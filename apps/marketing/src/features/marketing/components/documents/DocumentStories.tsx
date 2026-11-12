@@ -24,7 +24,7 @@ function Caret(props: { who: 'claude' | 'jacob' | 'julia' }) {
       data-caret={props.who}
       data-name={
         props.who === 'claude'
-          ? 'Macro'
+          ? 'Rox'
           : props.who === 'julia'
             ? 'Julia'
             : 'Jacob'
@@ -95,7 +95,7 @@ export function DocumentAgentDemo() {
               person: 'julia',
               text: (
                 <>
-                  <span class="homepage-person-mention">@Macro</span> update{' '}
+                  <span class="homepage-person-mention">@Rox</span> update{' '}
                   <HomepageMention
                     kind="md"
                     label={PROJECT_TITLE}

@@ -146,16 +146,16 @@ export function NorthwindSession(props: {
     sso: taskMention('northwind-sso'),
   };
   const sourceAnswer =
-    'Friday isn’t ready yet. The @[rollout plan](agent:plan) assumes 20 people and passwords; the customer now needs 40 and SSO.\n\nThe call limits Friday to 10 people, pending Teo’s SSO check. The other 30 join Monday, and the @[training task](agent:training) needs to move from Jacob to Julia.';
+    'Friday isn’t ready yet. The @[rollout plan](agent:plan) assumes 20 people and passwords; the customer now needs 40 and sign-in.\n\nThe call limits Friday to 10 people, pending Teo’s sign-in check. The other 30 join Monday, and the @[training task](agent:training) needs to move from Jacob to Julia.';
   const diagnosis =
-    'The @[customer email](agent:email) and @[call decision](agent:call) changed the rollout to 40 people with SSO. The plan still assumed 20.';
+    'The @[customer email](agent:email) and @[call decision](agent:call) changed the rollout to 40 people with sign-in. The plan still assumed 20.';
   const completedResult =
-    '- Updated the @[rollout plan](agent:plan): 10 Friday, 30 Monday.\n- Reassigned @[Training for 40 people](agent:training) to Julia, with two sessions.\n- Created urgent @[SSO verification](agent:sso) for Teo.';
+    '- Updated the @[rollout plan](agent:plan): 10 Friday, 30 Monday.\n- Reassigned @[Training for 40 people](agent:training) to Julia, with two sessions.\n- Created urgent @[sign-in verification](agent:sso) for Teo.';
   const resultAnswer = () =>
     [
       ...(phase() >= 1
         ? [
-            '- Updated the @[rollout plan](agent:plan): 20 on Friday → 10 Friday, 30 Monday, with SSO required.',
+            '- Updated the @[rollout plan](agent:plan): 20 on Friday → 10 Friday, 30 Monday, with sign-in required.',
           ]
         : []),
       ...(phase() >= 2
@@ -165,7 +165,7 @@ export function NorthwindSession(props: {
         : []),
       ...(phase() >= 3
         ? [
-            '- Created @[SSO verification](agent:sso) for Teo, marked urgent before invitations go out.',
+            '- Created @[sign-in verification](agent:sso) for Teo, marked urgent before invitations go out.',
           ]
         : []),
     ].join('\n');
@@ -177,7 +177,7 @@ export function NorthwindSession(props: {
         kind: 'email',
         title: 'Northwind rollout requirements',
         sender: 'Marcus',
-        snippet: '40 seats. SSO required before anyone joins.',
+        snippet: '40 seats. sign-in required before anyone joins.',
         time: 'Wed',
         onOpen: () => open('email', 'northwind-email'),
       },
@@ -187,7 +187,7 @@ export function NorthwindSession(props: {
               kind: 'call' as const,
               title: NORTHWIND_CALL.title,
               snippet:
-                '10 Friday, 30 Monday. Teo checks SSO; Julia takes training.',
+                '10 Friday, 30 Monday. Teo checks sign-in; Julia takes training.',
               time: 'Thu',
               onOpen: () => open('documents', 'northwind-call'),
             },
@@ -300,8 +300,8 @@ export function NorthwindSession(props: {
                           kind: 'action' as const,
                           label:
                             phase() < 3
-                              ? 'Create SSO verification task'
-                              : 'Created SSO verification task · Teo',
+                              ? 'Create sign-in verification task'
+                              : 'Created sign-in verification task · Teo',
                         },
                       ]
                     : []),
@@ -319,12 +319,12 @@ export function NorthwindSession(props: {
                     ? 'Updating the plan to match the call’s decision…'
                     : phase() === 1
                       ? 'Reassigning training and adding the second session…'
-                      : 'Creating the missing SSO check for Teo…'}
+                      : 'Creating the missing sign-in check for Teo…'}
                 </span>
               </Show>
               <Show when={phase() === 3}>
                 <AgentAnswer
-                  text="SSO is still open. Friday’s pilot can go ahead only after Teo confirms access."
+                  text="sign-in is still open. Friday’s pilot can go ahead only after Teo confirms access."
                   mentions={mentions}
                 />
               </Show>

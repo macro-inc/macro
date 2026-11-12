@@ -181,7 +181,7 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
           href="/"
           target="_self"
           class="site-menu-trigger site-menu-home"
-          aria-label="Macro home"
+          aria-label="Rox home"
           aria-expanded={open()}
           aria-controls="site-main-navigation"
           aria-keyshortcuts="ArrowDown"

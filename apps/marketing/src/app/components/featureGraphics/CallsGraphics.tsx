@@ -22,7 +22,7 @@ import { PreviewListDivider } from '../graphics/PreviewListDivider';
 import { PreviewWindow } from '../graphics/PreviewWindow';
 import { PhoneFrame, PhoneScreenContent } from '../utils/UtilPhoneFrame';
 
-const _HERO_DEMO_VIDEO_ID = 'MMG00RA7kU0'; // "Calls on Macro"
+const _HERO_DEMO_VIDEO_ID = 'MMG00RA7kU0'; // "Calls on Rox"
 const MACRO_REPO_URL = 'https://github.com/macro-inc/macro';
 
 // ---------------------------------------------------------------------------
@@ -826,7 +826,7 @@ export function HeroCallsWindow() {
       mask="linear-gradient(to bottom, rgb(0 0 0 / 1) 0%, rgb(0 0 0 / 1) 66%, rgb(0 0 0 / 0.18) 100%)"
       interactive={{
         ariaLabel:
-          'Interactive Macro calls demo. Use J and K to navigate, E to archive.',
+          'Interactive Rox calls demo. Use J and K to navigate, E to archive.',
         onKeyDown,
       }}
     >
@@ -1536,7 +1536,7 @@ export function CallStageGraphic() {
         >
           <img
             src={callMainFeedUrl}
-            alt="A teammate on a Macro video call, talking to the camera from a home office"
+            alt="A teammate on a Rox video call, talking to the camera from a home office"
             loading="lazy"
             decoding="async"
             style={{
@@ -1990,7 +1990,7 @@ export function SummaryGraphic() {
 // shown inside a phone (mirrors the Agents hero)
 // ---------------------------------------------------------------------------
 
-// Inline @Macro mention — matches the agent-mention style used across the app
+// Inline @Rox mention — matches the agent-mention style used across the app
 // (amber spark + amber label, no avatar chrome) rather than a faux avatar chip.
 function MacroMention() {
   return (
@@ -2012,7 +2012,7 @@ function MacroMention() {
       >
         <SparkleGlyph size={13} />
       </span>
-      Macro
+      Rox
     </span>
   );
 }
@@ -2618,12 +2618,12 @@ export function SearchGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Zoom vs Google Meet vs Granola)
+// Comparison table (Rox vs Zoom vs Google Meet vs Granola)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'Zoom', 'Meet', 'Granola'];
+const comparisonColumns = ['Rox', 'Zoom', 'Meet', 'Granola'];
 
 const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   { feature: 'Host & join video calls', cells: [true, true, true, false] },
@@ -2901,7 +2901,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'What happens after a call ends?',
     a: (
       <>
-        Macro auto-transcribes the call and generates an AI summary. The
+        Rox auto-transcribes the call and generates an AI summary. The
         recording and a readable, speaker-attributed transcript are always
         available at the bottom of the call, and everything becomes searchable
         from the calls tab.
@@ -2934,7 +2934,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'Can agents use my call transcripts?',
     a: (
       <>
-        Yes. Calls integrate with Macro's permission system, so agents can read
+        Yes. Calls integrate with Rox's permission system, so agents can read
         the transcripts you've shared. That richer context lets them help more
         effectively: ask an agent to assign a bug and it can route it to whoever
         said they were on it in yesterday's standup.
@@ -2962,11 +2962,11 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     ),
   },
   {
-    q: 'Is Macro open source?',
+    q: 'Is Rox open source?',
     a: (
       <>
-        Yes. Macro is fully open source under the AGPLv3 (as of May 31 2026),
-        not "open core." Video is powered by LiveKit. To build on Macro under a
+        Yes. Rox is fully open source under the AGPLv3 (as of May 31 2026),
+        not "open core." Video is powered by LiveKit. To build on Rox under a
         different license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>

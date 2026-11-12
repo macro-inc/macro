@@ -3,7 +3,7 @@ import { For, type JSX, Show } from 'solid-js';
 // A faithful, static implementation of the "Aidan Sketches" Figma list redesign
 // (file IOH8EtjS7V8rmxnbJzFZ2A) — a compact, denser take on the email list:
 // 24px rows, 10px type, no orange text (just the unread dot), and an optional
-// "Powered by Macro" footer. Parameterized so the same shell renders both the
+// "Powered by Rox" footer. Parameterized so the same shell renders both the
 // "Signal" card (node 2:2) and the "Noise" card (node 6:335) for the
 // signal-vs-noise hero composition.
 
@@ -338,7 +338,7 @@ export const SIGNAL_GROUPS: Group[] = [
     rows: [
       {
         who: 'Marco Delgado',
-        subject: 'Invitation: Macro intro @ 11 AM',
+        subject: 'Invitation: Rox intro @ 11 AM',
         preview:
           'You have been invited to an event on Thu Jun 19 from 11:00–11:30am. Agenda attached mostly want to cover the team, ro45 payment window',
         time: 'Jun 16',
@@ -804,7 +804,7 @@ export function EmailListCardGraphic(props: {
                 'white-space': 'nowrap',
               }}
             >
-              Powered by Macro
+              Powered by Rox
             </span>
             <MacroLogoIcon size={12} color={INK.textDim} />
           </div>

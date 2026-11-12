@@ -208,7 +208,7 @@ export function TasksLifecycle(props: {
 
   return (
     <section
-      aria-label="The lifecycle of a Macro task"
+      aria-label="The lifecycle of a Rox task"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',

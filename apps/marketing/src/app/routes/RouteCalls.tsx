@@ -22,7 +22,7 @@ import { viewportWidth } from '../utils/utilBreakpoint';
 import { CtaIcon, ctaHref, ctaLabel, handleCtaClick } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 
-const HERO_DEMO_VIDEO_ID = 'MMG00RA7kU0'; // "Calls on Macro"
+const HERO_DEMO_VIDEO_ID = 'MMG00RA7kU0'; // "Calls on Rox"
 
 const mobile = () => viewportWidth() < 700;
 
@@ -331,7 +331,7 @@ const stageBlock: LoopsFeatureBlock = {
     </>
   ),
   description:
-    'Host or join right inside Macro. It records, transcribes, and writes meeting notes live while you talk.',
+    'Host or join right inside Rox. It records, transcribes, and writes meeting notes live while you talk.',
   href: 'https://docs.macro.com/product/calls',
   heroShot: CallStageShot,
   heroBare: true,
@@ -354,12 +354,12 @@ const agentBlock: LoopsFeatureBlock = {
 };
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Zoom vs Google Meet vs Granola)
+// Comparison table (Rox vs Zoom vs Google Meet vs Granola)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'Zoom', 'Meet', 'Granola'];
+const comparisonColumns = ['Rox', 'Zoom', 'Meet', 'Granola'];
 
 const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   { feature: 'Host & join video calls', cells: [true, true, true, false] },
@@ -629,7 +629,7 @@ function ComparisonSection() {
   const [expanded, setExpanded] = createSignal(false);
   return (
     <section
-      aria-label="How Macro Calls compares"
+      aria-label="How Rox Calls compares"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -683,7 +683,7 @@ function ComparisonSection() {
             'max-width': '560px',
           }}
         >
-          Zoom hosts the call and forgets it. Macro records, transcribes, and
+          Zoom hosts the call and forgets it. Rox records, transcribes, and
           remembers every call.
         </p>
       </div>
@@ -878,9 +878,9 @@ function CallsFinalCta() {
 
 export const RouteCalls: Component = () => {
   setPageSeo({
-    title: 'Macro Calls — Video Calls with Perfect Memory',
+    title: 'Rox Calls — Video Calls with Perfect Memory',
     description:
-      'Host and join video calls inside Macro. Every call is recorded, transcribed, and summarized into shared team memory your whole team and your agents can search.',
+      'Host and join video calls inside Rox. Every call is recorded, transcribed, and summarized into shared team memory your whole team and your agents can search.',
     path: '/calls',
   });
 
@@ -966,7 +966,7 @@ export const RouteCalls: Component = () => {
                 'max-width': mobile() ? '34ch' : '600px',
               }}
             >
-              Host and join video calls in Macro. Every one is recorded,
+              Host and join video calls in Rox. Every one is recorded,
               transcribed, and summarized into shared memory your team and your
               agents can search.
             </p>
@@ -1084,7 +1084,7 @@ export const RouteCalls: Component = () => {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Macro demo video"
+          aria-label="Rox demo video"
           onClick={() => setHeroDemoOpen(false)}
           style={{
             'align-items': 'center',
@@ -1138,7 +1138,7 @@ export const RouteCalls: Component = () => {
               X
             </button>
             <iframe
-              title="Macro demo video"
+              title="Rox demo video"
               src={`https://www.youtube.com/embed/${HERO_DEMO_VIDEO_ID}?autoplay=1&rel=0`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowfullscreen

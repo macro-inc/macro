@@ -37,7 +37,7 @@ const STORES: Record<MobileStorePlatform, { url: string; buttonName: string }> =
  */
 export const RouteMobileSignupSent: Component = () => {
   setPageSeo({
-    title: 'Check your email — Macro',
+    title: 'Check your email — Rox',
     description: 'We sent you an email to continue onboarding on desktop.',
     path: '/mobile-signup-sent',
     // The tail of the signup flow — never a landing page from search.

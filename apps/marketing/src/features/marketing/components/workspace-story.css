@@ -84,8 +84,6 @@
 .homepage-compact-proof .home-proof-github-row { font-size: 14px; gap: 6px; }
 .homepage-compact-proof .home-proof-github-icon { height: 16px; width: 16px; }
 .homepage-compact-proof .home-proof-star { height: 12px; width: 12px; }
-.homepage-compact-proof .home-proof-badges { gap: 8px; }
-.homepage-compact-proof .home-proof-badge { height: 25px; width: 25px; }
 .homepage-compact-proof .home-proof-caption { font-size: 8px; letter-spacing: .08em; }
 .homepage-compact-proof .home-proof-divider { height: 32px; }
 @media (min-width: 768px) {
@@ -97,8 +95,6 @@
   .homepage-compact-proof .home-proof-github-row { font-size: 17.5px; gap: 7.5px; }
   .homepage-compact-proof .home-proof-github-icon { height: 20px; width: 20px; }
   .homepage-compact-proof .home-proof-star { height: 15px; width: 15px; }
-  .homepage-compact-proof .home-proof-badges { gap: 10px; }
-  .homepage-compact-proof .home-proof-badge { height: 31.25px; width: 31.25px; }
   .homepage-compact-proof .home-proof-caption { font-size: 10px; }
   .homepage-compact-proof .home-proof-divider { height: 40px; }
 }
@@ -106,8 +102,6 @@
   .homepage-compact-proof .home-proof-section { gap: 12px; }
   .homepage-compact-proof .home-proof-a16z { height: 17px; }
   .homepage-compact-proof .home-proof-github-row { font-size: 12px; gap: 5px; }
-  .homepage-compact-proof .home-proof-badges { gap: 5px; }
-  .homepage-compact-proof .home-proof-badge { height: 21px; width: 21px; }
   .homepage-compact-proof .home-proof-caption { font-size: 7px; letter-spacing: .04em; }
 }
 

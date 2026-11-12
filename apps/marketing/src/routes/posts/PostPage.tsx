@@ -46,10 +46,10 @@ export default function PostPage() {
       return;
     }
     setPageSeo({
-      title: `${e.meta.seoTitle ?? e.meta.title} · Macro`,
+      title: `${e.meta.seoTitle ?? e.meta.title} · Rox`,
       description:
         e.meta.description ??
-        `${e.meta.title} — writing from the team at Macro.`,
+        `${e.meta.title} — writing from the team at Rox.`,
       path: `/posts/${e.meta.slug}`,
       type: 'article',
       publishedTime: e.meta.date,

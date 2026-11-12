@@ -5,7 +5,7 @@ import './RouteDpa.css';
 import './RouteLegal.css';
 
 /**
- * Macro's Data Protection Agreement, transcribed from MacroDPA.docx (version
+ * Rox's Data Protection Agreement, transcribed from MacroDPA.docx (version
  * August 2026). The wording is the executed document's and the presentation is
  * ours, with one deliberate correction: clause 1.7 reads "all l and regulations"
  * in the source, and is published here as "all laws and regulations".
@@ -65,9 +65,9 @@ const TOC_ROWS = Math.ceil(TOC.length / 2);
 
 export const RouteDpa: Component = () => {
   setPageSeo({
-    title: 'Data Processing Agreement · Macro',
+    title: 'Data Processing Agreement · Rox',
     description:
-      "Macro's Data Protection Agreement (DPA), covering how Macro processes customer personal data as a processor, including security measures, sub-processors, audits, and cross-border transfers.",
+      "Rox's Data Protection Agreement (DPA), covering how Rox processes customer personal data as a processor, including security measures, sub-processors, audits, and cross-border transfers.",
     path: '/dpa',
   });
 
@@ -77,11 +77,11 @@ export const RouteDpa: Component = () => {
         <div class="dpa-doc">
           {/* Wordmark eyebrow, title, then the version line — the same header
               shape /terms and /privacy get from UtilPlainText. */}
-          <p class="dpa-eyebrow">Macro</p>
+          <p class="dpa-eyebrow">Rox</p>
           <h1 class="dpa-title">DPA</h1>
           <p class="dpa-version">Version August 2026</p>
 
-          {/* Macro's own notice, not part of the contract. The class carries no
+          {/* Rox's own notice, not part of the contract. The class carries no
               styling of its own; it exists so the page can be checked against
               MacroDPA.docx with the notice excluded. */}
           <p class="dpa-note">
@@ -861,7 +861,7 @@ export const RouteDpa: Component = () => {
                   </tr>
                   <tr>
                     <th scope="row">Provider activities:</th>
-                    <td>Supply and servicing of Macro application</td>
+                    <td>Supply and servicing of Rox application</td>
                   </tr>
                   <tr>
                     <th scope="row">Role:</th>
@@ -926,7 +926,7 @@ export const RouteDpa: Component = () => {
                     <th scope="row">Transfers to Subprocessors:</th>
                     <td>
                       Information related to licensing activation and monitoring
-                      for the Macro app is transferred, processed, and stored by
+                      for the Rox app is transferred, processed, and stored by
                       AWS, alongside other various subprocessors.
                     </td>
                   </tr>
@@ -942,15 +942,15 @@ export const RouteDpa: Component = () => {
               Schedule 2: Technical and Organizational Measures
             </h2>
             <p class="dpa-para">
-              Macro will maintain technical and organizational safeguards for
+              Rox will maintain technical and organizational safeguards for
               the security, confidentiality, and integrity of Customer’s
               Personal Data uploaded to the Cloud Service as maintained in the
-              Agreement. Macro will maintain a consistent overall security level
+              Agreement. Rox will maintain a consistent overall security level
               for the duration of the Service Term.
             </p>
             <p class="dpa-para">
               Aspects of current technical and organizational measures can be
-              seen at Macro’s{' '}
+              seen at Rox’s{' '}
               <a
                 href="http://security.macro.com"
                 target="_blank"

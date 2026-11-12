@@ -28,9 +28,9 @@ it('loads the standalone demo only on demand and restores focus when closed', as
   const trigger = screen.getByRole('button', { name: 'Interactive demo' });
   trigger.focus();
   fireEvent.click(trigger);
-  await screen.findByRole('dialog', { name: 'Macro · Interactive demo' });
+  await screen.findByRole('dialog', { name: 'Rox · Interactive demo' });
   expect(
-    screen.getByTitle('Macro interactive sample workspace').getAttribute('src')
+    screen.getByTitle('Rox interactive sample workspace').getAttribute('src')
   ).toBe('/demo');
   fireEvent.click(
     screen.getByRole('button', { name: 'Close interactive demo' })
@@ -45,7 +45,7 @@ it('lets inner controls handle Escape, then closes from inside the frame or the 
   const trigger = screen.getByRole('button', { name: 'Interactive demo' });
   fireEvent.click(trigger);
   const frame = (await screen.findByTitle(
-    'Macro interactive sample workspace'
+    'Rox interactive sample workspace'
   )) as HTMLIFrameElement;
   frame.contentDocument!.append(frame.contentDocument!.createElement('html'));
   frame.contentDocument!.documentElement.append(

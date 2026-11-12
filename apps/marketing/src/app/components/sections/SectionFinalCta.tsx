@@ -1,6 +1,3 @@
-import IconCasa from '../../../assets/designs/design-casa.svg';
-import IconIso from '../../../assets/designs/design-iso.svg';
-import IconSoc2 from '../../../assets/designs/design-soc2.svg';
 import {
   CtaIcon,
   ctaHref,
@@ -37,10 +34,6 @@ const FINAL_CTA_STYLES = `
   .final-cta-headline-main-desktop { font-size: 62px; line-height: 1.15; }
   .final-cta-headline-main-mobile { display: none; font-size: 47px; line-height: 1.15; }
   .final-cta-headline-sub { font-size: 47px; line-height: 1.2; }
-  .final-cta-trust { gap: 14px; justify-items: center; }
-  .final-cta-badges { gap: 12px; justify-content: center; }
-  .final-cta-badge { height: 26px; width: 26px; }
-  .final-cta-note { font-size: 14px; text-align: center; }
   @media (max-width: 699px) {
     .final-cta { align-items: start; gap: 36px; justify-items: start; text-align: left; }
     .final-cta-copy { gap: 14px; justify-items: start; }
@@ -52,18 +45,13 @@ const FINAL_CTA_STYLES = `
       white-space: nowrap;
     }
     .final-cta-headline-sub { display: none; }
-    .final-cta-trust { gap: 12px; justify-items: start; }
-    .final-cta-badges { gap: 10px; justify-content: start; }
-    .final-cta-badge { height: 22px; width: 22px; }
-    .final-cta-note { font-size: 13px; text-align: left; }
   }
 `;
 
 /**
  * Closing CTA shared by the homepage, blog pages, and feature pages: the
  * "Start with your inbox" headline, the Google + Book demo pill bar on desktop
- * (inline email capture on phones), and the security badges. Callers own the
- * surrounding padding.
+ * (inline email capture on phones). Callers own the surrounding padding.
  */
 export function SectionFinalCta(props: SectionFinalCtaProps) {
   return (
@@ -102,7 +90,7 @@ export function SectionFinalCta(props: SectionFinalCtaProps) {
             <span class="final-cta-headline-main-desktop">
               Start with your inbox.
             </span>
-            <span class="final-cta-headline-sub">Try Macro free today.</span>
+            <span class="final-cta-headline-sub">Try Rox free today.</span>
           </h2>
         </div>
         <SsgMobile>
@@ -211,55 +199,6 @@ export function SectionFinalCta(props: SectionFinalCtaProps) {
             </a>
           </div>
         </SsgDesktop>
-        <div
-          class="final-cta-trust"
-          style={{
-            display: 'grid',
-          }}
-        >
-          <div
-            aria-label="Security certifications"
-            class="final-cta-badges"
-            style={{
-              'align-items': 'center',
-              color: 'color-mix(in srgb, var(--c2) 55%, var(--c4))',
-              display: 'flex',
-              opacity: 0.42,
-            }}
-          >
-            <IconIso
-              aria-label="ISO 27001"
-              class="final-cta-badge"
-              style={{ display: 'block' }}
-            />
-            <IconSoc2
-              aria-label="AICPA SOC 2"
-              class="final-cta-badge"
-              style={{ display: 'block' }}
-            />
-            <IconCasa
-              aria-label="CASA Tier 2"
-              class="final-cta-badge"
-              style={{ display: 'block', transform: 'scale(1.02)' }}
-            />
-          </div>
-          <p
-            class="final-cta-note"
-            style={{
-              color: 'color-mix(in srgb, var(--c4) 70%, transparent)',
-              'font-family': 'body',
-              'font-weight': '500',
-              'letter-spacing': '0.01em',
-              'line-height': 1.4,
-              margin: '0',
-              'max-width': '420px',
-            }}
-          >
-            Enterprise-grade security.
-            <br />
-            SOC 2 Type II certified.
-          </p>
-        </div>
       </section>
     </>
   );

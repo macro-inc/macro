@@ -2,7 +2,7 @@ import type { JSX } from 'solid-js';
 import EmptyTrayGraphic from '../../../assets/graphics/empty-state-inbox-tray.svg';
 import { INK } from './EmailListCardGraphic';
 
-// The app's inbox-zero tray, ported from the Macro product (packages/design/
+// The app's inbox-zero tray, ported from the Rox product (packages/design/
 // empty-state-inbox-tray.svg): an isometric tray whose entrance animation is
 // embedded in the SVG itself — the tray drops in, then the dashed outline
 // fades up, both honoring prefers-reduced-motion. The animation runs when the

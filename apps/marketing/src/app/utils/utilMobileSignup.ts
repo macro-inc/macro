@@ -30,7 +30,7 @@ export const MOBILE_WEB_SIGNUP_LEAD_VALUE = 5;
 export type MobileStorePlatform = 'ios' | 'android';
 
 /**
- * The app store a visitor's device installs Macro from, or undefined on a
+ * The app store a visitor's device installs Rox from, or undefined on a
  * computer. iPadOS Safari reports itself as a Mac, so a touch-capable
  * "Macintosh" counts as iOS.
  */
@@ -119,7 +119,7 @@ export const recordMobileSignupSubmitted = (
 };
 
 /**
- * Sends the "open Macro on your computer" email to `email` via the auth
+ * Sends the "open Rox on your computer" email to `email` via the auth
  * service's public `/mobile-welcome-email` endpoint.
  *
  * The caller identifies the visitor and records `mobile_signup_submitted`

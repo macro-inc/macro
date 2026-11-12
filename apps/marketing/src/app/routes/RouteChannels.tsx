@@ -615,7 +615,7 @@ const heroPanel = {
   dms: {
     label: 'DMs',
     Graphic: ChatHeroAgentPanel,
-    alt: 'A direct message with a Macro agent that created a task, pushed a PR, and replied in a channel',
+    alt: 'A direct message with a Rox agent that created a task, pushed a PR, and replied in a channel',
     mobileMax: '320px',
     radius: artRadius(350, 400),
     offset: { x: 8, y: 0 },
@@ -625,7 +625,7 @@ const heroPanel = {
   channels: {
     label: 'Channels',
     Graphic: ChatHeroChannelPanel,
-    alt: 'A Macro Chat channel with an @mention, a shared image, a shared email thread, and an @Macro agent reply',
+    alt: 'A Rox Chat channel with an @mention, a shared image, a shared email thread, and an @Rox agent reply',
     mobileMax: '440px',
     radius: artRadius(600, 590),
     offset: { x: 0, y: 12 },
@@ -655,7 +655,7 @@ const heroClosingPair = (stacked: boolean): HeroPanel[] => {
     {
       ...heroPanel.dms,
       Graphic: ChatClosingAgentPanel,
-      alt: 'A direct message with a Macro agent catching the reader up on a channel and filing what is unresolved as tasks',
+      alt: 'A direct message with a Rox agent catching the reader up on a channel and filing what is unresolved as tasks',
       width: '30%',
       offset: { x: 8, y: -68 },
       overlap: { side: 'right', amount: '-5%' },
@@ -664,7 +664,7 @@ const heroClosingPair = (stacked: boolean): HeroPanel[] => {
     {
       ...heroPanel.channels,
       Graphic: ChatClosingChannelPanel,
-      alt: 'A Macro Chat channel where a design-system sweep is handed round, linked to a doc and a task, and picked up by an agent',
+      alt: 'A Rox Chat channel where a design-system sweep is handed round, linked to a doc and a task, and picked up by an agent',
       width: '50%',
       layer: 2,
     },
@@ -719,7 +719,7 @@ function ChannelsHero(props: { onWatchDemo: () => void }) {
             width: '100%',
           }}
         >
-          <HeroEyebrow label="Macro Chat" mobile={mobile} />
+          <HeroEyebrow label="Rox Chat" mobile={mobile} />
           {/* The hero shares the homepage's Slab weight, with its own size. */}
           <h1
             style={slabTitle({
@@ -777,7 +777,7 @@ function ChannelsHero(props: { onWatchDemo: () => void }) {
 function ChannelsFounderLetter() {
   return (
     <section
-      aria-label="Why we built Macro Chat"
+      aria-label="Why we built Rox Chat"
       style={{
         'box-sizing': 'border-box',
         margin: '0 auto',
@@ -834,7 +834,7 @@ function ChannelsFounderLetter() {
             communication.
             <br />
             <br />
-            Macro Chat lives in the same workspace as your email, docs, and
+            Rox Chat lives in the same workspace as your email, docs, and
             tasks. It removes the chasm between communication and execution with
             powerful @mentions for instant sharing, built-in task management,
             and agents that track and take on work without you having to leave
@@ -852,7 +852,7 @@ function ChannelsFounderLetter() {
               'text-wrap': 'pretty',
             }}
           >
-            - Jacob Beckerman, CEO and founder of Macro
+            - Jacob Beckerman, CEO and founder of Rox
           </p>
         </div>
       </div>
@@ -1020,7 +1020,7 @@ const channelsCards = [
     fill: 1,
     fig: '01',
     title: 'Tag team with agents',
-    desc: '@Macro summons an agent with full work context. Summarize, draft, or hand off tasks.',
+    desc: '@Rox summons an agent with full work context. Summarize, draft, or hand off tasks.',
   },
   {
     Graphic: ChatFigRadial,
@@ -1644,7 +1644,7 @@ function FeatureSplit(props: {
 }
 
 const agentsBlock: ChatFeatureBlock = {
-  label: 'Macro Chat',
+  label: 'Rox Chat',
   headline: (
     <>
       <span style={titleLine(0)}>Built-in agents</span>
@@ -1655,7 +1655,7 @@ const agentsBlock: ChatFeatureBlock = {
   heroShot: AgentThreadGraphic,
 };
 
-// The agent-catchup illustration (523×224 artboard) — @Macro summarizing a
+// The agent-catchup illustration (523×224 artboard) — @Rox summarizing a
 // channel, exported from the design file.
 function _AgentCatchupGraphic() {
   return (
@@ -1671,7 +1671,7 @@ function _AgentCatchupGraphic() {
           only inline SVG can see the page's Inter @font-face. */}
       <ChatAgentCatchup
         role="img"
-        aria-label="@Macro summarizing missed channel messages"
+        aria-label="@Rox summarizing missed channel messages"
         style={{
           display: 'block',
           filter: 'drop-shadow(0 30px 60px rgb(0 0 0 / 0.45))',
@@ -1829,11 +1829,11 @@ function ChannelsClosingHero() {
 
 const channelsFaq: FaqItem[] = [
   {
-    q: 'How is Macro Chat different from Slack?',
+    q: 'How is Rox Chat different from Slack?',
     a: (
       <>
-        Macro Chat includes channels, threads, and emoji. It also shares an
-        inbox with email and tasks, and @Macro can use the workspace context
+        Rox Chat includes channels, threads, and emoji. It also shares an
+        inbox with email and tasks, and @Rox can use the workspace context
         available to it.
       </>
     ),
@@ -1857,10 +1857,10 @@ const channelsFaq: FaqItem[] = [
     ),
   },
   {
-    q: 'What can @Macro do in a channel?',
+    q: 'What can @Rox do in a channel?',
     a: (
       <>
-        Type @Macro to ask an agent to summarize missed conversation, draft
+        Type @Rox to ask an agent to summarize missed conversation, draft
         replies, or answer questions using the workspace context available to
         it.
       </>
@@ -1871,10 +1871,10 @@ const channelsFaq: FaqItem[] = [
     a: <>Yes. One search covers channels, email, docs, and tasks.</>,
   },
   {
-    q: 'Is Macro open source?',
+    q: 'Is Rox open source?',
     a: (
       <>
-        Yes. Macro is open source under the AGPLv3. The code is on{' '}
+        Yes. Rox is open source under the AGPLv3. The code is on{' '}
         <a
           href="https://github.com/macro-inc/macro"
           target="_blank"
@@ -1890,11 +1890,11 @@ const channelsFaq: FaqItem[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Slack vs Discord vs Microsoft Teams)
+// Comparison table (Rox vs Slack vs Discord vs Microsoft Teams)
 // ---------------------------------------------------------------------------
 
 const comparisonColumns: ComparisonColumn[] = [
-  { label: 'Macro' },
+  { label: 'Rox' },
   { label: 'Slack', logo: LogoSlack },
   { label: 'Discord', logo: LogoDiscord },
   { label: 'Teams', logo: LogoMicrosoftTeams },
@@ -1929,7 +1929,7 @@ const comparisonRows: ComparisonRow[] = [
 function ComparisonSection() {
   return (
     <section
-      aria-label="How Macro Chat compares"
+      aria-label="How Rox Chat compares"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -1960,7 +1960,7 @@ function ComparisonSection() {
             margin: 0,
           }}
         >
-          How does Macro Chat stack up?
+          How does Rox Chat stack up?
         </h2>
         <p
           style={{
@@ -1974,7 +1974,7 @@ function ComparisonSection() {
             'text-wrap': 'balance',
           }}
         >
-          Macro Chat brings team conversations into the same workspace as email,
+          Rox Chat brings team conversations into the same workspace as email,
           tasks, and docs.
         </p>
       </div>
@@ -2045,9 +2045,9 @@ function ChannelsFinalCta() {
 
 export const RouteChannels: Component = () => {
   setPageSeo({
-    title: 'Macro Chat — Team Chat Wired into Everything',
+    title: 'Rox Chat — Team Chat Wired into Everything',
     description:
-      'Macro Chat combines Slack-speed team chat with inline threads, @mention sharing, a unified inbox, and AI agents — all in one workspace with your email, docs, and tasks.',
+      'Rox Chat combines Slack-speed team chat with inline threads, @mention sharing, a unified inbox, and AI agents — all in one workspace with your email, docs, and tasks.',
     path: '/channels',
   });
 
@@ -2201,7 +2201,7 @@ export const RouteChannels: Component = () => {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Macro demo video"
+          aria-label="Rox demo video"
           onClick={() => setHeroDemoOpen(false)}
           style={{
             'align-items': 'center',
@@ -2255,7 +2255,7 @@ export const RouteChannels: Component = () => {
               X
             </button>
             <iframe
-              title="Macro demo video"
+              title="Rox demo video"
               src={`https://www.youtube.com/embed/${HERO_DEMO_VIDEO_ID}?autoplay=1&rel=0`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowfullscreen

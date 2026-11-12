@@ -19,8 +19,8 @@ import { MacroMarkIcon } from '../graphics/MacroMarkIcon';
 import { APP_PREVIEW_HEIGHT } from './SceneAppPreview';
 
 // The /email hero: a purpose-built, fully interactive inbox. No app sidebar, no
-// other Macro features — just the email surface, tuned so a visitor discovers
-// the three things that sell Macro Mail in the first ten seconds: keystroke
+// other Rox features — just the email surface, tuned so a visitor discovers
+// the three things that sell Rox Mail in the first ten seconds: keystroke
 // triage (J/K/E/L), Signal vs Noise, and rich email bodies wired into a
 // workspace. Clearing Signal earns the inbox-zero tray.
 
@@ -138,7 +138,7 @@ const MAILS: Mail[] = [
     who: 'Marco Delgado',
     initials: 'MD',
     from: 'marco@vantagepoint.vc',
-    subject: 'Invitation: Macro <> intro @ 11am',
+    subject: 'Invitation: Rox <> intro @ 11am',
     preview:
       'You have been invited to an event on Thu Jun 19 from 11:00–11:30am. Agenda attached — mostly want to cover the team, roadmap, and how the pilot went.',
     time: 'Jun 16',
@@ -149,7 +149,7 @@ const MAILS: Mail[] = [
       ['Thursday Jun 19, 11:00–11:30am · Google Meet'],
       [
         'Looking forward to the intro. I attached ',
-        { kind: 'doc', label: 'Pre-read: Macro intro' },
+        { kind: 'doc', label: 'Pre-read: Rox intro' },
         ' with a short agenda — mostly want to cover the team, the roadmap, and how the pilot went.',
       ],
       ['If the time stops working, grab any slot on my calendar link below.'],
@@ -262,7 +262,7 @@ const MAILS: Mail[] = [
     who: 'Greg Sandoval',
     initials: 'GS',
     from: 'greg@zynoptes.io',
-    subject: 'Re: Zynoptes <> Macro follow up',
+    subject: 'Re: Zynoptes <> Rox follow up',
     preview:
       'We ran a preliminary scan on your repo and attached the .SARIF results. A couple of medium findings worth a look before you ship to production.',
     time: 'Jun 12',
@@ -524,7 +524,7 @@ export function EmailTurboInbox(props: {
   // visitors can then filter to Signal to see the triage story.
   const [tab, setTab] = createSignal(2);
   // Hero mode opens directly on the inbox-zero state (the curated three are
-  // pre-cleared), so the mock reads as "this is where Macro gets you" without
+  // pre-cleared), so the mock reads as "this is where Rox gets you" without
   // an intro animation. The empty-state button then loads the full inbox.
   const [done, setDone] = createSignal<number[]>(
     props.hero ? [...HERO_MAIL_IDS] : []
@@ -714,7 +714,7 @@ export function EmailTurboInbox(props: {
 
   return (
     <section
-      aria-label="Interactive Macro Mail demo"
+      aria-label="Interactive Rox Mail demo"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -877,7 +877,7 @@ export function EmailTurboInbox(props: {
                     class="turbo-shell"
                     tabindex={0}
                     role="application"
-                    aria-label="Interactive Macro Mail inbox. Use J and K to move, E to mark done, L to label, Enter to open the reading pane."
+                    aria-label="Interactive Rox Mail inbox. Use J and K to move, E to mark done, L to label, Enter to open the reading pane."
                     onKeyDown={onKeyDown}
                     onMouseEnter={() => shellEl?.focus({ preventScroll: true })}
                     style={{
@@ -933,7 +933,7 @@ export function EmailTurboInbox(props: {
                           }}
                         >
                           <MacroMarkIcon
-                            aria-label="Macro"
+                            aria-label="Rox"
                             style={{
                               color: INK.textDim,
                               display: 'block',

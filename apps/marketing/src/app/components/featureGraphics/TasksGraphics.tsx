@@ -66,7 +66,7 @@ function eyebrowStyle(): JSX.CSSProperties {
 }
 
 // ---------------------------------------------------------------------------
-// App-chrome icons (Macro product nav set)
+// App-chrome icons (Rox product nav set)
 // ---------------------------------------------------------------------------
 
 const NAV_ICONS: Record<string, Component<{ style?: JSX.CSSProperties }>> = {
@@ -232,7 +232,7 @@ const STATUS_META: Record<StatusKind, { label: string; color: string }> = {
   canceled: { label: 'Canceled', color: 'var(--c4)' },
 };
 
-// Canonical Macro status circles (square-task-*-circle), tinted by status color.
+// Canonical Rox status circles (square-task-*-circle), tinted by status color.
 const STATUS_ICON: Record<
   StatusKind,
   Component<{ style?: JSX.CSSProperties }>
@@ -271,7 +271,7 @@ const PRIORITY_META: Record<PriorityKind, { label: string }> = {
   urgent: { label: 'Urgent' },
 };
 
-// Canonical Macro priority bars (wide-priority-*). Neutral for low/med/high,
+// Canonical Rox priority bars (wide-priority-*). Neutral for low/med/high,
 // accent for urgent; "none" falls back to a faint dashed circle.
 const PRIORITY_ICON: Partial<
   Record<PriorityKind, Component<{ style?: JSX.CSSProperties }>>
@@ -327,7 +327,7 @@ function PriorityIcon(props: { kind: PriorityKind; size?: number }) {
 
 const heroTabs = ['Assigned', 'Created', 'All'];
 
-// The green task icon prefixing every task row — the Macro app's tasks icon.
+// The green task icon prefixing every task row — the Rox app's tasks icon.
 function TaskRowGlyph(props: { size?: number }) {
   const s = props.size ?? 15;
   return (
@@ -1021,7 +1021,7 @@ function TaskManagementPanel() {
               'white-space': 'nowrap',
             }}
           >
-            <span style={{ color: 'var(--c2)' }}>Macro</span> added the
+            <span style={{ color: 'var(--c2)' }}>Rox</span> added the
             migration checklist
           </span>
           <span
@@ -2941,12 +2941,12 @@ export function KeyboardGraphic(props: { columns?: number } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Linear vs Asana vs Jira vs ClickUp)
+// Comparison table (Rox vs Linear vs Asana vs Jira vs ClickUp)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'Linear', 'Asana', 'Jira', 'ClickUp'];
+const comparisonColumns = ['Rox', 'Linear', 'Asana', 'Jira', 'ClickUp'];
 
 const comparisonRows: {
   feature: string;
@@ -3235,13 +3235,13 @@ function _ComparisonTable() {
 
 const faqItems: { q: string; a: JSX.Element }[] = [
   {
-    q: 'How is Macro Tasks different from Linear?',
+    q: 'How is Rox Tasks different from Linear?',
     a: (
       <>
-        In building Macro Tasks we were heavily inspired by Linear: status,
+        In building Rox Tasks we were heavily inspired by Linear: status,
         priority, assignee, keyboard-first, and a GitHub integration that moves
         a task to "In Review" and "Done" as you open a PR and merge it. The
-        difference is that Macro Tasks live in the same app as your email,
+        difference is that Rox Tasks live in the same app as your email,
         channels, and docs. You can turn a message into a task in one click, and
         non-engineers see the work without needing a separate seat in a separate
         tool.
@@ -3316,11 +3316,11 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     ),
   },
   {
-    q: 'Is Macro open source?',
+    q: 'Is Rox open source?',
     a: (
       <>
         Yes, fully open source under the AGPLv3 (as of May 31 2026), not "open
-        core." To build on Macro under a different license, contact{' '}
+        core." To build on Rox under a different license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>
     ),
@@ -4026,7 +4026,7 @@ export function TaskLifecycleGraphic() {
 
   return (
     <div
-      aria-label="How a task moves through Macro"
+      aria-label="How a task moves through Rox"
       class="tasks-gfx-lc-root"
       style={{
         'box-sizing': 'border-box',
@@ -4868,7 +4868,7 @@ export function ChatTasksGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// Agent handoff graphic — @Macro is mentioned in a thread, picks the task up,
+// Agent handoff graphic — @Rox is mentioned in a thread, picks the task up,
 // works it (status, description, comments), then hands it back. Static.
 // ---------------------------------------------------------------------------
 
@@ -4929,7 +4929,7 @@ export function AgentHandoffGraphic() {
         width: '100%',
       }}
     >
-      {/* The thread: a teammate hands the task to @Macro, the agent accepts */}
+      {/* The thread: a teammate hands the task to @Rox, the agent accepts */}
       <div style={cardStyle}>
         <div
           style={{
@@ -4970,7 +4970,7 @@ export function AgentHandoffGraphic() {
             time="9:41 AM"
             compact={compact()}
           >
-            <PersonMentionInline label="Macro" /> can you take{' '}
+            <PersonMentionInline label="Rox" /> can you take{' '}
             <TaskMentionInline
               label="Fix pricing-step drop-off"
               status="not-started"
@@ -5015,7 +5015,7 @@ export function AgentHandoffGraphic() {
                   'font-weight': '600',
                 }}
               >
-                Macro
+                Rox
               </span>
               <span
                 style={{

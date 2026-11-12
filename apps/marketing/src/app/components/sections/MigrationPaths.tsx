@@ -64,8 +64,8 @@ export function MigrationPaths(props: { helpHref: string }) {
       content: (
         <PathContent
           icon={<Envelope />}
-          title="Bring your inbox into Macro"
-          description="Connect Gmail or Google Workspace and use Macro for your daily email. Your mail stays in Gmail and syncs with Macro."
+          title="Bring your inbox into Rox"
+          description="Connect Gmail or Google Workspace and use Rox for your daily email. Your mail stays in Gmail and syncs with Rox."
         >
           <PathSection icon={<Plugs />} title="Connect your account">
             Connect Gmail during signup or add it in Settings. Add your other
@@ -73,12 +73,12 @@ export function MigrationPaths(props: { helpHref: string }) {
           </PathSection>
           <PathSection icon={<At />} title="Your email address">
             Send and receive from your existing address, with your mail and
-            labels available in Macro. This works whether you currently read
+            labels available in Rox. This works whether you currently read
             Gmail in a browser, Superhuman, or another email client.
           </PathSection>
           <PathSection icon={<Chat />} title="Other email providers">
             Talk to our team about your email setup and the best way to use
-            Macro with it. {help()}
+            Rox with it. {help()}
           </PathSection>
         </PathContent>
       ),
@@ -91,14 +91,14 @@ export function MigrationPaths(props: { helpHref: string }) {
         <PathContent
           icon={<Folder />}
           title="Bring your files and records"
-          description="Upload files and import CSV data from the tools your company uses. Organize the work in Macro and share it with your team."
+          description="Upload files and import CSV data from the tools your company uses. Organize the work in Rox and share it with your team."
         >
           <PathSection icon={<FileText />} title="Documents and files">
-            Upload your documents, PDFs, images, and other files into Macro.
+            Upload your documents, PDFs, images, and other files into Rox.
             Organize them in folders so your team can find and share them.
           </PathSection>
           <PathSection icon={<Database />} title="Tables and exported data">
-            Import a CSV into a Macro database. Review the rows and columns in
+            Import a CSV into a Rox database. Review the rows and columns in
             the import preview, then bring the records into your workspace.
           </PathSection>
           <PathSection icon={<Buildings />} title="Company records">
@@ -119,8 +119,8 @@ export function MigrationPaths(props: { helpHref: string }) {
       content: (
         <PathContent
           icon={<FileText />}
-          title="Bring your docs and tasks into Macro"
-          description="Import documents and tasks into Macro so your team can write, assign work, and follow progress in the same workspace."
+          title="Bring your docs and tasks into Rox"
+          description="Import documents and tasks into Rox so your team can write, assign work, and follow progress in the same workspace."
         >
           <PathSection
             icon={<SwitchBrandIcon brand="notion" size={19} />}
@@ -129,15 +129,15 @@ export function MigrationPaths(props: { helpHref: string }) {
             Connect Notion in Settings, then ask an agent to find the pages you
             want to bring over. Choose the suggested pages or provide a page
             link. Page text, headings, lists, checklists, and tables become
-            editable Macro docs. For database records, export a CSV and use
-            Macro’s database import.
+            editable Rox docs. For database records, export a CSV and use
+            Rox’s database import.
           </PathSection>
           <PathSection
             icon={<SwitchBrandIcon brand="linear" size={19} />}
             title="Linear tasks"
           >
             Connect Linear and ask an agent to find the issues you need.
-            Selected issues become Macro tasks with their descriptions, source
+            Selected issues become Rox tasks with their descriptions, source
             links, and supported task properties. You can also upload a Linear
             CSV export, review the preview, and match assignees before
             importing.
@@ -162,24 +162,24 @@ export function MigrationPaths(props: { helpHref: string }) {
         <PathContent
           icon={<Chat />}
           title="Bring your team’s conversations"
-          description="Move discussions into Macro channels, where conversations connect directly to your docs, tasks, and email."
+          description="Move discussions into Rox channels, where conversations connect directly to your docs, tasks, and email."
         >
           <PathSection
             icon={<SwitchBrandIcon brand="slack" size={19} />}
             title="Bring over Slack channels"
           >
             Connect Slack, find your channels, and select the ones to bring into
-            Macro. The channel import creates the corresponding channels for
+            Rox. The channel import creates the corresponding channels for
             your team.
           </PathSection>
           <PathSection icon={<Folder />} title="Import conversation history">
             Upload a Slack export ZIP and select the conversations you want to
-            bring over. This copies the selected history into Macro. New Slack
+            bring over. This copies the selected history into Rox. New Slack
             messages remain in Slack.
           </PathSection>
           <PathSection icon={<Plugs />} title="Keep Slack connected">
             Agents can search connected Slack content while your team works in
-            Macro. You can keep using Slack for conversations with customers and
+            Rox. You can keep using Slack for conversations with customers and
             partners.
           </PathSection>
           <PathSection icon={<Chat />} title="Other chat tools">
@@ -208,10 +208,10 @@ export function MigrationPaths(props: { helpHref: string }) {
             Tell an agent which project, pages, or issues you need. It can use
             the tools available through your connection to find relevant work.
             Choose what to import and manage the resulting docs or tasks in
-            Macro.
+            Rox.
           </PathSection>
           <PathSection icon={<Plugs />} title="Bring an export">
-            Files and CSV exports provide another route into Macro. Tell our
+            Files and CSV exports provide another route into Rox. Tell our
             team what you want to move, and we’ll help you choose between an
             import, a connection, or a file upload. {help()}
           </PathSection>

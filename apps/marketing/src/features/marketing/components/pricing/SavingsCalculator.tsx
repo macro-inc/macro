@@ -74,7 +74,7 @@ const comparisonIcons: Record<
   acrobat: FilePdfIcon,
 };
 
-/** Yearly cost of a team's current tools next to Macro's paid plan. */
+/** Yearly cost of a team's current tools next to Rox's paid plan. */
 export function SavingsCalculator() {
   const [selected, setSelected] = createSignal(DEFAULT_COMPARISON_TOOLS);
   const [seats, setSeats] = createSignal(5);
@@ -96,14 +96,14 @@ export function SavingsCalculator() {
                 {summary().differenceCents > 0
                   ? 'You’d save'
                   : summary().differenceCents < 0
-                    ? 'Macro would cost more'
+                    ? 'Rox would cost more'
                     : 'Same yearly cost'}
               </span>
               <strong>{formatUsd(Math.abs(summary().differenceCents))}</strong>
               <span class="pricing-savings-period">/ year</span>
             </div>
             <p class="pricing-savings-macro-plan">
-              With Macro Pro at $40/user/month
+              With Rox Pro at $40/user/month
             </p>
           </div>
           <div class="pricing-savings-seats">
@@ -146,12 +146,12 @@ export function SavingsCalculator() {
         <div
           class="pricing-savings-scroll"
           role="region"
-          aria-label="All tools to replace with Macro"
+          aria-label="All tools to replace with Rox"
           tabIndex={0}
         >
           <table
             class="pricing-savings-table"
-            aria-label="Tools to replace with Macro"
+            aria-label="Tools to replace with Rox"
           >
             <colgroup>
               <col class="pricing-savings-tool-col" />

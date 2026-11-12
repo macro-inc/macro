@@ -4,15 +4,15 @@
  * `public/video/tutorials/`, which docs.macro.com also embeds from macro.com.
  */
 export const TUTORIAL_VIDEOS = {
-  mail: { title: 'Learn how to use Macro Mail', length: '1:42' },
-  tasks: { title: 'Learn how to use Macro Tasks', length: '1:57' },
-  chat: { title: 'Learn how to use Macro Chat', length: '1:30' },
-  docs: { title: 'Learn how to use Macro Docs', length: '1:15' },
-  calls: { title: 'Learn how to use Macro Calls', length: '1:10' },
-  crm: { title: 'Learn how to use Macro CRM', length: '1:26' },
-  agents: { title: 'Learn how to use Macro Agents', length: '1:05' },
+  mail: { title: 'Learn how to use Rox Mail', length: '1:42' },
+  tasks: { title: 'Learn how to use Rox Tasks', length: '1:57' },
+  chat: { title: 'Learn how to use Rox Chat', length: '1:30' },
+  docs: { title: 'Learn how to use Rox Docs', length: '1:15' },
+  calls: { title: 'Learn how to use Rox Calls', length: '1:10' },
+  crm: { title: 'Learn how to use Rox CRM', length: '1:26' },
+  agents: { title: 'Learn how to use Rox Agents', length: '1:05' },
   macrod: { title: 'Learn how to use MacroD', length: '1:17' },
-  github: { title: 'Learn how to use Macro with GitHub', length: '1:01' },
+  github: { title: 'Learn how to use Rox with GitHub', length: '1:01' },
 } as const;
 
 export type TutorialVideoId = keyof typeof TUTORIAL_VIDEOS;

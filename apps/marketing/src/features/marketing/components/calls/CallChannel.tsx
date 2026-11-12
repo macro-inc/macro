@@ -48,7 +48,7 @@ const TABS: {
 
 /**
  * ChannelDetailTopBar: title, inset tabs (icons when the bar runs out of
- * room), then Invite, Call or Join, and Ask Macro. The live Call tab shows
+ * room), then Invite, Call or Join, and Ask Rox. The live Call tab shows
  * while a call runs in the channel.
  */
 export function ChannelTopBar(props: {
@@ -125,14 +125,14 @@ export function ChannelTopBar(props: {
         <Button
           variant="plain"
           size="md"
-          aria-label="Ask Macro"
+          aria-label="Ask Rox"
           onClick={props.onAsk}
           disabled={!props.onAsk}
-          tooltip="Ask Macro"
+          tooltip="Ask Rox"
           class="call-bar-action"
         >
           <Sparkle />
-          <span class="call-bar-label">Ask Macro</span>
+          <span class="call-bar-label">Ask Rox</span>
         </Button>
       </div>
     </ViewShell.TopBar>

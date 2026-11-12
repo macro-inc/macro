@@ -16,7 +16,7 @@ Update the instructions or settings of an AI agent the current user can manage. 
 | `botId` | string | Yes | The agent's bot id: `bot.botId` from ListAgents. |
 | `instructions` | string | No | The complete new instructions in markdown. Replaces the current instructions entirely; omit to keep them. |
 | `harness` | `"in-memory"` \| `"cursor"` \| `"macrod"` | No | Runtime to move the agent onto. `macrod` also needs harnessId; the other runtimes must not have one. The current model may not exist on the new runtime, so usually pass defaultModel with it. Omit to keep the current runtime. |
-| `harnessId` | string | No | Id of the registered self-hosted harness, required when harness is `macrod` and forbidden otherwise. |
+| `harnessId` | string | No | Id of the registered local harness, required when harness is `macrod` and forbidden otherwise. |
 | `defaultModel` | string | No | Model id the agent's new sessions should use, as the runtime names it (e.g. `claude-sonnet-4-5`). Valid ids depend on the runtime. Omit to keep the current model. |
 | `channelScope` | `"all"` \| `"selected"` | No | `all` makes the agent mentionable in every channel its owner can use; `selected` limits it to channelIds. Omit to keep the current scope, or omit it and pass channelIds alone to switch to `selected`. |
 | `channelIds` | string[] | No | The complete list of channel ids the agent is limited to; the user must be a member of each. Required with the `selected` scope and forbidden with `all`. |

@@ -221,7 +221,7 @@ export function GithubStarButton() {
 }
 
 // ---------------------------------------------------------------------------
-// App-chrome icons (Macro product nav set)
+// App-chrome icons (Rox product nav set)
 // ---------------------------------------------------------------------------
 
 const NAV_ICONS: Record<string, Component<{ style?: JSX.CSSProperties }>> = {
@@ -511,7 +511,7 @@ function ClockTinyGlyph(props: { size?: number }) {
 // The little blue document icon used in the real Files list.
 function DocFileGlyph(props: { size?: number; color?: string }) {
   const s = props.size ?? 16;
-  // Macro app document icon (wide-file-md), inherits color via currentColor.
+  // Rox app document icon (wide-file-md), inherits color via currentColor.
   return (
     <IconFileMd
       aria-hidden="true"
@@ -703,7 +703,7 @@ function MentionPill(props: {
 }) {
   // Person mentions render as a compact accent pill (@name, no avatar); docs,
   // tasks, channels, and agents render as an inline icon + underlined name —
-  // matching how the real Macro editor distinguishes user vs. entity mentions
+  // matching how the real Rox editor distinguishes user vs. entity mentions
   // (see UserMention.tsx / DocumentMention.tsx in the app repo).
   if (props.kind === 'person') {
     return (
@@ -950,7 +950,7 @@ export function HeroDocWindow() {
               <PinnedProp label="Urgency" value="High" accent />
             </div>
             <p style={bodyText}>
-              We ship the V1 of Macro as the open-source company OS. Looping in{' '}
+              We ship the V1 of Rox as the open-source company OS. Looping in{' '}
               <MentionPill kind="person" label="Julia Westphal" initials="JW" />{' '}
               to own GTM and <MentionPill kind="agent" label="research agent" />{' '}
               to pull the competitive landscape. Everything in this doc stays
@@ -1452,7 +1452,7 @@ export function HomeMobileDocsShot() {
                   margin: '0',
                 }}
               >
-                @mention any Macro entity
+                @mention any Rox entity
               </h4>
               <div class="home-mobile-docs-mentions">
                 <span class="home-mobile-docs-mention">
@@ -1554,7 +1554,7 @@ export function HeroDocCollabWindow() {
   // the document's first heading as the visitor edits it. Seeded with the
   // editor's own starting heading so the chrome is right before the iframe
   // loads (and stays right for the prerender and mobile fallbacks).
-  const [docTitle, setDocTitle] = createSignal('Why Macro Docs?');
+  const [docTitle, setDocTitle] = createSignal('Why Rox Docs?');
   // Where the intro sentence ends, measured inside the editor iframe, so the
   // "START TYPING" arrow can point at it instead of floating mid-document.
   const [anchor, setAnchor] = createSignal<{ x: number; y: number } | null>(
@@ -1743,7 +1743,7 @@ export function HeroDocCollabWindow() {
                         margin: '0',
                       }}
                     >
-                      Why Macro Docs?
+                      Why Rox Docs?
                     </h3>
                     <p
                       class="docs-gfx-collab-body-text"
@@ -2218,7 +2218,7 @@ export function SlashMenuPanel(props: { highlightIndex?: number } = {}) {
   );
 }
 
-// A faithful static replica of the real Macro editor's @-mention typeahead menu
+// A faithful static replica of the real Rox editor's @-mention typeahead menu
 // (captured from the live editor): People / Documents, Agents & Tasks / Channels
 // sections, each with a "View all" affordance, avatars, and entity icons.
 type MentionMenuRow =
@@ -4224,7 +4224,7 @@ function _ImportGraphic() {
             >
               Engineering
             </span>{' '}
-            workspace as Macro docs. Skip anything archived.
+            workspace as Rox docs. Skip anything archived.
           </span>
         </div>
 
@@ -4255,7 +4255,7 @@ function _ImportGraphic() {
                 'font-weight': '600',
               }}
             >
-              Macro Agent
+              Rox Agent
             </span>
           </div>
 
@@ -4417,13 +4417,13 @@ function _ImportGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Notion vs Obsidian vs Google Docs vs Confluence)
+// Comparison table (Rox vs Notion vs Obsidian vs Google Docs vs Confluence)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
 const comparisonColumns = [
-  'Macro',
+  'Rox',
   'Notion',
   'Obsidian',
   'Google Docs',
@@ -4706,11 +4706,11 @@ function _ComparisonTable() {
 
 const faqItems: { q: string; a: JSX.Element }[] = [
   {
-    q: 'How is Macro different from Notion?',
+    q: 'How is Rox different from Notion?',
     a: (
       <>
         Notion asks you to build your own tools out of markdown pages and
-        databases. Macro gives you purpose-built blocks (docs, tasks, CRM,
+        databases. Rox gives you purpose-built blocks (docs, tasks, CRM,
         email, and channels) that share one data model and one search index. You
         give up some freeform database flexibility, but each block works like a
         real product and agents can read all of it as one context. See our{' '}
@@ -4750,7 +4750,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         Edits from teammates appear almost instantly, as if you were on the same
-        machine, and edits to the same line resolve without thrashing. Macro
+        machine, and edits to the same line resolve without thrashing. Rox
         uses CRDTs so multiple people can type in the same doc simultaneously,
         and you can keep working with no network connection.
       </>
@@ -4774,18 +4774,18 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         Documents use standard access levels: owner, editor, commenter, and
-        viewer. You can share with people outside Macro by email, or with a
+        viewer. You can share with people outside Rox by email, or with a
         public URL link if you enable the Public Link. People who aren't signed
         in see a preview without having to create an account.
       </>
     ),
   },
   {
-    q: 'Is Macro open source?',
+    q: 'Is Rox open source?',
     a: (
       <>
-        Yes. Macro is fully open source under the AGPLv3 (as of May 31 2026),
-        not "open core." To build on Macro under a different license, contact{' '}
+        Yes. Rox is fully open source under the AGPLv3 (as of May 31 2026),
+        not "open core." To build on Rox under a different license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>
     ),

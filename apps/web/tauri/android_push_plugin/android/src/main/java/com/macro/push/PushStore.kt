@@ -126,7 +126,7 @@ internal object PushStore {
         save(context, all)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_macro_notification)
-            .setContentTitle(message.title.ifBlank { "Macro" })
+            .setContentTitle(message.title.ifBlank { "Rox" })
             .setContentText(message.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
             .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true)

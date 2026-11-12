@@ -65,7 +65,7 @@ export const CONSTELLATION_TOOLS = [
   { name: 'Figma', icon: FigmaIcon, x: 77, y: 6, size: 24 },
 ];
 
-/** A restrained, dimensional constellation of the tools Macro brings together. */
+/** A restrained, dimensional constellation of the tools Rox brings together. */
 export function ContextScene(props: { unified?: boolean } = {}) {
   return (
     <div

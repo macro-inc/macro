@@ -1,6 +1,6 @@
 import { createEffect, createUniqueId } from 'solid-js';
 
-// Animated line icons ported from the Macro app (js/app/packages/icon/*.tsx).
+// Animated line icons ported from the Rox app (js/app/packages/icon/*.tsx).
 // Each takes a `triggerAnimation` prop (we drive it off the create-tile hover).
 
 type IconProps = { triggerAnimation?: boolean; class?: string };

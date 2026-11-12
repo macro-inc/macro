@@ -5,7 +5,7 @@
   "routes": [
     {
       "path": "/",
-      "title": "Macro \u2014 The ultimate workspace for startups",
+      "title": "Rox \u2014 The ultimate workspace for startups",
       "schemaTypes": [
         "Offer",
         "Organization",
@@ -15,7 +15,7 @@
     },
     {
       "path": "/jobs",
-      "title": "Jobs at Macro",
+      "title": "Jobs at Rox",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -23,7 +23,7 @@
     },
     {
       "path": "/terms",
-      "title": "Terms of Service \u00b7 Macro",
+      "title": "Terms of Service \u00b7 Rox",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -31,7 +31,7 @@
     },
     {
       "path": "/privacy",
-      "title": "Privacy Policy \u00b7 Macro",
+      "title": "Privacy Policy \u00b7 Rox",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -39,7 +39,7 @@
     },
     {
       "path": "/dpa",
-      "title": "Data Processing Agreement \u00b7 Macro",
+      "title": "Data Processing Agreement \u00b7 Rox",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -47,7 +47,7 @@
     },
     {
       "path": "/posts",
-      "title": "Blog \u00b7 Macro",
+      "title": "Blog \u00b7 Rox",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -55,7 +55,7 @@
     },
     {
       "path": "/startups",
-      "title": "Macro for Startups \u2014 Up to $10,000 in Credits",
+      "title": "Rox for Startups \u2014 Up to $10,000 in Credits",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -63,7 +63,7 @@
     },
     {
       "path": "/tasks",
-      "title": "Macro Tasks \u2014 Task management that keeps up with your team",
+      "title": "Rox Tasks \u2014 Task management that keeps up with your team",
       "schemaTypes": [
         "Answer",
         "BreadcrumbList",
@@ -77,7 +77,7 @@
     },
     {
       "path": "/email",
-      "title": "Macro Mail \u2014 The AI Email Client",
+      "title": "Rox Mail \u2014 The AI Email Client",
       "schemaTypes": [
         "Answer",
         "BreadcrumbList",
@@ -91,7 +91,7 @@
     },
     {
       "path": "/documents",
-      "title": "Macro Docs \u2014 Markdown Documents, Wired Into Everything",
+      "title": "Rox Docs \u2014 Markdown Documents, Wired Into Everything",
       "schemaTypes": [
         "Answer",
         "BreadcrumbList",
@@ -105,7 +105,7 @@
     },
     {
       "path": "/channels",
-      "title": "Macro Chat \u2014 Team Chat Wired into Everything",
+      "title": "Rox Chat \u2014 Team Chat Wired into Everything",
       "schemaTypes": [
         "Answer",
         "BreadcrumbList",
@@ -119,7 +119,7 @@
     },
     {
       "path": "/calls",
-      "title": "Macro Calls \u2014 Video Calls with Perfect Memory",
+      "title": "Rox Calls \u2014 Video Calls with Perfect Memory",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem",
@@ -130,7 +130,7 @@
     },
     {
       "path": "/crm",
-      "title": "Macro CRM \u2014 The Self-Building CRM",
+      "title": "Rox CRM \u2014 The Self-Building CRM",
       "schemaTypes": [
         "Answer",
         "BreadcrumbList",
@@ -144,7 +144,7 @@
     },
     {
       "path": "/agents",
-      "title": "Macro Agents \u2014 AI With Your Whole Workspace as Context",
+      "title": "Rox Agents \u2014 AI With Your Whole Workspace as Context",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -152,7 +152,7 @@
     },
     {
       "path": "/github",
-      "title": "Macro Reviews \u2014 Review PRs in Your Inbox",
+      "title": "Rox Reviews \u2014 Review PRs in Your Inbox",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem",
@@ -163,7 +163,7 @@
     },
     {
       "path": "/pricing",
-      "title": "Pricing \u2014 Macro",
+      "title": "Pricing \u2014 Rox",
       "schemaTypes": [
         "Answer",
         "BreadcrumbList",
@@ -174,7 +174,7 @@
     },
     {
       "path": "/partners",
-      "title": "Macro Partner Program \u2014 Refer, Implement, and Build on Macro",
+      "title": "Rox Partner Program \u2014 Refer, Implement, and Build on Rox",
       "schemaTypes": [
         "Answer",
         "BreadcrumbList",
@@ -185,7 +185,7 @@
     },
     {
       "path": "/partners/terms",
-      "title": "Macro Partner Program Terms",
+      "title": "Rox Partner Program Terms",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -193,7 +193,7 @@
     },
     {
       "path": "/migrate",
-      "title": "Switch your startup to Macro | Migration guide",
+      "title": "Switch your startup to Rox | Migration guide",
       "schemaTypes": [
         "BreadcrumbList",
         "ListItem"
@@ -201,7 +201,7 @@
     },
     {
       "path": "/posts/why-macro-is-open-source",
-      "title": "Why Macro Is Open Source \u00b7 Macro",
+      "title": "Why Rox Is Open Source \u00b7 Rox",
       "schemaTypes": [
         "BlogPosting",
         "BreadcrumbList",
@@ -213,7 +213,7 @@
     },
     {
       "path": "/posts/clickup-alternative",
-      "title": "Macro vs ClickUp \u2014 The Open-Source ClickUp Alternative \u00b7 Macro",
+      "title": "Rox vs ClickUp \u2014 The Open-Source ClickUp Alternative \u00b7 Rox",
       "schemaTypes": [
         "Answer",
         "BlogPosting",
@@ -228,7 +228,7 @@
     },
     {
       "path": "/posts/doppler-config",
-      "title": "How We Migrated Macro to Doppler and Made Configuration Safer \u00b7 Macro",
+      "title": "How We Migrated Rox to Doppler and Made Configuration Safer \u00b7 Rox",
       "schemaTypes": [
         "BlogPosting",
         "BreadcrumbList",
@@ -240,7 +240,7 @@
     },
     {
       "path": "/posts/ai-editing-agents",
-      "title": "Agents Attacking Documents with CRDTs \u2014 How Macro Does AI Document Editing \u00b7 Macro",
+      "title": "Agents Attacking Documents with CRDTs \u2014 How Rox Does AI Document Editing \u00b7 Rox",
       "schemaTypes": [
         "BlogPosting",
         "BreadcrumbList",
@@ -252,7 +252,7 @@
     },
     {
       "path": "/posts/mfs-sharing",
-      "title": "The Macro Filesystem \u00b7 Macro",
+      "title": "The Rox Filesystem \u00b7 Rox",
       "schemaTypes": [
         "BlogPosting",
         "BreadcrumbList",
@@ -264,7 +264,7 @@
     },
     {
       "path": "/posts/graphql-cache",
-      "title": "Building a GraphQL Cache That Doesn\u2019t Have to Fit in Memory \u00b7 Macro",
+      "title": "Building a GraphQL Cache That Doesn\u2019t Have to Fit in Memory \u00b7 Rox",
       "schemaTypes": [
         "BlogPosting",
         "BreadcrumbList",
@@ -276,7 +276,7 @@
     },
     {
       "path": "/posts/gmail-rate-limits",
-      "title": "Getting Rate Limited for Fun and Profit \u2014 Working Within Gmail API Quotas \u00b7 Macro",
+      "title": "Getting Rate Limited for Fun and Profit \u2014 Working Within Gmail API Quotas \u00b7 Rox",
       "schemaTypes": [
         "BlogPosting",
         "BreadcrumbList",
@@ -288,7 +288,7 @@
     },
     {
       "path": "/posts/linear-alternative",
-      "title": "Macro vs Linear \u2014 The Open-Source Linear Alternative \u00b7 Macro",
+      "title": "Rox vs Linear \u2014 The Open-Source Linear Alternative \u00b7 Rox",
       "schemaTypes": [
         "Answer",
         "BlogPosting",
@@ -303,7 +303,7 @@
     },
     {
       "path": "/posts/notion-alternative",
-      "title": "Macro vs Notion \u2014 The Open-Source Notion Alternative \u00b7 Macro",
+      "title": "Rox vs Notion \u2014 The Open-Source Notion Alternative \u00b7 Rox",
       "schemaTypes": [
         "Answer",
         "BlogPosting",
@@ -318,7 +318,7 @@
     },
     {
       "path": "/posts/slack-alternative",
-      "title": "Macro vs Slack \u2014 The Open-Source Slack Alternative \u00b7 Macro",
+      "title": "Rox vs Slack \u2014 The Open-Source Slack Alternative \u00b7 Rox",
       "schemaTypes": [
         "Answer",
         "BlogPosting",
@@ -333,7 +333,7 @@
     },
     {
       "path": "/posts/superhuman-alternative",
-      "title": "Macro vs Superhuman \u2014 The Open-Source Superhuman Alternative \u00b7 Macro",
+      "title": "Rox vs Superhuman \u2014 The Open-Source Superhuman Alternative \u00b7 Rox",
       "schemaTypes": [
         "Answer",
         "BlogPosting",

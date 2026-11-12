@@ -147,7 +147,7 @@ function FigMention(props: { height: string }) {
 }
 
 // --- Fig 03 — Comments synced both ways -----------------------------------
-// Macro's copy and GitHub's copy of the same PR orbit a shared sync ring whose
+// Rox's copy and GitHub's copy of the same PR orbit a shared sync ring whose
 // dashes flow; each bobs in opposite phase.
 function FigSync(props: { height: string }) {
   const left = { cx: 56, cy: 76, w: 12, h: 16 };
@@ -246,7 +246,7 @@ const pillars: Pillar[] = [
     slug: 'sync',
     fig: 'Fig 03',
     title: 'Comments synced both ways',
-    body: 'Comment in Macro and it posts to GitHub. Comment on GitHub and it shows up here.',
+    body: 'Comment in Rox and it posts to GitHub. Comment on GitHub and it shows up here.',
     Graphic: FigSync,
   },
   {
@@ -352,7 +352,7 @@ export function GithubFeatureGrid() {
 
   return (
     <section
-      aria-label="Why Macro Reviews"
+      aria-label="Why Rox Reviews"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',

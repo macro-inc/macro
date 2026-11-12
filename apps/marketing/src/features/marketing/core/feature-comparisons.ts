@@ -22,7 +22,7 @@ export type FeatureComparison = {
 export const emailComparisons: readonly FeatureComparison[] = [
   {
     id: 'superhuman',
-    question: 'How does Macro compare with Superhuman Mail?',
+    question: 'How does Rox compare with Superhuman Mail?',
     competitor: 'Superhuman Mail',
     rows: [
       {
@@ -54,7 +54,7 @@ export const emailComparisons: readonly FeatureComparison[] = [
       },
     ],
     article: {
-      label: 'Macro vs. Superhuman',
+      label: 'Rox vs. Superhuman',
       href: '/posts/superhuman-alternative',
     },
     sources: [
@@ -69,7 +69,7 @@ export const emailComparisons: readonly FeatureComparison[] = [
   },
   {
     id: 'gmail',
-    question: 'How does Macro compare with Gmail?',
+    question: 'How does Rox compare with Gmail?',
     competitor: 'Gmail',
     rows: [
       {
@@ -114,7 +114,7 @@ export const emailComparisons: readonly FeatureComparison[] = [
 export const documentComparisons: readonly FeatureComparison[] = [
   {
     id: 'notion',
-    question: 'How does Macro compare with Notion?',
+    question: 'How does Rox compare with Notion?',
     competitor: 'Notion',
     rows: [
       {
@@ -129,7 +129,7 @@ export const documentComparisons: readonly FeatureComparison[] = [
         macro: true,
         competitor: 'partial',
         competitorNote:
-          'Build or duplicate a CRM with Notion databases and templates. Macro has dedicated company, contact, and pipeline tools.',
+          'Build or duplicate a CRM with Notion databases and templates. Rox has dedicated company, contact, and pipeline tools.',
       },
       {
         feature: 'Read live email beside your document',
@@ -146,7 +146,7 @@ export const documentComparisons: readonly FeatureComparison[] = [
       },
       { feature: 'Custom pages and databases', macro: true, competitor: true },
     ],
-    article: { label: 'Macro vs. Notion', href: '/posts/notion-alternative' },
+    article: { label: 'Rox vs. Notion', href: '/posts/notion-alternative' },
     sources: [
       'https://www.notion.com/help/sprints',
       'https://www.notion.com/help/guides/getting-started-with-templates-for-your-team',
@@ -166,7 +166,7 @@ export const documentComparisons: readonly FeatureComparison[] = [
 export const taskComparisons: readonly FeatureComparison[] = [
   {
     id: 'linear',
-    question: 'How does Macro compare with Linear?',
+    question: 'How does Rox compare with Linear?',
     competitor: 'Linear',
     rows: [
       {
@@ -195,7 +195,7 @@ export const taskComparisons: readonly FeatureComparison[] = [
         competitor: false,
       },
     ],
-    article: { label: 'Macro vs. Linear', href: '/posts/linear-alternative' },
+    article: { label: 'Rox vs. Linear', href: '/posts/linear-alternative' },
     sources: [
       'https://linear.app/docs/linear-asks-email',
       'https://linear.app/docs/mcp',
@@ -207,7 +207,7 @@ export const taskComparisons: readonly FeatureComparison[] = [
   },
   {
     id: 'jira',
-    question: 'How does Macro compare with Jira?',
+    question: 'How does Rox compare with Jira?',
     competitor: 'Jira',
     rows: [
       {
@@ -249,7 +249,7 @@ export const taskComparisons: readonly FeatureComparison[] = [
 export const chatComparisons: readonly FeatureComparison[] = [
   {
     id: 'slack',
-    question: 'How does Macro compare with Slack?',
+    question: 'How does Rox compare with Slack?',
     competitor: 'Slack',
     rows: [
       {
@@ -282,7 +282,7 @@ export const chatComparisons: readonly FeatureComparison[] = [
         competitor: false,
       },
     ],
-    article: { label: 'Macro vs. Slack', href: '/posts/slack-alternative' },
+    article: { label: 'Rox vs. Slack', href: '/posts/slack-alternative' },
     sources: [
       'https://slack.com/help/articles/206819278-Send-emails-to-Slack',
       'https://slack.com/help/articles/27452748828179-Use-lists-in-Slack',
@@ -300,7 +300,7 @@ export const chatComparisons: readonly FeatureComparison[] = [
 export const crmComparisons: readonly FeatureComparison[] = [
   {
     id: 'salesforce',
-    question: 'How does Macro compare with Salesforce?',
+    question: 'How does Rox compare with Salesforce?',
     competitor: 'Salesforce',
     rows: [
       {
@@ -325,7 +325,7 @@ export const crmComparisons: readonly FeatureComparison[] = [
         macro: true,
         competitor: 'partial',
         competitorNote:
-          'CRM activity is linked to collaboration tools and connected apps. Macro keeps email, calls, documents, and team chat in the same workspace.',
+          'CRM activity is linked to collaboration tools and connected apps. Rox keeps email, calls, documents, and team chat in the same workspace.',
       },
     ],
     sources: [
@@ -338,7 +338,7 @@ export const crmComparisons: readonly FeatureComparison[] = [
   },
   {
     id: 'hubspot',
-    question: 'How does Macro compare with HubSpot?',
+    question: 'How does Rox compare with HubSpot?',
     competitor: 'HubSpot',
     rows: [
       {
@@ -363,7 +363,7 @@ export const crmComparisons: readonly FeatureComparison[] = [
         macro: true,
         competitor: 'partial',
         competitorNote:
-          'CRM activity is linked to collaboration tools and connected apps. Macro keeps email, calls, documents, and team chat in the same workspace.',
+          'CRM activity is linked to collaboration tools and connected apps. Rox keeps email, calls, documents, and team chat in the same workspace.',
       },
     ],
     sources: [
@@ -376,7 +376,7 @@ export const crmComparisons: readonly FeatureComparison[] = [
   },
   {
     id: 'attio',
-    question: 'How does Macro compare with Attio?',
+    question: 'How does Rox compare with Attio?',
     competitor: 'Attio',
     rows: [
       {
@@ -401,7 +401,7 @@ export const crmComparisons: readonly FeatureComparison[] = [
         macro: true,
         competitor: 'partial',
         competitorNote:
-          'CRM activity is linked to collaboration tools and connected apps. Macro keeps email, calls, documents, and team chat in the same workspace.',
+          'CRM activity is linked to collaboration tools and connected apps. Rox keeps email, calls, documents, and team chat in the same workspace.',
       },
     ],
     sources: [

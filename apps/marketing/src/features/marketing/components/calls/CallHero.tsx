@@ -79,7 +79,7 @@ export function CallHeroDemo() {
       <WorkspaceDesktopDemo
         heroFrame
         view="messages"
-        label="Explore Macro Calls"
+        label="Explore Rox Calls"
       >
         <ProductDemo label="Training call">
           <Show

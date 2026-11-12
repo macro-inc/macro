@@ -12,7 +12,7 @@ export interface PostMeta {
   titleLine2?: string;
   /** Centered subheader shown under the title on the post page. */
   subtitle?: string;
-  /** Overrides the `<title>`/og:title (before " · Macro"); use for SEO-tuned titles. */
+  /** Overrides the `<title>`/og:title (before " · Rox"); use for SEO-tuned titles. */
   seoTitle?: string;
   /** Original publish date (`YYYY-MM-DD`). */
   date?: string;
@@ -32,7 +32,7 @@ export interface PostMeta {
   preview?: string;
   tags?: string[];
   /**
-   * Keep the post off the homepage's "From the Macro blog" section. It still
+   * Keep the post off the homepage's "From the Rox blog" section. It still
    * appears at `/posts` and has its own page — this only controls whether it
    * is one of the cards we put in front of every visitor to the front page.
    */

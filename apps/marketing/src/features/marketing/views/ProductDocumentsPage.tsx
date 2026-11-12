@@ -20,14 +20,14 @@ import { documentComparisons } from '../core/feature-comparisons';
 
 const documentsFaq = [
   {
-    q: 'What can I write in Macro?',
+    q: 'What can I write in Rox?',
     a: 'Create notes, briefs, proposals, and handbooks with headings, checklists, tables, images, and code. Link relevant emails, tasks, and files directly in your document.',
   },
   {
     q: 'Can I import and export my documents?',
     a: (
       <>
-        Import Notion pages or upload files. Export native Macro documents as
+        Import Notion pages or upload files. Export native Rox documents as
         Markdown. See <a href="/migrate">migration options</a> for your current
         tools.
       </>
@@ -39,7 +39,7 @@ const documentsFaq = [
       <>
         Yes. People and agents can edit the same document in real time, and
         teammates can comment on specific text. Ask an agent to update the
-        document while you keep writing. See <a href="/agents">Macro Agents</a>.
+        document while you keep writing. See <a href="/agents">Rox Agents</a>.
       </>
     ),
   },
@@ -56,10 +56,10 @@ const documentsFaq = [
     a: 'You can keep editing an open document if your connection drops. Changes save on your device and sync when you reconnect.',
   },
   {
-    q: 'Can I try Macro for free?',
+    q: 'Can I try Rox for free?',
     a: (
       <>
-        Yes. Macro has a free plan with usage limits. See{' '}
+        Yes. Rox has a free plan with usage limits. See{' '}
         <a href="/pricing">plans and limits</a> before choosing a plan for your
         team.
       </>
@@ -69,7 +69,7 @@ const documentsFaq = [
 
 export function RouteDocuments() {
   setPageSeo({
-    title: 'Macro Docs | Write With Your Team and Your Agents',
+    title: 'Rox Docs | Write With Your Team and Your Agents',
     description:
       'Write in Markdown and collaborate live with people and agents. Link emails and tasks, open them beside your doc, and organize your work with folders and tags.',
     path: '/documents',
@@ -87,7 +87,7 @@ export function RouteDocuments() {
         <WorkspaceDesktopDemo
           heroFrame
           view="documents"
-          label="Explore Macro Docs"
+          label="Explore Rox Docs"
           render={() => <DocumentProjectDemo teamEditing />}
         />
         <nav
@@ -139,7 +139,7 @@ export function RouteDocuments() {
         </FeaturePageSection>
         <section
           id="documents-comparison"
-          aria-label="Compare Macro and Notion"
+          aria-label="Compare Rox and Notion"
         >
           <FeatureComparisons
             title="Compare Workspaces"
@@ -149,7 +149,7 @@ export function RouteDocuments() {
         <div>
           <FeaturePageFaq
             id="documents-faq-title"
-            title="Questions about Macro Docs"
+            title="Questions about Rox Docs"
             items={documentsFaq}
           />
         </div>

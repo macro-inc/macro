@@ -21,7 +21,7 @@ import type { PostMeta } from '../../registry';
 const LINEAR_VIDEO_ID = 'nHxqE2mVKrA';
 const TASKS_VIDEO_ID = 'gxJquVXRX5A';
 const ARTICLE_PARAGRAPHS = [
-  'We loved Linear. Before Macro we ran our old company on it, and Macro Tasks is inspired by its keyboard-first speed and design principles.',
+  'We loved Linear. Before Rox we ran our old company on it, and Rox Tasks is inspired by its keyboard-first speed and design principles.',
   'Linear is really really good for pure task tracking.',
 ] as const;
 const ARTICLE_PREVIEW = ARTICLE_PARAGRAPHS.join(' ');
@@ -100,19 +100,19 @@ const USER_QUOTES: { name: string; text: string }[] = [
   },
   {
     name: 'Seamus',
-    text: 'Compared to Linear, Macro has an obvious good writing surface. I do more spec writing in tasks for agents \u2014 in Linear I didn\u2019t like the writing surface as much \u2014 then I\u2019ll use a skill to delegate it to an agent.',
+    text: 'Compared to Linear, Rox has an obvious good writing surface. I do more spec writing in tasks for agents \u2014 in Linear I didn\u2019t like the writing surface as much \u2014 then I\u2019ll use a skill to delegate it to an agent.',
   },
   {
     name: 'Eric',
-    text: 'I\u2019ll often collect tasks into a todo doc, which is easier in Macro. I prefer organizing things in a markdown doc vs the list view \u2014 it\u2019s just easier for me.',
+    text: 'I\u2019ll often collect tasks into a todo doc, which is easier in Rox. I prefer organizing things in a markdown doc vs the list view \u2014 it\u2019s just easier for me.',
   },
   {
     name: 'Julia',
-    text: 'I joined at the tail end of when we used Linear. I think I make tasks less in Macro \u2014 because in Linear I used to make a lot of tickets each morning as a morning ritual. Now the tickets are mostly there for me.',
+    text: 'I joined at the tail end of when we used Linear. I think I make tasks less in Rox \u2014 because in Linear I used to make a lot of tickets each morning as a morning ritual. Now the tickets are mostly there for me.',
   },
   {
     name: 'Rahul',
-    text: 'In Linear it felt like there was a big giant backlog of tasks; I probably should have gone in and deleted them. In Macro I still have a backlog obviously, but it\u2019s less cluttered.',
+    text: 'In Linear it felt like there was a big giant backlog of tasks; I probably should have gone in and deleted them. In Rox I still have a backlog obviously, but it\u2019s less cluttered.',
   },
 ];
 
@@ -206,14 +206,14 @@ function PostAutoplayClip(props: {
 
 export const postMeta: PostMeta = {
   slug: 'linear-alternative',
-  title: 'Macro vs Linear',
-  seoTitle: 'Macro vs Linear — The Open-Source Linear Alternative',
+  title: 'Rox vs Linear',
+  seoTitle: 'Rox vs Linear — The Open-Source Linear Alternative',
   subtitle:
-    'Macro is the open source alternative to Linear for fast engineering task management.',
+    'Rox is the open source alternative to Linear for fast engineering task management.',
   date: '2026-06-25',
   updated: '2026-09-25',
   description:
-    'Macro is the open-source alternative to Linear: fast, keyboard-first task management inside one workspace with email, chat, docs, calls and a CRM, linked to GitHub and a shared team memory.',
+    'Rox is the open-source alternative to Linear: fast, keyboard-first task management inside one workspace with email, chat, docs, calls and a CRM, linked to GitHub and a shared team memory.',
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'linear', 'comparison'],
   category: 'Comparison',
@@ -221,7 +221,7 @@ export const postMeta: PostMeta = {
   image: '/og/linear-alternative.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Jacob Beckerman', role: 'Macro', avatar: avatarJacob },
+  author: { name: 'Jacob Beckerman', role: 'Rox', avatar: avatarJacob },
   ctaButtonName: 'macro_vs_linear_cta',
 };
 
@@ -242,7 +242,7 @@ export default function MacroVsLinearPost() {
         <p>
           Architecturally, task management should not be a separate tab from the
           rest of the work — they should be part of the same system.{' '}
-          <span class="mvn-hl">Macro is that system</span>: tasks in the same
+          <span class="mvn-hl">Rox is that system</span>: tasks in the same
           @linked workspace as email, messages, agents, docs, calls and CRM.
         </p>
 
@@ -295,9 +295,9 @@ export default function MacroVsLinearPost() {
         />
 
         <hr class="post-section-rule" aria-hidden="true" />
-        <h2>Task creation: Linear is manual, Macro is automatic</h2>
+        <h2>Task creation: Linear is manual, Rox is automatic</h2>
         <p>
-          Macro and Linear are comparably fast once you are inside the tracker:
+          Rox and Linear are comparably fast once you are inside the tracker:
           tasks are quick to create, assign, prioritize and close with keyboard
           shortcuts.
         </p>
@@ -309,23 +309,23 @@ export default function MacroVsLinearPost() {
           often never led to a ticket.
         </p>
         <p>
-          In Macro you spin one up without leaving where you are working. Every
+          In Rox you spin one up without leaving where you are working. Every
           task is linked back to its source bidirectionally — the task remembers
           where it came from and the source knows the task exists. Linear can be
-          notified about a Slack thread; in Macro the message and the task are
+          notified about a Slack thread; in Rox the message and the task are
           two views of one object.
         </p>
 
         <h3>From a customer email</h3>
         <p>
           Open any email — a customer report, a bug thread, a partner ask — and
-          hit <strong>Task</strong> in the Actions panel. Macro opens the
+          hit <strong>Task</strong> in the Actions panel. Rox opens the
           create-task modal with the email already attached as context, so the
           assignee can jump straight back to the thread.
         </p>
         <PostScreenshot
           src={taskEmailAction}
-          alt="Email sidebar Actions panel with Ask Macro and Task buttons, cursor on Task"
+          alt="Email sidebar Actions panel with Ask Rox and Task buttons, cursor on Task"
           width={517}
           height={291}
         />
@@ -336,7 +336,7 @@ export default function MacroVsLinearPost() {
 
         <h3>From a channel message</h3>
         <p>
-          Hover any message and click <strong>Create task</strong>. Macro spins
+          Hover any message and click <strong>Create task</strong>. Rox spins
           one up deterministically, linked to that thread — no copy-paste into
           another tab.
         </p>
@@ -351,20 +351,20 @@ export default function MacroVsLinearPost() {
           linked to that thread.
         </p>
 
-        <h3>Ask @Macro</h3>
+        <h3>Ask @Rox</h3>
         <p>
-          Mention <code>@Macro</code> in a channel and ask it to create a task
+          Mention <code>@Rox</code> in a channel and ask it to create a task
           from what was just said. It assigns the work and links the task back
           to the conversation.
         </p>
         <PostScreenshot
           src={taskFromChannel}
-          alt="Channel thread where a user asks @Macro to create a task from a bug report and Macro assigns it with a linked task title"
+          alt="Channel thread where a user asks @Rox to create a task from a bug report and Rox assigns it with a linked task title"
           width={1024}
           height={330}
         />
         <p class="mvn-figcaption">
-          Mention <code>@Macro</code> in a channel and it creates a task from
+          Mention <code>@Rox</code> in a channel and it creates a task from
           the conversation, linked back to the thread.
         </p>
 
@@ -372,17 +372,17 @@ export default function MacroVsLinearPost() {
         <p>
           Hit <code>c</code> then <code>t</code> from anywhere to bring up the
           create task modal — the same Linear-style speed, without leaving
-          Macro.
+          Rox.
         </p>
         <PostScreenshot
           src={taskCreateCurrent}
-          alt="Current Macro create-task dialog with title, description, status, priority, assignee, due date and tags"
+          alt="Current Rox create-task dialog with title, description, status, priority, assignee, due date and tags"
           width={840}
           height={366}
         />
         <p class="mvn-figcaption">
           Set the task’s status, priority, assignee and due date in the create
-          dialog. Captured from Macro in September 2026.
+          dialog. Captured from Rox in September 2026.
         </p>
 
         <h3>From markdown to-dos</h3>
@@ -390,7 +390,7 @@ export default function MacroVsLinearPost() {
           Drop a to-do box into any markdown area, highlight the set, and turn
           them into tasks at once. Specs and notes become tracked work without a
           separate triage pass. Linear can do something similar, but only inside
-          a task — as subtasks. In Macro it works anywhere in the workspace: a
+          a task — as subtasks. In Rox it works anywhere in the workspace: a
           personal "todos July 9th" doc, a meeting note, a spec, not just the
           task editor.
         </p>
@@ -398,7 +398,7 @@ export default function MacroVsLinearPost() {
         <div class="mvn-video">
           <iframe
             src={`https://www.youtube.com/embed/${TASKS_VIDEO_ID}?rel=0`}
-            title="Tasks on Macro"
+            title="Tasks on Rox"
             loading="lazy"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowfullscreen
@@ -416,20 +416,20 @@ export default function MacroVsLinearPost() {
           — someone says they will do something on the standup, everyone nods,
           and by Monday nobody wrote it down. With Linear that meant opening
           another tab after the huddle and trying to remember who owned what.
-          Macro keeps the meeting in the same workspace as the tracker.
+          Rox keeps the meeting in the same workspace as the tracker.
         </p>
         <p>
           Spin up a huddle in any channel or DM without sharing a link, or run a
           full meet with one. Calls record, transcribe and diarize by default,
           so what got said on the standup is searchable and shared with the
-          team. Mention <code>@Macro</code> during or after the call and ask it
-          to create tasks from what was discussed — Macro assigns them to the
+          team. Mention <code>@Rox</code> during or after the call and ask it
+          to create tasks from what was discussed — Rox assigns them to the
           right people and links each one back to the recording. No one has to
           play secretary.
         </p>
         <PostScreenshot
           src={taskFromHuddle}
-          alt="Channel message with an active Macro huddle showing participants and in-call controls on mobile"
+          alt="Channel message with an active Rox huddle showing participants and in-call controls on mobile"
           width={1024}
           height={665}
         />
@@ -441,15 +441,15 @@ export default function MacroVsLinearPost() {
         <hr class="post-section-rule" aria-hidden="true" />
         <h2>Linked to GitHub, both ways</h2>
         <p>
-          For engineering work, Macro tasks link to GitHub bidirectionally and
+          For engineering work, Rox tasks link to GitHub bidirectionally and
           to the agents working on them. Click the GitHub pill to jump from a
           task to its pull request, or the other way around, all opening in a
-          split inside Macro so you never leave your workspace.
+          split inside Rox so you never leave your workspace.
         </p>
         <p>Here's what this looks like on mobile:</p>
         <PostPhoneScreenshot
           src={taskGithubPr}
-          alt="Macro task detail with a linked GitHub pull request pill, status, assignees and discussion thread"
+          alt="Rox task detail with a linked GitHub pull request pill, status, assignees and discussion thread"
           width={472}
           height={820}
         />
@@ -459,7 +459,7 @@ export default function MacroVsLinearPost() {
         </p>
         <p>
           The integration goes one step further into your inbox. GitHub's own
-          notifications are famously easy to miss, so Macro brings the PRs where
+          notifications are famously easy to miss, so Rox brings the PRs where
           you are the author, are mentioned, or get a comment into your unified
           inbox alongside your messages, tasks and important email. You stop
           checking three places to find out a review came in, and team velocity
@@ -475,7 +475,7 @@ export default function MacroVsLinearPost() {
         <h2>One linked system, one team memory</h2>
         <p>
           In Linear you link issues to issues, and to PRs and a handful of
-          connected apps. In Macro you can @-mention anything in your company
+          connected apps. In Rox you can @-mention anything in your company
           from a task: a doc, a file, a customer email, a support ticket, a
           channel message, a recorded call. The links are bidirectional, so the
           task and whatever it touches both know about each other, and your
@@ -483,14 +483,14 @@ export default function MacroVsLinearPost() {
         </p>
         <PostScreenshot
           src={taskDetailCurrent}
-          alt="Current Macro task editor with status, priority, assignee, description, discussion and the shared workspace navigation"
+          alt="Current Rox task editor with status, priority, assignee, description, discussion and the shared workspace navigation"
           width={1200}
           height={650}
         />
         <p class="mvn-figcaption">
           The current task editor keeps properties, the description and
           discussion together, with the rest of the workspace one click away.
-          Captured from Macro in September 2026.
+          Captured from Rox in September 2026.
         </p>
         <p>
           That web is also how permissions work. Anything you @-mention in a
@@ -500,7 +500,7 @@ export default function MacroVsLinearPost() {
         </p>
         <p>
           The same linked graph feeds shared memory across your whole team.
-          Macro builds it from your docs, email, tasks, channels, calls and CRM,
+          Rox builds it from your docs, email, tasks, channels, calls and CRM,
           refreshes it nightly, and lets agents do work a standalone tracker
           cannot: assign a task to whoever actually owns that area, route an
           incoming customer report to the right person, or tell you who to ask
@@ -510,7 +510,7 @@ export default function MacroVsLinearPost() {
 
         <h2>What our users say</h2>
         <p>
-          We dogfood Macro internally. After years on Linear, here is what the
+          We dogfood Rox internally. After years on Linear, here is what the
           team said about switching:
         </p>
         <div class="mvn-testimonials">
@@ -526,10 +526,10 @@ export default function MacroVsLinearPost() {
 
         <h2 class="post-faq-title">Frequently asked questions</h2>
         <div class="post-faq">
-          <PostFaqItem question="Should I switch from Linear to Macro?">
+          <PostFaqItem question="Should I switch from Linear to Rox?">
             <p>
               If your stack is Linear plus Slack plus email plus docs plus a
-              CRM, yes — that is five tools that do not share context. Run Macro
+              CRM, yes — that is five tools that do not share context. Run Rox
               alongside Linear for a week, create tasks from your real email and
               channels, wire up GitHub, and see how much context-switching
               disappears.
@@ -544,7 +544,7 @@ export default function MacroVsLinearPost() {
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="Is Macro open source?">
+          <PostFaqItem question="Is Rox open source?">
             <p>
               Yes, end to end:{' '}
               <a
@@ -561,8 +561,8 @@ export default function MacroVsLinearPost() {
 
           <PostFaqItem question="Can I move my Linear issues over?">
             <p>
-              Run Macro alongside Linear while you switch — create tasks from
-              live email and channels so new work lands in Macro without a
+              Run Rox alongside Linear while you switch — create tasks from
+              live email and channels so new work lands in Rox without a
               big-bang migration, then bring the rest across as you go.
             </p>
           </PostFaqItem>
@@ -576,7 +576,7 @@ export default function MacroVsLinearPost() {
             target="_blank"
             rel="noreferrer"
           >
-            Macro tasks documentation
+            Rox tasks documentation
           </a>
           .
         </p>

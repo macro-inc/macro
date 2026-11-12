@@ -37,7 +37,7 @@ export function SectionHero() {
             'text-decoration': 'none',
           }}
         >
-          Macro raises $30M led by a16z &rarr;
+          Rox raises $30M led by a16z &rarr;
         </span>
         <div
           style={{
@@ -83,7 +83,7 @@ export function SectionHero() {
             href="https://github.com/macro-inc/macro"
             target="_blank"
             rel="noreferrer"
-            aria-label="View Macro on GitHub"
+            aria-label="View Rox on GitHub"
             class="hover-relaunch"
             style={{
               width: '28px',

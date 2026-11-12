@@ -1,7 +1,7 @@
 import type { Accessor } from 'solid-js';
 import { MacroMarkIcon } from '../graphics/MacroMarkIcon';
 
-// The small brand tag that sits above each hero headline — the Macro mark
+// The small brand tag that sits above each hero headline — the Rox mark
 // followed by the product name in a spaced, uppercase Inter cap. Shared by
 // the home hero and every feature page so the label reads identically across
 // the site (only the `label` text changes per page).

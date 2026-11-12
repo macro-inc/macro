@@ -43,10 +43,10 @@ describe('website document editor', () => {
       />
     ));
     const editor = view.getByRole('textbox', {
-      name: 'Live Macro document editor',
+      name: 'Live Rox document editor',
     });
     expect(view.container.querySelector('iframe')).toBeNull();
-    expect(editor.textContent).toContain('Why Macro Docs?');
+    expect(editor.textContent).toContain('Why Rox Docs?');
     expect(onReady).toHaveBeenCalledOnce();
     const heading = editor.querySelector('h1');
     if (!heading) throw new Error('Missing document title');

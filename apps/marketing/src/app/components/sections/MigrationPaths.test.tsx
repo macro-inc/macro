@@ -39,8 +39,8 @@ it('explains agent-assisted imports without embedding product comparisons', () =
     view.getByRole('heading', { name: 'Linear tasks' }).parentElement
       ?.textContent
   ).toContain('supported task properties');
-  expect(view.queryByText('Compare Macro with Notion')).toBeNull();
-  expect(view.queryByText('Compare Macro with Linear')).toBeNull();
+  expect(view.queryByText('Compare Rox with Notion')).toBeNull();
+  expect(view.queryByText('Compare Rox with Linear')).toBeNull();
   expect(view.getByRole('link', { name: 'See import details' })).toBeTruthy();
 });
 

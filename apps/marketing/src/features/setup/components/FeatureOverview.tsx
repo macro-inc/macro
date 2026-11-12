@@ -188,7 +188,7 @@ export function FeatureConstellation(
           ? 'Features to try first'
           : `${items()
               .map((feature) => feature.label)
-              .join(', ')}, connected in Macro`
+              .join(', ')}, connected in Rox`
       }
     >
       <div class="feature-flow-light" aria-hidden="true">

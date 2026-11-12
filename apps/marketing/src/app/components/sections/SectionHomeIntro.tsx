@@ -76,7 +76,7 @@ const pillars: Pillar[] = [
   {
     slug: 'open-source',
     title: 'Open source',
-    body: 'Contribute, fork, extend and self-host. Built for speed in Rust and SolidJS.',
+    body: 'Contribute, fork, and extend. Built for speed in Rust and SolidJS.',
     Graphic: FigSpeed,
   },
 ];
@@ -202,7 +202,7 @@ export function SectionHomeIntro() {
 
   return (
     <section
-      aria-label="What is Macro"
+      aria-label="What is Rox"
       class="home-intro-section"
       style={{
         'box-sizing': 'border-box',
@@ -226,13 +226,13 @@ export function SectionHomeIntro() {
             weren't operating as one. Context was scattered across Slack, email,
             docs, meetings, and a dozen SaaS tools. We realized we were missing
             something fundamental: an operating cadence for the company, and a
-            system to support it. Macro is that system.
+            system to support it. Rox is that system.
           </p>
           <p class="home-intro-letter-signoff">
             - Jacob Beckerman
             <span class="home-intro-letter-signoff-sep">, </span>
             <span class="home-intro-letter-signoff-role">
-              Co-Founder &amp; CEO at Macro
+              Co-Founder &amp; CEO at Rox
             </span>
           </p>
         </div>
@@ -256,7 +256,7 @@ export function SectionHomeIntro() {
           }}
         >
           <InfiniteCarousel
-            ariaLabel="What makes Macro different"
+            ariaLabel="What makes Rox different"
             class="home-intro-mobile-carousel"
             items={pillars}
             onActiveChange={setActivePillar}
@@ -302,7 +302,7 @@ export function SectionHomeIntro() {
             )}
           </InfiniteCarousel>
           <div
-            aria-label="What makes Macro different"
+            aria-label="What makes Rox different"
             style={{
               display: 'flex',
               gap: '8px',

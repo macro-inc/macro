@@ -225,7 +225,7 @@ export function TasksFeatureGrid() {
 
   return (
     <section
-      aria-label="Why Macro Tasks"
+      aria-label="Why Rox Tasks"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',

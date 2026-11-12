@@ -408,7 +408,7 @@ const documentsFeatureStyles = `
 `;
 
 // A single row of the documents fundamentals (4-wide, collapsing to 2 then 1) —
-// same divider-and-figure language as the home page's "What is Macro" pillars,
+// same divider-and-figure language as the home page's "What is Rox" pillars,
 // with from-scratch animated isometric figures.
 export function DocumentsFeatureGrid() {
   const mobile = () => viewportWidth() < 700;
@@ -418,7 +418,7 @@ export function DocumentsFeatureGrid() {
 
   return (
     <section
-      aria-label="Why Macro Docs"
+      aria-label="Why Rox Docs"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',

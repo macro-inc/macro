@@ -23,7 +23,7 @@ export function FolderComposerMockup() {
       class="agent-folder-preview"
       style={{ height: `${480 * scale()}px` }}
       role="img"
-      aria-label="Client files mockup using Macro’s folder upload composer"
+      aria-label="Client files mockup using Rox’s folder upload composer"
     >
       <div
         class="agent-folder-mockup"

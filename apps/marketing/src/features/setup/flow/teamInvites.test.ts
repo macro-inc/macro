@@ -63,7 +63,7 @@ describe('validInviteEmails', () => {
   it('normalizes case before deduplication and self exclusion', () => {
     expect(
       validInviteEmails(
-        ['ADA@Macro.com', 'ada@macro.com', 'ME@MACRO.COM'],
+        ['ADA@MACRO.COM', 'ada@macro.com', 'ME@MACRO.COM'],
         'me@macro.com'
       )
     ).toEqual(['ada@macro.com']);

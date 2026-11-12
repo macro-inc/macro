@@ -4,7 +4,7 @@ import { breakpoint } from '../../utils/utilBreakpoint';
 const items = [
   {
     label: 'Extensible',
-    body: 'Macro is designed so new workflows can plug into the same shared context instead of living as disconnected add-ons.',
+    body: 'Rox is designed so new workflows can plug into the same shared context instead of living as disconnected add-ons.',
   },
   {
     label: 'Modular',
@@ -12,7 +12,7 @@ const items = [
   },
   {
     label: 'Source available',
-    body: 'The code is available on GitHub for teams that want to inspect how Macro is put together and follow its direction more closely.',
+    body: 'The code is available on GitHub for teams that want to inspect how Rox is put together and follow its direction more closely.',
   },
 ] as const;
 
@@ -61,7 +61,7 @@ export function SectionExtensibility() {
             'max-width': '720px',
           }}
         >
-          The best work software should not feel like a hostage situation. Macro
+          The best work software should not feel like a hostage situation. Rox
           is structured so teams can understand how the pieces fit together,
           adapt workflows over time, and build on top of a system that is
           visible rather than sealed off.

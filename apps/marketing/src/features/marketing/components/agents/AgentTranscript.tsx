@@ -36,7 +36,7 @@ import '../demo-mentions.css';
 import './agent-transcript.css';
 
 /**
- * Frozen presentation of a Macro agent session (block-agent's Message,
+ * Frozen presentation of a Rox agent session (block-agent's Message,
  * ToolGroup, Thought, and the chat block's grouped tool renderers). Website
  * fixtures only: no sessions, tools, providers, or network.
  */

@@ -35,7 +35,7 @@ import { TabsInset } from '../graphics/MockupChrome';
 import { PreviewWindow } from '../graphics/PreviewWindow';
 import { SsgDesktop, SsgMobile } from '../utils/SsgGate';
 
-const _HERO_DEMO_VIDEO_ID = '1gDOXUxHo0U'; // "What Macro learned from Slack/Superhuman"
+const _HERO_DEMO_VIDEO_ID = '1gDOXUxHo0U'; // "What Rox learned from Slack/Superhuman"
 const MACRO_REPO_URL = 'https://github.com/macro-inc/macro';
 
 // ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ function _GithubStarButton() {
 }
 
 // ---------------------------------------------------------------------------
-// App-chrome icons (Macro product nav set)
+// App-chrome icons (Rox product nav set)
 // ---------------------------------------------------------------------------
 
 const NAV_ICONS: Record<string, Component<{ style?: JSX.CSSProperties }>> = {
@@ -373,7 +373,7 @@ function SparkleGlyph(props: { size?: number; color?: string }) {
   );
 }
 
-// Channel indicator — the Macro app's channel icon.
+// Channel indicator — the Rox app's channel icon.
 function HashGlyph(props: { size?: number; color?: string }) {
   const s = props.size ?? 15;
   return (
@@ -412,7 +412,7 @@ function PaperclipGlyph(props: { size?: number }) {
   );
 }
 
-// The blue document icon — the Macro app's documents icon.
+// The blue document icon — the Rox app's documents icon.
 function DocFileGlyph(props: { size?: number; color?: string }) {
   const s = props.size ?? 16;
   return (
@@ -429,7 +429,7 @@ function DocFileGlyph(props: { size?: number; color?: string }) {
   );
 }
 
-// The green task icon — the Macro app's tasks icon.
+// The green task icon — the Rox app's tasks icon.
 function TaskListGlyph(props: { size?: number; color?: string }) {
   const s = props.size ?? 16;
   return (
@@ -487,7 +487,7 @@ function PriorityGlyph(props: { size?: number }) {
   );
 }
 
-// The phone / call icon — the Macro app's calls icon.
+// The phone / call icon — the Rox app's calls icon.
 function PhoneGlyph(props: { size?: number; color?: string }) {
   const s = props.size ?? 14;
   return (
@@ -789,7 +789,7 @@ export function HeroChannelWindow() {
       initials: 'JW',
       color: 'var(--b4)',
     },
-    { name: 'Macro Agent', role: 'Agent', agent: true },
+    { name: 'Rox Agent', role: 'Agent', agent: true },
   ];
 
   return (
@@ -1460,7 +1460,7 @@ export function HeroChannelWindow() {
 // ---------------------------------------------------------------------------
 // Channels page hero — a #creative-team channel window beside a DM panel.
 // The channel thread walks the page's four stories in order: @mention a
-// teammate, share an image, share an email thread, and pull in @Macro. The
+// teammate, share an image, share an email thread, and pull in @Rox. The
 // DM panel carries the 1:1 story ("Type @ to share with Jacob").
 // ---------------------------------------------------------------------------
 
@@ -2092,20 +2092,20 @@ function ChatHeroChannelWindow(props: { compact: boolean }) {
             Read this before we write the copy — the customer's exact words:
           </ChatHeroMessage>
 
-          {/* @Macro */}
+          {/* @Rox */}
           <ChatHeroMessage
             initials="TN"
             name="Teo Nys"
             time="9:14 AM"
             compact={c()}
           >
-            <MentionPill kind="person" label="Macro" /> what did I miss in here
+            <MentionPill kind="person" label="Rox" /> what did I miss in here
             overnight?
           </ChatHeroMessage>
 
           <ChatHeroMessage
             agent
-            name="Macro"
+            name="Rox"
             time="9:14 AM"
             meta="· summarized 26 messages"
             compact={c()}
@@ -3191,7 +3191,7 @@ export function InboxGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// @Macro agent in channel graphic
+// @Rox agent in channel graphic
 // ---------------------------------------------------------------------------
 
 export function AgentGraphic() {
@@ -3251,7 +3251,7 @@ export function AgentGraphic() {
           </span>
         </div>
 
-        {/* user message calling @Macro */}
+        {/* user message calling @Rox */}
         <div
           style={{
             'align-items': 'flex-start',
@@ -3294,7 +3294,7 @@ export function AgentGraphic() {
                 margin: 0,
               }}
             >
-              <MentionPill kind="person" label="Macro" initials="M" /> what did
+              <MentionPill kind="person" label="Rox" initials="M" /> what did
               I miss in here overnight?
             </p>
           </div>
@@ -3337,7 +3337,7 @@ export function AgentGraphic() {
                   'font-weight': '600',
                 }}
               >
-                Macro
+                Rox
               </span>
               <span
                 style={{
@@ -4030,7 +4030,7 @@ export function ChannelCohesionGraphic() {
             }}
           >
             {/* @mention menu — opens upward so it never hides the composer.
-                Mirrors the real Macro typeahead: an elevated rounded-xl card with
+                Mirrors the real Rox typeahead: an elevated rounded-xl card with
                 muted section headers, a subtle ink/5 highlight on the active row,
                 and a "View all →" affordance. */}
             <Show when={menuOpen()}>
@@ -4425,12 +4425,12 @@ export function ChannelCohesionGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Slack vs Discord vs Microsoft Teams)
+// Comparison table (Rox vs Slack vs Discord vs Microsoft Teams)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'Slack', 'Discord', 'Teams'];
+const comparisonColumns = ['Rox', 'Slack', 'Discord', 'Teams'];
 
 const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   { feature: 'Channels, threads & emoji', cells: [true, true, true, true] },
@@ -4703,10 +4703,10 @@ function _ComparisonTable() {
 
 const faqItems: { q: string; a: JSX.Element }[] = [
   {
-    q: 'How is Macro different from Slack?',
+    q: 'How is Rox different from Slack?',
     a: (
       <>
-        Channels in Macro are quieter and more organized. The first few replies
+        Channels in Rox are quieter and more organized. The first few replies
         show inline, so you don't open a thread every time someone responds, and
         a busy channel reads more like a forum than a firehose. Channels also
         share one inbox with your email (split into Signal and Noise), and
@@ -4731,8 +4731,8 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         Yes. Connect Slack under <strong>Settings → Connectors</strong> as an
-        MCP connector so agents in Macro can still search it. That helps with
-        archives or Slack Connect with customers. Many teams run Macro for
+        MCP connector so agents in Rox can still search it. That helps with
+        archives or Slack Connect with customers. Many teams run Rox for
         internal communication and keep Slack only for external channels during
         the transition.
       </>
@@ -4746,7 +4746,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
         <code>@tomorrow</code>), and groups (<code>@here</code>). Each mention
         creates a two-way link between both places, and messages use the same
         rich editor (formatting, attachments, and markdown) as everywhere else
-        in Macro.
+        in Rox.
       </>
     ),
   },
@@ -4754,7 +4754,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'Can agents work inside channels?',
     a: (
       <>
-        Yes. @mention <strong>@Macro</strong> to call an agent into the channel.
+        Yes. @mention <strong>@Rox</strong> to call an agent into the channel.
         It can summarize earlier discussion, answer questions about your
         workspace, draft replies, and more, with the full context of your docs,
         tasks, and email.
@@ -4762,21 +4762,21 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     ),
   },
   {
-    q: 'Do channel members need a Macro account?',
+    q: 'Do channel members need a Rox account?',
     a: (
       <>
         No. Anyone can be added to a channel by email, even if they're not on
-        your team. People without a Macro account receive an email telling them
+        your team. People without a Rox account receive an email telling them
         about their channel notifications.
       </>
     ),
   },
   {
-    q: 'Is Macro open source?',
+    q: 'Is Rox open source?',
     a: (
       <>
-        Yes. Macro is fully open source under the AGPLv3 (as of May 31 2026),
-        not "open core." To build on Macro under a different license, contact{' '}
+        Yes. Rox is fully open source under the AGPLv3 (as of May 31 2026),
+        not "open core." To build on Rox under a different license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>
     ),

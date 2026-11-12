@@ -80,18 +80,18 @@ export default {
   whatsappSnippet:
     'Link WhatsApp, bring your chats in, reply, share and mention them in channels',
   whatsappLength: '0:43',
-  agentsTitle: 'Learn how to use Macro Agents',
-  agentsBlock: 'Macro Agents',
+  agentsTitle: 'Learn how to use Rox Agents',
+  agentsBlock: 'Rox Agents',
   agentsSnippet:
     'Agents in your channels, tasks for agents, macroD and unified memory',
   agentsLength: '1:05',
-  macrodTitle: 'Learn how to use MacroD',
-  macrodBlock: 'MacroD',
+  macrodTitle: 'Learn how to use RoxD',
+  macrodBlock: 'RoxD',
   macrodSnippet:
     'Connect the coding agent you already use, then @mention it or assign it a task',
   macrodLength: '1:17',
-  driveTitle: 'Learn how to use Macro Drive',
-  driveBlock: 'Macro Drive',
+  driveTitle: 'Learn how to use Rox Drive',
+  driveBlock: 'Rox Drive',
   driveSnippet:
     'Files from channels, DMs and email in one place, linked to everything else',
   driveLength: '1:29',

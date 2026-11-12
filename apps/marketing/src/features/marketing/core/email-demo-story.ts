@@ -13,7 +13,7 @@ export const meetingDraft = {
   subject: 'Re: Thursday demo',
   to: 'Valentina <valentina@coparse.com>',
   cc: 'Julia <julia@macro.com>',
-  body: 'Hi Valentina,\n\nThursday at 9 works. Here’s the setup plan and Macro overview. I’ve copied Julia, who can help with setup.\n\nSee you Thursday,\nJacob',
+  body: 'Hi Valentina,\n\nThursday at 9 works. Here’s the setup plan and Rox overview. I’ve copied Julia, who can help with setup.\n\nSee you Thursday,\nJacob',
 };
 
 /** Three populated, fictional inboxes, isolated to the Mail page. */

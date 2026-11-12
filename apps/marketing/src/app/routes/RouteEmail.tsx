@@ -28,8 +28,8 @@ const faqItems = [
     q: 'Which email accounts can I connect?',
     a: (
       <>
-        Macro supports Gmail and Google Workspace. Connect an account in
-        Settings and keep using Gmail alongside Macro. See the{' '}
+        Rox supports Gmail and Google Workspace. Connect an account in
+        Settings and keep using Gmail alongside Rox. See the{' '}
         <a href="https://docs.macro.com/product/email">email setup guide</a>.
       </>
     ),
@@ -50,7 +50,7 @@ const faqItems = [
       <>
         Yes. Ask an agent to draft a reply using the email thread and relevant
         workspace context. Review and edit the draft before sending. Learn more
-        about <a href="/agents">Macro Agents</a>.
+        about <a href="/agents">Rox Agents</a>.
       </>
     ),
   },
@@ -69,8 +69,8 @@ const faqItems = [
     ),
   },
   {
-    q: 'Does Macro get my Google password?',
-    a: 'No. You authorize the connection on Google, and Macro receives access tokens rather than your password.',
+    q: 'Does Rox get my Google password?',
+    a: 'No. You authorize the connection on Google, and Rox receives access tokens rather than your password.',
   },
   {
     q: 'Is my email used to train AI?',
@@ -86,17 +86,17 @@ const faqItems = [
     q: 'How do I disconnect an account?',
     a: (
       <>
-        Disconnect in Macro’s Settings or revoke access from your Google
-        account. Disconnecting does not delete data already stored in Macro. See
+        Disconnect in Rox’s Settings or revoke access from your Google
+        account. Disconnecting does not delete data already stored in Rox. See
         the <a href="/privacy">Privacy Policy</a> for deletion details.
       </>
     ),
   },
   {
-    q: 'Can I try Macro for free?',
+    q: 'Can I try Rox for free?',
     a: (
       <>
-        Yes. Macro has a free plan with usage limits. See{' '}
+        Yes. Rox has a free plan with usage limits. See{' '}
         <a href="/pricing">plans and limits</a> before choosing a plan for your
         team.
       </>
@@ -106,9 +106,9 @@ const faqItems = [
 
 export function RouteEmail() {
   setPageSeo({
-    title: 'Macro Mail — The AI Email Client',
+    title: 'Rox Mail — The AI Email Client',
     description:
-      'Bring your email accounts into one inbox. Draft and edit with agents, separate signal from noise, and share email threads with your team in Macro.',
+      'Bring your email accounts into one inbox. Draft and edit with agents, separate signal from noise, and share email threads with your team in Rox.',
     path: '/email',
   });
 
@@ -194,7 +194,7 @@ export function RouteEmail() {
       <EmailComparison />
       <FeaturePageFaq
         id="email-faq-title"
-        title="Questions about Macro Mail"
+        title="Questions about Rox Mail"
         items={faqItems}
       />
       <HomepageClosing />

@@ -103,7 +103,7 @@ export function HomepageInteractiveDemo() {
                 <span class="homepage-demo-yellow" aria-hidden="true" />
                 <span class="homepage-demo-green" aria-hidden="true" />
               </div>
-              <Dialog.Title>Macro · Interactive demo</Dialog.Title>
+              <Dialog.Title>Rox · Interactive demo</Dialog.Title>
               <Dialog.CloseButton
                 class="homepage-demo-close"
                 aria-label="Close interactive demo"
@@ -123,7 +123,7 @@ export function HomepageInteractiveDemo() {
               <Show when={open()}>
                 <iframe
                   src="/demo"
-                  title="Macro interactive sample workspace"
+                  title="Rox interactive sample workspace"
                   class="homepage-demo-frame"
                   onLoad={(event) => {
                     frameEscape.watch(event.currentTarget);

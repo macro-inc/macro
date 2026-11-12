@@ -6,7 +6,7 @@ const parts: EmailDemoToken[] = [
   'Hi Valentina,\n',
   'Thanks for joining the demo on September 14. Great meeting your team!\n',
   'Here’s our ',
-  { kind: 'pdf', label: 'Macro sales overview.pdf' },
+  { kind: 'pdf', label: 'Rox sales overview.pdf' },
   ' and the ',
   { kind: 'md', label: 'Team rollout plan' },
   '.\n',

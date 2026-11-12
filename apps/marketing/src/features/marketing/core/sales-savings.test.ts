@@ -17,7 +17,7 @@ describe('sales savings', () => {
     expect(perSeat).toBe(8400);
   });
 
-  it('compares a five-seat team with Macro', () => {
+  it('compares a five-seat team with Rox', () => {
     expect(salesSavings(SALES_HEADLINE_TOOLS, 5, 'business')).toEqual({
       toolsCents: 504_000,
       macroCents: 240_000,

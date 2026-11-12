@@ -80,7 +80,7 @@ export function FeatureComparisons(props: {
         presentation="framed"
         minWidth={props.tableMinWidth}
         columns={[
-          { label: 'Macro', macro: true, icon: <ComparisonMacroLogo /> },
+          { label: 'Rox', macro: true, icon: <ComparisonMacroLogo /> },
           ...props.comparisons.map((comparison) => ({
             label: comparison.competitor,
           })),
@@ -89,7 +89,7 @@ export function FeatureComparisons(props: {
         sortRows={false}
         mobileCellWidth={110}
         mobileMinWidth={240 + (props.comparisons.length + 1) * 110}
-        scrollLabel="Compare Macro"
+        scrollLabel="Compare Rox"
       />
       <FeatureComparisonKey
         partial={rows().some((row) => row.cells.includes('partial'))}

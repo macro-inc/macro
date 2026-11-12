@@ -2,7 +2,7 @@ import { For, type JSX, Show } from 'solid-js';
 import IconGithub from '../../../assets/icons/icon-github.svg';
 import { viewportWidth } from '../../utils/utilBreakpoint';
 
-// Concrete 2x2 grid of GitHub-in-Macro UI elements, mirroring DocumentsUiGrid:
+// Concrete 2x2 grid of GitHub-in-Rox UI elements, mirroring DocumentsUiGrid:
 // grayscale near-black mocks above captions. Each cell shows
 // exactly one legible mock — no layered/dimmed compositions — so the four
 // graphics stay distinct at a glance: an inbox list, a chat message, a task

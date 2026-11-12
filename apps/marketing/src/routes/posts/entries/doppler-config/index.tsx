@@ -4,14 +4,14 @@ import type { PostMeta } from '../../registry';
 
 export const postMeta: PostMeta = {
   slug: 'doppler-config',
-  title: 'How We Migrated Macro to Doppler',
+  title: 'How We Migrated Rox to Doppler',
   titleLine2: 'and Made Configuration Safer',
-  seoTitle: 'How We Migrated Macro to Doppler and Made Configuration Safer',
+  seoTitle: 'How We Migrated Rox to Doppler and Made Configuration Safer',
   subtitle:
     'One source of truth for every service’s configuration, a typed loader that fails at startup instead of drifting, and CI that catches a missing value before it becomes a failed deploy.',
   date: '2026-07-12',
   description:
-    'How Macro moved service configuration to Doppler: Config Sync into AWS Secrets Manager, a single APP_SECRETS_JSON injected at deploy time, typed loading through the macro_env_var and macro_config crates, and CI validation with doppler-config-rs.',
+    'How Rox moved service configuration to Doppler: Config Sync into AWS Secrets Manager, a single APP_SECRETS_JSON injected at deploy time, typed loading through the macro_env_var and macro_config crates, and CI validation with doppler-config-rs.',
   preview:
     'Deploy fails. Dig through the logs. Find the environment variable nobody added to the infra. We got tired of that loop.',
   tags: ['macro', 'engineering'],
@@ -22,7 +22,7 @@ export const postMeta: PostMeta = {
   image: '/og/doppler-config.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Will Hutchinson', role: 'Macro Engineering' },
+  author: { name: 'Will Hutchinson', role: 'Rox Engineering' },
   ctaButtonName: 'blog_doppler_config_cta',
 };
 
@@ -119,7 +119,7 @@ export default function DopplerConfigPost() {
     <div class="dpl-post">
       <article>
         <p class="dpl-lede">
-          As Macro has grown, so has the number of services we run to deliver
+          As Rox has grown, so has the number of services we run to deliver
           the product experience our users expect.
         </p>
         <p>

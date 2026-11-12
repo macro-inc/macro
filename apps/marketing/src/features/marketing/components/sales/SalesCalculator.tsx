@@ -139,7 +139,7 @@ export function SalesCalculator(props: {
               <s>{formatWholeUsd(result().toolsCents)}/yr</s>
             </p>
             <p>
-              <span>Macro</span>
+              <span>Rox</span>
               <strong>{formatWholeUsd(result().macroCents)}/yr</strong>
             </p>
           </div>
@@ -147,7 +147,7 @@ export function SalesCalculator(props: {
             when={result().savedCents > 0}
             fallback={
               <p class="sales-calc-even">
-                Macro replaces all of it for{' '}
+                Rox replaces all of it for{' '}
                 {formatWholeUsd(result().macroCents / seats() / 12)} a person
                 per month.
               </p>
@@ -170,7 +170,7 @@ export function SalesCalculator(props: {
       </div>
       <p class="sales-calc-note">
         Monthly per-seat prices, billed yearly, from each tool’s pricing page in{' '}
-        {PRICES_CHECKED}. Macro is priced at Pro, $40 a seat per month.
+        {PRICES_CHECKED}. Rox is priced at Pro, $40 a seat per month.
       </p>
     </div>
   );

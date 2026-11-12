@@ -43,7 +43,7 @@ const tasksCards = [
   {
     Graphic: TasksAiHandoffGraphic,
     title: 'Agents pick up and close them',
-    desc: 'Assign a task to a Macro agent. The agent can open PRs, update docs, and close out the task.',
+    desc: 'Assign a task to a Rox agent. The agent can open PRs, update docs, and close out the task.',
     bleed: true,
   },
 ];
@@ -414,7 +414,7 @@ export function TasksFeatureCards(props: { cardsOnly?: boolean } = {}) {
                 'text-wrap': 'balance',
               }}
             >
-              Why did we build Macro Tasks?
+              Why did we build Rox Tasks?
             </h2>
             {/* Why the product exists, in place of a demo reel: the cards below show
             what it does, so this says why it was built. */}
@@ -436,7 +436,7 @@ export function TasksFeatureCards(props: { cardsOnly?: boolean } = {}) {
                   'text-wrap': 'pretty',
                 }}
               >
-                Macro Tasks was designed based off our frustration with tools
+                Rox Tasks was designed based off our frustration with tools
                 like Linear, Notion and Jira... we've tried every task manager
                 and every way of using them. None of them helped our team move
                 faster. Each kept us organized for a while until they inevitably
@@ -445,7 +445,7 @@ export function TasksFeatureCards(props: { cardsOnly?: boolean } = {}) {
                 to Linear and nothing seemed to make us more organized.
                 <br />
                 <br />
-                Macro Tasks fixes this by tightly co-locating tasks with your
+                Rox Tasks fixes this by tightly co-locating tasks with your
                 team chat. Tickets are so easy to create from task messages, and
                 their status gets updated automatically so they'll actually get
                 closed. After two years of dogfooding it's finally working for
@@ -463,7 +463,7 @@ export function TasksFeatureCards(props: { cardsOnly?: boolean } = {}) {
                   'text-wrap': 'pretty',
                 }}
               >
-                - Jacob Beckerman, CEO and founder of Macro
+                - Jacob Beckerman, CEO and founder of Rox
               </p>
             </div>
           </div>

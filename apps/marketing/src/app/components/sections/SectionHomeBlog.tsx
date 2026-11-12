@@ -105,7 +105,7 @@ export function SectionHomeBlog() {
 
   return (
     <section
-      aria-label="From the Macro blog"
+      aria-label="From the Rox blog"
       class="home-blog-section posts-shell"
       style={{
         'box-sizing': 'border-box',
@@ -341,7 +341,7 @@ export function SectionHomeBlog() {
           'text-wrap': 'balance',
         }}
       >
-        From the Macro blog
+        From the Rox blog
       </A>
       <SsgDesktop>
         <div class="home-blog-desktop-carousel">
@@ -350,7 +350,7 @@ export function SectionHomeBlog() {
             classList={{ 'is-at-end': atEnd() }}
           >
             <ul
-              aria-label="Macro blog posts"
+              aria-label="Rox blog posts"
               class="home-blog-desktop-track"
               onScroll={syncDesktopEdges}
               ref={(el) => {
@@ -389,7 +389,7 @@ export function SectionHomeBlog() {
       <SsgMobile>
         <div class="home-blog-mobile-carousel">
           <InfiniteCarousel
-            ariaLabel="Macro blog posts"
+            ariaLabel="Rox blog posts"
             class="home-blog-mobile-track"
             items={homePosts()}
             onActiveChange={setActivePost}

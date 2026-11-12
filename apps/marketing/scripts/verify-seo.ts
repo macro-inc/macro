@@ -24,13 +24,13 @@ const typesIn = (html: string) =>
 
 // Intentional copy updates; retain the captured migration baseline unchanged.
 const updatedTitles: Record<string, string> = {
-  '/github': 'GitHub in Macro | Pull Requests, Code Changes, and Tasks',
-  '/agents': 'Macro Agents | Agents That Know What Your Team Is Doing',
-  '/calls': 'Macro Calls — Turn Conversations into Tasks and Updates',
-  '/channels': 'Macro Chat: Bring the Work into the Conversation',
-  '/documents': 'Macro Docs | Write With Your Team and Your Agents',
-  '/migrate': 'Switch your company to Macro | Migration guide',
-  '/tasks': 'Macro Tasks — Task management that keeps up with your team',
+  '/github': 'GitHub in Rox | Pull Requests, Code Changes, and Tasks',
+  '/agents': 'Rox Agents | Agents That Know What Your Team Is Doing',
+  '/calls': 'Rox Calls — Turn Conversations into Tasks and Updates',
+  '/channels': 'Rox Chat: Bring the Work into the Conversation',
+  '/documents': 'Rox Docs | Write With Your Team and Your Agents',
+  '/migrate': 'Switch your company to Rox | Migration guide',
+  '/tasks': 'Rox Tasks — Task management that keeps up with your team',
 };
 
 const linksByRoute = new Map<string, string[]>();

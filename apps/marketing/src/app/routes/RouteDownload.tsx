@@ -6,8 +6,8 @@ import './RouteDownload.css';
 
 export function RouteDownload() {
   setPageSeo({
-    title: 'Download Macro - Coming Soon',
-    description: 'Macro desktop app coming soon for macOS and Linux.',
+    title: 'Download Rox - Coming Soon',
+    description: 'Rox desktop app coming soon for macOS and Linux.',
     path: '/download',
   });
 
@@ -19,7 +19,7 @@ export function RouteDownload() {
             <MacroLogo />
           </div>
           <h1>Coming Soon</h1>
-          <p>The Macro desktop app will be available for macOS and Linux.</p>
+          <p>The Rox desktop app will be available for macOS and Linux.</p>
         </header>
       </div>
       <SectionMoreFeatures currentPath="/download" footerOnly />

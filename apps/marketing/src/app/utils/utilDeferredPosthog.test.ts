@@ -61,7 +61,7 @@ describe('deferred website PostHog', () => {
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     window.history.replaceState({}, '', '/?utm_source=launch&gclid=ad-click');
-    document.title = 'Macro';
+    document.title = 'Rox';
   });
 
   afterEach(() => {

@@ -5,7 +5,7 @@ import {
 } from './pricing-comparison';
 
 describe('pricing comparison', () => {
-  it('compares the default business stack with Macro Pro', () => {
+  it('compares the default business stack with Rox Pro', () => {
     // Superhuman $33 + Notion $20 + Jira $15.56 + Slack $15 + Granola $14 + HubSpot $90.
     expect(summarizeComparison(DEFAULT_COMPARISON_TOOLS, 5)).toEqual({
       monthlySeatCents: 18756,
@@ -24,7 +24,7 @@ describe('pricing comparison', () => {
     });
   });
 
-  it('reports additional cost when Macro costs more instead of claiming savings', () => {
+  it('reports additional cost when Rox costs more instead of claiming savings', () => {
     expect(summarizeComparison(['notion'], 1).differenceCents).toBe(-24000);
     expect(summarizeComparison([], 5).differenceCents).toBe(-240000);
     expect(summarizeComparison(['notion', 'airtable'], 1).differenceCents).toBe(

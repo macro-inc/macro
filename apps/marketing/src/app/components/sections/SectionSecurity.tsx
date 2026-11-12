@@ -1,6 +1,3 @@
-import IconCasa from '../../../assets/designs/design-casa.svg';
-import IconIso from '../../../assets/designs/design-iso.svg';
-import IconSoc2 from '../../../assets/designs/design-soc2.svg';
 import { viewportWidth } from '../../utils/utilBreakpoint';
 
 export function SectionSecurity(props: { gridArea?: string } = {}) {
@@ -21,7 +18,7 @@ export function SectionSecurity(props: { gridArea?: string } = {}) {
         display: 'grid',
         gap: mobile() ? '22px' : '32px',
         ...(props.gridArea ? { 'grid-area': props.gridArea } : {}),
-        'grid-template-columns': mobile() ? '1fr' : 'minmax(0, 1fr) auto',
+        'grid-template-columns': '1fr',
         'min-height': mobile() ? '150px' : '132px',
         padding: mobile() ? '24px 22px' : '24px 72px',
         position: 'relative',
@@ -62,45 +59,8 @@ export function SectionSecurity(props: { gridArea?: string } = {}) {
             'max-width': '520px',
           }}
         >
-          Enterprise-grade security. Zero data retention (ZDR, no training) with
-          model providers. SOC 2 Type II certified.
+          Zero data retention (ZDR, no training) with model providers.
         </p>
-      </div>
-      <div
-        aria-label="Security certifications"
-        style={{
-          'align-items': 'center',
-          color: 'color-mix(in srgb, var(--c2) 78%, var(--c4))',
-          display: 'flex',
-          gap: mobile() ? '20px' : '28px',
-          'justify-content': mobile() ? 'center' : 'end',
-          opacity: 0.78,
-          position: 'relative',
-          'z-index': 1,
-        }}
-      >
-        <IconIso
-          aria-label="ISO 27001"
-          style={{
-            height: mobile() ? '48px' : '60px',
-            width: mobile() ? '48px' : '60px',
-          }}
-        />
-        <IconSoc2
-          aria-label="AICPA SOC 2"
-          style={{
-            height: mobile() ? '48px' : '60px',
-            width: mobile() ? '48px' : '60px',
-          }}
-        />
-        <IconCasa
-          aria-label="CASA Tier 2"
-          style={{
-            height: mobile() ? '48px' : '60px',
-            transform: 'scale(1.02)',
-            width: mobile() ? '48px' : '60px',
-          }}
-        />
       </div>
     </section>
   );

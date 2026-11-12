@@ -140,7 +140,7 @@ it('shows the complete two-person hero for reduced motion', () => {
 it('reads the sources before editing and keeps both collaborators in one paragraph', () => {
   const view = render(() => <DocumentAgentDemo />);
   const hit = view.container.querySelector('[data-search-hit="email"]');
-  expect(view.queryByRole('textbox', { name: 'Message Macro' })).toBeNull();
+  expect(view.queryByRole('textbox', { name: 'Message Rox' })).toBeNull();
   visible(true);
   vi.advanceTimersByTime(2600);
   expect(body(view).textContent).toContain('Add annual plans later');
@@ -195,7 +195,7 @@ it('shows the completed agent edit without animation for reduced motion', () => 
   expect(body(view).textContent).toContain(
     'Link to the billing FAQ below the table.'
   );
-  expect(view.queryByRole('textbox', { name: 'Message Macro' })).toBeNull();
+  expect(view.queryByRole('textbox', { name: 'Message Rox' })).toBeNull();
 });
 
 it('merges an offline edit with the teammate edit on reconnect', () => {

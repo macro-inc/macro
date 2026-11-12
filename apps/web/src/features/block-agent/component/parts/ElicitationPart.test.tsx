@@ -22,7 +22,7 @@ let canAnswer = true;
 
 vi.mock('../../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
-    bot: () => ({ name: 'Macro Coder' }),
+    bot: () => ({ name: 'Rox Coder' }),
     interactions: {
       pending: () => (pending ? [{ kind: 'elicitation', ...pending }] : []),
       canAnswer: () => canAnswer,
@@ -222,7 +222,7 @@ describe('ElicitationPart', () => {
       <ElicitationPart turn={0} part={part()} />
     ));
     expect(queryByTestId('form')).not.toBeNull();
-    expect(getByTestId('title').textContent).toContain('Macro Coder is asking');
+    expect(getByTestId('title').textContent).toContain('Rox Coder is asking');
     expect(getByTestId('trailing').textContent).toBe('Waiting for you');
   });
 

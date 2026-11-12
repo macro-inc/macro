@@ -17,8 +17,8 @@ export const dataSecurityFaqItem: FaqItem = {
   q: 'Is our workspace data secure?',
   a: (
     <>
-      Yes. Open source means the Macro application code is available to inspect.
-      It does not make your workspace public. Data in your Macro account,
+      Yes. Open source means the Rox application code is available to inspect.
+      It does not make your workspace public. Data in your Rox account,
       including your team’s email, documents, messages, and other workspace
       content, remains private and secure.
     </>

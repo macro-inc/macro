@@ -125,7 +125,7 @@ const providers: readonly {
 export const migrationComparisons: readonly FeatureComparison[] = providers.map(
   (provider) => ({
     id: provider.id,
-    question: `How does Macro compare with ${provider.competitor}?`,
+    question: `How does Rox compare with ${provider.competitor}?`,
     competitor: provider.competitor,
     sources: provider.sources,
     rows: rows.map((row) => ({

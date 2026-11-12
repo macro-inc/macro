@@ -26,9 +26,9 @@ export default function RouteDemo() {
   const [params] = useSearchParams();
   const palette = createSitePalette();
   setPageSeo({
-    title: 'Macro — Sample workspace',
+    title: 'Rox — Sample workspace',
     description:
-      'Explore Macro with an interactive sample workspace. All changes stay in this browser session.',
+      'Explore Rox with an interactive sample workspace. All changes stay in this browser session.',
     path: '/demo',
     noindex: true,
   });

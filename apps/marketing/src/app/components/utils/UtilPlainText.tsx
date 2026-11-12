@@ -80,7 +80,7 @@ function parseContent(content: string, lists: boolean): ParsedContent {
       flushList();
     }
 
-    if (!eyebrow && line === 'Macro') {
+    if (!eyebrow && line === 'Rox') {
       eyebrow = line;
       continue;
     }

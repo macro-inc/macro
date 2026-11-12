@@ -26,7 +26,7 @@ export const featurePages: FeaturePage[] = [
   },
   {
     Icon: IconEmail,
-    title: 'Macro Mail',
+    title: 'Rox Mail',
     href: '/email',
     description: 'Fast email search, shared threads, and agent drafts.',
   },

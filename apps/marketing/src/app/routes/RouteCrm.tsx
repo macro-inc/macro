@@ -42,11 +42,11 @@ const FollowupDemo = lazy(loadFollowup);
 const faqItems = [
   {
     q: 'How do I start using CRM?',
-    a: 'Open Customers in Macro. Your team needs CRM enabled; a new team can enable it from CRM settings. You can then add companies, contacts, and pipelines.',
+    a: 'Open Customers in Rox. Your team needs CRM enabled; a new team can enable it from CRM settings. You can then add companies, contacts, and pipelines.',
   },
   {
     q: 'How are companies and contacts added?',
-    a: 'Macro creates company and contact records from your team’s primary connected email accounts. You can also add records manually or import a CSV. Personal email domains do not become companies.',
+    a: 'Rox creates company and contact records from your team’s primary connected email accounts. You can also add records manually or import a CSV. Personal email domains do not become companies.',
   },
   {
     q: 'Can I track deals in a board or table?',
@@ -54,7 +54,7 @@ const faqItems = [
   },
   {
     q: 'What does automatic enrichment add?',
-    a: 'Macro uses a company’s domain to add public company information. Deal details such as stage, owner, and revenue come from you or your agents.',
+    a: 'Rox uses a company’s domain to add public company information. Deal details such as stage, owner, and revenue come from you or your agents.',
   },
   {
     q: 'What customer context can my agent use?',
@@ -62,7 +62,7 @@ const faqItems = [
       <>
         Agents can read accessible customer emails, calls, chats, files, and
         tasks to draft follow-ups and identify next steps. They can also update
-        CRM fields. See <a href="/agents">Macro Agents</a> or{' '}
+        CRM fields. See <a href="/agents">Rox Agents</a> or{' '}
         <a href="https://docs.macro.com/AI/mcp/overview">
           connect an AI client through MCP
         </a>
@@ -88,7 +88,7 @@ const faqItems = [
     q: 'Where can I check pricing and CRM access?',
     a: (
       <>
-        See <a href="/pricing">Macro’s current plans and limits</a>. If you need
+        See <a href="/pricing">Rox’s current plans and limits</a>. If you need
         help enabling CRM for your team,{' '}
         <a href={DEMO_BOOKING_URL}>talk to us</a>.
       </>
@@ -98,7 +98,7 @@ const faqItems = [
 
 export function RouteCrm() {
   setPageSeo({
-    title: 'Macro CRM — The Self-Building CRM',
+    title: 'Rox CRM — The Self-Building CRM',
     description:
       'Companies and contacts built from your email, enriched automatically, and kept current by agents. Right in your workspace, so there’s no separate tool to check.',
     path: '/crm',
@@ -119,7 +119,7 @@ export function RouteCrm() {
         heroFrame
         windowChrome={false}
         view="crm"
-        label="Explore Macro CRM"
+        label="Explore Rox CRM"
         render={() => (
           <DeferredDemo
             preload={loadPipeline}
@@ -171,7 +171,7 @@ export function RouteCrm() {
       <FeaturePageSection
         id="crm-enrichment"
         title={['Automatically add and', 'enrich new contacts.']}
-        description="When you email someone new, Macro creates the contact and company from their domain. Public company details fill in the record, so you have a starting point before the first meeting."
+        description="When you email someone new, Rox creates the contact and company from their domain. Public company details fill in the record, so you have a starting point before the first meeting."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -208,7 +208,7 @@ export function RouteCrm() {
       <CrmComparison />
       <FeaturePageFaq
         id="crm-faq-title"
-        title="Questions about Macro CRM"
+        title="Questions about Rox CRM"
         items={faqItems}
       />
       <HomepageClosing />

@@ -29,7 +29,7 @@ const callsFaq = [
     ),
   },
   {
-    q: 'Can someone join without a Macro account?',
+    q: 'Can someone join without a Rox account?',
     a: 'Yes. Guests can join standalone meeting links in their browser without an account. Channel-linked calls require sign-in.',
   },
   {
@@ -42,7 +42,7 @@ const callsFaq = [
       <>
         Yes. Ask an agent to use an accessible transcript to draft a follow-up,
         create tasks, or update customer records. See{' '}
-        <a href="/agents">Macro Agents</a>.
+        <a href="/agents">Rox Agents</a>.
       </>
     ),
   },
@@ -52,7 +52,7 @@ const callsFaq = [
   },
   {
     q: 'Can I use transcripts from another meeting app?',
-    a: 'You can bring a transcript into Macro as a document and use it as agent context. This is separate from recording a call in Macro.',
+    a: 'You can bring a transcript into Rox as a document and use it as agent context. This is separate from recording a call in Rox.',
   },
   {
     q: 'Which plan includes calls?',
@@ -89,9 +89,9 @@ export function RouteCalls() {
     });
   };
   setPageSeo({
-    title: 'Macro Calls — Turn Conversations into Tasks and Updates',
+    title: 'Rox Calls — Turn Conversations into Tasks and Updates',
     description:
-      'Macro records and transcribes your calls so your agents can update tasks and docs from the conversation.',
+      'Rox records and transcribes your calls so your agents can update tasks and docs from the conversation.',
     path: '/calls',
   });
   return (
@@ -101,9 +101,9 @@ export function RouteCalls() {
           cta="calls_hero_get_started"
           tutorial="calls"
           product="Calls"
-          title={['Call from anywhere in Macro', 'with every call recorded.']}
+          title={['Call from anywhere in Rox', 'with every call recorded.']}
           description={[
-            'Macro records and transcribes your calls',
+            'Rox records and transcribes your calls',
             'so your agent can handle what comes next.',
           ]}
         />
@@ -128,7 +128,7 @@ export function RouteCalls() {
             'Start a call in channels, DMs,',
             'or through meeting links.',
           ]}
-          description="You can start calls from channels, DMs, or through meeting links. People outside of Macro can join your meeting links. Create your own booking links so people can set up times with you."
+          description="You can start calls from channels, DMs, or through meeting links. People outside of Rox can join your meeting links. Create your own booking links so people can set up times with you."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -158,7 +158,7 @@ export function RouteCalls() {
         <CallsComparison />
         <FeaturePageFaq
           id="calls-faq-title"
-          title="Questions about Macro Calls"
+          title="Questions about Rox Calls"
           items={callsFaq}
         />
         <HomepageClosing />

@@ -2,12 +2,12 @@
 title: "Bring your own agent"
 sidebarTitle: "Bring your own agent"
 icon: "terminal"
-description: "Bring Claude Code, Codex, or another local agent into your Macro workspace with macrod."
+description: "Bring Claude Code, Codex, or another local agent into your Rox workspace with macrod."
 ---
 
 ## Agents and machines
 
-An **agent** is the name, instructions, and model you @mention. A **machine** is where that agent runs: in Macro, in Cursor, or on a computer of your own.
+An **agent** is the name, instructions, and model you @mention. A **machine** is where that agent runs: in Rox, in Cursor, or on a computer of your own.
 
 Create agents in **Settings → Agents**. Connect a machine in **Settings → Machines**.
 
@@ -15,27 +15,27 @@ Watch a 1:17 walkthrough of MacroD.
 
 <video src="https://macro.com/video/tutorials/macrod.mp4" poster="https://macro.com/video/tutorials/macrod-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
-## On the Macro desktop app
+## On the Rox desktop app
 
 The desktop app bundles `macrod`, so there is nothing to download. Open **Settings → Machines** and use the **This computer** card. **Set up** looks for a coding agent already installed on your machine, then **Set up** that agent configures, pairs, and starts macrod and creates the agent. No terminal and no pairing code. Open **Options** to choose a different agent, set the **Workspace folder**, or turn on **Full access**. Keep the app open while agents run.
 
 The manual `macrod` steps below are for machines without the desktop app (servers, a second computer), and both kinds of machine can be paired to the same account.
 
-## Macro daemon
+## Rox daemon
 
-Use your local coding agent from Macro. `macrod` runs on your computer, connects your agent to Macro, and keeps its sessions available from your workspace.
+Use your local coding agent from Rox. `macrod` runs on your computer, connects your agent to Rox, and keeps its sessions available from your workspace.
 
 <Info>
-  Macro Daemon is for advanced users that want to connect agents running in your terminal. For example, if you run Claude Code on your server.
+  Rox Daemon is for advanced users that want to connect agents running in your terminal. For example, if you run Claude Code on your server.
 </Info>
 
-Run the Macro daemon (`macrod`) on your computer or server.
+Run the Rox daemon (`macrod`) on your computer or server.
 
 ## Before you start
 
 You need a macOS, Linux, or Windows computer that can stay online and an installed, authenticated coding agent. `macrod` recognizes Claude Code, Codex, OpenCode, OpenClaw, and Hermes. You can also configure a custom command for an Agent Client Protocol (ACP) agent.
 
-`macrod` connects out to Macro. You do not need a public webhook endpoint, port forwarding, or an HTTPS tunnel.
+`macrod` connects out to Rox. You do not need a public webhook endpoint, port forwarding, or an HTTPS tunnel.
 
 <Warning>
   Your local agent can run commands and edit files on your computer. Choose a dedicated workspace and review access before sharing a machine with your team. Leave permission bypass off unless you intend to allow actions without approval.
@@ -66,9 +66,9 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
       </Tab>
     </Tabs>
 
-    You can also download the archive for your operating system and architecture from [Macro releases](https://github.com/macro-inc/macro/releases) and extract it.
+    You can also download the archive for your operating system and architecture from [Rox releases](https://github.com/macro-inc/macro/releases) and extract it.
 
-    Open **Settings → Machines → New machine** in Macro. The page walks you through installation, configuration, and pairing.
+    Open **Settings → Machines → New machine** in Rox. The page walks you through installation, configuration, and pairing.
   </Step>
 
   <Step title="Run macrod">
@@ -82,7 +82,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
 
     On first launch, **Quickstart** lists the agents available on your machine. Select one, or choose **Custom command** to enter an ACP launch command.
 
-    Set **Workspace** to the directory your agent should work in. Everything else about the machine is managed in Macro.
+    Set **Workspace** to the directory your agent should work in. Everything else about the machine is managed in Rox.
 
     Select **Create and pair** to generate your device code.
 
@@ -92,7 +92,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
   </Step>
 
   <Step title="Enter your pairing code">
-    The **Pair macrod** panel shows a device code and a link to Macro. If you are already in the terminal overview, press <kbd>p</kbd> to open pairing. Press <kbd>c</kbd> to copy the code.
+    The **Pair macrod** panel shows a device code and a link to Rox. If you are already in the terminal overview, press <kbd>p</kbd> to open pairing. Press <kbd>c</kbd> to copy the code.
 
     Open the pairing link, or go to **Settings → Machines → New machine**. Enter your code and click **Look up**.
 
@@ -144,7 +144,7 @@ or start `macrod` with `MACROD_NO_UPDATE=1` set. `macrod` then only changes when
 
 - **Your agent is missing from Quickstart:** check that it is installed and its command is available in the terminal where you launch `macrod`. For a different ACP agent, use **Custom command**.
 - **Your code is invalid or expired:** start a new pairing from the terminal and enter the new code. The code in the screenshot is only an example.
-- **Your machine is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors.
+- **Your machine is offline:** check that your computer is awake, `macrod` is running, and it can reach Rox. Check the terminal's **Logs** tab for errors.
 - **`macrod` says your config sets `[identity]` or a `scope` in `[credentials]`:** delete those lines from `~/.macrod/macrod.toml`. The machine's name, access, and permission bypass are set in **Settings → Machines**.
 - **`macrod` asks you to pair again after an update:** it reads only `~/.macrod/macrod.toml`. If you started an older `macrod` from a project folder, move the `macrod.toml` from that folder to `~/.macrod/`.
 

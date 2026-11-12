@@ -1,10 +1,10 @@
 ---
 title: "Mentions"
 icon: "at"
-description: "How Blocks reference each other and how permissions are handled. The @mention primitive that works across every markdown surface in Macro."
+description: "How Blocks reference each other and how permissions are handled. The @mention primitive that works across every markdown surface in Rox."
 ---
 
-Mentions are how Blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, an agent or [routine](/product/routines) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's References panel.
+Mentions are how Blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, an agent or [routine](/product/routines) prompt, or a task description) opens an autocomplete that lets you reference something else in Rox. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's References panel.
 
 <div className="mention-thread" role="img" aria-label="Riley replies and mentions Quinn and Harbor">
   <div className="mention-msg">
@@ -33,7 +33,7 @@ You don't _need to_ mention entities to agents. Since your agent has access to t
 
 ## Mentions in Channels
 
-The primary benefit of using Macro instead of Slack is that it is deeply linked to the rest of your workspace. Mention an entity and send the message. That shares it with the people in the channel. This avoids the footgun that can happen with Slack\+Notion, Slack\+Drive, etc., where you don't give the permissions and people need to ask "hey can you share \_\_ with me?"
+The primary benefit of using Rox instead of Slack is that it is deeply linked to the rest of your workspace. Mention an entity and send the message. That shares it with the people in the channel. This avoids the footgun that can happen with Slack\+Notion, Slack\+Drive, etc., where you don't give the permissions and people need to ask "hey can you share \_\_ with me?"
 
 **When people are added or removed from a channel, permissions to shared items flow through accordingly.** This is really helpful when somebody joins or leaves your company, so they already have access to everything they need. This is why we recommend using Channels for each team, so that permissions for all entities your team needs are handled automatically.
 
@@ -43,7 +43,7 @@ When you mention a document or file in a channel, a bidirectional link is create
 
 Mentioning people causes them to be added to cc on the email thread.
 
-@mentioning a document or file in an email sets it to view-only for anyone with the link and shows a confirmation. If you cannot change the file's sharing, Macro shows a warning that recipients may not have access. In other email clients, the @mention appears as a plain hyperlink.
+@mentioning a document or file in an email sets it to view-only for anyone with the link and shows a confirmation. If you cannot change the file's sharing, Rox shows a warning that recipients may not have access. In other email clients, the @mention appears as a plain hyperlink.
 
 ## Mentions in Documents
 
@@ -55,7 +55,7 @@ Use canvases to embed other entities on a 2D plane. This is useful for mind-mapp
 
 ## What happens when you mention...
 
-- **People**: If you mention them by name or email in a comment or channel, even if they are not a Macro user, they will get a notification. On the other hand, if you mention them in the body of a task or markdown doc, they will _not_ get notified. If you want them to be notified, share the document with them in a channel, or through **Share**. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
+- **People**: If you mention them by name or email in a comment or channel, even if they are not a Rox user, they will get a notification. On the other hand, if you mention them in the body of a task or markdown doc, they will _not_ get notified. If you want them to be notified, share the document with them in a channel, or through **Share**. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
 - **Documents and Blocks**: Mention one in a channel and it is shared with the channel. Mention one in a document or a comment and it is not. Mentioning a person in a comment notifies them. If the document is already set to **Anyone with the link** or **Team members with the link**, they get that access.
 - **Contacts and Company Records**: These are not shared when mentioned. Their sharing is determined by Teams.
 - **Channels, Threads, or a Specific Message**: Mentioning a channel doesn't grant permissions, and neither does mentioning a message. There is no way to share a message with someone who isn't in the channel, because the ability to view a message is determined by channel membership. If you need to share a message without adding somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel — go to the channel and add them as a participant.
@@ -63,6 +63,6 @@ Use canvases to embed other entities on a 2D plane. This is useful for mind-mapp
 
 In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC. Mentioning a document inserts a link _and_ makes it viewable by anyone with the link so recipients can open it.
 
-In a **channel** there are two special mentions on top of the normal ones: `@here` pings every participant, and `@Macro` invokes the agent inline.
+In a **channel** there are two special mentions on top of the normal ones: `@here` pings every participant, and `@Rox` invokes the agent inline.
 
 The agent leans on mentions heavily: anything you @mention into a chat is pulled in as context.

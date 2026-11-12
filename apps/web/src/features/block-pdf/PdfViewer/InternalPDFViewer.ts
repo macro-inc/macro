@@ -1317,7 +1317,7 @@ export class InternalPDFViewer {
         case 'alert': {
           return showMessageBoxSync({
             type: 'warning',
-            title: 'Macro',
+            title: 'Rox',
             message: args[0],
             buttons: ['OK'],
             defaultId: 0,
@@ -1327,7 +1327,7 @@ export class InternalPDFViewer {
           return (
             showMessageBoxSync({
               type: 'question',
-              title: 'Macro',
+              title: 'Rox',
               message: args[0],
               buttons: ['OK', 'Cancel'],
               defaultId: 0,

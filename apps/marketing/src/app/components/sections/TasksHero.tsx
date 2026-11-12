@@ -167,7 +167,7 @@ export function TasksHero(props: { onWatchDemo: () => void }) {
             width: '100%',
           }}
         >
-          <HeroEyebrow label="Macro Tasks" mobile={mobile} />
+          <HeroEyebrow label="Rox Tasks" mobile={mobile} />
           <h1 class="tasks-h1">
             Tasks that keep up <br /> with your team.
           </h1>
@@ -178,7 +178,7 @@ export function TasksHero(props: { onWatchDemo: () => void }) {
               'text-wrap': 'balance',
             }}
           >
-            Macro Tasks self-update based on conversations in your channels, so
+            Rox Tasks self-update based on conversations in your channels, so
             you don't need a separate task manager.
           </p>
           <div
@@ -445,7 +445,7 @@ export function TasksHero(props: { onWatchDemo: () => void }) {
                     render in a fallback face. */}
                 <TaskCreationFlow
                   role="img"
-                  aria-label="Macro task creation flow showing a message becoming a task"
+                  aria-label="Rox task creation flow showing a message becoming a task"
                   style={{
                     display: 'block',
                     height: 'auto',

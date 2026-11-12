@@ -218,7 +218,7 @@ const pillars: Pillar[] = [
     slug: 'memory',
     fig: 'Fig 02',
     title: 'Team-level memory',
-    body: 'Macro knows what your team is working on — shared context that carries across every chat.',
+    body: 'Rox knows what your team is working on — shared context that carries across every chat.',
     Graphic: FigMemory,
   },
   {
@@ -297,7 +297,7 @@ export function AgentsFeatureGrid() {
 
   return (
     <section
-      aria-label="Why Macro Agents"
+      aria-label="Why Rox Agents"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',

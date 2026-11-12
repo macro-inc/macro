@@ -61,8 +61,11 @@ pub const MACRO_AI_BOT_ID: BotId =
 /// Stable handle for the classic "Macro" system bot (used for `@` mentions).
 pub const MACRO_AI_HANDLE: &str = "macro";
 
-/// Display name for Macro, shared by both of its bot ids.
-pub const MACRO_AI_NAME: &str = "Macro";
+/// Product name rendered by backend display strings.
+pub const PRODUCT_DISPLAY_NAME: &str = "Rox";
+
+/// Display name for Rox, shared by both of its bot ids.
+pub const MACRO_AI_NAME: &str = PRODUCT_DISPLAY_NAME;
 
 /// Stable [`BotId`] for the agent-session half of Macro.
 ///
@@ -86,8 +89,8 @@ pub const MACRO_NEW_HANDLE: &str = "macro-new";
 pub const MACRO_SYSTEM_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_5759));
 
-/// Display name for the autonomous Macro platform principal.
-pub const MACRO_SYSTEM_NAME: &str = "Macro System";
+/// Display name for the autonomous Rox platform principal.
+pub const MACRO_SYSTEM_NAME: &str = concat!(PRODUCT_DISPLAY_NAME, " System");
 
 /// Stable [`BotId`] for the "Macro Coder" system bot, our coding-agent harness.
 ///
@@ -100,8 +103,8 @@ pub const MACRO_CODER_BOT_ID: BotId =
 /// Stable handle for the "Macro Coder" system bot (used for `@` mentions).
 pub const MACRO_CODER_HANDLE: &str = "coder";
 
-/// Display name for the "Macro Coder" system bot.
-pub const MACRO_CODER_NAME: &str = "Macro Coder";
+/// Display name for the Rox coding bot.
+pub const MACRO_CODER_NAME: &str = concat!(PRODUCT_DISPLAY_NAME, " Coder");
 
 /// Stable [`BotId`] for the "Cursor" system bot.
 ///

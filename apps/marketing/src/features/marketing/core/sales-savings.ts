@@ -43,9 +43,9 @@ export function tierMonthlyCents(tool: SavingsTool, tier: SalesTier): number {
 export type SalesSavings = {
   /** Yearly cost of the selected tools for the whole team. */
   toolsCents: number;
-  /** Yearly cost of Macro's paid plan for the whole team. */
+  /** Yearly cost of Rox's paid plan for the whole team. */
   macroCents: number;
-  /** Yearly difference; zero when Macro costs the same or more. */
+  /** Yearly difference; zero when Rox costs the same or more. */
   savedCents: number;
 };
 

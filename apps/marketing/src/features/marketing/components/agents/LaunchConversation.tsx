@@ -57,7 +57,7 @@ const LAUNCH_ANSWER =
 export const LAUNCH_PROMPT = 'What’s left before Thursday’s launch?';
 
 /**
- * The hero's open Macro session. Task citations read live sample-workspace
+ * The hero's open Rox session. Task citations read live sample-workspace
  * state and open the task, just as a mention opens its item in the app.
  */
 export function LaunchConversation(props: { workspace: DummyWorkspace }) {

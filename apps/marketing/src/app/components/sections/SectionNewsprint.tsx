@@ -119,7 +119,7 @@ export function SectionNewsprint() {
             <span style={labelStyle}>After</span>
           </div>
           <div style={comparisonCopyStyle}>
-            <span style={{ color: 'var(--c1)' }}>Macro fixed our startup.</span>
+            <span style={{ color: 'var(--c1)' }}>Rox fixed our startup.</span>
             <br />
             We're systemized.
             <br />

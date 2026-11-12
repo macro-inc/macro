@@ -255,7 +255,7 @@ export function HomeDesktopFeatureCarousel() {
 
   return (
     <section
-      aria-label="Explore Macro on desktop"
+      aria-label="Explore Rox on desktop"
       data-hero-entrance="preview"
       ref={heroEntrance('preview')}
       onPointerCancel={cancelComponentSwipe}

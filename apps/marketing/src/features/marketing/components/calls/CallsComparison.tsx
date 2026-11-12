@@ -3,13 +3,13 @@ import { FeatureComparisons } from '../comparisons/FeatureComparisons';
 
 // Availability includes paid plans; Granola complements existing meeting apps.
 // Granola explicitly rules out audio/video playback in its feature-request docs.
-// Macro uses Granola Get Note/List Notes through its connector catalog; this
+// Rox uses Granola Get Note/List Notes through its connector catalog; this
 // grants access to notes, not control of Granola’s capture UI. See
 // docs/agent-guide/settings.md and docs/agent-guide/ai-chat.md.
 const comparisons: readonly FeatureComparison[] = [
   {
     id: 'google-meet',
-    question: 'How does Macro compare with Google Meet?',
+    question: 'How does Rox compare with Google Meet?',
     competitor: 'Google Meet',
     rows: [
       {
@@ -34,7 +34,7 @@ const comparisons: readonly FeatureComparison[] = [
         feature: 'Capture notes in other meeting apps',
         macro: 'partial',
         macroNote:
-          'Granola captures the meeting. After connecting Granola, Macro agents can read its notes and transcripts; Macro does not record other meeting apps itself.',
+          'Granola captures the meeting. After connecting Granola, Rox agents can read its notes and transcripts; Rox does not record other meeting apps itself.',
         competitor: false,
       },
     ],
@@ -50,7 +50,7 @@ const comparisons: readonly FeatureComparison[] = [
   },
   {
     id: 'granola',
-    question: 'How does Macro compare with Granola?',
+    question: 'How does Rox compare with Granola?',
     competitor: 'Granola',
     rows: [
       {
@@ -79,7 +79,7 @@ const comparisons: readonly FeatureComparison[] = [
         feature: 'Capture notes in other meeting apps',
         macro: 'partial',
         macroNote:
-          'Granola captures the meeting. After connecting Granola, Macro agents can read its notes and transcripts; Macro does not record other meeting apps itself.',
+          'Granola captures the meeting. After connecting Granola, Rox agents can read its notes and transcripts; Rox does not record other meeting apps itself.',
         competitor: true,
       },
     ],

@@ -303,7 +303,7 @@ export function ChatComposer(props: {
         placeholder={
           isTouchDevice()
             ? // Phones are too narrow for the full mention and skills hint.
-              'Message Macro AI'
+              'Message Rox AI'
             : (props.placeholder ??
               'Type @ to mention docs, people, or channels, / for skills')
         }

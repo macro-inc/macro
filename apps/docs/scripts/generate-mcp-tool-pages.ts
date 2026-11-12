@@ -229,7 +229,7 @@ async function resetGeneratedPages() {
 function renderToolPage(tool: ResolvedTool, defs: Record<string, JsonSchema>) {
   const slug = slugifyToolName(tool.name);
   const description =
-    tool.description ?? 'Generated from the Macro Rust tool registry.';
+    tool.description ?? 'Generated from the Rox Rust tool registry.';
   const paramsTable = renderParamsTable(tool.inputSchema, defs);
   // Metadata is a summary; the complete tool instructions belong in the body.
   const summary = description.trim().split(/\n\s*\n|(?<=[.!?])\s/)[0];
@@ -261,12 +261,12 @@ async function writeIndexPage(
 ) {
   const page = `---
 title: Tool Reference
-description: Generated reference pages for Macro MCP tools.
+description: Generated reference pages for Rox MCP tools.
 ---
 
 # Tool Reference
 
-These pages are generated from Macro's Rust MCP tool registry.
+These pages are generated from Rox's Rust MCP tool registry.
 
 ## Tools
 

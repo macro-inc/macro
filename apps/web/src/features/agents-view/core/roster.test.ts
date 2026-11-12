@@ -89,7 +89,7 @@ describe('buildAgentRoster', () => {
       'coder',
     ]);
     expect(saved[0]?.runtime).toEqual({
-      label: 'Macro Agent',
+      label: 'Rox Agent',
       connected: true,
     });
     expect(saved[0]?.unavailableReason).toBeUndefined();

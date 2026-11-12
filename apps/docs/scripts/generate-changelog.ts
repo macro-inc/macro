@@ -128,10 +128,10 @@ async function main() {
   const intro = `---
 title: Changelog
 icon: clock-rotate-left
-description: All notable changes to Macro, pulled from GitHub Releases.
+description: All notable changes to Rox, pulled from GitHub Releases.
 ---
 
-All notable changes to Macro, pulled from [GitHub Releases](https://github.com/${REPO}/releases).
+All notable changes to Rox, pulled from [GitHub Releases](https://github.com/${REPO}/releases).
 
 Releases follow the format \`vYYYY.M.D.patch\`. Earlier months are in the sidebar.
 
@@ -152,7 +152,7 @@ ${latestUpdates.join("\n\n")}
 
     const mdx = `---
 title: "${title}"
-description: "Macro releases from ${title}."
+description: "Rox releases from ${title}."
 ---
 
 ${updates.join("\n\n")}

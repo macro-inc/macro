@@ -49,7 +49,7 @@ impl Daemon {
         if self.fail {
             return Err(zbus::fdo::Error::Failed("Delivery rejected".into()));
         }
-        assert_eq!(app, "Macro");
+        assert_eq!(app, "Rox");
         assert_eq!(replaces, 0);
         assert_eq!(timeout, -1);
         assert!(hints.contains_key("desktop-entry"));

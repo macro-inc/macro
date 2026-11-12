@@ -729,7 +729,7 @@ function ActionsGraphic() {
               margin: 0,
             }}
           >
-            <MentionPill kind="agent" label="Macro" /> turn the{' '}
+            <MentionPill kind="agent" label="Rox" /> turn the{' '}
             <MentionPill kind="call" label="Atlas go / no-go" /> into tasks and
             assign them.
           </p>
@@ -1200,12 +1200,12 @@ const scheduleBlock: LoopsFeatureBlock = {
 };
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs ChatGPT vs Glean vs Notion AI)
+// Comparison table (Rox vs ChatGPT vs Glean vs Notion AI)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'ChatGPT', 'Glean', 'Notion AI'];
+const comparisonColumns = ['Rox', 'ChatGPT', 'Glean', 'Notion AI'];
 
 const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   {
@@ -1229,7 +1229,7 @@ const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
     cells: [true, 'partial', true, 'partial'],
   },
   {
-    feature: 'Fast in-conversation agent (@Macro)',
+    feature: 'Fast in-conversation agent (@Rox)',
     cells: [true, false, false, false],
   },
   {
@@ -1476,7 +1476,7 @@ function ComparisonSection() {
   const [expanded, setExpanded] = createSignal(false);
   return (
     <section
-      aria-label="How Macro Agents compare"
+      aria-label="How Rox Agents compare"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -1530,7 +1530,7 @@ function ComparisonSection() {
             'max-width': '560px',
           }}
         >
-          A chatbot makes you paste in context. Macro already has it — and acts
+          A chatbot makes you paste in context. Rox already has it — and acts
           on it.
         </p>
       </div>
@@ -1725,9 +1725,9 @@ function AgentsFinalCta() {
 
 export const RouteAgents: Component = () => {
   setPageSeo({
-    title: 'Macro Agents — AI With Your Whole Workspace as Context',
+    title: 'Rox Agents — AI With Your Whole Workspace as Context',
     description:
-      'Agents in Macro are AI with access to everything in your workspace: email, messages, tasks, docs, and calls, with your exact permissions. They answer, take action, run on a schedule, and connect to your tools via MCP.',
+      'Agents in Rox are AI with access to everything in your workspace: email, messages, tasks, docs, and calls, with your exact permissions. They answer, take action, run on a schedule, and connect to your tools via MCP.',
     path: '/agents',
   });
 
@@ -1786,7 +1786,7 @@ export const RouteAgents: Component = () => {
               width: '100%',
             }}
           >
-            <HeroEyebrow label="Macro Agents" mobile={mobile} />
+            <HeroEyebrow label="Rox Agents" mobile={mobile} />
             <h1
               style={{
                 'font-family': 'display',

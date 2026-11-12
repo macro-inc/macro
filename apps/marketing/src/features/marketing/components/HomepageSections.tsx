@@ -197,7 +197,7 @@ export function HomepageSections() {
               text: (
                 <>
                   <DemoMention
-                    item={{ id: 'macro', label: 'Macro', kind: 'person' }}
+                    item={{ id: 'macro', label: 'Rox', kind: 'person' }}
                   />{' '}
                   draft Valentina’s follow-up from{' '}
                   <HomepageMention

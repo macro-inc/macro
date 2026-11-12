@@ -259,7 +259,7 @@ export function AgentHandoffAnimated() {
       class="tah-anim"
       classList={{ 'is-active': active() }}
       role="img"
-      aria-label="Mentioning the Macro agent in a thread and it working the linked task"
+      aria-label="Mentioning the Rox agent in a thread and it working the linked task"
       style={{ display: 'grid', 'justify-items': 'center', width: '100%' }}
     >
       <style>{`

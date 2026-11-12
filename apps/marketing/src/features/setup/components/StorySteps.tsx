@@ -4,9 +4,6 @@ import {
   formatStarCount,
   githubStars,
 } from '../../../app/utils/utilGithubStars';
-import IconCasa from '../../../assets/designs/design-casa.svg';
-import IconIso from '../../../assets/designs/design-iso.svg';
-import IconSoc2 from '../../../assets/designs/design-soc2.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
 import LogoA16z from '../../../assets/logos/a16z.svg';
 import { ContinueButton } from '../flow/shared';
@@ -26,7 +23,7 @@ export function SecurityStep(props: { onContinue: () => void }) {
         data-security-scene
         data-security-proof
         aria-label="Built on trust"
-        class="grid w-full grid-cols-1 gap-6 border-b border-edge-muted pb-8 min-[360px]:grid-cols-3 min-[360px]:gap-3 sm:gap-6"
+        class="grid w-full grid-cols-1 gap-6 border-b border-edge-muted pb-8 min-[360px]:grid-cols-2 min-[360px]:gap-3 sm:gap-6"
       >
         <a
           data-security-item
@@ -65,19 +62,6 @@ export function SecurityStep(props: { onContinue: () => void }) {
           </span>
           <span class="mt-3 text-sm font-normal leading-6 text-ink-extra-muted">
             $30M+ raised
-          </span>
-        </div>
-        <div data-security-item class="flex min-w-0 flex-col items-center">
-          <div
-            class="flex h-10 items-center justify-center gap-1.5 text-ink-muted"
-            aria-label="Security certifications"
-          >
-            <IconIso class="size-6 sm:size-7" aria-label="ISO 27001" />
-            <IconSoc2 class="size-6 sm:size-7" aria-label="SOC 2" />
-            <IconCasa class="size-6 sm:size-7" aria-label="CASA Tier 2" />
-          </div>
-          <span class="mt-3 text-sm font-normal leading-6 text-ink-extra-muted">
-            Audited security
           </span>
         </div>
       </section>

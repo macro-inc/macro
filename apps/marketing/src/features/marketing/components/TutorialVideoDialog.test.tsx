@@ -47,7 +47,7 @@ it('opens the video paused and plays only from the play pill', async () => {
   await openDialog();
 
   const dialog = screen.getByRole('dialog', {
-    name: 'Learn how to use Macro Mail',
+    name: 'Learn how to use Rox Mail',
   });
   const video = dialog.querySelector('video');
   expect(video?.getAttribute('src')).toBe('/video/tutorials/mail.mp4');
@@ -56,7 +56,7 @@ it('opens the video paused and plays only from the play pill', async () => {
 
   fireEvent.click(
     screen.getByRole('button', {
-      name: 'Play Learn how to use Macro Mail, 1:42',
+      name: 'Play Learn how to use Rox Mail, 1:42',
     })
   );
 

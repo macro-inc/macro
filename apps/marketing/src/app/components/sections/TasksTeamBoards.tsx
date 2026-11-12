@@ -45,7 +45,7 @@ export const taskTeams: TaskTeam[] = [
           who: { kind: 'agent' },
           body: (
             <>
-              <At>@Macro</At> pulled 12 interview notes into this list
+              <At>@Rox</At> pulled 12 interview notes into this list
             </>
           ),
           time: '11:02 AM',
@@ -87,7 +87,7 @@ export const taskTeams: TaskTeam[] = [
           who: { kind: 'pr' },
           body: (
             <>
-              <At>@Macro</At> opened a fix PR:{' '}
+              <At>@Rox</At> opened a fix PR:{' '}
               <PrRef>fix(db): bound the writer pool</PrRef>
             </>
           ),
@@ -116,13 +116,13 @@ export const taskTeams: TaskTeam[] = [
       assignee: { src: avatarGabriel, name: 'Gabriel' },
       desc: (
         <>
-          They will not sign until the questionnaire is back. Send the SOC 2
-          report first, then book the call. Opened from <Mention>sales</Mention>
+          They will not sign until the questionnaire is back. Send the security
+          overview first, then book the call. Opened from <Mention>sales</Mention>
           .
         </>
       ),
       checks: [
-        { label: 'Send the SOC 2 report', done: false },
+        { label: 'Send the security overview', done: false },
         { label: 'Answer the 14 questionnaire items', done: false },
         { label: 'Book the call with their CISO', done: false },
       ],
@@ -131,7 +131,7 @@ export const taskTeams: TaskTeam[] = [
           who: { kind: 'agent' },
           body: (
             <>
-              <At>@Macro</At> drafted this from Tuesday's call
+              <At>@Rox</At> drafted this from Tuesday's call
             </>
           ),
           time: '9:12 AM',

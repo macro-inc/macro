@@ -1,7 +1,4 @@
 import { onMount, Show } from 'solid-js';
-import IconCasa from '../../../assets/designs/design-casa.svg';
-import IconIso from '../../../assets/designs/design-iso.svg';
-import IconSoc2 from '../../../assets/designs/design-soc2.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
 import LogoA16z from '../../../assets/logos/a16z.svg';
 import { analytics } from '../../utils/utilAnalytic';
@@ -13,7 +10,7 @@ import {
 
 const MACRO_REPO_URL = 'https://github.com/macro-inc/macro';
 
-/** Full-bleed trust band: capital, open source, security. */
+/** Full-bleed trust band: capital and open source. */
 export function HomeIntroProof() {
   onMount(() => {
     ensureGithubStars();
@@ -69,8 +66,6 @@ export function HomeIntroProof() {
         .home-proof-github-row { font-size: 20px; gap: 10px; }
         .home-proof-github-icon { height: 22px; width: 22px; }
         .home-proof-star { height: 17px; width: 17px; }
-        .home-proof-badges { gap: 15px; }
-        .home-proof-badge { height: 38px; width: 38px; }
         .home-proof-divider {
           background-color: color-mix(in srgb, var(--c4) 14%, transparent);
           flex: none;
@@ -88,11 +83,9 @@ export function HomeIntroProof() {
           .home-proof-github-row { font-size: 13px; gap: 6px; }
           .home-proof-github-icon { height: 15px; width: 15px; }
           .home-proof-star { height: 12px; width: 12px; }
-          .home-proof-badges { gap: 8px; }
-          .home-proof-badge { height: 22px; width: 22px; }
           .home-proof-divider { display: none; }
         }
-        /* Only very narrow screens stack; the three signals otherwise stay on
+        /* Only very narrow screens stack; the two signals otherwise stay on
            one line so the band reads as a strip rather than a list. */
         @media (max-width: 359px) {
           .home-proof-section { flex-direction: column; gap: 24px; }
@@ -128,7 +121,7 @@ export function HomeIntroProof() {
         href={MACRO_REPO_URL}
         target="_blank"
         rel="noreferrer"
-        aria-label="Macro on GitHub"
+        aria-label="Rox on GitHub"
         class="home-proof-signal"
         onClick={() => {
           analytics.track('app_redirect', {
@@ -176,29 +169,6 @@ export function HomeIntroProof() {
         <span class="home-proof-caption">Full open source</span>
       </a>
 
-      <span aria-hidden="true" class="home-proof-divider" />
-
-      <div class="home-proof-signal">
-        <div
-          aria-label="Security certifications"
-          class="home-proof-mark-row home-proof-badges"
-          style={{
-            'align-items': 'center',
-            color: 'color-mix(in srgb, var(--c2) 78%, var(--c4))',
-            display: 'flex',
-            opacity: 0.72,
-          }}
-        >
-          <IconIso aria-label="ISO 27001" class="home-proof-badge" />
-          <IconSoc2 aria-label="AICPA SOC 2" class="home-proof-badge" />
-          <IconCasa
-            aria-label="CASA Tier 2"
-            class="home-proof-badge"
-            style={{ transform: 'scale(1.02)' }}
-          />
-        </div>
-        <span class="home-proof-caption">Enterprise security</span>
-      </div>
     </section>
   );
 }

@@ -4,7 +4,7 @@ description: "Connect email, create a team, import your data, and set up agents.
 icon: "rocket"
 ---
 
-Macro is meant to be an all in one solution. The more context it has, the better your workspace will be.
+Rox is meant to be an all in one solution. The more context it has, the better your workspace will be.
 
 <Card title="Prefer a guided tour?" icon="calendar" href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo">
   Book a live onboarding call and a member of our team will walk you through setup and answer questions.
@@ -12,7 +12,7 @@ Macro is meant to be an all in one solution. The more context it has, the better
 
 ## 1. Connect email
 
-Connecting an account lets Macro read, send, and organize that email, as well as manage the calendar on a Google or Outlook account.
+Connecting an account lets Rox read, send, and organize that email, as well as manage the calendar on a Google or Outlook account.
 
 After signup, connect from either place:
 
@@ -48,7 +48,7 @@ Once the team exists, this is what you set up on it:
 - **Channels.** A team channel is visible to everyone on the team. Turn on **Automatically add teammates** to add current and future members.
 - **Tasks and projects.** Tasks and [projects](/product/projects) you create are shared with your team by default, and you can make them private. Teammates can view and comment. You and the assignee control status and properties.
 - **Calls.** A call started in a channel is recorded, transcribed, and shared with the team. Uncheck **Share with team** during the call to keep it with the people on the call. A call you start on your own stays with the people on it. See [Calls](/product/calls).
-- **Customers.** An admin turns on **Team CRM** in **Settings → CRM**. Macro builds company and contact records from the team's email. **Email Sync** on a company shows that company's email threads to the team. See [Customers](/product/crm).
+- **Customers.** An admin turns on **Team CRM** in **Settings → CRM**. Rox builds company and contact records from the team's email. **Email Sync** on a company shows that company's email threads to the team. See [Customers](/product/crm).
 - **Booking links.** Open Scheduling and select **Personal** or your team, then open **Booking links** and click **New booking link**. You can also open **Booking links** from the calendar. A team link is **Collective**, which books every host, or **Round robin**, which books one host. Owners and admins edit team links. Other members can view them. See [Booking links](/product/booking-links).
 - **Agents.** In **Settings → Agents**, choose **Team** under **Who can use it**. Teammates mention that agent by its **@tag** in a channel.
 - **Routines.** A [routine](/product/routines) runs a saved prompt on a schedule, or when something happens that you can see: a channel message, a task change, or a new email. Create one from the Agents Block. A routine is visible only to you and runs with your permissions.
@@ -103,7 +103,7 @@ An admin does this from team settings.
 1. Open **Settings → Integrations**.
 2. Under **MCP integrations**, click **Add server**.
 3. Set **Name** to ClickUp and **URL** to `https://mcp.clickup.com/mcp`.
-4. Sign in to ClickUp when Macro asks.
+4. Sign in to ClickUp when Rox asks.
 5. Open Agents, click **New conversation**, and tell it what to copy. For example:
 
 ```text
@@ -121,7 +121,7 @@ Then start a chat and name what to copy and what to skip. Ask the agent to show 
 
 You can also import from Claude, Cursor, or Codex. Open **Settings → MCP server** and connect your account, or point the client at `https://mcp-server.macro.com/mcp` and sign in. The client can then create docs, tasks, and channels in your workspace. See [MCP setup](/AI/mcp/overview).
 
-Macro's MCP server has no rate limit. That includes the Free plan.
+Rox's MCP server has no rate limit. That includes the Free plan.
 
 ## 4. Set up your agents
 
@@ -129,7 +129,7 @@ The built-in agent is ready once you are signed in. It can use the email, tasks,
 
 Start a conversation from the box at the top of Home, or open the Agents Block and click **New conversation**.
 
-In a channel, type **@Macro** and your message. The reply stays in that thread.
+In a channel, type **@Rox** and your message. The reply stays in that thread.
 
 To add an agent of your own:
 
@@ -137,13 +137,13 @@ To add an agent of your own:
 2. Click **Add agent**.
 3. Set the **Name** and **@tag**. The tag is how people mention this agent.
 4. Write **Instructions**. The agent receives them at the start of every conversation.
-5. Under **Where it runs**, choose **In Macro**, **In Cursor**, or **In your harness**. **In Macro** uses Macro's tools and the apps you have connected. **In Cursor** needs Cursor connected on this page. **In your harness** runs the agent on your machine through MacroD.
+5. Under **Where it runs**, choose **In Rox**, **In Cursor**, or **In your harness**. **In Rox** uses Rox's tools and the apps you have connected. **In Cursor** needs Cursor connected on this page. **In your harness** runs the agent on your machine through MacroD.
 6. Under **Who can use it**, choose **Private** or **Team**. A Private agent can be mentioned inside of a team channel only by the owner. A team agent can be mentioned by anyone on the team. Team agents need a team.
 7. Click **Create agent**.
 
-Mention a team agent with its **@tag** in a channel, the same way you mention **@Macro**.
+Mention a team agent with its **@tag** in a channel, the same way you mention **@Rox**.
 
-Apps you connect for an import are also available to agents that run in Macro. To connect an app without starting an import, open **Settings → Integrations** and connect it there. Each person connects their own account.
+Apps you connect for an import are also available to agents that run in Rox. To connect an app without starting an import, open **Settings → Integrations** and connect it there. Each person connects their own account.
 
 ### Routines
 
@@ -160,4 +160,4 @@ Activity triggers include:
 
 ### MacroD
 
-MacroD is a local daemon that connects coding agents on your machine, or a cloud instance, to Macro. Herdr, Claude Code, Codex, and similar agents hook in. It is bundled in the desktop app, and you can also install it from the command line. It connects out to Macro, so you do not need a tunnel, a webhook, or an open port. Setup is in [Bring your own agent](/AI/bring-your-own).
+MacroD is a local daemon that connects coding agents on your machine, or a cloud instance, to Rox. Herdr, Claude Code, Codex, and similar agents hook in. It is bundled in the desktop app, and you can also install it from the command line. It connects out to Rox, so you do not need a tunnel, a webhook, or an open port. Setup is in [Bring your own agent](/AI/bring-your-own).

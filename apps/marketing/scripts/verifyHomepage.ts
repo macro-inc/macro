@@ -145,7 +145,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
 
         if (viewport.width >= 768)
           await page
-            .getByRole('link', { name: 'Macro home', exact: true })
+            .getByRole('link', { name: 'Rox home', exact: true })
             .hover();
         else
           await page
@@ -163,11 +163,11 @@ export async function verifyHomepage(directory: string): Promise<void> {
           await page.locator('#interactive-demo').scrollIntoViewIfNeeded();
           await page
             .getByRole('button', {
-              name: /^Interact with Macro sample workspace/,
+              name: /^Interact with Rox sample workspace/,
             })
             .click();
           const workspace = page.frameLocator(
-            'iframe[title="Embedded Macro sample workspace"]'
+            'iframe[title="Embedded Rox sample workspace"]'
           );
           // Prerendered buttons can paint before they have handlers. Also wait
           // for iframe load, whose carousel listener selects the initial view.

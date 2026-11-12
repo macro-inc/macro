@@ -230,7 +230,7 @@ export function PipedreamAiProvider(props: {
       onBack={view.closeProvider}
       backLabel="Integrations"
     >
-      <SettingsSection title="Macro AI">
+      <SettingsSection title="Rox AI">
         <SettingsCard>
           <IntegrationRow
             icon={providerIcon(props.provider)}

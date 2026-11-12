@@ -17,8 +17,8 @@ import type { PostMeta } from '../../registry';
 
 const EMAIL_VIDEO_ID = 'tnsxkywzTvY';
 const ARTICLE_PARAGRAPHS = [
-  "On the surface, Macro and ClickUp have a lot in common. They're both all-in-one workspace tools that combine team communication, agents, docs, task management, CRM, and even video call features. ClickUp has more of those features — more views, more custom fields, more settings pages.",
-  "But Macro's take on these tools is fundamentally different from ClickUp's. We built Macro to be fast and AI-first — the kind of workspace that also feels like an IDE if you want it to, with keyboard-first commands for people who live in shortcuts. Anyone on the team can open it and get work done; power users just get more speed out of it. If you want an AI-powered workspace with all your organization's context, including email, available to agents, Macro is built for that.",
+  "On the surface, Rox and ClickUp have a lot in common. They're both all-in-one workspace tools that combine team communication, agents, docs, task management, CRM, and even video call features. ClickUp has more of those features — more views, more custom fields, more settings pages.",
+  "But Rox's take on these tools is fundamentally different from ClickUp's. We built Rox to be fast and AI-first — the kind of workspace that also feels like an IDE if you want it to, with keyboard-first commands for people who live in shortcuts. Anyone on the team can open it and get work done; power users just get more speed out of it. If you want an AI-powered workspace with all your organization's context, including email, available to agents, Rox is built for that.",
 ] as const;
 const ARTICLE_PREVIEW = ARTICLE_PARAGRAPHS.join(' ');
 
@@ -140,13 +140,13 @@ function PostScreenshot(props: {
 
 export const postMeta: PostMeta = {
   slug: 'clickup-alternative',
-  title: 'Macro vs ClickUp',
-  seoTitle: 'Macro vs ClickUp — The Open-Source ClickUp Alternative',
+  title: 'Rox vs ClickUp',
+  seoTitle: 'Rox vs ClickUp — The Open-Source ClickUp Alternative',
   subtitle:
-    'Macro is the open source alternative to ClickUp with email, chat, docs, tasks, calls and a CRM built in.',
+    'Rox is the open source alternative to ClickUp with email, chat, docs, tasks, calls and a CRM built in.',
   date: '2026-07-27',
   description:
-    'Macro is the open-source alternative to ClickUp: a fast, AI-first workspace with a native email client, chat, docs, tasks, calls and a CRM sharing one memory, at one flat price per seat.',
+    'Rox is the open-source alternative to ClickUp: a fast, AI-first workspace with a native email client, chat, docs, tasks, calls and a CRM sharing one memory, at one flat price per seat.',
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'clickup', 'comparison'],
   category: 'Comparison',
@@ -155,7 +155,7 @@ export const postMeta: PostMeta = {
   image: '/og/clickup-alternative.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Jacob Beckerman', role: 'Macro', avatar: avatarJacob },
+  author: { name: 'Jacob Beckerman', role: 'Rox', avatar: avatarJacob },
   ctaButtonName: 'macro_vs_clickup_cta',
 };
 
@@ -170,7 +170,7 @@ export default function MacroVsClickUpPost() {
           by hand — more modules, views, and toggles than almost anyone else. A
           lot of it works. But you can feel the years of features stacked on
           features, and none of the surfaces are quite best in class vs.
-          purpose-built tools like Slack or Notion. Macro is similar in scope,
+          purpose-built tools like Slack or Notion. Rox is similar in scope,
           with more of a focus on quality and how the suite fits together, and
           built for the agentic era.
         </p>
@@ -187,7 +187,7 @@ export default function MacroVsClickUpPost() {
           tradeoff may be fine.
         </p>
 
-        <h2>Macro vs. ClickUp at a glance</h2>
+        <h2>Rox vs. ClickUp at a glance</h2>
         <ComparisonTable
           competitor="ClickUp"
           logo={ClickUpLogo}
@@ -195,9 +195,9 @@ export default function MacroVsClickUpPost() {
         />
 
         <SectionGlyph route="/agents" />
-        <h2>Why Macro is the best all-in-one workspace for startups</h2>
+        <h2>Why Rox is the best all-in-one workspace for startups</h2>
         <p>
-          We built Macro as a modern unified workspace with email, messages,
+          We built Rox as a modern unified workspace with email, messages,
           docs, tasks, calls and a CRM in a single app, at a single flat price
           per seat — without asking you to assemble the product from a long list
           of optional modules.
@@ -209,11 +209,11 @@ export default function MacroVsClickUpPost() {
         </p>
         <p>
           We also built in keyboard-first navigation, so it's extremely fast to
-          get around. Finally, Macro is open source, so you can audit how it
-          works, extend it, or self-host it.
+          get around. Finally, Rox is open source, so you can audit how it
+          works and extend it.
         </p>
 
-        <h3>Macro brings a real email client into your workspace</h3>
+        <h3>Rox brings a real email client into your workspace</h3>
         <p>
           Our <a href="/email">AI-powered email</a> client brings your inbox
           into the same workspace as all your organization's docs, tasks and
@@ -248,7 +248,7 @@ export default function MacroVsClickUpPost() {
         </ul>
         <PostScreenshot
           src={emailSignal}
-          alt="Macro email client with the Signal tab open, showing prioritized threads next to the full workspace sidebar"
+          alt="Rox email client with the Signal tab open, showing prioritized threads next to the full workspace sidebar"
           width={1650}
           height={902}
         />
@@ -267,7 +267,7 @@ export default function MacroVsClickUpPost() {
         <div class="mvn-video">
           <iframe
             src={`https://www.youtube.com/embed/${EMAIL_VIDEO_ID}?rel=0`}
-            title="Macro email"
+            title="Rox email"
             loading="lazy"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowfullscreen
@@ -275,10 +275,10 @@ export default function MacroVsClickUpPost() {
         </div>
         <p class="mvn-figcaption">
           A real email client inside the workspace — inbox, triage, and AI
-          drafting without leaving Macro.
+          drafting without leaving Rox.
         </p>
 
-        <h3>Macro agents can perform tasks with full context</h3>
+        <h3>Rox agents can perform tasks with full context</h3>
         <p>
           It's not just you who can work more efficiently thanks to the built-in
           email. Because your inbox, messaging, calls,{' '}
@@ -288,7 +288,7 @@ export default function MacroVsClickUpPost() {
         </p>
         <PostScreenshot
           src={agentsShot}
-          alt="Macro Agents tab listing chats that catch people up, draft outbound email, and recap conversations"
+          alt="Rox Agents tab listing chats that catch people up, draft outbound email, and recap conversations"
           width={1650}
           height={902}
         />
@@ -298,7 +298,7 @@ export default function MacroVsClickUpPost() {
         </p>
         <p>
           You can open the agent from any page, and it can answer questions or
-          perform tasks. At Macro, we use agents daily to summarize documents,
+          perform tasks. At Rox, we use agents daily to summarize documents,
           create tasks, build drafts, check statuses and perform research.
         </p>
         <p>
@@ -315,12 +315,12 @@ export default function MacroVsClickUpPost() {
         </p>
         <PostScreenshot
           src={agentInChannel}
-          alt="A bug report in a Macro channel where @Macro is asked to make a task and replies with the created, linked task"
+          alt="A bug report in a Rox channel where @Rox is asked to make a task and replies with the created, linked task"
           width={1465}
           height={937}
         />
         <p class="mvn-figcaption">
-          <code>@Macro</code> reads the thread, creates the task and links it
+          <code>@Rox</code> reads the thread, creates the task and links it
           back — then asks if it should assign and prioritize it.
         </p>
         <p>
@@ -332,22 +332,22 @@ export default function MacroVsClickUpPost() {
           sold as an add-on rather than the default way the workspace thinks.
         </p>
 
-        <h3>Macro is fast, like an IDE for your whole workspace</h3>
+        <h3>Rox is fast, like an IDE for your whole workspace</h3>
         <p>
-          We built keyboard navigation into Macro so you can move through tasks
+          We built keyboard navigation into Rox so you can move through tasks
           like you're in an IDE, instead of clicking through layer after layer
           of menus. In total, we've shipped more than 70 pre-configured
           shortcuts that let you navigate every option without touching a mouse.
         </p>
         <p>
-          Macro also has its own window manager, letting you open any new menu
+          Rox also has its own window manager, letting you open any new menu
           in splitscreen. It's easy to keep email, channels and docs open side
           by side, instead of switching back and forth between tabs to keep
           track of everything.
         </p>
         <PostScreenshot
           src={splitScreen}
-          alt="Three Macro channels — Engineers, bug-reports and creative team — open side by side in split view"
+          alt="Three Rox channels — Engineers, bug-reports and creative team — open side by side in split view"
           width={2347}
           height={1237}
         />
@@ -361,37 +361,37 @@ export default function MacroVsClickUpPost() {
           through nested settings to turn something on.
         </p>
 
-        <h3>GitHub pull requests land in your Macro inbox</h3>
+        <h3>GitHub pull requests land in your Rox inbox</h3>
         <p>
-          Another feature our engineers love is that Macro tasks link
+          Another feature our engineers love is that Rox tasks link
           bidirectionally to <a href="/github">GitHub</a>, so their pull
           requests and reviews land right in the inbox, letting them check
-          notifications without ever leaving Macro.
+          notifications without ever leaving Rox.
         </p>
         <PostScreenshot
           src={githubTaskPr}
-          alt="Macro task detail with status, priority, assignee and a linked GitHub pull request pill"
+          alt="Rox task detail with status, priority, assignee and a linked GitHub pull request pill"
           width={1486}
           height={640}
         />
         <p class="mvn-figcaption">
           A task with its GitHub PR linked both ways — open the review in a
-          split without leaving Macro.
+          split without leaving Rox.
         </p>
         <p>
-          Additionally, comments are synced both ways, from Macro to GitHub and
-          vice versa. And once tasks land in Macro, you can @mention them in a
+          Additionally, comments are synced both ways, from Rox to GitHub and
+          vice versa. And once tasks land in Rox, you can @mention them in a
           message, doc or task.
         </p>
 
-        <h3>Macro has bidirectional linking with permissions</h3>
+        <h3>Rox has bidirectional linking with permissions</h3>
         <p>
           Bidirectional linking means you can @mention any document you have
           permission to access in any message, AI chat, task or document.
         </p>
         <PostScreenshot
           src={docMention}
-          alt="Typing @ in a Macro doc opens a picker listing documents, agent chats, tasks and emails to mention"
+          alt="Typing @ in a Rox doc opens a picker listing documents, agent chats, tasks and emails to mention"
           width={1200}
           height={528}
         />
@@ -411,9 +411,9 @@ export default function MacroVsClickUpPost() {
           shared with them.
         </p>
 
-        <h3>We made Macro fully open source</h3>
+        <h3>We made Rox fully open source</h3>
         <p>
-          Macro is fully open source under the AGPLv3 license:{' '}
+          Rox is fully open source under the AGPLv3 license:{' '}
           <a
             href="https://github.com/macro-inc/macro"
             target="_blank"
@@ -421,14 +421,14 @@ export default function MacroVsClickUpPost() {
           >
             github.com/macro-inc/macro
           </a>
-          . You can audit exactly how it handles your data, extend it to fit
-          your own workflows, or self-host it on your own infrastructure.
+          . You can audit exactly how it handles your data and extend it to fit
+          your own workflows.
         </p>
 
         <SectionGlyph route="/tasks" />
         <h2>ClickUp is a powerful — and dense — project management tool</h2>
         <p>
-          ClickUp ships more project-management surface area than Macro. Custom
+          ClickUp ships more project-management surface area than Rox. Custom
           fields, statuses, dependencies, Gantt, workload views, whiteboards,
           calendars, dashboards — the list is long, and for some organizations
           that breadth is the point. The tradeoff is that living in ClickUp
@@ -475,7 +475,7 @@ export default function MacroVsClickUpPost() {
         <p>
           The flip side of a folder-heavy wiki is the same problem as the rest
           of the product: finding the right doc often means remembering which
-          Space and Folder it lives in. Macro is built around search and linking
+          Space and Folder it lives in. Rox is built around search and linking
           instead — fewer places to lose a page.
         </p>
 
@@ -492,16 +492,15 @@ export default function MacroVsClickUpPost() {
         </p>
 
         <SectionGlyph route="/crm" />
-        <h2>Macro vs. ClickUp pricing comparison</h2>
+        <h2>Rox vs. ClickUp pricing comparison</h2>
         <p>
-          At Macro, we offer a single paid plan. It costs $40 per seat and
+          At Rox, we offer a single paid plan. It costs $40 per seat and
           includes access to the whole workspace and all AI features — one line
           item, no module matrix.
         </p>
         <p>
           You can also join a workspace as a Guest for free, with limits on
-          storage and the AI models you can access. Finally, enterprises can get
-          a custom deployment that adds SSO, compliance and self-hosting.
+          storage and the AI models you can access.
         </p>
         <p>
           ClickUp's seat price starts lower — $10 to $19 before AI — but the
@@ -511,8 +510,8 @@ export default function MacroVsClickUpPost() {
           simple until you map which plan unlocks which toggle.
         </p>
 
-        <h2>When to choose Macro</h2>
-        <p>Choose Macro when:</p>
+        <h2>When to choose Rox</h2>
+        <p>Choose Rox when:</p>
         <ul class="mvn-list">
           <li>
             You're a fast-moving team that wants tasks linked directly to
@@ -560,10 +559,10 @@ export default function MacroVsClickUpPost() {
           </li>
         </ul>
 
-        <h2>Macro vs. ClickUp: the verdict</h2>
+        <h2>Rox vs. ClickUp: the verdict</h2>
         <p>
-          Macro and ClickUp solve different problems. ClickUp has more features
-          on the checklist. Macro is built so you can actually move through the
+          Rox and ClickUp solve different problems. ClickUp has more features
+          on the checklist. Rox is built so you can actually move through the
           day without fighting the tool — email, chat, docs and tasks in one
           fast, AI-first workspace, with agents that share one memory.
         </p>
@@ -571,41 +570,41 @@ export default function MacroVsClickUpPost() {
           If what you need is deep project mechanics and you're prepared for the
           configuration that comes with them, ClickUp can cover that ground. If
           you want a workspace that stays coherent as you grow — without a
-          thicket of views, statuses and settings to babysit — Macro is the
+          thicket of views, statuses and settings to babysit — Rox is the
           clearer foundation.
         </p>
 
         <h2 class="post-faq-title">Frequently asked questions</h2>
         <div class="post-faq">
-          <PostFaqItem question="Is Macro better than ClickUp for startups?">
+          <PostFaqItem question="Is Rox better than ClickUp for startups?">
             <p>
-              For most startups, yes. Macro replaces your inbox, chat, docs and
+              For most startups, yes. Rox replaces your inbox, chat, docs and
               task tracker with one AI-first workspace, so shared context is the
               default. ClickUp offers more project-management knobs, but those
               knobs are also where small teams lose time — configuring Spaces,
               cleaning up views, and teaching new hires which List is current.
               If you want everything connected and AI-ready without a heavy
-              admin burden, Macro is the better place to start.
+              admin burden, Rox is the better place to start.
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="Is Macro cheaper than ClickUp?">
+          <PostFaqItem question="Is Rox cheaper than ClickUp?">
             <p>
               This depends on the plan you choose. ClickUp's base plans cost $10
               or $19 per seat per month. To access AI, you have to add another
               $14 or $33, depending on the features you want. That brings the
-              total with AI to somewhere between $24 and $52. Macro, meanwhile,
+              total with AI to somewhere between $24 and $52. Rox, meanwhile,
               costs $40 per month for everything we offer — including AI —
               without sorting which features sit behind which tier.
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="How does Macro Guest access compare with ClickUp's free plan?">
+          <PostFaqItem question="How does Rox Guest access compare with ClickUp's free plan?">
             <p>
               ClickUp's free plan is built for testing the product. You get
               unlimited tasks and members, but storage is capped at 60MB, and
-              you get limited access to AI tools. Guest access in Macro is free,
-              with a "Sent with Macro" signature and limits on storage and AI.
+              you get limited access to AI tools. Guest access in Rox is free,
+              with a "Sent with Rox" signature and limits on storage and AI.
             </p>
           </PostFaqItem>
 
@@ -624,12 +623,12 @@ export default function MacroVsClickUpPost() {
               training — if anything, it needs them, because there's so much to
               learn. Power users who enjoy configuring workflows often stick
               with it. Teams that want to open the app and move get frustrated
-              by how many places a simple task can live. Macro is deliberately
+              by how many places a simple task can live. Rox is deliberately
               narrower so day-to-day use stays fast.
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="Is Macro open source?">
+          <PostFaqItem question="Is Rox open source?">
             <p>
               Yes, end to end:{' '}
               <a
@@ -649,7 +648,7 @@ export default function MacroVsClickUpPost() {
           For tasks, GitHub linking, agents and the rest of the workspace, see
           the{' '}
           <a href="https://docs.macro.com" target="_blank" rel="noreferrer">
-            Macro documentation
+            Rox documentation
           </a>
           .
         </p>

@@ -97,7 +97,7 @@ export function LiveDocEditor(props: {
             class="site-live-doc-editor"
             contentEditable
             role="textbox"
-            aria-label="Live Macro document editor"
+            aria-label="Live Rox document editor"
             aria-multiline="true"
             onInput={interactedWithDocument}
             onKeyDown={(event) => {
@@ -142,7 +142,7 @@ export function LiveDocEditor(props: {
               setMenu('command');
             }}
           >
-            <h1>Why Macro Docs?</h1>
+            <h1>Why Rox Docs?</h1>
             <p>
               Every document is a CRDT with its own{' '}
               <strong>Durable Object</strong> in the cloud. Edits merge in

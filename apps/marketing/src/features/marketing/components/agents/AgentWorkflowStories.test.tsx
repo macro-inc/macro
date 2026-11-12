@@ -163,7 +163,7 @@ it('lets a visitor inspect the design without autoplay taking over', async () =>
   vi.advanceTimersByTime(6000);
   expect(
     view.getByRole('img', {
-      name: 'Client files mockup using Macro’s folder upload composer',
+      name: 'Client files mockup using Rox’s folder upload composer',
     })
   ).toBeTruthy();
   fireEvent.click(view.getByRole('button', { name: 'Back to conversation' }));

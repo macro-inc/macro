@@ -16,7 +16,7 @@ export function SectionAlt() {
       >
         <div>
           <div>Signal / Noise</div>
-          Macro is an elegant set of cohesive tools to build better software. It
+          Rox is an elegant set of cohesive tools to build better software. It
           is not a second brain to waste time maintaining. It has no methodology
           to feign productivity. It is a lightweight collaborative office suite,
           built for speed & focus.
@@ -37,7 +37,7 @@ export function SectionAlt() {
         <SceneContextWindow />
         <div>
           <div>Signal / Noise</div>
-          Macro is an elegant set of cohesive tools to build better software. It
+          Rox is an elegant set of cohesive tools to build better software. It
           is not a second brain to waste time maintaining. It has no methodology
           to feign productivity. It is a lightweight collaborative office suite,
           built for speed & focus.

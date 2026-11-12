@@ -19,7 +19,7 @@ import type { PostMeta } from '../../registry';
 
 const SLACK_VIDEO_ID = '1gDOXUxHo0U';
 const ARTICLE_PARAGRAPHS = [
-  'Before Macro, we used Slack for years and never had any problems with it.',
+  'Before Rox, we used Slack for years and never had any problems with it.',
   "That's to say, beyond the usual, mildly annoying problems that I didn't think of as being that bad:",
 ] as const;
 const ARTICLE_PREVIEW = ARTICLE_PARAGRAPHS.join(' ');
@@ -141,13 +141,13 @@ function PostScreenshot(props: {
 
 export const postMeta: PostMeta = {
   slug: 'slack-alternative',
-  title: 'Macro vs Slack',
-  seoTitle: 'Macro vs Slack — The Open-Source Slack Alternative',
+  title: 'Rox vs Slack',
+  seoTitle: 'Rox vs Slack — The Open-Source Slack Alternative',
   subtitle:
-    'Macro is the open source alternative to Slack with a real inbox and a full workspace built in.',
+    'Rox is the open source alternative to Slack with a real inbox and a full workspace built in.',
   date: '2026-06-25',
   description:
-    'Macro is the open-source alternative to Slack: team channels with a real inbox and Signal vs Noise, wired into your email, docs, tasks, calls and a CRM with one shared memory.',
+    'Rox is the open-source alternative to Slack: team channels with a real inbox and Signal vs Noise, wired into your email, docs, tasks, calls and a CRM with one shared memory.',
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'slack', 'comparison'],
   category: 'Comparison',
@@ -155,7 +155,7 @@ export const postMeta: PostMeta = {
   image: '/og/slack-alternative.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Jacob Beckerman', role: 'Macro', avatar: avatarJacob },
+  author: { name: 'Jacob Beckerman', role: 'Rox', avatar: avatarJacob },
   ctaButtonName: 'macro_vs_slack_cta',
 };
 
@@ -188,7 +188,7 @@ export default function MacroVsSlackPost() {
           </li>
         </ul>
         <p>
-          Since migrating onto Macro I've realized Slack was taking up more time
+          Since migrating onto Rox I've realized Slack was taking up more time
           than I thought it was, for me and our team. It was kind of like a mini
           social network.
         </p>
@@ -198,7 +198,7 @@ export default function MacroVsSlackPost() {
         </p>
         <p>
           I'd seen people complaining about Slack being noisy before, but I
-          didn't really grok it until we switched off it onto Macro Chat.
+          didn't really grok it until we switched off it onto Rox Chat.
         </p>
 
         <div class="mvn-video">
@@ -225,13 +225,13 @@ export default function MacroVsSlackPost() {
         <SectionGlyph route="/email" />
         <h2>A Signal vs. Noise split to keep you sane</h2>
         <p>
-          The main innovation of Macro for making things quieter is the Signal
+          The main innovation of Rox for making things quieter is the Signal
           vs. Noise split. Important emails, messages and @mentions go into
           Signal, and non-important things go into Noise.
         </p>
         <PostScreenshot
           src={signalNoise}
-          alt="Macro inbox with Signal, Noise and All tabs, showing grouped channel replies from #bug-reports and an email draft"
+          alt="Rox inbox with Signal, Noise and All tabs, showing grouped channel replies from #bug-reports and an email draft"
           width={1435}
           height={751}
         />
@@ -243,22 +243,22 @@ export default function MacroVsSlackPost() {
         <SectionGlyph route="/channels" />
         <h2>Unread on the side, not everything</h2>
         <p>
-          The second big thing that makes Macro less noisy than Slack is that
+          The second big thing that makes Rox less noisy than Slack is that
           only your unread channels are on the side, not every channel (of
           course, you can pin channels if you want them there). This
           ever-so-slight bit of friction to open a channel, for everyone on your
           team, creates less traffic. I know it doesn't sound like much, but
-          when I introspect on why our Macro Chat is quieter than our Slack was,
+          when I introspect on why our Rox Chat is quieter than our Slack was,
           I think this is why.
         </p>
 
         <SectionGlyph route="/tasks" />
-        <h2>Macro Chat tightly integrates with engineering tasks</h2>
+        <h2>Rox Chat tightly integrates with engineering tasks</h2>
         <p>
           If you read our{' '}
-          <a href="/posts/linear-alternative">post on Macro vs. Linear</a>,
+          <a href="/posts/linear-alternative">post on Rox vs. Linear</a>,
           you'll see me talk about how tightly channels are integrated with
-          Macro tasks. This has been really helpful for our engineering team
+          Rox tasks. This has been really helpful for our engineering team
           staying on track without needing a dedicated PM keeping track of
           everything — which works well with our culture of agency and no
           micromanaging. We no longer have to "stay on top" of everybody,
@@ -268,7 +268,7 @@ export default function MacroVsSlackPost() {
         </p>
         <PostScreenshot
           src={tasksIntegration}
-          alt="A task pill in a Macro channel thread expanded into a preview card showing status, assignees and due date"
+          alt="A task pill in a Rox channel thread expanded into a preview card showing status, assignees and due date"
           width={1213}
           height={658}
         />
@@ -278,17 +278,17 @@ export default function MacroVsSlackPost() {
         </p>
 
         <SectionGlyph route="/documents" />
-        <h2>Split-screen channels in Macro Chat</h2>
+        <h2>Split-screen channels in Rox Chat</h2>
         <p>
           Slack only lets you have one window open at a time, which makes it
-          hard to multitask. When I look at our team using Macro Chat, they
+          hard to multitask. When I look at our team using Rox Chat, they
           often have multiple splits open at a time, which wouldn't be possible
           with Slack. This makes it easy to carry out multiple conversations in
           parallel.
         </p>
         <PostScreenshot
           src={splitScreen}
-          alt="Three Macro channels — Engineers, bug-reports and creative team — open side by side in split view"
+          alt="Three Rox channels — Engineers, bug-reports and creative team — open side by side in split view"
           width={2347}
           height={1237}
         />
@@ -298,13 +298,13 @@ export default function MacroVsSlackPost() {
         </p>
 
         <SectionGlyph route="/channels" />
-        <h2>Inline replies are easier to read in Macro</h2>
+        <h2>Inline replies are easier to read in Rox</h2>
         <p>
           With Slack, I'd often forget which channel a message was sent in, and
           I'd have to go looking through all the different channels to find it.
         </p>
         <p>
-          In Macro this is a lot easier because the first few replies to a
+          In Rox this is a lot easier because the first few replies to a
           message show inline (like Reddit or forums), instead of being hidden
           in a side flap like Slack that you need to expand to see the context
           of the thread. Most threads are just people saying "okay" or one or
@@ -318,7 +318,7 @@ export default function MacroVsSlackPost() {
         </p>
         <PostScreenshot
           src={inlineReplies}
-          alt="A Macro channel where several threads show their first replies inline, with a '2 more replies' pill for the longer one"
+          alt="A Rox channel where several threads show their first replies inline, with a '2 more replies' pill for the longer one"
           width={1573}
           height={1213}
         />
@@ -332,7 +332,7 @@ export default function MacroVsSlackPost() {
         </p>
         <PostScreenshot
           src={threadExpand}
-          alt="An expanded Macro thread with a reply composer open inline under the messages"
+          alt="An expanded Rox thread with a reply composer open inline under the messages"
           width={1443}
           height={418}
         />
@@ -340,16 +340,16 @@ export default function MacroVsSlackPost() {
         <SectionGlyph route="/agents" />
         <h2>Better access for agents: a real MCP surface</h2>
         <p>
-          One of the awesome things about Macro is the unified memory for the
+          One of the awesome things about Rox is the unified memory for the
           agent. It can search all your channels as well as list recent messages
           in bulk. That's the important part: in bulk. Where Slack's MCP is
-          limited in what it can read, Macro's MCP is far more capable for the
+          limited in what it can read, Rox's MCP is far more capable for the
           agent — and for your own agents that you can plug in. Here's an
           example of that:
         </p>
         <PostScreenshot
           src={agentBulkSearch}
-          alt="The Macro agent reading 30 messages each from the Engineers and bug-reports channels in bulk, then summarizing the team's day"
+          alt="The Rox agent reading 30 messages each from the Engineers and bug-reports channels in bulk, then summarizing the team's day"
           width={1240}
           height={775}
         />
@@ -371,38 +371,38 @@ export default function MacroVsSlackPost() {
         <SectionGlyph route="/agents" />
         <h2>Powerful built-in agents, integrated with your workspace</h2>
         <p>
-          Slack and Macro both have agents in channels, @mentionable just like
+          Slack and Rox both have agents in channels, @mentionable just like
           human users. Slack has a well-developed marketplace and a lead in
-          integrations compared to Macro (as of 2026), whereas Macro has a
+          integrations compared to Rox (as of 2026), whereas Rox has a
           stronger first-party agent with full-workspace context and the ability
-          to take action. When you <code>@Macro</code> in a channel, it gains
+          to take action. When you <code>@Rox</code> in a channel, it gains
           the permissions of the person sending the message, allowing it to
           access everything, create tasks, send messages, and more.
         </p>
         <PostScreenshot
           src={agentInChannel}
-          alt="A bug report in a Macro channel where @Macro is asked to make a task and replies with the created, linked task"
+          alt="A bug report in a Rox channel where @Rox is asked to make a task and replies with the created, linked task"
           width={1465}
           height={937}
         />
         <p class="mvn-figcaption">
-          <code>@Macro</code> reads the thread, creates the task and links it
+          <code>@Rox</code> reads the thread, creates the task and links it
           back — then asks if it should assign and prioritize it.
         </p>
 
         <h2>Conclusion</h2>
         <p>
           Slack is a mature chat platform with a big integration marketplace and
-          Slack Connect to chat across companies. Macro is quieter, has better
+          Slack Connect to chat across companies. Rox is quieter, has better
           UX, and is a more powerful bedrock for agentic development.
         </p>
 
         <h2 class="post-faq-title">Frequently asked questions</h2>
         <div class="post-faq">
-          <PostFaqItem question="Should I switch from Slack to Macro?">
+          <PostFaqItem question="Should I switch from Slack to Rox?">
             <p>
               If your stack is Slack plus email plus a tracker plus docs plus a
-              CRM, yes — that is five tools that do not share context. Run Macro
+              CRM, yes — that is five tools that do not share context. Run Rox
               alongside Slack for a week, move a few active channels over, and
               feel what a real inbox and a Signal/Noise split do to your day.
             </p>
@@ -412,12 +412,12 @@ export default function MacroVsSlackPost() {
             <p>
               When you depend on Slack's enormous app directory or on Slack
               Connect channels with external companies. Those ecosystems took
-              years to build and we will not pretend Macro matches them yet;
+              years to build and we will not pretend Rox matches them yet;
               some teams keep both during a transition.
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="Does Macro have huddles or calls?">
+          <PostFaqItem question="Does Rox have huddles or calls?">
             <p>
               Yes — start a call in any channel or DM like a huddle, or share a
               link like Google Meet. Calls run across devices with nothing to
@@ -426,7 +426,7 @@ export default function MacroVsSlackPost() {
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="Is Macro open source?">
+          <PostFaqItem question="Is Rox open source?">
             <p>
               Yes, end to end:{' '}
               <a
@@ -450,7 +450,7 @@ export default function MacroVsSlackPost() {
             target="_blank"
             rel="noreferrer"
           >
-            Macro channels documentation
+            Rox channels documentation
           </a>
           .
         </p>

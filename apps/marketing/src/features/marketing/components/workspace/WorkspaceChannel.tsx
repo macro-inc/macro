@@ -261,7 +261,7 @@ export function WorkspaceChannel(props: {
             onClick={() => w.openItem('agents')}
           >
             <Sparkle class="size-3" />
-            Ask Macro
+            Ask Rox
           </Button>
         </div>
       </ViewShell.TopBar>

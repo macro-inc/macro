@@ -30,7 +30,7 @@ import { createEmailComposer } from '../primitives/email-composer';
 import { ComposeLayout } from '../views/compose-layout';
 import { ReplyInputView } from '../views/reply-input';
 
-/** Free plans add the "Sent with Macro" watermark below the message. */
+/** Free plans add the "Sent with Rox" watermark below the message. */
 const freePlan = new URLSearchParams(location.search).has('free');
 const directoryEnabled = new URLSearchParams(location.search).has('directory');
 const mobile = new URLSearchParams(location.search).has('mobile');

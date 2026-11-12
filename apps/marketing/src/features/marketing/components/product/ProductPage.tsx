@@ -25,10 +25,10 @@ export function ProductBrand(props: { product: string }) {
         href="/"
         target="_self"
         class="product-home-link"
-        aria-label="Macro home"
+        aria-label="Rox home"
       >
         <MacroLogo width="20" height="20" aria-hidden="true" />
-        <span>Macro</span>
+        <span>Rox</span>
       </a>
       <span aria-hidden="true">/</span>
       <span>{props.product}</span>

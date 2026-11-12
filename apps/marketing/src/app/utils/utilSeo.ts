@@ -2,7 +2,7 @@ import { isServer } from 'solid-js/web';
 import { APP_BASE_URL } from './utilBaseUrl';
 
 export interface PageSeo {
-  /** Document/og title, e.g. 'Jobs at Macro'. */
+  /** Document/og title, e.g. 'Jobs at Rox'. */
   title: string;
   /** Meta description (aim for ~150-160 chars). */
   description: string;
@@ -26,7 +26,7 @@ export interface PageSeo {
   noindex?: boolean;
 }
 
-export const SITE_NAME = 'Macro';
+export const SITE_NAME = 'Rox';
 export const DEFAULT_OG_IMAGE = `${APP_BASE_URL}/og/home-unified-2026-10-27.png`;
 
 // Homepage only: other product and article cards retain their own images.

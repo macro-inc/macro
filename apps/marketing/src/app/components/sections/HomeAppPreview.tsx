@@ -258,7 +258,7 @@ export function HomeHeroBackdrop(props: {
   );
 }
 
-// The homepage's interactive "app preview" hero: a 3D-tilted, shadowed Macro
+// The homepage's interactive "app preview" hero: a 3D-tilted, shadowed Rox
 // window (SceneAppPreview) floating off the gradient, with the floating glass
 // feature strip straddling its bottom edge. Reused on feature pages (e.g. the
 // docs hero) via `defaultSection` so they open on the matching app section.

@@ -11,6 +11,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import {
   MACRO_AGENT_BOT_ID,
+  MACRO_AGENT_NAME,
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
@@ -139,10 +140,10 @@ const IN_MEMORY_HARNESS: ConnectedHarness = {
 
 const MACRO_AGENT: AgentSummary = {
   id: MACRO_AGENT_BOT_ID,
-  name: 'Macro',
+  name: MACRO_AGENT_NAME,
   tag: 'macro',
   instructions: '',
-  whereItRuns: 'In Macro',
+  whereItRuns: `In ${MACRO_AGENT_NAME}`,
   defaultModel: MODEL_PRETTYNAME[Model.sonnet55],
   channelSummary: 'All channels',
   share: 'Team',

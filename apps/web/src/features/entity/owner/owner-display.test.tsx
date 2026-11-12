@@ -99,7 +99,7 @@ describe('OwnerLabel', () => {
   });
 
   it('names a first-party bot without requesting its profile', () => {
-    expect(textOf('bot|00000000-0000-0000-0000-00000000a1a1')).toBe('Macro');
+    expect(textOf('bot|00000000-0000-0000-0000-00000000a1a1')).toBe('Rox');
     expect(textOf('00000000-0000-0000-0000-00000000c5c5')).toBe('Cursor');
     expect(mocks.requestedBotIds).toEqual([]);
 

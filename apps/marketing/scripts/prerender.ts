@@ -161,7 +161,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/dpa': 'Data Processing Agreement',
   '/posts': 'Blog',
   '/tasks': 'Tasks',
-  '/email': 'Macro Mail',
+  '/email': 'Rox Mail',
   '/documents': 'Documents',
   '/channels': 'Channels',
   '/calls': 'Calls',
@@ -170,26 +170,26 @@ const ROUTE_LABELS: Record<string, string> = {
   '/github': 'GitHub',
   '/pricing': 'Pricing',
   '/download': 'Download',
-  '/tour': 'Macro tour',
+  '/tour': 'Rox tour',
   '/partners': 'Partner Program',
   '/partners/terms': 'Partner Program Terms',
-  '/migrate': 'Switch your startup to Macro',
+  '/migrate': 'Switch your startup to Rox',
   '/mobile-signup': 'Start for free',
   '/mobile-signup-sent': 'Check your email',
 };
 
-// Product/feature pages, each describing one part of the Macro app. Used to
+// Product/feature pages, each describing one part of the Rox app. Used to
 // emit a SoftwareApplication block per page so the product pages carry their own
 // structured data (not just the site-wide one on the homepage). Names are the
 // product names used in copy, independent of the marketing <title>.
 const FEATURE_APPS: Record<string, string> = {
-  '/tasks': 'Macro Tasks',
-  '/email': 'Macro Mail',
-  '/documents': 'Macro Docs',
-  '/channels': 'Macro Chat',
-  '/calls': 'Macro Calls',
-  '/crm': 'Macro CRM',
-  '/github': 'Macro Reviews',
+  '/tasks': 'Rox Tasks',
+  '/email': 'Rox Mail',
+  '/documents': 'Rox Docs',
+  '/channels': 'Rox Chat',
+  '/calls': 'Rox Calls',
+  '/crm': 'Rox CRM',
+  '/github': 'Rox Reviews',
 };
 
 // Sitemap importance/freshness hints, by route. Higher priority and more
@@ -298,7 +298,7 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
     blocks.push({
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: 'Macro',
+      name: 'Rox',
       url: `${BASE_URL}/`,
       logo: `${BASE_URL}/logo.png`,
       sameAs: [
@@ -312,13 +312,13 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
     blocks.push({
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: 'Macro',
+      name: 'Rox',
       url: `${BASE_URL}/`,
     });
     blocks.push({
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
-      name: 'Macro',
+      name: 'Rox',
       url: `${BASE_URL}/`,
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'macOS, Windows, Web',
@@ -330,7 +330,7 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
       },
       publisher: {
         '@type': 'Organization',
-        name: 'Macro',
+        name: 'Rox',
         url: `${BASE_URL}/`,
       },
     });
@@ -355,7 +355,7 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
         : {}),
       publisher: {
         '@type': 'Organization',
-        name: 'Macro',
+        name: 'Rox',
         url: `${BASE_URL}/`,
       },
     });
@@ -373,12 +373,12 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
       isPartOf: {
         '@type': 'SoftwareApplication',
-        name: 'Macro',
+        name: 'Rox',
         url: `${BASE_URL}/`,
       },
       publisher: {
         '@type': 'Organization',
-        name: 'Macro',
+        name: 'Rox',
         url: `${BASE_URL}/`,
       },
     });
@@ -505,7 +505,7 @@ function writeSitemapAndRobots(
 }
 
 const JOURNEY_SEO: PageSeo = {
-  title: 'Macro — The unified workspace for your company.',
+  title: 'Rox — The unified workspace for your company.',
   description:
     'Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email.',
   path: '/',
@@ -570,7 +570,7 @@ fs.writeFileSync(
 const start = journeyHtml({
   ...JOURNEY_SEO,
   path: '/start',
-  title: 'Get started with Macro',
+  title: 'Get started with Rox',
   noindex: true,
 });
 fs.mkdirSync(path.join(DIST_DIR, 'start'), { recursive: true });

@@ -267,7 +267,7 @@ function DesyncCaseStudy() {
             <div class="migrate-case-scrim" aria-hidden="true" />
             <div class="migrate-case-heading">
               <h2 class="migrate-case-title">Case study</h2>
-              <p class="migrate-case-subtitle">A company switches to Macro</p>
+              <p class="migrate-case-subtitle">A company switches to Rox</p>
             </div>
             <aside
               class="migrate-case-quote"
@@ -281,7 +281,7 @@ function DesyncCaseStudy() {
                 </span>
               </div>
               <blockquote>
-                &ldquo;Macro did not help us get organized. Macro is why we are
+                &ldquo;Rox did not help us get organized. Rox is why we are
                 organized.&rdquo;
               </blockquote>
             </aside>
@@ -317,9 +317,9 @@ function DesyncCaseStudy() {
 
 export const RouteMigrate: Component = () => {
   setPageSeo({
-    title: 'Switch your company to Macro | Migration guide',
+    title: 'Switch your company to Rox | Migration guide',
     description:
-      'Bring your company’s email, files, docs, tasks, and conversations into Macro. Explore imports, connected tools, and help from our team.',
+      'Bring your company’s email, files, docs, tasks, and conversations into Rox. Explore imports, connected tools, and help from our team.',
     path: '/migrate',
   });
 
@@ -381,7 +381,7 @@ export const RouteMigrate: Component = () => {
 
         /* Greys throughout this page's plate chrome are mixed from --c4 (ink), not
            taken off the --b* scale: that scale is not ordered by lightness in
-           every theme — under Macro, --b3 sits at 0.10 against a 0.14 background,
+           every theme — under Rox, --b3 sits at 0.10 against a 0.14 background,
            i.e. darker than the surface it's drawn on, which reads as black. Mixing
            ink toward transparent always lands between the text and the
            background, whichever way the theme runs. */
@@ -730,7 +730,7 @@ export const RouteMigrate: Component = () => {
                 margin: '0',
               }}
             >
-              Switch your company to Macro
+              Switch your company to Rox
             </h1>
             <p
               style={{
@@ -750,7 +750,7 @@ export const RouteMigrate: Component = () => {
           </div>
         </section>
 
-        {/* The connector scene shows incoming tools linked to Macro.
+        {/* The connector scene shows incoming tools linked to Rox.
             Click it to replay the slide. */}
         <div
           style={{
@@ -844,7 +844,7 @@ export const RouteMigrate: Component = () => {
                 <CaretDown aria-hidden="true" />
               </summary>
               <p class="migrate-faq__answer">
-                Imports create copies in Macro. Later edits in Notion or Linear
+                Imports create copies in Rox. Later edits in Notion or Linear
                 do not automatically replace those copies. Connected tools
                 remain available to agents. Gmail works differently: your
                 connected mailbox continues to sync.
@@ -857,7 +857,7 @@ export const RouteMigrate: Component = () => {
               </summary>
               <p class="migrate-faq__answer">
                 Review the imported work, confirm task assignees, and set
-                sharing in Macro. Invite teammates by email and give them access
+                sharing in Rox. Invite teammates by email and give them access
                 to the projects and channels they need. Your company can move
                 together or in stages.
               </p>
@@ -885,7 +885,7 @@ export const RouteMigrate: Component = () => {
 
       {/* The overview is visible; provider-specific detail stays in the linked pages. */}
       <section
-        aria-label="Macro compared to the rest of the toolset"
+        aria-label="Rox compared to the rest of the toolset"
         style={{
           ...sectionShell(),
           'padding-block': mobile() ? '48px' : '64px',
@@ -953,7 +953,7 @@ export const RouteMigrate: Component = () => {
               }}
             >
               Book a call with us. We’ll answer your questions and help you get
-              your company set up in Macro.
+              your company set up in Rox.
             </p>
           </div>
           <div

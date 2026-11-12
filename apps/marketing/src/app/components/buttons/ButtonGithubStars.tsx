@@ -27,7 +27,7 @@ export function ButtonGithubStars(props: {
       target="_blank"
       rel="noreferrer"
       class={props.class}
-      aria-label="Macro on GitHub"
+      aria-label="Rox on GitHub"
       onClick={props.onClick}
       style={{
         'align-items': 'center',

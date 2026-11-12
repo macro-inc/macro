@@ -89,7 +89,7 @@ const _INBOX_PANEL = {
 };
 
 // ---------------------------------------------------------------------------
-// App-chrome icons (Macro product nav set)
+// App-chrome icons (Rox product nav set)
 // ---------------------------------------------------------------------------
 
 const NAV_ICONS: Record<string, Component<{ style?: JSX.CSSProperties }>> = {
@@ -219,7 +219,7 @@ const heroRows: HeroRow[] = [
   // This week
   {
     who: 'Marco Delgado',
-    subject: 'Invitation: Macro <> intro @ 11am',
+    subject: 'Invitation: Rox <> intro @ 11am',
     preview:
       'You have been invited to an event on Thu Jun 19, 2026 from 11:00–11:30am. Agenda and a short pre-read are attached for the team.',
     time: 'Jun 16',
@@ -229,7 +229,7 @@ const heroRows: HeroRow[] = [
   },
   {
     who: 'Greg Sandoval',
-    subject: 'Re: Zynoptes <> Macro follow up',
+    subject: 'Re: Zynoptes <> Rox follow up',
     preview:
       'We ran a preliminary scan on your repo and attached the .SARIF results. A couple of medium findings worth a look before we ship to production.',
     time: 'Jun 16',
@@ -459,7 +459,7 @@ export function HeroAppWindow() {
       mask="linear-gradient(to bottom, rgb(0 0 0 / 1) 0%, rgb(0 0 0 / 1) 66%, rgb(0 0 0 / 0.18) 100%)"
       interactive={{
         ariaLabel:
-          'Interactive Macro inbox demo. Use J and K to navigate, E to archive.',
+          'Interactive Rox inbox demo. Use J and K to navigate, E to archive.',
         onKeyDown,
       }}
     >
@@ -965,7 +965,7 @@ function MultiInboxGraphic() {
 // Compose + @mention graphic (typing + filtering + insertion animation)
 // ---------------------------------------------------------------------------
 
-// "ref" is an inline Macro-document reference (a live clickable link), distinct
+// "ref" is an inline Rox-document reference (a live clickable link), distinct
 // from "doc" (a file that becomes an attachment).
 type ComposePill = {
   kind: 'person' | 'doc' | 'ref';
@@ -1629,7 +1629,7 @@ export function ComposeMentionGraphic() {
     <div
       ref={frameEl}
       role="img"
-      aria-label="A Macro email being composed: typing an @mention adds Valentina to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
+      aria-label="A Rox email being composed: typing an @mention adds Valentina to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
     >
       <ComposeMentionScene t={t} />
     </div>
@@ -1642,7 +1642,7 @@ export function ComposeMentionGraphic() {
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'Superhuman', 'Outlook', 'Gmail'];
+const comparisonColumns = ['Rox', 'Superhuman', 'Outlook', 'Gmail'];
 
 const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   {
@@ -2055,7 +2055,7 @@ function _EmailIntro() {
 
   return (
     <section
-      aria-label="Why Macro Mail"
+      aria-label="Why Rox Mail"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -2242,7 +2242,7 @@ export function MultiInboxSpotlight() {
 }
 
 // ---------------------------------------------------------------------------
-// Email, messages & mentions in one — a faithful recreation of the real Macro
+// Email, messages & mentions in one — a faithful recreation of the real Rox
 // unified inbox (modeled on js/app .../list-entity wide-layout). A full-width
 // background pane that cycles a light-gray rounded selection through the rows.
 // ---------------------------------------------------------------------------
@@ -2476,8 +2476,8 @@ const inboxItems: InboxItem[] = [
     kind: 'row',
     row: {
       kind: 'email',
-      primary: 'Macro via TestFlight',
-      boldSecondary: 'Macro App 2.0.5 (174) is now available to test',
+      primary: 'Rox via TestFlight',
+      boldSecondary: 'Rox App 2.0.5 (174) is now available to test',
       secondary: 'Open TestFlight on your iOS device to install',
       time: 'Jun 17',
     },
@@ -2486,7 +2486,7 @@ const inboxItems: InboxItem[] = [
     kind: 'row',
     row: {
       kind: 'ai',
-      primary: 'Current Macro Events',
+      primary: 'Current Rox Events',
       lead: 'AI responded \u00B7',
       secondary:
         "Lots happening \u2014 here's the live snapshot as of right now",
@@ -2828,8 +2828,8 @@ const unifiedItems: UItem[] = [
   {
     kind: 'row',
     type: 'email',
-    who: 'Macro via TestFlight',
-    subject: 'Macro 2.0.5 (174) is now available to test',
+    who: 'Rox via TestFlight',
+    subject: 'Rox 2.0.5 (174) is now available to test',
     preview:
       'Open TestFlight on your iOS device to install this build, then drop notes in the beta feedback channel.',
     time: 'Jun 17',
@@ -3047,9 +3047,9 @@ function UnifiedInboxWindow() {
           padding: compact() ? '11px 13px' : '12px 16px',
         }}
       >
-        {/* Lead with the Macro mark, like the mockup's chrome. */}
+        {/* Lead with the Rox mark, like the mockup's chrome. */}
         <MacroMarkIcon
-          aria-label="Macro"
+          aria-label="Rox"
           style={{
             color: '#bfbfbf',
             display: 'block',

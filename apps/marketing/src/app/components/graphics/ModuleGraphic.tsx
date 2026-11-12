@@ -12,7 +12,7 @@ const MODULE_VIEWBOX = '210 -40 310 310';
  * logo, dropped into a bare SVG host (the root just needs the `setup-graphic`
  * class, which brings both the styling and the `currentColor` ink).
  *
- * Ported from the Macro app's `StepModule` (features/setup/flow), where each
+ * Ported from the Rox app's `StepModule` (features/setup/flow), where each
  * connection step uses one as its hero.
  *
  * `state` reflects the connection: `idle` before, `linked` (logo held accent)

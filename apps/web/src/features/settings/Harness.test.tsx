@@ -316,10 +316,10 @@ describe('Harness', () => {
   it('lists Macro Agent and Cursor in the harness list', () => {
     render(() => <Harness />);
 
-    expect(screen.getByRole('heading', { name: 'Macro Agent' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Rox Agent' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
     expect(
-      screen.getByText(/Uses official Macro tools and MCPs to get the job done/)
+      screen.getByText(/Uses official Rox tools and MCPs to get the job done/)
     ).toBeTruthy();
   });
 

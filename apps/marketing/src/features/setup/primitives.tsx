@@ -11,7 +11,7 @@ import { For, type JSX, Show } from 'solid-js';
  * One source's card: a connector-first header (icon, name, count badge,
  * right-aligned actions), a recessed status well underneath — the same
  * inset treatment as the soup's active-filters bar — carrying the green
- * "Connected" dot and a blurb saying what Macro found, and the pill cloud
+ * "Connected" dot and a blurb saying what Rox found, and the pill cloud
  * as the body.
  */
 export function ImportCard(props: {
@@ -99,7 +99,7 @@ export function ItemPill(props: {
   /** Hover detail (subtitle/description); falls back to the label. */
   title?: string;
   /**
-   * The Macro entity this item already became (imported by the user or a
+   * The Rox entity this item already became (imported by the user or a
    * teammate). Renders as a quiet "already in your workspace" pill that
    * opens the existing entity.
    */
@@ -159,7 +159,7 @@ export function ItemPill(props: {
           {content}
           <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
             <CheckIcon class="size-3 shrink-0" />
-            in Macro
+            in Rox
           </span>
         </button>
       )}

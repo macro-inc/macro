@@ -4,20 +4,20 @@ import { Diagram, DiagramArrow, DiagramBox } from '../../PostDiagram';
 import type { PostMeta } from '../../registry';
 
 const ARTICLE_PARAGRAPHS = [
-  "Access management is one of the hardest systems we've built at Macro, and the one we've rewritten the most. The design we finally landed on does the most work under the hood and is the easiest for users to understand.",
-  'This is one part of a multi-part piece on how we design the Macro filesystem (MFS). Our focus in this article is the access management (permissions and sharing) system.',
+  "Access management is one of the hardest systems we've built at Rox, and the one we've rewritten the most. The design we finally landed on does the most work under the hood and is the easiest for users to understand.",
+  'This is one part of a multi-part piece on how we design the Rox filesystem (MFS). Our focus in this article is the access management (permissions and sharing) system.',
 ] as const;
 const ARTICLE_PREVIEW = ARTICLE_PARAGRAPHS.join(' ');
 
 export const postMeta: PostMeta = {
   slug: 'mfs-sharing',
-  title: 'The Macro Filesystem',
-  seoTitle: 'The Macro Filesystem',
+  title: 'The Rox Filesystem',
+  seoTitle: 'The Rox Filesystem',
   subtitle:
-    'How channel-based sharing made access management in Macro fast, simple, and free of side effects.',
+    'How channel-based sharing made access management in Rox fast, simple, and free of side effects.',
   date: '2026-07-07',
   description:
-    'How Macro rebuilt MFS permissions around channel-based sharing: a single flat entity_access table that took worst-case reads from over 10 seconds to about 600ms and removed membership side effects.',
+    'How Rox rebuilt MFS permissions around channel-based sharing: a single flat entity_access table that took worst-case reads from over 10 seconds to about 600ms and removed membership side effects.',
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'engineering'],
   category: 'Engineering',
@@ -26,7 +26,7 @@ export const postMeta: PostMeta = {
   image: '/og/mfs-sharing.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Will Hutchinson', role: 'Macro Engineering' },
+  author: { name: 'Will Hutchinson', role: 'Rox Engineering' },
   ctaButtonName: 'blog_mfs_sharing_cta',
 };
 
@@ -53,12 +53,12 @@ export default function MfsSharingPost() {
           <em>{ARTICLE_PARAGRAPHS[1]}</em>
         </p>
 
-        <h2>Some background on the Macro Filesystem</h2>
+        <h2>Some background on the Rox Filesystem</h2>
         <p>
-          The Macro Filesystem ("MFS") is a unique problem because, unlike
+          The Rox Filesystem ("MFS") is a unique problem because, unlike
           single-purpose software (Linear for tasks, Slack for chat, Notion for
-          notes), Macro needs a flexible schema that works across all of these
-          content types. Every entity in Macro, whether it's a document, a
+          notes), Rox needs a flexible schema that works across all of these
+          content types. Every entity in Rox, whether it's a document, a
           project, a chat, or an email, lives in one workspace under one access
           model.
         </p>
@@ -85,7 +85,7 @@ export default function MfsSharingPost() {
         </ul>
         <p>
           Beyond these requirements, MFS should be simple for users and
-          developers to use. That is our design goal with Macro generally: it is
+          developers to use. That is our design goal with Rox generally: it is
           why the app is built in Rust and SolidJS, and why we put so much
           effort into product design.
         </p>
@@ -95,7 +95,7 @@ export default function MfsSharingPost() {
           When we talk about permissions, we mean which users and agents should
           have access to an entity. Sharing is closely related: it is the act of
           granting permissions and notifying users or agents of the grant via
-          email, push notification, or Macro message.
+          email, push notification, or Rox message.
         </p>
         <p>
           In designing sharing and permissions for MFS, we had the following
@@ -196,7 +196,7 @@ export default function MfsSharingPost() {
           <div class="mfs-shot-frame">
             <img
               src={forgotToShare}
-              alt="A Macro chat where Jacob shares a doc called Email Roadmap and Hutch replies: I think you forgot to share it with me"
+              alt="A Rox chat where Jacob shares a doc called Email Roadmap and Hutch replies: I think you forgot to share it with me"
               loading="lazy"
               width={928}
               height={402}
@@ -213,7 +213,7 @@ export default function MfsSharingPost() {
           </figcaption>
         </figure>
         <p>
-          This is nothing unique to Macro. It happens half the time someone
+          This is nothing unique to Rox. It happens half the time someone
           pastes a Google Docs link in Slack, or a Figma in a Notion. So we
           didn't initially recognize this was a problem we could solve.
         </p>
@@ -224,7 +224,7 @@ export default function MfsSharingPost() {
 
         <h2>Introducing: channel-based sharing</h2>
         <p>
-          Because Macro has everything in one system, we thought: why not just
+          Because Rox has everything in one system, we thought: why not just
           "cascade" the permissions from the channel to the document? (Cascade
           was the first word we used to describe it.)
         </p>
@@ -288,7 +288,7 @@ export default function MfsSharingPost() {
           {ENTITY_ACCESS_SQL}
         </pre>
         <p>
-          Like the rest of Macro, the implementation is open source at{' '}
+          Like the rest of Rox, the implementation is open source at{' '}
           <a
             href="https://github.com/macro-inc/macro"
             target="_blank"

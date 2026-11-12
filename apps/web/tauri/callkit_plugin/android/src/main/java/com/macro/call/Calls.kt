@@ -103,7 +103,7 @@ internal object Calls {
     private fun account(ctx: Context): PhoneAccountHandle {
         val handle = PhoneAccountHandle(ComponentName(ctx, TelecomService::class.java), accountId)
         ctx.getSystemService(TelecomManager::class.java).registerPhoneAccount(
-            PhoneAccount.builder(handle, "Macro").setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED)
+            PhoneAccount.builder(handle, "Rox").setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED)
                 .setSupportedUriSchemes(listOf("macro-call")).build()
         )
         return handle

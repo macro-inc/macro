@@ -155,7 +155,7 @@ const docsCards: FeatureLiteCard[] = [
   {
     icon: ShapeCircle,
     title: 'Open source',
-    desc: 'Macro fully open source on Github. Audit it, fork it, or extend it.',
+    desc: 'Rox fully open source on Github. Audit it, fork it, or extend it.',
   },
   {
     icon: ShapeRoundedRect,
@@ -171,10 +171,10 @@ const docsCards: FeatureLiteCard[] = [
 
 const docsFaq: FaqItem[] = [
   {
-    q: 'How is Macro Docs different from Notion?',
+    q: 'How is Rox Docs different from Notion?',
     a: (
       <>
-        Macro Docs uses Markdown and supports real-time, offline-capable
+        Rox Docs uses Markdown and supports real-time, offline-capable
         editing. Documents link directly to related tasks, email, and channels.
       </>
     ),
@@ -217,10 +217,10 @@ const docsFaq: FaqItem[] = [
     ),
   },
   {
-    q: 'Is Macro open source?',
+    q: 'Is Rox open source?',
     a: (
       <>
-        Yes. Macro is open source under the AGPLv3. The code is on{' '}
+        Yes. Rox is open source under the AGPLv3. The code is on{' '}
         <a
           href="https://github.com/macro-inc/macro"
           target="_blank"
@@ -313,16 +313,16 @@ function PowerInSimplicity() {
               'text-wrap': 'pretty',
             }}
           >
-            At the end of the day, a Macro Doc is just a markdown file. As
+            At the end of the day, a Rox Doc is just a markdown file. As
             simple as you want it to be, with advanced features when you need
-            them. Collaborate online, smart link to other Macro entities, loop
+            them. Collaborate online, smart link to other Rox entities, loop
             in agents, edit offline, or export for another markdown editor.
             <br />
             <br />
             Nothing is trapped in a proprietary format.
             <br />
             <br />
-            <Hi>A Macro Doc is just a markdown file.</Hi>
+            <Hi>A Rox Doc is just a markdown file.</Hi>
           </p>
         </div>
       </div>
@@ -484,7 +484,7 @@ function _FeatureSplit(props: {
 }
 
 const versionHistoryBlock: DocsFeatureBlock = {
-  label: 'Macro Docs',
+  label: 'Rox Docs',
   headline: <>Rewrite history.</>,
   // Three claims, one per row, stacked under the headline: the headline is one
   // line here, so the column beside it was carrying a three-line paragraph
@@ -505,7 +505,7 @@ const versionHistoryBlock: DocsFeatureBlock = {
   ),
 };
 
-// The markdown claim, demonstrated. PowerInSimplicity has just said "A Macro
+// The markdown claim, demonstrated. PowerInSimplicity has just said "A Rox
 // Doc is just a markdown file" three times over, in a column of pure type
 // with no artwork -- it is the only claim on this page with nothing to look
 // at. This band is that sentence happening: the syntax lands, the blocks form
@@ -513,7 +513,7 @@ const versionHistoryBlock: DocsFeatureBlock = {
 // once here without being explained, so that section reads as the escalation
 // it is written as rather than as the first mention of the idea.
 const markdownBlock: DocsFeatureBlock = {
-  label: 'Macro Docs',
+  label: 'Rox Docs',
   headline: (
     <>
       Mention and link
@@ -531,7 +531,7 @@ const markdownBlock: DocsFeatureBlock = {
 };
 
 const agentTeammateBlock: DocsFeatureBlock = {
-  label: 'Macro Docs',
+  label: 'Rox Docs',
   headline: (
     <>
       Agents edit
@@ -550,7 +550,7 @@ const agentTeammateBlock: DocsFeatureBlock = {
 };
 
 // ---------------------------------------------------------------------------
-// Live editor — the real Macro editor, embedded and typeable
+// Live editor — the real Rox editor, embedded and typeable
 // ---------------------------------------------------------------------------
 
 // The same window the home page runs, on its own full-width beat. On phones the
@@ -1756,11 +1756,11 @@ function _LiveEditorSection() {
 }
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Notion vs Obsidian vs Google Docs vs Confluence)
+// Comparison table (Rox vs Notion vs Obsidian vs Google Docs vs Confluence)
 // ---------------------------------------------------------------------------
 
 const comparisonColumns: ComparisonColumn[] = [
-  { label: 'Macro' },
+  { label: 'Rox' },
   { label: 'Notion', logo: LogoNotion },
   { label: 'Obsidian', logo: LogoObsidian },
   { label: 'Google Docs', logo: LogoGoogleDocs },
@@ -1814,7 +1814,7 @@ const comparisonRows: ComparisonRow[] = [
 function ComparisonSection() {
   return (
     <section
-      aria-label="How Macro Docs compares"
+      aria-label="How Rox Docs compares"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -1840,7 +1840,7 @@ function ComparisonSection() {
             'font-family': 'display',
             'font-size': mobile() ? '26px' : '32px',
             // Main's h3 tier -- the smaller section title. /tasks sets its own
-            // "How does Macro Tasks stack up?" in .tasks-h3 at 350, which is
+            // "How does Rox Tasks stack up?" in .tasks-h3 at 350, which is
             // this heading in the same slot on the sibling page.
             'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.015em',
@@ -1848,7 +1848,7 @@ function ComparisonSection() {
             margin: 0,
           }}
         >
-          How does Macro Docs stack up?
+          How does Rox Docs stack up?
         </h2>
       </div>
       <div style={{ width: '100%', 'max-width': '920px', 'min-width': '0' }}>
@@ -2313,7 +2313,7 @@ const DHC_CHROME_FADE = `radial-gradient(24% 22% at ${DHC_CHROME_CX}% ${DHC_CHRO
  * point at three different kinds of link rather than explaining one.
  */
 const closingBlock: DocsFeatureBlock = {
-  label: 'Macro Docs',
+  label: 'Rox Docs',
   headline: (
     <>
       Leverage links
@@ -2323,7 +2323,7 @@ const closingBlock: DocsFeatureBlock = {
   ),
   description: (
     <>
-      Link to literally anything that exists in Macro. <br />
+      Link to literally anything that exists in Rox. <br />
       Format a link as text, a card, or an icon. <br />
       Agents can add, edit, and navigate links.
     </>
@@ -2623,7 +2623,7 @@ function DocsClosingFigure() {
         <div class="feat-lite-hero-art dhc-art" data-dhc={phase()} ref={figure}>
           <img
             src={docsHeroUrl}
-            alt="A Macro document @linking last week's notes, four tasks, an email and a channel, with teammate and agent cursors in the text."
+            alt="A Rox document @linking last week's notes, four tasks, an email and a channel, with teammate and agent cursors in the text."
             draggable={false}
           />
           {/* Geometry in one overlay in the asset's own units. The asset
@@ -2738,7 +2738,7 @@ function DocsClosingFigure() {
 
 export const RouteDocuments: Component = () => {
   setPageSeo({
-    title: 'Macro Docs — Markdown Documents, Wired Into Everything',
+    title: 'Rox Docs — Markdown Documents, Wired Into Everything',
     description:
       'Markdown-native, real-time, @linked documents that replace Notion, tied to your tasks, email, channels, and agents through one unified workspace.',
     path: '/documents',
@@ -2770,7 +2770,7 @@ export const RouteDocuments: Component = () => {
       `}</style>
 
       <SectionFeatureLite
-        eyebrow="Macro Docs"
+        eyebrow="Rox Docs"
         headline={
           <>
             {docsHeadlineLines[0]}

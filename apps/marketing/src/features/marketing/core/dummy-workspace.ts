@@ -295,7 +295,7 @@ export function dummyData(): DummyData {
         id: 'rollout',
         tags: ['Launch', 'Customers'],
         title: 'Team rollout plan',
-        body: '## Setup\n\nConnect your work email, invite your team, and bring your existing documents into Macro.\n\n## Next steps\n\n- Confirm the workspace owner\n- Invite the Meadow team\n- Schedule the Thursday check-in',
+        body: '## Setup\n\nConnect your work email, invite your team, and bring your existing documents into Rox.\n\n## Next steps\n\n- Confirm the workspace owner\n- Invite the Meadow team\n- Schedule the Thursday check-in',
         comments: [],
       },
       {

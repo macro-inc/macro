@@ -189,7 +189,7 @@ export function TaskHeroDemo() {
     <WorkspaceDesktopDemo
       heroFrame
       view="tasks"
-      label="Explore Macro Tasks"
+      label="Explore Rox Tasks"
       desktopWidth={1280}
       tasksShowcase
     />

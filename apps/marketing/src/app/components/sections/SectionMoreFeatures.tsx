@@ -25,7 +25,7 @@ const secondaryLinks: {
     external: true,
     onClick: () => handleDemoClick('footer_book_demo'),
   },
-  { title: 'Switch to Macro', href: '/migrate' },
+  { title: 'Switch to Rox', href: '/migrate' },
   { title: 'Jobs', href: '/jobs' },
   { title: 'Partners', href: '/partners' },
   { title: 'Terms', href: '/terms' },
@@ -298,7 +298,7 @@ export function SectionMoreFeatures(props: {
             'text-align': 'center',
           }}
         >
-          &copy; {year} Macro. All rights reserved.
+          &copy; {year} Rox. All rights reserved.
         </p>
 
         <p

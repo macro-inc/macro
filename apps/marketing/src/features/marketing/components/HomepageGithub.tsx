@@ -101,7 +101,7 @@ export function HomepageGithub(props: { motion?: 'bubbles' } = {}) {
         href="https://github.com/macro-inc/macro"
         target="_blank"
         rel="noreferrer"
-        aria-label="Explore Macro on GitHub"
+        aria-label="Explore Rox on GitHub"
       >
         <div class="homepage-github-orbit">
           <div class="homepage-github-mark glass">

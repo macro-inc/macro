@@ -11,9 +11,9 @@ import './RouteMobileSignup.css';
  */
 export const RouteMobileSignup: Component = () => {
   setPageSeo({
-    title: 'Start for free — Macro',
+    title: 'Start for free — Rox',
     description:
-      'Enter your email and we will send you a link to set up Macro on your computer.',
+      'Enter your email and we will send you a link to set up Rox on your computer.',
     path: '/mobile-signup',
     // A step inside the signup flow: useful to visitors, not a search result.
     noindex: true,
@@ -24,7 +24,7 @@ export const RouteMobileSignup: Component = () => {
       <MobileSignupMark />
       <h1 class="mobile-signup-card-title">One app for all your work.</h1>
       <p class="mobile-signup-card-subtitle">
-        Macro is better on desktop. Drop your email and we&rsquo;ll send you a
+        Rox is better on desktop. Drop your email and we&rsquo;ll send you a
         link to start.
       </p>
       <div class="mobile-signup-card-body">

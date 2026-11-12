@@ -81,7 +81,7 @@ export function WorkspaceAgents(props: {
                         ? session()?.title
                         : 'New conversation'}
             </span>
-            <Show when={conversation() && session()?.runtime !== 'Macro'}>
+            <Show when={conversation() && session()?.runtime !== 'Rox'}>
               <span class="ml-auto flex gap-2 items-center text-xs text-success">
                 <GitPull class="size-4" />
                 {pullRequest()}
@@ -226,7 +226,7 @@ export function WorkspaceAgents(props: {
                       <p>No routines yet</p>
                       <p class="mt-2">
                         Create a routine to run an agent on a schedule or a
-                        Macro event.
+                        Rox event.
                       </p>
                       <p class="mt-6 text-xs">
                         Scheduling is unavailable in this local sample.
@@ -237,7 +237,7 @@ export function WorkspaceAgents(props: {
                   <div class="mx-auto max-w-3xl p-8">
                     <h1 class="text-2xl font-semibold mb-6">Connections</h1>
                     <div class="text-sm text-ink-muted mb-6">
-                      Connect the tools your team already uses so Macro's agent
+                      Connect the tools your team already uses so Rox's agent
                       can work in them.
                     </div>
                     <For each={['Gmail', 'Google Calendar', 'GitHub', 'Slack']}>
@@ -255,7 +255,7 @@ export function WorkspaceAgents(props: {
                 <div class="sample-agent-catalog">
                   <h1 class="text-2xl font-semibold mb-2">Agents</h1>
                   <div class="text-sm text-ink-muted leading-6 mb-6">
-                    Agents let you customize your Macro AI experience by
+                    Agents let you customize your Rox AI experience by
                     combining a unique name, specific instructions, default
                     model, and harness.
                   </div>
@@ -266,7 +266,7 @@ export function WorkspaceAgents(props: {
                     </div>
                     <h2 class="text-xl font-medium tracking-tight mb-3">
                       Bring <span class="text-accent">Claude Code</span> to
-                      Macro.
+                      Rox.
                     </h2>
                     <p class="text-sm text-ink-muted leading-relaxed">
                       Your agent, on your machine. Connect a runtime with

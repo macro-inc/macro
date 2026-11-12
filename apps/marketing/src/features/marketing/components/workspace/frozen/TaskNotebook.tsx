@@ -146,7 +146,7 @@ export function TaskNotebook(props: {
                   variant="plain"
                   onClick={() => props.workspace.openItem('agents')}
                 >
-                  ✧ Ask Macro
+                  ✧ Ask Rox
                 </Button>
                 <Button
                   size="sm"

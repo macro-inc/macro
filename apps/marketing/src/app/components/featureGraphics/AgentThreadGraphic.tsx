@@ -51,7 +51,7 @@ const MENU_DROP = 36;
 
 const TL = {
   cycle: 14600,
-  /** Jacob's message rises in, then its @Macro chip lights. */
+  /** Jacob's message rises in, then its @Rox chip lights. */
   askIn: 600,
   askEnd: 1050,
   mentionLit: 1250,
@@ -517,7 +517,7 @@ export function AgentThreadGraphic() {
         .atg-menulabel { white-space: nowrap; }
         /* The chosen row, in plain light rather than an accent hue: a menu
            selection is chrome, and tinting it competed with the two things in
-           the scene that are genuinely orange -- the @Macro mention and the
+           the scene that are genuinely orange -- the @Rox mention and the
            task chip. */
         .atg-menurow-fill {
           background: rgb(255 255 255 / 0.1);
@@ -604,7 +604,7 @@ export function AgentThreadGraphic() {
                       scale: `${(0.7 + 0.3 * mentionLit()).toFixed(3)} 1`,
                     }}
                   />
-                  <span class="atg-mention">@Macro</span> I&rsquo;ve been out
+                  <span class="atg-mention">@Rox</span> I&rsquo;ve been out
                   since Thursday, catch me up
                 </p>
               </div>
@@ -627,7 +627,7 @@ export function AgentThreadGraphic() {
                         gap: '3px',
                       }}
                     >
-                      <span class="atg-who">Macro</span>
+                      <span class="atg-who">Rox</span>
                       <Show
                         when={!working()}
                         fallback={
@@ -734,7 +734,7 @@ export function AgentThreadGraphic() {
                         gap: '3px',
                       }}
                     >
-                      <span class="atg-who">Macro</span>
+                      <span class="atg-who">Rox</span>
                       <Show
                         when={!working2()}
                         fallback={

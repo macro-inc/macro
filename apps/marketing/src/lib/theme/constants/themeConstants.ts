@@ -72,7 +72,7 @@ export const DEFAULT_THEMES = [
   },
   {
     id: 'Macro',
-    name: 'Macro',
+    name: 'Rox',
     version: 1,
     tokens: {
       a0: { l: 0.89, c: 0.2, h: 59 },

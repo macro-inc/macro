@@ -5,7 +5,7 @@
 
 ## What it is
 
-The customer-facing documentation site for Macro, served at docs.macro.com
+The customer-facing documentation site for Rox, served at docs.macro.com
 and built on [Mintlify](https://mintlify.com). It covers the hosted
 product for end users, plus the MCP tool reference pages AI surfaces
 expose.
@@ -22,9 +22,9 @@ expose.
 ## Terminology
 
 - Call a form’s conditional answer check a **gate** in UI copy, AI tools, and docs.
-- **Block** is a proper noun for a core unit in Macro (a doc, email, channel, task, call, canvas, and so on). Capitalize it every time: "the Agents Block", "Block types". Use "Block", not "module" or "app". Leave ordinary English alone: code block, blockquote, and **Block Sender**
+- **Block** is a proper noun for a core unit in Rox (a doc, email, channel, task, call, canvas, and so on). Capitalize it every time: "the Agents Block", "Block types". Use "Block", not "module" or "app". Leave ordinary English alone: code block, blockquote, and **Block Sender**
 - Use **@mention** (not "at-mention" or "tag") for references created with `@`
-- Use **channel** (not "chat room"), **agent** (not "bot"), and **workspace** for a user's whole Macro environment
+- Use **channel** (not "chat room"), **agent** (not "bot"), and **workspace** for a user's whole Rox environment
 - Use **personal memory** and **team memory** for the two memory levels
 - **Signal** and **Noise** are capitalized when referring to the inbox and email views
 - Third-party products use their official capitalization: GitHub, Gmail, Notion, Slack
@@ -42,6 +42,6 @@ expose.
 
 ## Content boundaries
 
-- Document the hosted product; self-hosting is covered only at a high level in the FAQ
+- Document the hosted product
 - Don't document internal tooling, infrastructure details, or unreleased features
 - Don't add placeholder or "WIP" pages — add a page only when there's real content for it

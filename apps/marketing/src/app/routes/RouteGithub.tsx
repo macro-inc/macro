@@ -236,7 +236,7 @@ function GithubStarButton() {
 }
 
 // ---------------------------------------------------------------------------
-// App-chrome icons (Macro product nav set)
+// App-chrome icons (Rox product nav set)
 // ---------------------------------------------------------------------------
 
 const NAV_ICONS: Record<string, Component<{ style?: JSX.CSSProperties }>> = {
@@ -2170,7 +2170,7 @@ function _MentionGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// Synced comments — Macro comment ↔ GitHub
+// Synced comments — Rox comment ↔ GitHub
 // ---------------------------------------------------------------------------
 
 function SyncedCommentsGraphic() {
@@ -2186,7 +2186,7 @@ function SyncedCommentsGraphic() {
         'max-width': '560px',
       }}
     >
-      {/* Comment written in Macro */}
+      {/* Comment written in Rox */}
       <div
         style={{
           'background-color': '#0a0a0a',
@@ -2278,7 +2278,7 @@ function SyncedCommentsGraphic() {
                     'font-size': '11.5px',
                   }}
                 >
-                  commented in Macro
+                  commented in Rox
                 </span>
               </div>
               <p
@@ -2841,19 +2841,19 @@ const syncedBlock: LoopsFeatureBlock = {
     </>
   ),
   description:
-    'Comment in Macro and it posts to GitHub. Comment on GitHub and it shows up here. One thread.',
+    'Comment in Rox and it posts to GitHub. Comment on GitHub and it shows up here. One thread.',
   href: 'https://docs.macro.com/product/github',
   heroShot: SyncedCommentsSpotlight,
   heroBare: true,
 };
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs GitHub vs Linear vs Graphite)
+// Comparison table (Rox vs GitHub vs Linear vs Graphite)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'GitHub', 'Linear', 'Graphite'];
+const comparisonColumns = ['Rox', 'GitHub', 'Linear', 'Graphite'];
 
 const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   {
@@ -3125,7 +3125,7 @@ function ComparisonSection() {
   const [expanded, setExpanded] = createSignal(false);
   return (
     <section
-      aria-label="How Macro Reviews compares"
+      aria-label="How Rox Reviews compares"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -3169,7 +3169,7 @@ function ComparisonSection() {
             'max-width': '580px',
           }}
         >
-          Your code stays on GitHub. Macro brings the PRs into your inbox, next
+          Your code stays on GitHub. Rox brings the PRs into your inbox, next
           to your tasks and chat.
         </p>
       </div>
@@ -3390,9 +3390,9 @@ const githubExtraSections: AppSection[] = [
 
 export const RouteGithub: Component = () => {
   setPageSeo({
-    title: 'Macro Reviews — Review PRs in Your Inbox',
+    title: 'Rox Reviews — Review PRs in Your Inbox',
     description:
-      'Bring your GitHub pull requests into Macro — in your inbox alongside email and chat, @mentionable in messages and docs, with comments synced both ways, reliable notifications, tasks linked to PRs, and agents that read your PRs. Open source.',
+      'Bring your GitHub pull requests into Rox — in your inbox alongside email and chat, @mentionable in messages and docs, with comments synced both ways, reliable notifications, tasks linked to PRs, and agents that read your PRs. Open source.',
     path: '/github',
   });
 
@@ -3466,7 +3466,7 @@ export const RouteGithub: Component = () => {
               width: '100%',
             }}
           >
-            <HeroEyebrow label="Macro Reviews" mobile={mobile} />
+            <HeroEyebrow label="Rox Reviews" mobile={mobile} />
             <h1
               style={{
                 'font-family': 'display',
@@ -3574,7 +3574,7 @@ export const RouteGithub: Component = () => {
         />
       </div>
 
-      {/* 2x2 of concrete GitHub-in-Macro UI elements */}
+      {/* 2x2 of concrete GitHub-in-Rox UI elements */}
       <GithubUiGrid />
 
       {/* Comparison */}

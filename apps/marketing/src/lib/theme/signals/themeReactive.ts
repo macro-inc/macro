@@ -441,7 +441,7 @@ export function createThemeEffect(cb: () => void) {
  * change instead of staying baked at whatever they were when the animation
  * started.
  *
- * Mirrors the same helper in the Macro app (features/theme/signals), so the
+ * Mirrors the same helper in the Rox app (features/theme/signals), so the
  * graphics ported from there can use it unchanged.
  */
 export function useReactiveColorString(colorKey: keyof ThemeReactive) {

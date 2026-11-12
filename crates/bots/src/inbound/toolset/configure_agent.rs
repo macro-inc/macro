@@ -24,13 +24,13 @@ use uuid::Uuid;
 /// The runtimes an agent can be moved onto.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
 pub enum AgentHarnessOption {
-    /// Macro's built-in chat agent; needs no connected account.
+    /// Rox's built-in chat agent; needs no connected account.
     #[serde(rename = "in-memory")]
     InMemory,
     /// A Cursor cloud agent on the session owner's Cursor account.
     #[serde(rename = "cursor")]
     Cursor,
-    /// A registered self-hosted harness; requires `harnessId`.
+    /// A registered local harness; requires `harnessId`.
     #[serde(rename = "macrod")]
     Macrod,
 }
@@ -81,7 +81,7 @@ pub struct ConfigureAgent {
     pub harness: Option<AgentHarnessOption>,
     /// Registered harness for the `macrod` runtime.
     #[schemars(
-        description = "Id of the registered self-hosted harness, required when harness is `macrod` and forbidden otherwise."
+        description = "Id of the registered local harness, required when harness is `macrod` and forbidden otherwise."
     )]
     #[serde(default)]
     pub harness_id: Option<Uuid>,

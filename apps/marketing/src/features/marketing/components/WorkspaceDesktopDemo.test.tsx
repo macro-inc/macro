@@ -16,12 +16,12 @@ it('omits simulated browser chrome while retaining the hero and its app content'
       heroFrame
       windowChrome={false}
       view="crm"
-      label="Explore Macro CRM"
+      label="Explore Rox CRM"
     >
       <div>Sales pipeline</div>
     </WorkspaceDesktopDemo>
   ));
-  const frame = view.getByRole('region', { name: 'Explore Macro CRM' });
+  const frame = view.getByRole('region', { name: 'Explore Rox CRM' });
   expect(frame.getAttribute('data-hero-frame')).toBe('true');
   expect(frame.getAttribute('data-window-chrome')).toBe('false');
   expect(frame.querySelector('.email-desktop-titlebar')).toBeNull();
@@ -32,7 +32,7 @@ it('omits simulated browser chrome while retaining the hero and its app content'
 
 it('preserves the existing title bar on other product frames', () => {
   const view = render(() => (
-    <WorkspaceDesktopDemo heroFrame view="documents" label="Explore Macro Docs">
+    <WorkspaceDesktopDemo heroFrame view="documents" label="Explore Rox Docs">
       <div>Shared document</div>
     </WorkspaceDesktopDemo>
   ));

@@ -23,17 +23,17 @@ import './agents-page.css';
 
 const agentsFaq = [
   {
-    q: 'What can Macro’s agents do?',
+    q: 'What can Rox’s agents do?',
     a: 'Search workspace context, draft emails, edit documents, create tasks, and update customer records. Start a conversation in Agents or mention an available agent in a team channel.',
   },
   {
     q: 'Can I use my existing AI client?',
     a: (
       <>
-        Yes. Connect an MCP-compatible client to your Macro account so it can
+        Yes. Connect an MCP-compatible client to your Rox account so it can
         work with your workspace. Follow the{' '}
         <a href="https://docs.macro.com/AI/mcp/overview">MCP setup guide</a>.
-        Running a local agent inside Macro is a separate feature; check the{' '}
+        Running a local agent inside Rox is a separate feature; check the{' '}
         <a href="https://docs.macro.com/AI/bring-your-own">local agent guide</a>{' '}
         for availability.
       </>
@@ -53,7 +53,7 @@ const agentsFaq = [
       <>
         Yes. Ask for a draft, review it, and make edits before sending.
         Connected AI clients have their own approval controls. See{' '}
-        <a href="/email">Macro Mail</a>.
+        <a href="/email">Rox Mail</a>.
       </>
     ),
   },
@@ -65,7 +65,7 @@ const agentsFaq = [
     q: 'How much agent usage is included?',
     a: (
       <>
-        Macro has a free plan with limited AI usage. Paid plans offer more usage
+        Rox has a free plan with limited AI usage. Paid plans offer more usage
         and model options. See{' '}
         <a href="/pricing">current plans and AI limits</a>.
       </>
@@ -98,7 +98,7 @@ export function RouteAgents() {
     });
   };
   setPageSeo({
-    title: 'Macro Agents | Agents That Know What Your Team Is Doing',
+    title: 'Rox Agents | Agents That Know What Your Team Is Doing',
     description:
       'Give agents native access to the context and tools behind your work. Use workspace permissions, choose a model, mention agents in chat, or bring your own agent.',
     path: '/agents',
@@ -145,7 +145,7 @@ export function RouteAgents() {
       <FeaturePageSection
         id="agent-sources"
         title={['Give your agent the full', 'context of your team’s work.']}
-        description="Macro gives your agent access to your team’s calendar, conversations, and files, so it can use the full context of your work to help you get more done."
+        description="Rox gives your agent access to your team’s calendar, conversations, and files, so it can use the full context of your work to help you get more done."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -165,7 +165,7 @@ export function RouteAgents() {
       <FeaturePageSection
         id="agent-collaboration"
         title={['Turn conversations', 'into finished work.']}
-        description="Bring design and implementation into the team conversation. Ask Macro for a mockup, give feedback together, then tag Cursor to build it using the context already in the channel."
+        description="Bring design and implementation into the team conversation. Ask Rox for a mockup, give feedback together, then tag Cursor to build it using the context already in the channel."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -175,12 +175,12 @@ export function RouteAgents() {
       <FeaturePageSection
         id="existing-agents"
         title="Bring your own agent."
-        description="Give the agent you already use access to the context and tools in Macro."
+        description="Give the agent you already use access to the context and tools in Rox."
       >
         <div class="agents-connections">
           <div class="agents-connection-paths">
             <div class="agents-connection-path">
-              <h3>Your agent, inside Macro</h3>
+              <h3>Your agent, inside Rox</h3>
               <p>
                 Bring Claude Code, OpenCode, OpenClaw, or Hermes into your
                 workspace. Connect through macrod and keep your agent running on
@@ -197,9 +197,9 @@ export function RouteAgents() {
               </div>
             </div>
             <div class="agents-connection-path">
-              <h3>Macro, inside your agent</h3>
+              <h3>Rox, inside your agent</h3>
               <p>
-                Use Macro from Claude, ChatGPT, Cursor, or another MCP client.
+                Use Rox from Claude, ChatGPT, Cursor, or another MCP client.
                 Search your workspace and work with its documents and tasks from
                 there.
               </p>
@@ -226,7 +226,7 @@ export function RouteAgents() {
       </FeaturePageSection>
       <FeaturePageFaq
         id="agents-faq-title"
-        title="Questions about Macro Agents"
+        title="Questions about Rox Agents"
         items={agentsFaq}
       />
       <HomepageClosing />

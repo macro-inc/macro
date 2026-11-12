@@ -42,7 +42,7 @@ type MigrateQuoteCard = Omit<QuoteCard, 'background' | 'hatch'> & {
 const cards: QuoteCard[] = [
   {
     quote:
-      'Macro is the biggest change to how companies work in years. By open sourcing and bringing everything into one workspace, agents and teams can move much faster.',
+      'Rox is the biggest change to how companies work in years. By open sourcing and bringing everything into one workspace, agents and teams can move much faster.',
     name: 'Alex Rampell',
     role: 'General Partner, Andreessen Horowitz',
     background: '#E8E8E8',
@@ -51,7 +51,7 @@ const cards: QuoteCard[] = [
   },
   {
     quote:
-      'Macro did not help us get organized. Macro is why we are organized.',
+      'Rox did not help us get organized. Rox is why we are organized.',
     name: 'Mark Evgenev',
     role: 'Founder/CEO, Desync',
     background: 'var(--a0)',
@@ -562,7 +562,7 @@ export function SectionHomeQuote(props: { variant?: 'default' | 'migrate' }) {
                     'padding-left': '20px',
                   }}
                 >
-                  Macro is the open-source workspace for ambitious teams.
+                  Rox is the open-source workspace for ambitious teams.
                 </p>
                 <button
                   type="button"

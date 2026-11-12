@@ -21,7 +21,7 @@ import { chatComparisons } from '../core/feature-comparisons';
 
 export function RouteChannels() {
   setPageSeo({
-    title: 'Macro Chat: Bring the Work into the Conversation',
+    title: 'Rox Chat: Bring the Work into the Conversation',
     description:
       'Share documents, tasks, and email threads in team chat. Channel members get access, work stays linked to its discussion, and follow-ups wait in one inbox.',
     path: '/channels',
@@ -80,7 +80,7 @@ export function RouteChannels() {
       <FeaturePageSection
         id="channel-agents"
         title={['Bring your agents', 'into the conversation.']}
-        description="Tag your agent to ask for help, add context, assign a task, or get something done. You can use the Macro agent or bring your own."
+        description="Tag your agent to ask for help, add context, assign a task, or get something done. You can use the Rox agent or bring your own."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -105,7 +105,7 @@ export function RouteChannels() {
       />
       <FeaturePageFaq
         id="channels-faq-title"
-        title="Questions about Macro Chat"
+        title="Questions about Rox Chat"
         items={[
           {
             q: 'How do I start a channel with my team?',
@@ -138,7 +138,7 @@ export function RouteChannels() {
               <>
                 Yes. Mention an available agent to answer questions, draft work,
                 or create and update tasks from the conversation. See{' '}
-                <a href="/agents">Macro Agents</a>.
+                <a href="/agents">Rox Agents</a>.
               </>
             ),
           },
@@ -151,10 +151,10 @@ export function RouteChannels() {
             a: 'Yes. Mute or snooze its notifications from the channel menu without leaving the conversation.',
           },
           {
-            q: 'Can I try Macro for free?',
+            q: 'Can I try Rox for free?',
             a: (
               <>
-                Yes. Macro has a free plan with usage limits. See{' '}
+                Yes. Rox has a free plan with usage limits. See{' '}
                 <a href="/pricing">plans and limits</a> before choosing a plan
                 for your team.
               </>

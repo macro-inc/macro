@@ -56,7 +56,7 @@ function bookDemo(event: MouseEvent, buttonName: string) {
 
 export function RouteTour() {
   setPageSeo({
-    title: 'Macro — Email, Docs, Tasks, and Agents in One App',
+    title: 'Rox — Email, Docs, Tasks, and Agents in One App',
     description:
       'Replace Notion, Linear, and Superhuman with one workspace for email, chat, documents, tasks, CRM, and agents. Book a demo.',
     path: '/tour',
@@ -139,7 +139,7 @@ export function RouteTour() {
             <TourHeading
               id="savings-title"
               title="One subscription instead of many."
-              description="Choose your team size and the tools you pay for today. Every Macro plan includes every module."
+              description="Choose your team size and the tools you pay for today. Every Rox plan includes every module."
             />
             <SalesCalculator
               onBook={(event) => bookDemo(event, 'tour_calculator_book_demo')}

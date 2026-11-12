@@ -8,7 +8,7 @@ import type { Component, JSX } from 'solid-js';
 
 // ---------------------------------------------------------------------------
 // The same task, driven two ways — a channel message on one side, a Claude Code
-// session over the Macro MCP on the other. The point of the pairing is that it
+// session over the Rox MCP on the other. The point of the pairing is that it
 // is deliberately the SAME task in both graphics ("Fix coupon validation at
 // pricing step", moved to In Review and assigned to Teo): the section is about
 // how far up or down the technical ladder you can work, not about two separate
@@ -60,7 +60,7 @@ const sides: Side[] = [
     // card across the bottom-right, with the meaningful rows running y 18
     // (Gabriel) to y 225 (the activity line) -- centre 121/325 = 37.3%, well
     // above the artboard's middle, because the card's lower half is empty.
-    // focalX 44%: the @Macro instruction and the card's title/pills together
+    // focalX 44%: the @Rox instruction and the card's title/pills together
     // span x 46-350, centre 198/447 = 44.3%, slightly left of centre.
     scale: 1.32,
     focalX: '45%',
@@ -70,7 +70,7 @@ const sides: Side[] = [
     id: 'mcp',
     title: 'or through the MCP',
     ellipsis: 'leading',
-    line: 'Point your agents at your Macro workspace and drive tasks as tool calls.',
+    line: 'Point your agents at your Rox workspace and drive tasks as tool calls.',
     graphic: FlexMcp,
     // Frames the typed instruction (y 80) through the answer (y 272), centre
     // 176/380 = 46.3%. focalX is 32%, not 50%: the transcript is left-anchored

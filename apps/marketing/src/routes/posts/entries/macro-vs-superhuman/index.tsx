@@ -21,12 +21,12 @@ import type { PostMeta } from '../../registry';
 
 const SUPERHUMAN_VIDEO_ID = 'tnsxkywzTvY';
 const ARTICLE_LEDE =
-  'Macro is heavily inspired by Superhuman. While building Macro we had the privilege of speaking with the co-founders of Superhuman. They invented CMD+K, popularized dark mode (especially in email), and the idea of luxury, highly polished software. They laid the foundations for high-taste companies that came after them like Linear.';
+  'Rox is heavily inspired by Superhuman. While building Rox we had the privilege of speaking with the co-founders of Superhuman. They invented CMD+K, popularized dark mode (especially in email), and the idea of luxury, highly polished software. They laid the foundations for high-taste companies that came after them like Linear.';
 const ARTICLE_SECOND_PARAGRAPH = {
   after:
-    '. Superhuman is a really fast email client, but only for one inbox at a time. Macro is that plus your team chat, your docs, and your GitHub PRs, all triaged from one list with the same keyboard shortcuts. On top of that we made a handful of specific improvements to the email experience itself.',
-  before: 'The main difference between Macro and Superhuman is that ',
-  emphasis: 'Macro is multi-modal',
+    '. Superhuman is a really fast email client, but only for one inbox at a time. Rox is that plus your team chat, your docs, and your GitHub PRs, all triaged from one list with the same keyboard shortcuts. On top of that we made a handful of specific improvements to the email experience itself.',
+  before: 'The main difference between Rox and Superhuman is that ',
+  emphasis: 'Rox is multi-modal',
 } as const;
 const ARTICLE_PREVIEW = `${ARTICLE_LEDE} ${ARTICLE_SECOND_PARAGRAPH.before}${ARTICLE_SECOND_PARAGRAPH.emphasis}${ARTICLE_SECOND_PARAGRAPH.after}`;
 
@@ -163,14 +163,14 @@ function PostAutoplayClip(props: {
 
 export const postMeta: PostMeta = {
   slug: 'superhuman-alternative',
-  title: 'Macro vs Superhuman',
-  seoTitle: 'Macro vs Superhuman — The Open-Source Superhuman Alternative',
+  title: 'Rox vs Superhuman',
+  seoTitle: 'Rox vs Superhuman — The Open-Source Superhuman Alternative',
   subtitle:
-    'Macro is the open source alternative to Superhuman with your workspace built in.',
+    'Rox is the open source alternative to Superhuman with your workspace built in.',
   date: '2026-06-25',
   updated: '2026-07-28',
   description:
-    'Macro is the open-source alternative to Superhuman: the same fast, keyboard-first email, but on your own database and inside one workspace with chat, docs, tasks, calls and a CRM.',
+    'Rox is the open-source alternative to Superhuman: the same fast, keyboard-first email, but on your own database and inside one workspace with chat, docs, tasks, calls and a CRM.',
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'superhuman', 'comparison'],
   category: 'Comparison',
@@ -178,7 +178,7 @@ export const postMeta: PostMeta = {
   image: '/og/superhuman-alternative.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Jacob Beckerman', role: 'Macro', avatar: avatarJacob },
+  author: { name: 'Jacob Beckerman', role: 'Rox', avatar: avatarJacob },
   ctaButtonName: 'macro_vs_superhuman_cta',
 };
 
@@ -216,7 +216,7 @@ export default function MacroVsSuperhumanPost() {
           out to build on top of it.
         </p>
 
-        <h2>Macro vs. Superhuman at a glance</h2>
+        <h2>Rox vs. Superhuman at a glance</h2>
         <ComparisonTable
           competitor="Superhuman"
           logo={SuperhumanLogo}
@@ -225,13 +225,13 @@ export default function MacroVsSuperhumanPost() {
 
         <SectionGlyph route="/email" />
         <h2>
-          In detail: why Macro is the better choice once you're living across
+          In detail: why Rox is the better choice once you're living across
           email, chat, and docs
         </h2>
 
-        <h3>Macro is multi-modal</h3>
+        <h3>Rox is multi-modal</h3>
         <p>
-          Macro has a <strong>unified inbox</strong> so you can triage all your
+          Rox has a <strong>unified inbox</strong> so you can triage all your
           accounts at once using familiar <code>j</code>, <code>k</code> and{' '}
           <code>e</code> shortcuts. You can also view accounts individually if
           you want. Connect 2 emails as a Guest or unlimited emails with a paid
@@ -239,7 +239,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostScreenshot
           src={accountsSidebar}
-          alt="Macro sidebar with two email accounts nested under Email, alongside Channels and Calls"
+          alt="Rox sidebar with two email accounts nested under Email, alongside Channels and Calls"
           width={1120}
           height={600}
         />
@@ -256,7 +256,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostScreenshot
           src={unifiedInbox}
-          alt="Macro inbox list mixing docs, emails, tasks, channel messages and shared threads in one triage list"
+          alt="Rox inbox list mixing docs, emails, tasks, channel messages and shared threads in one triage list"
           width={1400}
           height={439}
         />
@@ -268,7 +268,7 @@ export default function MacroVsSuperhumanPost() {
 
         <h3>Better "Signal" vs. "Noise" split</h3>
         <p>
-          Superhuman calls this <em>important</em> and <em>other</em>. Macro
+          Superhuman calls this <em>important</em> and <em>other</em>. Rox
           uses large language models to make this split, and we're introducing
           even more customization. In Superhuman, to our understanding, this
           feature has been around for a long time and they don't use the latest
@@ -276,7 +276,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostScreenshot
           src={signalNoise}
-          alt="Macro email view with Signal, Noise, Sent, Calendar and Drafts tabs, Signal selected"
+          alt="Rox email view with Signal, Noise, Sent, Calendar and Drafts tabs, Signal selected"
           width={1052}
           height={610}
         />
@@ -291,11 +291,11 @@ export default function MacroVsSuperhumanPost() {
           Superhuman has integrations with HubSpot and Salesforce that we used
           when we used to use those products. It's pretty limited in what you
           can see though, and oftentimes you just have to go into a new tab and
-          open HubSpot anyways. Macro's CRM is native to the workspace.
+          open HubSpot anyways. Rox's CRM is native to the workspace.
         </p>
         <PostScreenshot
           src={crmBoard}
-          alt="Macro CRM board with Lead, Demo, Customer and Churned columns of company cards"
+          alt="Rox CRM board with Lead, Demo, Customer and Churned columns of company cards"
           width={1400}
           height={905}
         />
@@ -308,7 +308,7 @@ export default function MacroVsSuperhumanPost() {
         <p>
           To our knowledge, the way Superhuman works is it uses the Gmail API or
           the Outlook API to pull your emails in for synchronization and then
-          uses a local cache. Macro actually creates a whole backup of your
+          uses a local cache. Rox actually creates a whole backup of your
           emails so that we are not rate limited by the Gmail API after the
           initial backfill process is complete.
         </p>
@@ -324,7 +324,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostScreenshot
           src={agentDraft}
-          alt="Macro agent drafting a catch-up email in the composer after searching recent conversations"
+          alt="Rox agent drafting a catch-up email in the composer after searching recent conversations"
           width={1400}
           height={905}
         />
@@ -345,7 +345,7 @@ export default function MacroVsSuperhumanPost() {
           once and you can't even see your inbox at the same time.
         </p>
         <p>
-          Macro fixes this with a split screen system, our splits, that let you
+          Rox fixes this with a split screen system, our splits, that let you
           see as many panes as your screen will allow using its own built-in
           window manager. You can draft multiple emails at once and search
           multiple things at once. It's basically as good as Outlook Desktop,
@@ -353,7 +353,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostScreenshot
           src={emailSplits}
-          alt="Two Macro email splits side by side: an open thread on the left and a new draft being composed on the right"
+          alt="Two Rox email splits side by side: an open thread on the left and a new draft being composed on the right"
           width={1400}
           height={864}
         />
@@ -362,7 +362,7 @@ export default function MacroVsSuperhumanPost() {
           popped-out compose windows.
         </p>
 
-        <h3>Macro has a unified properties system</h3>
+        <h3>Rox has a unified properties system</h3>
         <p>
           It works across not just email but all surfaces, not just custom
           fields bolted onto one inbox. You can apply the same fields to
@@ -373,7 +373,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostScreenshot
           src={propertiesPanel}
-          alt="Macro side panel on an email showing Actions, Tags including user feedback, and Properties"
+          alt="Rox side panel on an email showing Actions, Tags including user feedback, and Properties"
           width={876}
           height={670}
         />
@@ -383,7 +383,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
 
         <SectionGlyph route="/channels" />
-        <h3>Macro lets you share emails to channels</h3>
+        <h3>Rox lets you share emails to channels</h3>
         <p>
           From any email, you can just hit the share button in the top right and
           instantly send a message to any one of your contacts or any member of
@@ -391,7 +391,7 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostAutoplayClip
           src={emailShareDemo}
-          alt="Sharing an email thread from Macro: hit Share, pick a recipient, add a note, and the thread lands in the channel"
+          alt="Sharing an email thread from Rox: hit Share, pick a recipient, add a note, and the thread lands in the channel"
           width={1920}
           height={1080}
         />
@@ -411,7 +411,7 @@ export default function MacroVsSuperhumanPost() {
             those that live in email.
           </strong>
         </p>
-        <p>Macro fixes this:</p>
+        <p>Rox fixes this:</p>
         <ol class="mvn-list">
           <li>
             <code>Share</code> button sends the email right into channels, just
@@ -445,16 +445,16 @@ export default function MacroVsSuperhumanPost() {
         </p>
 
         <h3>A fast, focused single inbox</h3>
-        <p>What both Superhuman and Macro have:</p>
+        <p>What both Superhuman and Rox have:</p>
         <ul class="mvn-list">
           <li>Split inbox</li>
           <li>AI auto-tagging</li>
           <li>Connect all your accounts</li>
         </ul>
 
-        <h3>Both Superhuman and Macro have a clean user interface</h3>
+        <h3>Both Superhuman and Rox have a clean user interface</h3>
         <p>
-          Macro's <code>block-email</code> interface, where you actually see,
+          Rox's <code>block-email</code> interface, where you actually see,
           respond to, and triage the email, is modeled after Superhuman.
         </p>
         <PostScreenshot
@@ -469,18 +469,18 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostScreenshot
           src={blockEmail}
-          alt="The same thread open in Macro's block-email view with Actions, Tags and Properties beside it"
+          alt="The same thread open in Rox's block-email view with Actions, Tags and Properties beside it"
           width={1400}
           height={905}
         />
         <p class="mvn-figcaption">
-          Macro's block-email view of the same thread — the shortcuts and layout
+          Rox's block-email view of the same thread — the shortcuts and layout
           come straight from Superhuman.
         </p>
 
-        <h2>Macro vs. Superhuman pricing comparison</h2>
+        <h2>Rox vs. Superhuman pricing comparison</h2>
         <p>
-          Macro is one flat $40 per seat, and that includes every module: email,
+          Rox is one flat $40 per seat, and that includes every module: email,
           chat, docs, tasks, CRM, calls, all of it, with all AI features
           included. You can also join a workspace as a Guest for free, with
           limits on storage and AI. Superhuman is also $40 a month which
@@ -490,8 +490,8 @@ export default function MacroVsSuperhumanPost() {
           people) might have limited overlap.
         </p>
 
-        <h2>When to choose Macro</h2>
-        <p>Choose Macro when:</p>
+        <h2>When to choose Rox</h2>
+        <p>Choose Rox when:</p>
         <ul class="mvn-list">
           <li>
             You want email, chat, docs, and tasks triaged from one unified inbox
@@ -532,21 +532,21 @@ export default function MacroVsSuperhumanPost() {
           </li>
         </ul>
 
-        <h2>Macro vs. Superhuman: the verdict</h2>
+        <h2>Rox vs. Superhuman: the verdict</h2>
         <p>
           Superhuman is genuinely great, and it shaped a lot of how we think
-          about speed and polish in Macro. But it's built for one inbox at a
+          about speed and polish in Rox. But it's built for one inbox at a
           time. If your job is answering email as fast as possible and nothing
           else, it's excellent at that. If you're trying to keep email, chat,
           docs, and tasks from splintering into four different products your
-          team half-checks, Macro is built for that instead.
+          team half-checks, Rox is built for that instead.
         </p>
 
         <h2 class="post-faq-title">Frequently asked questions</h2>
         <div class="post-faq">
-          <PostFaqItem question="Is Macro better than Superhuman?">
+          <PostFaqItem question="Is Rox better than Superhuman?">
             <p>
-              For teams that live across email, chat, and docs, yes. Macro
+              For teams that live across email, chat, and docs, yes. Rox
               triages all of it from one inbox with the same shortcuts
               Superhuman popularized. For someone whose entire job is answering
               a single inbox as fast as possible, Superhuman is still excellent
@@ -554,9 +554,9 @@ export default function MacroVsSuperhumanPost() {
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="Is Macro cheaper than Superhuman?">
+          <PostFaqItem question="Is Rox cheaper than Superhuman?">
             <p>
-              Depends what you're comparing. Macro is $40/seat flat with
+              Depends what you're comparing. Rox is $40/seat flat with
               everything included. Superhuman's Mail only shows up on the
               Business plan, $33/seat/month billed annually ($40 monthly), and
               that doesn't include a native chat, docs, or task layer, those are
@@ -569,14 +569,14 @@ export default function MacroVsSuperhumanPost() {
             <p>
               No. Superhuman's Shared Conversations let you loop teammates into
               an email thread, but it's a parallel system, not your team's
-              actual chat. Macro's channels are native, and emails, docs, and
+              actual chat. Rox's channels are native, and emails, docs, and
               tasks all live in the same inbox.
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="Why does Macro's email UI look like Superhuman's?">
+          <PostFaqItem question="Why does Rox's email UI look like Superhuman's?">
             <p>
-              Because we built it that way on purpose. Macro's{' '}
+              Because we built it that way on purpose. Rox's{' '}
               <code>block-email</code> interface is modeled after Superhuman's,
               we think they got that part right, and it laid a lot of the
               groundwork for what "polished" looks like in email.
@@ -592,7 +592,7 @@ export default function MacroVsSuperhumanPost() {
             target="_blank"
             rel="noreferrer"
           >
-            Macro Mail documentation
+            Rox Mail documentation
           </a>
           .
         </p>

@@ -6,7 +6,7 @@ export const PLAN_COMPARISON = [
   { feature: 'Connected email accounts', guest: 'Up to 2', pro: 'Unlimited' },
   {
     feature: 'Email branding',
-    guest: '“Sent with Macro” footer',
+    guest: '“Sent with Rox” footer',
     pro: 'No watermark',
   },
   { feature: 'AI models', guest: 'Gemini Flash', pro: 'All models' },

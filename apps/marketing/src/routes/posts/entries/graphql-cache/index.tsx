@@ -10,7 +10,7 @@ export const postMeta: PostMeta = {
     'How we designed a disk-backed, Rust-powered normalized cache for a workspace with documents, email, chat, tasks, CRM, notes, and files.',
   date: '2026-07-06',
   description:
-    'How Macro built a disk-backed, Rust-powered normalized GraphQL cache with bounded memory, offline replay, and shared browser/desktop architecture.',
+    'How Rox built a disk-backed, Rust-powered normalized GraphQL cache with bounded memory, offline replay, and shared browser/desktop architecture.',
   tags: ['macro', 'engineering'],
   category: 'Engineering',
   // Was excluded from the homepage by slug in SectionHomeBlog; same behaviour,
@@ -20,7 +20,7 @@ export const postMeta: PostMeta = {
   image: '/og/graphql-cache.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Sean', role: 'Macro Engineering' },
+  author: { name: 'Sean', role: 'Rox Engineering' },
   ctaButtonName: 'blog_graphql_cache_cta',
 };
 
@@ -42,7 +42,7 @@ export default function GraphqlCachePost() {
           big.
         </p>
         <p>
-          Macro is a workspace for teams that brings documents, email, chat,
+          Rox is a workspace for teams that brings documents, email, chat,
           tasks, CRM, notes, and files into one connected system. That means the
           application is not just rendering a few screens. It is constantly
           navigating a large object graph: documents connected to projects,
@@ -121,7 +121,7 @@ Read everything back into memory`}
 
         <p>
           For applications with relatively small datasets, that is perfectly
-          reasonable. For a workspace like Macro, where the cache may eventually
+          reasonable. For a workspace like Rox, where the cache may eventually
           contain hundreds of thousands of interconnected objects, it becomes a
           bottleneck.
         </p>

@@ -19,9 +19,9 @@ export function desktopReleaseVersion(downloadUrl: string): string | undefined {
 
 export const FALLBACK_DOWNLOAD_URLS: DesktopDownloadUrls = {
   macos:
-    'https://github.com/macro-inc/macro/releases/download/v2026.10.6.0/Macro-2.5.0-aarch64-darwin.dmg',
+    'https://github.com/macro-inc/macro/releases/download/v2026.10.6.0/Rox-2.5.0-aarch64-darwin.dmg',
   linux:
-    'https://github.com/macro-inc/macro/releases/download/v2026.10.6.0/Macro-2.5.0-x86_64-linux.AppImage',
+    'https://github.com/macro-inc/macro/releases/download/v2026.10.6.0/Rox-2.5.0-x86_64-linux.AppImage',
 };
 
 interface ReleaseAsset {
@@ -45,7 +45,7 @@ export function releaseDownloadUrls(
     .flatMap((release) => release.assets ?? []);
   const findAsset = (suffix: string) =>
     assets.find(
-      (asset) => asset.name.startsWith('Macro-') && asset.name.endsWith(suffix)
+      (asset) => asset.name.startsWith('Rox-') && asset.name.endsWith(suffix)
     )?.browser_download_url;
 
   return {

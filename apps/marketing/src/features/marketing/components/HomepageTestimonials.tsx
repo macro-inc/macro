@@ -7,11 +7,11 @@ export function HomepageTestimonials() {
     <section
       id="homepage-testimonial"
       class="homepage-testimonials workspace-demo"
-      aria-label="What people say about Macro"
+      aria-label="What people say about Rox"
     >
       <figure>
         <blockquote>
-          “Macro is the biggest change to how companies work in years. By open
+          “Rox is the biggest change to how companies work in years. By open
           sourcing and bringing everything into one workspace, agents and teams
           can move much faster.”
         </blockquote>

@@ -20,7 +20,7 @@ it('shows one table with all email competitors with a heading and no disclosure'
       comparisons={emailComparisons}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Macro' });
+  const table = view.getByRole('region', { name: 'Compare Rox' });
   expect(view.container.querySelector('details')).toBeNull();
   expect(
     view.getByRole('heading', { name: 'Compare Email Clients', level: 2 })
@@ -53,7 +53,7 @@ it('combines Linear and Jira in one mobile-scrollable table', () => {
       comparisons={taskComparisons}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Macro' });
+  const table = view.getByRole('region', { name: 'Compare Rox' });
   expect(within(table).getByText('Linear')).toBeTruthy();
   expect(within(table).getByText('Jira')).toBeTruthy();
   expect(table.tabIndex).toBe(0);
@@ -68,11 +68,11 @@ it('credits shared CRM capabilities and competitors’ dedicated reporting', () 
   expect(
     view.getByRole('heading', { name: 'Compare CRMs', level: 2 })
   ).toBeTruthy();
-  const table = view.getByRole('region', { name: 'Compare Macro' });
+  const table = view.getByRole('region', { name: 'Compare Rox' });
   expect(view.container.querySelector('details')).toBeNull();
   expect(within(table).getByText('Features')).toBeTruthy();
   expect(table.querySelector('[title$="logo placeholder"]')).toBeNull();
-  for (const label of ['Macro', 'Salesforce', 'HubSpot', 'Attio']) {
+  for (const label of ['Rox', 'Salesforce', 'HubSpot', 'Attio']) {
     expect(within(table).getByText(label)).toBeTruthy();
   }
   const contacts = within(table).getByText('Sales pipelines and custom fields');

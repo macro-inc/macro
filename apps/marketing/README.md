@@ -1,6 +1,6 @@
 # Standalone public website
 
-This directory owns the Macro public website and its public signup introduction.
+This directory owns the Rox public website and its public signup introduction.
 It shares the repository with the authenticated application, but has its own
 package manifest, Vite entry points, TypeScript aliases, styles, assets, and UI
 components. Application UI changes must not alter the website.
@@ -216,7 +216,7 @@ public feature and blog routes, `/download`, and `/start`;
 `/onboarding-preview.html` remains a development review entry. It does not host
 the authenticated `/app/*` routes.
 
-`/download` is headed “Download Macro Alpha”, says “Available for macOS and
+`/download` is headed “Download Rox Alpha”, says “Available for macOS and
 Linux”, and has one download button.
 Desktop Linux browsers receive the x86_64 AppImage; other browsers default to
 the Apple silicon DMG, with the selected platform named in the button.
@@ -340,13 +340,13 @@ stacks; phone layouts keep the page gutters. Email stages share the chapter alig
 without an extra inset. This pattern only applies to lower subpage sections;
 leave the homepage, product heroes, and wallpaper demos unchanged.
 FAQ disclosures retain the onboarding security section’s reading measure.
-Use “Questions about Macro [product]” for every product FAQ title, matching the
+Use “Questions about Rox [product]” for every product FAQ title, matching the
 page’s product name (Mail, Chat, Docs, Tasks, Calls, CRM, Agents, or for GitHub).
 Put FAQ questions directly below that title without an introduction or second
 heading. Order questions by setup and compatibility, core capabilities, sharing
 and permissions, practical limitations, then pricing. Lead each answer with the
 answer, keep useful detail in the relevant question, and link to the specific
-Macro product, setup guide, migration page, privacy policy, or pricing page.
+Rox product, setup guide, migration page, privacy policy, or pricing page.
 Verify permissions and availability against current app guides before making
 claims; distinguish pipeline fields from company properties, and channel-call
 team sharing from standalone meeting access.
@@ -372,7 +372,7 @@ in demo-only passes. These demos use local fixtures, with no live account, email
 sharing, or agent requests.
 
 `email-demo-story.ts` supplies 31 emails for the hero and multi-account story,
-with Macro, Gmail, and Outlook sample addresses. `EmailAccountsDemo` adds two
+with Rox, Gmail, and Outlook sample addresses. `EmailAccountsDemo` adds two
 sample accounts, one per connection click. It stays in All inboxes, focuses an
 individual account, then returns to the combined list. Do not click All inboxes
 while it is already selected. Google authorization is deliberately omitted from this local demonstration;
@@ -497,7 +497,7 @@ savings calculator, and a closing "Pick a time" button.
 `core/sales-savings.ts` reduces the pricing calculator to one plan tier for all
 tools and reads prices from `core/savings-calculator.ts`; update prices there,
 not on the page. "Book a demo" and "Pick a time" are demo links: they open the
-Macro team booking link in `DemoBookingDialog`, which reports a booking made
+Rox team booking link in `DemoBookingDialog`, which reports a booking made
 there to Meta. Verify at phone width: no horizontal scroll, calculator steppers
 and toggles, and that the dialog opens.
 
@@ -549,8 +549,8 @@ headline, controls, and layout intact. Sidebar navigation updates the active
 highlight without overriding the visitor’s navigation. Slab headlines sit directly
 below the blue indicator and chevrons, without small category headers. Verify direct
 interaction, slide navigation, and reduced motion when changing this section.
-Below the carousel, the original open-source section shows GitHub stars, a16z
-backing, and ISO/SOC 2/CASA badges. A continuous grainy gradient funnels into the
+Below the carousel, the original open-source section shows GitHub stars and a16z
+backing. A continuous grainy gradient funnels into the
 GitHub mark on scroll, then drains away. Verify the flow in both scroll directions
 and after resizing. Reduced motion skips the flow
 and shows the finished GitHub treatment.
@@ -679,7 +679,7 @@ FAQs, and the overview's horizontal scrolling.
 
 Use the framed comparison layout across the six existing product tables: a
 category title (Compare CRMs, Compare Task Managers, etc.), a continuous Features
-header, readable rows, and plain competitor names with the standard Macro mark.
+header, readable rows, and plain competitor names with the standard Rox mark.
 Keep checks for verifiable capabilities and horizontal dashes labeled Partial for partial support.
 Give partial cells a concise accessible description explaining the difference.
 Keep pricing disclaimers off the tables and show only legend symbols used in
@@ -702,9 +702,9 @@ Superhuman/Gmail on Email; Notion on Docs; Linear/Jira on Tasks; Slack on Chat;
 Google Meet/Granola on Calls. CRM uses the same visible layout and legend, with
 Salesforce, HubSpot, and Attio. Omit generic records/email-history rows and end
 with the native workspace distinction;
-sales reporting is checked for those CRMs and partial for Macro’s agent summaries.
-Connected collaboration tools receive partial credit alongside Macro’s native workspace.
-Credit Macro’s Granola connection for reading captured notes, not for native
+sales reporting is checked for those CRMs and partial for Rox’s agent summaries.
+Connected collaboration tools receive partial credit alongside Rox’s native workspace.
+Credit Rox’s Granola connection for reading captured notes, not for native
 recording of other meeting apps or every feature of the connected product. ClickUp
 stays in the migration overview. The migration overview uses the same framed
 `FeatureComparisons` renderer with plain, unlinked headers and row labels. Its
@@ -719,7 +719,7 @@ functional FAQs after moving or adding a comparison.
 
 Match each comparison’s outer edges to the 1160px demo chapter above it and
 use the same mobile gutters. Keep horizontal overflow inside the keyboard-focusable
-table. Use neutral check marks, text, and competitor marks with the standard Macro
+table. Use neutral check marks, text, and competitor marks with the standard Rox
 logo; white on dark pages and dark ink on cream pages. Comparison accent tokens
 are scoped to product tables so legacy migration tables retain their styling.
 
@@ -732,10 +732,10 @@ are scoped to product tables so legacy migration tables retain their styling.
 - A personal agent progressively checks the calendar, reads the email and call,
   then presents its findings and creates the brief. Visitors can inspect those
   sources. Reduced motion shows the finished brief; interaction stops playback.
-- The hero includes Macro’s source summary, a specific request to Cursor, and
+- The hero includes Rox’s source summary, a specific request to Cursor, and
   Julia’s follow-up so both people and agents participate in the same channel.
-- Macro produces a folder-upload mockup from the client brief. Julia asks to
-  preserve nested folders; Macro clarifies the design before Jacob asks Cursor
+- Rox produces a folder-upload mockup from the client brief. Julia asks to
+  preserve nested folders; Rox clarifies the design before Jacob asks Cursor
   to build it. Cursor returns one completed PR card, and Julia checks
   the preview. The sequence stops on interaction and completes without motion
   when reduced motion is enabled. The attachment uses FolderComposerMockup,
@@ -832,7 +832,7 @@ Verified against `block-project/component/Block.tsx`,
 `crates/projects/src/inbound/toolset/move_to_project.rs` at e2bd582d.
 Folders and tags are separate organization mechanisms, not multiple physical
 copies or nested docs. Keep competitor comparisons in the comparison table;
-the FAQ leads with writing, importing, collaboration, and sharing in Macro.
+the FAQ leads with writing, importing, collaboration, and sharing in Rox.
 
 Verify folder and tag navigation, search, source open/close with Escape and focus
 restoration, edits surviving navigation, local sharing, tool inspection,
@@ -917,7 +917,7 @@ Source navigation shares task state; Close and Escape return to the task and
 restore focus. The channel agent creates proposal and pricing tasks, then reassigns the proposal
 only after the illustrated request. Both responses are threaded replies to
 Jacob. The first request types into the channel composer. The follow-up is a
-plain-text reply in that same thread, without another @Macro mention. Playback
+plain-text reply in that same thread, without another @Rox mention. Playback
 waits 1.4 seconds before each agent reply and holds the first result for 2.2
 seconds before the follow-up. It starts when the main composer is fully visible.
 Composer handles and explicit reply state drive playback; no synthetic input or
@@ -949,7 +949,7 @@ return navigation, the agent’s reassignment, and comparison FAQs on desktop an
 Comparisons live in individual FAQ answers for Jira, Linear, Notion, and ClickUp;
 keep them specific to workflows. Notion supports task databases, subtasks, and
 dependencies. Do not describe it as lacking granular tasks or imply that all
-Macro tasks complete automatically. Keep migration, pricing, and comparison links.
+Rox tasks complete automatically. Keep migration, pricing, and comparison links.
 
 ## Chat page
 
@@ -969,7 +969,7 @@ uses the full workspace email view and an original two-message thread. Share typ
 shows the channel's access grant, then opens the delivered file from the channel.
 Autoplay and manual sharing use the same form actions. Reset both the grant and
 the delivered message between untouched loops; public-link access stays separate. The agent story
-continues from Macro creating Julia’s task to Julia mentioning Cursor and Cursor
+continues from Rox creating Julia’s task to Julia mentioning Cursor and Cursor
 investigating in the same thread with one response. Keep Julia as owner while work starts.
 The final catch-up demo focuses on inline replies in a full-width channel,
 without the Home sidebar or inbox shortcuts. Three original conversations show
@@ -1048,7 +1048,7 @@ On the landing page, Valentina is an external contact at `coparse.com` and
 Julia’s Cc address is `julia@macro.com`. Spreadsheet and pipeline contacts use
 their company’s domain; fictional companies use reserved `.example` domains.
 
-Homepage feature dividers align with the heading text, above the description; coding agent logos sit in a separate row above the dividers. The document animation renders saved scheduling links as calendar mentions with a short label, matching Macro’s booking link presentation.
+Homepage feature dividers align with the heading text, above the description; coding agent logos sit in a separate row above the dividers. The document animation renders saved scheduling links as calendar mentions with a short label, matching Rox’s booking link presentation.
 
 ### Linked homepage spreadsheet cells
 
@@ -1099,7 +1099,7 @@ and correctly sized logos before releasing them.
 The homepage uses a silent dark unification MP4 and its clean opening frame as
 Open Graph media. Keep the image free of navigation and CTA buttons, and keep
 the headline above the bottom quarter, where X overlays its title label. The video
-ends in a unified Macro mark; it is not a seamless loop. Use versioned asset URLs
+ends in a unified Rox mark; it is not a seamless loop. Use versioned asset URLs
 and retain earlier files for cached previews. Keep video homepage-only, with
 `og:type=website`, the matching `og:image`, and an
 explicit `twitter:card=summary_large_image` plus `twitter:image`. Product and
@@ -1127,8 +1127,8 @@ Keep tool logos, names, plans, and prices in consistent columns; show the per-us
 monthly unit once in the header. Preserve the same columns on phones with
 smaller type and spacing. Do not show category headings, a separate result card,
 divider lines, a stacked cost breakdown, or introductory subtext. Standalone AI
-subscriptions are excluded. Display yearly savings against Macro Pro at $40 per
-person per month; label additional cost explicitly when Macro costs more.
+subscriptions are excluded. Display yearly savings against Rox Pro at $40 per
+person per month; label additional cost explicitly when Rox costs more.
 Prices link to vendor sources; a short plain-text billing/seat-count note sits directly below the list.
 The `/tour` calculator retains its separate tier controls and shares the original
 nine tools' prices through `core/savings-calculator.ts`.

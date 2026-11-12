@@ -6,7 +6,7 @@ export function EmailDesktopDemo() {
     <WorkspaceDesktopDemo
       heroFrame
       view="email"
-      label="Try Macro Mail"
+      label="Try Rox Mail"
       initialData={{
         emails: emailPageInbox.map((email) => ({
           ...email,

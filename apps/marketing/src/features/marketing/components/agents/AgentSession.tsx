@@ -63,7 +63,7 @@ export function AgentSession(props: {
               <dt>Created by</dt>
               <dd>Jacob</dd>
               <dt>Agent</dt>
-              <dd>Macro</dd>
+              <dd>Rox</dd>
             </dl>
           </aside>
         </Show>

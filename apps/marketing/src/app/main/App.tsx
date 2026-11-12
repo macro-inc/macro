@@ -300,7 +300,7 @@ export const App: Component<{
   // The animal clock now starts itself while animate() subscribers exist —
   // no unconditional global rAF loop.
   systemThemeEffect();
-  applyTheme('Macro');
+  applyTheme('Rox');
   utilFaviconEffect();
 
   return (

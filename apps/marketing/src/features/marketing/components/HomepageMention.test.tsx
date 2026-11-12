@@ -25,12 +25,12 @@ it('keeps normal navigation available for links without a local source', () => {
   const view = render(() => (
     <HomepageMention
       kind="pdf"
-      label="Macro overview.pdf"
-      description="Learn about documents in Macro."
+      label="Rox overview.pdf"
+      description="Learn about documents in Rox."
       href="/documents"
     />
   ));
-  const link = view.getByRole('link', { name: 'Macro overview.pdf' });
+  const link = view.getByRole('link', { name: 'Rox overview.pdf' });
   expect(link.getAttribute('href')).toBe('/documents');
   expect(link.getAttribute('target')).toBe('_blank');
 });

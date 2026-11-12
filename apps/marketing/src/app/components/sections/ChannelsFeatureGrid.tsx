@@ -83,7 +83,7 @@ function Sparkle(props: {
 
 // --- Fig 01 — Inline threads -------------------------------------------------
 // A tall main block (the parent message) with smaller reply blocks branching off
-// to the right via a vertical rail, mirroring Macro's forum-style threads.
+// to the right via a vertical rail, mirroring Rox's forum-style threads.
 function FigInlineThreads(props: { height: string }) {
   const parent = { cx: 70, cy: 50, w: 18, h: 28 };
   const replies = [
@@ -297,7 +297,7 @@ const pillars: Pillar[] = [
     slug: 'agents',
     fig: 'Fig 04',
     title: 'Agents in channels',
-    body: '@Macro summarizes overnight, drafts replies, and works from your full workspace context.',
+    body: '@Rox summarizes overnight, drafts replies, and works from your full workspace context.',
     Graphic: FigAgents,
   },
 ];
@@ -377,7 +377,7 @@ export function ChannelsFeatureGrid() {
 
   return (
     <section
-      aria-label="Why Macro Chat"
+      aria-label="Why Rox Chat"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',

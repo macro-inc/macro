@@ -7,6 +7,7 @@ use agent_code_mode::{domain::UserCodeMode, inbound::toolset::UserCodeModeToolCo
 use agent_inmem::domain::tool_mode::ToolMode;
 use ai_toolset::ToolCaller;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
+use bot_id::PRODUCT_DISPLAY_NAME;
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
@@ -215,19 +216,19 @@ where
         let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         let base_url = self.item_base_url.trim_end_matches('/');
         info.server_info = rmcp::model::Implementation::new(SERVER_NAME, env!("CARGO_PKG_VERSION"))
-            .with_title("Macro")
+            .with_title(PRODUCT_DISPLAY_NAME)
             .with_description(
-                "Search, read, and create content across documents, emails, and messages in Macro.",
+                "Search, read, and create content across documents, emails, and messages in Rox.",
             )
             // The same icon the web app's <link rel="icon"> points at, so the
-            // server shows up in MCP clients with the Macro favicon.
+            // server shows up in MCP clients with the Rox favicon.
             .with_icons(vec![
                 Icon::new(format!("{base_url}/app/macro-favicon.svg"))
                     .with_mime_type("image/svg+xml")
                     .with_sizes(vec!["any".to_owned()]),
             ]);
         info.instructions = Some(format!(
-            "This server provides tools for interacting with a user's Macro workspace. \
+            "This server provides tools for interacting with a user's Rox workspace. \
              Use ContentSearch and NameSearch to find entities. \
              Use ReadContent and ReadMetadata for documents, ReadAgentSession for agent-session conversations. \
              Use ReadChannelMessages, ReadChannelThread, and ReadChannelMessageContext \

@@ -132,7 +132,7 @@ export function NorthwindCollaboration() {
               relatedContent={
                 <div class="mt-6">
                   <AgentAnswer
-                    text="Related work: @[SSO verification](agent:sso) · @[Training for 40 people](agent:training)"
+                    text="Related work: @[sign-in verification](agent:sso) · @[Training for 40 people](agent:training)"
                     mentions={mentions}
                   />
                 </div>

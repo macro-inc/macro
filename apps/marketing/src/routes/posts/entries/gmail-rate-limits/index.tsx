@@ -12,7 +12,7 @@ export const postMeta: PostMeta = {
     'How we backfill an entire inbox as fast as Gmail will allow, without starving every other email operation in the product.',
   date: '2026-06-26',
   description:
-    "How Macro works within Gmail's 6,000 quota-units-per-minute limit: a queue-driven backfill that retries on 429 via visibility timeouts, plus a Redis cost-based sliding window that reserves headroom for live inbox operations.",
+    "How Rox works within Gmail's 6,000 quota-units-per-minute limit: a queue-driven backfill that retries on 429 via visibility timeouts, plus a Redis cost-based sliding window that reserves headroom for live inbox operations.",
   preview:
     'Backfilling an inbox at full speed is easy. Doing it while the user can still send, read, and archive email is the hard part.',
   tags: ['macro', 'engineering'],
@@ -23,7 +23,7 @@ export const postMeta: PostMeta = {
   image: '/og/gmail-rate-limits.png',
   showTOC: true,
   tocDepth: 2,
-  author: { name: 'Evan', role: 'Macro Engineering' },
+  author: { name: 'Evan', role: 'Rox Engineering' },
   ctaButtonName: 'blog_gmail_rate_limits_cta',
 };
 
@@ -34,10 +34,10 @@ export default function GmailRateLimitsPost() {
         <p class="grl-lede">
           When we set out to add a{' '}
           <a href="https://macro.com/email/">first-class email client</a> to
-          Macro last year, we started with Gmail support.
+          Rox last year, we started with Gmail support.
         </p>
         <p>
-          To make email a first-class entity in Macro — linked with docs and
+          To make email a first-class entity in Rox — linked with docs and
           agents, in unified search, with native mentions and powerful filtering
           and sorting — we needed the user's email in our own database. Which
           means that on sign-up, we needed to backfill the user's inbox as
@@ -102,7 +102,7 @@ export default function GmailRateLimitsPost() {
         </p>
         <Diagram
           title="Reserving headroom inside one user's quota"
-          alt="Backfill queue messages pass through a Redis cost-based sliding window that is configured to consume only part of the per-user quota, leaving the remainder for live inbox operations from the Macro UI."
+          alt="Backfill queue messages pass through a Redis cost-based sliding window that is configured to consume only part of the per-user quota, leaving the remainder for live inbox operations from the Rox UI."
           caption="The split is configurable: backfill gets a percentage of the per-minute quota, live operations keep the rest."
         >
           <div class="pdg-row">
@@ -124,7 +124,7 @@ export default function GmailRateLimitsPost() {
               <DiagramBox
                 dashed
                 title="Reserved"
-                note="Sends, reads, and archives from the Macro UI still go through"
+                note="Sends, reads, and archives from the Rox UI still go through"
               />
             </div>
           </div>
@@ -132,13 +132,13 @@ export default function GmailRateLimitsPost() {
         <p>
           The usage limiter is fully configurable, so we can dynamically set the
           percentage of available quota units that backfill is allowed to spend,
-          leaving the rest for normal inbox operations in the Macro UI. Problem
+          leaving the rest for normal inbox operations in the Rox UI. Problem
           solved.
         </p>
 
         <h2>Round two: bulk operations</h2>
         <p>
-          That is, until we added bulk email operations to Macro. Up until this
+          That is, until we added bulk email operations to Rox. Up until this
           point, every operation acted on a single email message at a time. Once
           we added the ability to act on many emails at once, we ran into the
           dreaded 429s all over again.

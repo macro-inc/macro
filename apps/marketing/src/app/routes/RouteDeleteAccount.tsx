@@ -4,23 +4,23 @@ import { UtilPlainText } from '../components/utils/UtilPlainText';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteLegal.css';
 
-const content = `Macro
+const content = `Rox
 
-# Delete your Macro account
+# Delete your Rox account
 
-You can request deletion of your Macro account and associated personal data by email, including if you no longer have the app installed. Macro is operated by Coparse, Inc. dba Macro.
+You can request deletion of your Rox account and associated personal data by email, including if you no longer have the app installed. Rox is operated by Coparse, Inc. dba Macro.
 
 ## Request deletion by email
 
-1. Email [support@macro.com](mailto:support@macro.com?subject=Delete%20my%20Macro%20account) from the email address associated with your Macro account.
-2. Use the subject “Delete my Macro account” and say that you want your account and associated personal data deleted.
+1. Email [support@macro.com](mailto:support@macro.com?subject=Delete%20my%20Macro%20account) from the email address associated with your Rox account.
+2. Use the subject “Delete my Rox account” and say that you want your account and associated personal data deleted.
 3. We may ask you to verify your identity before fulfilling the request. Do not send your password or sign-in codes.
 
 If you cannot access your account email, contact the same address and explain the situation so we can help verify your identity. You do not need to reinstall the app to make a request.
 
 ## Delete your account in the app
 
-1. Open Macro and sign in.
+1. Open Rox and sign in.
 2. Open Settings, then Account.
 3. Below Log out, select Delete account and follow the confirmation steps. The final step asks you to press and hold the delete button for 5 seconds.
 
@@ -32,9 +32,9 @@ We aim to complete account deletion and associated cleanup within seven days aft
 
 ## Data covered by deletion
 
-The request covers your Macro account, profile information such as your name and email address, and associated personal data stored by Macro. Account cleanup includes owned documents, AI chats, projects, agent sessions, scheduled actions, and onboarding information.
+The request covers your Rox account, profile information such as your name and email address, and associated personal data stored by Rox. Account cleanup includes owned documents, AI chats, projects, agent sessions, scheduled actions, and onboarding information.
 
-Deleting your Macro account does not delete accounts you hold with connected providers, such as Google. Copies of content held independently by other people or services are outside Macro's account-deletion process. If you use Macro through an organization, that organization may be responsible for handling requests for data it controls.
+Deleting your Rox account does not delete accounts you hold with connected providers, such as Google. Copies of content held independently by other people or services are outside Rox's account-deletion process. If you use Rox through an organization, that organization may be responsible for handling requests for data it controls.
 
 ## Data retention and exceptions
 
@@ -47,9 +47,9 @@ Personal information in backup archives that cannot immediately be deleted is se
 
 export const RouteDeleteAccount: Component = () => {
   setPageSeo({
-    title: 'Delete your account · Macro',
+    title: 'Delete your account · Rox',
     description:
-      'Request deletion of your Macro account and associated personal data by email or in the app. Learn what deletion covers and how retained data is handled.',
+      'Request deletion of your Rox account and associated personal data by email or in the app. Learn what deletion covers and how retained data is handled.',
     path: '/delete-account',
   });
 

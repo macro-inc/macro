@@ -231,7 +231,7 @@ export function HomeMobileFeatureCarousel() {
 
   return (
     <section
-      aria-label="Explore Macro on mobile"
+      aria-label="Explore Rox on mobile"
       onPointerCancel={cancelComponentSwipe}
       onPointerDown={beginComponentSwipe}
       onPointerMove={moveComponentSwipe}
@@ -384,7 +384,7 @@ export function HomeMobileFeatureCarousel() {
                   }}
                 />
                 <img
-                  alt={`${slide.label} in Macro for mobile`}
+                  alt={`${slide.label} in Rox for mobile`}
                   decoding="async"
                   loading={
                     !context.isClone() && context.logicalIndex() === 0

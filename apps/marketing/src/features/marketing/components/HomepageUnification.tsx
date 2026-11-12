@@ -178,7 +178,7 @@ export function HomepageUnification(
       const reveal = (target: HTMLElement, index: number) => {
         const end = targetRects.get(target)!;
         const arrival = arrivals.get(target);
-        // Additional features unfold from the arriving Macro bubble.
+        // Additional features unfold from the arriving Rox bubble.
         const origin = arrival?.rect ?? coreRect;
         const dx = origin.left + origin.width / 2 - end.left - end.width / 2;
         const dy = origin.top + origin.height / 2 - end.top - end.height / 2;

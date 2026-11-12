@@ -1,3 +1,4 @@
+import { MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import { useUserId } from '@core/context/user';
 import { type CombinedRecipientItem, recipientEntityMapper } from '@core/user';
@@ -17,9 +18,9 @@ export function useAgentDmRecipients() {
     return [
       recipientEntityMapper('agent')({
         id: MACRO_NEW_BOT_ID,
-        name: 'Macro',
+        name: MACRO_AGENT_NAME,
         handle: 'macro',
-        description: 'Your private conversation with Macro',
+        description: `Your private conversation with ${MACRO_AGENT_NAME}`,
       }),
       ...visibleAgents
         .filter((agent) =>

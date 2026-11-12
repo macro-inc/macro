@@ -80,7 +80,7 @@ function Message(props: { message: HomepageMessage }) {
                   ? 'Investigating and fixing the invite flow'
                   : props.message.person === 'claude'
                     ? 'Working from the team’s shared context'
-                    : '#launch · Macro'}
+                    : '#launch · Rox'}
               </span>
             </div>
           </div>

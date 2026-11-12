@@ -43,7 +43,7 @@ export function HomepageBlog() {
       aria-labelledby="homepage-blog-title"
     >
       <header>
-        <h2 id="homepage-blog-title">From the Macro blog</h2>
+        <h2 id="homepage-blog-title">From the Rox blog</h2>
         <a href="/posts">
           View all <ArrowRight aria-hidden="true" />
         </a>
@@ -59,7 +59,7 @@ export function HomepageBlog() {
           event.stopPropagation();
           move(event.key === 'ArrowLeft' ? -1 : 1);
         }}
-        aria-label="Macro blog posts"
+        aria-label="Rox blog posts"
         tabindex="0"
       >
         <For each={homePosts}>

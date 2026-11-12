@@ -3,7 +3,7 @@ import { MacroMarkIcon } from './MacroMarkIcon';
 import { MODULE_LOGOS } from './moduleLogos';
 
 /**
- * The "<tool> → Macro" switch graphic that heads each migration section.
+ * The "<tool> → Rox" switch graphic that heads each migration section.
  *
  * A themed rebuild of the SVGs on docs.macro.com/switch-to-macro, which bake
  * in the docs site's fixed dark palette. Here the tiles, ink, and arrow come
@@ -96,7 +96,7 @@ const captionStyle: JSX.CSSProperties = {
 
 /**
  * Side-by-side tiles — the tool you are coming from, an accent arrow, then
- * Macro — sized by `compact` (mobile) rather than a media query, so it matches
+ * Rox — sized by `compact` (mobile) rather than a media query, so it matches
  * the rest of the page's `mobile()` breakpoint.
  */
 export function SwitchGraphic(props: {
@@ -109,7 +109,7 @@ export function SwitchGraphic(props: {
 
   return (
     <div
-      aria-label={`${brand().label} to Macro`}
+      aria-label={`${brand().label} to Rox`}
       role="img"
       style={{
         'align-items': 'flex-start',
@@ -166,7 +166,7 @@ export function SwitchGraphic(props: {
             }}
           />
         </div>
-        <span style={{ ...captionStyle, color: 'var(--a0)' }}>Macro</span>
+        <span style={{ ...captionStyle, color: 'var(--a0)' }}>Rox</span>
       </div>
     </div>
   );

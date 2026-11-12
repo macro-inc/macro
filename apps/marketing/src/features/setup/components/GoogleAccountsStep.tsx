@@ -56,8 +56,8 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
         </h1>
         <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
           {personal()
-            ? 'Add a personal account for email and calendar in Macro. This is optional; your work account remains your Macro sign-in. Agents ask for approval before sending email, and you can disconnect anytime.'
-            : 'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'}
+            ? 'Add a personal account for email and calendar in Rox. This is optional; your work account remains your Rox sign-in. Agents ask for approval before sending email, and you can disconnect anytime.'
+            : 'Connect through Google to read, send, and organize email and manage your calendars in Rox. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'}
         </p>
       </header>
 
@@ -157,12 +157,12 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
         <div data-privacy-item class="flex min-w-0 flex-col items-center">
           <ShieldIcon class="size-5 text-ink-muted" aria-hidden="true" />
           <h2 class="mt-3 text-xs font-medium leading-5 text-ink">
-            Audited security
+            Access control
           </h2>
           <p class="mt-1 text-[11px] leading-[1.6] text-ink-extra-muted sm:text-xs">
-            SOC 2 · ISO 27001
+            Review and revoke
             <br />
-            CASA Tier 2
+            permissions anytime
           </p>
         </div>
         <div data-privacy-item class="flex min-w-0 flex-col items-center">

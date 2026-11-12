@@ -315,7 +315,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                 'white-space': 'nowrap',
               }}
             >
-              Macro launches on Product Hunt: July 1
+              Rox launches on Product Hunt: July 1
             </span>
           </div>
           <div style={{ position: 'relative' }}>
@@ -338,11 +338,11 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
             >
               <p style={bodyText}>Hey,</p>
               <p style={bodyText}>
-                Quick heads up: we're launching Macro on Product Hunt on{' '}
+                Quick heads up: we're launching Rox on Product Hunt on{' '}
                 <strong style={{ color: 'var(--c1)' }}>July 1</strong>.
               </p>
               <p style={bodyText}>
-                This is the V1 launch: Macro as the open source company OS, one
+                This is the V1 launch: Rox as the open source company OS, one
                 platform replacing Slack + Notion + Linear + Superhuman.
               </p>
               <p

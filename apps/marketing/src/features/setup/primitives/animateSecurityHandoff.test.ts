@@ -111,7 +111,7 @@ describe('security handoff', () => {
     view.content.innerHTML = `
       <div data-workspace-intro>
         <svg><filter id="intro-noise"></filter><rect filter="url(#intro-noise)" /></svg>
-        <button class="workspace-intro-icon">Macro</button>
+        <button class="workspace-intro-icon">Rox</button>
       </div>
       <p>Already have an account?</p>`;
     const commit = () => {
@@ -147,7 +147,7 @@ describe('security handoff', () => {
   it('preserves centered feature positions throughout the entrance and cleanup', async () => {
     const view = setup();
     view.content.innerHTML =
-      '<button class="workspace-intro-icon">Macro</button>';
+      '<button class="workspace-intro-icon">Rox</button>';
     animateSecurityHandoff(
       view.content,
       () => {

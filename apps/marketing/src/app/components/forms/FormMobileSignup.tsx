@@ -24,7 +24,7 @@ type FormMobileSignupProps = {
 /**
  * Email capture for mobile visitors: one field, one button, no app load.
  *
- * Submitting emails the visitor a link to open Macro on desktop (see
+ * Submitting emails the visitor a link to open Rox on desktop (see
  * `utilMobileSignup`) and then routes to the confirmation page client-side, so
  * the whole flow stays on the static site.
  */

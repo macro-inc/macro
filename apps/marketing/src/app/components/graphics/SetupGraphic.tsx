@@ -1,5 +1,5 @@
 /*
- * Ported from the Macro app: apps/web/src/features/setup/SetupGraphic.tsx, off
+ * Ported from the Rox app: apps/web/src/features/setup/SetupGraphic.tsx, off
  * branch aidan/onboarding-v4-graphics (at c3129038f), where it's the /setup
  * onboarding empty state. Here it's the /migrate hero.
  *
@@ -305,7 +305,7 @@ export type ModuleConfig = {
 };
 
 /** Shared period for the hero's auto demo: GitHub / Notion bursts and the
- *  Macro card slide, staggered so they don't overlap. Click still works. */
+ *  Rox card slide, staggered so they don't overlap. Click still works. */
 const AUTO_CYCLE_MS = 9000;
 
 /** Delay before the card slide joins the auto cycle — after the two module
@@ -343,8 +343,8 @@ const INVERSE_BLOCKS_TRANSFORM = `translate(${SCENE.blocks.center.x} ${SCENE.blo
 const BLOCKS_TRANSFORM = `translate(${SCENE.blocks.center.x} ${SCENE.blocks.center.y}) scale(${SCENE.blocks.scale}) translate(${-SCENE.blocks.center.x} ${-SCENE.blocks.center.y})`;
 
 /**
- * The isometric connectors scene (the Macro app's `/setup` empty state; the
- * `/migrate` hero here): the Macro logo re-imagined as three technical
+ * The isometric connectors scene (the Rox app's `/setup` empty state; the
+ * `/migrate` hero here): the Rox logo re-imagined as three technical
  * isometric blocks (`front_card`, `middle_card`, `back_card`), with hovering
  * modules around it. Inlined (rather than imported as an asset) so animation
  * can target the named groups.
@@ -362,7 +362,7 @@ const BLOCKS_TRANSFORM = `translate(${SCENE.blocks.center.x} ${SCENE.blocks.cent
 export function SetupGraphic(props: {
   class?: string;
   modules?: ModuleConfig[];
-  /** Adds the bottom "Import via MCP with 1 click" CTA under the Macro blocks.
+  /** Adds the bottom "Import via MCP with 1 click" CTA under the Rox blocks.
    *  Brand modules (including GitHub) stay in their top slots. */
   importButton?: {
     href: string;
@@ -646,7 +646,7 @@ export function SetupGraphic(props: {
       illuminateLeds();
       return;
     }
-    // Macro card slide: a quick intro play, then the same AUTO_CYCLE_MS loop as
+    // Rox card slide: a quick intro play, then the same AUTO_CYCLE_MS loop as
     // GitHub / Notion, joining late so it sits after their bursts.
     slideDelay = setTimeout(playSlide, MOTION.cardSlide.delayMs);
     slideCycleDelay = setTimeout(() => {

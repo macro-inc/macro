@@ -34,7 +34,7 @@ export const homepagePeople = {
     photo: valentina,
   },
   teo: { name: 'Teo', shortName: 'Teo', initials: 'T', photo: teo },
-  macro: { name: 'Macro', shortName: 'Macro', initials: 'M', photo: macro },
+  macro: { name: 'Rox', shortName: 'Rox', initials: 'M', photo: macro },
   claude: { name: 'Claude', shortName: 'Claude', initials: 'C', photo: claude },
   cursor: { name: 'Cursor', shortName: 'Cursor', initials: 'C', photo: cursor },
 } as const;

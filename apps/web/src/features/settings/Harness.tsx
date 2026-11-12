@@ -208,8 +208,8 @@ export function Harness(
                       </span>
                     </div>
                     <p class="mt-1 text-sm text-ink-muted">
-                      Macro in house fast and powerful agent. Uses official
-                      Macro tools and MCPs to get the job done.
+                      Rox in house fast and powerful agent. Uses official
+                      Rox tools and MCPs to get the job done.
                     </p>
                   </div>
                 </section>

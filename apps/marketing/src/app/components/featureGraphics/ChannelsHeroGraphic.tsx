@@ -660,7 +660,7 @@ type Part =
 
 type Row = {
   who: string;
-  /** Omitted for the agent, which wears the Macro mark instead. */
+  /** Omitted for the agent, which wears the Rox mark instead. */
   face?: string;
   /** The hairline ring the frame puts on an avatar inside a thread. */
   ring?: boolean;
@@ -759,7 +759,7 @@ const CHANNEL_HERO: ChannelScene = {
       cycle: 1,
       lines: [
         [
-          { mention: '@Macro' },
+          { mention: '@Rox' },
           ' can you take this up to the finish line? ',
           {
             task: 'Deploy onboarding v3',
@@ -770,7 +770,7 @@ const CHANNEL_HERO: ChannelScene = {
       ],
     },
     {
-      who: 'Macro',
+      who: 'Rox',
       time: '10:14 AM',
       thread: true,
       cycle: 2,
@@ -798,7 +798,7 @@ const CHANNEL_CLOSING: ChannelScene = {
   faces: [avatarJulia, avatarTeo, avatarGabriel],
   rows: [
     {
-      who: 'Macro',
+      who: 'Rox',
       time: '8:00 AM',
       status: 'Automation \u2022 Weekly',
       lines: [
@@ -858,7 +858,7 @@ const CHANNEL_CLOSING: ChannelScene = {
       ],
     },
     {
-      who: 'Macro',
+      who: 'Rox',
       time: '8:48 AM',
       thread: true,
       cycle: 1,

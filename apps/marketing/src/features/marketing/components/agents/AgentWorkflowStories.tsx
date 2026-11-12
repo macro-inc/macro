@@ -209,7 +209,7 @@ export function AgentFeedbackWorkflow(props: { workspace: DummyWorkspace }) {
         id: 'feedback-request',
         person: 'jacob',
         time: '9:41 AM',
-        body: '@[Macro](demo-mention:macro), what’s left to fix with client file uploads?',
+        body: '@[Rox](demo-mention:macro), what’s left to fix with client file uploads?',
       },
       {
         id: 'feedback-result',
@@ -359,7 +359,7 @@ export function AgentDeliverableStory() {
       id: 'brief-update-request',
       person: 'julia',
       time: '',
-      body: '@[Macro](demo-mention:macro), add a simple test checklist before we share this with clients.',
+      body: '@[Rox](demo-mention:macro), add a simple test checklist before we share this with clients.',
     },
   ]);
   const reply = (body: string) => {
@@ -536,7 +536,7 @@ export function AgentDeliverableStory() {
   return (
     <ProductDemo
       ref={(el) => (root = el)}
-      label="Macro adds Julia’s test checklist to the document"
+      label="Rox adds Julia’s test checklist to the document"
       height={600}
       mobileHeight={700}
       onInteract={pause}
@@ -552,14 +552,14 @@ export function AgentDeliverableStory() {
           {(position) => (
             <div
               class="agent-writing-caret"
-              aria-label="Macro is typing in the document"
+              aria-label="Rox is typing in the document"
               style={{
                 left: `${position().left}px`,
                 top: `${position().top}px`,
                 height: `${position().height}px`,
               }}
             >
-              <span>Macro</span>
+              <span>Rox</span>
             </div>
           )}
         </Show>
@@ -745,7 +745,7 @@ export function AgentTeamworkStory() {
       id: 'design-request',
       person: 'jacob',
       time: '10:04 AM',
-      body: '@Macro, can you sketch the upload screen from the client brief? Focus on uploading a whole project folder.',
+      body: '@Rox, can you sketch the upload screen from the client brief? Focus on uploading a whole project folder.',
     },
     {
       id: 'design-result',
@@ -869,7 +869,7 @@ export function AgentTeamworkStory() {
   return (
     <ProductDemo
       ref={(el) => (root = el)}
-      label="People, Macro, and Cursor working together"
+      label="People, Rox, and Cursor working together"
       height={820}
       mobileHeight={780}
       onInteract={playback.pause}
@@ -890,7 +890,7 @@ export function AgentTeamworkStory() {
               renderMessageBody={(message) =>
                 message.id === 'design-request' ? (
                   <AgentAnswer
-                    text="@[Macro](agent:macro), can you sketch the upload screen from the @[client brief](agent:brief)? Focus on uploading a whole project folder."
+                    text="@[Rox](agent:macro), can you sketch the upload screen from the @[client brief](agent:brief)? Focus on uploading a whole project folder."
                     mentions={{
                       macro: { kind: 'person', person: 'macro' },
                       brief: {

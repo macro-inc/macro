@@ -37,7 +37,7 @@ import {
 } from '../graphics/CreateMenuIcons';
 import { MacroMarkIcon } from '../graphics/MacroMarkIcon';
 
-// The homepage "app preview" — a clickable Macro window. The left rail mirrors
+// The homepage "app preview" — a clickable Rox window. The left rail mirrors
 // the real product nav; selecting a section swaps the main panel to that
 // feature's hero graphic (the same windows shown at the top of each feature
 // page). Trimmed to the sections that have a hero, every item interactive.
@@ -842,7 +842,7 @@ export function SceneAppPreview(props: {
             dropped and the window fills the whole card instead. */}
         <Show when={!mobile()}>
           <nav
-            aria-label="Macro sections"
+            aria-label="Rox sections"
             class={mobile() ? 'no-scrollbar' : undefined}
             style={{
               'align-content': 'start',
@@ -868,7 +868,7 @@ export function SceneAppPreview(props: {
               width: mobile() ? undefined : collapsed() ? '46px' : '196px',
             }}
           >
-            {/* Header: Macro logo + sidebar toggle. When collapsed, only the
+            {/* Header: Rox logo + sidebar toggle. When collapsed, only the
               toggle remains, taking the logo's place. */}
             <Show when={!mobile()}>
               <div

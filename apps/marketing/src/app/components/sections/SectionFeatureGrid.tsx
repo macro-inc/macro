@@ -146,7 +146,7 @@ const teamMembers = [
 export function MacroTextLogo() {
   return (
     <svg
-      aria-label="Macro"
+      aria-label="Rox"
       role="img"
       viewBox="0 0 442 58"
       style={{
@@ -210,7 +210,7 @@ function _QuoteVideo() {
           src={markDesyncPlaceholder}
           loading="lazy"
           decoding="async"
-          alt="Preview frame of the Macro demo video"
+          alt="Preview frame of the Rox demo video"
           style={{
             display: 'block',
             filter: 'brightness(0.82)',
@@ -264,7 +264,7 @@ function _QuoteVideo() {
               'overflow-wrap': 'break-word',
             }}
           >
-            “Macro did not help us get organized. Macro<em> is why</em> we are
+            “Rox did not help us get organized. Rox<em> is why</em> we are
             organized.”
           </blockquote>
           <div
@@ -1871,7 +1871,7 @@ export function SectionFeatureGrid(
               style={bentoTextStyle()}
               segments={[
                 {
-                  text: 'Macro replaces your siloed stack with a single app. ',
+                  text: 'Rox replaces your siloed stack with a single app. ',
                 },
                 {
                   text: 'Messages, docs, tasks, calls, and email all connected.',
@@ -2090,7 +2090,7 @@ export function SectionFeatureGrid(
               loading="eager"
               fetchpriority="high"
               decoding="async"
-              alt="Macro app channels interface"
+              alt="Rox app channels interface"
               style={{
                 border:
                   '1px solid color-mix(in srgb, var(--c4) 12%, transparent)',
@@ -2196,7 +2196,7 @@ export function SectionFeatureGrid(
             <div
               role="dialog"
               aria-modal="true"
-              aria-label="Macro demo video"
+              aria-label="Rox demo video"
               onClick={() => setHeroDemoOpen(false)}
               style={{
                 'align-items': 'center',
@@ -2530,9 +2530,9 @@ export function SectionFeatureGrid(
         </Show>
 
         {/* "vs the tools you know" — re-uses the comparison copy so a new
-          visitor can anchor Macro against products they already understand. */}
+          visitor can anchor Rox against products they already understand. */}
         <section
-          aria-label="How Macro compares"
+          aria-label="How Rox compares"
           style={{
             ...abstractCell,
             'grid-area': 'compare',

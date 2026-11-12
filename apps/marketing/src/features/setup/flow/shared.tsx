@@ -21,7 +21,7 @@ export function emailDomain(address: string | undefined): string | undefined {
   return address.slice(at + 1).toLowerCase();
 }
 
-/** "macro.com" → "Macro": the domain root, capitalized. Whether a domain
+/** "macro.com" → "Rox": the domain root, capitalized. Whether a domain
  * deserves a team suggestion at all is judged server-side
  * (`OnboardingState.suggested_team_domain`) — no domain list lives here. */
 export function deriveTeamName(domain: string): string {

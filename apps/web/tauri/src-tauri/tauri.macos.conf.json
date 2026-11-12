@@ -3,7 +3,7 @@
   "app": {
     "windows": [
       {
-        "title": "Macro",
+        "title": "Rox",
         "width": 800,
         "height": 600,
         "resizable": true,

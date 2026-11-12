@@ -17,7 +17,7 @@ const call: SampleCall = {
   duration: 1200,
   people: ['jacob', 'valentina', 'julia'],
   summary:
-    '- Valentina confirmed Thursday at 9.\n- Send the setup plan and Macro overview before the meeting.\n- Julia will help with setup.',
+    '- Valentina confirmed Thursday at 9.\n- Send the setup plan and Rox overview before the meeting.\n- Julia will help with setup.',
   segments: [
     {
       id: 'time',
@@ -35,7 +35,7 @@ const call: SampleCall = {
       id: 'followup',
       person: 'jacob',
       at: 65,
-      text: 'I’ll send the setup plan and Macro overview, and copy Julia.',
+      text: 'I’ll send the setup plan and Rox overview, and copy Julia.',
     },
   ],
   poster: [

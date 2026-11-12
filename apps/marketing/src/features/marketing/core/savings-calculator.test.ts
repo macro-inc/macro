@@ -52,7 +52,7 @@ describe('savings calculator', () => {
     expect(summary.toolsCents).toBe((2000 + 1000 + 2500) * 12);
   });
 
-  it('charges Macro a flat $40 a seat at every team size', () => {
+  it('charges Rox a flat $40 a seat at every team size', () => {
     expect(macroAnnualCost(1)).toBe(4000 * 12);
     expect(macroAnnualCost(5)).toBe(4000 * 12 * 5);
     expect(macroAnnualCost(8)).toBe(4000 * 12 * 8);

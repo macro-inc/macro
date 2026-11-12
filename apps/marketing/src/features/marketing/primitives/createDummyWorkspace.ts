@@ -211,7 +211,7 @@ export function createDummyWorkspace(initial: WorkspaceView = 'home') {
             )}. The launch plan and shared emails are in this workspace.`;
       setAgentReplies((items) => [...items, { prompt, answer }]);
       setBusy(false);
-      log('Macro reviewed the sample workspace');
+      log('Rox reviewed the sample workspace');
     }, 450);
   }
   function createCompany() {

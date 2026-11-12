@@ -1,16 +1,16 @@
 import type { WorkspaceDocument } from './dummy-workspace';
 
-/** Fictional examples, shaped like the mixed files and sessions in Macro. */
+/** Fictional examples, shaped like the mixed files and sessions in Rox. */
 export const sampleAgentSessions = [
   {
     id: 'northwind',
     title: 'Northwind rollout',
     time: 'Now',
-    runtime: 'Macro',
+    runtime: 'Rox',
     provider: 'claude',
     prompt: 'What’s putting Northwind’s Friday rollout at risk?',
     answer:
-      'The plan now reflects the phased rollout. Teo owns SSO verification and Julia owns training. The pilot stays gated until access is confirmed.',
+      'The plan now reflects the phased rollout. Teo owns sign-in verification and Julia owns training. The pilot stays gated until access is confirmed.',
   },
   {
     id: 'deploy',
@@ -27,7 +27,7 @@ export const sampleAgentSessions = [
     id: 'launch-status',
     title: 'Launch workspace',
     time: '1h',
-    runtime: 'Macro',
+    runtime: 'Rox',
     provider: 'claude',
     prompt: 'What is left before Thursday’s launch?',
     answer:
@@ -50,7 +50,7 @@ export const sampleAgentSessions = [
     id: 'customer-summary',
     title: 'Summarize customer conversations',
     time: '3h',
-    runtime: 'Macro',
+    runtime: 'Rox',
     provider: 'chatgpt',
     prompt: 'Summarize the Meadow conversation and suggest next steps.',
     answer:

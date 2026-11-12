@@ -35,9 +35,9 @@ function shortDate(date: string | undefined): string | undefined {
 export default function PostsIndex() {
   createRenderEffect(() => {
     setPageSeo({
-      title: 'Blog · Macro',
+      title: 'Blog · Rox',
       description:
-        'Writing from Macro: notes on product, engineering, management, and the software companies we learn from.',
+        'Writing from Rox: notes on product, engineering, management, and the software companies we learn from.',
       path: '/posts',
     });
   });
@@ -46,9 +46,9 @@ export default function PostsIndex() {
     <>
       <main class="posts-shell posts-index-shell posts-index-list">
         <header class="posts-index-hero">
-          <h1>The Macro Blog</h1>
+          <h1>The Rox Blog</h1>
           <p class="posts-index-sub">
-            Why we build Macro, how we use it, and the engineering behind it.
+            Why we build Rox, how we use it, and the engineering behind it.
           </p>
         </header>
 

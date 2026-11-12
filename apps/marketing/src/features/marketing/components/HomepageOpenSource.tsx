@@ -111,7 +111,7 @@ function DesktopHomepageOpenSource(props: {
       <section
         ref={section}
         class="homepage-embedded-demo workspace-demo"
-        aria-label="Explore Macro interactively"
+        aria-label="Explore Rox interactively"
         id="interactive-demo"
         // animateDemoEntrance clears this; prerendered markup starts hidden too.
         data-entrance-waiting
@@ -120,7 +120,7 @@ function DesktopHomepageOpenSource(props: {
           <div class="homepage-embedded-wallpaper">
             <div class="homepage-embedded-window">
               <DemoInteractionBoundary
-                label={'Macro sample workspace'}
+                label={'Rox sample workspace'}
                 class="homepage-embedded-content"
               >
                 <Show when={!loaded()}>
@@ -130,7 +130,7 @@ function DesktopHomepageOpenSource(props: {
                 </Show>
                 <iframe
                   ref={frame}
-                  title="Embedded Macro sample workspace"
+                  title="Embedded Rox sample workspace"
                   // Ignore the initial about:blank load before src is set.
                   onLoad={() => frame.src && setLoaded(true)}
                 />

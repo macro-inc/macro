@@ -423,7 +423,7 @@ describe('createMagicChipModel', () => {
         return dispose;
       });
       await settle();
-      expect(model.header()?.agent).toBe('Macro Agent');
+      expect(model.header()?.agent).toBe('Rox Agent');
       dispose();
     }
   );

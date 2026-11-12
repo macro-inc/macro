@@ -23,7 +23,7 @@ type Testimonial = {
 const testimonials: Testimonial[] = [
   {
     quote:
-      'Macro replaced five tabs and a dozen notifications. My team finally has one place where email, chat, and tasks actually talk to each other.',
+      'Rox replaced five tabs and a dozen notifications. My team finally has one place where email, chat, and tasks actually talk to each other.',
     name: 'Alex Rivera',
     role: 'Head of Ops, Northwind',
     initials: 'AR',
@@ -82,7 +82,7 @@ export function SectionHomeSocialProof() {
 
   return (
     <section
-      aria-label="What teams say about Macro"
+      aria-label="What teams say about Rox"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -280,33 +280,6 @@ export function SectionHomeSocialProof() {
             </Show>
           </span>
         </a>
-
-        <StatDivider vertical={!stacked()} />
-
-        <span
-          style={{
-            'align-items': 'center',
-            display: 'inline-flex',
-            gap: '9px',
-          }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 256 256"
-            fill="currentColor"
-            aria-hidden="true"
-            style={{ color: 'var(--a0)', display: 'block' }}
-          >
-            <path d="M208,40H48A16,16,0,0,0,32,56v58.78c0,89.61,75.82,119.34,91,124.39a15.53,15.53,0,0,0,10,0c15.2-5.05,91-34.78,91-124.39V56A16,16,0,0,0,208,40Zm-34.34,69.66-48,48a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L120,140.69l42.34-42.35a8,8,0,0,1,11.32,11.32Z" />
-          </svg>
-          <span style={{ 'font-size': '15px', 'font-weight': '400' }}>
-            <span style={{ color: 'var(--c1)', 'font-weight': '700' }}>
-              SOC 2
-            </span>{' '}
-            Type II certified
-          </span>
-        </span>
 
         <StatDivider vertical={!stacked()} />
 

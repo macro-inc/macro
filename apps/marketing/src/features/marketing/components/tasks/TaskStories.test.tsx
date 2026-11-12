@@ -138,7 +138,7 @@ it('types Jacob’s requests into the composer before sending them', () => {
   const log = within(view.getByRole('log', { name: 'Channel sales' }));
   visible(true);
   vi.advanceTimersByTime(1400);
-  expect(input.textContent).toContain('@Macro');
+  expect(input.textContent).toContain('@Rox');
   expect(log.queryByText(/make tasks for this proposal/)).toBeNull();
   advanceTo(() => log.queryByText(/make tasks for this proposal/));
   expect(input.textContent).toBe('');
@@ -150,7 +150,7 @@ it('types Jacob’s requests into the composer before sending them', () => {
   );
   const threadInput = view.getByRole('textbox', { name: 'Thread reply' });
   expect(threadInput.textContent).toContain('Julia');
-  expect(threadInput.textContent).not.toContain('@Macro');
+  expect(threadInput.textContent).not.toContain('@Rox');
   expect(
     log.queryByText(/Julia will draft/, { selector: 'article p' })
   ).toBeNull();
@@ -164,7 +164,7 @@ it('types Jacob’s requests into the composer before sending them', () => {
   ).toBeNull();
 });
 
-it('lets @Macro create assigned tasks from one channel message', () => {
+it('lets @Rox create assigned tasks from one channel message', () => {
   const view = render(() => <TaskAgentChannelDemo />);
   expect(view.queryByText('Draft the customer proposal')).toBeNull();
   visible(true);
@@ -285,7 +285,7 @@ it('does not perform the scripted reassignment after the visitor takes over', ()
   vi.advanceTimersByTime(8000);
   fireEvent.pointerDown(
     view.getByRole('group', {
-      name: 'Ask Macro to create tasks and change an owner',
+      name: 'Ask Rox to create tasks and change an owner',
     })
   );
   reduce();

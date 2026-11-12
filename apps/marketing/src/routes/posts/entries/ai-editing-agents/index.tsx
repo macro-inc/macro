@@ -8,12 +8,12 @@ export const postMeta: PostMeta = {
   slug: 'ai-editing-agents',
   title: 'Agents Attacking Documents with CRDTs',
   seoTitle:
-    'Agents Attacking Documents with CRDTs — How Macro Does AI Document Editing',
+    'Agents Attacking Documents with CRDTs — How Rox Does AI Document Editing',
   subtitle:
     'A team of small agents writes code against a thin library to surgically edit the document tree, streaming their changes in as human-looking CRDT peers.',
   date: '2026-07-09',
   description:
-    'How Macro built live collaborative AI document editing: an XML lens over the editor tree, a supervisor dispatching cheap writer agents, and an animation layer that streams their edits in as CRDT peers.',
+    'How Rox built live collaborative AI document editing: an XML lens over the editor tree, a supervisor dispatching cheap writer agents, and an animation layer that streams their edits in as CRDT peers.',
   preview:
     'Swapping whole Markdown blocks was too coarse and LLMs are terrible at JSON patches. So we gave a team of small agents a thin library and let them edit the tree directly.',
   tags: ['macro', 'engineering'],
@@ -22,7 +22,7 @@ export const postMeta: PostMeta = {
   hideFromHome: true,
   coverBrand: 'ai-editing',
   image: '/og/ai-editing-agents.png',
-  author: { name: 'Wolf', role: 'Macro Engineering' },
+  author: { name: 'Wolf', role: 'Rox Engineering' },
   ctaButtonName: 'blog_ai_editing_agents_cta',
 };
 
@@ -31,7 +31,7 @@ export default function AiEditingAgentsPost() {
     <div class="aie-post">
       <article>
         <p class="aie-lede">
-          One of my first tasks at Macro: make it possible for AI to edit
+          One of my first tasks at Rox: make it possible for AI to edit
           documents across the platform. Or, put less generously, create swarms
           of agents that come in and attack your documents with requested
           changes while you are mid-edit.
@@ -40,7 +40,7 @@ export default function AiEditingAgentsPost() {
           <div class="aie-shot-frame">
             <img
               src={aiPeerCursor}
-              alt="A Macro document titled Hello World Doc with the text 'hello world' being typed by a labelled cursor reading 'Wolf (AI)'"
+              alt="A Rox document titled Hello World Doc with the text 'hello world' being typed by a labelled cursor reading 'Wolf (AI)'"
               loading="lazy"
               width={709}
               height={284}
@@ -57,7 +57,7 @@ export default function AiEditingAgentsPost() {
           </figcaption>
         </figure>
         <p>
-          Macro documents are a tree, not flat Markdown, and they sync live
+          Rox documents are a tree, not flat Markdown, and they sync live
           between peers with{' '}
           <a href="https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type">
             CRDTs
@@ -81,7 +81,7 @@ export default function AiEditingAgentsPost() {
           <a href={ORIGINAL_URL}>Read it on 404wolf.com →</a>
         </p>
         <p>
-          Macro is open source, so you can also just read{' '}
+          Rox is open source, so you can also just read{' '}
           <a href="https://github.com/macro-inc/macro/tree/main/js/ai-editing-worker">
             the AI editing worker
           </a>

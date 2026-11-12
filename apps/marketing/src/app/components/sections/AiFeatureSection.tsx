@@ -95,7 +95,7 @@ export function AiFeatureSection(
             }}
           >
             {
-              'BYO agents or use the embedded models with unified memory. Macro remembers everything you do across email, tasks, docs, sales, marketing and engineering. One system, one context.'
+              'BYO agents or use the embedded models with unified memory. Rox remembers everything you do across email, tasks, docs, sales, marketing and engineering. One system, one context.'
             }
           </p>
         </div>

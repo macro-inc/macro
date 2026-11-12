@@ -98,7 +98,7 @@ export default function HomepageEmailCompose(
                 label={item.label}
                 description={
                   item.kind === 'pdf'
-                    ? 'Macro product overview and pricing, shared after the demo.'
+                    ? 'Rox product overview and pricing, shared after the demo.'
                     : 'The setup steps and owners for Valentina’s team.'
                 }
                 href={

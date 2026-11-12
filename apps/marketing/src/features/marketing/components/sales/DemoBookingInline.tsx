@@ -3,7 +3,7 @@ import { demoHref, handleDemoBooked } from '../../../../app/utils/utilCta';
 import { BOOKING_MADE, BOOKING_PATH, wasRefused } from '../DemoBookingDialog';
 
 /**
- * The Macro demo booking page, framed inline. Loads the frame only once the
+ * The Rox demo booking page, framed inline. Loads the frame only once the
  * visitor nears it, so the ad landing page's first paint stays light. A
  * refused frame falls back to a link to the booking page.
  */

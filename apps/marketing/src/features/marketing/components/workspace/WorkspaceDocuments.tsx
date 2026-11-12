@@ -234,7 +234,7 @@ export function WorkspaceDocuments(props: {
                     variant="plain"
                     onClick={() => w.openItem('agents')}
                   >
-                    ✧ Ask Macro
+                    ✧ Ask Rox
                   </Button>
                 </PanelSection>
                 <PanelSection title="Details" open>

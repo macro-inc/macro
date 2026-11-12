@@ -15,11 +15,11 @@ it('uses the framed comparison with plain headers and feature labels', () => {
       tableMinWidth={900}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Macro' });
+  const table = view.getByRole('region', { name: 'Compare Rox' });
   expect(table.getAttribute('data-presentation')).toBe('framed');
   expect(table.querySelectorAll('a')).toHaveLength(0);
   for (const name of [
-    'Macro',
+    'Rox',
     'Superhuman Mail',
     'Notion',
     'Slack',
@@ -40,7 +40,7 @@ it('credits CRM templates and Salesforce-backed CRM with explained partial marks
       tableMinWidth={900}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Macro' });
+  const table = view.getByRole('region', { name: 'Compare Rox' });
   let cell = within(table).getByText('Dedicated CRM').nextElementSibling;
   const cells: Element[] = [];
   for (let index = 0; index < 6; index++) {

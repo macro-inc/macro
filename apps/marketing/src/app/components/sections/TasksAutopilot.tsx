@@ -202,7 +202,7 @@ export function TasksAutopilot() {
           </p>
         </div>
 
-        {/* The product's own calls empty state, ported from the Macro repo
+        {/* The product's own calls empty state, ported from the Rox repo
             (apps/web/src/lib/design/empty-state-calls.svg). Two hooks the whole
             empty-state family expects from its host, the same pair
             EmptyInboxTray.tsx documents: strokes draw with currentColor, and the

@@ -487,7 +487,7 @@ const toolRows = (openTask: (button: HTMLButtonElement) => void) => [
 const callNote =
   'From the training check-in: Julia leads Thursday’s training at 10. Teo sends his notes today.';
 
-/** Section 3: @Macro reads the call and updates the task it was about. */
+/** Section 3: @Rox reads the call and updates the task it was about. */
 export function CallFollowupDemo() {
   let root!: HTMLDivElement;
   const w = createCallProject();
@@ -578,7 +578,7 @@ export function CallFollowupDemo() {
   return (
     <div ref={root}>
       <ProductDemo
-        label="Ask @Macro to update a task from a call"
+        label="Ask @Rox to update a task from a call"
         onInteract={playback.pause}
         height={560}
         mobileHeight={600}
@@ -661,7 +661,7 @@ export function CallFollowupDemo() {
               </For>
               <Show when={followups().length > 0}>
                 <p class="text-sm text-ink-muted">
-                  This sample keeps your message here. Open Macro to work with
+                  This sample keeps your message here. Open Rox to work with
                   an agent.
                 </p>
               </Show>

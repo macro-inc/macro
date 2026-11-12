@@ -47,7 +47,7 @@ const tasksFaq = [
       <>
         Yes. Assign an available agent to start an agent session and open that
         session from the task to follow its work. You can also ask an agent to
-        create or update tasks. See <a href="/agents">Macro Agents</a>.
+        create or update tasks. See <a href="/agents">Rox Agents</a>.
       </>
     ),
   },
@@ -67,10 +67,10 @@ const tasksFaq = [
     a: 'Tasks follow their sharing settings. In the task composer, choose whether to share with your team or keep access limited to yourself and the people you share it with.',
   },
   {
-    q: 'Can I try Macro for free?',
+    q: 'Can I try Rox for free?',
     a: (
       <>
-        Yes. Macro has a free plan with usage limits. See{' '}
+        Yes. Rox has a free plan with usage limits. See{' '}
         <a href="/pricing">plans and limits</a> before choosing a plan for your
         team.
       </>
@@ -80,7 +80,7 @@ const tasksFaq = [
 
 export function RouteTasks() {
   setPageSeo({
-    title: 'Macro Tasks — Task management that keeps up with your team',
+    title: 'Rox Tasks — Task management that keeps up with your team',
     description:
       'Turn requests in chat, email, and docs into assigned tasks. Keep the source attached, follow progress, and get work done with your team and agents.',
     path: '/tasks',
@@ -106,10 +106,10 @@ export function RouteTasks() {
           <a
             class="tasks-founder-card"
             href="/posts/linear-alternative"
-            aria-label="Read Jacob’s story: Macro vs. Linear"
+            aria-label="Read Jacob’s story: Rox vs. Linear"
           >
             <div class="tasks-founder-card-body">
-              <h2 id="tasks-founder-title">Why we built Macro Tasks.</h2>
+              <h2 id="tasks-founder-title">Why we built Rox Tasks.</h2>
               <blockquote>
                 “Tracking tasks felt like busywork to our team.”
               </blockquote>
@@ -123,12 +123,12 @@ export function RouteTasks() {
                 />
                 <div>
                   <strong>Jacob</strong>
-                  <span>CEO and founder of Macro</span>
+                  <span>CEO and founder of Rox</span>
                 </div>
               </div>
             </div>
             <div class="tasks-founder-card-article">
-              <span>Macro vs. Linear</span>
+              <span>Rox vs. Linear</span>
               <span>
                 Read the story <span aria-hidden="true">→</span>
               </span>
@@ -178,7 +178,7 @@ export function RouteTasks() {
         <TasksComparison />
         <FeaturePageFaq
           id="tasks-faq-title"
-          title="Questions about Macro Tasks"
+          title="Questions about Rox Tasks"
           items={tasksFaq}
         />
         <HomepageClosing />

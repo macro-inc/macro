@@ -1,5 +1,4 @@
-import { createUniqueId, For, onCleanup, onMount } from 'solid-js';
-import { MACRO_MARK_PATHS } from './MacroMarkIcon';
+import { createUniqueId, onCleanup, onMount } from 'solid-js';
 import { createOrthoPerspectiveTransform } from './orthoPerspective';
 
 const BOB_KEYFRAMES: Keyframe[] = [
@@ -171,7 +170,13 @@ export function Supermodule(props: {
             class="supermodule-macro-logo"
             transform={FRONT_CAP_MACRO_TRANSFORM}
           >
-            <For each={MACRO_MARK_PATHS}>{(path) => <path d={path} />}</For>
+            <image
+              href="/macro-favicon.svg"
+              x="31.5"
+              y="0"
+              width="119"
+              height="119"
+            />
           </g>
         </g>
       </g>

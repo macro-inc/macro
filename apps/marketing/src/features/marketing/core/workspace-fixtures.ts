@@ -247,7 +247,7 @@ export function sampleCompanies(): SampleCompany[] {
           id: 'meadow-security',
           sender: 'Priya',
           subject: 'Security questionnaire',
-          snippet: 'Our IT contractor sent over a few questions about SSO.',
+          snippet: 'Our IT contractor sent over a few questions about sign-in.',
           time: 'Sep 25',
           signal: true,
         },

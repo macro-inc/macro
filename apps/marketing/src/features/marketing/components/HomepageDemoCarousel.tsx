@@ -207,7 +207,7 @@ export function HomepageDemoCarousel(props: {
       data-active-scene={slide().label}
       aria-roledescription="carousel"
       role="region"
-      aria-label="What you can do with Macro"
+      aria-label="What you can do with Rox"
       onPointerDown={(event) => {
         if (
           !ready() ||

@@ -1,4 +1,4 @@
-# Macro Docs
+# Rox Docs
 
 This directory contains the Mintlify site for `docs.macro.com`.
 

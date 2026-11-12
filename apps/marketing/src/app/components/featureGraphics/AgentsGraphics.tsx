@@ -46,7 +46,7 @@ export function AgentGlyph(props: { kind: GlyphKind }) {
 function AgentIdentity() {
   return (
     <span class="agents-identity">
-      <MacroMarkIcon /> <span>Macro</span>
+      <MacroMarkIcon /> <span>Rox</span>
     </span>
   );
 }

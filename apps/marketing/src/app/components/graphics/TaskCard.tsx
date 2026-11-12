@@ -84,7 +84,7 @@ const PRIORITY: Record<
 };
 
 export type TaskActivity = {
-  /** A face for a person, the Macro mark for the agent, or a PR disc for work
+  /** A face for a person, the Rox mark for the agent, or a PR disc for work
       the agent did on a branch. */
   who: { kind: 'person'; src: string } | { kind: 'agent' } | { kind: 'pr' };
   body: JSX.Element;
@@ -137,7 +137,7 @@ const Face = (p: { src: string; size: number }) => (
   />
 );
 
-/** Macro's face wherever it acts as a participant: the brand mark in orange on
+/** Rox's face wherever it acts as a participant: the brand mark in orange on
     a black disc. The mark's viewBox is 182x119, so it is sized by width with
     its height following — forcing it square squashes the three strokes. */
 const AgentFace = (p: { size: number }) => (

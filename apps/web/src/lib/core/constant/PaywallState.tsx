@@ -49,7 +49,7 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
   },
   [PaywallKey.O1_LIMIT]: {
     title: 'Smart models require Pro or Max',
-    description: 'Upgrade to use Macro’s most capable AI models.',
+    description: 'Upgrade to use Rox’s most capable AI models.',
     learnMoreUrl: 'https://docs.macro.com/product/agents',
     learnMoreSubject: 'agents',
   },
@@ -67,8 +67,8 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
     learnMoreSubject: 'saved prompts',
   },
   [PaywallKey.REMOVE_SIGNATURE]: {
-    title: 'Remove the Macro signature',
-    description: 'Upgrade to send emails without the Macro signature.',
+    title: 'Remove the Rox signature',
+    description: 'Upgrade to send emails without the Rox signature.',
     learnMoreUrl: 'https://docs.macro.com/product/email',
     learnMoreSubject: 'email',
   },

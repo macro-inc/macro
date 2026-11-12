@@ -6,7 +6,7 @@ export const GOOGLE_SSO_URL =
   'https://gateway.macro.com/auth/login/sso?idp_name=google_gmail';
 
 // Auth-service base URL, used for the unauthenticated endpoints the site calls
-// directly (mobile email capture). Derived from the SSO URL so a stack that
+// directly (mobile email capture). Derived from the sign-in URL so a stack that
 // points VITE_GOOGLE_SSO_URL at a gateway /auth route also talks to the same
 // /auth route here; VITE_AUTH_SERVICE_URL overrides it.
 const resolveAuthServiceBaseUrl = (): string => {
@@ -94,7 +94,7 @@ export const buildAppUrl = (path: string): string => {
   return url.toString();
 };
 
-/** Google SSO URL with any captured attribution params appended. */
+/** Google sign-in URL with any captured attribution params appended. */
 export const buildGoogleSsoUrl = (): string => {
   const url = new URL(GOOGLE_SSO_URL);
   for (const [key, value] of attributionParams) {

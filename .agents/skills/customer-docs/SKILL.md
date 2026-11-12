@@ -1,7 +1,7 @@
 ---
 name: customer-docs
 description: >-
-  Write or edit Macro's customer documentation in apps/docs (docs.macro.com,
+  Write or edit Rox's customer documentation in apps/docs (docs.macro.com,
   Mintlify MDX). Use when adding or changing a docs page, product guide, or
   getting-started steps. Block is a proper noun and is always capitalized.
 ---
@@ -10,7 +10,7 @@ description: >-
 
 Read `apps/docs/AGENTS.md` before writing. Follow its terminology and style.
 
-**Block** is a proper noun for a core unit in Macro: a doc, email, channel, task, call, canvas, and the sidebar Blocks such as Home, Drive, and Agents. Capitalize it every time.
+**Block** is a proper noun for a core unit in Rox: a doc, email, channel, task, call, canvas, and the sidebar Blocks such as Home, Drive, and Agents. Capitalize it every time.
 
 - Write "the Agents Block", "Block types", "core Blocks".
 - Use "Block", not "module" or "app".

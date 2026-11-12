@@ -20,7 +20,7 @@ import './email-agentic-editing.css';
 const EmailDemoSource = lazy(() => import('./EmailDemoSource'));
 
 const request =
-  'Draft a reply to Valentina confirming Thursday at 9. Use the call notes, include the setup plan and Macro overview, and copy Julia. Leave it as a draft.';
+  'Draft a reply to Valentina confirming Thursday at 9. Use the call notes, include the setup plan and Rox overview, and copy Julia. Leave it as a draft.';
 
 /** User request → source context → editable email, as in the app's agent chat. */
 export function EmailAgenticEditingDemo() {
@@ -219,8 +219,8 @@ export function EmailAgenticEditingDemo() {
                             and our{' '}
                             <HomepageMention
                               kind="pdf"
-                              label="Macro overview.pdf"
-                              description="A short overview of Macro and how to get started."
+                              label="Rox overview.pdf"
+                              description="A short overview of Rox and how to get started."
                               href="/documents"
                             />
                             .

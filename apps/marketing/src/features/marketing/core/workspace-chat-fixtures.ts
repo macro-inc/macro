@@ -51,7 +51,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'julia-demo',
           'julia',
           '9:06 AM',
-          'The recording is ready too. I start in the inbox, open the customer email, then ask Macro to draft the follow-up.'
+          'The recording is ready too. I start in the inbox, open the customer email, then ask Rox to draft the follow-up.'
         ),
         message(
           'julia-demo-reply',
@@ -553,7 +553,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'customers-summary',
           'julia',
           '9:54 AM',
-          'Macro pulled out the open questions from the last call. Seats, shared email access, and importing their existing docs.',
+          'Rox pulled out the open questions from the last call. Seats, shared email access, and importing their existing docs.',
           { documentId: 'notes' }
         ),
         message(
@@ -802,7 +802,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'agents-search',
           'julia',
           '9:12 AM',
-          'Asked Macro to find the last Meadow call and draft the follow-up. It found the email too, which is handy.'
+          'Asked Rox to find the last Meadow call and draft the follow-up. It found the email too, which is handy.'
         ),
         message(
           'agents-search-reply',

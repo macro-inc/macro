@@ -1,5 +1,4 @@
 import { For } from 'solid-js';
-import { MACRO_MARK_PATHS } from './MacroMarkIcon';
 
 const CX = 120;
 const CY = 120;
@@ -21,7 +20,7 @@ const ticks = Array.from({ length: 48 }, (_, i) => {
   };
 });
 
-/** Circular seal: Macro mark, chapter ticks, and a legend around the rim. */
+/** Circular seal: Rox mark, chapter ticks, and a legend around the rim. */
 export function PartnerBadge() {
   return (
     <svg
@@ -35,7 +34,7 @@ export function PartnerBadge() {
         width: '100%',
       }}
     >
-      <title id="partner-badge-title">Macro Approved Partner badge</title>
+      <title id="partner-badge-title">Rox Approved Partner badge</title>
       <defs>
         <path id="partner-badge-ring" d={RING_PATH} />
         <radialGradient id="partner-badge-disc" cx="46%" cy="38%" r="68%">
@@ -116,14 +115,13 @@ export function PartnerBadge() {
         stroke-width="0.8"
       />
 
-      <g
-        transform="translate(120, 112) scale(0.46) translate(-91, -59.5)"
-        fill="var(--a0)"
-      >
-        <path d={MACRO_MARK_PATHS[0]} />
-        <path d={MACRO_MARK_PATHS[1]} />
-        <path d={MACRO_MARK_PATHS[2]} />
-      </g>
+      <image
+        href="/macro-favicon.svg"
+        x="70"
+        y="70"
+        width="100"
+        height="100"
+      />
     </svg>
   );
 }

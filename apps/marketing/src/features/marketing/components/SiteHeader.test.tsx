@@ -38,7 +38,7 @@ function mousePointer(type: string) {
 
 it('opens on mouse hover and keeps the mark linked to the landing page', () => {
   render(() => <SiteHeader />);
-  const home = screen.getByRole('link', { name: 'Macro home' });
+  const home = screen.getByRole('link', { name: 'Rox home' });
   expect(home.getAttribute('href')).toBe('/');
   expect(home.getAttribute('target')).toBe('_self');
   expect(screen.queryByRole('navigation')).toBeNull();
@@ -56,7 +56,7 @@ it('opens on mouse hover and keeps the mark linked to the landing page', () => {
 
 it('opens with Down Arrow, keeps focused links available, and returns focus with Escape', () => {
   render(() => <SiteHeader />);
-  const home = screen.getByRole('link', { name: 'Macro home' });
+  const home = screen.getByRole('link', { name: 'Rox home' });
   home.focus();
   fireEvent.keyDown(home, { key: 'ArrowDown' });
   const email = within(screen.getByRole('navigation')).getByRole('link', {
@@ -72,7 +72,7 @@ it('opens with Down Arrow, keeps focused links available, and returns focus with
 
 it('uses a single hamburger touch toggle and closes when leaving navigation', () => {
   render(() => <SiteHeader />);
-  const home = screen.getByRole('link', { name: 'Macro home' });
+  const home = screen.getByRole('link', { name: 'Rox home' });
   const touch = new Event('pointerenter', { bubbles: true });
   Object.defineProperty(touch, 'pointerType', { value: 'touch' });
   fireEvent(home.parentElement!, touch);
@@ -109,7 +109,7 @@ it('keeps narrow-screen keyboard navigation inside the open menu', () => {
     dispatchEvent: vi.fn(),
   }));
   render(() => <SiteHeader />);
-  const home = screen.getByRole('link', { name: 'Macro home' });
+  const home = screen.getByRole('link', { name: 'Rox home' });
   fireEvent(home.parentElement!, mousePointer('pointerenter'));
   expect(screen.queryByRole('navigation')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
@@ -126,7 +126,7 @@ it('keeps narrow-screen keyboard navigation inside the open menu', () => {
 
 it('allows crossing the gap and cancels dismissal while over the dropdown', () => {
   render(() => <SiteHeader />);
-  const menu = screen.getByRole('link', { name: 'Macro home' }).parentElement!;
+  const menu = screen.getByRole('link', { name: 'Rox home' }).parentElement!;
   fireEvent(menu, mousePointer('pointerenter'));
   fireEvent(menu, mousePointer('pointerleave'));
   vi.advanceTimersByTime(300);
@@ -146,7 +146,7 @@ it('allows crossing the gap and cancels dismissal while over the dropdown', () =
 
 it('cancels a pending close when keyboard navigation opens and dismisses immediately on Escape', () => {
   render(() => <SiteHeader />);
-  const home = screen.getByRole('link', { name: 'Macro home' });
+  const home = screen.getByRole('link', { name: 'Rox home' });
   fireEvent(home.parentElement!, mousePointer('pointerenter'));
   fireEvent(home.parentElement!, mousePointer('pointerleave'));
   vi.advanceTimersByTime(200);
@@ -161,7 +161,7 @@ it('cancels a pending close when keyboard navigation opens and dismisses immedia
 
 it('cleans up the dismissal timer on unmount', () => {
   const view = render(() => <SiteHeader />);
-  const menu = screen.getByRole('link', { name: 'Macro home' }).parentElement!;
+  const menu = screen.getByRole('link', { name: 'Rox home' }).parentElement!;
   fireEvent(menu, mousePointer('pointerenter'));
   fireEvent(menu, mousePointer('pointerleave'));
   expect(vi.getTimerCount()).toBe(1);

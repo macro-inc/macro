@@ -1,7 +1,7 @@
 import { onCleanup, onMount } from 'solid-js';
 
 const LETTER =
-  'Macro incorporates the best parts of our favorite tools — like Linear, Slack, Notion, Superhuman, and Attio — into a single chat-based interface that keeps the whole company together.';
+  'Rox incorporates the best parts of our favorite tools — like Linear, Slack, Notion, Superhuman, and Attio — into a single chat-based interface that keeps the whole company together.';
 
 const phase = (progress: number, start: number, end: number) => {
   const value = Math.max(0, Math.min(1, (progress - start) / (end - start)));
@@ -102,7 +102,7 @@ export function HomepageFounderLetter() {
         </blockquote>
         <figcaption class="mt-5 flex flex-col gap-0.5 md:mt-[25px]">
           <span>Jacob</span>
-          <span>Co-Founder &amp; CEO at Macro</span>
+          <span>Co-Founder &amp; CEO at Rox</span>
         </figcaption>
       </figure>
       <div ref={lowerHost}>

@@ -13,8 +13,8 @@ import SwitchFromSlack from '../../assets/switch/switch-from-slack.svg';
 import SwitchFromSuperhuman from '../../assets/switch/switch-from-superhuman.svg';
 
 /**
- * Card / hero artwork, keyed by brand: the "switch to Macro" graphics from
- * docs.macro.com/switch-to-macro (competitor app icon → Macro), plus
+ * Card / hero artwork, keyed by brand: the "switch to Rox" graphics from
+ * docs.macro.com/switch-to-macro (competitor app icon → Rox), plus
  * per-post covers drawn in the same tile style.
  */
 const SWITCH_GRAPHICS: Record<

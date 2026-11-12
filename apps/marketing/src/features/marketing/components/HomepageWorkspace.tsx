@@ -248,7 +248,7 @@ function AgentDemo(props: { demo: WorkspaceDemo }) {
                   <div class="scard">
                     <AgentRosterRow
                       id="demo-macro"
-                      name="Macro"
+                      name="Rox"
                       handle="macro"
                       share="system"
                       detail="Default model · All channels"
@@ -256,7 +256,7 @@ function AgentDemo(props: { demo: WorkspaceDemo }) {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          label="Open Macro conversation"
+                          label="Open Rox conversation"
                           onClick={() => props.demo.openSession('macro')}
                         >
                           <CaretRightIcon class="size-4" />
@@ -360,7 +360,7 @@ function AgentSessionDemo(props: {
           <Show when={coding()} fallback={<MacroLogo class="size-5" />}>
             <CursorIcon class="size-5" />
           </Show>
-          {coding() ? 'Cursor' : 'Macro'}
+          {coding() ? 'Cursor' : 'Rox'}
         </div>
         <AgentMessage
           message={

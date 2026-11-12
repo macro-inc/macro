@@ -102,7 +102,6 @@ describe('opening story', () => {
     fireEvent.click(view.getByRole('button', { name: 'Continue' }));
     expect(view.next).toHaveBeenLastCalledWith(['Docs']);
     expect(view.step()).toBe('security');
-    expect(view.getByLabelText('ISO 27001')).toBeTruthy();
     expect(
       view.getByRole('link', { name: /Open source/ }).getAttribute('href')
     ).toBe('https://github.com/macro-inc/macro');

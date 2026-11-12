@@ -116,7 +116,7 @@ export function seedCrmFollowup(w: DummyWorkspace) {
     {
       id: 'followup-intro',
       sender: 'Jacob',
-      subject: 'Getting started with Macro',
+      subject: 'Getting started with Rox',
       snippet: 'A short walkthrough for your team.',
       time: 'Fri',
       account: 'work',
@@ -241,7 +241,7 @@ export function seedCrmFollowup(w: DummyWorkspace) {
   ]);
   w.setData('companies', (c) => c.id === followupIds.company, {
     description:
-      'A design studio trying Macro for shared files and team communication.',
+      'A design studio trying Rox for shared files and team communication.',
     lastInteracted: 'today',
     updated: '9:40 AM',
     contacts: [{ name: 'Ava Chen', email: 'ava@parlorstudio.example' }],

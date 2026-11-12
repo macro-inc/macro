@@ -2029,7 +2029,7 @@ export function DocsMarkdownGraphic() {
       ref={(element) => {
         frameEl = element;
       }}
-      label="A Macro document typing itself in markdown: headings, bullets and checkboxes form as the syntax lands, and one @ search resolves into a person, a task, a date, an email thread and a channel."
+      label="A Rox document typing itself in markdown: headings, bullets and checkboxes form as the syntax lands, and one @ search resolves into a person, a task, a date, an email thread and a channel."
     >
       <DocsMarkdownScene t={t} />
     </DocsGraphicFrame>

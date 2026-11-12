@@ -312,7 +312,7 @@ const TaskMeta = (p: { status: { icon: Component<any>; color: string } }) => (
     row leads with a 10px face, and the connector line down the left of the
     list is positioned against that, so this matches the footprint exactly and
     fills it with the surface-and-hairline the scene's chips already use. The
-    glyph is orange because that is @Macro's colour everywhere else in the row.
+    glyph is orange because that is @Rox's colour everywhere else in the row.
     The Phosphor mark carries its own padding inside a 256 viewBox -- it fills
     about two thirds of it -- so the icon is set larger than the disc's inner
     box to land at a sensible optical size. */
@@ -339,7 +339,7 @@ const ActivityDisc = (p: { icon: Component<any>; size?: number }) => {
   );
 };
 
-/** Macro's face wherever it appears as a participant: the brand mark in
+/** Rox's face wherever it appears as a participant: the brand mark in
     orange on a black disc. The mark's viewBox is 182x119, so it is sized by
     width with its height following that ratio -- forcing it square would
     squash the three strokes. The hairline ring is the one the thread's reply
@@ -753,7 +753,7 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
     () => t() >= TL.assigneeClick && t() < TL.teoPick
   );
   const dueMenu = createMemo(() => t() >= TL.dueClick && t() < TL.tomorrowPick);
-  // Both menus hold three rows. Teo is the top one, so arrow-up passes Macro
+  // Both menus hold three rows. Teo is the top one, so arrow-up passes Rox
   // and Aidan to reach it; Tomorrow is the middle, so it passes one. The last
   // press lands a beat before Enter, rather than on it.
   const assigneeHi = createMemo(() =>
@@ -1458,7 +1458,7 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
                               display: 'inline-flex',
                             }}
                           >
-                            <span class="tls-name">Macro</span>
+                            <span class="tls-name">Rox</span>
                             <span class="tls-agent-tag">Agent</span>
                           </span>
                           <span class="tls-time">6:21 PM</span>
@@ -1609,7 +1609,7 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
                               <span
                                 class={`tls-menu-row ${assigneeHi() === 2 ? 'hi' : ''}`}
                               >
-                                <AgentDisc size={10} /> Macro
+                                <AgentDisc size={10} /> Rox
                               </span>
                             </span>
                           </Show>
@@ -1851,7 +1851,7 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
                       <span class="tls-act-l">
                         <ActivityDisc icon={IconPullRequest} />
                         <span>
-                          <span class="tls-at">@Macro</span> opened a fix PR:{' '}
+                          <span class="tls-at">@Rox</span> opened a fix PR:{' '}
                           <Mention icon={IconGithub} w={8} color="#fff">
                             {PR_TITLE}
                           </Mention>
@@ -1870,7 +1870,7 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
                       <span class="tls-act-l">
                         <ActivityDisc icon={IconPullRequest} />
                         <span>
-                          <span class="tls-at">@Macro</span> pushed 2 commits
+                          <span class="tls-at">@Rox</span> pushed 2 commits
                           and checked off 2 items
                         </span>
                       </span>
@@ -1987,7 +1987,7 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
                 <span class="tls-act-l">
                   <Ic icon={StatusDone} w={10} color="#15da43" />
                   <span>
-                    <span class="tls-at">@Macro</span> closed this task with
+                    <span class="tls-at">@Rox</span> closed this task with
                     status Completed
                   </span>
                 </span>
@@ -1996,7 +1996,7 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
             </div>
             <div class="tls-card-foot">
               <span>
-                Closed by <span style={{ 'font-weight': '500' }}>@Macro</span>
+                Closed by <span style={{ 'font-weight': '500' }}>@Rox</span>
               </span>
             </div>
           </div>

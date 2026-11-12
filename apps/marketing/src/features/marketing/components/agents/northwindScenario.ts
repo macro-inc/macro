@@ -6,10 +6,10 @@ export const NORTHWIND_PROMPT =
 export const NORTHWIND_OLD_PLAN =
   '## Friday rollout\n\nLaunch for all 20 operations staff on Friday, October 9. Use password sign-in.\n\n## Training\n\nJacob prepares one training session for 20 people.\n\n## Before launch\n\nConfirm the participant list and send invitations.';
 export const NORTHWIND_PLAN =
-  '## Friday pilot\n\nStart with 10 operations staff on Friday, October 9. The remaining 30 join on Monday, October 12.\n\n## Access\n\nEveryone uses SSO. Teo verifies sign-in before the Friday pilot can start.\n\n## Training\n\nJulia prepares two sessions for the 40-person group.\n\n## Launch checks\n\nSSO verification is still open. Confirm access before sending invitations.';
+  '## Friday pilot\n\nStart with 10 operations staff on Friday, October 9. The remaining 30 join on Monday, October 12.\n\n## Access\n\nEveryone uses sign-in. Teo verifies sign-in before the Friday pilot can start.\n\n## Training\n\nJulia prepares two sessions for the 40-person group.\n\n## Launch checks\n\nSSO verification is still open. Confirm access before sending invitations.';
 export const NORTHWIND_COLLAB_PLAN = NORTHWIND_PLAN.replace(
-  'SSO verification is still open. Confirm access before sending invitations.',
-  '- [ ] Teo verifies SSO before the pilot.\n- [ ] Julia confirms both training sessions.\n- [ ] Send invitations after access is confirmed.'
+  'sign-in verification is still open. Confirm access before sending invitations.',
+  '- [ ] Teo verifies sign-in before the pilot.\n- [ ] Julia confirms both training sessions.\n- [ ] Send invitations after access is confirmed.'
 );
 export const NORTHWIND_HUMAN_NOTE =
   '\n\n## Customer coordination\n\nMarcus will send the names of the 10 pilot participants today.';
@@ -19,7 +19,7 @@ export const NORTHWIND_CALL: SampleCall = {
   duration: 180,
   people: ['jacob', 'teo', 'julia'],
   summary:
-    '- Keep Friday for a 10-person pilot; the other 30 join Monday.\n- SSO must be verified before anyone joins. Teo owns that check.\n- Julia prepares two training sessions for the 40-person group.',
+    '- Keep Friday for a 10-person pilot; the other 30 join Monday.\n- sign-in must be verified before anyone joins. Teo owns that check.\n- Julia prepares two training sessions for the 40-person group.',
   poster: [
     { person: 'jacob', video: false },
     { person: 'teo', video: false },
@@ -30,13 +30,13 @@ export const NORTHWIND_CALL: SampleCall = {
       id: 'scope',
       person: 'jacob',
       at: 8,
-      text: 'Marcus now needs 40 seats and SSO. Let’s keep Friday for 10 people, with the other 30 joining Monday.',
+      text: 'Marcus now needs 40 seats and sign-in. Let’s keep Friday for 10 people, with the other 30 joining Monday.',
     },
     {
       id: 'access',
       person: 'teo',
       at: 35,
-      text: 'I’ll verify SSO before the pilot. We should not send invitations until that check passes.',
+      text: 'I’ll verify sign-in before the pilot. We should not send invitations until that check passes.',
     },
     {
       id: 'training',
@@ -53,7 +53,7 @@ export const NORTHWIND_CALL: SampleCall = {
   ],
 };
 
-/** This request changes the plan, not the real-world status of the SSO check. */
+/** This request changes the plan, not the real-world status of the sign-in check. */
 export function updateNorthwindPlan(w: DummyWorkspace) {
   w.setData(
     'documents',
@@ -77,9 +77,9 @@ export function createNorthwindAccessTask(w: DummyWorkspace) {
     ...tasks,
     {
       id: 'northwind-sso',
-      title: 'Verify Northwind SSO before the pilot',
+      title: 'Verify Northwind sign-in before the pilot',
       description:
-        'Verify SSO for the 10-person Friday pilot. Confirm access before invitations go out; the remaining 30 join Monday.',
+        'Verify sign-in for the 10-person Friday pilot. Confirm access before invitations go out; the remaining 30 join Monday.',
       status: 'Not Started',
       priority: 'Urgent',
       owner: 'teo',
@@ -142,8 +142,8 @@ export function seedNorthwind(w: DummyWorkspace, completed = true) {
       sender: 'Marcus <marcus@coparse.com>',
       subject: 'Northwind rollout requirements',
       snippet:
-        'We need 40 seats, and everyone must use single sign-on (SSO) before joining.',
-      body: 'Hi Jacob,\n\nThe operations group has grown to 40 people. Everyone must use SSO before joining. We will need two training sessions for the full group.\n\nCan you confirm how this changes Friday’s rollout?\n\nMarcus',
+        'We need 40 seats, and everyone must use managed sign-in before joining.',
+      body: 'Hi Jacob,\n\nThe operations group has grown to 40 people. Everyone must use sign-in before joining. We will need two training sessions for the full group.\n\nCan you confirm how this changes Friday’s rollout?\n\nMarcus',
       time: 'Wednesday',
       account: 'work',
       folder: 'inbox',
@@ -160,7 +160,7 @@ export function seedNorthwind(w: DummyWorkspace, completed = true) {
         id: 'northwind-decision',
         person: 'jacob' as const,
         time: 'Thursday',
-        body: 'Northwind now needs 40 seats and SSO. We agreed on a 10-person Friday pilot, with the other 30 joining Monday. Teo owns the access check; Julia takes training. The plan and tasks need updating.',
+        body: 'Northwind now needs 40 seats and sign-in. We agreed on a 10-person Friday pilot, with the other 30 joining Monday. Teo owns the access check; Julia takes training. The plan and tasks need updating.',
         emailId: 'northwind-email',
         documentId: 'northwind-plan',
         taskId: 'northwind-training',

@@ -76,7 +76,7 @@ export function WorkspaceDesktopDemo(props: {
                 <span />
                 <span />
               </div>
-              <span>Macro</span>
+              <span>Rox</span>
               <a
                 href={
                   props.demoHref ??

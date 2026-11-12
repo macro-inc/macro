@@ -20,10 +20,10 @@ import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 const githubFaq = [
   {
     q: 'How do I connect GitHub?',
-    a: 'Link your GitHub account in Macro’s Settings. Your GitHub permissions determine which repositories and pull requests you can access.',
+    a: 'Link your GitHub account in Rox’s Settings. Your GitHub permissions determine which repositories and pull requests you can access.',
   },
   {
-    q: 'What can I do with pull requests in Macro?',
+    q: 'What can I do with pull requests in Rox?',
     a: 'Open a linked pull request from chat, inspect its changes, and read the discussion alongside your work. Your repositories, branches, CI, and repository settings stay on GitHub.',
   },
   {
@@ -33,7 +33,7 @@ const githubFaq = [
         Include the task ID in the branch name, PR title, or description.
         Opening the PR moves the task to In Review; merging completes it.
         Closing without merging returns it to Not Started. See{' '}
-        <a href="/tasks">Macro Tasks</a>.
+        <a href="/tasks">Rox Tasks</a>.
       </>
     ),
   },
@@ -49,17 +49,17 @@ const githubFaq = [
   },
   {
     q: 'Who can merge a pull request?',
-    a: 'Users with the required GitHub access can merge eligible pull requests in Macro after confirming. GitHub’s branch protections still apply. Macro’s Merge button requires a ready PR with passing checks.',
+    a: 'Users with the required GitHub access can merge eligible pull requests in Rox after confirming. GitHub’s branch protections still apply. Rox’s Merge button requires a ready PR with passing checks.',
   },
   {
-    q: 'Can I submit a code review in Macro?',
-    a: 'You can inspect changes and read the review discussion in Macro. Submit formal approvals and review comments on GitHub.',
+    q: 'Can I submit a code review in Rox?',
+    a: 'You can inspect changes and read the review discussion in Rox. Submit formal approvals and review comments on GitHub.',
   },
   {
-    q: 'Can I try Macro for free?',
+    q: 'Can I try Rox for free?',
     a: (
       <>
-        Yes. Macro has a free plan with usage limits. See{' '}
+        Yes. Rox has a free plan with usage limits. See{' '}
         <a href="/pricing">plans and limits</a> before choosing a plan for your
         team.
       </>
@@ -69,7 +69,7 @@ const githubFaq = [
 
 export function RouteGithub() {
   setPageSeo({
-    title: 'GitHub in Macro | Pull Requests, Code Changes, and Tasks',
+    title: 'GitHub in Rox | Pull Requests, Code Changes, and Tasks',
     description:
       'Open GitHub pull requests from chat, inspect code changes, and keep linked tasks in sync. Work with coding agents and see review requests in your inbox.',
     path: '/github',
@@ -79,7 +79,7 @@ export function RouteGithub() {
       <div class="github-page">
         <ProductHero
           product="for GitHub"
-          title={['Write code, review PRs,', 'and ship in Macro.']}
+          title={['Write code, review PRs,', 'and ship in Rox.']}
           description={[
             'Read the discussion, inspect code changes,',
             'and keep linked tasks up to date.',
@@ -90,7 +90,7 @@ export function RouteGithub() {
         <WorkspaceDesktopDemo
           heroFrame
           view="home"
-          label="Explore GitHub in Macro"
+          label="Explore GitHub in Rox"
           render={() => <GithubPrHero />}
         />
         <nav class="feature-page-jump-links" aria-label="On this page">
@@ -152,7 +152,7 @@ export function RouteGithub() {
         </FeaturePageSection>
         <FeaturePageFaq
           id="github-faq"
-          title="Questions about Macro for GitHub"
+          title="Questions about Rox for GitHub"
           items={githubFaq}
         />
       </div>

@@ -8,7 +8,7 @@ import { analytics } from './utilAnalytic';
 
 // Mobile/touch browsers (phones, touch tablets). Signing up + onboarding on a
 // phone is a poor experience, so these visitors get the site's own email
-// capture instead — it takes their email and sends them a link to open Macro on
+// capture instead — it takes their email and sends them a link to open Rox on
 // desktop.
 //
 // Mirrors the app's `isTouchDevice()` (`pointer: coarse`) so the site and the
@@ -31,7 +31,7 @@ export const isMobileWebDevice = (): boolean => mobileWebDevice;
 export const ctaHref = (): string => journeyHref();
 export const ctaLabel = (_webLabel: string): string => 'Get started';
 
-/** Booking page for a live Macro demo with the team. */
+/** Booking page for a live Rox demo with the team. */
 export const demoHref = (): string => DEMO_BOOKING_URL;
 
 /**

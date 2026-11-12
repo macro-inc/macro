@@ -150,9 +150,9 @@ function JobCard(props: JobCardProps) {
 
 export const RouteJobs: Component = () => {
   setPageSeo({
-    title: 'Jobs at Macro',
+    title: 'Jobs at Rox',
     description:
-      'Join the team building Macro, the unified workspace for messages, docs, tasks, calls, and email. Open roles in NYC and Toronto, including software engineering.',
+      'Join the team building Rox, the unified workspace for messages, docs, tasks, calls, and email. Open roles in NYC and Toronto, including software engineering.',
     path: '/jobs',
   });
 

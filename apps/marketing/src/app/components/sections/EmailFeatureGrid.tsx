@@ -8,7 +8,7 @@ export function EmailFeatureGrid() {
 
   return (
     <section
-      aria-label="Why Macro Mail"
+      aria-label="Why Rox Mail"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',

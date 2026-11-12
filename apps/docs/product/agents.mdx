@@ -6,11 +6,7 @@ description: "Agents that live inside your workspace — with full context on yo
 
 <div className="home-start agent-start" role="img" aria-label="What should we work on? Auto is selected.">
   <div className="home-start-greeting">
-    <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M0 10.014v6.801a.75.75 0 0 0 .225.513l2.742 2.644 2.002-.8v-7.099l-2.97-2.859z" />
-      <path d="M4.078 4.8v5.786l1.36 1.309v1.313L12.481 20l2.002-.8-.001-7.1L6.078 4z" />
-      <path d="M13.594 4.8v5.786l1.36 1.311-.013 1.3L22 20 24 19.2V12.42a.75.75 0 0 0-.225-.533L15.595 4z" />
-    </svg>
+    <img src="/favicon.svg" width="36" height="36" alt="" />
     What should we work on?
   </div>
   <div className="home-composer-stack">
@@ -47,9 +43,9 @@ description: "Agents that live inside your workspace — with full context on yo
   </div>
 </div>
 
-Macro agents live and work inside your workspace, so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
+Rox agents live and work inside your workspace, so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
 
-Watch a 1:05 walkthrough of Macro Agents.
+Watch a 1:05 walkthrough of Rox Agents.
 
 <video src="https://macro.com/video/tutorials/agents.mp4" poster="https://macro.com/video/tutorials/agents-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
@@ -97,15 +93,15 @@ Agents have a broad tool set and will reach for the right tools on their own. In
 
 ### Agents in channels
 
-Mention **@Macro** in any [channel](/product/channels) to pull agents into the conversation with the whole channel as context. They show up in the normal @-mention typeahead, read the thread, and reply inline. Agents can also post their results back into a channel or a specific thread as part of a longer task.
+Mention **@Rox** in any [channel](/product/channels) to pull agents into the conversation with the whole channel as context. They show up in the normal @-mention typeahead, read the thread, and reply inline. Agents can also post their results back into a channel or a specific thread as part of a longer task.
 
 <Note>
-  **@Macro** invokes the built-in agents. They're separate from **custom bots** — named integrations you create with their own API tokens and webhooks to post into channels programmatically.
+  **@Rox** invokes the built-in agents. They're separate from **custom bots** — named integrations you create with their own API tokens and webhooks to post into channels programmatically.
 </Note>
 
 ### Routines
 
-A [routine](/product/routines) is a saved prompt that runs on a schedule or when activity happens in Macro, such as a new email or a task status change.
+A [routine](/product/routines) is a saved prompt that runs on a schedule or when activity happens in Rox, such as a new email or a task status change.
 
 ### Skills
 
@@ -113,7 +109,7 @@ A [skill](/product/skills) is a saved set of instructions an agent follows. Type
 
 ### Custom agents
 
-**Settings → Agents** creates agents with a name, instructions, default model, and the machine it runs on: Macro's own, a hosted coding agent, or your own computer. See [Bring your own agent](/AI/bring-your-own) to connect Claude Code, Codex, or another local agent. See [Cursor](/AI/cursor) to run coding agents on your Cursor plan.
+**Settings → Agents** creates agents with a name, instructions, default model, and the machine it runs on: Rox's own, a hosted coding agent, or your own computer. See [Bring your own agent](/AI/bring-your-own) to connect Claude Code, Codex, or another local agent. See [Cursor](/AI/cursor) to run coding agents on your Cursor plan.
 
 ### Choosing a model
 
@@ -125,7 +121,7 @@ Agent chats count as AI usage. Each plan includes a monthly amount, and some mod
 
 ### MCP setup
 
-Macro's MCP server lets AI clients like Claude Code, Codex, and Cursor work with your workspace directly. Connect once by going to **Settings → MCP server** (authorize with your Macro account — MCP access is included on every plan, Free included), or point a client at the endpoint below.
+Rox's MCP server lets AI clients like Claude Code, Codex, and Cursor work with your workspace directly. Connect once by going to **Settings → MCP server** (authorize with your Rox account — MCP access is included on every plan, Free included), or point a client at the endpoint below.
 
 ```text
 https://mcp-server.macro.com/mcp
@@ -135,4 +131,4 @@ See [MCP setup](/AI/mcp/overview) for client-by-client instructions and the full
 
 ### @mentioning
 
-Agent conversations are entities like everything else in Macro, so you can @mention a conversation from a doc, task, email, or channel to link back to a conversation. And it works the other way too: @mention docs, tasks, channels, people, and more inside a prompt to hand agents exactly the context you want.
+Agent conversations are entities like everything else in Rox, so you can @mention a conversation from a doc, task, email, or channel to link back to a conversation. And it works the other way too: @mention docs, tasks, channels, people, and more inside a prompt to hand agents exactly the context you want.

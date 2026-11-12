@@ -272,7 +272,7 @@ const comparisonGroups: Array<{
     group: 'Branding and teams',
     rows: [
       {
-        label: '"Sent with Macro" email footer',
+        label: '"Sent with Rox" email footer',
         free: 'Added',
         pro: 'Removed',
         max: 'Removed',
@@ -548,7 +548,7 @@ function CaseStudyVideo() {
               'overflow-wrap': 'break-word',
             }}
           >
-            &ldquo;Macro did not help us get organized. Macro<em> is why</em> we
+            &ldquo;Rox did not help us get organized. Rox<em> is why</em> we
             are organized.&rdquo;
           </blockquote>
           <div
@@ -715,10 +715,10 @@ function CaseStudyVideo() {
 
 const faqItems: Array<{ q: string; a: JSX.Element }> = [
   {
-    q: "What's the main purpose of Macro?",
+    q: "What's the main purpose of Rox?",
     a: (
       <>
-        Macro combines email, chat, documents, tasks, calls, and agents. Read
+        Rox combines email, chat, documents, tasks, calls, and agents. Read
         them in one inbox, search across the workspace, and use agents to edit
         documents, draft replies, and update tasks. Documents use CRDTs for live
         collaboration and offline sync.
@@ -726,16 +726,16 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     ),
   },
   {
-    q: 'How does Macro compare to Notion?',
+    q: 'How does Rox compare to Notion?',
     a: (
       <>
-        Macro is a replacement for Notion. Notion is built on markdown and
-        databases; Macro has purpose-built modules for each job, plus native
+        Rox is a replacement for Notion. Notion is built on markdown and
+        databases; Rox has purpose-built modules for each job, plus native
         email, messaging, and file storage. You can still{' '}
         <a href="https://docs.macro.com/faq" target="_blank" rel="noreferrer">
           connect Notion via MCP
         </a>{' '}
-        and ask a Macro agent to import your docs. See our{' '}
+        and ask a Rox agent to import your docs. See our{' '}
         <a href="https://youtu.be/hyU1XYmxkYM" target="_blank" rel="noreferrer">
           comparison video
         </a>
@@ -744,10 +744,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     ),
   },
   {
-    q: 'How does Macro compare to Superhuman?',
+    q: 'How does Rox compare to Superhuman?',
     a: (
       <>
-        Macro Mail uses familiar J / K / E shortcuts, combines your email
+        Rox Mail uses familiar J / K / E shortcuts, combines your email
         accounts in one inbox, and shares that inbox with messages, @mentions,
         tasks, and agent responses. Agents can search indexed email, draft
         replies, and share threads with your team.
@@ -755,10 +755,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     ),
   },
   {
-    q: 'How does Macro compare to Slack?',
+    q: 'How does Rox compare to Slack?',
     a: (
       <>
-        Macro Chat shows replies inline and treats conversations as inbox items
+        Rox Chat shows replies inline and treats conversations as inbox items
         you can mark done. When you can share a document or email thread,
         @mentioning it in a channel grants access to that channel. Agents
         participate in channels and can read the referenced work.
@@ -766,54 +766,42 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     ),
   },
   {
-    q: 'Does Macro have its own email or integrate with my email?',
+    q: 'Does Rox have its own email or integrate with my email?',
     a: (
       <>
-        Macro Mail is an email client, not an email server. We integrate with
+        Rox Mail is an email client, not an email server. We integrate with
         your existing Google Workspace or Gmail account. Outlook and custom
         IMAP/SMTP are a popular request and are coming soon.
       </>
     ),
   },
   {
-    q: 'Can I self-host Macro?',
-    a: (
-      <>
-        Yes, under our AGPL license, though the hosted version is our primary
-        focus today. The hosted version has the iOS and Android apps,
-        Apple/Google/GitHub approvals, runs on AWS, and maintains a SOC 2 Type
-        II audit. For HIPAA, FedRAMP, or other needs, contact{' '}
-        <a href="mailto:self-host@macro.com">self-host@macro.com</a>.
-      </>
-    ),
-  },
-  {
-    q: 'Is Macro fully open source? What is the license?',
+    q: 'Is Rox fully open source? What is the license?',
     a: (
       <>
         Yes — fully open source, not "open core". As of May 31 2026 we moved
         from BSL to the AGPLv3, a copyleft license, meaning derivative works
-        must also be open source. To build on Macro under a different (e.g.
+        must also be open source. To build on Rox under a different (e.g.
         closed-source) license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>
     ),
   },
   {
-    q: 'How do you make money if Macro is open source?',
+    q: 'How do you make money if Rox is open source?',
     a: (
       <>
         From our hosted version, like any other SaaS or AI product, and from
-        those who build on top of Macro and prefer a license other than the
+        those who build on top of Rox and prefer a license other than the
         AGPLv3.
       </>
     ),
   },
   {
-    q: 'How do teams work in Macro? Do I need a team?',
+    q: 'How do teams work in Rox? Do I need a team?',
     a: (
       <>
-        Macro works great solo or as a team, and pricing is the same either way.
+        Rox works great solo or as a team, and pricing is the same either way.
         Teams share email, tasks, documents, and calls through workspace
         permissions. Agents can search and read the work you have access to, and
         use memory built from your workspace activity. Team subscriptions
@@ -826,7 +814,7 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     a: (
       <>
         Every plan includes a monthly amount of AI usage. Free has a limited
-        allowance for trying Macro, Pro covers standard everyday use, and Max
+        allowance for trying Rox, Pro covers standard everyday use, and Max
         includes 10× Pro's usage for heavy agent work. If you reach your limit,
         upgrade from billing settings: Free to Pro, or Pro to Max.
       </>
@@ -987,7 +975,7 @@ function PricingFinalCta() {
 
 export const RoutePricing: Component = () => {
   setPageSeo({
-    title: 'Pricing — Macro',
+    title: 'Pricing — Rox',
     description:
       'Start free. Pro is $40 per seat per month with every AI model and standard usage. Max is $200 per seat per month with 10× Pro usage. Every module is included on every plan — we charge for usage limits and team features, not feature gates.',
     path: '/pricing',
@@ -1038,7 +1026,7 @@ export const RoutePricing: Component = () => {
             'text-wrap': 'balance',
           }}
         >
-          Support Macro's open source development with a paid plan.
+          Support Rox's open source development with a paid plan.
         </h1>
       </section>
 

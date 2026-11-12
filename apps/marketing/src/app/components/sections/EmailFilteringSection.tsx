@@ -4,7 +4,7 @@ import { GRID_COLS, GRID_GAP } from '../base/BaseHeader';
 import { EmailTurboInbox } from './EmailTurboInbox';
 
 // "Spend less time on email" — a one-line title + supporting copy sharing a
-// baseline, running along the top of the interactive Macro Mail mockup below.
+// baseline, running along the top of the interactive Rox Mail mockup below.
 // The header owns the section's top spacing; EmailTurboInbox (hero) drops its
 // own top padding so the two read as one section.
 export function EmailFilteringSection(props: { mobile: () => boolean }) {
@@ -81,7 +81,7 @@ export function EmailFilteringSection(props: { mobile: () => boolean }) {
                 'letter-spacing': '0em',
               }}
             >
-              Macro Mail
+              Rox Mail
             </span>{' '}
             filter and draft for you.
           </p>

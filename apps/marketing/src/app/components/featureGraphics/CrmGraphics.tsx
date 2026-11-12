@@ -547,7 +547,7 @@ const heroEmails = [
   {
     who: 'Marcus Lee',
     subject: 'Security review questionnaire',
-    snippet: 'Attaching our SOC 2 and DPA for',
+    snippet: 'Attaching our security overview and DPA for',
     date: 'Jun 9',
     unread: true,
   },
@@ -1548,7 +1548,7 @@ const crmMotionStyles = `
 `;
 
 // ---------------------------------------------------------------------------
-// The real Macro @-mention typeahead, replicated — same anatomy as the docs
+// The real Rox @-mention typeahead, replicated — same anatomy as the docs
 // page's RealMentionMenu (captured from the live editor): muted section
 // headers with a "View all (n)" affordance, an → key hint on the first
 // section, and an ink/5 highlight on the active row.
@@ -2779,7 +2779,7 @@ export function RiskFlagGraphic() {
               'font-weight': '600',
             }}
           >
-            Macro Agent
+            Rox Agent
           </span>
           <span
             style={{
@@ -2856,7 +2856,7 @@ export function RiskFlagGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// @Macro agent uses the CRM as context
+// @Rox agent uses the CRM as context
 // ---------------------------------------------------------------------------
 
 function SearchTinyGlyph(props: { size?: number }) {
@@ -3491,12 +3491,12 @@ export function CrmAgentGraphic() {
 }
 
 // ---------------------------------------------------------------------------
-// Comparison table (Macro vs Salesforce vs HubSpot vs Attio)
+// Comparison table (Rox vs Salesforce vs HubSpot vs Attio)
 // ---------------------------------------------------------------------------
 
 type Cell = boolean | 'partial' | string;
 
-const comparisonColumns = ['Macro', 'Salesforce', 'HubSpot', 'Attio'];
+const comparisonColumns = ['Rox', 'Salesforce', 'HubSpot', 'Attio'];
 
 const comparisonRows: { feature: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   {
@@ -3774,9 +3774,9 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         No, that's the whole point. Because your team's email already flows
-        through Macro, contact and company records are created and kept up to
+        through Rox, contact and company records are created and kept up to
         date automatically as you work. There's no importer to run and no fields
-        to type in. Most CRMs die because nobody fills them in. Macro's fills
+        to type in. Most CRMs die because nobody fills them in. Rox's fills
         itself.
       </>
     ),
@@ -3785,7 +3785,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'How are companies and contacts created?',
     a: (
       <>
-        When someone on your team emails an external contact, Macro creates a
+        When someone on your team emails an external contact, Rox creates a
         contact record and groups contacts into companies by email domain, so
         everyone <code>@acme.com</code> rolls up to one Acme record. Each
         contact tracks its first and last interaction, and generic vendor / tool
@@ -3811,7 +3811,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
       <>
         Every company and contact has its own discussion thread, so deal notes
         and context live on the record itself instead of a side channel. Threads
-        work just like Macro channels, with inline replies, the same rich
+        work just like Rox channels, with inline replies, the same rich
         editor, and @mentions of people, docs, tasks, and other records.
       </>
     ),
@@ -3820,7 +3820,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'Can I @mention a company or contact elsewhere?',
     a: (
       <>
-        Yes. Like everything in Macro, CRM records are blocks. @mention a
+        Yes. Like everything in Rox, CRM records are blocks. @mention a
         company or contact in a doc, task, or channel and it becomes a live,
         traceable link. From the record you can see everywhere it's been
         referenced across channels, docs, and calls. Note that sharing of CRM
@@ -3833,7 +3833,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'How does email sharing work?',
     a: (
       <>
-        CRM is where Macro Mail's auto-sharing lives. With{' '}
+        CRM is where Rox Mail's auto-sharing lives. With{' '}
         <strong>Sync Emails</strong> on for a company, your team's threads with
         that company become visible to teammates in the CRM, so nobody has to
         forward a thread to share context. Turn it off and the record stays, but
@@ -3859,8 +3859,8 @@ const faqItems: { q: string; a: JSX.Element }[] = [
       <>
         CRM is rolling out now. If you don't see the <strong>Companies</strong>{' '}
         view in your workspace yet, it hasn't reached your account. And like the
-        rest of Macro, it's fully open source under the AGPLv3, not "open core."
-        To build on Macro under a different license, contact{' '}
+        rest of Rox, it's fully open source under the AGPLv3, not "open core."
+        To build on Rox under a different license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>
     ),

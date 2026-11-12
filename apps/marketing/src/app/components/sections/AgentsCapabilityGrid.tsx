@@ -111,7 +111,7 @@ const capabilities = [
     id: 'follow-through',
     title: 'Assign it the work',
     description:
-      'Give a task to @Macro. It can update docs, open a pull request, and report back with the result.',
+      'Give a task to @Rox. It can update docs, open a pull request, and report back with the result.',
     Graphic: AssignmentGraphic,
   },
   {
@@ -132,7 +132,7 @@ const capabilities = [
     id: 'connected-tools',
     title: 'Connect your tools',
     description:
-      'Bring other tools into Macro through MCP, or give your coding agent access to your workspace.',
+      'Bring other tools into Rox through MCP, or give your coding agent access to your workspace.',
     Graphic: ConnectionsGraphic,
   },
 ];
@@ -143,7 +143,7 @@ export function AgentsCapabilityGrid() {
     <section
       class="agents-capabilities"
       id="agent-capabilities"
-      aria-label="Working with Macro agents"
+      aria-label="Working with Rox agents"
     >
       <For each={capabilities}>
         {(item, index) => (

@@ -56,7 +56,7 @@ impl Notification {
             .call(
                 "Notify",
                 &(
-                    "Macro",
+                    "Rox",
                     0u32,
                     icon.unwrap_or("macro"),
                     title,

@@ -5,41 +5,41 @@ import { setPageSeo } from '../utils/utilSeo';
 import '../../routes/posts/posts-shell.css';
 import './RoutePartnerTerms.css';
 
-const content = String.raw`Macro
+const content = String.raw`Rox
 
-# Macro Partner Program Terms
+# Rox Partner Program Terms
 
 Effective: August 31, 2026 · Version 1.3
 
-These Macro Partner Program Terms (the "Terms") govern participation in the Macro Partner Program (the "Program") operated by Coparse Inc. d/b/a Macro ("Macro," "we," "us," or "our").
+These Rox Partner Program Terms (the "Terms") govern participation in the Rox Partner Program (the "Program") operated by Coparse Inc. d/b/a Rox ("Rox," "we," "us," or "our").
 
 By applying to the Program and electronically accepting these Terms, you or the entity you represent ("Partner" or "you") agree to these Terms.
 
-The Program is designed for consultants, agencies, developers, system integrators, influencers, accelerators, incubators, open-source contributors, technology companies, and other people and organizations that help customers discover, adopt, implement, or extend Macro.
+The Program is designed for consultants, agencies, developers, system integrators, influencers, accelerators, incubators, open-source contributors, technology companies, and other people and organizations that help customers discover, adopt, implement, or extend Rox.
 
 ## 1. Program Overview
 
-The Macro Partner Program enables approved Partners to:
+The Rox Partner Program enables approved Partners to:
 
-- identify themselves as an Official Macro Partner;
-- refer prospective customers to Macro and earn referral fees on qualifying business;
+- identify themselves as an Official Rox Partner;
+- refer prospective customers to Rox and earn referral fees on qualifying business;
 - receive access to partner materials, training, product resources, and other Program benefits;
 - participate in partner events and community programs;
-- become eligible for inclusion in Macro's partner directory;
+- become eligible for inclusion in Rox's partner directory;
 - participate in co-marketing opportunities;
 - receive early access to certain products, features, or roadmap information;
-- become eligible for customer introductions or implementation opportunities from Macro; and
-- qualify for additional certifications, designations, benefits, or Program tiers that Macro may introduce.
+- become eligible for customer introductions or implementation opportunities from Rox; and
+- qualify for additional certifications, designations, benefits, or Program tiers that Rox may introduce.
 
-Participation in the Program does not give Partner any right to resell Macro products unless Macro and Partner enter into a separate written reseller agreement.
+Participation in the Program does not give Partner any right to resell Rox products unless Rox and Partner enter into a separate written reseller agreement.
 
 ## 2. Eligibility and Acceptance
 
-Participation in the Program is subject to Macro's approval.
+Participation in the Program is subject to Rox's approval.
 
-Macro may consider factors including Partner's experience, reputation, customer relationships, technical capabilities, open-source contributions, intended use of the Program, and ability to provide a high-quality customer experience.
+Rox may consider factors including Partner's experience, reputation, customer relationships, technical capabilities, open-source contributions, intended use of the Program, and ability to provide a high-quality customer experience.
 
-Macro may accept or reject any application in its reasonable discretion.
+Rox may accept or reject any application in its reasonable discretion.
 
 Partner must provide accurate and complete information in its application and keep its Program information current.
 
@@ -48,28 +48,28 @@ Partner must remain in Good Standing to participate in the Program and receive P
 1. complies with these Terms and applicable Program policies;
 2. has provided information reasonably required for payments, tax reporting, compliance, or verification;
 3. maintains appropriate standards of customer service and professional conduct;
-4. does not have material unresolved customer complaints relating to its Macro-related activities; and
-5. satisfies any training, certification, security, or other requirements Macro reasonably establishes for the Partner's applicable designation.
+4. does not have material unresolved customer complaints relating to its Rox-related activities; and
+5. satisfies any training, certification, security, or other requirements Rox reasonably establishes for the Partner's applicable designation.
 
 ## 3. Program Fee
 
-There is no membership fee to join or remain in the Macro Partner Program.
+There is no membership fee to join or remain in the Rox Partner Program.
 
 This does not include tickets, travel, lodging, sponsorships, or other costs associated with optional partner events or programs.
 
 ## 4. Partner Benefits
 
-While in Good Standing, Partner may receive benefits made available by Macro from time to time, which may include:
+While in Good Standing, Partner may receive benefits made available by Rox from time to time, which may include:
 
 ### 4.1. Official Partner Status
 
-Partner may describe itself as an "Official Macro Partner" and use approved Macro Partner badges and other materials in accordance with these Terms and Macro's branding guidelines.
+Partner may describe itself as an "Official Rox Partner" and use approved Rox Partner badges and other materials in accordance with these Terms and Rox's branding guidelines.
 
-Partner may not describe itself as a "Macro Certified Partner," "Macro Premier Partner," or similar designation unless Macro has expressly granted that designation.
+Partner may not describe itself as a "Rox Certified Partner," "Rox Premier Partner," or similar designation unless Rox has expressly granted that designation.
 
 ### 4.2. Partner Directory
 
-Macro may allow eligible Partners to create a public profile in a Macro partner directory.
+Rox may allow eligible Partners to create a public profile in a Rox partner directory.
 
 Directory listings may include Partner's:
 
@@ -82,29 +82,29 @@ Directory listings may include Partner's:
 - customer references or case studies; and
 - contact information.
 
-Macro may determine directory eligibility, ordering, categorization, and presentation and may remove or modify listings that are inaccurate, inactive, misleading, or inconsistent with Program standards.
+Rox may determine directory eligibility, ordering, categorization, and presentation and may remove or modify listings that are inaccurate, inactive, misleading, or inconsistent with Program standards.
 
 ### 4.3. Product and Demo Access
 
-Macro may provide Partner with free or discounted accounts, demo environments, credits, training environments, or other product access for internal evaluation, demonstrations, training, or customer support.
+Rox may provide Partner with free or discounted accounts, demo environments, credits, training environments, or other product access for internal evaluation, demonstrations, training, or customer support.
 
 Such access may be subject to additional terms and may not be resold or transferred.
 
 ### 4.4. Early Access
 
-Macro may provide Partners with previews of unreleased products, features, APIs, documentation, roadmap information, or other confidential materials.
+Rox may provide Partners with previews of unreleased products, features, APIs, documentation, roadmap information, or other confidential materials.
 
 Early-access features may be changed or discontinued at any time and should not be represented to customers as generally available functionality.
 
 ### 4.5. Training and Certification
 
-Macro may provide partner training and certification programs.
+Rox may provide partner training and certification programs.
 
-Macro may require certifications or other qualifications before allowing a Partner to use certain designations, appear in certain directory categories, receive customer referrals, or access certain Program benefits.
+Rox may require certifications or other qualifications before allowing a Partner to use certain designations, appear in certain directory categories, receive customer referrals, or access certain Program benefits.
 
 ### 4.6. Co-Marketing
 
-Macro and Partner may participate in mutually agreed:
+Rox and Partner may participate in mutually agreed:
 
 - case studies;
 - webinars;
@@ -120,31 +120,31 @@ Unless otherwise agreed in writing, each party is responsible for its own costs.
 
 ### 4.7. Partner Events
 
-Partners may receive invitations or preferred access to Macro partner dinners, conferences, product sessions, community events, or other gatherings.
+Partners may receive invitations or preferred access to Rox partner dinners, conferences, product sessions, community events, or other gatherings.
 
-Some events may require an additional registration or participation fee. Partner is responsible for its own travel and related expenses unless Macro expressly agrees otherwise.
+Some events may require an additional registration or participation fee. Partner is responsible for its own travel and related expenses unless Rox expressly agrees otherwise.
 
 ### 4.8. Customer Opportunities
 
-Macro may introduce prospective customers to Partners for consulting, migration, implementation, development, training, or other services.
+Rox may introduce prospective customers to Partners for consulting, migration, implementation, development, training, or other services.
 
 No Partner is guaranteed any minimum number or value of customer opportunities, and customers remain free to choose whether and with whom they engage.
 
 ## 5. Referral Program
 
-Partners in Good Standing may earn referral fees for qualifying customers they introduce to Macro.
+Partners in Good Standing may earn referral fees for qualifying customers they introduce to Rox.
 
 ### 5.1. Referral Fee
 
-For each Qualified Referral, Macro will pay Partner an amount equal to 30% of First-Year Net Subscription Revenue.
+For each Qualified Referral, Rox will pay Partner an amount equal to 30% of First-Year Net Subscription Revenue.
 
-Macro may establish higher referral rates, incentives, or promotional rates for particular Partners, markets, products, campaigns, or Program tiers.
+Rox may establish higher referral rates, incentives, or promotional rates for particular Partners, markets, products, campaigns, or Program tiers.
 
-Unless Macro expressly states otherwise, the standard rate remains 30%.
+Unless Rox expressly states otherwise, the standard rate remains 30%.
 
 ### 5.2. First-Year Net Subscription Revenue
 
-"First-Year Net Subscription Revenue" means subscription fees attributable to the first twelve (12) months of a referred customer's initial eligible Macro subscription, to the extent actually received by Macro.
+"First-Year Net Subscription Revenue" means subscription fees attributable to the first twelve (12) months of a referred customer's initial eligible Rox subscription, to the extent actually received by Rox.
 
 First-Year Net Subscription Revenue excludes:
 
@@ -159,26 +159,26 @@ First-Year Net Subscription Revenue excludes:
 - third-party products or services;
 - event fees;
 - amounts that a customer fails to pay; and
-- any other amounts Macro designates as non-subscription revenue.
+- any other amounts Rox designates as non-subscription revenue.
 
 If a customer enters into a multi-year agreement, only subscription revenue attributable to the first twelve months is eligible.
 
-If the customer expands its eligible subscription during those first twelve months, Macro may include the incremental subscription revenue attributable to that same first-year period when calculating the referral fee.
+If the customer expands its eligible subscription during those first twelve months, Rox may include the incremental subscription revenue attributable to that same first-year period when calculating the referral fee.
 
-Renewals after the first twelve months are not eligible unless Macro expressly provides otherwise.
+Renewals after the first twelve months are not eligible unless Rox expressly provides otherwise.
 
 ### 5.3. Qualified Referral
 
 A "Qualified Referral" is a prospective customer that:
 
-1. Partner actually referred to Macro through a genuine introduction or other material contribution to creating the opportunity;
-2. was not already an active Macro sales opportunity or otherwise materially engaged in an active purchasing process with Macro when Partner referred them;
-3. Partner claims after the fact through Macro's designated claim process;
-4. is accepted by Macro as a Partner-sourced referral;
-5. becomes a paying Macro customer; and
+1. Partner actually referred to Rox through a genuine introduction or other material contribution to creating the opportunity;
+2. was not already an active Rox sales opportunity or otherwise materially engaged in an active purchasing process with Rox when Partner referred them;
+3. Partner claims after the fact through Rox's designated claim process;
+4. is accepted by Rox as a Partner-sourced referral;
+5. becomes a paying Rox customer; and
 6. otherwise complies with these Terms.
 
-Macro may require Partner to provide reasonable information regarding the prospect and Partner's relationship with the prospect.
+Rox may require Partner to provide reasonable information regarding the prospect and Partner's relationship with the prospect.
 
 Merely identifying a company, supplying purchased contact information, submitting publicly available leads, or listing a prospect before an actual referral does not by itself create a Qualified Referral.
 
@@ -190,49 +190,49 @@ Partner claims a referral after Partner has actually referred the prospect. Part
 
 There is no deal-protection period, exclusive-reservation window, or other right to an opportunity that Partner has not actually referred.
 
-Partner submits a claim through the process designated by Macro, which may include a partner portal, online form, email, or other system.
+Partner submits a claim through the process designated by Rox, which may include a partner portal, online form, email, or other system.
 
-Macro may accept or reject a claim.
+Rox may accept or reject a claim.
 
 ### 6.2. Attribution
 
 Credit is attributed to the Partner who actually referred the customer.
 
-If more than one Partner claims substantially the same opportunity, Macro will attribute the opportunity based on who actually made the referral. Macro may consider the timing, quality, and substance of each Partner's involvement when resolving attribution disputes.
+If more than one Partner claims substantially the same opportunity, Rox will attribute the opportunity based on who actually made the referral. Rox may consider the timing, quality, and substance of each Partner's involvement when resolving attribution disputes.
 
-Macro's good-faith determination regarding attribution will be final absent manifest error.
+Rox's good-faith determination regarding attribution will be final absent manifest error.
 
-### 6.3. Existing Macro Opportunities
+### 6.3. Existing Rox Opportunities
 
 A referral is not eligible if, when Partner referred the prospect:
 
-- Macro is already in an active sales process with the same prospective customer for substantially the same purchase;
+- Rox is already in an active sales process with the same prospective customer for substantially the same purchase;
 - the prospective customer has already requested or received a proposal for the same opportunity;
-- the opportunity was independently created by Macro before Partner's introduction; or
-- the customer is otherwise designated in Macro's records as an existing active opportunity.
+- the opportunity was independently created by Rox before Partner's introduction; or
+- the customer is otherwise designated in Rox's records as an existing active opportunity.
 
-Macro will attempt to notify Partner if a submitted claim is ineligible for this reason.
+Rox will attempt to notify Partner if a submitted claim is ineligible for this reason.
 
 ## 7. Ineligible Referrals and Revenue
 
-Unless Macro expressly approves otherwise, referral fees are not payable for:
+Unless Rox expressly approves otherwise, referral fees are not payable for:
 
 - self-referrals by Partner;
 - purchases by Partner or its affiliates;
-- existing Macro customers;
+- existing Rox customers;
 - renewals;
-- opportunities already actively being pursued by Macro;
+- opportunities already actively being pursued by Rox;
 - duplicate referrals attributed to another Partner;
 - free accounts or trials that do not convert into an eligible paid subscription;
 - purchases that are refunded or charged back;
-- amounts that Macro does not actually collect;
+- amounts that Rox does not actually collect;
 - transactions generated through fraud, spam, deception, or other improper conduct;
 - transactions where payment of a referral fee is prohibited by law or by the customer;
-- transactions where the customer is separately paying Partner for the same referral fee on Macro's behalf;
-- transactions subject to another Macro incentive where double compensation is prohibited; or
-- transactions otherwise identified in advance by Macro as ineligible.
+- transactions where the customer is separately paying Partner for the same referral fee on Rox's behalf;
+- transactions subject to another Rox incentive where double compensation is prohibited; or
+- transactions otherwise identified in advance by Rox as ineligible.
 
-Macro may approve exceptions in writing.
+Rox may approve exceptions in writing.
 
 ## 8. Referral Fee Payments
 
@@ -240,36 +240,36 @@ Macro may approve exceptions in writing.
 
 Referral fees are calculated and paid quarterly.
 
-Macro will generally pay eligible amounts within forty-five (45) days after the end of the applicable calendar quarter.
+Rox will generally pay eligible amounts within forty-five (45) days after the end of the applicable calendar quarter.
 
-Macro may use a third-party payment provider.
+Rox may use a third-party payment provider.
 
 ### 8.2. Payment Information
 
-Before receiving payment, Partner must provide any information reasonably requested by Macro, including:
+Before receiving payment, Partner must provide any information reasonably requested by Rox, including:
 
 - payment details;
 - W-9, W-8, or other applicable tax forms;
 - legal entity information; and
 - documentation required for compliance purposes.
 
-Macro may withhold payment until required documentation has been received.
+Rox may withhold payment until required documentation has been received.
 
 ### 8.3. Minimum Payment
 
-Macro may establish a reasonable minimum payout threshold.
+Rox may establish a reasonable minimum payout threshold.
 
 Amounts below the threshold will roll forward to subsequent payment periods rather than being forfeited, unless payment is legally or administratively impracticable.
 
 ### 8.4. Taxes
 
-Partner is responsible for all taxes arising from payments it receives under the Program, other than taxes imposed on Macro's net income.
+Partner is responsible for all taxes arising from payments it receives under the Program, other than taxes imposed on Rox's net income.
 
-Macro may report payments to tax authorities or withhold amounts where required by law.
+Rox may report payments to tax authorities or withhold amounts where required by law.
 
 ### 8.5. Refunds, Nonpayment, and Clawbacks
 
-If Macro pays a referral fee and the underlying customer payment is subsequently:
+If Rox pays a referral fee and the underlying customer payment is subsequently:
 
 - refunded;
 - charged back;
@@ -278,25 +278,25 @@ If Macro pays a referral fee and the underlying customer payment is subsequently
 - determined to have been paid in error; or
 - not ultimately collected,
 
-Macro may deduct the corresponding referral fee from future amounts payable to Partner or require repayment.
+Rox may deduct the corresponding referral fee from future amounts payable to Partner or require repayment.
 
-Macro will not intentionally pay referral fees on revenue it does not retain.
+Rox will not intentionally pay referral fees on revenue it does not retain.
 
 ## 9. Partner Services
 
-Partner may independently offer customers consulting, migration, implementation, development, training, support, or other services relating to Macro.
+Partner may independently offer customers consulting, migration, implementation, development, training, support, or other services relating to Rox.
 
 Any agreement for Partner services is solely between Partner and the applicable customer.
 
 Unless expressly agreed otherwise in writing:
 
-- Macro is not a party to Partner's customer agreements;
+- Rox is not a party to Partner's customer agreements;
 - Partner sets its own pricing;
 - Partner is responsible for its own work;
-- Macro does not guarantee or warrant Partner's services;
-- Partner may not enter into agreements on Macro's behalf;
-- Partner may not modify Macro's customer terms; and
-- Partner must clearly distinguish its own services from products and services provided by Macro.
+- Rox does not guarantee or warrant Partner's services;
+- Partner may not enter into agreements on Rox's behalf;
+- Partner may not modify Rox's customer terms; and
+- Partner must clearly distinguish its own services from products and services provided by Rox.
 
 Partner must perform its services professionally and in a manner reasonably consistent with applicable industry standards.
 
@@ -304,39 +304,39 @@ Partner must perform its services professionally and in a manner reasonably cons
 
 ### 10.1. License to Partner
 
-While Partner remains in Good Standing, Macro grants Partner a limited, non-exclusive, non-transferable, revocable license to use Macro-approved names, logos, badges, and other trademarks solely to accurately promote Partner's participation in the Program.
+While Partner remains in Good Standing, Rox grants Partner a limited, non-exclusive, non-transferable, revocable license to use Rox-approved names, logos, badges, and other trademarks solely to accurately promote Partner's participation in the Program.
 
-All goodwill arising from Partner's use of Macro trademarks belongs to Macro.
+All goodwill arising from Partner's use of Rox trademarks belongs to Rox.
 
-### 10.2. "Official Macro Partner"
+### 10.2. "Official Rox Partner"
 
-An active Partner in Good Standing may state that it is an "Official Macro Partner."
+An active Partner in Good Standing may state that it is an "Official Rox Partner."
 
-This designation means only that Partner has been accepted into the Macro Partner Program.
+This designation means only that Partner has been accepted into the Rox Partner Program.
 
-It does not mean Partner is an employee, agent, representative, reseller, or legal partner of Macro.
+It does not mean Partner is an employee, agent, representative, reseller, or legal partner of Rox.
 
 ### 10.3. Restrictions
 
 Partner may not:
 
-- modify Macro logos or badges except as permitted by brand guidelines;
-- imply that Macro guarantees or endorses Partner's services;
-- make false or misleading statements about Macro;
-- make commitments, guarantees, warranties, or representations on Macro's behalf;
-- register domain names, social handles, company names, or trademarks confusingly similar to Macro's marks;
-- bid on Macro trademarks in paid search advertising without Macro's prior written permission;
-- impersonate Macro;
-- issue press releases announcing a partnership without Macro's approval; or
-- continue using Macro Partner branding after suspension or termination from the Program.
+- modify Rox logos or badges except as permitted by brand guidelines;
+- imply that Rox guarantees or endorses Partner's services;
+- make false or misleading statements about Rox;
+- make commitments, guarantees, warranties, or representations on Rox's behalf;
+- register domain names, social handles, company names, or trademarks confusingly similar to Rox's marks;
+- bid on Rox trademarks in paid search advertising without Rox's prior written permission;
+- impersonate Rox;
+- issue press releases announcing a partnership without Rox's approval; or
+- continue using Rox Partner branding after suspension or termination from the Program.
 
-Macro may require Partner to modify or remove any use of Macro branding.
+Rox may require Partner to modify or remove any use of Rox branding.
 
 ### 10.4. Partner Marks
 
-Partner grants Macro a non-exclusive, worldwide, royalty-free license during Partner's participation in the Program to use Partner's name, logo, and approved descriptive information to identify and promote Partner as a participant in the Program, including in Macro's website, partner directory, presentations, and marketing materials.
+Partner grants Rox a non-exclusive, worldwide, royalty-free license during Partner's participation in the Program to use Partner's name, logo, and approved descriptive information to identify and promote Partner as a participant in the Program, including in Rox's website, partner directory, presentations, and marketing materials.
 
-Partner may request that Macro discontinue a specific use of Partner's marks, and Macro will do so within a reasonable period.
+Partner may request that Rox discontinue a specific use of Partner's marks, and Rox will do so within a reasonable period.
 
 ## 11. Marketing Conduct and Compliance
 
@@ -369,13 +369,13 @@ Partner may not offer anything of value for the purpose of improperly influencin
 
 ## 12. Customer and Personal Data
 
-Partner may provide Macro with business contact information relating to prospective customers only where Partner has a lawful basis to do so.
+Partner may provide Rox with business contact information relating to prospective customers only where Partner has a lawful basis to do so.
 
 Partner is responsible for providing any notices and obtaining any permissions required by applicable privacy laws in connection with information Partner collects or shares.
 
 If Partner accesses customer information in connection with services it provides independently to a customer, Partner is independently responsible for its handling and security of that information.
 
-Participation in the Program does not itself authorize Partner to access Macro customer data.
+Participation in the Program does not itself authorize Partner to access Rox customer data.
 
 ## 13. Confidentiality
 
@@ -383,7 +383,7 @@ Either party may receive non-public information from the other party in connecti
 
 "Confidential Information" means information that is marked confidential or that a reasonable person would understand to be confidential given its nature or the circumstances of disclosure.
 
-Macro Confidential Information may include:
+Rox Confidential Information may include:
 
 - unreleased product information;
 - roadmap information;
@@ -413,31 +413,31 @@ A party may disclose Confidential Information where required by law, provided it
 
 ## 14. Product Information and Feedback
 
-Macro may provide Partner with documentation, training material, beta software, APIs, demonstrations, or other Program resources.
+Rox may provide Partner with documentation, training material, beta software, APIs, demonstrations, or other Program resources.
 
 Unless expressly stated otherwise, Program resources and pre-release functionality are provided "as is" and may change or be discontinued.
 
-Partner may provide ideas, suggestions, or feedback relating to Macro. Partner grants Macro a perpetual, worldwide, royalty-free right to use such feedback without restriction or obligation.
+Partner may provide ideas, suggestions, or feedback relating to Rox. Partner grants Rox a perpetual, worldwide, royalty-free right to use such feedback without restriction or obligation.
 
-This does not transfer ownership of Partner's pre-existing intellectual property to Macro.
+This does not transfer ownership of Partner's pre-existing intellectual property to Rox.
 
 ## 15. Independent Relationship
 
-Despite the use of the word "Partner," nothing in these Terms creates a legal partnership, joint venture, franchise, fiduciary relationship, employment relationship, or agency relationship between Macro and Partner.
+Despite the use of the word "Partner," nothing in these Terms creates a legal partnership, joint venture, franchise, fiduciary relationship, employment relationship, or agency relationship between Rox and Partner.
 
 Partner is an independent contractor.
 
 Neither party has authority to bind the other or enter into obligations on the other's behalf.
 
-Participation in the Program is non-exclusive. Both Macro and Partner may work with, recommend, develop, market, or sell products and services that compete with those offered by the other.
+Participation in the Program is non-exclusive. Both Rox and Partner may work with, recommend, develop, market, or sell products and services that compete with those offered by the other.
 
 ## 16. Program Changes
 
-Macro may update the Program, Program benefits, qualification requirements, policies, or these Terms from time to time.
+Rox may update the Program, Program benefits, qualification requirements, policies, or these Terms from time to time.
 
-For material changes, Macro will provide reasonable notice by email, through the Partner Program, or by posting updated Terms.
+For material changes, Rox will provide reasonable notice by email, through the Partner Program, or by posting updated Terms.
 
-Unless required by law or necessary to prevent fraud or abuse, a reduction to the standard referral percentage will apply prospectively to referrals claimed after the effective date of the change and will not reduce the percentage applicable to Qualified Referrals already accepted by Macro.
+Unless required by law or necessary to prevent fraud or abuse, a reduction to the standard referral percentage will apply prospectively to referrals claimed after the effective date of the change and will not reduce the percentage applicable to Qualified Referrals already accepted by Rox.
 
 Continued participation after updated Terms become effective constitutes acceptance where permitted by law.
 
@@ -455,42 +455,42 @@ Either party may terminate Partner's participation in the Program without cause 
 
 ### 17.3. Suspension or Termination for Cause
 
-Macro may suspend or immediately terminate Partner for:
+Rox may suspend or immediately terminate Partner for:
 
 - material breach of these Terms;
 - fraud or attempted manipulation of Program attribution;
 - illegal or unethical conduct;
 - bribery or corruption;
 - sanctions or export-control concerns;
-- misuse of Macro trademarks;
-- material misrepresentation regarding Macro;
+- misuse of Rox trademarks;
+- material misrepresentation regarding Rox;
 - significant or repeated customer complaints;
-- conduct reasonably likely to harm Macro, its customers, or the Program;
+- conduct reasonably likely to harm Rox, its customers, or the Program;
 - failure to maintain Good Standing; or
 - material security or privacy violations.
 
-Where appropriate, Macro may provide Partner an opportunity to cure a violation before termination.
+Where appropriate, Rox may provide Partner an opportunity to cure a violation before termination.
 
 ### 17.4. Effect of Termination
 
 Upon termination:
 
-- Partner must stop describing itself as an Official Macro Partner;
-- Partner must stop using Macro Partner badges and other Program-specific branding;
+- Partner must stop describing itself as an Official Rox Partner;
+- Partner must stop using Rox Partner badges and other Program-specific branding;
 - access to Program benefits may end; and
 - each party must cease using the other party's Confidential Information except as legally required.
 
 Referral fees earned before termination remain payable, subject to these Terms.
 
-If Macro terminates Partner without cause, referrals already accepted before notice of termination remain eligible if the customer later becomes a paying Macro customer.
+If Rox terminates Partner without cause, referrals already accepted before notice of termination remain eligible if the customer later becomes a paying Rox customer.
 
-If Partner terminates the Program, or Macro terminates Partner for cause, claims that have not yet become paying customers will cease to be eligible unless Macro agrees otherwise.
+If Partner terminates the Program, or Rox terminates Partner for cause, claims that have not yet become paying customers will cease to be eligible unless Rox agrees otherwise.
 
 Sections that by their nature should survive termination — including confidentiality, payment obligations, intellectual property, indemnification, limitations of liability, and dispute provisions — will survive.
 
 ## 18. Disclaimer of Program Benefits
 
-Except as expressly stated in these Terms, Macro does not guarantee:
+Except as expressly stated in these Terms, Rox does not guarantee:
 
 - any particular number of leads;
 - any customer introductions;
@@ -507,7 +507,7 @@ THE PROGRAM AND PROGRAM BENEFITS ARE PROVIDED "AS IS" AND "AS AVAILABLE" TO THE 
 
 ## 19. Indemnification
 
-Partner will defend, indemnify, and hold harmless Macro and its affiliates, officers, directors, employees, and agents from third-party claims, damages, liabilities, costs, and reasonable attorneys' fees arising from:
+Partner will defend, indemnify, and hold harmless Rox and its affiliates, officers, directors, employees, and agents from third-party claims, damages, liabilities, costs, and reasonable attorneys' fees arising from:
 
 1. Partner's products or services;
 2. Partner's representations or commitments to a customer;
@@ -516,9 +516,9 @@ Partner will defend, indemnify, and hold harmless Macro and its affiliates, offi
 5. Partner's handling of personal or customer data; or
 6. Partner's material breach of these Terms.
 
-Macro will promptly notify Partner of an indemnified claim and provide reasonable cooperation at Partner's expense.
+Rox will promptly notify Partner of an indemnified claim and provide reasonable cooperation at Partner's expense.
 
-Partner may not settle a claim in a manner that admits fault by or imposes obligations on Macro without Macro's prior written consent.
+Partner may not settle a claim in a manner that admits fault by or imposes obligations on Rox without Rox's prior written consent.
 
 ## 20. Limitation of Liability
 
@@ -533,7 +533,7 @@ These limitations do not apply to liability that cannot lawfully be limited.
 
 ## 21. Records and Program Administration
 
-Macro may maintain records regarding:
+Rox may maintain records regarding:
 
 - Partner registrations;
 - sales opportunities;
@@ -543,9 +543,9 @@ Macro may maintain records regarding:
 - Program status; and
 - certifications.
 
-Macro's records will control for purposes of calculating Program payments absent manifest error.
+Rox's records will control for purposes of calculating Program payments absent manifest error.
 
-Partner must notify Macro of a payment or attribution dispute within ninety (90) days after the relevant payment statement or determination.
+Partner must notify Rox of a payment or attribution dispute within ninety (90) days after the relevant payment statement or determination.
 
 The parties will attempt in good faith to resolve Program disputes informally before commencing formal proceedings.
 
@@ -559,9 +559,9 @@ The state and federal courts located in New York County, New York will have excl
 
 ### 23.1. Assignment
 
-Partner may not assign or transfer these Terms or its Program membership without Macro's prior written consent.
+Partner may not assign or transfer these Terms or its Program membership without Rox's prior written consent.
 
-Macro may assign these Terms in connection with a merger, acquisition, corporate reorganization, or sale of substantially all of its assets.
+Rox may assign these Terms in connection with a merger, acquisition, corporate reorganization, or sale of substantially all of its assets.
 
 ### 23.2. No Waiver
 
@@ -573,13 +573,13 @@ If any provision is found unenforceable, the remaining provisions will remain ef
 
 ### 23.4. Entire Agreement
 
-These Terms, together with any Program policies or written supplemental terms expressly incorporated by reference, constitute the entire agreement between Macro and Partner regarding participation in the Program.
+These Terms, together with any Program policies or written supplemental terms expressly incorporated by reference, constitute the entire agreement between Rox and Partner regarding participation in the Program.
 
-A separate written agreement signed by Macro and Partner may modify these Terms with respect to that Partner.
+A separate written agreement signed by Rox and Partner may modify these Terms with respect to that Partner.
 
 ### 23.5. Electronic Communications
 
-Partner agrees that Macro may provide Program-related notices electronically, including by email or through Program systems.
+Partner agrees that Rox may provide Program-related notices electronically, including by email or through Program systems.
 
 ### 23.6. Headings
 
@@ -587,21 +587,21 @@ Headings are for convenience only and do not affect interpretation.
 
 ## 24. Partner Kickoff
 
-After acceptance into the Program, new Partners are encouraged to schedule a Macro Partnerships kickoff call: [Partnerships Program booking page](https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/partnerships-program).
+After acceptance into the Program, new Partners are encouraged to schedule a Rox Partnerships kickoff call: [Partnerships Program booking page](https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/partnerships-program).
 
-The kickoff call may be used to discuss Partner's business, specialties, potential customer opportunities, implementation capabilities, product questions, and ways Macro and Partner can work together.
+The kickoff call may be used to discuss Partner's business, specialties, potential customer opportunities, implementation capabilities, product questions, and ways Rox and Partner can work together.
 
 ## 25. Contact
 
-Questions about the Macro Partner Program may be directed to Macro Partnerships at [partnerships@macro.com](mailto:partnerships@macro.com).
+Questions about the Rox Partner Program may be directed to Rox Partnerships at [partnerships@macro.com](mailto:partnerships@macro.com).
 
 Legal notices relating to these Terms should be directed to 54 W 21st Suite 503, New York NY 10002.`;
 
 export const RoutePartnerTerms: Component = () => {
   setPageSeo({
-    title: 'Macro Partner Program Terms',
+    title: 'Rox Partner Program Terms',
     description:
-      'The terms that govern participation in the Macro Partner Program, including eligibility, referral fees, deal registration, payments, and brand use.',
+      'The terms that govern participation in the Rox Partner Program, including eligibility, referral fees, deal registration, payments, and brand use.',
     path: '/partners/terms',
   });
 
@@ -613,7 +613,7 @@ export const RoutePartnerTerms: Component = () => {
           <span class="posts-eyebrow-sep">/</span>
           Terms
         </nav>
-        <h1 class="posts-title">Macro Partner Program Terms</h1>
+        <h1 class="posts-title">Rox Partner Program Terms</h1>
         <p class="posts-updated">Effective August 31, 2026 · Version 1.3</p>
       </header>
       <UtilPlainText content={content} lists variant="post" />

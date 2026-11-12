@@ -144,7 +144,7 @@ targets:
     info:
       path: ShareExtension/Info.plist
       properties:
-        CFBundleDisplayName: Share to Macro
+        CFBundleDisplayName: Share to Rox
         CFBundleShortVersionString: 2.0.18
         CFBundleVersion: "199"
         LSApplicationQueriesSchemes:
