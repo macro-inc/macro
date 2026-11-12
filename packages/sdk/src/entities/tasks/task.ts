@@ -1,6 +1,7 @@
 import type { PropertyInput } from '../../../generated/storage/types.gen';
-import { unwrap } from '../../utils';
+import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
@@ -86,6 +87,22 @@ export class Task extends Document {
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.create takes an options object, { name, markdown, ... }.',
+      );
+    rejectUnknownOptions('tasks.create', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+      initiative: true,
+      assignees: true,
+      dueDate: true,
+      team: true,
+      shareWithTeam: true,
+    });
+    if (typeof opts.name !== 'string' || !opts.name.trim())
+      throw new MacroError('tasks.create needs `name`, the task title.');
     const { documentId } = unwrap(
       await client.storage.createTaskHandler({
         body: {
@@ -145,6 +162,18 @@ export class Task extends Document {
     client: MacroClient,
     opts: { title: string; body?: string },
   ): Promise<SimilarTask[]> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.findSimilar takes an options object, { title, body }.',
+      );
+    rejectUnknownOptions('tasks.findSimilar', opts, {
+      title: true,
+      body: true,
+    });
+    if (typeof opts.title !== 'string' || !opts.title.trim())
+      throw new MacroError(
+        'tasks.findSimilar needs `title`, the title of the task you would create.',
+      );
     const { results } = unwrap(
       await client.storage.taskSimilaritySearchHandler({
         body: { taskName: opts.title, markdown: opts.body ?? null },

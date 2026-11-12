@@ -188,6 +188,11 @@ each run.
   stays available. Activating creates the caller's own routine with `template_id`
   pointing back and the published appearance snapshot. Filling variables happens
   in the client.
+- Event triggers follow the owner's `enable-event-routines` PostHog flag
+  (`domain/event_rollout.rs`): saving one needs it, and dispatch cancels runs
+  (`NotEnabled`) for owners without it. Pausing an event routine never needs
+  it. Without PostHog configured, no one has it and the host starts no event
+  intake.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 

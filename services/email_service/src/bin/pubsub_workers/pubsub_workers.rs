@@ -2,11 +2,11 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::GmailApiClientRepository;
+use email_service::composition::workers::CrmMetadataResolver;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
-use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
@@ -309,7 +309,8 @@ async fn main() -> anyhow::Result<()> {
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
-    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
+        .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
             mailbox_repository.clone(),
@@ -748,16 +749,16 @@ async fn main() -> anyhow::Result<()> {
     // send scheduled emails
     worker_tracker.spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
-            email_service::pubsub::scheduled::context::ScheduledContext {
-                sqs_worker: scheduled_worker,
-                db: db_scheduled,
-                email_api: email_api_scheduled,
-                attachment_bytes: draft_content,
-                s3_client: s3_client_scheduled,
-                attachment_bucket: attachment_bucket_scheduled,
-                macro_event_broker: macro_event_broker_scheduled,
+            email_service::pubsub::scheduled::worker::context(
+                scheduled_worker,
+                db_scheduled,
+                email_api_scheduled,
+                draft_content,
+                s3_client_scheduled,
+                attachment_bucket_scheduled,
+                macro_event_broker_scheduled,
                 read_receipts,
-            },
+            ),
             cancellation_token,
         )
         .await;

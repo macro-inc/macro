@@ -4299,107 +4299,6 @@ export type SqlStatement =
  */
 export type ReactionAction = 'add' | 'remove';
 /**
- * One activity action returned to the AI.
- */
-export type ToolActivityAction =
-  | {
-      type: 'created';
-    }
-  | {
-      type: 'edited';
-    }
-  | {
-      type: 'opened';
-    }
-  | {
-      type: 'deleted';
-    }
-  | {
-      type: 'messaged';
-    }
-  | {
-      type: 'sent';
-    }
-  | {
-      type: 'responded';
-    }
-  | {
-      /**
-       * The property definition id.
-       */
-      property: string;
-      /**
-       * The property definition's human-readable display name, when it is
-       * still visible to the caller.
-       */
-      propertyName?: string | null;
-      /**
-       * The property's canonical data type, including `tag` for tag sets.
-       */
-      propertyType?: string | null;
-      /**
-       * The previous value, when known.
-       */
-      from?: {
-        [k: string]: unknown;
-      };
-      /**
-       * Previous select/tag option ids resolved to display labels.
-       */
-      fromLabels?: string[] | null;
-      /**
-       * The new value, or `None` when cleared.
-       */
-      to?: {
-        [k: string]: unknown;
-      };
-      /**
-       * New select/tag option ids resolved to display labels.
-       */
-      toLabels?: string[] | null;
-      type: 'propertyChanged';
-    }
-  | {
-      /**
-       * The added principal.
-       */
-      participant: string;
-      type: 'participantAdded';
-    }
-  | {
-      /**
-       * The removed principal.
-       */
-      participant: string;
-      type: 'participantRemoved';
-    }
-  | {
-      /**
-       * The started call's id.
-       */
-      callId: string;
-      type: 'callStarted';
-    }
-  | {
-      type: 'taskAdded';
-    }
-  | {
-      type: 'taskRemoved';
-    }
-  | {
-      /**
-       * The stored action tag.
-       */
-      tag: string;
-      /**
-       * The stored payload, verbatim.
-       */
-      payload?: {
-        [k: string]: unknown;
-      };
-      type: 'unknown';
-    };
-/**
  * Who or what archived a session.
  */
 export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
@@ -5043,6 +4942,107 @@ export type ReadThreadReadContent =
       formatted_preview: string;
       type: 'itemPreviews';
     };
+/**
+ * One activity action returned to the AI.
+ */
+export type ToolActivityAction =
+  | {
+      type: 'created';
+    }
+  | {
+      type: 'edited';
+    }
+  | {
+      type: 'opened';
+    }
+  | {
+      type: 'deleted';
+    }
+  | {
+      type: 'messaged';
+    }
+  | {
+      type: 'sent';
+    }
+  | {
+      type: 'responded';
+    }
+  | {
+      /**
+       * The property definition id.
+       */
+      property: string;
+      /**
+       * The property definition's human-readable display name, when it is
+       * still visible to the caller.
+       */
+      propertyName?: string | null;
+      /**
+       * The property's canonical data type, including `tag` for tag sets.
+       */
+      propertyType?: string | null;
+      /**
+       * The previous value, when known.
+       */
+      from?: {
+        [k: string]: unknown;
+      };
+      /**
+       * Previous select/tag option ids resolved to display labels.
+       */
+      fromLabels?: string[] | null;
+      /**
+       * The new value, or `None` when cleared.
+       */
+      to?: {
+        [k: string]: unknown;
+      };
+      /**
+       * New select/tag option ids resolved to display labels.
+       */
+      toLabels?: string[] | null;
+      type: 'propertyChanged';
+    }
+  | {
+      /**
+       * The added principal.
+       */
+      participant: string;
+      type: 'participantAdded';
+    }
+  | {
+      /**
+       * The removed principal.
+       */
+      participant: string;
+      type: 'participantRemoved';
+    }
+  | {
+      /**
+       * The started call's id.
+       */
+      callId: string;
+      type: 'callStarted';
+    }
+  | {
+      type: 'taskAdded';
+    }
+  | {
+      type: 'taskRemoved';
+    }
+  | {
+      /**
+       * The stored action tag.
+       */
+      tag: string;
+      /**
+       * The stored payload, verbatim.
+       */
+      payload?: {
+        [k: string]: unknown;
+      };
+      type: 'unknown';
+    };
 
 /**
  * Add a copy of a calendar event someone shared with one of the user's channels to one of the user's Google calendars, as `Add to calendar` on the event's card does. Use it for a calendar event mention (`blockName` `calendar`) whose meeting is not on the user's calendar; pass the mention's `documentId` as `eventId`.
@@ -5128,8 +5128,8 @@ export interface ToolCalendarEvent {
    */
   conferenceUrl?: string | null;
   /**
-   * Join URL of the Macro call created with the event, when
-   * CreateCalendarEvent was asked for one.
+   * Join URL of the event's Macro call, when CreateCalendarEvent or
+   * UpdateCalendarEvent was asked for one.
    */
   macroCallUrl?: string | null;
   /**
@@ -13380,54 +13380,6 @@ export interface ReactToChannelMessageResponse {
   count: number;
 }
 /**
- * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
- */
-export interface ReadActivity {
-  /**
-   * Inclusive start of the range as an RFC 3339 timestamp.
-   */
-  from: string;
-  /**
-   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
-   */
-  to: string;
-}
-/**
- * Response from [`ReadActivity`].
- */
-export interface ReadActivityResponse {
-  /**
-   * Matching activity events, newest first.
-   */
-  activities: ToolActivityEvent[];
-  /**
-   * Whether more than 100 events matched the requested range.
-   */
-  truncated: boolean;
-}
-/**
- * One activity event returned by [`ReadActivity`].
- */
-export interface ToolActivityEvent {
-  /**
-   * The principal that mechanically performed the action.
-   */
-  actorId: string;
-  /**
-   * The kind of entity acted on.
-   */
-  entityType: string;
-  /**
-   * The entity acted on.
-   */
-  entityId: string;
-  action: ToolActivityAction;
-  /**
-   * When the action occurred.
-   */
-  occurredAt: string;
-}
-/**
  * Read an agent session by its ID from an agent-session mention or search result. Returns the latest 20 messages in chronological order, including prompts, replies, tool activity and errors. Optionally select a turn number to inspect earlier history. Each message is capped at 4000 characters; truncated flags identify omitted history or text. Requires view access to the session.
  */
 export interface ReadAgentSession {
@@ -16079,6 +16031,8 @@ export interface UpdateBookingSettings {
  *
  * A guest without modify rights (`viewerCan.editDetails` false while `viewerCan.rsvp` is true) may only change their own `reminders`, add guests where `viewerCan.inviteGuests` allows it, and answer with `rsvp`; changing the title, time, description, location, recurrence or conference fails because the organizer doesn't let guests change the event.
  *
+ * `addMacroCall` switches the event to a Macro call in place, so never delete and recreate an event to change its meeting link. It creates the call, adds its join link to the description (and to `location` when no physical location is set), and removes any Google Meet or other conference, in the one update attendees are notified of. The returned event's `macroCallUrl` holds the link. An Outlook event's Teams meeting cannot be removed this way, and the call then fails.
+ *
  * `rsvp` sets the user's own response to an invitation and is independent of the field edits — it can be the only thing this call changes. It applies at the same `scope` as the rest of the call and answers as the connected inbox the event's copy belongs to, so it only works when that inbox is an attendee.
  */
 export interface UpdateCalendarEvent {
@@ -16124,9 +16078,13 @@ export interface UpdateCalendarEvent {
    */
   recurrenceLines?: string[] | null;
   /**
-   * Change the event's video conference: "provider_default" uses the calendar's supported provider; "google_meet" or "microsoft_teams" selects one explicitly. "remove" detaches the conference only where supported. Check ListCalendars capabilities first. Omit to preserve the current conference.
+   * Change the event's video conference: "provider_default" uses the calendar's supported provider; "google_meet" or "microsoft_teams" selects one explicitly. "remove" detaches the conference only where supported. Check ListCalendars capabilities first. Omit to preserve the current conference. To switch to a Macro call use `addMacroCall` instead.
    */
   conference?: ConferenceChangeInput | null;
+  /**
+   * Switch the event to a Macro call, replacing any Google Meet or other conference. An event already holding a Macro call keeps it. Mutually exclusive with `conference`.
+   */
+  addMacroCall?: boolean;
   /**
    * Replacement notification reminders. `useDefault: true` follows the calendar's own defaults; otherwise `overrides` replaces the whole list with entries of `method` "popup" (a Macro notification) or "email" and `minutes` before the start — an empty list silences the event. Omit to keep the current reminders.
    */
@@ -16850,4 +16808,52 @@ export interface Subagent {
 }
 export interface SubagentResponse {
   result: string;
+}
+/**
+ * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
+ */
+export interface ReadActivity {
+  /**
+   * Inclusive start of the range as an RFC 3339 timestamp.
+   */
+  from: string;
+  /**
+   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
+   */
+  to: string;
+}
+/**
+ * Response from [`ReadActivity`].
+ */
+export interface ReadActivityResponse {
+  /**
+   * Matching activity events, newest first.
+   */
+  activities: ToolActivityEvent[];
+  /**
+   * Whether more than 100 events matched the requested range.
+   */
+  truncated: boolean;
+}
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export interface ToolActivityEvent {
+  /**
+   * The principal that mechanically performed the action.
+   */
+  actorId: string;
+  /**
+   * The kind of entity acted on.
+   */
+  entityType: string;
+  /**
+   * The entity acted on.
+   */
+  entityId: string;
+  action: ToolActivityAction;
+  /**
+   * When the action occurred.
+   */
+  occurredAt: string;
 }

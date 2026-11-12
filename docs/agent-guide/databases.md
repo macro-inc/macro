@@ -105,7 +105,7 @@ PostHog unless the variable was set when it was built. With the flag off:
   the slash menu's **Database** and **Query** actions are absent, and no starter database is
   created.
 - The sidebar, mentions, search and Quick Access list no databases; Activity
-  and the ReadActivity tool leave out database rows.
+  and `macro.activity.mine()` leave out database rows.
 - A document's database answer shows its title (or "Database answer") as a
   plain label, keeps the node unchanged, and never loads the SQL engine.
 - Database tool calls in a chat render as a muted "Database tool" line.

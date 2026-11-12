@@ -7,6 +7,7 @@
 pub(crate) mod helpers;
 
 mod blocked_domains;
+mod contact_emails;
 mod contact_update;
 mod create_company;
 mod create_contact;
