@@ -7,6 +7,7 @@ import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
@@ -822,9 +823,10 @@ export function VaultView(props: {
                   </div>
                 </Match>
                 <Match when={vault.items.isPending}>
-                  <p class="p-4 text-sm text-ink-muted">
-                    {t('passwords.loading')}
-                  </p>
+                  <ViewSkeleton.Rows
+                    label={t('passwords.loading')}
+                    class="px-2"
+                  />
                 </Match>
                 <Match when={vault.items.isError && !vault.items.data}>
                   <div class="flex flex-col items-start gap-2 p-4">

@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   source: {},
   existingSplit: vi.fn<() => { id: string } | undefined>(() => undefined),
   tabManager: vi.fn<() => object | undefined>(() => undefined),
+  openProjectAction: vi.fn(),
+  projectsEnabled: true,
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -51,6 +53,9 @@ vi.mock('@app/features/next-soup/actions', () => ({
   makeRenameAction: mocks.action,
   makeShareAction: mocks.action,
 }));
+vi.mock('@app/features/projects/project-entity-actions', () => ({
+  openProjectEntityAction: mocks.openProjectAction,
+}));
 vi.mock('@app/features/crm/crm-action-items', () => ({
   createCrmEntityActionItems: () => () => [],
 }));
@@ -69,7 +74,7 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false }),
+  useFeatureFlag: () => () => ({ enabled: mocks.projectsEnabled }),
 }));
 vi.mock('@app/lib/i18n', () => ({ t: (key: string) => key }));
 vi.mock('@app/signal/splitLayout', () => ({
@@ -109,6 +114,8 @@ beforeEach(() => {
   mocks.open.mockReset();
   mocks.existingSplit.mockReset();
   mocks.tabManager.mockReset();
+  mocks.openProjectAction.mockReset();
+  mocks.projectsEnabled = true;
 });
 
 afterEach(() => disarmOpenInNewTabIntent());
@@ -189,4 +196,80 @@ describe('Open in new tab on a conversation', () => {
       );
     }
   );
+});
+
+const project = (id: string, ownerId: string) =>
+  ({ type: 'initiative', id, name: `Project ${id}`, ownerId }) as EntityData;
+
+const clearSelection = vi.fn();
+const menuItems = (entities: EntityData[]) =>
+  createSoupEntityActions()
+    .buildActionGroups(
+      {
+        selection: { clear: clearSelection },
+      } as unknown as EntityActionListState,
+      entities,
+      {
+        viewContext: {
+          supportsMarkDone: false,
+          supportsOpenInNewSplit: true,
+          senderBucket: undefined,
+        },
+      }
+    )
+    .flatMap((group) => group.items);
+
+describe('Project rows', () => {
+  it('offers an owned project its rename, share and delete actions', async () => {
+    const items = menuItems([project('a', 'user')]);
+
+    expect(items.map(({ id }) => id)).toEqual(
+      expect.arrayContaining(['open-in-split', 'rename', 'share', 'delete'])
+    );
+    await items.find(({ id }) => id === 'rename')?.onClick();
+    await items.find(({ id }) => id === 'share')?.onClick();
+    await items.find(({ id }) => id === 'delete')?.onClick();
+
+    expect(mocks.openProjectAction.mock.calls).toEqual([
+      [{ kind: 'rename', id: 'a', name: 'Project a' }],
+      [{ kind: 'share', id: 'a' }],
+      [{ kind: 'delete', ids: ['a'] }, { onDeleted: expect.any(Function) }],
+    ]);
+  });
+
+  it("offers only sharing on someone else's project", () => {
+    const ids = menuItems([project('a', 'someone')]).map(({ id }) => id);
+
+    expect(ids).toContain('share');
+    expect(ids).not.toContain('rename');
+    expect(ids).not.toContain('delete');
+  });
+
+  it('deletes several owned projects together and drops single-project actions', async () => {
+    const items = menuItems([project('a', 'user'), project('b', 'user')]);
+
+    expect(items.map(({ id }) => id)).toEqual(['delete']);
+    await items[0]?.onClick();
+
+    expect(mocks.openProjectAction).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'delete', ids: ['a', 'b'] },
+      { onDeleted: expect.any(Function) }
+    );
+    clearSelection.mockClear();
+    mocks.openProjectAction.mock.calls[0]?.[1]?.onDeleted(['a']);
+    expect(clearSelection).toHaveBeenCalledOnce();
+  });
+
+  it('offers no project actions while projects are off or loading', () => {
+    mocks.projectsEnabled = false;
+    const ids = menuItems([project('a', 'user')]).map(({ id }) => id);
+
+    expect(ids).not.toContain('rename');
+    expect(ids).not.toContain('share');
+    expect(ids).not.toContain('delete');
+  });
+
+  it('keeps project actions off a selection mixing projects with other items', () => {
+    expect(menuItems([project('a', 'user'), channel])).toEqual([]);
+  });
 });

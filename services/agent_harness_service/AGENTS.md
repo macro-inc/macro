@@ -119,9 +119,11 @@ Pulumi stacks; they do not host extra agent processes.
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
-  reuses the harness tool context and retains bearer authentication. Wherever the harness can run code, every client but ChatGPT
-  gets only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
-  (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
+  reuses the harness tool context and retains bearer authentication. Wherever
+  the harness can run code, every client but ChatGPT gets only
+  `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
+  (`tool_service.rs`) and can call only those; a native tool named directly
+  is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, the `enable-agent-navigation` flag, Redis budgets and

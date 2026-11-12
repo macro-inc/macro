@@ -8,7 +8,8 @@ rail entry and phone dock entry appear only when both hold. By default the rail
 entry sits below Calendar and above Agents; a saved custom rail order without
 it gets it right after Calendar, and the user can reorder it like any other.
 
-The view uses the shared view shell. The inner sidebar (Drive's sidebar
+The view uses the shared view shell and standard shimmering skeletons while
+the team or password list loads. The inner sidebar (Drive's sidebar
 patterns) has a New dropdown, All items, Favorites, Recently used, Shared, and
 a Folders section: a Passwords root row and the folder tree, built from Drive's
 `FolderTree`. Folders nest; selecting one lists its items and its subfolders'

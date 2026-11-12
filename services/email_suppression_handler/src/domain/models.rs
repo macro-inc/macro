@@ -43,7 +43,10 @@ pub struct ComplainedRecipient {
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Metadata is retained for decoding and existing Debug telemetry"
+)]
 pub struct ComplaintNotification {
     /// A list that contains information about recipients that may have been responsible for the complaint. For more information, see Complained recipients.
     pub complained_recipients: Vec<ComplainedRecipient>,
@@ -126,7 +129,10 @@ pub enum BounceSubType {
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Metadata is retained for decoding and existing Debug telemetry"
+)]
 pub struct BouncedRecipient {
     /// The email address of the recipient. If a DSN is available, this is the value of the Final-Recipient field from the DSN.
     pub email_address: String,
@@ -140,7 +146,10 @@ pub struct BouncedRecipient {
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Metadata is retained for decoding and existing Debug telemetry"
+)]
 pub struct BounceNotification {
     /// The type of bounce, as determined by Amazon SES.
     pub bounce_type: BounceType,
