@@ -1,32 +1,15 @@
 /** @vitest-environment jsdom */
 
-import { publishSessionActivity } from '@core/agent-session/session-activity';
 import { cleanup, render } from '@solidjs/testing-library';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodeExecutionToolCall } from './CodeExecutionToolCall';
 
 vi.mock('./MacroToolCall', () => ({ MacroToolCall: () => null }));
 
-beforeEach(() => {
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-  );
-});
-
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
-});
+afterEach(cleanup);
 
 describe('CodeExecutionToolCall', () => {
-  it('names a running program with the session line in place of "Calling N tools"', () => {
-    publishSessionActivity('running-program', 'Searching your workspace (3)…');
-
+  it('shows a running program as its steps, with no group or card of its own', () => {
     const view = render(() => (
       <CodeExecutionToolCall
         common={{
@@ -38,12 +21,11 @@ describe('CodeExecutionToolCall', () => {
           trailing: undefined,
         }}
         context={{
-          sessionId: 'running-program',
-          messageId: 'running-program:turn-1',
+          sessionId: 'session',
+          messageId: 'session:turn-1',
           partIndex: 0,
           inFlight: true,
           followedBy: () => false,
-          current: true,
         }}
         record={{
           executionId: 'execution-1',
@@ -51,8 +33,8 @@ describe('CodeExecutionToolCall', () => {
           status: 'running',
           calls: [],
           activity: [
-            { id: 0, label: 'Search workspace', status: 'completed' },
-            { id: 1, label: 'Search workspace', status: 'running' },
+            { id: 0, label: 'Browse workspace', status: 'completed' },
+            { id: 1, label: 'Search email', status: 'running' },
           ],
         }}
         loading={false}
@@ -60,53 +42,52 @@ describe('CodeExecutionToolCall', () => {
       />
     ));
 
-    const group = view.getByRole('button');
-    expect(group.textContent).toContain('Searching your workspace (3)…');
-    expect(group.textContent).not.toContain('Calling');
+    expect(view.queryByRole('button')).toBeNull();
+    expect(view.container.textContent).toContain('Browse workspace');
+    expect(view.container.textContent).toContain('Search email');
+    expect(view.container.textContent).not.toMatch(
+      /Workspace activity|Working in your workspace|export async/
+    );
   });
 
-  it('shows the session line on the workspace card before any request is observed', () => {
-    publishSessionActivity('starting-program', 'Running code…');
-
+  it('shows one failed row for a program that ended before any step', () => {
     const view = render(() => (
       <CodeExecutionToolCall
         common={{
           id: 'execute-code',
           label: 'ExecuteCode',
-          status: 'running',
-          muted: false,
+          status: 'failed',
+          muted: true,
           stopped: false,
-          trailing: undefined,
+          trailing: 'Failed',
         }}
         context={{
-          sessionId: 'starting-program',
-          messageId: 'starting-program:turn-1',
+          sessionId: 'session',
+          messageId: 'session:turn-1',
           partIndex: 0,
-          inFlight: true,
+          inFlight: false,
           followedBy: () => false,
-          current: true,
         }}
         record={{
           executionId: 'execution-2',
           source: 'export async function main() {}',
-          status: 'running',
+          status: 'failed',
+          error: 'ReferenceError: macro is not defined',
           calls: [],
           activity: [],
         }}
+        error="ReferenceError: macro is not defined"
         loading={false}
         unavailable={false}
       />
     ));
 
-    expect(view.container.textContent).toContain('Running code…');
-    expect(view.container.textContent).not.toContain(
-      'Working in your workspace'
-    );
+    expect(view.container.textContent).toContain('Workspace activity');
+    expect(view.container.textContent).toContain('Failed');
+    expect(view.container.textContent).not.toContain('ReferenceError');
   });
 
-  it('keeps the tool count on a program the turn has moved past', () => {
-    publishSessionActivity('finished-program', 'Searching your workspace (8)…');
-
+  it('keeps a step failure on its own row when other steps ran', () => {
     const view = render(() => (
       <CodeExecutionToolCall
         common={{
@@ -118,68 +99,30 @@ describe('CodeExecutionToolCall', () => {
           trailing: undefined,
         }}
         context={{
-          sessionId: 'finished-program',
-          messageId: 'finished-program:turn-1',
+          sessionId: 'session',
+          messageId: 'session:turn-1',
           partIndex: 0,
-          inFlight: true,
+          inFlight: false,
           followedBy: () => false,
-          current: false,
         }}
         record={{
           executionId: 'execution-3',
           source: 'export async function main() {}',
           status: 'succeeded',
           calls: [],
-          activity: [{ id: 0, label: 'Search workspace', status: 'completed' }],
+          activity: [
+            { id: 0, label: 'Browse workspace', status: 'failed' },
+            { id: 1, label: 'Browse workspace', status: 'completed' },
+          ],
         }}
         loading={false}
         unavailable={false}
       />
     ));
 
-    const group = view.getByRole('button');
-    expect(group.textContent).toContain('Called 1 tool');
-    expect(group.textContent).not.toContain('Searching your workspace');
-  });
-
-  it('keeps the line on the newest program while the agent thinks after it', () => {
-    publishSessionActivity(
-      'thinking-after-program',
-      'Searching your workspace (4)…'
-    );
-
-    const view = render(() => (
-      <CodeExecutionToolCall
-        common={{
-          id: 'execute-code',
-          label: 'ExecuteCode',
-          status: 'completed',
-          muted: false,
-          stopped: false,
-          trailing: undefined,
-        }}
-        context={{
-          sessionId: 'thinking-after-program',
-          messageId: 'thinking-after-program:turn-1',
-          partIndex: 0,
-          inFlight: true,
-          followedBy: () => false,
-          current: true,
-        }}
-        record={{
-          executionId: 'execution-4',
-          source: 'export async function main() {}',
-          status: 'succeeded',
-          calls: [],
-          activity: [{ id: 0, label: 'Search workspace', status: 'completed' }],
-        }}
-        loading={false}
-        unavailable={false}
-      />
-    ));
-
-    const group = view.getByRole('button');
-    expect(group.textContent).toContain('Searching your workspace (4)…');
-    expect(group.textContent).not.toContain('Called');
+    expect(view.container.textContent).not.toContain('Workspace activity');
+    expect(
+      view.container.querySelectorAll('[data-tool-status="failed"]')
+    ).toHaveLength(1);
   });
 });

@@ -119,8 +119,8 @@ impl<Context> AuthenticatedToolService<Context> {
         definitions(&self.toolset).collect()
     }
 
-    /// Tools listed for a mode. Code mode lists only `ExecuteCode` and
-    /// `DescribeCodeTools`. Native tools stay callable if a client already
+    /// Tools listed for a mode. Code mode lists `ExecuteCode`,
+    /// `DescribeCodeTools` and `ReadCodeDocs`. Native tools stay callable if a client already
     /// knows their names.
     fn tool_definitions_for(&self, mode: ToolMode) -> Vec<Tool> {
         match (mode, &self.code_mode) {
