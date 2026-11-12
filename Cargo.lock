@@ -10646,51 +10646,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ideas"
-version = "0.1.0"
-dependencies = [
- "agent_correlation",
- "async-trait",
- "axum",
- "chrono",
- "chrono-tz",
- "entity_access",
- "entity_registry",
- "feature_flags",
- "futures",
- "ideas_db_utils",
- "macro_authorization",
- "macro_db_migrator",
- "macro_user_id",
- "macro_uuid",
- "model-entity",
- "model_owner",
- "rootcause",
- "serde",
- "serde_json",
- "shown_text",
- "sqlx",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "utoipa",
- "workspace-hack",
-]
-
-[[package]]
-name = "ideas_db_utils"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "macro_db_migrator",
- "macro_uuid",
- "serde_json",
- "sqlx",
- "workspace-hack",
-]
-
-[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17723,8 +17678,6 @@ dependencies = [
  "futures",
  "github",
  "glob",
- "ideas",
- "ideas_db_utils",
  "jev",
  "kafka_util",
  "lexical_client",
@@ -17751,6 +17704,7 @@ dependencies = [
  "sqlx",
  "strum 0.27.2",
  "suggestions",
+ "suggestions_db_utils",
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
@@ -19917,10 +19871,23 @@ dependencies = [
  "shown_text",
  "sqlx",
  "strum 0.27.2",
+ "suggestions_db_utils",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "suggestions_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "macro_uuid",
+ "serde_json",
+ "sqlx",
  "workspace-hack",
 ]
 
