@@ -28,6 +28,14 @@ impl HarnessBindings for Arc<FakeBindings> {
         Ok(self.bindings.lock().unwrap().get(&bot).copied())
     }
 
+    async fn access_facts(
+        &self,
+        _bot: BotId,
+        _actor: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<Option<crate::domain::model::RuntimeAccessFacts>> {
+        Ok(None)
+    }
+
     async fn sessions_on_harness(
         &self,
         _harness: HarnessId,
@@ -421,7 +429,11 @@ async fn a_dial_initializes_and_reports_the_sessions_its_runtime_lists() {
     let report = reports.recv().await.expect("the dial reports");
     assert_eq!(report.harness, HarnessId::TEST_A);
     assert_eq!(
-        report.acp_sessions,
+        report
+            .acp_sessions
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
 }

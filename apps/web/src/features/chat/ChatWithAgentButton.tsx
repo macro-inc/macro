@@ -33,6 +33,7 @@ type ChatWithAgentEntity =
       blockParams?: Record<string, string>;
     }
   | { type: 'project'; id: string; name: string }
+  | { type: 'chat'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType }
   | { type: 'pr'; id: string; url: string };
 
@@ -132,8 +133,14 @@ function entityMentionMarkdown(entity: ChatWithAgentEntity): string {
   return chatAttachmentMentionToMarkdown(buildMention(entity));
 }
 
+/** Prefixes a read-only chat's mention so the agent knows to read that chat and carry on. */
+const CONTINUE_CHAT_PREFIX = 'Continue this chat: ';
+
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  return createAndOpenAgent({ input: `${entityMentionMarkdown(entity)} ` });
+  const mention = `${entityMentionMarkdown(entity)} `;
+  const input =
+    entity.type === 'chat' ? `${CONTINUE_CHAT_PREFIX}${mention}` : mention;
+  return createAndOpenAgent({ input });
 }
 
 /** Open a new agent session with `initialInput` unsent, on `model`, told `instructions` privately. */

@@ -31,8 +31,12 @@ export function CallDiscussionContent(props: {
   panel: CallPanelState;
   onViewChannel: (channelId: string) => void;
   onOutsideCountChange?: (count: number) => void;
-  /** The state the channel needs, for a host that doesn't already provide it. */
-  channelHost?: (channel: JSX.Element) => JSX.Element;
+  /**
+   * The app state a discussion needs, for a host that doesn't already provide
+   * it. Messages need it as much as the channel does. The host renders the
+   * discussion itself: one created out here would not see its providers.
+   */
+  host?: (discussion: () => JSX.Element) => JSX.Element;
 }) {
   const channelThread = () => {
     const discussion = props.discussion();
@@ -43,31 +47,35 @@ export function CallDiscussionContent(props: {
     return discussion?.kind === 'call_chat' ? discussion : undefined;
   };
 
+  const hosted = (discussion: () => JSX.Element) =>
+    props.host ? props.host(discussion) : discussion();
+
   return (
     <Suspense>
       <Switch>
         <Match when={channelThread()}>
-          {(thread) => {
-            const panel = (
+          {(thread) =>
+            hosted(() => (
               <ChannelCallPanel
                 channelId={thread().channel_id}
                 rootId={thread().root_id}
                 onViewChannel={() => props.onViewChannel(thread().channel_id)}
                 onOutsideCountChange={props.onOutsideCountChange}
               />
-            );
-            return props.channelHost ? props.channelHost(panel) : panel;
-          }}
+            ))
+          }
         </Match>
         <Match when={callChat()}>
-          {(chat) => (
-            <CallChat
-              callId={chat().call_id}
-              open={props.panel.open}
-              focusOnOpen={props.panel.focusOnOpen}
-              onClose={props.panel.onClose}
-            />
-          )}
+          {(chat) =>
+            hosted(() => (
+              <CallChat
+                callId={chat().call_id}
+                open={props.panel.open}
+                focusOnOpen={props.panel.focusOnOpen}
+                onClose={props.panel.onClose}
+              />
+            ))
+          }
         </Match>
       </Switch>
     </Suspense>

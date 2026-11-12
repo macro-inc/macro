@@ -26,8 +26,10 @@ export const AiFeature = {
   agent_session: 'agent_session',
   agent_repository_choice: 'agent_repository_choice',
   agent_mode_choice: 'agent_mode_choice',
+  agent_activity_summary: 'agent_activity_summary',
   dictation: 'dictation',
   image_generation: 'image_generation',
   email_focus: 'email_focus',
   web_search: 'web_search',
+  non_billable_agent_session: 'non_billable_agent_session',
 } as const;

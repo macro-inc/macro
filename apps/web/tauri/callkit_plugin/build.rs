@@ -16,6 +16,9 @@ const COMMANDS: &[&str] = &[
     "watch_drawer_opened",
     "watch_participant_identities",
     "get_active_call_state",
+    "get_audio_output",
+    "select_audio_output",
+    "watch_audio_output",
     "start_outgoing_call",
     "prepare_join",
     "abort_join",
@@ -27,6 +30,8 @@ const COMMANDS: &[&str] = &[
     "switch_camera",
     "can_use_full_screen_intent",
     "open_full_screen_intent_settings",
+    "open_microphone_settings",
+    "request_microphone_permission",
 ];
 
 struct BuildEnv {

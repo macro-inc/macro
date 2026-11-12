@@ -1,4 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPeopleCache } from '../people/host';
+import {
+  PEOPLE_UNSUPPORTED,
+  type PeopleReferenceRequest,
+  type PeopleSearch,
+} from '../people/protocol';
+import { unsupportedContactSync } from '../people/test-support';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
 import { createRetirableCacheHost, retainCacheHost } from './retirable-host';
@@ -95,6 +102,144 @@ describe('createRetirableCacheHost', () => {
       'exhausted',
       'MUTATION_RETRY_EXHAUSTED'
     );
+  });
+
+  it('publishes and searches people through the app wrapper, retiring captured capabilities too', async () => {
+    const scope = {
+      identity: 'macro|viewer@example.com',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    };
+    const epoch = '00000000-0000-4000-8000-000000000002';
+    const update = { scope, epoch, action: { kind: 'commit' } } as const;
+    const search: PeopleSearch = {
+      scope,
+      mode: 'command',
+      query: 'person',
+      excluded: [],
+      limit: 50,
+      nowMs: 0,
+    };
+    const page = {
+      kind: 'page',
+      policyVersion: 3,
+      people: [],
+      truncated: false,
+      nextCursor: null,
+    };
+    const references: PeopleReferenceRequest = {
+      scope,
+      labels: ['Person'],
+      matching: 'preferFullName',
+      excludeSecondaryInboxes: true,
+    };
+    const resolved = {
+      kind: 'resolved',
+      policyVersion: 4,
+      matches: [{ complete: true, people: [] }],
+    };
+    const transport = {
+      ...unsupportedContactSync,
+      readSql: vi.fn().mockResolvedValue({ kind: 'unsupported' }),
+      resolveReferences: vi.fn().mockResolvedValue(resolved),
+      context: vi.fn().mockResolvedValue({ kind: 'ready', epoch }),
+      update: vi.fn().mockResolvedValue('1'),
+      search: vi.fn().mockResolvedValue(page),
+    };
+    const inner: CacheHost = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      people: createPeopleCache(transport),
+      dispose: vi.fn(),
+    };
+    const host = createRetirableCacheHost(inner);
+    const people = host.people;
+    expect(people).toBeDefined();
+    if (!people) throw new Error('Missing person capability');
+    await expect(people.context(scope)).resolves.toEqual({
+      kind: 'ready',
+      epoch,
+    });
+    await expect(people.update(update)).resolves.toBe('1');
+    await expect(people.search(search)).resolves.toEqual(page);
+    await expect(people.resolveReferences(references)).resolves.toEqual(
+      resolved
+    );
+    expect(transport.resolveReferences.mock.calls[0][0]).toEqual(references);
+    expect(transport.context.mock.calls[0][0]).toEqual(scope);
+    expect(transport.update.mock.calls[0][0]).toEqual(update);
+    expect(transport.search.mock.calls[0][0]).toEqual(search);
+
+    const contextRead = people.context;
+    const write = people.update;
+    const searchRead = people.search;
+    const referenceRead = people.resolveReferences;
+    host.dispose();
+    await expect(referenceRead(references)).resolves.toEqual({
+      kind: 'unsupported',
+    });
+    await expect(contextRead(scope)).resolves.toEqual({ kind: 'unsupported' });
+    await expect(searchRead(search)).resolves.toEqual({ kind: 'unsupported' });
+    await expect(write(update)).rejects.toThrow(PEOPLE_UNSUPPORTED);
+    expect(transport.context).toHaveBeenCalledOnce();
+    expect(transport.update).toHaveBeenCalledOnce();
+    expect(transport.search).toHaveBeenCalledOnce();
+    expect(transport.resolveReferences).toHaveBeenCalledOnce();
+    expect(inner.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('does not mask scope or persistence errors from a supported person host', async () => {
+    const scope = {
+      identity: 'macro|viewer@example.com',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    };
+    const error = new Error('cache hydration scope changed');
+    const host = createRetirableCacheHost({
+      ...createNoopCacheHost(),
+      people: createPeopleCache({
+        ...unsupportedContactSync,
+        readSql: vi.fn().mockRejectedValue(error),
+        resolveReferences: vi.fn().mockRejectedValue(error),
+        context: vi.fn().mockRejectedValue(error),
+        search: vi.fn().mockRejectedValue(error),
+        update: vi.fn().mockRejectedValue(error),
+      }),
+    });
+    const people = host.people;
+    if (!people) throw new Error('Missing person capability');
+    await expect(people.context(scope)).rejects.toBe(error);
+    await expect(
+      people.resolveReferences({
+        scope,
+        labels: ['Person'],
+        matching: 'exact',
+        excludeSecondaryInboxes: false,
+      })
+    ).rejects.toBe(error);
+    await expect(
+      people.search({
+        scope,
+        mode: 'command',
+        query: '',
+        excluded: [],
+        limit: 50,
+        nowMs: 0,
+      })
+    ).rejects.toBe(error);
+    await expect(
+      people.update({
+        scope,
+        epoch: '00000000-0000-4000-8000-000000000002',
+        action: { kind: 'commit' },
+      })
+    ).rejects.toBe(error);
+    host.dispose();
+  });
+
+  it('keeps unsupported person hosts unsupported', () => {
+    const host = createRetirableCacheHost(createNoopCacheHost());
+    expect(host.people).toBeUndefined();
+    host.dispose();
+    expect(host.people).toBeUndefined();
   });
 
   it('retires once', () => {

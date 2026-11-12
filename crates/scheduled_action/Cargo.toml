@@ -15,6 +15,8 @@ bots = { path = "../bots", features = ["outbound"] }
 activity = { path = "../activity", default-features = false }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = ["admission"] }
+agent_correlation = { path = "../agent_correlation" }
+async-trait = { workspace = true }
 bot_id = { path = "../bot_id" }
 call = { path = "../call", default-features = false, features = ["outbound"] }
 channel_sender = { path = "../channel_sender" }
@@ -52,6 +54,7 @@ sqlx = { workspace = true }
 macro_user_id = { path = "../macro_user_id"}
 cron = { workspace = true }
 anyhow = { workspace = true }
+lazy-regex = { workspace = true }
 macro_uuid = { path = "../macro_uuid"}
 chrono = { workspace = true}
 chrono-tz = { workspace = true }

@@ -18,6 +18,7 @@ fn no_types_means_every_type() {
             EntityType::CalendarEvent,
             EntityType::ForeignEntity,
             EntityType::AgentSession,
+            EntityType::Harness,
         ]
     );
 }

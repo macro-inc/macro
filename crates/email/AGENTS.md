@@ -56,6 +56,21 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- `Subject` is a message-level filter literal. With a top-level subject term,
+  each owned inbox gets a bound (not `unnest`) two-step subscan: threads in
+  order with only the trigram-indexed subject match, then the full match
+  (mailbox facts) per thread until LIMIT. Keep the `OFFSET 0` fences and the
+  absence of an outer sort, or the planner joins every hit to its facts first;
+  binding the inbox gives it that inbox's statistics instead of the average
+  one. Spam and Trash skip the subscan (it can't read their folder date), and
+  a subscan never picks its preview in the candidate stage
+  (`uses_subject_subscans`). Subscan queries run with parallel workers off
+  (`SET LOCAL max_parallel_workers_per_gather = 0`): workers ran far past the
+  page LIMIT and read 15 times the buffers. Other subject trees keep the
+  `has_thread_literals` mirror, so a page's LIMIT never counts threads the
+  lateral drops. Match the bare `subject` column so the planner keeps its
+  statistics. `Attachment(kind)` reads the denormalized thread flags
+  `email_db_client` maintains.
 - The send route refuses an agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
@@ -117,9 +132,11 @@ tools — hexagonal, heavily feature-gated.
   `domain/service/thread_labels.rs`); route new label actions through them.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
-  each of their own inboxes; an inbox whose read fails is skipped, and
-  subjects and snippets are cut to 200 and 300 characters there, not in the
-  adapters.
+  each of their own inboxes (50 by default, at most 100); an inbox whose read
+  fails is skipped. Subjects are cut to 200 characters and snippets to the
+  caller's `snippet_chars` (the provider's 300 by default, at most 500, past
+  the preview taken from the body) there, not in the adapters; each message
+  carries its label names.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
@@ -165,6 +182,10 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
+- Each `email_message_mailbox_facts` probe rebuilds a message's facts from its
+  labels and pending state. In the dynamic preview query, give a view's facts
+  condition to `view_mailbox_fact` so it shares the presence/trash probe in
+  `build_preview_message_predicate` instead of adding a second one.
 - Read receipts (`domain/read_receipts.rs`) own pixel policy for every send
   path: strip existing Macro pixels, track only HTML bodies, never block
   delivery on a tracking failure, and count opens only for sent messages.
@@ -175,21 +196,49 @@ tools — hexagonal, heavily feature-gated.
   claimed unit of `MailboxSyncService` and `MailboxProjectionService` opens
   one root `outlook.sync.*` span (idle polls open none) and records
   `outlook.outcome`, `outlook.defer_reason` and `outlook.defer_seconds`
-  through `record_done`/`record_deferred`/`record_failed`. The mailbox loops
-  log their own deferrals with `link_id` (gate refusals at DEBUG), so the
-  worker must not log them again. Add a new defer reason in `defer_reason`.
+  through `record_done`/`record_deferred`/`record_abandoned`/`record_failed`.
+  The mailbox loops log their own deferrals with `link_id` (gate refusals at
+  DEBUG), so the worker must not log them again. Add a new defer reason in `defer_reason`.
+  Notification lag rides the same rows: a Graph change notification stamps
+  the folder streams' `notified_at` and `notified_traceparent`. Every claim
+  of the stream carries `notified_at` onto the reconciliation rows its pages
+  queue (newest notification wins) until a checkpoint that started reading
+  after the notification clears it; enumerate and reconcile spans record
+  `outlook.notification_wait_ms` and `outlook.notification_lag_ms`. The first
+  claim of a stream or row takes the traceparent (clearing it) and adopts the
+  webhook's trace (`crate::trace_context`), so webhook to import is one
+  trace, while retries get traces of their own and a long deferral can't grow
+  it. Subscription upkeep and webhook deliveries open
+  `outlook.subscription.maintain` and `outlook.subscription.notify`; each
+  lifecycle event logs "outlook subscription lifecycle event".
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded.
   `MailboxError::Effect` (`defer_reason=effect`) is for a projection effect
   that fails outside the database; email-service's `MailboxEffects` maps its
   database steps with `database_failed` and everything else with `failed`.
+  Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
+  uploads, the attachment (`outlook.attachment_id`); never return one without
+  a cause.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
   import row is left. A resync must reset `import_started_at` and
   `import_completed_at` and log "outlook import started", as
   `outbound/mailbox_pg/lifecycle.rs` does.
+- A message reconciliation that keeps failing is abandoned
+  (`message_retry` in `domain/mailbox.rs`): its row waits at
+  `available_at = 'infinity'` with attempts reset, so claims stop at their
+  index bound and every enqueue's `available_at = now()` revives it. Any query
+  that reads queued or import-running state must leave those rows out, as
+  `settle_import`, the health snapshot, the backfill status and resync do.
+  Throttling and token refusals give their claim back to `attempts`.
+- Outlook sync claims (catalog, folder streams, messages, contacts) skip a
+  link with `needs_reauth`; clearing the flag resumes them.
+- Process deleted-user bindings in the domain by link id, custodian before
+  owner, then actor id, retaining one binding per link and actor; the repository
+  returns each binding's kind so custody cleanup runs before an owner disconnect
+  can suppress it without processing a self-custodian twice.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

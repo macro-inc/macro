@@ -1,15 +1,33 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, ConfirmDialog, ToggleSwitch } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { type Component, createSignal, For, Show } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type {
   RoutineCreatorSource,
   RoutineDraftStorage,
 } from '../context/routine-sources';
+import type { CreatedRoutineItem } from '../core/draft';
 import { withNewDraftSteps } from '../core/routine-draft';
 import { createRoutineComposer } from '../primitives/routine-composer';
 import { routineSections } from './routine-sections';
+
+/** Items AI created while drafting, which stay whether or not it's created. */
+function CreatedItems(props: {
+  label: string;
+  items: CreatedRoutineItem[];
+  Item: Component<{ item: CreatedRoutineItem }>;
+}) {
+  return (
+    <Show when={props.items.length}>
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+        <span>{props.label}</span>
+        <For each={props.items}>{(item) => <props.Item item={item} />}</For>
+        <span>They stay even if you don't create the routine.</span>
+      </div>
+    </Show>
+  );
+}
 
 /**
  * A routine before it exists: its page, laid out like a saved routine's, that
@@ -23,6 +41,8 @@ export function RoutineNewView(props: {
   defaultModel: string;
   /** Decisions are answered by the classifier behind trigger conditions. */
   decisionsEnabled: boolean;
+  /** One item AI created while drafting, by name. */
+  CreatedItem: Component<{ item: CreatedRoutineItem }>;
   onCreated(id: string): void;
   onCancel(): void;
 }) {
@@ -92,6 +112,16 @@ export function RoutineNewView(props: {
         }
         feedback={
           <>
+            <CreatedItems
+              label="Created for this routine:"
+              items={(draft().created ?? []).filter((item) => item.used)}
+              Item={props.CreatedItem}
+            />
+            <CreatedItems
+              label="Created, not used by this routine:"
+              items={(draft().created ?? []).filter((item) => !item.used)}
+              Item={props.CreatedItem}
+            />
             <Show when={attempted() && formError()}>
               {(message) => (
                 <p role="alert" class="text-sm text-failure">

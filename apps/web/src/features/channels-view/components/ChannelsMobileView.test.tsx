@@ -76,7 +76,13 @@ vi.mock(
     ChannelCardLayout: (props: {
       item: { entity: ChannelEntity };
       onClick: (event: MouseEvent) => void;
-    }) => <button onClick={props.onClick}>{props.item.entity.name}</button>,
+      trailing?: JSX.Element;
+    }) => (
+      <>
+        <button onClick={props.onClick}>{props.item.entity.name}</button>
+        {props.trailing}
+      </>
+    ),
   })
 );
 vi.mock('@queries/channel/notification-selection', () => ({
@@ -116,6 +122,7 @@ vi.mock('./rail/hooks/useChannelRailActivity', () => ({
 }));
 
 import { ChannelsMobileView } from './ChannelsMobileView';
+import { channelsForMobileSection } from './rail/next/mobile/mobile-section-tabs';
 
 const channel: ChannelEntity = {
   id: 'one',
@@ -298,23 +305,37 @@ describe('mobile channel pins', () => {
     );
   });
 
-  it('keeps a pinned conversation in the list while its call rings so it can be joined', () => {
-    mocks.incomingCallIds = new Map([['two', 'call-1']]);
-    render(() => (
-      <ChannelsMobileView
-        source={both}
-        pinned={[pinnedChannel]}
-        searchQuery=""
-        onClearSearch={() => {}}
-      />
-    ));
+  it.each([false, true])(
+    'keeps a ringing pinned conversation joinable with section tabs enabled: %s',
+    (sectionsEnabled) => {
+      mocks.incomingCallIds = new Map([['two', 'call-1']]);
+      const allSource = {
+        ...both,
+        items: () =>
+          sectionsEnabled
+            ? channelsForMobileSection({
+                tab: 'all',
+                channels: both.items(),
+                labels: [],
+              })
+            : both.items(),
+      };
+      render(() => (
+        <ChannelsMobileView
+          source={allSource}
+          pinned={[pinnedChannel]}
+          searchQuery=""
+          onClearSearch={() => {}}
+        />
+      ));
 
-    expect(
-      screen.getByRole('group', { name: 'Pinned conversations' })
-    ).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Two' })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Join call-1' })).toBeTruthy();
-  });
+      expect(
+        screen.getByRole('group', { name: 'Pinned conversations' })
+      ).toBeTruthy();
+      expect(screen.getAllByRole('button', { name: 'Two' })).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'Join call-1' })).toBeTruthy();
+    }
+  );
 
   it('lists pinned conversations normally while searching', () => {
     render(() => (
