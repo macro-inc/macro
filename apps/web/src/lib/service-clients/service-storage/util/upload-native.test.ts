@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   uploadDone: vi.fn(),
   contentHash: vi.fn(),
   fetch: vi.fn(),
+  userInfo: vi.fn(),
 }));
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: mocks.invoke,
@@ -46,6 +47,9 @@ vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: {},
 }));
 vi.mock('@core/util/hash', () => ({ contentHash: mocks.contentHash }));
+vi.mock('@queries/client', () => ({
+  queryClient: { getQueryData: mocks.userInfo },
+}));
 vi.mock('@queries/storage/document-location', () => ({
   waitForDocumentContentReady: mocks.ready,
 }));
@@ -67,7 +71,13 @@ vi.mock('@service-storage/websocket', () => ({ storageWS: {} }));
 vi.mock('./uploadDocx', () => ({ uploadDocx: vi.fn() }));
 
 import { createNativeStagedUploadFile } from '@core/mobile/nativeStagedUpload';
-import { upload } from './upload';
+import {
+  readPendingFolderUploads,
+  rememberPendingFolderUpload,
+} from './pendingFolderUploads';
+import { resumePendingFolderUploads, upload } from './upload';
+
+const USER_ID = 'macro|user@example.com';
 
 function stagedPdf() {
   const file = createNativeStagedUploadFile('share', {
@@ -87,6 +97,8 @@ function stagedPdf() {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  localStorage.clear();
+  mocks.userInfo.mockReturnValue({ id: USER_ID });
   vi.stubGlobal('fetch', mocks.fetch);
   mocks.contentHash.mockResolvedValue('cd'.repeat(32));
   mocks.trackUpload.mockReturnValue({
@@ -345,6 +357,100 @@ describe('folder uploads', () => {
     expect(mocks.toastAlert).toHaveBeenCalledWith(
       'Uploaded Archive, but 3 of 814 files could not be uploaded'
     );
+  });
+
+  it('remembers a sent folder until its outcome is shown', async () => {
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    let finish!: (outcome: unknown) => void;
+    mocks.waitForFolderUpload.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    expect(readPendingFolderUploads(USER_ID)).toEqual([
+      expect.objectContaining({ requestId: 'zip-request', name: 'Archive' }),
+    ]);
+    finish({ status: 'failed' });
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await result.projectId;
+    expect(readPendingFolderUploads(USER_ID)).toEqual([]);
+  });
+
+  it('does not remember a folder when no one is signed in', async () => {
+    mocks.userInfo.mockReturnValue(undefined);
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    expect(localStorage.length).toBe(0);
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await expect(result.projectId).resolves.toBe('project');
+  });
+
+  it('shows a folder sent before the page loaded until the server finishes it', async () => {
+    const sentAt = Date.now() - 60_000;
+    rememberPendingFolderUpload(USER_ID, {
+      requestId: 'earlier-request',
+      name: 'Records',
+      sentAt,
+    });
+    mocks.waitForFolderUpload.mockResolvedValue({
+      status: 'partially_completed',
+      projectId: 'project',
+      progress: { filesTotal: 10, filesStored: 9, filesFailed: 1 },
+    });
+
+    await Promise.all(resumePendingFolderUploads(USER_ID));
+
+    expect(mocks.trackUpload).toHaveBeenCalledWith('Records', 0);
+    expect(mocks.uploadProcessing).toHaveBeenCalledWith(null);
+    expect(mocks.waitForFolderUpload).toHaveBeenCalledWith(
+      'earlier-request',
+      expect.any(Function),
+      { sentAt }
+    );
+    expect(mocks.uploadDone).toHaveBeenCalledOnce();
+    expect(mocks.toastAlert).toHaveBeenCalledWith(
+      'Uploaded Records, but 1 of 10 files could not be uploaded'
+    );
+    expect(readPendingFolderUploads(USER_ID)).toEqual([]);
+  });
+
+  it('does not promise a resumed folder will show up soon', async () => {
+    rememberPendingFolderUpload(USER_ID, {
+      requestId: 'earlier-request',
+      name: 'Records',
+      sentAt: Date.now(),
+    });
+    mocks.waitForFolderUpload.mockResolvedValue({ status: 'unknown' });
+
+    await Promise.all(resumePendingFolderUploads(USER_ID));
+
+    expect(mocks.toastAlert).toHaveBeenCalledWith(
+      "Couldn't confirm that Records finished uploading. Check Drive."
+    );
+    expect(readPendingFolderUploads(USER_ID)).toEqual([]);
+  });
+
+  it('follows a folder once in the tab that sent it', async () => {
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    let finish!: (outcome: unknown) => void;
+    mocks.waitForFolderUpload.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    expect(resumePendingFolderUploads(USER_ID)).toEqual([]);
+    expect(mocks.waitForFolderUpload).toHaveBeenCalledOnce();
+    finish({ status: 'completed', projectId: 'project' });
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await result.projectId;
   });
 
   it('refuses a zip the app did not prepare before asking for an upload URL', async () => {

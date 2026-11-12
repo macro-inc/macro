@@ -86,6 +86,7 @@ jobs:
             - 'apps/web/src/features/settings/**'
           database_grid_changed:
             - 'apps/web/src/features/database/**'
+            - 'apps/web/src/components/gantt/**'
           calendar_details_changed:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
