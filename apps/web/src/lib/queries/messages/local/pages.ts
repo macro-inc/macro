@@ -215,6 +215,18 @@ export async function readDeviceChannelPage(
 }
 
 /**
+ * Whether writes still waiting in the device queue shape this page. A page
+ * the server answered cannot show them; one read from the device does.
+ */
+export async function pageHasPendingWrites(
+  host: Pick<CacheHost, 'channelTimeline'>,
+  request: ChannelPageRequest
+): Promise<boolean> {
+  const result = await host.channelTimeline(cacheArgs(request));
+  return result.kind !== 'unsupported' && result.covered && result.optimistic;
+}
+
+/**
  * The stretch a fetched page proves complete: from its oldest entry (or the
  * start of the channel) to its newest (or the live end). Undefined when the
  * page proves nothing, such as an empty window around a message.
