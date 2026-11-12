@@ -31,12 +31,12 @@ use anyhow::{Result, bail};
 use chrono::Utc;
 use chrono_tz::Tz;
 use feature_flags::FeatureFlags;
-use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
-use suggestions::domain::ports::GenerationSessions;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
 use routine_program::{CATALOG, Surface};
+use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
+use suggestions::domain::ports::GenerationSessions;
 
 use self::model::{
     GenerationStatus, RetireSuggestion, ReviewedState, ReviewedSuggestion, RoutineGenerationReport,

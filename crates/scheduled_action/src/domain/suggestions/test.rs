@@ -280,7 +280,11 @@ async fn only_the_persons_open_routines_sessions_may_suggest() {
     assert_not_suggesting(h.service.suggest(&principal, Some(theirs), request()).await);
     // The person's own suggestions session.
     let suggestions = h.session_of(user(), SessionKind::Suggestions, &[]);
-    assert_not_suggesting(h.service.suggest(&principal, Some(suggestions), request()).await);
+    assert_not_suggesting(
+        h.service
+            .suggest(&principal, Some(suggestions), request())
+            .await,
+    );
     assert!(h.repo.suggestions.lock().unwrap().is_empty());
 }
 
@@ -840,5 +844,10 @@ async fn a_routines_session_reviews_and_retires_and_a_retired_pick_may_return() 
     assert_eq!(actions, ["created", "retired", "created"]);
     // Only a routines session may review or retire.
     let suggestions = h.session_of(user(), SessionKind::Suggestions, &[]);
-    assert!(h.service.review(&principal, Some(suggestions)).await.is_err());
+    assert!(
+        h.service
+            .review(&principal, Some(suggestions))
+            .await
+            .is_err()
+    );
 }
