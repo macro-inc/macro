@@ -23,6 +23,7 @@ use super::ports::{
     AgentApiKeys, AgentRepos, Computers, EnrollmentEnvironment, TeamAgentRepository,
     TeamAgentService, TeamMembership,
 };
+use super::voice::AgentVoice;
 
 #[cfg(test)]
 mod test;
@@ -135,6 +136,7 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
         personality,
         size: request.size,
         avatar_url: request.avatar_url,
+        voice: request.voice,
     })
 }
 
@@ -151,6 +153,29 @@ fn acting_user<Permission: RequiredPermission>(
         .acting_user_id()
         .cloned()
         .ok_or(TeamAgentError::NotEnabled)
+}
+
+/// The agent teammates rollout for `caller`. Fails closed: no flag provider,
+/// a failed load or the flag off all refuse.
+pub(crate) async fn ensure_enabled<Flags: FeatureFlags>(
+    flags: Option<&Flags>,
+    caller: &MacroUserIdStr<'_>,
+) -> Result<(), TeamAgentError> {
+    let Some(flags) = flags else {
+        return Err(TeamAgentError::NotEnabled);
+    };
+    let enabled = flags
+        .load(caller)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, "could not load feature flags; agent teammates stay off");
+        })
+        .is_ok_and(|snapshot| snapshot.is_enabled(AGENT_TEAMMATES_FLAG));
+    if enabled {
+        Ok(())
+    } else {
+        Err(TeamAgentError::NotEnabled)
+    }
 }
 
 fn env_entry(
@@ -181,24 +206,23 @@ where
     Computer: Computers,
     Flags: FeatureFlags + 'static,
 {
-    /// Fails closed: no flag provider, a failed load or the flag off all
-    /// refuse.
     async fn ensure_enabled(&self, caller: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
-        let Some(flags) = &self.flags else {
-            return Err(TeamAgentError::NotEnabled);
-        };
-        let enabled = flags
-            .load(caller)
+        ensure_enabled(self.flags.as_ref(), caller).await
+    }
+
+    /// The receipt team's agent, or `NotFound`.
+    async fn team_record(
+        &self,
+        receipt: &EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<TeamAgentRecord, TeamAgentError> {
+        let team_id = team_id(receipt)?;
+        self.repository
+            .get(agent)
             .await
-            .inspect_err(|error| {
-                tracing::warn!(error = ?error, "could not load feature flags; agent teammates stay off");
-            })
-            .is_ok_and(|snapshot| snapshot.is_enabled(AGENT_TEAMMATES_FLAG));
-        if enabled {
-            Ok(())
-        } else {
-            Err(TeamAgentError::NotEnabled)
-        }
+            .map_err(TeamAgentError::internal)?
+            .filter(|record| record.team_id == team_id)
+            .ok_or(TeamAgentError::NotFound)
     }
 
     async fn undo(&self, receipt: EntityAccessReceipt<AdminTeamRole>, undo: Undo) {
@@ -258,6 +282,7 @@ where
             name: request.name.clone(),
             job_description: request.job_description.clone(),
             personality: request.personality.clone(),
+            voice: request.voice.clone(),
         };
 
         self.repository
@@ -412,13 +437,7 @@ where
     ) -> Result<(), TeamAgentError> {
         self.ensure_enabled(&acting_user(&receipt)?).await?;
         let team_id = team_id(&receipt)?;
-        let record = self
-            .repository
-            .get(agent)
-            .await
-            .map_err(TeamAgentError::internal)?
-            .filter(|record| record.team_id == team_id)
-            .ok_or(TeamAgentError::NotFound)?;
+        let record = self.team_record(&receipt, agent).await?;
 
         // The computer goes first, so nothing keeps running as the agent.
         if let Some(computer_id) = self
@@ -436,6 +455,47 @@ where
             .delete_account(&record.user_id)
             .await
             .map_err(TeamAgentError::internal)
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.voice",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        err
+    )]
+    async fn voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<AgentVoice, TeamAgentError> {
+        self.ensure_enabled(&acting_user(&receipt)?).await?;
+        let record = self.team_record(&receipt, agent).await?;
+        let model = self
+            .repos
+            .voice(&record.user_id, record.team_id)
+            .await?
+            .ok_or(TeamAgentError::NoVoice)?;
+        Ok(AgentVoice { model })
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.set_voice",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref()), voice = %voice.model),
+        err
+    )]
+    async fn set_voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        voice: AgentVoice,
+    ) -> Result<AgentVoice, TeamAgentError> {
+        self.ensure_enabled(&acting_user(&receipt)?).await?;
+        let record = self.team_record(&receipt, agent).await?;
+        self.repos
+            .set_voice(&record.user_id, record.team_id, &voice.model)
+            .await?;
+        Ok(voice)
     }
 
     #[tracing::instrument(

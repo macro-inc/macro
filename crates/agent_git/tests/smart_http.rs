@@ -7,13 +7,14 @@ use std::sync::Arc;
 
 use agent_git::client::AgentGitClient;
 use agent_git::domain::models::RepoLimits;
+use agent_git::domain::ports::{PushRateLimiter, RepoRepository};
 use agent_git::domain::service::{AgentGitAdapters, AgentGitServiceImpl};
 use agent_git::domain::template::WORKSPACE_TEMPLATE;
 use agent_git::inbound::http::{AgentGitRouterState, agent_git_router};
 use agent_git::outbound::bare_repo_store::BareRepoStore;
 use agent_git::outbound::git_http_backend::GitHttpBackend;
 use agent_git::outbound::pg_repo_repository::PgRepoRepository;
-use agent_git::outbound::push_rate_limiter::InMemoryPushRateLimiter;
+use agent_git::outbound::push_rate_limiter::PgPushRateLimiter;
 use agent_git::outbound::repo_directories::RepoDirectories;
 use agent_git::outbound::team_admins::TeamRepositoryAdmins;
 use macro_authorization::{
@@ -77,7 +78,7 @@ async fn start_server(pool: PgPool, storage_root: &Path, max_repo_size_bytes: u6
             admins: TeamRepositoryAdmins::new(teams::outbound::team_repo::TeamRepositoryImpl::new(
                 pool.clone(),
             )),
-            limiter: InMemoryPushRateLimiter::new(30),
+            limiter: PgPushRateLimiter::new(pool.clone(), 30),
             backend: GitHttpBackend::new(directories, tokio_util::task::TaskTracker::new()),
         },
         RepoLimits {
@@ -357,6 +358,7 @@ fn seed() -> agent_git::domain::template::PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
+        voice: None,
         creator_id: Some(
             MacroUserIdStr::parse_from_str("macro|admin@example.com")
                 .expect("creator id")
@@ -449,4 +451,237 @@ async fn missing_repo_and_bad_token_have_the_same_authentication_response(pool: 
         missing.bytes().await.unwrap(),
         existing.bytes().await.unwrap()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_voice_change_is_one_server_commit_that_keeps_the_agents_work(pool: PgPool) {
+    use agent_git::domain::voice::{VoiceConfig, VoiceModel};
+
+    insert_fixtures(&pool).await;
+    let storage = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let base = start_server(pool, storage.path(), 1024 * 1024).await;
+    let client = AgentGitClient::new(base, INTERNAL_API_KEY.to_owned()).unwrap();
+    let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+    let mut chosen = seed();
+    chosen.voice = Some(VoiceModel::parse("aura-2-thalia-en").unwrap());
+    let repo = client
+        .create_repo(agent.clone(), TEAM_ID, chosen)
+        .await
+        .unwrap();
+    let clone_url = with_password(&repo.clone_url, repo.token.expose());
+    assert_eq!(
+        client
+            .voice(&agent, TEAM_ID)
+            .await
+            .unwrap()
+            .unwrap()
+            .model
+            .as_str(),
+        "aura-2-thalia-en"
+    );
+
+    // The agent pushes work the server commit must keep.
+    let cloned = git(work.path(), &["clone", &clone_url, "agent"]).await;
+    assert!(cloned.status.success(), "{cloned:?}");
+    let checkout = work.path().join("agent");
+    std::fs::write(checkout.join("memory.md"), "remembered\n").unwrap();
+    assert!(git(&checkout, &["add", "memory.md"]).await.status.success());
+    assert!(
+        git(&checkout, &["commit", "-m", "remember"])
+            .await
+            .status
+            .success()
+    );
+    assert!(
+        git(&checkout, &["push", "origin", "main"])
+            .await
+            .status
+            .success()
+    );
+
+    let arcas = VoiceConfig {
+        model: VoiceModel::parse("aura-2-arcas-en").unwrap(),
+    };
+    client
+        .set_voice(&agent, TEAM_ID, arcas.clone())
+        .await
+        .unwrap();
+    client
+        .set_voice(&agent, TEAM_ID, arcas.clone())
+        .await
+        .unwrap();
+    assert_eq!(client.voice(&agent, TEAM_ID).await.unwrap(), Some(arcas));
+
+    let pulled = git(&checkout, &["pull", "--ff-only", "origin", "main"]).await;
+    assert!(pulled.status.success(), "{pulled:?}");
+    let log = git(&checkout, &["log", "--format=%an %s", "-3"]).await;
+    assert_eq!(
+        String::from_utf8_lossy(&log.stdout),
+        "Macro Set call voice\nAgent remember\nMacro Initial workspace\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(checkout.join("memory.md")).unwrap(),
+        "remembered\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(checkout.join("config/voice.json")).unwrap(),
+        "{\n  \"model\": \"aura-2-arcas-en\"\n}\n"
+    );
+
+    assert!(matches!(
+        client
+            .set_voice(
+                &agent,
+                Uuid::from_u128(2),
+                VoiceConfig {
+                    model: VoiceModel::parse("aura-2-thalia-en").unwrap(),
+                },
+            )
+            .await,
+        Err(agent_git::client::AgentGitClientError::TeamMismatch)
+    ));
+}
+
+#[tokio::test]
+async fn voice_commits_never_follow_symlinks_the_agent_committed() {
+    use agent_git::domain::ports::RepoStore;
+
+    for config_is_a_link in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let storage = root.path().join("repos");
+        std::fs::create_dir(&storage).unwrap();
+        let directories = RepoDirectories::new(storage);
+        let store = BareRepoStore::new(directories.clone());
+        let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+        store
+            .create_repo(&agent, &WORKSPACE_TEMPLATE.render(&agent, &seed()).unwrap())
+            .await
+            .unwrap();
+        let repo = directories.repo_path(&agent);
+        assert!(
+            git(root.path(), &["clone", repo.to_str().unwrap(), "checkout"])
+                .await
+                .status
+                .success()
+        );
+        let checkout = root.path().join("checkout");
+        let outside = root.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let protected = outside.join("voice.json");
+        std::fs::write(&protected, "protected\n").unwrap();
+        let config = checkout.join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        if config_is_a_link {
+            std::fs::remove_dir_all(&config).unwrap();
+            std::os::unix::fs::symlink(&outside, &config).unwrap();
+        } else {
+            if config.join("voice.json").exists() {
+                std::fs::remove_file(config.join("voice.json")).unwrap();
+            }
+            std::os::unix::fs::symlink(&protected, config.join("voice.json")).unwrap();
+        }
+        assert!(git(&checkout, &["add", "--all"]).await.status.success());
+        assert!(
+            git(&checkout, &["commit", "-m", "links"])
+                .await
+                .status
+                .success()
+        );
+        assert!(
+            git(&checkout, &["push", "origin", "main"])
+                .await
+                .status
+                .success()
+        );
+
+        // A symlink is never read as the voice.
+        assert_eq!(
+            store.read_file(&agent, "config/voice.json").await.unwrap(),
+            None
+        );
+        let committed = store
+            .commit_file(
+                &agent,
+                "config/voice.json",
+                b"{\"model\":\"aura-2-arcas-en\"}\n",
+                "Set call voice",
+            )
+            .await;
+
+        assert_eq!(committed.is_err(), config_is_a_link);
+        assert_eq!(std::fs::read_to_string(&protected).unwrap(), "protected\n");
+        if !config_is_a_link {
+            assert_eq!(
+                store.read_file(&agent, "config/voice.json").await.unwrap(),
+                Some(b"{\"model\":\"aura-2-arcas-en\"}\n".to_vec())
+            );
+        }
+        // Only the repo is left in the storage root: no scratch index.
+        assert_eq!(std::fs::read_dir(directories.root()).unwrap().count(), 1);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn every_replica_draws_from_one_push_budget_that_refills(pool: PgPool) {
+    insert_fixtures(&pool).await;
+    sqlx::query!(
+        "INSERT INTO agent_repos (agent_user_id, team_id, token_hash) VALUES ($1, $2, 'x'), ($3, $2, 'y')",
+        "macro|agent-a@example.com",
+        Uuid::parse_str("01900000-0000-7000-8000-000000000001").unwrap(),
+        "macro|agent-b@example.com",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+    let other = MacroUserIdStr::try_from("macro|agent-b@example.com".to_owned()).unwrap();
+    // Two replicas, one database.
+    let first = PgPushRateLimiter::new(pool.clone(), 2);
+    let second = PgPushRateLimiter::new(pool.clone(), 2);
+
+    assert!(first.try_acquire_push(&agent).await.unwrap());
+    assert!(second.try_acquire_push(&agent).await.unwrap());
+    assert!(!first.try_acquire_push(&agent).await.unwrap());
+    assert!(second.try_acquire_push(&other).await.unwrap());
+
+    // Half a minute later the bucket holds one more push.
+    sqlx::query!(
+        "UPDATE agent_repos SET push_tokens_refilled_at = push_tokens_refilled_at - interval '30 seconds' WHERE agent_user_id = $1",
+        "macro|agent-a@example.com",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(second.try_acquire_push(&agent).await.unwrap());
+    assert!(!first.try_acquire_push(&agent).await.unwrap());
+
+    let missing = MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap();
+    assert!(!first.try_acquire_push(&missing).await.unwrap());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_repo_lock_excludes_other_replicas_until_it_drops(pool: PgPool) {
+    let first = PgRepoRepository::new(pool.clone());
+    let second = PgRepoRepository::new(pool.clone());
+    let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+    let other = MacroUserIdStr::try_from("macro|agent-b@example.com".to_owned()).unwrap();
+
+    let held = first.lock_repo(&agent).await.unwrap();
+    // Another repo's lock is independent.
+    drop(second.lock_repo(&other).await.unwrap());
+
+    // Held: no other session can take it.
+    let free = sqlx::query_scalar!(
+        r#"SELECT pg_try_advisory_lock(hashtextextended('agent_git:' || $1, 0)) AS "free!""#,
+        agent.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!free);
+
+    // Dropping it ends its session; the other replica's wait then returns.
+    drop(held);
+    drop(second.lock_repo(&agent).await.unwrap());
 }

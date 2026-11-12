@@ -7,6 +7,7 @@
 //! announcements, derives agent triggers from `macro.channels`, then drives
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
+mod agent_git;
 mod agent_runtime_directory;
 mod anthropic_gateway;
 mod api;
@@ -31,7 +32,9 @@ mod routine_sessions;
 mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
+mod speech_gateway;
 mod trigger;
+mod voice_gateway;
 
 #[cfg(test)]
 mod test;
@@ -1361,6 +1364,18 @@ async fn run() -> anyhow::Result<()> {
         )),
     )
     .await?;
+    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
+        anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
+    );
+    let speech = Arc::new(speech_gateway::SpeechGateway::new(
+        brains.clone(),
+        admission.clone(),
+        recorder.clone(),
+        config.livekit_api_key.as_ref(),
+        config.livekit_api_secret.as_ref(),
+        speech_gateway::LIVEKIT_INFERENCE_URL,
+        speech_gateway::DEEPGRAM_MODELS_URL,
+    )?);
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
@@ -1369,10 +1384,9 @@ async fn run() -> anyhow::Result<()> {
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(Arc::new(
-            anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
-        )),
-    );
+        .with_brains(brains),
+    )
+    .merge(speech_gateway::router(speech.clone()));
     let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
@@ -1822,6 +1836,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         &computer_tasks,
     );
+    let voices = voice_gateway::router(voice_gateway::VoiceState {
+        voices: Arc::new(team_agents::domain::voice::Voices::new(
+            speech_gateway::VoiceCatalog(speech),
+            feature_flags.clone(),
+        )),
+        access: entity_access.clone(),
+        authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    });
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1992,6 +2014,18 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let agent_git_tasks = tokio_util::task::TaskTracker::new();
+    let agent_git_router = agent_git::router(
+        agent_git::AgentGitSettings {
+            repo_storage_root: &config.repo_storage_root,
+            max_repo_size_bytes: config.max_repo_size_bytes,
+            pushes_per_minute: config.pushes_per_minute,
+        },
+        pool.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        agent_git_tasks.clone(),
+    )
+    .await?;
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -2012,6 +2046,7 @@ async fn run() -> anyhow::Result<()> {
             .with_coding_agents(coding_agents)
             .with_claude_access(computer_claude)
             .with_capabilities(capabilities)
+            .with_voices(voices)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
             .with_session_tasks(session_task_links)
@@ -2041,6 +2076,7 @@ async fn run() -> anyhow::Result<()> {
             )
             .with_scheduling(scheduling_router)
             .with_preview(preview_router)
+            .with_agent_git(agent_git_router)
             .with_public_mcp(public_mcp_router)
             .with_listening_signal(http_listening),
             http_runtime_commands_readiness,
@@ -2505,6 +2541,9 @@ async fn run() -> anyhow::Result<()> {
     work_registration_tasks.close();
     work_registration_tasks.wait().await;
     http.abort();
+    if let Err(error) = agent_git::drain(&agent_git_tasks).await {
+        tracing::warn!(error = ?error, "agent git processes outlived shutdown");
+    }
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use agent_credentials::{AgentApiKey, RepoToken};
+pub use agent_git::domain::voice::VoiceModel;
 pub use hosted_runtimes::domain::ids::ComputerId;
 pub use hosted_runtimes::domain::size::ComputerSize;
 
@@ -93,6 +94,11 @@ pub struct CreateTeamAgent {
     pub size: ComputerSize,
     /// Profile picture URL (a static file the caller uploaded).
     pub avatar_url: Option<String>,
+    /// The call voice picked in the invite; `None` keeps the starter
+    /// agent's default.
+    #[serde(default)]
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub voice: Option<VoiceModel>,
 }
 
 /// The non-secret inputs the brain's first run writes into its workspace.
@@ -106,6 +112,10 @@ pub struct PersonaSeed {
     pub job_description: String,
     /// How the agent behaves and talks.
     pub personality: String,
+    /// The call voice picked in the invite; seeds stored before voices have
+    /// none.
+    #[serde(default)]
+    pub voice: Option<VoiceModel>,
 }
 
 /// An account to create for a new agent.
@@ -228,6 +238,16 @@ pub enum TeamAgentError {
     /// The workspace repository could not be created; nothing was charged.
     #[error("the workspace repository could not be created; nothing was charged")]
     RepoUnavailable(rootcause::Report),
+    /// The agent's repository has no valid `config/voice.json`.
+    #[error("the agent has no voice set")]
+    NoVoice,
+    /// The model is not in the provider's catalog.
+    #[error("that voice isn't available")]
+    UnknownVoice,
+    /// The workspace repository or the speech provider did not answer a
+    /// voice request.
+    #[error("voices are unavailable right now")]
+    VoiceUnavailable(rootcause::Report),
     /// Anything else.
     #[error("internal error: {0}")]
     Internal(rootcause::Report),

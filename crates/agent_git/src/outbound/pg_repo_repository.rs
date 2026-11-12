@@ -37,8 +37,31 @@ impl PgRepoRepository {
     }
 }
 
+/// A repo's lock: a Postgres session advisory lock on a connection of its own.
+/// Dropping it closes the session, which releases the lock, also when the
+/// process dies.
+pub struct PgRepoLock {
+    _session: sqlx::PgConnection,
+}
+
 impl RepoRepository for PgRepoRepository {
     type Err = PgRepoRepositoryError;
+    type Lock = PgRepoLock;
+
+    #[tracing::instrument(name = "agent_git.lock_repo", skip_all, fields(repo_id = %agent_credentials::telemetry_id(agent_user_id.as_ref())), err)]
+    async fn lock_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<PgRepoLock, PgRepoRepositoryError> {
+        let mut session = self.pool.acquire().await?.detach();
+        sqlx::query!(
+            r#"SELECT true AS "locked!" FROM pg_advisory_lock(hashtextextended('agent_git:' || $1, 0))"#,
+            agent_user_id.as_ref(),
+        )
+        .fetch_one(&mut session)
+        .await?;
+        Ok(PgRepoLock { _session: session })
+    }
 
     #[tracing::instrument(skip_all, err)]
     async fn find_repo(

@@ -5,7 +5,9 @@ use feature_flags::{FlagSnapshot, FlagValue};
 use rootcause::Report;
 
 use super::*;
-use crate::domain::models::{AgentApiKey, AgentRepo, ComputerSize, ComputerState, RepoToken};
+use crate::domain::models::{
+    AgentApiKey, AgentRepo, ComputerSize, ComputerState, RepoToken, VoiceModel,
+};
 
 const ADMIN: &str = "macro|admin@example.com";
 const TEAM: &str = "0193a1b2-0000-7000-8000-0000000000aa";
@@ -27,6 +29,7 @@ fn request() -> CreateTeamAgent {
         personality: "Dry, direct, kind.".to_owned(),
         size: ComputerSize::Standard,
         avatar_url: None,
+        voice: None,
     }
 }
 
@@ -165,6 +168,31 @@ impl AgentRepos for FakeRepos {
 
     async fn delete(&self, _: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
         self.0.record("repo.delete");
+        Ok(())
+    }
+
+    async fn voice(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Uuid,
+    ) -> Result<Option<VoiceModel>, TeamAgentError> {
+        let committed = self
+            .0
+            .entries()
+            .iter()
+            .rev()
+            .find_map(|entry| entry.strip_prefix("repo.set_voice ").map(str::to_owned));
+        Ok(committed.map(|model| VoiceModel::parse(model).unwrap()))
+    }
+
+    async fn set_voice(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: &VoiceModel,
+    ) -> Result<(), TeamAgentError> {
+        assert_eq!(team_id.to_string(), TEAM);
+        self.0.record(format!("repo.set_voice {voice}"));
         Ok(())
     }
 }
@@ -393,6 +421,87 @@ async fn removing_an_agent_releases_its_computer_first() {
             "repo.delete".to_owned(),
             "account.delete".to_owned(),
         ]
+    );
+}
+
+#[tokio::test]
+async fn the_invite_voice_seeds_the_repo_and_admins_change_it_later() {
+    let (service, journal) = service(true, FakeComputers::default());
+    let thalia = VoiceModel::parse("aura-2-thalia-en").unwrap();
+    let created = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                voice: Some(thalia.clone()),
+                ..request()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        service.repository.agents.lock().unwrap()[0]
+            .persona_seed
+            .voice,
+        Some(thalia)
+    );
+    assert!(matches!(
+        service.voice(receipt(), &created.user_id).await,
+        Err(TeamAgentError::NoVoice)
+    ));
+
+    let arcas = AgentVoice {
+        model: VoiceModel::parse("aura-2-arcas-en").unwrap(),
+    };
+    assert_eq!(
+        service
+            .set_voice(receipt(), &created.user_id, arcas.clone())
+            .await
+            .unwrap(),
+        arcas
+    );
+    assert_eq!(
+        service.voice(receipt(), &created.user_id).await.unwrap(),
+        arcas
+    );
+    assert_eq!(
+        journal.entries().last().unwrap(),
+        "repo.set_voice aura-2-arcas-en"
+    );
+}
+
+#[tokio::test]
+async fn voices_of_other_teams_agents_or_without_the_rollout_are_refused() {
+    let (service, journal) = service(true, FakeComputers::default());
+    let created = service.create(receipt(), request()).await.unwrap();
+    let other_team = EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user(ADMIN),
+        "0193a1b2-0000-7000-8000-0000000000bb",
+        EntityType::Team,
+    );
+    let voice = AgentVoice {
+        model: VoiceModel::parse("aura-2-arcas-en").unwrap(),
+    };
+
+    assert!(matches!(
+        service.voice(other_team.clone(), &created.user_id).await,
+        Err(TeamAgentError::NotFound)
+    ));
+    assert!(matches!(
+        service
+            .set_voice(other_team, &created.user_id, voice.clone())
+            .await,
+        Err(TeamAgentError::NotFound)
+    ));
+    let (closed, _) = self::service(false, FakeComputers::default());
+    assert!(matches!(
+        closed.set_voice(receipt(), &created.user_id, voice).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
+    assert!(
+        !journal
+            .entries()
+            .iter()
+            .any(|entry| entry.starts_with("repo.set_voice"))
     );
 }
 

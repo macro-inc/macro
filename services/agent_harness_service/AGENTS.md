@@ -50,6 +50,25 @@ Pulumi stacks; they do not host extra agent processes.
   `/brain/anthropic/*` serves agent teammates' brains the same way, but
   authenticates the agent's own Macro API key (`anthropic_gateway/brain.rs`)
   and counts usage against the agent account, with no session entity.
+- `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
+  `/brain/inference/tts` WebSockets on the egress listener, for agent
+  teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key and
+  admission as `/brain/anthropic`; the upgrade query must be exactly
+  `model=deepgram/nova-3` (STT) or `model=deepgram/aura-2` (TTS). The gateway
+  opens LiveKit Inference with a 60-second `inference.perform` JWT signed with
+  `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` (both empty: speech is off; one
+  alone fails startup) and relays events. `protocol.rs` pins the session:
+  Nova-3 English STT on mono PCM16 16 kHz, Aura-2 TTS as PCM16 24 kHz with a
+  catalog voice; a second `session.create`, an unknown field or a changed
+  voice closes the socket. Forwarded PCM seconds and synthesized characters
+  are recorded once, when the socket closes, against the agent
+  (`livekit-inference-deepgram-*` pricing rows). Upstream error details stay
+  in logs. Span: `speech_gateway.session`; never record transcripts or text.
+- `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
+  team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
+  The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
+  fixed-line WAV sample per process, billed to the admin's team when it is
+  synthesized.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
   every computer creation asks the auth service's internal
   `/internal/team_agent_enrollment` route, so an agent computer never enrolls
@@ -185,6 +204,20 @@ Pulumi stacks; they do not host extra agent processes.
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
   heartbeats register this process's private HTTP address for direct forwarding.
+- `src/agent_git.rs`: agent teammates' workspace repos (`crates/agent_git`)
+  under `/agent-git` (smart HTTP plus the internal create/ensure/delete API;
+  `AgentGitServiceUrl` points here), merged outside the gzip layer. Storage
+  is EFS at `REPO_STORAGE_ROOT` (`/data/agent-git`, the
+  `agent-harness-service` stack's file system and access point), chosen
+  because it is the simplest store git can use directly that both replicas
+  share. Each repo's push budget is a row in Postgres and each receive-pack
+  (and create/ensure/delete) holds a per-repo Postgres advisory lock, so the
+  replicas never interleave writes to one repo; git's lockfiles on EFS are
+  the second guard. Startup fails without git and `git-http-backend`, or
+  without the directory; shutdown drains running git processes for up to
+  8 s. Config: `REPO_STORAGE_ROOT`, `MAX_REPO_SIZE_BYTES`,
+  `PUSHES_PER_MINUTE` (required; locally the `agent_git_repos` compose
+  volume and 500 MiB / 30).
 - [Consolidation guide](../../docs/guides/consolidate-agent-services.md):
   Doppler migration, retirement order, OAuth provider cutover.
 

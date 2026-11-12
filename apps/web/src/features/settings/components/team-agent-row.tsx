@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
 import TrashIcon from '@icon/system/regular/trash.svg';
+import WaveformIcon from '@icon/system/regular/waveform.svg';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { Button, Tooltip } from '@ui';
 import { Show } from 'solid-js';
@@ -16,6 +17,8 @@ export function TeamAgentRow(props: {
   /** Team admins and owners may remove agents. */
   canRemove: boolean;
   onRemove: () => void;
+  /** Opens Change voice; left out for viewers who can't change it. */
+  onChangeVoice?: () => void;
 }) {
   return (
     <div
@@ -40,6 +43,20 @@ export function TeamAgentRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <TeamAgentStatusLabel status={props.agent.status} />
+        <Show when={props.onChangeVoice}>
+          {(changeVoice) => (
+            <Tooltip label={t('teamAgents.changeVoice')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('teamAgents.changeVoice')}
+                onClick={() => changeVoice()()}
+              >
+                <WaveformIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          )}
+        </Show>
         <Show when={props.canRemove}>
           <Tooltip label={t('teamAgents.remove')}>
             <Button

@@ -1,7 +1,7 @@
-"""A smart-HTTP git server for the brain VM test.
+"""A smart-HTTP git server for the agent VM test.
 
 Serves /srv/git through git http-backend on 127.0.0.1:8080, only with the
-brain's Basic credentials, and appends each request's traceparent header to
+agent's Basic credentials, and appends each request's traceparent header to
 /srv/git/traceparents.
 """
 import base64
@@ -10,7 +10,7 @@ import os
 import subprocess
 
 ROOT = '/srv/git'
-AUTHORIZATION = 'Basic ' + base64.b64encode(b'brain:test-token').decode()
+AUTHORIZATION = 'Basic ' + base64.b64encode(b'agent:test-token').decode()
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

@@ -60,6 +60,31 @@ vi.mock('@queries/team-agents/team-agents', () => ({
   }),
 }));
 
+vi.mock('@queries/team-agents/voices', () => ({
+  useVoiceCatalogQuery: () => ({
+    isSuccess: true,
+    isLoading: false,
+    isError: false,
+    data: [
+      {
+        model: 'aura-2-arcas-en',
+        name: 'Arcas',
+        accent: 'American',
+        tags: ['masculine', 'confident'],
+        languages: ['en'],
+      },
+      {
+        model: 'aura-2-thalia-en',
+        name: 'Thalia',
+        accent: 'American',
+        tags: ['feminine', 'warm'],
+        languages: ['en'],
+      },
+    ],
+  }),
+  fetchVoiceSample: vi.fn(),
+}));
+
 vi.mock('@queries/team/invites', () => ({
   useInviteToTeamMutation: () => ({
     isPending: false,
@@ -182,7 +207,7 @@ describe('InviteToTeamDialog agent teammates', () => {
     expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
   });
 
-  it('invites an agent on the chosen computer, priced like a computer', async () => {
+  it('invites an agent on the chosen computer and suggested voice, priced like a computer', async () => {
     setFlag({ enabled: true, loading: false });
     const onClose = vi.fn();
     mocks.createAgent.mockResolvedValue({ name: 'Ada' });
@@ -205,6 +230,11 @@ describe('InviteToTeamDialog agent teammates', () => {
       target: { value: 'Warm and concise.' },
     });
     fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
+    // The personality's own words pick the suggested voice.
+    expect(
+      (screen.getByRole('combobox', { name: 'Voice' }) as HTMLInputElement)
+        .value
+    ).toBe('Thalia');
 
     expect(invite().textContent).toContain('$80');
     // A failed invite keeps its purchase key, so retrying buys one computer.
@@ -227,6 +257,7 @@ describe('InviteToTeamDialog agent teammates', () => {
         size: 'large',
         avatarUrl: null,
         purchaseKey: expect.any(String),
+        voice: 'aura-2-thalia-en',
       },
     });
     expect(retry).toEqual(first);

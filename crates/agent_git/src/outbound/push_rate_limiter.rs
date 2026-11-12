@@ -1,65 +1,64 @@
-//! In-memory token bucket per repo. Per process: run one task, or move the
-//! buckets to Redis before scaling out.
-
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::Duration;
+//! Each repo's push budget, a token bucket in its `agent_repos` row, so every
+//! replica of the service draws from the same one.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use tokio::time::Instant;
+use sqlx::PgPool;
 
 use crate::domain::ports::PushRateLimiter;
 
-const WINDOW: Duration = Duration::from_secs(60);
-
-struct Bucket {
-    tokens: f64,
-    refilled_at: Instant,
-}
-
 /// Allows `pushes_per_minute` pushes per repo, refilling continuously.
-pub struct InMemoryPushRateLimiter {
+#[derive(Clone)]
+pub struct PgPushRateLimiter {
+    pool: PgPool,
     pushes_per_minute: u32,
-    buckets: Mutex<HashMap<String, Bucket>>,
 }
 
-impl InMemoryPushRateLimiter {
-    /// A limiter with a full bucket for every repo.
-    pub fn new(pushes_per_minute: u32) -> Self {
+impl PgPushRateLimiter {
+    /// A limiter over MacroDB's `agent_repos`.
+    pub fn new(pool: PgPool, pushes_per_minute: u32) -> Self {
         Self {
+            pool,
             pushes_per_minute,
-            buckets: Mutex::new(HashMap::new()),
         }
     }
 }
 
-impl PushRateLimiter for InMemoryPushRateLimiter {
-    fn try_acquire_push(&self, agent_user_id: &MacroUserIdStr<'_>) -> bool {
-        let capacity = f64::from(self.pushes_per_minute);
-        let now = Instant::now();
-        let mut buckets = self
-            .buckets
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let bucket = buckets
-            .entry(agent_user_id.as_ref().to_owned())
-            .or_insert(Bucket {
-                tokens: capacity,
-                refilled_at: now,
-            });
+impl PushRateLimiter for PgPushRateLimiter {
+    type Err = sqlx::Error;
 
-        let elapsed = now.duration_since(bucket.refilled_at).as_secs_f64();
-        bucket.tokens = (bucket.tokens + elapsed * capacity / WINDOW.as_secs_f64()).min(capacity);
-        bucket.refilled_at = now;
-
-        if bucket.tokens < 1.0 {
-            return false;
-        }
-
-        bucket.tokens -= 1.0;
-        true
+    #[tracing::instrument(name = "agent_git.push_budget", skip_all, fields(repo_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), allowed), err)]
+    async fn try_acquire_push(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<bool, sqlx::Error> {
+        // One statement: refill by the time since the last refill, then take a
+        // token if there is a whole one. A missing row takes nothing.
+        let taken = sqlx::query_scalar!(
+            r#"
+            WITH bucket AS (
+                SELECT LEAST(
+                    $2::float8,
+                    COALESCE(push_tokens, $2::float8)
+                        + EXTRACT(EPOCH FROM now() - COALESCE(push_tokens_refilled_at, now()))::float8
+                            * $2::float8 / 60
+                ) AS tokens
+                FROM agent_repos
+                WHERE agent_user_id = $1
+                FOR UPDATE
+            )
+            UPDATE agent_repos
+            SET push_tokens = bucket.tokens - 1, push_tokens_refilled_at = now()
+            FROM bucket
+            WHERE agent_user_id = $1 AND bucket.tokens >= 1
+            RETURNING true AS "taken!"
+            "#,
+            agent_user_id.as_ref(),
+            f64::from(self.pushes_per_minute),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .is_some();
+        tracing::Span::current().record("allowed", taken);
+        Ok(taken)
     }
 }
-
-#[cfg(test)]
-mod test;

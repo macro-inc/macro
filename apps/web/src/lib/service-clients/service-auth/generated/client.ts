@@ -7,6 +7,7 @@
 import type {
   AgentApiKey,
   AgentSetupResponse,
+  AgentVoice,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -6814,6 +6815,169 @@ export const deleteTeamAgent = async (
     status: res.status,
     headers: res.headers,
   } as deleteTeamAgentResponse;
+};
+
+/**
+ * @summary The agent's call voice, as committed in its workspace repository.
+Requires a team admin or owner.
+ */
+export type getTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type getTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamAgentVoiceResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentVoiceResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentVoiceResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getTeamAgentVoiceResponseSuccess = getTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentVoiceResponseError = (
+  | getTeamAgentVoiceResponse400
+  | getTeamAgentVoiceResponse401
+  | getTeamAgentVoiceResponse403
+  | getTeamAgentVoiceResponse404
+  | getTeamAgentVoiceResponse500
+  | getTeamAgentVoiceResponse502
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentVoiceResponse =
+  | getTeamAgentVoiceResponseSuccess
+  | getTeamAgentVoiceResponseError;
+
+export const getGetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const getTeamAgentVoice = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentVoiceResponse> => {
+  const res = await fetch(getGetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentVoiceResponse;
+};
+
+/**
+ * @summary Change the agent's call voice: a commit to its workspace repository that
+its next call picks up. Requires a team admin or owner.
+ */
+export type setTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type setTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type setTeamAgentVoiceResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setTeamAgentVoiceResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setTeamAgentVoiceResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type setTeamAgentVoiceResponseSuccess = setTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type setTeamAgentVoiceResponseError = (
+  | setTeamAgentVoiceResponse400
+  | setTeamAgentVoiceResponse401
+  | setTeamAgentVoiceResponse403
+  | setTeamAgentVoiceResponse404
+  | setTeamAgentVoiceResponse500
+  | setTeamAgentVoiceResponse502
+) & {
+  headers: Headers;
+};
+
+export type setTeamAgentVoiceResponse =
+  | setTeamAgentVoiceResponseSuccess
+  | setTeamAgentVoiceResponseError;
+
+export const getSetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const setTeamAgentVoice = async (
+  agentUserId: string,
+  agentVoice: AgentVoice,
+  options?: RequestInit
+): Promise<setTeamAgentVoiceResponse> => {
+  const res = await fetch(getSetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentVoice),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamAgentVoiceResponse;
 };
 
 /**

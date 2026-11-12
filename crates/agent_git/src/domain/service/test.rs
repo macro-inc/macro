@@ -18,10 +18,52 @@ use crate::domain::template::{PersonaSeed, RenderedFile, WORKSPACE_TEMPLATE};
 struct FakeRepos {
     rows: Arc<Mutex<HashMap<String, AgentRepo>>>,
     pushes: Arc<Mutex<Vec<(String, u64)>>>,
+    /// One lock per repo, waited on like the advisory lock.
+    locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+    /// Repos whose lock a guard holds now.
+    locked: Arc<Mutex<Vec<String>>>,
+    /// Every lock taken, in order.
+    lock_log: Arc<Mutex<Vec<String>>>,
+}
+
+/// Holds its repo's lock and its entry in [`FakeRepos::locked`] until dropped.
+struct FakeLock {
+    agent_user_id: String,
+    locked: Arc<Mutex<Vec<String>>>,
+    _guard: tokio::sync::OwnedMutexGuard<()>,
+}
+
+impl Drop for FakeLock {
+    fn drop(&mut self) {
+        self.locked
+            .lock()
+            .unwrap()
+            .retain(|held| held != &self.agent_user_id);
+    }
 }
 
 impl RepoRepository for FakeRepos {
     type Err = Infallible;
+    type Lock = FakeLock;
+
+    async fn lock_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<FakeLock, Infallible> {
+        let agent_user_id = agent_user_id.as_ref().to_owned();
+        let lock = self
+            .locks
+            .lock()
+            .unwrap()
+            .entry(agent_user_id.clone())
+            .or_default()
+            .clone();
+        let guard = lock.lock_owned().await;
+        self.locked.lock().unwrap().push(agent_user_id.clone());
+        self.lock_log.lock().unwrap().push(agent_user_id.clone());
+        Ok(FakeLock {
+            agent_user_id,
+            locked: self.locked.clone(),
+            _guard: guard,
+        })
+    }
 
     async fn find_repo(
         &self,
@@ -108,6 +150,8 @@ impl RepoRepository for FakeRepos {
 struct FakeStore {
     repos: Arc<Mutex<HashSet<String>>>,
     size_bytes: u64,
+    /// `main`'s files by agent and path, with the message that committed them.
+    files: Arc<Mutex<HashMap<(String, String), (Vec<u8>, String)>>>,
 }
 
 impl RepoStore for FakeStore {
@@ -134,6 +178,33 @@ impl RepoStore for FakeStore {
         _agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<u64, Infallible> {
         Ok(self.size_bytes)
+    }
+
+    async fn read_file(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        path: &str,
+    ) -> Result<Option<Vec<u8>>, Infallible> {
+        Ok(self
+            .files
+            .lock()
+            .unwrap()
+            .get(&(agent_user_id.as_ref().to_owned(), path.to_owned()))
+            .map(|(contents, _)| contents.clone()))
+    }
+
+    async fn commit_file(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        path: &str,
+        contents: &[u8],
+        message: &str,
+    ) -> Result<(), Infallible> {
+        self.files.lock().unwrap().insert(
+            (agent_user_id.as_ref().to_owned(), path.to_owned()),
+            (contents.to_vec(), message.to_owned()),
+        );
+        Ok(())
     }
 }
 
@@ -162,13 +233,18 @@ struct FakeLimiter {
 }
 
 impl PushRateLimiter for FakeLimiter {
-    fn try_acquire_push(&self, _agent_user_id: &MacroUserIdStr<'_>) -> bool {
+    type Err = Infallible;
+
+    async fn try_acquire_push(
+        &self,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<bool, Infallible> {
         let mut remaining = self.remaining.lock().unwrap();
         if *remaining == 0 {
-            return false;
+            return Ok(false);
         }
         *remaining -= 1;
-        true
+        Ok(true)
     }
 }
 
@@ -235,6 +311,7 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
             store: FakeStore {
                 repos: Arc::default(),
                 size_bytes: 1_000,
+                files: Arc::default(),
             },
             admins: FakeAdmins {
                 admins: HashSet::from([(TEAM, ADMIN.to_owned())]),
@@ -379,6 +456,7 @@ async fn pushes_stop_at_the_size_cap_and_the_rate_limit() {
     let full_store = FakeStore {
         repos: Arc::default(),
         size_bytes: 500,
+        files: Arc::default(),
     };
     let service = AgentGitServiceImpl::new(
         AgentGitAdapters {
@@ -439,6 +517,7 @@ async fn a_full_repo_refuses_the_push_advertisement() {
             store: FakeStore {
                 repos: Arc::default(),
                 size_bytes: 600,
+                files: Arc::default(),
             },
             admins: FakeAdmins::default(),
             limiter: FakeLimiter {
@@ -513,11 +592,95 @@ async fn deleting_removes_the_repo_and_the_row() {
     assert!(matches!(missing, Err(AgentGitError::InvalidToken)));
 }
 
+#[tokio::test]
+async fn voices_are_read_and_committed_only_for_the_repos_team() {
+    let store = FakeStore::default();
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: store.clone(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let other_team = Uuid::from_u128(2);
+    let voice = VoiceConfig {
+        model: crate::domain::voice::VoiceModel::parse("aura-2-thalia-en").unwrap(),
+    };
+
+    assert!(matches!(
+        service.set_voice(&agent, TEAM, &voice).await,
+        Err(AgentGitError::NotFound)
+    ));
+    service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    assert!(matches!(
+        service.voice(&agent, TEAM).await,
+        Err(AgentGitError::NoVoice)
+    ));
+    assert!(matches!(
+        service.set_voice(&agent, other_team, &voice).await,
+        Err(AgentGitError::TeamMismatch)
+    ));
+    assert!(matches!(
+        service.voice(&agent, other_team).await,
+        Err(AgentGitError::TeamMismatch)
+    ));
+
+    service.set_voice(&agent, TEAM, &voice).await.unwrap();
+    assert_eq!(service.voice(&agent, TEAM).await.unwrap(), voice);
+    assert_eq!(
+        store.files.lock().unwrap()[&(AGENT.to_owned(), "config/voice.json".to_owned())],
+        (
+            b"{\n  \"model\": \"aura-2-thalia-en\"\n}\n".to_vec(),
+            "Set call voice".to_owned()
+        )
+    );
+
+    // The agent may commit anything to its own repo.
+    store.files.lock().unwrap().insert(
+        (AGENT.to_owned(), "config/voice.json".to_owned()),
+        (br#"{"model":"not-a-voice"}"#.to_vec(), "agent".to_owned()),
+    );
+    assert!(matches!(
+        service.voice(&agent, TEAM).await,
+        Err(AgentGitError::NoVoice)
+    ));
+}
+
+#[test]
+fn an_invite_voice_replaces_the_template_default() {
+    let mut chosen = seed();
+    chosen.voice = Some(crate::domain::voice::VoiceModel::parse("aura-2-thalia-en").unwrap());
+    let files = WORKSPACE_TEMPLATE.render(&agent(), &chosen).unwrap();
+    let voices: Vec<_> = files
+        .iter()
+        .filter(|file| file.path == "config/voice.json")
+        .collect();
+
+    assert_eq!(voices.len(), 1);
+    assert_eq!(
+        voices[0].contents,
+        "{\n  \"model\": \"aura-2-thalia-en\"\n}\n"
+    );
+}
+
 fn seed() -> PersonaSeed {
     PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
+        voice: None,
         creator_id: Some(
             MacroUserIdStr::parse_from_str("macro|admin@example.com")
                 .expect("creator id")
@@ -692,6 +855,24 @@ impl RepoStore for PausedStore {
     async fn repo_size_bytes(&self, agent: &MacroUserIdStr<'_>) -> Result<u64, Self::Err> {
         self.store.repo_size_bytes(agent).await
     }
+
+    async fn read_file(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        path: &str,
+    ) -> Result<Option<Vec<u8>>, Self::Err> {
+        self.store.read_file(agent, path).await
+    }
+
+    async fn commit_file(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        path: &str,
+        contents: &[u8],
+        message: &str,
+    ) -> Result<(), Self::Err> {
+        self.store.commit_file(agent, path, contents, message).await
+    }
 }
 
 #[tokio::test]
@@ -736,4 +917,61 @@ async fn deletion_waits_for_recovery_and_removes_its_published_storage() {
     deletion.await.unwrap();
     assert!(repos.find_repo(&agent).await.unwrap().is_none());
     assert!(!store.repos.lock().unwrap().contains(agent.as_ref()));
+}
+
+#[tokio::test]
+async fn a_push_holds_the_repo_lock_until_its_response_ends_and_management_takes_it() {
+    let repos = FakeRepos::default();
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: repos.clone(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    assert_eq!(*repos.lock_log.lock().unwrap(), vec![AGENT.to_owned()]);
+    assert!(repos.locked.lock().unwrap().is_empty());
+
+    let push = service
+        .serve_git(
+            GitCredential::RepoToken(created.token.clone()),
+            &agent,
+            request(GitEndpoint::Rpc(GitService::ReceivePack), b"pack"),
+        )
+        .await
+        .unwrap();
+    // git is still receiving while the response streams.
+    assert_eq!(*repos.locked.lock().unwrap(), vec![AGENT.to_owned()]);
+    let body: Vec<_> = push.body.collect().await;
+    assert_eq!(body.len(), 1);
+    assert!(repos.locked.lock().unwrap().is_empty());
+
+    // Reads never wait for a push.
+    service
+        .serve_git(
+            GitCredential::RepoToken(created.token.clone()),
+            &agent,
+            request(GitEndpoint::Rpc(GitService::UploadPack), b""),
+        )
+        .await
+        .unwrap();
+    service.delete_repo(&agent).await.unwrap();
+    assert_eq!(
+        *repos.lock_log.lock().unwrap(),
+        vec![AGENT.to_owned(), AGENT.to_owned(), AGENT.to_owned()]
+    );
+    assert!(repos.locked.lock().unwrap().is_empty());
 }
