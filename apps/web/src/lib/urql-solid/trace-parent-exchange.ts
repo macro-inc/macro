@@ -12,14 +12,24 @@ export const TRACE_PARENT_CONTEXT_KEY = 'macroTraceParent';
  * fresh one for the request.
  */
 export function firstRequestIn(parent: TraceContext): TraceContext {
-  let used = false;
-  return {
+  const first: TraceContext = {
     run(work) {
-      if (used) return work();
-      used = true;
+      if (usedFirstRequests.has(first)) return work();
+      usedFirstRequests.add(first);
       return parent.run(work);
     },
   };
+  return first;
+}
+
+const usedFirstRequests = new WeakSet<TraceContext>();
+
+/**
+ * Whether running in `context` still joins the caller's trace: false once
+ * something ran in a {@link firstRequestIn} context.
+ */
+export function joinsCallerTrace(context: TraceContext): boolean {
+  return !usedFirstRequests.has(context);
 }
 
 // Mutations are sent by the mutation queue inside its own attempt span.

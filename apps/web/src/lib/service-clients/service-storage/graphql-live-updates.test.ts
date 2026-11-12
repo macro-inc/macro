@@ -7,9 +7,12 @@ import {
   gql,
   makeResult,
   type Operation,
+  type OperationResult,
 } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { filter, makeSubject, map, onPush, pipe, subscribe } from 'wonka';
+import { normalizedCacheExchange } from '../../graphql-cache/exchange/normalized-cache-exchange';
+import { createNoopCacheHost } from '../../graphql-cache/host/noop-host';
 import {
   firstRequestIn,
   TRACE_PARENT_CONTEXT_KEY,
@@ -341,8 +344,9 @@ describe('liveUpdatesGateExchange', () => {
   });
 
   // The client sends a query once until it has a result; the normalized cache
-  // can deliver one for a held read, and its refetch then reaches the gate.
-  it('sends only the latest operation for a held query, in its own trace', async () => {
+  // can deliver one for a held read, and a second reader's read or a refetch
+  // then reaches the gate.
+  it('sends every operation dispatched for a held query, in order', async () => {
     const { gate } = await pingedGate();
     const { source: operations$, next: dispatch } = makeSubject<Operation>();
     const forwarded: Operation[] = [];
@@ -362,25 +366,101 @@ describe('liveUpdatesGateExchange', () => {
     );
     const { client } = gatedClient(gate);
     const request = createRequest(FEED, {});
+    const parent = firstRequestIn({
+      run: (work) => within('view.projects', work),
+    });
+    const first = client.createRequestOperation('query', request, {
+      ...FOLLOWS_LIVE_UPDATES,
+      [TRACE_PARENT_CONTEXT_KEY]: parent,
+    });
+    dispatch(first);
+    // A re-execution carries the context its trace was already used from.
     dispatch(
       client.createRequestOperation('query', request, {
-        ...FOLLOWS_LIVE_UPDATES,
-        [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn({
-          run: (work) => within('view.projects', work),
-        }),
-      })
-    );
-    dispatch(
-      client.createRequestOperation('query', request, {
-        ...FOLLOWS_LIVE_UPDATES,
+        ...first.context,
         requestPolicy: 'network-only',
       })
     );
     expect(forwarded).toEqual([]);
 
     gate.pong(true);
-    expect(forwarded).toHaveLength(1);
-    expect(forwarded[0]?.context.requestPolicy).toBe('network-only');
-    expect(forwarded[0]?.context[TRACE_PARENT_CONTEXT_KEY]).toBeUndefined();
+    expect(forwarded.map(({ context }) => context.requestPolicy)).toEqual([
+      'cache-first',
+      'network-only',
+    ]);
+    expect(forwarded[0]?.context[TRACE_PARENT_CONTEXT_KEY]).not.toBe(parent);
+    expect(forwarded[1]?.context[TRACE_PARENT_CONTEXT_KEY]).toBe(parent);
+    // Only the first had a trace to wait in.
+    expect(telemetry.spans).toMatchObject([
+      { parent: 'view.projects', attributes: { 'live_updates.outcome': 'live' } },
+    ]);
+  });
+
+  it('leaves the normalized cache with no request in flight once held reads answer', async () => {
+    const run = async (gated: boolean) => {
+      const { gate } = await pingedGate();
+      let affected: ((keys: number[]) => void) | undefined;
+      const host = {
+        ...createNoopCacheHost(),
+        disabled: false,
+        readQuery: async () => ({
+          kind: 'hit' as const,
+          data: { feed: [{ id: 'cached' }] },
+        }),
+        onOpsAffected: (listener: (keys: number[]) => void) => {
+          affected = listener;
+          return () => undefined;
+        },
+      };
+      let reads = 0;
+      const network: Exchange = () => (operations$) =>
+        pipe(
+          operations$,
+          filter((operation) => operation.kind === 'query'),
+          onPush(() => {
+            reads += 1;
+          }),
+          map((operation) =>
+            makeResult(operation, { data: { feed: [{ id: 'server' }] } })
+          )
+        );
+      const client = createClient({
+        url: 'https://dss.test/graphql',
+        exchanges: [
+          normalizedCacheExchange(host),
+          ...(gated ? [liveUpdatesGateExchange(gate)] : []),
+          network,
+        ],
+      });
+      const observe = () => {
+        const results: OperationResult[] = [];
+        pipe(
+          client.executeQuery(createRequest(FEED, {}), {
+            requestPolicy: 'cache-and-network',
+            ...FOLLOWS_LIVE_UPDATES,
+          }),
+          subscribe((result) => results.push(result))
+        );
+        return results;
+      };
+      // Two readers of one query; the second mounts after the cached result.
+      const first = observe();
+      await vi.advanceTimersByTimeAsync(0);
+      const second = observe();
+      await vi.advanceTimersByTimeAsync(0);
+      gate.pong(true);
+      await vi.advanceTimersByTimeAsync(0);
+      // A later change to the query's records reads it from the cache again.
+      affected?.([createRequest(FEED, {}).key]);
+      await vi.advanceTimersByTimeAsync(0);
+      return {
+        reads,
+        stale: [first.at(-1)?.stale, second.at(-1)?.stale],
+      };
+    };
+
+    const ungated = await run(false);
+    expect(ungated.stale).toEqual([false, false]);
+    expect(await run(true)).toEqual(ungated);
   });
 });

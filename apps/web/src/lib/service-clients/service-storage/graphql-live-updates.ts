@@ -12,6 +12,7 @@ import {
 import { filter, makeSubject, merge, pipe } from 'wonka';
 import {
   firstRequestIn,
+  joinsCallerTrace,
   TRACE_PARENT_CONTEXT_KEY,
 } from '../../urql-solid/trace-parent-exchange';
 
@@ -135,34 +136,48 @@ export function createLiveUpdatesGate(options: {
   };
 }
 
-type HeldRead = {
+type HeldOperation = {
   operation: Operation;
-  /** The original operation's trace, which starting the wait span used up. */
+  /** The trace the operation's query started in, which the wait used up. */
   parent?: TraceContext;
-  span: Span;
-  cancel: () => void;
+  span?: Span;
 };
 
-function startWait(operation: Operation): Pick<HeldRead, 'parent' | 'span'> {
-  const traceParent: TraceContext | undefined =
-    operation.context[TRACE_PARENT_CONTEXT_KEY];
-  const start = () => {
-    const span = Telemetry.span('graphql_soup.live_updates.wait', {
-      sampling: 'perf',
-      attributes: {
-        'graphql.operation.name':
-          getOperationName(operation.query) ?? 'unknown',
-      },
-    });
-    return { span, parent: Telemetry.captureContext() };
-  };
-  if (!traceParent) return { span: start().span };
-  const { span, parent } = traceParent.run(start);
-  return { span, parent: firstRequestIn(parent) };
+/**
+ * Every operation dispatched for one query while it waits, in order. The
+ * normalized cache counts each one it forwards as a request in flight until
+ * its result arrives, so the gate sends them all, as it would have unheld.
+ */
+type HeldRead = { operations: HeldOperation[]; cancel: () => void };
+
+function waitSpan(operation: Operation): Span {
+  return Telemetry.span('graphql_soup.live_updates.wait', {
+    sampling: 'perf',
+    attributes: {
+      'graphql.operation.name': getOperationName(operation.query) ?? 'unknown',
+    },
+  });
 }
 
-function resumed(read: HeldRead): Operation {
-  const { operation, parent } = read;
+/**
+ * Starts the wait span in the trace the operation's query started in, and
+ * keeps a fresh context there for its request. An operation whose trace a
+ * request already joined (a re-sent operation) has no trace of its own to
+ * wait in: like any re-sent operation it goes out without one, unrecorded.
+ */
+function startWait(operation: Operation): HeldOperation {
+  const traceParent: TraceContext | undefined =
+    operation.context[TRACE_PARENT_CONTEXT_KEY];
+  if (!traceParent) return { operation, span: waitSpan(operation) };
+  if (!joinsCallerTrace(traceParent)) return { operation };
+  return traceParent.run(() => ({
+    operation,
+    span: waitSpan(operation),
+    parent: firstRequestIn(Telemetry.captureContext()),
+  }));
+}
+
+function resumed({ operation, parent }: HeldOperation): Operation {
   if (!parent) return operation;
   return makeOperation(operation.kind, operation, {
     ...operation.context,
@@ -173,8 +188,8 @@ function resumed(read: HeldRead): Operation {
 /**
  * After the normalized cache, so a cached result still shows at once: holds
  * the network reads of queries marked {@link FOLLOWS_LIVE_UPDATES} while
- * `gate` waits, keeping the latest operation per query, and sends them when
- * it opens.
+ * `gate` waits, and sends them, in order, when it opens. It only delays: what
+ * reaches the transport is what would have without it.
  */
 export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
   return ({ forward }) =>
@@ -184,24 +199,25 @@ export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
 
       const finish = (key: number, outcome: HoldOutcome | 'torn_down') => {
         const read = held.get(key);
-        if (!read) return undefined;
+        if (!read) return [];
         held.delete(key);
         read.cancel();
-        read.span.setAttr('live_updates.outcome', outcome);
-        read.span.end();
-        return read;
+        for (const { span } of read.operations) {
+          span?.setAttr('live_updates.outcome', outcome);
+          span?.end();
+        }
+        return read.operations;
       };
       const hold = (operation: Operation) => {
         const read: HeldRead = {
-          operation,
-          ...startWait(operation),
+          operations: [startWait(operation)],
           cancel: () => undefined,
         };
         held.set(operation.key, read);
         read.cancel = gate.hold((outcome) => {
           read.cancel = () => undefined;
-          const released = finish(operation.key, outcome);
-          if (released) send(resumed(released));
+          for (const released of finish(operation.key, outcome))
+            send(resumed(released));
         });
       };
 
@@ -219,9 +235,7 @@ export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
             return true;
           const read = held.get(operation.key);
           if (read) {
-            // A re-execution replaces the held read, with its own trace.
-            read.operation = operation;
-            read.parent = undefined;
+            read.operations.push(startWait(operation));
             return false;
           }
           if (!gate.holding()) return true;

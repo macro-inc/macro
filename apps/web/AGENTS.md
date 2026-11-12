@@ -840,7 +840,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   a pong after the subscribe frames (at most `LIVE_UPDATES_HOLD_MS`), so nothing
   published in between is lost. A `cache-first` read sets neither and is read
   again when the subscriptions go live; so is every read if the hold gave up.
-  Each held read records a `graphql_soup.live_updates.wait` span.
+  The gate only delays: it sends every held operation, because the normalized
+  cache counts each one it forwards until its result arrives. Each held read
+  records a `graphql_soup.live_updates.wait` span.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
