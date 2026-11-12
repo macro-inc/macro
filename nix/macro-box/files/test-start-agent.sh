@@ -16,8 +16,9 @@ mkdir -p "$HOME" "$root/bin"
 # The repository URL must be HTTP(S); git reads it from a local bare repo instead.
 git config --global url."file://$root/remote.git".insteadOf https://git.test/agent.git
 git config --global init.defaultBranch main
+# The build sandbox has no /usr/bin/env: name this bash by its path.
 cat >"$root/bin/bun" <<EOF
-#!/usr/bin/env bash
+#!$(command -v bash)
 echo "\$*" >>"$root/bun.ran"
 EOF
 chmod +x "$root/bin/bun"
