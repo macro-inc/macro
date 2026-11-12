@@ -6,7 +6,6 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
 import {
   useClaudeModeQuery,
@@ -31,7 +30,10 @@ import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { MachineRow } from '../../components/connected-runtimes-section';
+import {
+  MachineCardError,
+  MachineRow,
+} from '../../components/connected-runtimes-section';
 import { HarnessIcon } from '../../integration-ui';
 import { IntegrationRow, SettingsCard } from '../../primitives';
 import type { ComputerMenuItem } from '../components/computer-actions-menu';
@@ -472,7 +474,7 @@ export function MacroComputers(props: {
           <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
             {t('computers.title')}
           </h2>
-          <SettingsCard>
+          <SettingsCard inset="wide">
             <For each={computers()}>
               {(computer) => (
                 <ManagedComputerRow
@@ -493,7 +495,6 @@ export function MacroComputers(props: {
             <Show when={canPurchase() && isAdmin()}>
               <MachineRow
                 name={t('computers.getComputer')}
-                dot={<PlusIcon class="size-3 text-ink-muted" />}
                 meta={
                   onTrial()
                     ? t('computers.trialBlocked')
@@ -516,9 +517,7 @@ export function MacroComputers(props: {
               />
             </Show>
             <Show when={failed()}>
-              <p class="px-4 py-3 text-xs text-negative">
-                {t('computers.loadFailed')}
-              </p>
+              <MachineCardError>{t('computers.loadFailed')}</MachineCardError>
             </Show>
           </SettingsCard>
         </div>
