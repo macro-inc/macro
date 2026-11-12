@@ -177,6 +177,7 @@ async fn record<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -817,20 +818,14 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
 
 /// Every tool call is stamped with the tool's name under `_meta.macro`, the
 /// way Claude Code stamps `_meta.claudeCode.toolName`: an MCP tool as
-/// `mcp__<server>__<tool>`, a delegation flagged `subagent`.
+/// `mcp__<server>__<tool>`.
 #[tokio::test]
-async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
+async fn tool_calls_are_stamped_with_their_names() {
     let engine = Arc::new(ScriptedEngine::new(vec![
         StreamPart::ToolCall(agent::ToolCall {
             id: "call-1".into(),
             name: "ReadContent".into(),
             json: serde_json::json!({"documentId": "d"}),
-            mcp: None,
-        }),
-        StreamPart::ToolCall(agent::ToolCall {
-            id: "call-2".into(),
-            name: "Subagent".into(),
-            json: serde_json::json!({"task": "count the beans"}),
             mcp: None,
         }),
         StreamPart::ToolCall(agent::ToolCall {
@@ -867,7 +862,6 @@ async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
         metas,
         vec![
             serde_json::json!({"macro": {"toolName": "ReadContent"}}),
-            serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
             serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
         ]
     );
@@ -1874,6 +1868,7 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -1932,6 +1927,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -2023,6 +2019,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -2129,6 +2126,7 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(

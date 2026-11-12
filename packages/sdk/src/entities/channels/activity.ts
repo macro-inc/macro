@@ -7,7 +7,11 @@ import type { MacroClient } from '../../utils/client';
 import { User } from '../users/user';
 import type { Channel } from './channel';
 
-/** A user's channel activity marker. */
+/**
+ * A user's channel activity marker.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class ChannelActivity {
   constructor(
     private readonly client: MacroClient,
@@ -21,17 +25,29 @@ export class ChannelActivity {
     return this.record.id;
   }
 
-  /** User who interacted. */
+  /**
+   * User who interacted.
+   *
+   * @readonly
+   */
   user(): User {
     return User.byId(this.client, this.record.user_id);
   }
 
-  /** Creation time. */
+  /**
+   * Creation time.
+   *
+   * @readonly
+   */
   createdAt(): string {
     return this.record.created_at;
   }
 
-  /** Record a view or interaction in this channel. */
+  /**
+   * Record a view or interaction in this channel.
+   *
+   * @write
+   */
   async recordInteraction(type: ActivityType): Promise<ChannelActivity> {
     return new ChannelActivity(
       this.client,

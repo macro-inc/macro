@@ -4,6 +4,7 @@ import { Button, TextField } from '@ui';
 import { createEffect, createSignal, For, on, Show, Suspense } from 'solid-js';
 import { v7 as newMessageId } from 'uuid';
 import { CallChatBody } from './components/CallChatBody';
+import { CallChatEmptyState } from './components/CallChatEmptyState';
 import { useGuestCallChat } from './queries/use-guest-call-chat';
 
 type GuestCallChatProps = {
@@ -125,9 +126,7 @@ function GuestCallChatContent(props: GuestCallChatProps) {
         </Button>
       </Show>
       <Show when={chat.ready() && chat.messages().length === 0}>
-        <p class="text-sm text-ink-muted">
-          Start the conversation. Messages stay with this call.
-        </p>
+        <CallChatEmptyState />
       </Show>
       <For each={chat.messages()}>
         {(message) => (

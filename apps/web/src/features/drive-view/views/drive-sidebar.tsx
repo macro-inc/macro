@@ -9,6 +9,7 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
@@ -352,6 +353,7 @@ export function DriveSidebar() {
         <DriveCreateMenu />
       </ViewSidebar.Primary>
       <ViewSidebar.Content ref={setContent}>
+        <SidebarRoutineSuggestions surface="files" />
         <DriveTutorials />
         <DriveSidebarContent />
         <DriveImportPromotion />

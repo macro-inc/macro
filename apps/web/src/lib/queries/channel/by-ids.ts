@@ -6,7 +6,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { arrayEquals, setEquals } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isChannelEntity } from '@entity';
+import { type ChannelEntity, isChannelEntity } from '@entity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
 import { queryReadyGate } from '../gate';
@@ -110,11 +110,13 @@ export function useCachedChannelsByIds(
           () => batchIds,
           () => ({ cacheFirst: true })
         );
-        const channels = createMemo(
-          () =>
-            queryReadyGate(query)
-              ? query.data.entities.filter(isChannelEntity)
-              : [],
+        // A refresh must not empty sections that already resolved their members.
+        // Each batch owns its snapshot, so changed IDs or accounts start fresh.
+        const channels = createMemo<ChannelEntity[]>(
+          (previous) => {
+            if (!queryReadyGate(query)) return previous;
+            return query.data.entities.filter(isChannelEntity);
+          },
           [],
           { equals: arrayEquals }
         );

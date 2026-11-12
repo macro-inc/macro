@@ -15,7 +15,7 @@ export default function DemoDeployDiff() {
       <div
         ref={host}
         aria-label="Changes to deploy/retry.ts"
-        class="overflow-hidden rounded border border-edge-muted"
+        class="demo-deploy-diff overflow-hidden rounded border border-edge-muted"
         style={{
           '--diffs-font-family': 'var(--font-mono)',
           '--diffs-font-size': '0.75rem',
