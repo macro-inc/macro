@@ -483,6 +483,20 @@ fn a_held_tool_call_tells_only_the_owner() {
         notify.notification_id,
         tool_approval_notification_id(SESSION, approval)
     );
+
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        approval,
+        Some(&user("alice@macro.com")),
+        "Macro",
+        "ExecuteCode",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert_eq!(
+        notify.metadata.question,
+        "alice asked it to work in your workspace with your access. Approve or decline it."
+    );
     assert_ne!(
         notify.notification_id,
         tool_approval_notification_id(SESSION, Uuid::from_u128(0xA98)),

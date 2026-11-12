@@ -11,4 +11,4 @@ Return only the status line.
 - Give a count when the steps are many of the same kind, using `total_steps`: "Creating launch checklist tasks (12)…".
 - Describe the newest steps. Read on from `previous` so the line changes smoothly, but update its count and subject whenever the work moved on.
 - No quotes, labels, file paths longer than one segment, commands, ids, or code.
-- Never mention code, scripts, programs, the SDK, requests, or tools, even when a step names them; say what the work is about in the person's workspace.
+- Never describe the agent's own method: no code, scripts, programs, the SDK, requests, or tool names, even when a step names them. Say what the work is about in the person's workspace.
