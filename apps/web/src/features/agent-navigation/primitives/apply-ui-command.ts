@@ -6,10 +6,12 @@
 
 import {
   claimOf,
+  type Entry,
   type LayoutSnapshot,
   type PaneId,
   type SplitLocation,
   type SplitRouter,
+  type SplitSearchState,
 } from '@app/lib/split-router';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { splitOf } from '@components/app/split-layout/layoutManager';
@@ -56,11 +58,40 @@ function paneShowingSession(
     );
 }
 
-/** Already shown by a pane or a preview: an open would only bring it forward. */
+/** Whether every search value the agent asked for is in `shown`. */
+function includesSearch(
+  shown: SplitSearchState | undefined,
+  asked: SplitSearchState
+): boolean {
+  return Object.entries(asked).every(([namespace, params]) =>
+    Object.entries(params).every(([key, value]) =>
+      deepEqual(shown?.[namespace]?.[key], value)
+    )
+  );
+}
+
+/**
+ * Whether `entry` shows the view at `location`: the same route, with every
+ * search value the agent asked for (`/tasks` matches a Tasks pane on any
+ * saved view; `/tasks?s0.view=…` only a pane on that view).
+ */
+function showsView(entry: Entry | undefined, location: SplitLocation): boolean {
+  if (!entry) return false;
+  if (!deepEqual(entry.location.route, location.route)) return false;
+
+  return includesSearch(entry.location.search, location.search ?? {});
+}
+
+/**
+ * Already shown, so an open would only bring it forward: by whoever holds its
+ * claim (a pane or a preview), or, for a view no claim covers (Tasks, Home),
+ * by a pane on that view.
+ */
 function alreadyShown(router: SplitRouter, location: SplitLocation): boolean {
   const claim = claimOf(router.routes, location.route);
+  if (claim !== undefined) return router.claims.holderOf(claim) !== undefined;
 
-  return claim !== undefined && router.claims.holderOf(claim) !== undefined;
+  return router.panes().some((pane) => showsView(router.entry(pane), location));
 }
 
 /**
@@ -125,13 +156,15 @@ export async function applyOpen(
   location: SplitLocation
 ): Promise<ApplyOutcome> {
   const { router, manager } = deps;
+  // Opening it again would bring its pane forward and take focus. Checked
+  // before room: a full layout has nothing to make room for when it's shown.
+  if (alreadyShown(router, location)) return { kind: 'shown' };
+
   const { source, split } = target(router, frame);
   const roomy = split
     ? (manager?.canSplit(splitOf(split.pane), split.side) ?? true)
     : (manager?.canAppendSplit() ?? true);
   if (!deps.stacked && !roomy) return { kind: 'no_room' };
-  // Opening it again would bring its pane forward and take focus.
-  if (alreadyShown(router, location)) return { kind: 'shown' };
 
   const before = router.panes();
   const snapshot = router.layoutSnapshot();

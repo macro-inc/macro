@@ -110,7 +110,10 @@ function layoutWithAgentPane() {
   });
 }
 
-function command(router: ReturnType<typeof layoutWithAgentPane>['router']) {
+function command(
+  router: ReturnType<typeof layoutWithAgentPane>['router'],
+  path = '/md/doc-1'
+) {
   const decision = decideUiCommand(router.routes, ME, {
     commandId: 'command-1',
     userId: ME.userId,
@@ -118,7 +121,7 @@ function command(router: ReturnType<typeof layoutWithAgentPane>['router']) {
     sessionId: SESSION,
     agentName: 'Research agent',
     kind: 'open',
-    path: '/md/doc-1',
+    path,
     placement: 'beside-agent',
   });
   if (decision.kind !== 'open') throw new Error('expected an open');
@@ -190,6 +193,54 @@ describe('applyOpen', () => {
     expect(router.entry(agentPane!)?.location.route.matches.at(-1)?.id).toBe(
       'view-tasks'
     );
+  });
+
+  it('leaves a view no claim covers as it is when a pane already shows it', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const deps = { router, manager, arrivals, stacked: false };
+    const tasks = command(router, '/tasks');
+    const first = await applyOpen(deps, tasks.frame, tasks.location);
+    if (first.kind !== 'opened') throw new Error('expected an open');
+    const before = router.panes();
+
+    const again = await applyOpen(deps, tasks.frame, tasks.location);
+
+    expect(again.kind).toBe('shown');
+    expect(router.panes()).toEqual(before);
+  });
+
+  it('counts a pane on the view the agent names, whatever else its search holds', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const deps = { router, manager, arrivals, stacked: false };
+    const filtered = command(router, '/tasks?s0.tasks.view=mine&s0.tasks.q=x');
+    const first = await applyOpen(deps, filtered.frame, filtered.location);
+    if (first.kind !== 'opened') throw new Error('expected an open');
+    const sameView = command(router, '/tasks?s0.tasks.view=mine');
+    const otherView = command(router, '/tasks?s0.tasks.view=all');
+
+    const shown = await applyOpen(deps, sameView.frame, sameView.location);
+    const other = await applyOpen(deps, otherView.frame, otherView.location);
+
+    expect(sameView.location.search).toEqual({ tasks: { view: ['mine'] } });
+    expect(shown.kind).toBe('shown');
+    expect(other.kind).toBe('opened');
+  });
+
+  it('answers shown, not no room, for an item already on screen in a full layout', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const deps = { router, manager, arrivals, stacked: false };
+    const { frame, location } = command(router);
+    const first = await applyOpen(deps, frame, location);
+    if (first.kind !== 'opened') throw new Error('expected an open');
+    vi.spyOn(manager, 'canSplit').mockReturnValue(false);
+    vi.spyOn(manager, 'canAppendSplit').mockReturnValue(false);
+
+    const again = await applyOpen(deps, frame, location);
+
+    expect(again.kind).toBe('shown');
   });
 
   it('never replaces a pane when there is no room for another', async () => {
