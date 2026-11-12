@@ -464,6 +464,115 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
     assert!(details.contains("INNER JOIN initiative i ON i.id::text = t.id"));
 }
 
+/// Rows a plan read from `table` (returned or filtered out) across all loops
+/// of every node that scans it.
+fn rows_read(node: &serde_json::Value, table: &str) -> f64 {
+    let own = if node["Relation Name"] == table {
+        let returned = node["Actual Rows"].as_f64().unwrap_or(0.0);
+        let filtered = node["Rows Removed by Filter"].as_f64().unwrap_or(0.0);
+        (returned + filtered) * node["Actual Loops"].as_f64().unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    let children = node["Plans"]
+        .as_array()
+        .map(|plans| plans.iter().map(|plan| rows_read(plan, table)).sum())
+        .unwrap_or(0.0);
+    own + children
+}
+
+#[sqlx::test(
+    fixtures("../../initiative/test/access_paths.sql"),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn initiative_listing_reads_the_callers_initiatives_not_the_table(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // 20,000 initiatives the viewer cannot see, each with its owner's grant:
+    // most of production's table belongs to other people.
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        SELECT ('a2000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'background-' || n,
+            'background-' || n || '@paths.test', 'background-stripe-' || n
+        FROM generate_series(1, 20000) n"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id)
+        SELECT 'macro|background-' || n || '@paths.test', 'background-' || n || '@paths.test',
+            ('a2000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+        FROM generate_series(1, 20000) n"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id) SELECT 'background-share-' || n FROM generate_series(1, 20000) n"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO initiative (id, name, owner_user_id, share_permission_id)
+        SELECT ('a8000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'Background ' || n,
+            'macro|background-' || n || '@paths.test', 'background-share-' || n
+        FROM generate_series(1, 20000) n"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT id, 'initiative', owner_user_id, 'user', 'owner'
+        FROM initiative WHERE name LIKE 'Background %'"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("ANALYZE").execute(&pool).await?;
+
+    let filter = EntityFilterAst {
+        initiative_filter: Some(Arc::new(Expr::val(InitiativeLiteral::Include))),
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil())))),
+        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::Importance(false)))),
+        project_filter: Some(Arc::new(Expr::val(ProjectLiteral::Importance(false)))),
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
+        ..EntityFilterAst::mock_empty()
+    };
+    let viewer = "macro|viewer@paths.test";
+    let sort = DynamicSort::from(SimpleSortMethod::UpdatedAt);
+    // The first page, run and bound as expanded_dynamic_cursor_soup runs it.
+    let mut transaction = begin_dynamic_query(&pool).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
+    let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
+    let builder = build_query(&filter, false, sort, &mut document_ids);
+    let sql = format!("EXPLAIN (ANALYZE, FORMAT JSON) {}", builder.sql());
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "explains SQL generated from the AST"
+    )]
+    let mut query = sqlx::query_scalar::<_, serde_json::Value>(&sql)
+        .bind(viewer)
+        .bind(sort.timestamp_method().to_string())
+        .bind(50_i64)
+        .bind(None::<DateTime<Utc>>)
+        .bind(None::<String>)
+        .bind(StatusOption::COMPLETED_UUID.to_string())
+        .bind(SystemPropertyKey::STATUS_UUID)
+        .bind(SystemPropertyKey::ASSIGNEES_UUID)
+        .bind(&source_ids);
+    for ids in document_ids.into_binds() {
+        query = query.bind(ids);
+    }
+    let plan = query.persistent(false).fetch_one(&mut *transaction).await?;
+
+    // The viewer can list 8 initiatives and their team owns 17; the table holds 20,018.
+    let read = rows_read(&plan[0]["Plan"], "initiative");
+    assert!(
+        read < 100.0,
+        "the listing read {read} initiative rows; it should start from the viewer's access: {plan}"
+    );
+    Ok(())
+}
+
 #[test]
 fn initiative_name_literals_are_escaped_and_not_like_patterns() {
     let expr = Expr::val(InitiativeLiteral::NameContains("O'Reilly_%".into()));
