@@ -1,0 +1,23 @@
+nix-support/node_modules-hashes.json
+  s_4486610b4f3a97::t_b1580972860fea 3-4
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+  s_4486610b4f3a97::t_7b305406ec6d0c 113,133-137
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main/test.rs
+  s_4486610b4f3a97::t_04aa64aacebfab 871-875
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6e0e90b7486634b299b1b9c6c27d5f7d14d19885",
+  "prompts": {},
+  "sessions": {
+    "s_4486610b4f3a97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e07751b0-6706-4d89-b62e-01d8640f7d9d",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
