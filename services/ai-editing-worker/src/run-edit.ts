@@ -12,6 +12,7 @@ import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/so
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
+import type { LoroDoc } from 'loro-crdt';
 import { fastEditor, supervisor } from './ai-editing/agents';
 import { PeerPool } from './ai-editing/awareness';
 import type { DocumentOp } from './ai-editing/editor';
@@ -20,7 +21,6 @@ import type { UsageEntry } from './ai-editing/token-tracker';
 import type { CoderRunCode, DispatchEditTrace } from './ai-editing/tools';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
-import { loroRevision } from './revision';
 import { buildTraceSession, type TraceSession } from './trace-log';
 
 export type Provider = 'anthropic' | 'cerebras' | 'openai' | 'google';
@@ -270,4 +270,9 @@ export async function runEditSession(
     manager.dispose();
     source.cleanup();
   }
+}
+
+/** The doc's version as sync-service reports a revision: base64 of the encoded oplog version. */
+function loroRevision(doc: LoroDoc): string {
+  return btoa(String.fromCharCode(...doc.oplogVersion().encode()));
 }
