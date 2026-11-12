@@ -143,6 +143,10 @@ export const FormRespondRoutePage = lazyNamed(
   () => import('./pages'),
   'FormRespondRoutePage'
 );
+export const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
 export const NotFound = lazy(
   () => import('@core/component/AccessErrorViews/NotFound')
 );
@@ -192,9 +196,5 @@ export const OTHER_APP_VIEWS = [
   BookingLinksRouteView,
   ExternalRouteView,
   ExternalChatRouteView,
+  PasswordsRouteView,
 ];
-
-export const PasswordsRouteView = lazyNamed(
-  () => import('@app/features/passwords/route-views'),
-  'PasswordsRouteView'
-);
