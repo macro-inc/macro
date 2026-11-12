@@ -106,7 +106,9 @@ async function request<T extends object>(
     body: body === undefined ? undefined : JSON.stringify(body),
   };
   let result = await dssFetch<T>(url, init);
-  for (let retry = 0; retry < BUSY_RETRIES && isBusy(result); retry += 1) {
+  // Only a write is refused as busy; a read's 503 is not this refusal.
+  const retries = method === 'GET' ? 0 : BUSY_RETRIES;
+  for (let retry = 0; retry < retries && isBusy(result); retry += 1) {
     await sleep(BUSY_RETRY_MS);
     result = await dssFetch<T>(url, init);
   }

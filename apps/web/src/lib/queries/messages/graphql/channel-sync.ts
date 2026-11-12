@@ -1,6 +1,7 @@
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError } from '@core/util/result';
+import { thrownResultErrorHasCode } from '@core/util/result';
+import { sleep } from '@core/util/sleep';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import type {
@@ -67,6 +68,8 @@ const FIRST_PAGE_LIMIT = 50;
 /** Change pages one catch-up reads before it gives up and reads the page again. */
 const MAX_CATCH_UP_PAGES = 20;
 const PERSIST_DELAY_MS = 1_000;
+/** A changes read that has not answered by now is treated as failed. */
+const CHANGES_TIMEOUT_MS = 15_000;
 const SURFACE = 'channel-sync';
 
 type ChannelSyncState = {
@@ -130,6 +133,32 @@ function setTimelineSeq(parent: MessageParent, seq: number) {
   );
 }
 
+/**
+ * The loaded rows may no longer be the ones the number describes, so the
+ * timeline gives the number up. Without one it is not caught up or written
+ * to the cache; the next page read from the server brings a new one.
+ */
+function forgetTimelineSeq(parent: MessageParent) {
+  queryClient.setQueryData<MessageTimelineData>(
+    getMessageTimelineQueryKey(parent, null),
+    (data) => {
+      const first = data?.pages[0];
+      if (!data || first?.channel_seq === undefined) return data;
+      const { channel_seq: _seq, ...page } = first;
+      return { ...data, pages: [page, ...data.pages.slice(1)] };
+    }
+  );
+}
+
+/** The server said no: the viewer cannot read this channel, or it is gone. */
+function isRefusal(error: unknown): boolean {
+  return (
+    thrownResultErrorHasCode(error, 'FORBIDDEN') ||
+    thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+    thrownResultErrorHasCode(error, 'NOT_FOUND')
+  );
+}
+
 /** The sequence number a channel's loaded timeline is current to, if it has one. */
 export function channelSyncSeq(channelId: string): number | undefined {
   return timelineSeq({ type: 'channel', id: channelId });
@@ -160,6 +189,19 @@ async function readCache(
   }
 }
 
+/**
+ * Empty the channel's cached page. An empty page reads as a miss, so the
+ * next open asks the server.
+ */
+async function dropCachedPage(host: CacheHost, channelId: string) {
+  const cached = await readCache(host, channelId);
+  if (!cached || channelCacheHost() !== host) return;
+  await writeCachedLatestPage(host, channelId, {
+    ...cached,
+    page: { ...cached.page, entries: [] },
+  });
+}
+
 type LatestPageRead =
   | { source: 'cache'; read: CachedLatestPage }
   | { source: 'network'; read: LatestChannelPage };
@@ -169,6 +211,7 @@ type LatestPageRead =
  * still starting loses to a fast network and wins on a slow or absent one.
  */
 async function raceCacheWithNetwork(
+  host: CacheHost,
   cache: Promise<CachedLatestPage | undefined>,
   channelId: string,
   signal?: AbortSignal
@@ -182,8 +225,11 @@ async function raceCacheWithNetwork(
       return { source: 'network', read: await network };
     } catch (error) {
       // A refusal is the server's answer: someone removed from a channel
-      // must not be shown its cached page.
-      if (error instanceof ThrownResultError) throw error;
+      // must not be shown its cached page, now or on the next open.
+      if (isRefusal(error)) {
+        fireAndForget(dropCachedPage(host, channelId), SURFACE);
+        throw error;
+      }
       // Offline or failing: the cached page is still better than nothing.
       const cached = await cache;
       if (!cached || signal?.aborted) throw error;
@@ -224,7 +270,7 @@ async function readLatestPage(
     : 'not-ready';
   signal?.throwIfAborted();
   if (early === 'not-ready') {
-    const winner = await raceCacheWithNetwork(cache, parent.id, signal);
+    const winner = await raceCacheWithNetwork(host, cache, parent.id, signal);
     return { ...winner, raced: true };
   }
   if (early) return { source: 'cache', read: early, raced: false };
@@ -326,8 +372,30 @@ function applyChannelChanges(parent: MessageParent, changes: ChannelChanges) {
   for (const reply of changes.replies) {
     const message = normalizeThreadReplySender(messageFromGraphql(reply));
     if (!message.thread_id) continue;
-    setThreadRepliesData(parent, message.thread_id, (replies) =>
+    const threadId = message.thread_id;
+    const loaded = setThreadRepliesData(parent, threadId, (replies) =>
       upsertThreadReply(replies, message)
+    );
+    if (loaded) continue;
+    // A thread being read for the first time may have been answered before
+    // this reply existed; the reply joins it once that read lands.
+    const firstRead = queryClient.getQueryCache().find<MessageThread>({
+      queryKey: getThreadRepliesQueryKey(parent, threadId),
+      exact: true,
+    })?.promise;
+    if (!firstRead) continue;
+    fireAndForget(
+      (async () => {
+        try {
+          await firstRead;
+        } catch {
+          return;
+        }
+        setThreadRepliesData(parent, threadId, (replies) =>
+          upsertThreadReply(replies, message)
+        );
+      })(),
+      SURFACE
     );
   }
   if (removed.size > 0) removeThreadReplies(parent, removed);
@@ -356,13 +424,47 @@ function latestPageLoaded(parent: MessageParent): Promise<boolean> {
   });
 }
 
+/**
+ * Read the channel's pages from the server again. The rows on screen are in
+ * doubt until that read lands, so they give up their sequence number first.
+ */
 function readAgain(parent: MessageParent) {
+  forgetTimelineSeq(parent);
   queryClient.invalidateQueries({
     queryKey: getMessageTimelineQueryKeyPrefix(parent),
   });
   queryClient.invalidateQueries({
     queryKey: getThreadRepliesQueryKeyPrefix(parent),
   });
+}
+
+/**
+ * The server refused the channel's changes to a timeline shown from the
+ * cache. Drop the cached page and the loaded rows, so the read that follows
+ * shows the refusal instead of the page.
+ */
+function dropRefusedChannel(
+  host: CacheHost,
+  parent: MessageParent,
+  state: ChannelSyncState
+) {
+  state.skipCache = true;
+  fireAndForget(dropCachedPage(host, parent.id), SURFACE);
+  queryClient.resetQueries({
+    queryKey: getMessageTimelineQueryKeyPrefix(parent),
+  });
+}
+
+async function readChanges(
+  channelId: string,
+  since: number
+): Promise<ChannelChanges> {
+  const changes = await Promise.race([
+    fetchChannelChanges(channelId, since),
+    sleep(CHANGES_TIMEOUT_MS),
+  ]);
+  if (!changes) throw new Error('Channel changes read timed out');
+  return changes;
 }
 
 async function runCatchUp(
@@ -381,8 +483,9 @@ async function runCatchUp(
         return;
       }
       span.setAttr('channel.catch_up.since', timelineSeq(parent) ?? -1);
-      do {
+      for (;;) {
         state.rerun = false;
+        let applied = 0;
         let more = true;
         while (more) {
           if (pages >= MAX_CATCH_UP_PAGES) {
@@ -397,32 +500,47 @@ async function runCatchUp(
             outcome = 'unloaded';
             return;
           }
-          const changes = await fetchChannelChanges(parent.id, since);
+          const changes = await readChanges(parent.id, since);
+          const current = timelineSeq(parent);
+          if (current !== since) {
+            // A page read, a pushed change, a cancelled refetch or a rollback
+            // moved the timeline meanwhile. One already at the server's
+            // number holds these changes; any other asks again from where
+            // it is now.
+            if (!changes.reset && current !== undefined)
+              more = current < changes.seq;
+            continue;
+          }
           if (changes.reset) {
             outcome = 'reset';
             state.skipCache = true;
             readAgain(parent);
             return;
           }
-          // A page read, a cancelled refetch or a rollback meanwhile moved
-          // the timeline; ask again from where it is now.
-          if (timelineSeq(parent) !== since) continue;
           applyChannelChanges(parent, changes);
           setTimelineSeq(parent, changes.seq);
-          rows +=
+          applied +=
             changes.entries.length +
             changes.replies.length +
             changes.activities.length +
             changes.removed.length;
           more = changes.hasMore;
         }
-      } while (state.rerun);
-      // A page read that started before these changes would commit over
-      // them; start it again so it reads from the timeline as it is now.
-      if (rows > 0) await restartPendingChannelTimeline(parent);
+        rows += applied;
+        // A page read that started before these changes would commit over
+        // them; start it again so it reads from the timeline as it is now.
+        if (applied > 0) await restartPendingChannelTimeline(parent);
+        // A catch-up asked for during that restart is still owed.
+        if (!state.rerun) break;
+      }
       if (rows > 0) outcome = 'applied';
       schedulePersist(host, parent);
     } catch (error) {
+      if (isRefusal(error)) {
+        outcome = 'refused';
+        dropRefusedChannel(host, parent, state);
+        return;
+      }
       outcome = 'failed';
       // The cached page may be behind; the server's page settles it, and
       // its failure is the timeline's to show.

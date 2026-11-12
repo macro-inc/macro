@@ -36,6 +36,7 @@ import {
   messageTimelineQueryOptions,
 } from '../../timeline';
 import {
+  catchUpChannel,
   channelSyncSeq,
   loadChannelTimelinePage,
   resetChannelSync,
@@ -233,15 +234,78 @@ describe('opening a channel', () => {
         entries: [entryToGraphql(messageEntry('m1', 1, { content: 'older' }))],
       })
     );
-    await vi.waitFor(() =>
-      expect(mocks.fetchChannelChanges).toHaveBeenCalledTimes(2)
-    );
+    await Promise.resolve();
     const entry =
       testQueryClient.getQueryData<MessageTimelineData>(LATEST_KEY)?.pages[0]
         .entries[0];
     expect(entry?.type === 'message' && entry.message.content).toBe('newer');
-    expect(mocks.fetchChannelChanges).toHaveBeenLastCalledWith(CHANNEL.id, 5);
+    // The page read is already past what the changes read saw.
+    expect(mocks.fetchChannelChanges).toHaveBeenCalledTimes(1);
     expect(channelSyncSeq(CHANNEL.id)).toBe(5);
+  });
+
+  it('asks again when the timeline moved but is still behind the server', async () => {
+    mocks.readCachedLatestPage.mockResolvedValue({
+      seq: 1,
+      userId: 'user',
+      page: page([messageEntry('m1', 1)]),
+    });
+    let release: (value: unknown) => void = () => {};
+    mocks.fetchChannelChanges
+      .mockReturnValueOnce(new Promise((resolve) => (release = resolve)))
+      .mockResolvedValueOnce(
+        changes(8, { entries: [entryToGraphql(messageEntry('m3', 3))] })
+      );
+    await open();
+    await vi.waitFor(() =>
+      expect(mocks.fetchChannelChanges).toHaveBeenCalledTimes(1)
+    );
+    mocks.fetchLatestChannelPage.mockResolvedValue({
+      seq: 5,
+      userId: 'user',
+      page: page([messageEntry('m2', 2), messageEntry('m1', 1)]),
+    });
+    await open();
+    release(changes(8, { entries: [entryToGraphql(messageEntry('m3', 3))] }));
+    await caughtUpTo(8);
+    expect(mocks.fetchChannelChanges).toHaveBeenLastCalledWith(CHANNEL.id, 5);
+    expect(loadedIds()).toEqual([['m3', 'm2', 'm1']]);
+  });
+
+  it('gives up the number while the page is read again', async () => {
+    mocks.readCachedLatestPage.mockResolvedValue({
+      seq: 1,
+      userId: 'user',
+      page: page([messageEntry('m1', 1)]),
+    });
+    mocks.fetchChannelChanges.mockResolvedValue(changes(0, { reset: true }));
+    const newer = new Promise(() => {});
+    mocks.fetchLatestChannelPage.mockReturnValue(newer);
+    await open();
+    await readAgain();
+    // Rows in doubt are not caught up or written back under their old number.
+    expect(channelSyncSeq(CHANNEL.id)).toBeUndefined();
+    expect(loadedIds()).toEqual([['m1']]);
+  });
+
+  it('drops the cached page and the rows when the server refuses the changes', async () => {
+    mocks.readCachedLatestPage.mockResolvedValue({
+      seq: 1,
+      userId: 'user',
+      page: page([messageEntry('m1', 1)]),
+    });
+    const refusal = new ThrownResultError([
+      { code: 'FORBIDDEN', message: 'forbidden' },
+    ]);
+    mocks.fetchChannelChanges.mockRejectedValue(refusal);
+    mocks.fetchLatestChannelPage.mockRejectedValue(refusal);
+    await open();
+    await vi.waitFor(() => expect(loadedIds()).toEqual([]));
+    await vi.waitFor(() =>
+      expect(mocks.writeCachedLatestPage).toHaveBeenCalledTimes(1)
+    );
+    const [, , written] = mocks.writeCachedLatestPage.mock.calls[0];
+    expect(written.page.entries).toEqual([]);
   });
 
   it('reads the server page when changes cannot be read', async () => {
@@ -422,6 +486,52 @@ describe('the sequence number stays with the rows it describes', () => {
     await Promise.allSettled([paging, more]);
     await vi.waitFor(() => expect(loadedIds()).toEqual([['m2', 'm1'], ['m0']]));
     expect(channelSyncSeq(CHANNEL.id)).toBe(2);
+    unsubscribe();
+  });
+
+  it('runs a catch-up asked for while a page read was being restarted', async () => {
+    const cursor = { created_at: '2026-11-12T10:01:00Z', id: 'm1' };
+    mocks.readCachedLatestPage.mockResolvedValue({
+      seq: 1,
+      userId: 'user',
+      page: { ...page([messageEntry('m1', 1)]), next_cursor: cursor },
+    });
+    const changed = held<ReturnType<typeof changes>>();
+    mocks.fetchChannelChanges
+      .mockReturnValueOnce(changed.promise)
+      .mockResolvedValueOnce(
+        changes(3, { entries: [entryToGraphql(messageEntry('m3', 3))] })
+      );
+    const older = held<{ seq: number; page: ReturnType<typeof page> }>();
+    mocks.fetchChannelPage.mockReturnValueOnce(older.promise);
+    const restarted = held<{ seq: number; page: ReturnType<typeof page> }>();
+    mocks.fetchChannelPage.mockReturnValueOnce(restarted.promise);
+    const unsubscribe = observe();
+    await vi.waitFor(() =>
+      expect(mocks.fetchChannelChanges).toHaveBeenCalledTimes(1)
+    );
+    const query = testQueryClient
+      .getQueryCache()
+      .find({ queryKey: LATEST_KEY });
+    const more = query?.fetch(undefined, {
+      meta: { fetchMore: { direction: 'forward' } },
+    });
+    await vi.waitFor(() =>
+      expect(mocks.fetchChannelPage).toHaveBeenCalledTimes(1)
+    );
+    changed.release(
+      changes(2, { entries: [entryToGraphql(messageEntry('m2', 2))] })
+    );
+    // The catch-up is now waiting on the restarted page read.
+    await vi.waitFor(() =>
+      expect(mocks.fetchChannelPage).toHaveBeenCalledTimes(2)
+    );
+    const again = catchUpChannel(HOST, CHANNEL);
+    restarted.release({ seq: 2, page: page([messageEntry('m0', 0)]) });
+    older.release({ seq: 1, page: page([messageEntry('m0', 0)]) });
+    await Promise.allSettled([more, again]);
+    await caughtUpTo(3);
+    expect(loadedIds()[0]).toEqual(['m3', 'm2', 'm1']);
     unsubscribe();
   });
 

@@ -39,6 +39,9 @@ live events that keep them current.
   the rows: changed roots replace or join the loaded pages, removed ids leave
   them, replies go to loaded threads. A `reset`, more than 20 change pages, or
   a failed read invalidates the timeline, which then reads the server's page.
+  Rows read again are in doubt, so they give up their number first
+  (`readAgain`): without one the timeline is not caught up or written back
+  until the server's page brings a new one.
 - The sequence number lives on the loaded latest page (`channel_seq` on page
   0), never beside it. A refetch that commits, a cancelled one that reverts,
   and a rollback that restores a snapshot move the rows and the number
@@ -61,5 +64,13 @@ live events that keep them current.
   stops waiting for the server read; one that arrives after the server could
   not be reached is shown too, so a channel opens offline. A refusal from the
   server (not a member, not found) is its answer and is never covered by the
-  cached page.
+  cached page: the cached page is emptied, and a refused catch-up also drops
+  the loaded rows so the read that follows shows the refusal.
+- A catch-up stops when the timeline is already at the number the server
+  answered with, runs once more for a request made while it was finishing,
+  and treats a changes read with no answer in 15 s as failed. A reply for a
+  thread whose first read is in flight joins it when that read lands.
+- The messages client sends a write again, twice a second apart, when the
+  server answers 503 (its write guard); the id and nonce stay the same, so
+  the retry cannot post twice. Reads are not retried.
 - Threads, `messagesByIds` and message resolution still read REST.
