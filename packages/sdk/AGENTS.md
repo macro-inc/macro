@@ -146,8 +146,13 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
-- Keep the human-session-only Passwords vault endpoints in coverage exclusions;
-  normal human-session authorization and secret disclosure are outside v1 agent capabilities.
+- Keep the human-session-only Passwords vault endpoints, including the human
+  review of agent access requests, in coverage exclusions.
+- `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the
+  agent vault for the agent's own API key; every call sends that wake's
+  `X-Macro-Agent-Session-Id`. Its classes are `@mcp-exclude` and stay out of the
+  code-mode catalog: disclosed values and codes go to the agent's secrets
+  capability, never to model context.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Keep hosted-computer management, Claude sign-in and internal provisioning
   routes in app-only coverage exclusions.
