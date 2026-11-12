@@ -3188,7 +3188,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Newest-first timeline through ordinary view access.
+     * Newest-first timeline, or one thread's replies, through ordinary view access.
      */
     public externalChatMessages<ThrowOnError extends boolean = false>(options: Options<ExternalChatMessagesData, ThrowOnError>): RequestResult<ExternalChatMessagesResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<ExternalChatMessagesResponses, unknown, ThrowOnError>({ url: '/external-chats/{chat_id}/messages', ...options });

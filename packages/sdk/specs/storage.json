@@ -17725,7 +17725,7 @@
     },
     "/external-chats": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "List external chats the caller can view, including without a provider account.",
         "operationId": "external_chats",
         "responses": {
@@ -17745,7 +17745,7 @@
         }
       },
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Add one of the caller's provider chats as their own external chat.",
         "operationId": "external_chat_add",
         "requestBody": {
@@ -17774,7 +17774,7 @@
     },
     "/external-chats/{chat_id}": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "An external chat the caller can read.",
         "operationId": "external_chat",
         "parameters": [
@@ -17802,7 +17802,7 @@
         }
       },
       "delete": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Stop syncing the chat, locally. Owner only, in their own session.",
         "operationId": "external_chat_remove",
         "parameters": [
@@ -17825,7 +17825,7 @@
     },
     "/external-chats/{chat_id}/attachments": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Stage one attachment for a later media send in this chat.",
         "operationId": "external_chat_upload",
         "parameters": [
@@ -17865,7 +17865,7 @@
     },
     "/external-chats/{chat_id}/delivery": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "The caller's send progress for intents or messages.",
         "operationId": "external_chat_delivery",
         "parameters": [
@@ -17912,8 +17912,8 @@
     },
     "/external-chats/{chat_id}/messages": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
-        "summary": "Newest-first timeline through ordinary view access.",
+        "tags": ["external_chat::inbound::router"],
+        "summary": "Newest-first timeline, or one thread's replies, through ordinary view access.",
         "operationId": "external_chat_messages",
         "parameters": [
           {
@@ -17922,6 +17922,16 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "thread",
+            "in": "query",
+            "description": "The replies in the thread this message starts, instead of the chat.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
               "format": "uuid"
             }
           },
@@ -17962,7 +17972,7 @@
     },
     "/external-chats/{chat_id}/messages/attachments": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Attachment states of messages, by message id (at most 100).",
         "operationId": "external_chat_message_attachments",
         "parameters": [
@@ -18009,7 +18019,7 @@
     },
     "/external-chats/{chat_id}/messages/{message_id}": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "One message of the timeline, as the timeline shows it.",
         "operationId": "external_chat_message",
         "parameters": [
@@ -18048,7 +18058,7 @@
     },
     "/external-chats/{chat_id}/permissions": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Generic Share dialog policy.",
         "operationId": "external_chat_permissions",
         "parameters": [
@@ -18076,7 +18086,7 @@
         }
       },
       "patch": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "The owner, in their own session, updates link, team and channel sharing.",
         "operationId": "external_chat_update_permissions",
         "parameters": [
@@ -18109,7 +18119,7 @@
     },
     "/external-chats/{chat_id}/read": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Advance this viewer's read position.",
         "operationId": "external_chat_read",
         "parameters": [
@@ -18142,7 +18152,7 @@
     },
     "/external-chats/{chat_id}/sends": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Caller-owned pending, failed and uncertain sends.",
         "operationId": "external_chat_sends",
         "parameters": [
@@ -18173,7 +18183,7 @@
         }
       },
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Send to the chat from the caller's own provider account (one request per second per user).",
         "operationId": "external_chat_send",
         "parameters": [
@@ -42754,6 +42764,18 @@
         "description": "How a call went.",
         "enum": ["answered", "missed", "rejected", "other"]
       },
+      "ExternalChatCannotAdd": {
+        "type": "string",
+        "description": "Why a chat can't be added to Macro; the app words it from the code.",
+        "enum": [
+          "not_member",
+          "community",
+          "own_chat",
+          "not_in_chat_list",
+          "archived",
+          "frozen"
+        ]
+      },
       "ExternalChatCapabilities": {
         "type": "object",
         "description": "Operations implemented for a chat, independent of current permission.",
@@ -42763,7 +42785,8 @@
           "mutationWindowSeconds",
           "maxAttachments",
           "attachmentLimitBytes",
-          "attachmentTypes"
+          "attachmentTypes",
+          "threads"
         ],
         "properties": {
           "attachmentLimitBytes": {
@@ -42803,6 +42826,10 @@
             "format": "int32",
             "description": "Maximum UTF-8 bytes per text send.",
             "minimum": 0
+          },
+          "threads": {
+            "type": "boolean",
+            "description": "Messages can start threads, and sends can reply in one."
           }
         }
       },
@@ -43060,7 +43087,8 @@
           "kind",
           "forwarded",
           "viewOnce",
-          "mentions"
+          "mentions",
+          "threadBroadcast"
         ],
         "properties": {
           "attachments": {
@@ -43150,6 +43178,26 @@
             "type": "string",
             "format": "date-time",
             "description": "Timestamp assigned by the provider."
+          },
+          "thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatThreadSummary",
+                "description": "Replies to this message, when it starts a thread."
+              }
+            ]
+          },
+          "threadBroadcast": {
+            "type": "boolean",
+            "description": "A thread reply that was also sent to the chat."
+          },
+          "threadRoot": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The thread this message replies in."
           },
           "viewOnce": {
             "type": "boolean",
@@ -43342,7 +43390,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Display name, following WhatsApp."
+            "description": "Display name, following the provider."
           }
         }
       },
@@ -43573,7 +43621,7 @@
       },
       "ExternalChatSendReply": {
         "type": "object",
-        "description": "Explicit send action from a person. Only deliberate sends reach WhatsApp.",
+        "description": "Explicit send action from a person. Only deliberate sends reach the provider.",
         "required": ["idempotencyKey", "message"],
         "properties": {
           "idempotencyKey": {
@@ -43589,6 +43637,11 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Message being quoted, within this chat."
+          },
+          "thread": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`])."
           }
         }
       },
@@ -43756,6 +43809,28 @@
           "value": {
             "type": ["string", "null"],
             "description": "New subject or description; disappearing-messages timer in seconds\n(`\"0\"` is off)."
+          }
+        }
+      },
+      "ExternalChatThreadSummary": {
+        "type": "object",
+        "description": "The replies in a thread, as its root message shows them.",
+        "required": ["replyCount", "lastReplyAt", "unread"],
+        "properties": {
+          "lastReplyAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the newest reply was sent."
+          },
+          "replyCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Replies in the thread, deleted ones excluded.",
+            "minimum": 0
+          },
+          "unread": {
+            "type": "boolean",
+            "description": "The viewer has replies they have not read."
           }
         }
       },
@@ -48981,7 +49056,7 @@
           "messageId": {
             "type": "string",
             "format": "uuid",
-            "description": "Message in the addressed group."
+            "description": "Message in the addressed chat; a thread reply marks its thread read."
           }
         }
       },
@@ -56060,7 +56135,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Display name, following WhatsApp."
+            "description": "Display name, following the provider."
           },
           "ownerId": {
             "type": "string",
@@ -63566,11 +63641,6 @@
           }
         }
       },
-      "WhatsAppCannotAdd": {
-        "type": "string",
-        "description": "Why a chat can't be added to Macro; the app words it from the code.",
-        "enum": ["not_in_group", "community", "own_chat", "not_in_chat_list"]
-      },
       "WhatsAppChat": {
         "type": "object",
         "description": "One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.",
@@ -63601,7 +63671,7 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/WhatsAppCannotAdd",
+                "$ref": "#/components/schemas/ExternalChatCannotAdd",
                 "description": "Why it can't be added, when it is neither added, shared nor addable."
               }
             ]

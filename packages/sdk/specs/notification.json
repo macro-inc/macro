@@ -2087,6 +2087,35 @@
           }
         }
       },
+      "ExternalChatAccountEndedMetadata": {
+        "type": "object",
+        "description": "A person's linked external chat account stopped syncing; they must sign\nin again. Sent once per consent generation, to the account's owner.",
+        "required": ["provider", "accountId", "accountName", "reason"],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The provider account."
+          },
+          "accountName": {
+            "type": "string",
+            "description": "What the account is called (a workspace or phone number)."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalChatProvider",
+            "description": "The messaging service the account is at."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ExternalChatAccountEndedReason",
+            "description": "Why it ended."
+          }
+        }
+      },
+      "ExternalChatAccountEndedReason": {
+        "type": "string",
+        "description": "Why a provider stopped a person's linked external chat account.",
+        "enum": ["session_ended", "restricted", "unreadable"]
+      },
       "ExternalChatMessageMetadata": {
         "type": "object",
         "description": "A live message in an independently shared external chat.",
@@ -2978,6 +3007,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["external_chat_message"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A linked external chat account stopped syncing.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ExternalChatAccountEndedMetadata",
+                "description": "A linked external chat account stopped syncing."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["external_chat_account_ended"]
               }
             }
           },

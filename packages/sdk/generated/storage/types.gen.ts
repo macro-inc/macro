@@ -9746,6 +9746,11 @@ export type ExternalChatCall = {
 export type ExternalChatCallOutcome = 'answered' | 'missed' | 'rejected' | 'other';
 
 /**
+ * Why a chat can't be added to Macro; the app words it from the code.
+ */
+export type ExternalChatCannotAdd = 'not_member' | 'community' | 'own_chat' | 'not_in_chat_list' | 'archived' | 'frozen';
+
+/**
  * Operations implemented for a chat, independent of current permission.
  */
 export type ExternalChatCapabilities = {
@@ -9773,6 +9778,10 @@ export type ExternalChatCapabilities = {
      * Maximum UTF-8 bytes per text send.
      */
     textLimitBytes: number;
+    /**
+     * Messages can start threads, and sends can reply in one.
+     */
+    threads: boolean;
 };
 
 /**
@@ -10025,6 +10034,15 @@ export type ExternalChatMessage = {
      * Timestamp assigned by the provider.
      */
     sentAt: string;
+    thread?: null | ExternalChatThreadSummary;
+    /**
+     * A thread reply that was also sent to the chat.
+     */
+    threadBroadcast: boolean;
+    /**
+     * The thread this message replies in.
+     */
+    threadRoot?: string | null;
     /**
      * Sent as view-once; Macro shows it like any media.
      */
@@ -10187,7 +10205,7 @@ export type ExternalChatReference = {
      */
     id: string;
     /**
-     * Display name, following WhatsApp.
+     * Display name, following the provider.
      */
     name: string;
 };
@@ -10292,7 +10310,7 @@ export type ExternalChatSendProgress = {
 };
 
 /**
- * Explicit send action from a person. Only deliberate sends reach WhatsApp.
+ * Explicit send action from a person. Only deliberate sends reach the provider.
  */
 export type ExternalChatSendReply = {
     /**
@@ -10307,6 +10325,11 @@ export type ExternalChatSendReply = {
      * Message being quoted, within this chat.
      */
     replyTo?: string | null;
+    /**
+     * Reply in the thread this message starts, where the provider has
+     * threads ([`Capabilities::threads`]).
+     */
+    thread?: string | null;
 };
 
 /**
@@ -10393,6 +10416,24 @@ export type ExternalChatSystemLine = {
      * (`"0"` is off).
      */
     value?: string | null;
+};
+
+/**
+ * The replies in a thread, as its root message shows them.
+ */
+export type ExternalChatThreadSummary = {
+    /**
+     * When the newest reply was sent.
+     */
+    lastReplyAt: string;
+    /**
+     * Replies in the thread, deleted ones excluded.
+     */
+    replyCount: number;
+    /**
+     * The viewer has replies they have not read.
+     */
+    unread: boolean;
 };
 
 /**
@@ -13594,7 +13635,7 @@ export type MacroUserIdStr = string;
  */
 export type MarkRead = {
     /**
-     * Message in the addressed group.
+     * Message in the addressed chat; a thread reply marks its thread read.
      */
     messageId: string;
 };
@@ -17964,7 +18005,7 @@ export type SharedExternalChatReference = {
      */
     id: string;
     /**
-     * Display name, following WhatsApp.
+     * Display name, following the provider.
      */
     name: string;
     /**
@@ -22891,11 +22932,6 @@ export type WhatsAppAccountView = {
 };
 
 /**
- * Why a chat can't be added to Macro; the app words it from the code.
- */
-export type WhatsAppCannotAdd = 'not_in_group' | 'community' | 'own_chat' | 'not_in_chat_list';
-
-/**
  * One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.
  */
 export type WhatsAppChat = {
@@ -22908,7 +22944,7 @@ export type WhatsAppChat = {
      * "Add to Macro" works now.
      */
     canAdd: boolean;
-    cannotAddReason?: null | WhatsAppCannotAdd;
+    cannotAddReason?: null | ExternalChatCannotAdd;
     community?: null | ExternalChatCommunity;
     /**
      * WhatsApp chat JID: a group, or the other person's phone-number JID
@@ -31030,6 +31066,10 @@ export type ExternalChatMessagesData = {
         chat_id: string;
     };
     query?: {
+        /**
+         * The replies in the thread this message starts, instead of the chat.
+         */
+        thread?: string | null;
         /**
          * Last message id in the previous page.
          */
