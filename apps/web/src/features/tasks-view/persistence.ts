@@ -67,6 +67,7 @@ const taskDueDateFilterSchema = z.union([
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
+  userId: z.string().optional(),
   layout: z.enum(['list', 'board', 'gantt']).catch('list').default('list'),
   tab: taskTabSchema.default('my-tasks'),
   search: z.string().default(''),
@@ -141,8 +142,10 @@ function createTasksEntryStorage(options: {
   restore: boolean;
   scopeKey?: string;
   savedViewActive?: Accessor<boolean>;
+  userId: Accessor<string | undefined>;
 }) {
-  return createTabbedEntryPersistenceStorage({
+  let stateOwner = options.userId();
+  const storage = createTabbedEntryPersistenceStorage({
     handle: options.handle,
     key: options.scopeKey
       ? `${TASKS_ENTRY_STATE_KEY}:${options.scopeKey}`
@@ -154,8 +157,13 @@ function createTasksEntryStorage(options: {
         : state.tab,
     restoreEntryState: options.restore,
     restore: (current: TasksViewState, stored) => {
+      const viewer = options.userId();
+      if (viewer === undefined) return;
       const result = tasksEntryStateSchemaWithDefaults.safeParse(stored);
-      const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
+      // Old history entries can outlive the account that captured them.
+      // Reject the entire entry before importing any of its tab snapshots.
+      if (!result.success || result.data.userId !== viewer) return;
+      const restored = result.data;
       return {
         ...current,
         layout: restored.layout,
@@ -168,12 +176,23 @@ function createTasksEntryStorage(options: {
         collapsedGroupIds: [...restored.collapsedGroupIds],
       };
     },
-    select: (state) =>
-      selectEntryState({
+    select: (state) => ({
+      ...selectEntryState({
         ...state,
         savedViewActive: options.savedViewActive?.() ?? state.savedViewActive,
       }),
+      // Capture can precede the account-reset effect. Keep the old owner until
+      // the live controls reset rather than relabeling them as the new account.
+      userId: stateOwner,
+    }),
   });
+  return {
+    ...storage,
+    clearTabs: () => {
+      storage.clearTabs();
+      stateOwner = options.userId();
+    },
+  };
 }
 
 export function createTasksListEntryStorage(
@@ -198,15 +217,19 @@ export function createTasksListEntryStorage(
         stored && typeof stored === 'object' && 'tabs' in stored
           ? stored.tabs
           : undefined;
-      const selected =
-        activeTab && tabs && typeof tabs === 'object'
-          ? Reflect.get(tabs, activeTab)
-          : stored;
+      let selected = stored;
+      if (tabs && typeof tabs === 'object') {
+        // A saved view has no built-in tab. Restore its default position while
+        // retaining the separate built-in snapshots for later tab switches.
+        selected =
+          activeTab === undefined ? undefined : Reflect.get(tabs, activeTab);
+      }
       const result = tasksListStateSchemaWithDefaults.safeParse(selected);
       // List may have been unmounted during an account change (for example
       // while Board was active), so the entry itself must enforce ownership.
+      const viewer = options.userId();
       const sameAccount =
-        result.success && result.data.userId === options.userId();
+        viewer !== undefined && result.success && result.data.userId === viewer;
       const restored = sameAccount ? result.data : DEFAULT_TASKS_LIST_STATE;
 
       return {
@@ -254,6 +277,7 @@ export function createTasksViewPersistence(
 ) {
   const entry = createTasksEntryStorage({
     handle: options.handle,
+    userId: options.userId,
     restore: options.restoreEntryState ?? true,
     scopeKey: options.scopeKey,
     savedViewActive: options.savedViewActive,

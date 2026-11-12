@@ -16,11 +16,16 @@ afterEach(() => {
   for (const dispose of DISPOSERS.splice(0)) dispose();
 });
 
-function createView(entry?: Record<string, unknown>, saved = false) {
+function createView(
+  entry?: Record<string, unknown>,
+  saved = false,
+  account: { userId: string | undefined } = { userId: 'viewer-a' }
+) {
   return createRoot((dispose) => {
     DISPOSERS.push(dispose);
     const captors = new Map<string, () => unknown>();
     const [savedViewActive, setSavedViewActive] = createSignal(saved);
+    const [userId, setUserId] = createSignal(account.userId);
     const persistence = createTasksViewPersistence({
       handle: {
         currentEntryState: () => entry,
@@ -29,7 +34,7 @@ function createView(entry?: Record<string, unknown>, saved = false) {
           return () => captors.delete(key);
         },
       },
-      userId: () => undefined,
+      userId,
       savedViewActive,
     });
     const [state, setState] = makePersistedState(
@@ -40,6 +45,7 @@ function createView(entry?: Record<string, unknown>, saved = false) {
         groupBy: 'priority',
         sort: [{ id: 'updated_at' }],
         facets: {},
+        dueDate: undefined,
         collapsedGroupIds: [],
         collapsedSidebarSectionIds: ['saved-views'],
       }),
@@ -48,6 +54,7 @@ function createView(entry?: Record<string, unknown>, saved = false) {
     return {
       state,
       setState,
+      setUserId,
       setSavedViewActive,
       restoreTab: persistence.restoreTab,
       clearTabs: persistence.clearTabs,
@@ -169,8 +176,81 @@ it('releases tab snapshots when the account scope changes', () => {
   expect(view.restoreTab(view.state, 'team-tasks')).toBeUndefined();
 });
 
+it('rejects entry snapshots from another account when the view remounts', () => {
+  const original = createView();
+  original.setState({
+    facets: { status: ['in-progress'] },
+    search: 'account-a-search',
+  });
+  original.setState({
+    tab: 'team-tasks',
+    facets: { status: ['completed'] },
+    dueDate: { type: 'overdue' },
+    layout: 'board',
+    groupBy: 'assignee',
+    sort: [{ id: 'priority', reversed: true }],
+    collapsedGroupIds: ['account-a-group'],
+  });
+  const entry = original.capture();
+  original.dispose();
+
+  const restored = createView(entry, false, { userId: 'viewer-b' });
+  expect(restored.state).toMatchObject({
+    tab: 'my-tasks',
+    layout: 'list',
+    facets: {},
+    dueDate: undefined,
+    search: '',
+    groupBy: 'priority',
+    sort: [{ id: 'updated_at' }],
+    collapsedGroupIds: [],
+  });
+  expect(restored.restoreTab(restored.state, 'my-tasks')).toEqual({
+    ...restored.state,
+  });
+  expect(restored.restoreTab(restored.state, 'team-tasks')).toBeUndefined();
+});
+
+it('keeps the view snapshot owner until the account reset runs', () => {
+  const view = createView();
+  view.setState('facets', { status: ['completed'] });
+  view.setUserId('viewer-b');
+  const captured = view.capture();
+  expect(captured[TASKS_ENTRY_STATE_KEY]).toMatchObject({ userId: 'viewer-a' });
+  const remounted = createView(captured, false, { userId: 'viewer-b' });
+  expect(remounted.state.facets).toEqual({});
+
+  view.clearTabs();
+  view.setState('facets', { status: ['in-progress'] });
+  expect(view.capture()[TASKS_ENTRY_STATE_KEY]).toMatchObject({
+    userId: 'viewer-b',
+    facets: { status: ['in-progress'] },
+  });
+});
+
+it.each([undefined, 'viewer-a'])(
+  'rejects snapshot owner %s while account identity is unresolved',
+  (userId) => {
+    const restored = createView(
+      {
+        [TASKS_ENTRY_STATE_KEY]: {
+          version: 1,
+          userId,
+          tab: 'team-tasks',
+          facets: { status: ['completed'] },
+        },
+      },
+      false,
+      { userId: undefined }
+    );
+    expect(restored.state.tab).toBe('my-tasks');
+    expect(restored.state.facets).toEqual({});
+    expect(restored.restoreTab(restored.state, 'team-tasks')).toBeUndefined();
+  }
+);
+
 it('captures live list position before switching and restores each tab on return and remount', () => {
-  let tab: TasksTab = 'my-tasks';
+  let tab: TasksTab | undefined = 'my-tasks';
   let current: TasksListStateSnapshot = {
     focusKey: 'task-1',
     scrollOffset: 180,
@@ -221,6 +301,26 @@ it('captures live list position before switching and restores each tab on return
     scrollOffset: 720,
   });
   restored.dispose?.();
+
+  tab = undefined;
+  const savedView = createTasksListEntryStorage(handle, {
+    tab: () => tab,
+    userId: () => 'viewer-a',
+  });
+  expect(savedView.restore(current)).toEqual({
+    focusKey: undefined,
+    scrollOffset: 0,
+  });
+  tab = 'my-tasks';
+  expect(savedView.restoreTab(current, 'my-tasks')).toEqual({
+    focusKey: 'task-2',
+    scrollOffset: 360,
+  });
+  expect(savedView.restoreTab(current, 'team-tasks')).toEqual({
+    focusKey: 'task-3',
+    scrollOffset: 720,
+  });
+  savedView.dispose?.();
 
   const otherAccount = createTasksListEntryStorage(handle, {
     tab: () => tab,

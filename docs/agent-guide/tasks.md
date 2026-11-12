@@ -111,6 +111,9 @@ and confirm its own status selection and matching results. Also try independent
 due dates, grouping, sort, text search, and list positions; leave Tasks and return,
 then repeat. Edit a saved view temporarily, switch to a built-in tab, and reopen
 the saved view: its confirmed settings return, while the built-in tab is unchanged.
+A resumed saved view starts without the built-in tab's list focus or scroll position.
+Switch accounts while Tasks is closed, then return through history: the previous
+account's filters and list positions must not return.
 
 **Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again

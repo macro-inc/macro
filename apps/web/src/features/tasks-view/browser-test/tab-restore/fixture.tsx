@@ -308,6 +308,7 @@ function App() {
             <Button onClick={() => setViewer('another-test-viewer')}>
               Switch account
             </Button>
+            <Button onClick={() => setViewer(undefined)}>Sign out</Button>
           </div>
           <SplitRouter.Outlet pane={pane} />
         </PanelContext.Provider>

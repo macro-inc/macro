@@ -14,5 +14,5 @@ entry captors, and view-retention hook run over synthetic task data. The fixture
 replaces account/directory sources, preview rendering, and unrelated routes, not
 tab switching or persistence. Desktop and phone cases cover independent status
 filters, matching task results, whole-view resume, saved-view draft discard,
-and account-scoped resets.
+and account-scoped resets, including sign-out/sign-in and returning to old entries.
 Screenshots and failure traces stay in the ignored `test-results` directory.

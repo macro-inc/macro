@@ -135,3 +135,37 @@ test('account changes clear tab snapshots and replace the previous tab URL', asy
     '{"status":["in-progress","in-review","not-started"]}'
   );
 });
+
+test('the new account retains its tabs after identity passes through sign-out', async ({
+  page,
+}, info) => {
+  await page.goto('/');
+  await statusFilter(page, info.project.name === 'phone', 'In progress');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Switch account', exact: true })
+    .click();
+  await statusFilter(page, info.project.name === 'phone', 'Completed');
+  await page.getByRole('button', { name: 'Leave Tasks', exact: true }).click();
+  await page.getByRole('button', { name: 'Resume Tasks', exact: true }).click();
+  await expect(page.getByTestId('facets')).toHaveText(
+    '{"status":["completed"]}'
+  );
+});
+
+test('returning to an old entry after switching accounts discards its filters', async ({
+  page,
+}, info) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'All tasks', exact: true }).click();
+  await statusFilter(page, info.project.name === 'phone', 'Completed');
+  await page.getByRole('button', { name: 'Leave Tasks', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Switch account', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Resume Tasks', exact: true }).click();
+  await expect(page.getByTestId('facets')).toHaveText(
+    '{"status":["in-progress","in-review","not-started"]}'
+  );
+});

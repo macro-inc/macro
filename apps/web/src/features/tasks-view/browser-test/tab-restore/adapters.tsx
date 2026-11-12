@@ -31,7 +31,7 @@ export const useSplitPanel = () => useContext(PanelContext);
 export function withSplitPanelOwner<T>(name: string, create: () => T): T {
   return useSplitPanelOrThrow().replaceOwnedSlot(name, create);
 }
-export const [viewer, setViewer] = createSignal(VIEWER);
+export const [viewer, setViewer] = createSignal<string | undefined>(VIEWER);
 export const useUserId = () => viewer;
 export const useFeatureFlag = () => () => ({ enabled: false });
 export const useTagSets = () => () => [];

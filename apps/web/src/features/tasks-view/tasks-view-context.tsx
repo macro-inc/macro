@@ -450,13 +450,12 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   }));
   const savedViewScope = () => (disposed ? undefined : requestScope());
   let priorSavedView: string | undefined;
-  let priorSavedViewViewer: string | undefined;
+  let priorSavedViewViewer = userId();
   createEffect(
     on(
       () => [tabSearch.savedView, userId(), newSavedView()] as const,
       ([id, viewer, creating]) => {
-        const accountChanged =
-          priorSavedViewViewer !== undefined && viewer !== priorSavedViewViewer;
+        const accountChanged = viewer !== priorSavedViewViewer;
         if (accountChanged) setNewSavedView(false);
         if (creating && !accountChanged) {
           if (creating !== id) return;
