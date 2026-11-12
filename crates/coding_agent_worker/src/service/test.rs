@@ -43,6 +43,7 @@ fn creates_a_config_from_setup_flags() {
         &ServiceOptions {
             ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: Some("custom".to_owned()),
             workspace: Some(workspace.clone()),
         },
@@ -69,6 +70,7 @@ fn reconfigures_without_dropping_credentials() {
         &ServiceOptions {
             ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: Some("custom".to_owned()),
             workspace: Some(workspace),
         },
@@ -92,6 +94,7 @@ fn reconfigures_without_dropping_credentials() {
         &ServiceOptions {
             ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: None,
             workspace: Some(moved.clone()),
         },
@@ -143,7 +146,9 @@ path = "{workspace}"
     configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: Some("custom".to_owned()),
             workspace: Some(workspace.clone()),
         },
@@ -157,6 +162,7 @@ path = "{workspace}"
         Some(HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test_secret".to_owned(),
+            pairing_id: None,
         })
     );
     assert_eq!(config.workspace.path, workspace);
@@ -171,6 +177,7 @@ fn creating_a_config_requires_an_agent() {
         &ServiceOptions {
             ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: None,
             workspace: Some(directory.path().to_owned()),
         },

@@ -1,11 +1,11 @@
 import type { Permissions } from '@core/component/SharePermissions';
-import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import { Button, ButtonGroup, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import type { BlockTool } from './block-tool';
 import { HeaderActionGroup } from './HeaderActionGroup';
 import { SidePanel } from './side-panel';
 import { HeaderIsland } from './split-layout/components/HeaderIsland';
@@ -21,26 +21,8 @@ import {
   SplitPermissionsBadge,
   SplitTitleFileMenu,
 } from './split-layout/components/SplitLabel';
-import type {
-  SplitFileMenuAction,
-  SplitFileMenuActionGroup,
-} from './split-layout/context';
 
-export type BlockTool = {
-  label: string | (() => string);
-  icon: Component;
-  action: () => void;
-  children?: SplitFileMenuAction[];
-  condition?: () => boolean;
-  isActive?: () => boolean;
-  buttonComponent?: Component<{ grouped?: boolean }>;
-  focusTarget?: () => HTMLElement | null;
-  hotkeyToken?: HotkeyToken;
-  /** Menu section this tool renders in when shown in the title file menu. */
-  group?: SplitFileMenuActionGroup;
-  /** See {@link SplitFileMenuAction.afterMenuCloses}. */
-  afterMenuCloses?: boolean;
-};
+export type { BlockTool };
 
 export function ToolButton(props: { tool: BlockTool; grouped?: boolean }) {
   const label = () =>

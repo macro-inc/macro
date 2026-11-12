@@ -1,5 +1,8 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
+import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -11,7 +14,9 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { buildEntityData } from '@entity';
+import { Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import type { MarkdownDocumentKind } from '../types';
 import { useMarkdownName } from './MarkdownNameProvider';
@@ -32,6 +37,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
   fallbackName?: string;
   ownerId: string;
   projectId?: string;
+  appearance?: EntityAppearance | null;
   onClose: () => void;
   onDuplicate: (id: string, name: string) => void;
 }) {
@@ -40,8 +46,27 @@ export function MarkdownDetailBreadcrumbItem(props: {
   const { permissions, state } = useMarkdownDocument();
   const { fileOperations, menuTools } = useMarkdownDocumentTools();
   const blockName = () => markdownDocumentBlockName(props.kind);
+  const userId = useUserId();
+  const appearance = useDocumentAppearance(
+    () =>
+      props.kind === 'document' || props.kind === 'snippet'
+        ? { id: props.documentId, appearance: props.appearance }
+        : undefined,
+    () => Boolean(userId())
+  );
   const documentName = () =>
     displayName() || props.fallbackName || blockNameToDefaultFile(blockName());
+  const headerEntity = () =>
+    props.kind === 'document' || props.kind === 'snippet'
+      ? buildEntityData({
+          id: props.documentId,
+          name: documentName(),
+          blockName: blockName(),
+          ownerId: props.ownerId,
+          projectId: props.projectId,
+          appearance: appearance(),
+        })
+      : undefined;
   useSplitDisplayName(documentName);
   const focusDocument = () => state.editor.md.editor?.focus();
 
@@ -74,6 +99,16 @@ export function MarkdownDetailBreadcrumbItem(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
+          <Show when={permissions.canEdit() ? headerEntity() : undefined}>
+            {(entity) => (
+              <span class="shrink-0">
+                <EntityAppearanceTrigger
+                  entity={entity()}
+                  editable={permissions.canEdit()}
+                />
+              </span>
+            )}
+          </Show>
           <SplitTitleCrumb id={props.documentId} isActive={item.isActive()}>
             <DocumentTitleHoverCard
               documentId={props.documentId}
@@ -88,11 +123,14 @@ export function MarkdownDetailBreadcrumbItem(props: {
                   focusDocument();
                 }}
               >
-                <EntityIcon
-                  targetType={blockName()}
-                  size="xs"
-                  class="shrink-0"
-                />
+                <Show when={!permissions.canEdit() || !headerEntity()}>
+                  <EntityIcon
+                    targetType={blockName()}
+                    appearance={appearance()}
+                    size="xs"
+                    class="shrink-0"
+                  />
+                </Show>
                 <span class="truncate">{documentName()}</span>
               </ViewBreadcrumbs.Button>
             </DocumentTitleHoverCard>
@@ -105,6 +143,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
               ops={fileOperations}
               tools={menuTools}
               entityKind={blockName()}
+              entity={headerEntity()}
               permissions={menuPermissions()}
               onDuplicate={(id) => props.onDuplicate(id, documentName())}
               onDelete={props.onClose}

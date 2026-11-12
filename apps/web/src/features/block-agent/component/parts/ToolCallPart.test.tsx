@@ -220,7 +220,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
   });
 
   it('reuses a known renderer for calls from the explicit Macro MCP server', () => {
@@ -265,7 +265,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
@@ -289,7 +289,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
   });
@@ -1586,6 +1586,18 @@ describe('code execution results', () => {
     );
   });
 
+  it('loads the record by the receipt ID when the agent omitted one', () => {
+    const part = codePart('macro_internal');
+    if (part.detail.kind === 'other') {
+      part.detail.input = { source: 'return { count: 1 };' };
+    }
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+  });
+
   it('loads server-accepted UUIDs with reserved variant bits', () => {
     const id = '35e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f90';
     const part = codePart('macro_internal');
@@ -1652,5 +1664,36 @@ describe('ACP review presentations', () => {
       <ToolCallPart part={part('external')} context={context(false)} />
     ));
     expect(view.queryByTestId('persisted-review')).toBeNull();
+  });
+});
+
+describe('code-mode lookups', () => {
+  const lookup = (name: ToolUsePart['name']): ToolUsePart => ({
+    kind: 'tool_use',
+    id: 'lookup-1',
+    status: 'completed',
+    name,
+    detail: {
+      kind: 'other',
+      acpKind: 'other',
+      input: { query: 'documents' },
+      output: null,
+      result: { tools: [] },
+      error: null,
+    },
+  });
+  it('renders nothing for the agent finding its way around its own tools', () => {
+    for (const name of [
+      { kind: 'mcp', server: 'macro_internal', tool: 'DescribeCodeTools' },
+      { kind: 'mcp', server: 'macro_internal', tool: 'ReadCodeDocs' },
+      { kind: 'mcp', server: 'macro', tool: 'SearchTools' },
+      { kind: 'native', name: 'LoadTools' },
+    ] as const) {
+      const view = render(() => (
+        <ToolCallPart part={lookup(name)} context={context(false)} />
+      ));
+      expect(view.container.textContent).toBe('');
+      view.unmount();
+    }
   });
 });

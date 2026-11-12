@@ -147,6 +147,7 @@ function PopoverSplitModal(props: {
     bottomPanel: () => undefined,
     registerBottomPanel: () => () => {},
     layoutRefs: {},
+    mobileHeaderOwner: createSignal<symbol>(),
     titleFileMenuRef,
     setTitleFileMenuRef,
     titleFileMenuTrigger,

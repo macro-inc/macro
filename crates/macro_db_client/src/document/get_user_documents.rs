@@ -1,3 +1,5 @@
+use document_sub_type::DocumentSubType;
+use model_owner::Owner;
 use sqlx::{Pool, Postgres};
 
 use model::document::{DocumentMetadata, FileType};
@@ -50,7 +52,6 @@ pub async fn get_user_document_ids(
 }
 
 #[tracing::instrument(skip(db))]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_user_documents(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -58,57 +59,43 @@ pub async fn get_user_documents(
     offset: i64,
     file_type: Option<String>,
 ) -> anyhow::Result<(Vec<DocumentMetadata>, i64)> {
-    let mut count_query = r#"
-        SELECT COUNT(*) as "count"
+    let total = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) as "count!"
         FROM "Document" d
-        WHERE owner = $1 AND d."deletedAt" IS NULL
-        "#
-    .to_string();
+        WHERE d.owner = $1 AND d."deletedAt" IS NULL
+            AND ($2::text IS NULL OR d."fileType" = $2)
+        "#,
+        user_id,
+        file_type.as_deref(),
+    )
+    .fetch_one(db)
+    .await?;
 
-    let mut count_set_parts: Vec<String> = Vec::new();
-    let mut set_parts: Vec<String> = Vec::new();
-    let mut parameters: Vec<String> = Vec::new();
-
-    if let Some(file_type) = file_type {
-        let count_param_number = parameters.len() + 2;
-        let param_number = parameters.len() + 4;
-        set_parts.push(format!("AND d.\"fileType\" = ${}", param_number));
-        count_set_parts.push(format!("AND d.\"fileType\" = ${}", count_param_number));
-        parameters.push(file_type);
-    }
-
-    count_query += &count_set_parts.join(" ");
-    let mut count_query = sqlx::query_as::<_, (i64,)>(&count_query);
-    count_query = count_query.bind(user_id);
-
-    for param in &parameters {
-        count_query = count_query.bind(param);
-    }
-
-    let count_result = count_query.fetch_one(db).await?;
-
-    if count_result.0 == 0 {
+    if total == 0 {
         return Ok((vec![], 0));
     }
 
-    let mut query = r#"
+    let documents = sqlx::query!(
+        r#"
         SELECT
             d.id as document_id,
             d.owner as owner,
             d.name as document_name,
-            COALESCE(db.id, di.id) as "document_version_id",
+            COALESCE(db.id, di.id) as "document_version_id!",
             d."branchedFromId" as branched_from_id,
             d."branchedFromVersionId" as branched_from_version_id,
             d."documentFamilyId" as document_family_id,
             d."fileType" as file_type,
+            d.appearance,
             d."createdAt"::timestamptz as created_at,
             d."updatedAt"::timestamptz as updated_at,
             db.bom_parts as "document_bom",
             di.modification_data as "modification_data",
             d."projectId" as "project_id",
-            p.name as "project_name",
-            di.sha as "sha",
-            dt.sub_type as "sub_type",
+            p.name as "project_name?",
+            di.sha as "sha?",
+            dt.sub_type as "sub_type?: DocumentSubType",
             d."deletedAt"::timestamptz as deleted_at
         FROM
             "Document" d
@@ -169,26 +156,46 @@ pub async fn get_user_documents(
         ) p ON d."projectId" IS NOT NULL
         WHERE
         d.owner = $1 AND d."deletedAt" IS NULL
-    "#
-    .to_string();
+            AND ($4::text IS NULL OR d."fileType" = $4)
+        ORDER BY d."updatedAt" DESC
+        LIMIT $2 OFFSET $3
+        "#,
+        user_id,
+        limit,
+        offset,
+        file_type.as_deref(),
+    )
+    .try_map(|row| {
+        Ok(DocumentMetadata {
+            appearance: row
+                .appearance
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+            document_id: row.document_id,
+            document_version_id: row.document_version_id,
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+            document_name: row.document_name,
+            file_type: row.file_type,
+            sha: row.sha,
+            project_id: row.project_id,
+            project_name: row.project_name,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            document_bom: row.document_bom,
+            modification_data: row.modification_data,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            sub_type: row.sub_type,
+            deleted_at: row.deleted_at,
+        })
+    })
+    .fetch_all(db)
+    .await?;
 
-    query += &set_parts.join(" ");
-    query += r#" ORDER BY d."updatedAt" DESC
-        LIMIT $2 OFFSET $3"#;
-
-    let mut query = sqlx::query_as::<_, DocumentMetadata>(&query);
-
-    query = query.bind(user_id);
-    query = query.bind(limit);
-    query = query.bind(offset);
-
-    for param in parameters {
-        query = query.bind(param);
-    }
-
-    let documents = query.fetch_all(db).await?;
-
-    Ok((documents, count_result.0))
+    Ok((documents, total))
 }
 
 #[cfg(test)]
@@ -198,12 +205,26 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_get_user_documents(pool: Pool<Postgres>) {
+        let appearance = model_entity::EntityAppearance {
+            icon: Some(model_entity::AppearanceIcon::Emoji {
+                value: "📋".into()
+            }),
+            color: None,
+        };
+        sqlx::query!(
+            r#"UPDATE "Document" SET appearance = $1 WHERE id = 'document-seven'"#,
+            sqlx::types::Json(&appearance) as _,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         let documents = get_user_documents(&pool, &"macro|user@user.com", 3, 0, None)
             .await
             .unwrap();
 
         assert_eq!(documents.0.len(), 3);
         assert_eq!(documents.1, 7);
+        assert_eq!(documents.0[0].appearance.as_ref(), Some(&appearance));
 
         let document_ids: Vec<(String, i64)> = documents
             .0

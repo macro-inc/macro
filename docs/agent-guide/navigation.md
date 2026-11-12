@@ -24,8 +24,10 @@ they had. Background tabs are hidden, inert, and skip
 rendering; past five, the least recently used unmount and reload when next
 opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
-Home; the `X` or a middle click closes one (the last tab cannot close;
-`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
+Home; the `X` or a middle click closes one (the last tab cannot close).
+`Cmd+W` (File > Close Tab) closes the active tab, or the window when it is
+the only tab, as in a browser; `Shift+Cmd+W` also closes the active tab but
+never the window. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
 `Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text);
 `Cmd+1`–`Cmd+8` jump to that tab and `Cmd+9` to the last. The AI and PSD editors
 keep their own `Cmd+1` and `Cmd+7` while they have focus.
@@ -565,6 +567,10 @@ External (plug icon, `g x`) appears on the rail only with the
   split (Shift-click for a new split); there is no account menu. Log out lives
   on **Settings → Account**, and the command menu is `Ctrl K`.
 
+Above Settings, the question-mark **Help** button opens a menu: **Message
+support** opens your support channel (hidden when you have none), **Book a call**
+opens the booking page, and **Email** starts an email to support.
+
 The rail highlights the workspace shown by the **active split**, not every app
 named in the multi-split URL. Nested details keep their owning workspace selected
 (for example, a thread under Email or a document under Home). Selection changes
@@ -730,8 +736,8 @@ undelivered notifications` errors, and the sidebar should switch between docked
 and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
 can still report it from the virtualizer's own observer.
 
-Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
-inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
+Email, Tasks, and Agents use the same sidebar rows for inboxes, favorites,
+and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
 
 Entity rows and navigation use Phosphor icons. Entity icons share one mapping
@@ -1328,7 +1334,9 @@ connector: **✦ Only if | question | ×** for an AI check, or **+ Filter** to a
 one. Triggers are separated by **or**. **Add trigger** sits in the tray under
 the card (on its own before there are triggers).
 
-The event menu groups Macro activity triggers by surface:
+Event triggers appear only for users with the `enable-event-routines` PostHog
+flag; without it, **Add trigger** offers schedules only. The event menu groups
+Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.

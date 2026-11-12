@@ -5,8 +5,8 @@ import {
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { t } from '@app/lib/i18n';
 import '@app/features/tasks-view/components/task-list/task-list.css';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { Entity, MultiSelectCheckbox } from '@entity';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
@@ -144,7 +144,13 @@ export function ProjectRow(props: {
             placement="content"
             class="flex min-w-0 items-center gap-2 truncate font-medium"
           >
-            <ProjectIcon class="size-4 shrink-0 text-ink-muted" />
+            <EntityIcon
+              targetType="initiative"
+              appearance={props.row.project.appearance}
+              size="xs"
+              theme="monochrome"
+              class="text-ink-muted"
+            />
             <Show
               when={props.rename.isRenaming(props.row)}
               fallback={

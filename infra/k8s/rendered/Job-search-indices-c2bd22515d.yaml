@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: search-indices
+    app.kubernetes.io/name: search-indices
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/job: search-indices
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: search-indices-c2bd22515d
+  namespace: macro-kube-reference
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: search-indices
+        app.kubernetes.io/name: search-indices
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/job: search-indices
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: DRY_RUN
+              value: "false"
+            - name: ENVIRONMENT
+              value: local
+            - name: OPENSEARCH_URL
+              value: http://search:9200
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/search-indices:build.jz976f4l0zhjmlcrwqy54bijdddph4q8
+          imagePullPolicy: IfNotPresent
+          name: search-indices
+          ports: []
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - until kubectl rollout status deployment/search --timeout=600s; do sleep 0.2; done; until nc -z -w 1 search 9200; do sleep 0.2; done
+          image: localhost:32550/macro/readiness:build.smghxgld6q7kd9samdjm65jjgd5zm50c
+          name: dependency
+      restartPolicy: OnFailure
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp

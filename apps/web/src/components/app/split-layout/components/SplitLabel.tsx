@@ -27,6 +27,7 @@ import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   type Component,
+  children,
   createMemo,
   For,
   type JSX,
@@ -209,6 +210,13 @@ export function BlockItemSplitLabel(props: {
   const isOwner = useIsDocumentOwner();
   const lockRename = () =>
     (props.id === undefined && !isOwner()) || props.lockRename;
+  const suppliedIcon = children(() => props.icon);
+  const appearance = () => {
+    const metadata = blockMetadataSignal();
+    return (blockName === 'md' || blockName === 'snippet') && metadata
+      ? metadata.appearance
+      : undefined;
+  };
 
   const targetType = () => {
     if (blockName === 'unknown') {
@@ -233,16 +241,17 @@ export function BlockItemSplitLabel(props: {
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <Show
-            when={props.icon}
+            when={suppliedIcon.toArray().length > 0}
             fallback={
               <EntityIcon
                 class="shrink-0"
                 targetType={targetType()}
+                appearance={appearance()}
                 size="xs"
               />
             }
           >
-            {props.icon}
+            {suppliedIcon()}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <Show

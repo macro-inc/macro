@@ -100,7 +100,7 @@ pub(in crate::api::search) async fn filter_chats(
 
 /// Performs the name search over chat names
 #[allow(clippy::too_many_arguments)]
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(skip(db, term), fields(term_len = term.len()), err)]
 pub(in crate::api::search::simple) async fn search_names<'a>(
     db: &Pool<Postgres>,
     user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
@@ -157,3 +157,6 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         (hits, response.cursor)
     })
 }
+
+#[cfg(test)]
+mod test;

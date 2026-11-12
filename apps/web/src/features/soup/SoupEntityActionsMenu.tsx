@@ -40,6 +40,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const panel = useSplitPanelOrThrow();
   const { buildActionGroups } = createSoupEntityActions({
     markDoneDelegate: () => props.markDoneDelegate?.(),
+    selectedEntities: () => props.entities,
   });
   // Resolved rather than tested as JSX: a host whose items render nothing
   // (label rows behind a flag, say) still passes a truthy element, and

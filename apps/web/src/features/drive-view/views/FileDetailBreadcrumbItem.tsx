@@ -14,7 +14,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { getPermissions } from '@core/component/SharePermissions';
 import type { FileDownloadController } from '@core/util/createFileDownload';
 import { buildEntityData } from '@entity';
-import { useItemRawName } from '@queries/preview';
+import { useItemIdentity } from '@queries/preview';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Show } from 'solid-js';
@@ -41,12 +41,12 @@ export function FileDetailBreadcrumbItem(props: {
     { op: 'delete' },
   ];
   const documentId = () => props.documentMetadata.documentId;
-  const liveName = useItemRawName(() => ({
+  const accessible = useItemIdentity(() => ({
     id: documentId(),
     type: 'document',
   }));
   const documentName = () =>
-    liveName() ??
+    accessible()?.rawName ??
     props.documentMetadata.documentName ??
     props.fallbackName ??
     'Untitled';
@@ -98,6 +98,11 @@ export function FileDetailBreadcrumbItem(props: {
                         : props.blockType
                     }
                     size="xs"
+                    appearance={
+                      accessible()?.appearance === undefined
+                        ? props.documentMetadata.appearance
+                        : accessible()?.appearance
+                    }
                     class="shrink-0"
                   />
                   <span class="truncate">{documentName()}</span>

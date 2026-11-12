@@ -104,6 +104,7 @@ export function ProjectsCollection(props: {
   canOpenInNewSplit: Accessor<boolean>;
   onCopyLink(id: string): void;
   onCopyId(id: string): void;
+  onChangeIcon?(project: ProjectRowData['project']): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
 }) {
@@ -337,6 +338,9 @@ export function ProjectsCollection(props: {
           if (isMobile()) projectRename.begin(row);
           else renameAfterMenuCloses = row;
         }}
+        onChangeIcon={
+          props.onChangeIcon && ((row) => props.onChangeIcon?.(row.project))
+        }
         onSetOption={(rows, property, optionId) =>
           fireAndForget(setOption(rows, property, optionId), 'projects')
         }
@@ -922,9 +926,9 @@ export function ProjectsCollection(props: {
                     <Show
                       when={projectRename.isRenaming(entity())}
                       fallback={
-                        <span class="min-w-0 truncate">
+                        <Gantt.BarTitle>
                           {projectRename.displayName(entity())}
-                        </span>
+                        </Gantt.BarTitle>
                       }
                     >
                       <RenameInput

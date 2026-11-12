@@ -326,9 +326,16 @@ Older local-tool builds can recreate the shared LGTM collector and drop other
 stacks' network attachments. For a static frontend refresh, reuse the
 complete recorded binary set with `just stack update --frontend --binaries-dir
 <recorded-dir> --instance <name>` to avoid backend builds and collector startup.
-`--traces off` also skips collector startup, but omits automatic backend OTLP
-wiring and disables Vite browser telemetry. When collecting trace proof, preserve
-explicit backend and browser exporter settings and connect the existing collector
+`--traces off` skips collector startup, omits automatic backend OTLP wiring,
+and disables Vite browser telemetry and the local Docker sync-service exporter.
+For both local and dev runs, the resolved tracing policy owns
+`SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT`: it is empty when tracing is off or
+no collector is available, and uses the collector's HTTP intake when enabled.
+The Compose launcher removes an inherited shell value for this key so its
+explicit generated env file remains authoritative. The Docker worker forwards
+the resulting value through Wrangler `--var`; direct Compose defaults to an
+empty endpoint, with no fallback hostname. Deployed Worker settings are separate.
+When collecting trace proof, enable tracing and connect the existing collector
 to the instance's services network with the `otel-collector` alias, without
 restarting it.
 
@@ -443,6 +450,11 @@ containers keeps its window and networks, including ones created before this
 allocator or with `--port-base`. Other commands find the window themselves, so
 repeat only `--instance`. Startup prints the window; `just status_local` and
 `just stack status --json` print the endpoints.
+
+Local signup and onboarding screens provide **Bypass** for any account. Before
+signup it skips the opening slides, not authentication; after sign-in it records
+both onboarding and tutorial completion. See the
+[onboarding guide](../agent-guide/onboarding.md#onboarding-bypass--apponboarding).
 
 If a program outside this tooling takes a port during the build, the start moves
 to another window instead of failing at `docker compose up`.
@@ -657,7 +669,10 @@ mappings. A recreate consumes the current deployment addresses and fresh credent
 COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
 ```
 
-Both the devbox and runtime must be logged into the same Tailscale tailnet.
+This path is currently unavailable: `runtime-dev-1` no longer joins a tailnet
+(it serves the hosted dev control plane over WireGuard; see
+[`nix/hosts/README.md`](../../nix/hosts/README.md)). It needs the devbox and
+runtime logged into the same Tailscale tailnet.
 `tailscale ip -4 runtime-dev-1` must return an IPv4 address before startup;
 xtask fails loudly if it cannot resolve one. Set `COMPUTERS_INCUS_ADDRESS=<IPv4>`
 to override discovery. Compose receives the numeric
@@ -930,3 +945,8 @@ dropped after a week.
 
 To try it without the hosted stack, run a throwaway Loki and point the file at
 it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
+
+## Local Kubernetes
+
+For the Nix-declared kind runtime, isolated namespaces and two HTTPS slots, see
+[local Kubernetes](local-kubernetes.md).

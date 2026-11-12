@@ -1433,7 +1433,10 @@ test('the composer mentions group participants as WhatsApp mentions', async ({
   await expect(page.getByText('+14155550199')).toBeVisible();
   await expect(page.getByText('@here')).toHaveCount(0);
   await page.keyboard.press('Enter');
-  // Wait for inline search to be replaced before typing the next character.
+  // Wait for the selected mention and replacement of the inline search.
+  await expect(
+    page.locator('[data-input-editor-shell] [data-user-mention]')
+  ).toHaveCount(1);
   await expect(
     page.getByRole('textbox').locator('.md-inline-search')
   ).toHaveCount(0);

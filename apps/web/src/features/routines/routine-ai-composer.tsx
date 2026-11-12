@@ -38,14 +38,12 @@ export function RoutineAiComposer(props: {
     decisionsEnabled: () => props.decisionsEnabled,
   });
   // Leaving for a template or a blank routine discards a draft still on its
-  // way, so it can't replace what the user picked.
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
+  // way, so it can't replace what the user picked, and it isn't sent again.
+  const left = new AbortController();
+  onCleanup(() => left.abort());
   const describe = async (description: string) => {
-    const draft = await composeRoutine(description, context());
-    if (disposed) return undefined;
+    const draft = await composeRoutine(description, context(), left.signal);
+    if (left.signal.aborted) return undefined;
     if (typeof draft === 'string') return draft;
     props.apply(
       {

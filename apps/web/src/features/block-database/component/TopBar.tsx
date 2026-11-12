@@ -1,5 +1,7 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
@@ -117,6 +119,7 @@ export function TopBar(props: {
     name: detail.database.name,
     ownerId: detail.database.owner_id,
     grant: detail.grant,
+    appearance: readEntityAppearance(detail.database.appearance),
     projectId: detail.database.project_id ?? undefined,
   });
   const entityActions = (detail: DatabaseDetail): DatabaseEntityActions => ({
@@ -162,7 +165,20 @@ export function TopBar(props: {
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel id={databaseId} name={name} />
+        <BlockItemSplitLabel
+          id={databaseId}
+          name={name}
+          icon={
+            <Show when={props.detail}>
+              {(detail) => (
+                <EntityAppearanceTrigger
+                  entity={entity(detail())}
+                  editable={props.canEdit}
+                />
+              )}
+            </Show>
+          }
+        />
         <Show when={props.detail}>
           {(detail) => (
             <>
