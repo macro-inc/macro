@@ -1,5 +1,7 @@
 /* A pipeline as a database table. Its columns keep their own widths, as the
    app's do, so the Add field menu opens over the empty end of the rows. */
+#crm-databases .paper-feature-graphic > .feature-demo-backdrop::before { opacity: .25; }
+
 .crm-pipeline-db { position: relative; font-weight: 400; }
 .crm-pipeline-db .database-views-tabs .database-views-pill { font-weight: 500; }
 .crm-pipeline-db .database-views-name { font-weight: 400; }
