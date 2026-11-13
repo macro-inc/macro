@@ -19,6 +19,8 @@ MacroDB migrations.
 - `src/outbound/postgres.rs`: storage (feature `postgres`).
 - `src/outbound/macro_services.rs`, `src/outbound/meeting_links.rs`: calendar/team
   domain ports and Macro-call meeting links (feature `calendar`).
+- `src/domain/attendance.rs` derives outcomes from participation evidence without changing
+  stored manual choices; `src/outbound/attendance.rs` reads through the call domain.
 
 ## Scope
 
@@ -61,6 +63,8 @@ MacroDB migrations.
   link config.
 - Reschedule counts only increase after a successful move; old records default
   to zero rather than reconstructing unknown history.
+- Automatic no-shows require tracked Macro-call participation during the booking window;
+  never infer attendance from token issuance, invitations, or elapsed time alone.
 
 ## Related
 

@@ -24,12 +24,33 @@ the isolated browser fixture defaults to the light reference appearance.
 Reports group bookings by their current start date in the profile default
 schedule's timezone. Previous-period queries include equal calendar-day windows
 across DST. Completed means confirmed bookings whose end time has passed,
-excluding recorded no-shows; actual call duration is not tracked. Rescheduled
-counts bookings with at least one recorded successful reschedule, once per
-booking. No-shows require an explicit host/admin record. Categories may overlap.
+excluding no-shows; actual call duration is not used for meeting-hour totals. Rescheduled
+counts bookings with at least one recorded successful reschedule, once per booking.
+No-shows use explicit host/admin records or eligible Macro-call participation evidence.
+Categories may overlap.
 Failed and processing provider operations are excluded. Oversized queries return
 an actionable error instead of silently dropping records. CSV exports the filtered
 current-period bookings and escapes spreadsheet formulas.
+
+### Automatic Macro-call attendance
+
+For ended, confirmed Macro bookings whose overlapping native call sessions are tracked
+and finished, use real human participation during the booked window. An assigned host
+alone means guest no-show; a guest alone means host no-show;
+both sides joining means attended; neither side joining stays unknown. Anonymous callers
+and signed-in humans outside the assigned hosts count as guests, not verified booker
+identities. Bots, program clients, join-token issuance and calendar invitations are not
+attendance evidence.
+
+Manual outcomes always win. Clearing a manual outcome resumes automatic detection.
+Read-time derivation keeps these choices separate from participation evidence, and the
+same returned booking outcomes feed the list, CSV, charts and both comparison periods.
+External meetings and untracked history stay manual. Still-live calls or deleted evidence
+leave an unknown result. Late webhook delivery can update inferred outcomes. The saved
+meeting link, not title or invitee-email matching, identifies the call; its origin must
+match the configured app origin. This deliberately avoids a speculative historical backfill.
+Deploy the additive attendance migrations before the updated call writers and calendar
+reader; legacy sessions keep tracking disabled and cannot produce automatic no-shows.
 
 ## Deliberate deferrals and remaining gaps
 

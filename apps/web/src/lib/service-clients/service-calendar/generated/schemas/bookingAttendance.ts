@@ -6,7 +6,7 @@
  */
 
 /**
- * Attendance recorded by an assigned host or profile administrator after a meeting.
+ * Attendance recorded by a host or derived from observed Macro-call participation.
  */
 export type BookingAttendance =
   (typeof BookingAttendance)[keyof typeof BookingAttendance];

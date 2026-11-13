@@ -1,5 +1,7 @@
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+/// Observed RTC participation and meeting-attendance read capabilities.
+pub mod attendance;
 /// Kafka event contracts for call lifecycle events.
 pub mod events;
 /// Public call notifications for access-checked subscribers.

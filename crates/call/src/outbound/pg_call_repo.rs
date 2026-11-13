@@ -256,6 +256,13 @@ impl PgCallRepo {
 impl CallRepository for PgCallRepo {
     type Err = sqlx::Error;
 
+    async fn record_attendance(
+        &self,
+        event: &crate::domain::models::CallWebhookEvent,
+    ) -> Result<(), CallError> {
+        super::meeting_attendance::record(&self.pool, event).await
+    }
+
     async fn can_join_call(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
         sqlx::query_scalar!(
             r#"SELECT (
@@ -2232,6 +2239,11 @@ impl CallRepository for PgCallRepo {
         call_record_id: &Uuid,
     ) -> Result<Option<DeletedCallRecordStorageKeys>, Self::Err> {
         let mut tx = self.pool.begin().await?;
+        // Once a call's evidence is deleted, sibling sessions cannot prove absence.
+        sqlx::query!(
+            "UPDATE call_meetings SET attendance_incomplete = true WHERE id = (SELECT meeting_id FROM call_entities WHERE id = $1)",
+            call_record_id,
+        ).execute(tx.as_mut()).await?;
 
         let row = sqlx::query!(
             r#"

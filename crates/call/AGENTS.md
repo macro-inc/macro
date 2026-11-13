@@ -15,6 +15,8 @@ in-call chat.
   call discussion; message storage and delivery belong to `messages`.
 - `src/domain/meetings.rs`: scheduled-meeting ↔ call association (used by
   `calendar_events`/`calendar_scheduling` meeting links).
+- `src/domain/attendance.rs` + `src/outbound/meeting_attendance.rs`: actual human RTC
+  intervals and bounded booking-window reads; the lightweight `attendance` feature is read-only.
 - `src/domain/notification_events.rs`: public call event contract for
   access-checked webhook and stream subscribers.
 - `src/inbound/axum_router.rs`, `src/inbound/stale_call_sweeper.rs`: HTTP routes
@@ -75,6 +77,8 @@ in-call chat.
   candidate rooms have no `calls` row yet and must be left alone.
 - Bot RTC identities use `bot|<uuid>`. Webhooks never write bot attendance or
   participant events; an archived call's recreated room evicts the bot.
+- Keep RTC evidence separate from token-issued membership; only tracked, finished native
+  sessions support automatic booking outcomes, and record deletion invalidates meeting coverage.
 - `enable-programmatic-calls` fails closed for the explicit start, join, and
   leave routes. Meeting join ignores optional join settings while disabled.
 - Accept bodyless meeting joins even with `Content-Type: application/json`;

@@ -569,7 +569,39 @@ impl CallRtcClient for LivekitRtcClient {
             .and_then(|p| BotIdStr::parse_from_str(&p.identity).ok())
             .map(|id| id.bot_id());
 
+        let attendance = event.participant.as_ref().and_then(|participant| {
+            let human = !participant.attributes.contains_key("macro.program")
+                && (guest_identity.is_some()
+                    || MacroUserIdStr::parse_from_str(&participant.identity).is_ok());
+            if !human || participant.sid.is_empty() || participant.sid.len() > 128 {
+                return None;
+            }
+            if !matches!(
+                event.event.as_str(),
+                "participant_joined" | "participant_left"
+            ) {
+                return None;
+            }
+            let joined_at = if participant.joined_at_ms > 0 {
+                DateTime::from_timestamp_millis(participant.joined_at_ms)
+            } else if participant.joined_at > 0 {
+                DateTime::from_timestamp(participant.joined_at, 0)
+            } else {
+                None
+            }?;
+            let left_at = if event.event == "participant_left" {
+                Some(DateTime::from_timestamp(event.created_at, 0)?.max(joined_at))
+            } else {
+                None
+            };
+            Some(crate::domain::attendance::RtcAttendance {
+                participant_sid: participant.sid.clone(),
+                joined_at,
+                left_at,
+            })
+        });
         Ok(CallWebhookEvent {
+            attendance,
             guest_identity,
             event: event.event,
             id: event.id,

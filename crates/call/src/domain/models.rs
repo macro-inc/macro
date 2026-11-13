@@ -448,6 +448,8 @@ pub struct CallWebhookEvent {
     pub file_url: Option<String>,
     /// Unix timestamp (seconds) when the event was created.
     pub created_at: i64,
+    /// Actual human connection evidence from the provider, never token issuance.
+    pub attendance: Option<super::attendance::RtcAttendance>,
 }
 
 /// A transcript segment from LiveKit Inference STT.

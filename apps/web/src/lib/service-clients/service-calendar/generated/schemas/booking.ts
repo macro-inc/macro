@@ -16,7 +16,7 @@ import type { BookingStatus } from './bookingStatus';
 export interface Booking {
   /** Answers keyed by question identity. */
   answers: BookingAnswers;
-  /** Explicit attendance outcome; existing booking records default to unknown. */
+  /** Effective attendance on reads; stored manual outcomes override automatic detection. */
   attendance?: BookingAttendance;
   /** Booker's email. */
   email: string;

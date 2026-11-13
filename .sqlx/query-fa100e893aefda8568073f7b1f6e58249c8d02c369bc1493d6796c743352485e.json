@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH requested AS (\n    SELECT token, starts_at, ends_at, ordinal\n    FROM unnest($1::text[], $2::timestamptz[], $3::timestamptz[])\n        WITH ORDINALITY AS r(token, starts_at, ends_at, ordinal)\n)\nSELECT r.ordinal AS \"ordinal!\",\n       COALESCE(e.attendance_tracked AND e.ended_at IS NOT NULL AND NOT m.attendance_incomplete, false) AS \"tracked!\",\n       a.user_id, a.participant_sid AS \"participant_sid?\"\nFROM requested r\nLEFT JOIN call_meetings m ON m.share_token = r.token\nLEFT JOIN LATERAL (\n    SELECT id, ended_at, attendance_tracked\n    FROM call_entities\n    WHERE meeting_id = m.id AND created_via = 'native'\n      AND started_at < r.ends_at\n      AND COALESCE(ended_at, 'infinity'::timestamptz) > r.starts_at\n    LIMIT 10001\n) e ON true\nLEFT JOIN LATERAL (\n    SELECT user_id, participant_sid\n    FROM call_rtc_attendance\n    WHERE call_id = e.id AND joined_at < r.ends_at\n      AND COALESCE(left_at, e.ended_at, 'infinity'::timestamptz) > r.starts_at\n    LIMIT 10001\n) a ON true\nLIMIT 10001\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ordinal!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "tracked!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "participant_sid?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TimestamptzArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "fa100e893aefda8568073f7b1f6e58249c8d02c369bc1493d6796c743352485e"
+}

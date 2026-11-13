@@ -95,6 +95,9 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;
   programmatic joins set `agent` or `api_key` after recording attendance.
+- `call_rtc_attendance` stores actual provider connection intervals and cascades with call
+  entities; `attendance_tracked` defaults false for legacy writers. Meeting coverage becomes
+  incomplete when a call record is deleted, so missing evidence never implies a no-show.
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
 - Keep concurrent index migrations to one statement with `-- no-transaction`;
   build replacement indexes before dropping old constraints, and validate large

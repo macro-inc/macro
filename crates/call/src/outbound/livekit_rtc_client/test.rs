@@ -208,3 +208,43 @@ async fn guest_tokens_preserve_names_and_only_grant_the_room() {
     assert_eq!(event.guest_identity, Some(guest_id));
     assert_eq!(event.participant_identity, None);
 }
+
+#[test]
+fn signed_webhooks_capture_real_sessions_and_exclude_programs() {
+    for (identity, attributes, human) in [
+        ("macro|host@example.com", serde_json::json!({}), true),
+        (
+            "00000000-0000-0000-0000-000000000123",
+            serde_json::json!({}),
+            true,
+        ),
+        (
+            "macro|host@example.com",
+            serde_json::json!({"macro.program": "api_key"}),
+            false,
+        ),
+        ("agent-transcriber", serde_json::json!({}), false),
+    ] {
+        let body = serde_json::json!({
+            "event": "participant_left", "id": "EV_attendance", "createdAt": 200,
+            "room": {"name": "room-1"},
+            "participant": {"sid": "PA_attendance", "identity": identity,
+                "joinedAt": 100, "joinedAtMs": 100500, "attributes": attributes}
+        })
+        .to_string();
+        let event = client()
+            .receive_webhook(&body, &sign_webhook(&body))
+            .unwrap();
+        assert_eq!(event.attendance.is_some(), human);
+        if let Some(attendance) = event.attendance {
+            assert_eq!(attendance.participant_sid, "PA_attendance");
+            assert_eq!(attendance.joined_at.timestamp_millis(), 100500);
+            assert_eq!(attendance.left_at.unwrap().timestamp(), 200);
+        }
+        assert!(
+            client()
+                .receive_webhook(&body, "invalid-signature")
+                .is_err()
+        );
+    }
+}
