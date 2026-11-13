@@ -17,9 +17,47 @@ use crate::{Delivered, EmulatorError, LifecycleEvent, NotificationDelivery, Requ
 
 const ACCESS_TOKEN_LIFETIME_SECONDS: i64 = 3600;
 
+const AUTHORIZATION_CODE_LIFETIME_SECONDS: i64 = 600;
+
 struct AccessToken {
     email: String,
     expires_at: DateTime<Utc>,
+}
+
+/// What a user agreed to on the sign-in page.
+pub(crate) struct Consent {
+    pub(crate) client_id: String,
+    pub(crate) redirect_uri: String,
+    /// The scopes asked for, in the order asked.
+    pub(crate) scopes: Vec<String>,
+    pub(crate) nonce: Option<String>,
+    /// The PKCE challenge (S256) the code is bound to.
+    pub(crate) code_challenge: Option<String>,
+}
+
+struct AuthorizationCode {
+    email: String,
+    consent: Consent,
+    expires_at: DateTime<Utc>,
+}
+
+/// Why the token endpoint refuses an authorization code.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CodeError {
+    /// Not a code this emulator issued, or one already redeemed.
+    Unknown,
+    Expired,
+    /// Redeemed by another client than it was issued to.
+    Client,
+    RedirectUri,
+    /// The PKCE verifier is missing or does not match the challenge.
+    Verifier,
+}
+
+/// What redeeming an authorization code yields.
+pub(crate) struct Redeemed {
+    pub(crate) email: String,
+    pub(crate) consent: Consent,
 }
 
 /// A Graph subscription to a mailbox's messages.
@@ -80,6 +118,10 @@ pub(crate) struct State {
     pub(crate) links: HashMap<String, String>,
     /// The access token last handed out for each link.
     link_tokens: HashMap<String, String>,
+    /// Authorization codes not yet redeemed.
+    codes: HashMap<String, AuthorizationCode>,
+    /// The mailbox of each refresh token handed out by a refresh.
+    rotated_refresh_tokens: HashMap<String, String>,
 }
 
 impl State {
@@ -226,9 +268,101 @@ impl State {
 
     /// The mailbox a refresh token belongs to.
     pub(crate) fn refresh_token_owner(&self, refresh_token: &str) -> Option<&Mailbox> {
-        self.mailboxes
-            .values()
-            .find(|mailbox| mailbox.refresh_token == refresh_token)
+        match self.rotated_refresh_tokens.get(refresh_token) {
+            Some(email) => self.mailboxes.get(email),
+            None => self
+                .mailboxes
+                .values()
+                .find(|mailbox| mailbox.refresh_token == refresh_token),
+        }
+    }
+
+    /// A further refresh token for the mailbox's grant. Like Microsoft's,
+    /// it replaces none: the earlier ones keep working until the grant is
+    /// revoked.
+    pub(crate) fn rotate_refresh_token(&mut self, email: &str) -> String {
+        self.issued += 1;
+        let token = format!(
+            "0.AXemulator.{}",
+            URL_SAFE_NO_PAD.encode(format!("{email}/refresh/{}", self.issued))
+        );
+        self.rotated_refresh_tokens
+            .insert(token.clone(), email.to_string());
+        token
+    }
+
+    // -- sign-in --
+
+    /// Records that the mailbox's owner signed in and consented, and
+    /// answers the authorization code for it. The scopes add to the ones
+    /// the grant already covers. A consent after a revocation starts a new
+    /// grant, whose refresh tokens are new: the revoked ones stay dead.
+    pub(crate) fn authorize(
+        &mut self,
+        email: &str,
+        consent: Consent,
+    ) -> Result<String, EmulatorError> {
+        let expires_at = self.now() + Duration::seconds(AUTHORIZATION_CODE_LIFETIME_SECONDS);
+        let mailbox = self.mailbox(email)?;
+        let email = mailbox.email.clone();
+        if mailbox.revoked {
+            mailbox.revoked = false;
+            mailbox.grants += 1;
+            mailbox.refresh_token = format!("refresh-{email}-{}", mailbox.grants);
+            mailbox.scopes.clear();
+            self.rotated_refresh_tokens
+                .retain(|_, owner| *owner != email);
+        }
+        let mailbox = self.mailbox(&email)?;
+        for scope in &consent.scopes {
+            if !mailbox.scopes.contains(scope) {
+                mailbox.scopes.push(scope.clone());
+            }
+        }
+
+        self.issued += 1;
+        let code = format!(
+            "0.AXemulator.{}",
+            URL_SAFE_NO_PAD.encode(format!("{email}/code/{}", self.issued))
+        );
+        self.codes.insert(
+            code.clone(),
+            AuthorizationCode {
+                email,
+                consent,
+                expires_at,
+            },
+        );
+        Ok(code)
+    }
+
+    /// Redeems an authorization code, once, for the client and redirect URI
+    /// it was issued to. `challenge` is the S256 challenge of the request's
+    /// PKCE verifier.
+    pub(crate) fn redeem_code(
+        &mut self,
+        code: &str,
+        client_id: &str,
+        redirect_uri: &str,
+        challenge: Option<&str>,
+    ) -> Result<Redeemed, CodeError> {
+        let issued = self.codes.remove(code).ok_or(CodeError::Unknown)?;
+        if issued.expires_at <= self.now() {
+            return Err(CodeError::Expired);
+        }
+        if issued.consent.client_id != client_id {
+            return Err(CodeError::Client);
+        }
+        if issued.consent.redirect_uri != redirect_uri {
+            return Err(CodeError::RedirectUri);
+        }
+        if issued.consent.code_challenge.as_deref() != challenge {
+            return Err(CodeError::Verifier);
+        }
+        Ok(Redeemed {
+            email: issued.email,
+            consent: issued.consent,
+        })
     }
 
     /// Revokes the mailbox's grant: its tokens answer 401, refreshing
@@ -237,6 +371,7 @@ impl State {
         let mailbox = self.mailbox(email)?;
         mailbox.revoked = true;
         let email = mailbox.email.clone();
+        self.codes.retain(|_, code| code.email != email);
         let ids: Vec<String> = self
             .subscriptions
             .values()

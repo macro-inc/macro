@@ -89,6 +89,10 @@ async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
             "MCP OAuth authorization code encryption key (local)",
         ),
         (
+            resources::MICROSOFT_TOKEN_KMS_ALIAS,
+            "Microsoft refresh token envelope encryption key (local)",
+        ),
+        (
             resources::WHATSAPP_SESSION_KMS_ALIAS,
             "WhatsApp session data key encryption key (local)",
         ),
