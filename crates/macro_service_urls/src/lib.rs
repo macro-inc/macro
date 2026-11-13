@@ -822,6 +822,16 @@ service_url! {
 }
 
 service_url! {
+    /// WhatsApp's multi-device websocket. WhatsApp's host in every
+    /// environment; override it to run against `crates/whatsapp_fake_server`.
+    pub struct WhatsappWebsocketUrl {
+        local: "wss://web.whatsapp.com/ws/chat",
+        dev: "wss://web.whatsapp.com/ws/chat",
+        prod: "wss://web.whatsapp.com/ws/chat",
+    }
+}
+
+service_url! {
     /// Control and internal MCP surface of the live preview service.
     pub struct PreviewGatewayUrl {
         local: "http://localhost:8101/preview",

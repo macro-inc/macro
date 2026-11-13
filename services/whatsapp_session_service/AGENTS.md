@@ -139,9 +139,11 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   `alias/whatsapp-session-service-<environment>` from `ENVIRONMENT`
   (GenerateDataKey + Decrypt); `xtask_local` creates the `-local` alias in
   LocalStack.
-- Tests only, process env: `OVERRIDE_WHATSAPP_WEBSOCKET_URL` (fake server)
-  and `OVERRIDE_WHATSAPP_MEDIA_HOST` (`scheme://host[:port]` of its media
-  host).
+- The websocket is `WhatsappWebsocketUrl` in `macro_service_urls`
+  (`OVERRIDE_WHATSAPP_WEBSOCKET_URL` points it at a fake server). Tests
+  only: `OVERRIDE_WHATSAPP_MEDIA_HOST` (`scheme://host[:port]` of the fake's
+  media host) replaces the media hosts WhatsApp hands out per connection,
+  so it has no fixed default.
 
 ## Telemetry
 
