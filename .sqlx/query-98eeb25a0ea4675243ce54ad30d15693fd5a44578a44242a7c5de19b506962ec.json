@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO dashboard_versions (dashboard_id, version, view, author_id)\n            VALUES ($1, 1, $2, $3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "98eeb25a0ea4675243ce54ad30d15693fd5a44578a44242a7c5de19b506962ec"
+}

@@ -302,6 +302,10 @@ account_manager = { path = "../../crates/account_manager", features = [
   "outbound",
   "postgres",
 ] }
+dashboards = { path = "../../crates/dashboards", features = [
+  "inbound",
+  "outbound",
+] }
 user_api_key = { path = "../../crates/user_api_key", features = [
   "inbound",
   "postgres",

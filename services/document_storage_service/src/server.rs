@@ -951,7 +951,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -2180,6 +2180,11 @@ async fn run_server() -> anyhow::Result<()> {
             macro_service_urls::AppServiceUrl::new()?,
         ),
     ));
+    let dashboard_service = Arc::new(dashboards::domain::service::DashboardServiceImpl::new(
+        dashboards::outbound::pg_dashboard_repo::PgDashboardRepo::new(db.clone()),
+        dashboards::outbound::access::EntityDashboardAccess(entity_access_service.clone()),
+        dashboards::outbound::gate::FlaggedDashboards(flags.clone()),
+    ));
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
         db.clone(),
     )));
@@ -2490,6 +2495,10 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
+            authorization_state.clone(),
+        ),
+        dashboard_state: dashboards::inbound::axum_router::DashboardRouterState::new(
+            dashboard_service,
             authorization_state.clone(),
         ),
         user_api_key_state: UserApiKeyRouterState::new(

@@ -18,6 +18,7 @@ members = [
   "crates/agent_code_mode",
   "crates/agent_correlation",
   "crates/code_mode_assets",
+  "crates/dashboards",
   "crates/dynamic_ui",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
