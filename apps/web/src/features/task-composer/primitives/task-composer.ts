@@ -412,6 +412,7 @@ export function createTaskComposer(
               shareWithTeam,
               showFailureToast: false,
               onCreated: confirm,
+              // ast-grep-ignore: ts-optimistic-through-mutation-queue -- Local draft and composer UI lifecycle.
               onMutate: () => {
                 discardSavedDraft();
                 if (keepOpen) {
