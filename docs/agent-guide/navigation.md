@@ -262,6 +262,8 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/routines/new` | A new routine's page, saved only by **Create routine** |
 | `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
+| `/app/agent-accounts/<macro-id>` | An agent account's page with its home dashboard (requires `enable-agent-dashboards`; see [Agent dashboards](agent-dashboards.md)) |
+| `/app/dashboard/<uuid>` | Any dashboard by id, read-only (requires `enable-agent-dashboards`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
