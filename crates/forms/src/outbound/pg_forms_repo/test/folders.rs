@@ -138,3 +138,47 @@ async fn trashing_its_folder_returns_a_form_to_the_root_without_its_grants(pool:
         vec![(OWNER.to_string(), None)]
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn moving_a_form_marks_the_folders_it_left_and_joined_edited(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    shared_folders(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
+    let long_ago = chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+        .unwrap()
+        .naive_utc();
+    let reset = || async {
+        sqlx::query!(r#"UPDATE "Project" SET "updatedAt" = $1"#, long_ago)
+            .execute(&pool)
+            .await
+            .unwrap();
+    };
+    let edited = || async {
+        sqlx::query_scalar!(
+            r#"SELECT id FROM "Project" WHERE "updatedAt" > $1 ORDER BY id"#,
+            long_ago
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+    };
+
+    reset().await;
+    repo.move_form(form.id, Some(FOLDER)).await.unwrap();
+    assert_eq!(edited().await, vec![FOLDER.to_string()]);
+
+    reset().await;
+    repo.move_form(form.id, Some(SUBFOLDER)).await.unwrap();
+    assert_eq!(
+        edited().await,
+        vec![FOLDER.to_string(), SUBFOLDER.to_string()]
+    );
+
+    reset().await;
+    repo.move_form(form.id, None).await.unwrap();
+    assert_eq!(edited().await, vec![SUBFOLDER.to_string()]);
+}

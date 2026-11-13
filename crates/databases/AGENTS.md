@@ -74,7 +74,8 @@ service with Axum, agent-tool and Postgres adapters.
   never silently drop data outside an explicit delete.
 - Filing in a folder (`database_entities.project_id`, `MoveEntity`): owner
   only; the repository swaps the folder-inherited `entity_access` rows in the
-  same transaction (`entity_access_db_utils::project_grants`). Trashing or
+  same transaction (`entity_access_db_utils::project_grants`) and bumps the
+  old and new folder's `updatedAt` (`project_modified`). Trashing or
   purging the folder returns the database to the root without the folder's
   grants; trashing goes through `PgDatabaseFolders`, which the projects
   domain reaches through its `FiledItemsUnfiler` port.
