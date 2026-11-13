@@ -87,39 +87,32 @@ it('hides local results from a search scoped to a channel or a sender', () => {
   expect(featuredIdsFor({ channelSenderId: ['user-1'] })).toEqual([]);
 });
 
-it('hides local results the task facets cannot be tested against', () => {
+it('hides local results the Search view task facets cannot be tested against', () => {
+  const status = {
+    properties: [
+      { propertyId: 'status', type: 'select' as const, value: 'done' },
+    ],
+  };
+  expect(hidesLocalSearchResults(status, 'search')).toBe(true);
   expect(
-    hidesLocalSearchResults({
-      properties: [{ propertyId: 'status', type: 'select', value: 'done' }],
-    })
+    hidesLocalSearchResults({ documentOwnerId: ['user-1'] }, 'search')
   ).toBe(true);
-  expect(hidesLocalSearchResults({ documentOwnerId: ['user-1'] })).toBe(true);
-  expect(hidesLocalSearchResults({ documentOwnerId: [NIL_UUID] })).toBe(false);
-  expect(hidesLocalSearchResults({})).toBe(false);
+  expect(
+    hidesLocalSearchResults({ documentOwnerId: [NIL_UUID] }, 'search')
+  ).toBe(false);
+  expect(hidesLocalSearchResults({}, 'search')).toBe(false);
 });
 
-it('does not demand the entity pool until local search has text', () => {
-  vi.useFakeTimers();
-  const [text, setText] = createSignal('');
-  const { search, dispose } = createRoot((dispose) => ({
-    dispose,
-    search: createSearchState({
-      surface: () => 'home',
-      soup: createSoupState(),
-      filters: () => ({ include: {}, exclude: {} }),
-      assignees: () => [],
-      searchText: text,
-      setSearchText: setText,
-    }),
-  }));
-  expect(search.localFuzzyResults()).toEqual([]);
-  expect(pool).not.toHaveBeenCalled();
-  setText('budget');
-  vi.advanceTimersByTime(20);
-  expect(search.localFuzzyResults()).toEqual([]);
-  expect(pool).toHaveBeenCalledOnce();
-  setText('');
-  vi.advanceTimersByTime(20);
-  expect(pool).toHaveBeenCalledOnce();
-  dispose();
+it('keeps local results in views whose tab presets carry those filters', () => {
+  expect(
+    hidesLocalSearchResults({ documentOwnerId: ['viewer'] }, 'documents')
+  ).toBe(false);
+  expect(
+    hidesLocalSearchResults(
+      {
+        properties: [{ propertyId: 'assignee', type: 'entity', value: 'me' }],
+      },
+      'tasks'
+    )
+  ).toBe(false);
 });

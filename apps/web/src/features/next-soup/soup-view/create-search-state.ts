@@ -35,17 +35,21 @@ const namesAny = (ids: readonly string[] | undefined) =>
   ids?.some((id) => id !== NIL_UUID) ?? false;
 
 /**
- * Local results match by name against predicates only, so they are hidden for
- * the filters they cannot be tested against: a named channel or sender (those
- * searches list message hits, not channel rows) and task facets. A type filter
- * NIL-excludes every other type, which names nothing.
+ * Local results match by name against the view's predicates only, so they are
+ * hidden where a filter has no predicate to test them with: a named channel or
+ * sender (those searches list message hits, not channel rows) and, in the
+ * Search view, its task facets. A type filter NIL-excludes every other type,
+ * which names nothing.
  */
-export function hidesLocalSearchResults(include: QueryState['include']) {
+export function hidesLocalSearchResults(
+  include: QueryState['include'],
+  surface: string
+) {
+  if (namesAny(include.channelId) || namesAny(include.channelSenderId))
+    return true;
   return (
-    namesAny(include.channelId) ||
-    namesAny(include.channelSenderId) ||
-    namesAny(include.documentOwnerId) ||
-    (include.properties?.length ?? 0) > 0
+    surface === 'search' &&
+    (namesAny(include.documentOwnerId) || (include.properties?.length ?? 0) > 0)
   );
 }
 
@@ -96,7 +100,8 @@ export const createSearchState = ({
     return pool.filter((item) => matchingIds.has(item.data.id));
   });
 
-  const hideLocalResults = () => hidesLocalSearchResults(filters().include);
+  const hideLocalResults = () =>
+    hidesLocalSearchResults(filters().include, surface());
 
   const search = createSharedSearchState({
     surface,

@@ -972,11 +972,11 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const itemsSource = () => soupItemsSource;
 
-  const featuredDocuments = useFeaturedDocuments(() =>
-    ENABLE_FEATURED_SEARCH_RESULTS
-      ? featuredDocumentIds(search.localFuzzyResults())
-      : []
-  );
+  const featuredDocuments = ENABLE_FEATURED_SEARCH_RESULTS
+    ? useFeaturedDocuments(() =>
+        featuredDocumentIds(search.localFuzzyResults())
+      )
+    : () => [];
 
   const localDrafts = createLocalDraftSource(
     () => itemsQuery.transport === 'graphql'
