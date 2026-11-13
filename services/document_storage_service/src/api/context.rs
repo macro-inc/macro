@@ -610,17 +610,10 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
-/// Chat service used by the unified entity mutation adapter.
+/// Chat service used by the unified entity mutation adapter and owner-checked
+/// permanent deletes. It publishes chat lifecycle events, which is how search,
+/// activity and event subscribers learn a chat changed or is gone.
 pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
-    (),
-    EntityAccessManagementService,
->;
-
-/// Chat service for owner-checked permanent deletes. Unlike
-/// [`DssChatMutationService`] it publishes chat events, which is how search
-/// and activity learn a chat is gone.
-pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
     chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
@@ -629,7 +622,7 @@ pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
 
 /// State of `DELETE /internal/owned/{entity_type}/{entity_id}`.
 pub(crate) type DssOwnedPurgeState =
-    super::internal::OwnedPurgeState<DssDocumentPurger, DssChatPurgeService, ProjectService>;
+    super::internal::OwnedPurgeState<DssDocumentPurger, DssChatMutationService, ProjectService>;
 
 /// Concrete unified entity mutation service wired into GraphQL.
 pub(crate) type DssEntityMutationService =

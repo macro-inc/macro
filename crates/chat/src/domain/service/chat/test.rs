@@ -1191,3 +1191,41 @@ async fn patch_repo_conflict_does_not_publish_event() {
     assert!(matches!(result, Err(ChatErr::Conflict(_))));
     assert!(broker.events().is_empty());
 }
+
+#[tokio::test]
+async fn unified_entity_mutations_publish_one_lifecycle_event_each() {
+    use entity_mutation::{DeleteEntityPermanently, RestoreEntity, TrashEntity};
+
+    let broker = RecordingEventBroker::default();
+    let service = build_service(StubChatRepo::with_project(), broker.clone());
+    let chat = EntityType::Chat.with_entity_string(CHAT_ID.to_string());
+
+    service
+        .trash_entity(chat.clone(), owner_receipt(CHAT_ID))
+        .await
+        .unwrap();
+    service
+        .restore_entity(chat.clone(), owner_receipt(CHAT_ID))
+        .await
+        .unwrap();
+    service
+        .delete_entity_permanently(chat, owner_receipt(CHAT_ID))
+        .await
+        .unwrap();
+
+    let events = broker.events();
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| (event.key.as_str(), event.envelope["event_type"].as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (CHAT_ID, Some("chat.deleted")),
+            (CHAT_ID, Some("chat.restored")),
+            (CHAT_ID, Some("chat.permanently_deleted")),
+        ]
+    );
+    for event in &events {
+        assert_eq!(event.envelope["metadata"]["actor_user_id"], OWNER);
+    }
+}
