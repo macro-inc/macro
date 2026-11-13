@@ -1231,6 +1231,31 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).not.toHaveBeenCalled();
   });
 
+  it('keeps activity pushes out of the cache and other subscriptions in it', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const subscription = (text: string): Operation => ({
+      kind: 'subscription',
+      key: 43,
+      query: parse(text),
+      variables: {},
+      context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+    });
+    const uncached =
+      mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.isUncachedSubscription;
+
+    expect(
+      uncached?.(
+        subscription('subscription ActivityUpdates { activityUpdates { id } }')
+      )
+    ).toBe(true);
+    expect(
+      uncached?.(
+        subscription('subscription SoupUpdates { soupUpdates { __typename } }')
+      )
+    ).toBe(false);
+  });
+
   it.each(['query', 'mutation', 'subscription'] as const)(
     'reports handled cache-disposed failures for %s without exporting operation payloads',
     async (kind) => {
