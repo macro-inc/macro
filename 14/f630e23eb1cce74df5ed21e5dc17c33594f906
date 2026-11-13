@@ -1,0 +1,75 @@
+crates/email/src/domain/notification_events/test.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 97-99,112-115
+  s_9d302c2d5b35f4::t_3807f35085b00b 1-96,100-111,116-158
+services/email_service/src/pubsub/util.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 3
+  s_9d302c2d5b35f4::t_69026136d9c6b8 46-48,50
+crates/email/src/domain/mailbox/link_manager/deletion/test/fakes.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 5
+  s_9d302c2d5b35f4::t_39c03ae037016e 273-277
+crates/email/src/domain.rs
+  s_9d302c2d5b35f4::t_c13619621fc143 31-32
+crates/email/src/domain/events/test.rs
+  s_9d302c2d5b35f4::t_ad50951acab207 457
+  s_9d302c2d5b35f4::t_3de4d4bbfe8358 6,454-456,458-467,469,472-475
+  s_9d302c2d5b35f4::t_9b7f5a05f3b798 476
+services/email_service/src/outbound/mailbox_projection.rs
+  s_9d302c2d5b35f4::t_69026136d9c6b8 108
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 4
+crates/email/src/domain/backfill_jobs/worker/metadata.rs
+  s_9d302c2d5b35f4::t_69026136d9c6b8 67
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 4
+services/email_service/src/outbound/scheduled_delivery.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 12
+  s_9d302c2d5b35f4::t_69026136d9c6b8 79,211
+  s_9d302c2d5b35f4::t_c773aee3bcc675 22
+crates/email/src/domain/mailbox/link_manager/test/fakes.rs
+  s_9d302c2d5b35f4::t_ef4373cd00c9ad 163-167
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 4
+crates/email/src/domain/mailbox/inbox_sync/test/fakes.rs
+  s_9d302c2d5b35f4::t_39c03ae037016e 400-404
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 3
+crates/email/src/domain/mailbox/link_manager/deletion.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 12
+  s_9d302c2d5b35f4::t_69026136d9c6b8 121
+crates/email/src/domain/events.rs
+  s_9d302c2d5b35f4::t_3de4d4bbfe8358 472-473
+crates/email/src/domain/message_labels/test.rs
+  s_9d302c2d5b35f4::t_ef4373cd00c9ad 157-161
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 3
+crates/email/src/domain/notification_events.rs
+  s_9d302c2d5b35f4::t_55245b0c96fab9 1-306
+crates/email/src/domain/message_labels.rs
+  s_9d302c2d5b35f4::t_69026136d9c6b8 272
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 5
+crates/email/AGENTS.md
+  s_9d302c2d5b35f4::t_0cd76305e4860c 127-143
+crates/email/src/domain/mailbox/inbox_sync.rs
+  s_9d302c2d5b35f4::t_69026136d9c6b8 256
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 32
+crates/email/src/outbound/email_pg_repo/test/thread_archive.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 46-49
+  s_9d302c2d5b35f4::t_4056d9e005b10a 8,20,44-45,50-53
+crates/email/src/domain/service.rs
+  s_9d302c2d5b35f4::t_bf228d8c6b221d 20
+  s_9d302c2d5b35f4::t_69026136d9c6b8 149-150,155
+crates/email/src/domain/mailbox/link_manager.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 17
+  s_9d302c2d5b35f4::t_69026136d9c6b8 139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "14f630e23eb1cce74df5ed21e5dc17c33594f906",
+  "prompts": {},
+  "sessions": {
+    "s_9d302c2d5b35f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eba92134-fcdc-4053-be03-fafeb9be5fc3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
