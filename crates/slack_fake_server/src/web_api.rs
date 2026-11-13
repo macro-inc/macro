@@ -736,7 +736,15 @@ fn share_files(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
         return error("file_not_found");
     }
     let channel = channel.to_owned();
-    let text = field(fields, "text").unwrap_or_default().to_owned();
+    // Like Slack: the message text is the section blocks' mrkdwn, joined.
+    let text = match parse_json_field(fields, "blocks") {
+        Ok(Some(Value::Array(blocks))) => blocks
+            .iter()
+            .filter_map(|block| block.pointer("/text/text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => field(fields, "text").unwrap_or_default().to_owned(),
+    };
     let thread_ts = field(fields, "thread_ts").map(str::to_owned);
     let client_msg_id = field(fields, "client_msg_id").map(str::to_owned);
     let ts = share(

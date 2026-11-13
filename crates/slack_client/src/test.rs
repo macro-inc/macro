@@ -556,8 +556,8 @@ async fn files_upload_download_and_external_users_resolve() {
         history
             .messages
             .iter()
-            .any(|message| message.ts == uploaded.share_ts),
-        "the share message carries the returned ts"
+            .any(|message| message.ts == uploaded.share_ts && message.text == "here you go"),
+        "the share message carries the returned ts and the caption"
     );
     assert_eq!(
         fake.file_bytes(uploaded.id.as_str()),

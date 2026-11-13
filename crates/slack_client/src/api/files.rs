@@ -116,7 +116,14 @@ impl SlackClient {
             form.push(("thread_ts", thread_ts.to_string()));
         }
         if let Some(comment) = &upload.initial_comment {
-            form.push(("text", comment.clone()));
+            // files.share ignores `text`; the caption goes in mrkdwn sections.
+            let blocks = serde_json::to_string(&caption_blocks(comment)).map_err(|source| {
+                SlackError::Decode {
+                    method: SlackMethod::FilesShare,
+                    source,
+                }
+            })?;
+            form.push(("blocks", blocks));
         }
         let shared: SharedFile = self.call(SlackMethod::FilesShare, form).await?;
         Ok(UploadedFile {
@@ -174,4 +181,26 @@ impl SlackClient {
             .await
             .map(|envelope| envelope.file)
     }
+}
+
+/// Slack's limit on a section's text.
+const SECTION_TEXT_LIMIT: usize = 3000;
+
+/// A caption as mrkdwn section blocks, split at char boundaries to fit.
+fn caption_blocks(caption: &str) -> Vec<serde_json::Value> {
+    let mut blocks = Vec::new();
+    let mut rest = caption;
+    while !rest.is_empty() {
+        let mut end = rest.len().min(SECTION_TEXT_LIMIT);
+        while !rest.is_char_boundary(end) {
+            end -= 1;
+        }
+        let (chunk, tail) = rest.split_at(end);
+        blocks.push(serde_json::json!({
+            "type": "section",
+            "text": { "type": "mrkdwn", "text": chunk },
+        }));
+        rest = tail;
+    }
+    blocks
 }
