@@ -8117,6 +8117,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "uuid",
  "workspace-hack",

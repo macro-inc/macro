@@ -17,7 +17,7 @@ mod test;
 
 use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt;
 use uuid::Uuid;
@@ -67,7 +67,8 @@ pub struct PublicEvent<'a, P: Clone> {
 }
 
 /// Rollout stage of a public event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Stage {
     /// Delivered to everyone in the audience.
     Stable,
@@ -198,7 +199,8 @@ impl fmt::Display for PublicEntityType {
 /// A rule reads only the event payload. Delivery resolves it against current
 /// access when the event is fanned out. Link-share viewers are never part of
 /// an audience: only explicit accessors are.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "class", content = "rule", rename_all = "snake_case")]
 pub enum Audience {
     /// Explicit accessors of an entity: owner, direct grants, channel
     /// participants, team grants.
@@ -241,6 +243,12 @@ pub enum Audience {
         /// The user whose contacts (and self) may see the event.
         user_id: MacroUserIdStr<'static>,
     },
+    /// Whoever the GitHub App installation belongs to. Delivery resolves the
+    /// installation's owners when the event is fanned out.
+    GithubInstallation {
+        /// The GitHub App installation id.
+        installation_id: String,
+    },
     /// One webhook workspace: a user's personal workspace (their user id) or
     /// a team's (the team id).
     Workspace {
@@ -259,7 +267,8 @@ pub enum Audience {
 }
 
 /// The lowest team role an [`Audience::Team`] event reaches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MinTeamRole {
     /// Every member.
     Member,
