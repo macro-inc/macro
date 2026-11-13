@@ -210,9 +210,10 @@ fn local_code_edit(throw_at: usize) -> (usize, bool, bool) {
     (provider.calls.load(Ordering::Relaxed), main, follow_up)
 }
 
-// Carrier E3 reachability pin: a local SetState with a code block calls the tokenizer only
-// inside follow-up updates, so every throw surfaces as FollowUpFailed (which carries no
-// takeable cause) and none as a main-update error. A change in either direction fails here.
+// Carrier E3 reachability pin: an id-less local SetState with a code block calls the tokenizer
+// only inside follow-up updates (the id-assigning round, as Source's nodeIdPlugin update), so
+// every throw surfaces as FollowUpFailed, with its cause reported to the observer, and none as a
+// main-update error. A change in either direction fails here.
 #[test]
 fn follow_up_reachability_of_the_tokenizer_in_a_local_code_edit() {
     let (calls, main, follow_up) = local_code_edit(0);
@@ -468,8 +469,14 @@ fn set_state_run(ids: bool, metadata: Option<u32>, throw_at: usize) -> SetStateR
         follow_up_failed: view
             .iter()
             .any(|effect| matches!(effect, ViewEffect::Editor(Effect::FollowUpFailed { .. }))),
-        stored_version: local.state().to_json().unwrap().root["$"]["documentMetadata"]
-            .get("version")
+        stored_version: local
+            .state()
+            .to_json()
+            .unwrap()
+            .root
+            .get("$")
+            .and_then(|state| state.get("documentMetadata"))
+            .and_then(|metadata| metadata.get("version"))
             .cloned(),
     }
 }
@@ -677,4 +684,76 @@ fn typing_into_a_loaded_code_block_tokenizes_once_in_the_typing_update() {
     // so the typing is one change and no follow-up round re-dirties the code block.
     assert_eq!(run.highlights_without_id, 0);
     assert_eq!(run.loro_changes, Some(1));
+}
+
+/// Records each reported model error's code-tokenizer cause with its view index.
+#[derive(Default)]
+struct ThrownReports(std::sync::Mutex<Vec<(usize, Option<u32>)>>);
+impl ReportedModelErrorObserver for ThrownReports {
+    fn reported(&self, error: &lexical_model::Error, view_index: usize) {
+        let cause = match error {
+            lexical_model::Error::Extension(cause) => {
+                match cause.downcast_ref::<CodeTokenError>() {
+                    Some(CodeTokenError::Thrown { cause }) => Some(*cause),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        self.0.lock().unwrap().push((view_index, cause));
+    }
+}
+
+// The one follow-up tokenize left (an id-less SetState): its throw reaches the reported-error
+// observer with the original cause, at the index of the FollowUpFailed effect, as a main-update
+// throw does at its error effect.
+#[test]
+fn a_follow_up_tokenizer_throw_reaches_the_observer_with_its_cause() {
+    let provider = Arc::new(ThrowAt {
+        calls: AtomicUsize::new(0),
+        throw_at: 2,
+    });
+    let doc = lexical_loro::new_doc(7).unwrap();
+    let mut local = EditorSurface::new(
+        config(CodeTokens::new(provider.clone(), "throw-at")),
+        7,
+        now(),
+    )
+    .unwrap();
+    local
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let reports = Arc::new(ThrownReports::default());
+    // As observe_reported_model_errors installs it: follow-up causes reach the observer through
+    // the follow-up capture.
+    let capture = Arc::new(super::reported_errors::Capture::default());
+    local.core.observe_follow_up_errors(capture.clone());
+    local.follow_up_errors = Some(capture);
+    local.reported_errors = Some(reports.clone());
+    let state = code_state(&local);
+    let mut view = Vec::new();
+    let _ = local.apply(
+        &doc,
+        Input::SetState {
+            state,
+            tags: TagSet::default(),
+        },
+        now(),
+        Access::Edit,
+        &mut view,
+    );
+    let follow_up = view
+        .iter()
+        .position(|effect| matches!(effect, ViewEffect::Editor(Effect::FollowUpFailed { .. })));
+    assert!(follow_up.is_some(), "the throw failed a follow-up");
+    assert!(
+        !view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Error(_))),
+        "not a main-update error"
+    );
+    assert_eq!(
+        *reports.0.lock().unwrap(),
+        vec![(follow_up.unwrap(), Some(2))]
+    );
 }

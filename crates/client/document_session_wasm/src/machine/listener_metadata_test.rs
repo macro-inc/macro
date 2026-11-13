@@ -332,3 +332,43 @@ fn metadata_opt_in_owner_drain_and_terminal_retire_are_explicit() {
         ListenerMetadataProtocol::Closed
     ));
 }
+
+#[derive(Default)]
+struct Counting(std::sync::atomic::AtomicUsize);
+impl document_session::ReportedModelErrorObserver for Counting {
+    fn reported(&self, _: &lexical_model::Error, _: usize) {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// Either bind order keeps every observer: the session's single slot holds the machine fan-out.
+#[test]
+fn reported_errors_reach_every_observer_in_either_bind_order() {
+    for registry_first in [true, false] {
+        let mut machine = machine();
+        let registry = Arc::new(Counting::default());
+        let code_tokens = Arc::new(Counting::default());
+        let order: [Arc<Counting>; 2] = if registry_first {
+            [registry.clone(), code_tokens.clone()]
+        } else {
+            [code_tokens.clone(), registry.clone()]
+        };
+        for observer in order {
+            machine.observe_reported_errors(observer).unwrap();
+        }
+        let fan_out = machine.reported_errors.clone().expect("installed once");
+        document_session::ReportedModelErrorObserver::reported(
+            &*fan_out,
+            &lexical_model::Error::Invariant("probe"),
+            0,
+        );
+        assert_eq!(
+            (
+                registry.0.load(std::sync::atomic::Ordering::Relaxed),
+                code_tokens.0.load(std::sync::atomic::Ordering::Relaxed)
+            ),
+            (1, 1),
+            "registry_first={registry_first}"
+        );
+    }
+}

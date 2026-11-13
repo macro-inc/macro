@@ -103,7 +103,7 @@ export function nativeSurface(
       const flags = call();
       if (flags & (1 | 2 | 8 | 16)) {
         const output = decodeOutput(session.takeOutput());
-        if (flags & 16 && codeTokens?.bindCauses)
+        if (flags & (1 | 16) && codeTokens?.bindCauses)
           bindCodeTokenCauses(session, output.viewEffects);
         sink.apply(output.view, output.strings, output.viewEffects);
       }

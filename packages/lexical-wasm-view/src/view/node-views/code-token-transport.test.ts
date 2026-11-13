@@ -505,42 +505,75 @@ test('an untaken cause is retired and counted when the next entry begins; later 
   }
 });
 
-// Carrier E3 pin (named open gap): a setState runs the code transform in a follow-up update,
-// whose failure is reported as FollowUpFailed with no takeable cause.
-test('a tokenizer throw inside a follow-up update carries no takeable cause', () => {
-  let threw = 0;
-  const { fixture } = surfaceWith(() => {
-    threw++;
-    throw new Error(SENTINEL);
-  });
-  try {
+// Carrier E3: setState runs the code transform in a follow-up update (the id-assigning round);
+// its failure, reported as FollowUpFailed (kind 6, code 10), carries the original thrown value,
+// takeable at that effect's ordinal and bound onto it like a main-update error.
+test.each([false, true])(
+  'a tokenizer throw inside a follow-up update carries its original value (bound=%s)',
+  (bindCauses) => {
+    const thrown = new Error(SENTINEL);
+    const { fixture } = surfaceWith(
+      () => {
+        throw thrown;
+      },
+      () => loadedReply(true),
+      bindCauses
+    );
+    const applied: IViewEffectMsg[][] = [];
+    const apply = fixture.view.apply.bind(fixture.view);
+    fixture.view.apply = (words, strings, effects = []) => {
+      applied.push(effects);
+      apply(words, strings, effects);
+    };
     try {
-      fixture.port.setState(
-        JSON.stringify({
-          root: {
-            type: 'root',
-            version: 1,
-            children: [
-              {
-                type: 'custom-code',
-                version: 1,
-                language: 'rust',
-                children: [{ type: 'text', version: 1, text: 'fn main() {}' }],
-              },
-            ],
-          },
-        })
+      try {
+        fixture.port.setState(
+          JSON.stringify({
+            root: {
+              type: 'root',
+              version: 1,
+              children: [
+                {
+                  type: 'custom-code',
+                  version: 1,
+                  language: 'rust',
+                  children: [
+                    { type: 'text', version: 1, text: 'fn main() {}' },
+                  ],
+                },
+              ],
+            },
+          })
+        );
+      } catch {
+        // Asserted below.
+      }
+      const effects = applied.at(-1) ?? [];
+      const failedAt = effects.findIndex(
+        (effect) => effect.kind === 6 && effect.code === 10
       );
-    } catch {
-      // Asserted below.
+      expect(failedAt).toBeGreaterThanOrEqual(0);
+      if (bindCauses) {
+        // The executor took the record and put the value on the follow-up failure effect.
+        expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
+        const effect: { codeTokenCause?: { value: unknown } } =
+          effects[failedAt];
+        expect(effect.codeTokenCause?.value).toBe(thrown);
+      } else {
+        const failure = fixture.session.takeCodeTokenFailure();
+        if (!failure) throw new Error('missing code token failure');
+        expect([...failure.effectOrdinals()]).toEqual([failedAt]);
+        const [cause] = failure.causes();
+        expect(
+          fixture.session.takeCodeTokenCause(failure.entry, cause)?.[0]
+        ).toBe(thrown);
+      }
+      expect(fixture.session.codeTokenCausesDropped()).toBe(0);
+    } finally {
+      fixture.close();
     }
-    expect(threw).toBeGreaterThan(0);
-    expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
-    expect(fixture.session.codeTokenCausesDropped()).toBe(0);
-  } finally {
-    fixture.close();
   }
-});
+);
 
 // GUARD, not a RED: the decoded ordinal must index the error effect. A Diff before the error
 // in one output needs tx.preceding (core.rs:246/251/273, a multi-item input flushing between

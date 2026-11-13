@@ -35,7 +35,9 @@ pub(crate) struct Machine {
     /// Last issued session entry; never 0 once a call began, never wraps.
     entry: u64,
     /// The session's code tokenizer token.
-    code_tokens: Option<u64>,
+    code_tokens: Option<(u64, Arc<crate::code_tokens::CodeTokenObserver>)>,
+    /// The session's single reported-error observer: every bound observer, in bind order.
+    reported_errors: Option<Arc<ReportedErrors>>,
     /// Recorded throws reported in the latest output; replaced by the next entry.
     code_token_failure: Option<crate::code_tokens::CodeTokenFailure>,
     #[cfg(test)]
@@ -222,6 +224,7 @@ impl Machine {
             entry: 0,
             code_tokens: None,
             code_token_failure: None,
+            reported_errors: None,
             #[cfg(test)]
             fail_next_output_generation: false,
             #[cfg(not(feature = "compatibility"))]
@@ -279,10 +282,10 @@ impl Machine {
                 "view command registry already bound",
             ));
         }
-        let Session::Editor(session) = &mut self.session else {
+        if !matches!(self.session, Session::Editor(_)) {
             return Err(BoundaryError::Invalid("view commands require an editor"));
-        };
-        session.observe_reported_model_errors(registry.clone());
+        }
+        self.observe_reported_errors(registry.clone())?;
         self.view_commands = Some(registry);
         Ok(())
     }
@@ -293,7 +296,34 @@ impl Machine {
                 "code tokenizer bound after construction",
             ));
         }
-        self.code_tokens = Some(token);
+        let observer = Arc::new(crate::code_tokens::CodeTokenObserver::default());
+        self.observe_reported_errors(observer.clone())?;
+        self.code_tokens = Some((token, observer));
+        Ok(())
+    }
+    /// The session has one observer slot: install the machine's fan-out once and add each
+    /// observer to it, so no bind order replaces another observer.
+    pub(crate) fn observe_reported_errors(
+        &mut self,
+        observer: Arc<dyn document_session::ReportedModelErrorObserver>,
+    ) -> Result<(), BoundaryError> {
+        let fan_out = match &self.reported_errors {
+            Some(fan_out) => fan_out.clone(),
+            None => {
+                let Session::Editor(session) = &mut self.session else {
+                    return Err(BoundaryError::Invalid("reported errors require an editor"));
+                };
+                let fan_out = Arc::new(ReportedErrors::default());
+                session.observe_reported_model_errors(fan_out.clone());
+                self.reported_errors = Some(fan_out.clone());
+                fan_out
+            }
+        };
+        fan_out
+            .0
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(observer);
         Ok(())
     }
     pub(crate) fn take_code_token_failure(
@@ -307,10 +337,12 @@ impl Machine {
         entry: u64,
         cause: u32,
     ) -> Option<wasm_bindgen::JsValue> {
-        crate::code_tokens::take(self.code_tokens?, entry, cause)
+        crate::code_tokens::take(self.code_tokens.as_ref()?.0, entry, cause)
     }
     pub(crate) fn code_token_causes_dropped(&self) -> u32 {
-        self.code_tokens.map_or(0, crate::code_tokens::dropped)
+        self.code_tokens
+            .as_ref()
+            .map_or(0, |(token, _)| crate::code_tokens::dropped(*token))
     }
     pub(crate) fn take_view_command_failure(
         &self,
@@ -364,12 +396,14 @@ impl Machine {
             .ok_or(BoundaryError::Invalid("session entry id space"))?;
         self.entry = entry;
         self.code_token_failure = None;
-        if let Some(token) = self.code_tokens {
-            crate::code_tokens::begin_entry(token, entry);
+        if let Some((token, observer)) = &self.code_tokens {
+            observer.take();
+            crate::code_tokens::begin_entry(*token, entry);
         }
         let result = self.call_entry(input, mono, wall, main_commit);
-        if let Some(token) = self.code_tokens {
-            crate::code_tokens::end_entry(token);
+        if let Some((token, observer)) = &self.code_tokens {
+            observer.take();
+            crate::code_tokens::end_entry(*token);
         }
         result
     }
@@ -642,8 +676,9 @@ impl Machine {
         if let Some(registry) = &self.view_commands {
             registry.bind_output(&out.view);
         }
-        if let Some(token) = self.code_tokens {
-            self.code_token_failure = crate::code_tokens::bind_output(token, self.entry, &out.view);
+        if let Some((token, observer)) = &self.code_tokens {
+            self.code_token_failure =
+                crate::code_tokens::bind_output(*token, self.entry, &out.view, &observer.take());
         }
         if command
             && flags & 16 == 0
@@ -781,3 +816,22 @@ mod compatibility;
 #[cfg(test)]
 #[path = "machine/listener_metadata_test.rs"]
 mod listener_metadata_test;
+
+/// Every metadata observer bound to a session, called in bind order (view-command registry,
+/// code tokenizer); each is metadata-only.
+#[derive(Default)]
+pub(crate) struct ReportedErrors(
+    std::sync::RwLock<Vec<Arc<dyn document_session::ReportedModelErrorObserver>>>,
+);
+impl document_session::ReportedModelErrorObserver for ReportedErrors {
+    fn reported(&self, error: &lexical_model::Error, view_index: usize) {
+        for observer in self
+            .0
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+        {
+            observer.reported(error, view_index);
+        }
+    }
+}

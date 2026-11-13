@@ -316,18 +316,64 @@ fn thrown_cause(error: &lexical_model::Error) -> Option<u32> {
     }
 }
 
-/// Tag-16 ordinals and cause ids of the recorded throws an output reports, from every Session
-/// path (local, remote, restore), in the decoded numbering JS sees; `None` when the ordinal
-/// cannot be represented.
-pub(crate) fn thrown_ordinals(view: &[document_session::ViewEffect]) -> Vec<(Option<u32>, u32)> {
-    view.iter()
-        .enumerate()
-        .filter_map(|(index, effect)| {
-            let cause = crate::view_command_scope::model_error(effect).and_then(thrown_cause)?;
-            let ordinal = crate::view_command_scope::effect_ordinal(view, index).ok();
-            Some((ordinal, cause))
+/// Tag-16 ordinals and cause ids of the recorded throws an output reports, in the decoded
+/// numbering JS sees; `None` when the ordinal cannot be represented. Main-update errors are read
+/// from the output from every Session path (local, remote, restore); a follow-up failure carries
+/// only plugin and kind in the output, so its cause comes from the reported-error observer at the
+/// FollowUpFailed effect's view index.
+pub(crate) fn thrown_ordinals(
+    view: &[document_session::ViewEffect],
+    follow_ups: &[(usize, u32)],
+) -> Vec<(Option<u32>, u32)> {
+    let main = view.iter().enumerate().filter_map(|(index, effect)| {
+        let cause = crate::view_command_scope::model_error(effect).and_then(thrown_cause)?;
+        Some((index, cause))
+    });
+    let follow_up = follow_ups.iter().copied().filter(|(index, _)| {
+        matches!(
+            view.get(*index),
+            Some(document_session::ViewEffect::Editor(
+                lexical_model::Effect::FollowUpFailed { .. }
+            ))
+        )
+    });
+    let mut reported: Vec<(usize, u32)> = main.chain(follow_up).collect();
+    reported.sort_unstable();
+    reported.dedup();
+    reported
+        .into_iter()
+        .map(|(index, cause)| {
+            (
+                crate::view_command_scope::effect_ordinal(view, index).ok(),
+                cause,
+            )
         })
         .collect()
+}
+
+/// Metadata-only observer of reported model errors whose chain holds a recorded throw; it keeps
+/// (view index, cause). It runs under the session's report call: no JS, no I/O, no reentry.
+#[derive(Default)]
+pub(crate) struct CodeTokenObserver(std::sync::Mutex<Vec<(usize, u32)>>);
+impl CodeTokenObserver {
+    pub(crate) fn take(&self) -> Vec<(usize, u32)> {
+        std::mem::take(
+            &mut *self
+                .0
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        )
+    }
+}
+impl document_session::ReportedModelErrorObserver for CodeTokenObserver {
+    fn reported(&self, error: &lexical_model::Error, view_index: usize) {
+        if let Some(cause) = thrown_cause(error) {
+            self.0
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push((view_index, cause));
+        }
+    }
 }
 
 /// Carry every recorded throw this entry's output reports, as the view-command registry binds
@@ -336,9 +382,10 @@ pub(crate) fn bind_output(
     token: u64,
     entry: u64,
     view: &[document_session::ViewEffect],
+    follow_ups: &[(usize, u32)],
 ) -> Option<CodeTokenFailure> {
     let (mut ordinals, mut causes) = (Vec::new(), Vec::new());
-    for (ordinal, cause) in thrown_ordinals(view) {
+    for (ordinal, cause) in thrown_ordinals(view, follow_ups) {
         match ordinal {
             Some(ordinal) if carry(token, cause) => {
                 ordinals.push(ordinal);

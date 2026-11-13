@@ -129,6 +129,7 @@ impl Machine {
             entry: 0,
             code_tokens: None,
             code_token_failure: None,
+            reported_errors: None,
             pending_checklist_output: vec![],
             #[cfg(test)]
             fail_next_output_generation: false,

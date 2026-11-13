@@ -186,7 +186,10 @@ fn thrown_ordinals_use_the_decoded_tag16_numbering() {
     ];
     // Raw indices 3 and 6. Decoded: Initialize 1 + Cursors 3 + Diff 0 = 4; then that error 1,
     // Diff 0 and the Host error 1 = 6.
-    assert_eq!(thrown_ordinals(&view), vec![(Some(4), 4), (Some(6), 4)]);
+    assert_eq!(
+        thrown_ordinals(&view, &[]),
+        vec![(Some(4), 4), (Some(6), 4)]
+    );
 }
 
 #[test]
@@ -201,4 +204,28 @@ fn a_discarded_cause_is_retired_and_counted() {
     assert!(!causes.carry(cause));
     causes.end();
     assert_eq!(causes.take(1, cause), None);
+}
+
+#[test]
+fn a_follow_up_report_is_carried_at_its_follow_up_failed_effect_only() {
+    use document_session::ViewEffect;
+    use lexical_model::Effect;
+    let failed = || {
+        ViewEffect::Editor(Effect::FollowUpFailed {
+            plugin: "pipeline",
+            kind: "Extension",
+            message: std::sync::Arc::from("host code tokenizer failed"),
+        })
+    };
+    let view = vec![
+        ViewEffect::CommitTags(vec![]),
+        failed(),
+        ViewEffect::CommitTags(vec![]),
+    ];
+    // A report at the FollowUpFailed effect is carried with its tag-16 ordinal; a report at any
+    // other effect is ignored; a duplicate is carried once.
+    assert_eq!(
+        thrown_ordinals(&view, &[(1, 9), (2, 8), (1, 9)]),
+        vec![(Some(1), 9)]
+    );
 }
