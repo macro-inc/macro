@@ -360,6 +360,7 @@ export type {
   LinkedTask,
   PendingToolApproval,
   SessionAutoArchive,
+  SessionThreadReplies,
 } from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
 export {

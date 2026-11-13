@@ -86,6 +86,10 @@ pub enum AgentSessionError {
         "agent session {0} answers an agent conversation; start fresh there instead of archiving it"
     )]
     AnswersConversation(AgentSessionId),
+    /// Only a session started from a thread answers replies there, so only
+    /// such a session's thread replies can be paused.
+    #[error("agent session {0} was not started from a thread")]
+    NotFromThread(AgentSessionId),
     #[error("a preview request may name at most {0} sessions")]
     TooManyPreviewIds(usize),
     #[error("a pull request lookup may name at most {0} pull requests")]

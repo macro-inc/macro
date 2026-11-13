@@ -451,7 +451,7 @@ async fn instructions_round_trip_on_every_read_path(pool: PgPool) {
         .expect("the token should resolve to the session");
     assert_eq!(by_token.instructions.as_deref(), Some(INSTRUCTIONS));
 
-    let for_thread = AgentSessionRepo::find_all_for_thread(&repo, thread_id)
+    let for_thread = AgentSessionRepo::find_replying_in_thread(&repo, thread_id)
         .await
         .expect("the thread lookup should run");
     assert_eq!(
@@ -1017,7 +1017,7 @@ async fn find_for_thread_matches_the_originating_thread_and_bot(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
+async fn find_replying_in_thread_returns_every_session_on_the_thread(pool: PgPool) {
     let repo = test_repo(&pool);
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
@@ -1038,7 +1038,7 @@ async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
         .expect("attach an external identity");
 
     let found = repo
-        .find_all_for_thread(thread)
+        .find_replying_in_thread(thread)
         .await
         .expect("list sessions on the thread");
     assert_eq!(found.len(), 2);
@@ -1064,10 +1064,70 @@ async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
     );
 
     let empty = repo
-        .find_all_for_thread(macro_uuid::generate_uuid_v7())
+        .find_replying_in_thread(macro_uuid::generate_uuid_v7())
         .await
         .expect("list an unrelated thread");
     assert!(empty.is_empty());
+}
+
+/// A paused session answers only mentions, so the unmentioned-reply lookup
+/// skips it until it resumes; its sibling on the thread keeps answering.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn paused_thread_replies_leave_the_replying_lookup_until_resumed(pool: PgPool) {
+    use crate::domain::thread_replies::ThreadRepliesRepo;
+
+    let repo = test_repo(&pool);
+    let bot_a = create_test_bot(&pool).await;
+    let bot_b = create_test_bot(&pool).await;
+    let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
+    let paused = create_session(
+        &repo,
+        new_session(bot_a, Some(thread), Some(originating_message)),
+    )
+    .await;
+    let replying = create_session(
+        &repo,
+        new_session(bot_b, Some(thread), Some(originating_message)),
+    )
+    .await;
+    let unthreaded = create_session(&repo, new_session(bot_a, None, None)).await;
+    let user = MacroUserIdStr::try_from_email("pauser@example.com").expect("valid user id");
+
+    repo.set_thread_replies_paused(paused.id, Some(&user))
+        .await
+        .expect("pause");
+    // Pausing twice keeps the first pause.
+    repo.set_thread_replies_paused(paused.id, Some(&user))
+        .await
+        .expect("pause again");
+
+    let state = repo.thread_replies(paused.id).await.expect("read state");
+    assert!(state.from_thread && state.paused);
+    let unthreaded_state = repo
+        .thread_replies(unthreaded.id)
+        .await
+        .expect("read unthreaded state");
+    assert!(!unthreaded_state.from_thread && !unthreaded_state.paused);
+    let found = repo
+        .find_replying_in_thread(thread)
+        .await
+        .expect("list replying sessions");
+    assert_eq!(
+        found.iter().map(|session| session.id).collect::<Vec<_>>(),
+        vec![replying.id]
+    );
+
+    repo.set_thread_replies_paused(paused.id, None)
+        .await
+        .expect("resume");
+    assert!(!repo.thread_replies(paused.id).await.expect("read").paused);
+    assert_eq!(
+        repo.find_replying_in_thread(thread)
+            .await
+            .expect("list replying sessions")
+            .len(),
+        2
+    );
 }
 
 /// The recent list is the owner's own, newest first, and stops at `limit` -
@@ -2783,7 +2843,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
         Some(parent.clone())
     );
     assert_eq!(
-        repo.find_all_for_thread(root.id).await.unwrap()[0].thread_parent,
+        repo.find_replying_in_thread(root.id).await.unwrap()[0].thread_parent,
         Some(parent.clone())
     );
 

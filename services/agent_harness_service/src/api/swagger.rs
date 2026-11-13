@@ -35,6 +35,9 @@ use agent_session::inbound::axum_router::pull_requests::{
     SessionPullRequestsResponse,
 };
 use agent_session::inbound::axum_router::task::{LinkTaskRequest, LinkedTaskResponse};
+use agent_session::inbound::axum_router::thread_replies::{
+    SessionThreadRepliesResponse, SetSessionThreadRepliesRequest,
+};
 use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
     self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
@@ -119,6 +122,8 @@ impl Modify for SecurityAddon {
         axum_router::auto_archive::put_auto_archive_preferences,
         axum_router::auto_archive::get_session_auto_archive,
         axum_router::auto_archive::put_session_auto_archive,
+        axum_router::thread_replies::get_session_thread_replies,
+        axum_router::thread_replies::put_session_thread_replies,
         axum_router::work_registration::register_work,
         axum_router::work_registration::unregister_work,
         axum_router::work_registration::list_own_work,
@@ -193,6 +198,8 @@ impl Modify for SecurityAddon {
         AutoArchiveOverridesBody,
         ArchiveCause,
         SessionAutoArchiveResponse,
+        SessionThreadRepliesResponse,
+        SetSessionThreadRepliesRequest,
         WorkRegistrationResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,

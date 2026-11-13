@@ -391,6 +391,18 @@ button that copies the whole section; a call that failed is faded, shows the
 error as its subtitle, and adds an `Error` section. Rows for a call still running
 show whatever has arrived so far.
 
+## Pausing an agent's replies in a thread
+
+An agent's reply in a channel thread carries an `Open Session` chip on its
+sender line. For a session started from a thread, someone with edit access to
+the session also sees a bell toggle beside the chip (`Pause agent replies`).
+Pressing it pauses the agent in that thread: later unmentioned replies no
+longer reach it, even ones that read as meant for it or quote its message, and
+the bell shows slashed (`Resume agent replies`). Mentioning the agent still
+reaches it. Pressing again resumes. The state is the session's, so every reply
+from that session shows it. To check it, pause the agent, post an unmentioned
+follow-up that asks it something (no reply), then mention it (it answers).
+
 ## Inline image actions
 
 An image attached to a channel message renders inline. Hovering it, or focusing

@@ -122,6 +122,14 @@ restore, so a session auto-archives at most once. A session archives for pull
 requests once every linked pull request is closed and at least one merged;
 links with no `github_pull_request` row count as open.
 
+Thread replies (`domain/thread_replies.rs`, `outbound/postgres/thread_replies.rs`,
+`inbound/axum_router/thread_replies.rs`): `GET`/`PUT /agent-sessions/{id}/thread-replies`
+pauses a thread session's unmentioned replies (view to read, edit to change; only a session
+with a `thread_id` can be paused). A row in `agent_session_thread_reply_pause` exists while
+paused, and `AgentSessionRepo::find_replying_in_thread` leaves those sessions out, so
+`agent_trigger`'s implicit routing (explicit replies and the judge) skips them while
+mentions still reach them.
+
 Registered work (`domain/work_registration.rs`, `outbound/postgres/work_registration.rs`,
 `inbound/axum_router/work_registration.rs`, `inbound/work_registration_sweep.rs`): any account
 registers a session it can edit as its work; registering shares nothing, and readers see only

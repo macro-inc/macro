@@ -67,6 +67,16 @@ export type SessionAutoArchive = {
   autoArchivedAt?: string;
 };
 
+/** Whether a session answers unmentioned replies in the thread it was started from. */
+export type SessionThreadReplies = {
+  /** The session was started from a thread; only such a session can be paused. */
+  fromThread: boolean;
+  /** The agent answers only messages that mention it. */
+  paused: boolean;
+  /** The caller may pause or resume it (edit access). */
+  canChange: boolean;
+};
+
 /** A session's history folded into readable messages, oldest first. */
 export type FoldedAgentSessionLog = {
   /** The agent that sent every agent message. */
@@ -605,6 +615,36 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
           onPullRequestMerged: overrides.onPullRequestMerged ?? null,
           onRuntimeClosed: overrides.onRuntimeClosed ?? null,
         },
+      }),
+    );
+  }
+
+  /**
+   * Whether this session answers unmentioned replies in its thread.
+   *
+   * @readonly
+   */
+  async threadReplies(): Promise<SessionThreadReplies> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionThreadReplies({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /**
+   * Pause or resume this session's unmentioned replies in its thread. While
+   * paused, the agent answers only messages that mention it. Edit access;
+   * only a session started from a thread can be paused.
+   *
+   * @write
+   * @idempotent
+   */
+  async setThreadRepliesPaused(paused: boolean): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.putAgentSessionThreadReplies({
+        path: { session_id: this.id },
+        body: { paused },
       }),
     );
   }

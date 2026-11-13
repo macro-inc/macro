@@ -3406,6 +3406,166 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/thread-replies": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read whether a session answers unmentioned replies in its thread.",
+        "operationId": "get_agent_session_thread_replies",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionThreadRepliesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Pause or resume a session's unmentioned replies in its thread. While paused, the agent\nanswers only messages that mention it. Edit access.",
+        "operationId": "put_agent_session_thread_replies",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionThreadRepliesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetSessionThreadRepliesRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The session was not started from a thread",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/tool-approvals/{approval_id}": {
       "post": {
         "tags": ["agent-sessions"],
@@ -8431,6 +8591,25 @@
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
       },
+      "SessionThreadRepliesResponse": {
+        "type": "object",
+        "description": "Whether a session answers unmentioned replies in the thread it was started from.",
+        "required": ["fromThread", "paused", "canChange"],
+        "properties": {
+          "canChange": {
+            "type": "boolean",
+            "description": "The caller may pause or resume it: edit access to the session."
+          },
+          "fromThread": {
+            "type": "boolean",
+            "description": "The session was started from a thread. Only such a session answers replies there, so\nonly it can be paused."
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "The agent answers only messages that mention it."
+          }
+        }
+      },
       "SetAgentSessionArchivedRequest": {
         "type": "object",
         "description": "Request body for archiving or unarchiving an agent session.",
@@ -8439,6 +8618,17 @@
           "archived": {
             "type": "boolean",
             "description": "Archive the session, or restore it."
+          }
+        }
+      },
+      "SetSessionThreadRepliesRequest": {
+        "type": "object",
+        "description": "Pause or resume a session's unmentioned thread replies.",
+        "required": ["paused"],
+        "properties": {
+          "paused": {
+            "type": "boolean",
+            "description": "Answer only messages that mention the agent, or resume answering replies."
           }
         }
       },

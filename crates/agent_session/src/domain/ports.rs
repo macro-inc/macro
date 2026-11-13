@@ -541,12 +541,14 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         bot_id: Option<BotId>,
     ) -> impl Future<Output = Result<ThreadSession>> + Send;
 
-    /// Every session rooted at this thread, newest first, regardless of bot.
+    /// Every session rooted at this thread that answers unmentioned replies,
+    /// newest first, regardless of bot. A session whose thread replies are
+    /// paused (`thread_replies`) is left out: it answers only mentions.
     ///
     /// [`find_for_thread`](Self::find_for_thread) answers for one known bot;
     /// this answers when no bot was named - a message in the thread may still
     /// be meant for whichever agent lives there.
-    fn find_all_for_thread(
+    fn find_replying_in_thread(
         &self,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
