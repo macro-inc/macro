@@ -287,6 +287,13 @@ reserved from `previewData.poll.optionCount`, keeps that height through load,
 and never scrolls or clips inside:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
 
+Contact mention chips (`<m-contact-mention>`, which agents write) are one
+unbreakable box, so a long address truncates at the message width instead of
+scrolling the channel sideways, and the hover card wraps it whole. The
+backend-free regression mounts the real message body on desktop, a narrow
+split, and phone:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts contact-mention.browser.e2e.ts`.
+
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
 `bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
