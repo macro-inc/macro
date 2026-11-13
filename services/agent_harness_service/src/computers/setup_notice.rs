@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use hosted_runtimes::domain::lifecycle::SetupOutcome;
 use hosted_runtimes::domain::ports::{SetupNotice, SetupNotices};
-use model_entity::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use model_notifications::{ComputerSetupAgent, ComputerSetupMetadata, ComputerSetupOutcome};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
@@ -43,7 +43,9 @@ impl<Ingress, Agents> IngressSetupNotices<Ingress, Agents> {
     }
 }
 
-impl<Ingress: NotificationIngress, Agents: TeamAgentRepository> IngressSetupNotices<Ingress, Agents> {
+impl<Ingress: NotificationIngress, Agents: TeamAgentRepository>
+    IngressSetupNotices<Ingress, Agents>
+{
     /// Who hears about the notice, and the agent it names: the buyer for a
     /// plain computer; for an agent teammate's, the agent's inviter. `None`
     /// when there is no one left to tell: the agent was removed, or its

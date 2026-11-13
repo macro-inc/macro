@@ -29,8 +29,8 @@ use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use sqlx::PgPool;
-use team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo;
 use sqlx::postgres::PgPoolOptions;
+use team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 

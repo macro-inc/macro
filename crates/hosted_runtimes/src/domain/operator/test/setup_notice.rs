@@ -37,7 +37,12 @@ async fn an_agent_computers_notice_names_its_agent() {
     let operator = operator(FakeFleet::default()).await;
     let id = paid_computer(&operator).await;
     let agent = MacroUserIdStr::try_from("macro|ada@agents.macro.invalid".to_owned()).unwrap();
-    operator.repo.agents.lock().unwrap().insert(id, agent.clone());
+    operator
+        .repo
+        .agents
+        .lock()
+        .unwrap()
+        .insert(id, agent.clone());
     operator.run_fleet_effects().await.unwrap();
 
     operator.macrod_connected(HARNESS).await.unwrap();

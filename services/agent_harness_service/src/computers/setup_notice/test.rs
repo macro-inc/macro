@@ -122,8 +122,7 @@ fn ada(created_by: Option<&str>) -> TeamAgentRecord {
     TeamAgentRecord {
         user_id: MacroUserIdStr::try_from("macro|ada@agents.macro.invalid".to_owned()).unwrap(),
         team_id: Uuid::from_u128(2),
-        created_by: created_by
-            .map(|inviter| MacroUserIdStr::try_from(inviter.to_owned()).unwrap()),
+        created_by: created_by.map(|inviter| MacroUserIdStr::try_from(inviter.to_owned()).unwrap()),
         persona_seed: PersonaSeed {
             creator_id: None,
             name: "Ada".to_owned(),
@@ -137,9 +136,7 @@ fn ada(created_by: Option<&str>) -> TeamAgentRecord {
 
 fn agent_ready() -> SetupNotice {
     SetupNotice {
-        agent: Some(
-            MacroUserIdStr::try_from("macro|ada@agents.macro.invalid".to_owned()).unwrap(),
-        ),
+        agent: Some(MacroUserIdStr::try_from("macro|ada@agents.macro.invalid".to_owned()).unwrap()),
         ..ready()
     }
 }
@@ -156,7 +153,10 @@ async fn a_plain_computers_notice_goes_to_its_buyer_without_an_agent() {
     let sent = sent(ready(), vec![]).await;
 
     assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0]["req"]["recipient_ids"], json!(["macro|owner@example.com"]));
+    assert_eq!(
+        sent[0]["req"]["recipient_ids"],
+        json!(["macro|owner@example.com"])
+    );
     assert_eq!(sent[0]["req"]["notification"]["content"].get("agent"), None);
 }
 
@@ -165,7 +165,10 @@ async fn an_agent_computers_notice_goes_to_the_agents_inviter_by_the_agents_name
     let sent = sent(agent_ready(), vec![ada(Some("macro|inviter@example.com"))]).await;
 
     assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0]["req"]["recipient_ids"], json!(["macro|inviter@example.com"]));
+    assert_eq!(
+        sent[0]["req"]["recipient_ids"],
+        json!(["macro|inviter@example.com"])
+    );
     assert_eq!(
         sent[0]["req"]["notification"]["content"]["agent"],
         json!({ "userId": "macro|ada@agents.macro.invalid", "name": "Ada" })
@@ -174,7 +177,10 @@ async fn an_agent_computers_notice_goes_to_the_agents_inviter_by_the_agents_name
 
 #[tokio::test]
 async fn a_removed_agent_or_a_deleted_inviter_has_no_one_to_tell() {
-    assert_eq!(sent(agent_ready(), vec![]).await, Vec::<serde_json::Value>::new());
+    assert_eq!(
+        sent(agent_ready(), vec![]).await,
+        Vec::<serde_json::Value>::new()
+    );
     assert_eq!(
         sent(agent_ready(), vec![ada(None)]).await,
         Vec::<serde_json::Value>::new()

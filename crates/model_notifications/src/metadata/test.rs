@@ -1685,10 +1685,7 @@ fn an_agent_teammates_computer_setup_names_the_agent() {
         ready.format_body(None).unwrap(),
         "Message Ada to get started."
     );
-    assert_eq!(
-        failed.format_title(None).unwrap(),
-        "Ada couldn't be set up"
-    );
+    assert_eq!(failed.format_title(None).unwrap(), "Ada couldn't be set up");
     assert_eq!(
         failed.format_body(None).unwrap(),
         "The computer couldn't be created on the host. Retry from Ada's row in Members."
