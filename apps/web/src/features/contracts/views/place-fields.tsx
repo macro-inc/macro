@@ -250,16 +250,24 @@ export function PlaceFields(props: {
     palette.querySelector<HTMLElement>('button')?.focus();
   }
 
+  /**
+   * Store the placement as it is now. The fields stay editable while a save
+   * is in flight, so it saves again until what is stored is what is on the
+   * page: an edit made during a save is never left behind.
+   */
   async function save(): Promise<boolean> {
     setSaving(true);
-    const saving = placed();
-    const result = await context.saveFields(packetId, placement.snapshot());
-    setSaving(false);
-    if (result.isErr()) {
-      toast.failure(t('contracts.actionFailed'));
-      return false;
+    while (placed() !== saved) {
+      const saving = placed();
+      const result = await context.saveFields(packetId, placement.snapshot());
+      if (result.isErr()) {
+        setSaving(false);
+        toast.failure(t('contracts.actionFailed'));
+        return false;
+      }
+      saved = saving;
     }
-    saved = saving;
+    setSaving(false);
     return true;
   }
 
