@@ -9,6 +9,7 @@ use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
+use tracing::Instrument;
 
 /// Item access level resolved for the current viewer.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
@@ -296,7 +297,7 @@ where
 {
     DataLoader::new(
         EntityPermissionLoader::new(user_id, organization_id, reader),
-        tokio::spawn,
+        |batch| tokio::spawn(batch.in_current_span()),
     )
 }
 

@@ -85,7 +85,10 @@ drag grip outside `CardActions`, whose descendants opt out of dragging.
 `onComposeRecord` replaces a board lane's inline card with the host's own form,
 seeded with the lane's values; the form creates its row with the actions'
 `createRow`. A `GridCell` rendered inside a modal dialog takes `popupMount` so
-its menus stay inside the dialog, which blocks the page around it.
+its menus stay inside the dialog, which blocks the page around it. A label and
+value list, such as a CRM record's Pipelines card, passes `layout="property"`
+for 32px rows and full-ink editable values instead of restyling the cell from
+outside; grids and boards keep the default `grid` layout.
 Hosts can mark select columns with `fixedOptions` and `defaultValue` for system
 fields. Pair a numeric column with `currencyColumnId` to format its values and
 group monetary summaries by denomination; pass the row's cells to `GridCell`.
