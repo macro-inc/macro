@@ -181,3 +181,35 @@ fn email_subject_sender_and_visibility_refresh_but_bodies_do_not() {
         assert!(changes(typename, Some(&before), Some(&after)).is_empty());
     }
 }
+
+#[test]
+fn icon_edits_and_initiative_timestamps_refresh_the_rows_that_show_them() {
+    let document = record("GraphqlSoupDocument");
+    let mut recoloured = document.clone();
+    recoloured
+        .fields
+        .insert("appearance".into(), CacheValue::String("blue".into()));
+    assert_eq!(
+        changes("GraphqlSoupDocument", Some(&document), Some(&recoloured)),
+        BTreeSet::from(["document".to_owned()])
+    );
+
+    let mut initiative = record("GraphqlSoupInitiative");
+    initiative
+        .fields
+        .insert("displayName".into(), CacheValue::String("Launch".into()));
+    let mut viewed = initiative.clone();
+    viewed
+        .fields
+        .insert("metadata".into(), CacheValue::String("viewed later".into()));
+    assert_eq!(
+        changes("GraphqlSoupInitiative", Some(&initiative), Some(&viewed)),
+        BTreeSet::from(["initiative".to_owned()])
+    );
+    // Only initiatives list from `metadata`.
+    let mut annotated = document.clone();
+    annotated
+        .fields
+        .insert("metadata".into(), CacheValue::String("large".into()));
+    assert!(changes("GraphqlSoupDocument", Some(&document), Some(&annotated)).is_empty());
+}

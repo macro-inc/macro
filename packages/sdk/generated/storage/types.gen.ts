@@ -19990,6 +19990,12 @@ export type SoupItem = {
      */
     data: SoupHarness;
     tag: 'harness';
+} | {
+    /**
+     * Team, listed only by attention feeds.
+     */
+    data: SoupTeam;
+    tag: 'team';
 };
 
 /**
@@ -20179,6 +20185,26 @@ export type SoupProperty = {
      */
     id: string;
     value?: null | PropertyValue;
+};
+
+/**
+ * A team, listed only by attention feeds: team-scoped notifications (a
+ * vault access request) are filed under it, and it has no page of its own.
+ * Teams carry no timestamps; attention feeds order by attention time.
+ */
+export type SoupTeam = {
+    /**
+     * The team uuid.
+     */
+    id: string;
+    /**
+     * The team's display name.
+     */
+    name: string;
+    /**
+     * The user who owns the team.
+     */
+    ownerId: string;
 };
 
 /**

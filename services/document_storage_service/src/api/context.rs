@@ -955,6 +955,7 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
     pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
     pub passwords_agent_state:
         passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
@@ -1108,6 +1109,7 @@ impl From<&ApiContext> for SearchHandlerState {
             calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
+            term_matching_rollout: ctx.search_term_matching.clone(),
         }
     }
 }

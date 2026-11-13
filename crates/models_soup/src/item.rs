@@ -8,9 +8,9 @@ use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
 use crate::harness::SoupHarness;
-use crate::team::SoupTeam;
 use crate::initiative::SoupInitiative;
 use crate::project::SoupProject;
+use crate::team::SoupTeam;
 use crate::{
     chat::SoupChat,
     comms::{SoupChannel, SoupChannelThread},

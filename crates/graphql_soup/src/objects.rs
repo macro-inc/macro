@@ -28,10 +28,10 @@ use models_soup::{
     },
     foreign_entity::SoupForeignEntity,
     harness::SoupHarness,
-    team::SoupTeam,
     initiative::SoupInitiative,
     item::SoupItem,
     project::SoupProject,
+    team::SoupTeam,
 };
 use predicate_index::RecordKey;
 use serde_json::Value;

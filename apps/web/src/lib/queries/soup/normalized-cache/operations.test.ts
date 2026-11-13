@@ -2178,3 +2178,22 @@ describe('raw grouped entity IDs', () => {
     expect(removed[1].group.totalCount).toBe(4);
   });
 });
+
+it('notification-only Team skips generic refetch and timestamp cache mutation', async () => {
+  await refetchSoupEntity('team-1', 'team', {
+    refreshGraphql: true,
+    ownTouch: true,
+    notified: true,
+  });
+  expect(getSoupItemsMock).not.toHaveBeenCalled();
+  expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
+  const team: SoupApiItem = {
+    tag: 'team',
+    data: { id: 'team-1', name: 'Synthetic team', ownerId: 'viewer' },
+    frecency_score: 0,
+    is_favorited: false,
+  };
+  mockNormalizer.getObjectById.mockReturnValueOnce(team);
+  optimisticUpdateSoupItemUpdatedAt('team-1', 'team', '2026-11-13T00:00:00Z');
+  expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
+});

@@ -33,14 +33,14 @@ use model_notifications::{
     AgentSignInExpiryStage, AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
     ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
-    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
-    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
-    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
-    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RoutineRunFinishedMetadata, RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent,
-    TaskAssignedMetadata,
+    ComputerSetupMetadata, ComputerSetupOutcome, DocumentMentionMetadata, GithubPrCheckRun,
+    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
+    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
+    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
+    InboxReauthRequiredMetadata, InviteToTeamMetadata, MentionedInDocumentCommentMetadata,
+    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
+    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -848,6 +848,53 @@ impl GraphqlAgentSignInExpiryMetadata {
     }
 }
 
+/// How a Macro computer's first setup ended.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlComputerSetupOutcome {
+    /// The computer is ready.
+    Ready,
+    /// Setup gave up before the computer was ready.
+    Failed,
+}
+
+/// GraphQL wrapper for computer setup metadata.
+pub struct GraphqlComputerSetupMetadata(ComputerSetupMetadata);
+
+/// Metadata for a Macro computer finishing, or failing, first-time setup.
+#[Object]
+impl GraphqlComputerSetupMetadata {
+    /// The computer that was set up.
+    async fn computer_id(&self) -> ID {
+        ID(self.0.computer_id.to_string())
+    }
+
+    /// The computer's harness, once macrod has connected.
+    async fn harness_id(&self) -> Option<ID> {
+        self.0.harness_id.map(|id| ID(id.to_string()))
+    }
+
+    /// The computer's name when the notice was sent.
+    async fn computer_name(&self) -> &str {
+        &self.0.computer_name
+    }
+
+    /// Whether setup finished or failed.
+    async fn outcome(&self) -> GraphqlComputerSetupOutcome {
+        match self.0.outcome {
+            ComputerSetupOutcome::Ready => GraphqlComputerSetupOutcome::Ready,
+            ComputerSetupOutcome::Failed { .. } => GraphqlComputerSetupOutcome::Failed,
+        }
+    }
+
+    /// Why setup failed; absent when it finished.
+    async fn failure_reason(&self) -> Option<&str> {
+        match &self.0.outcome {
+            ComputerSetupOutcome::Ready => None,
+            ComputerSetupOutcome::Failed { failure_reason } => Some(failure_reason),
+        }
+    }
+}
+
 /// GraphQL wrapper for removed runtime access metadata.
 pub struct GraphqlRuntimeAccessRemovedMetadata(RuntimeAccessRemovedMetadata);
 
@@ -1455,6 +1502,8 @@ pub enum GraphqlNotifEvent {
     RoutineRunFinished(GraphqlRoutineRunFinishedMetadata),
     /// Agent sign-in expiry metadata.
     AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata),
+    /// Computer setup metadata.
+    ComputerSetup(GraphqlComputerSetupMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1524,6 +1573,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             }
             NotifEvent::AgentSignInExpiry(metadata) => {
                 Self::AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata(metadata))
+            }
+            NotifEvent::ComputerSetup(metadata) => {
+                Self::ComputerSetup(GraphqlComputerSetupMetadata(metadata))
             }
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))

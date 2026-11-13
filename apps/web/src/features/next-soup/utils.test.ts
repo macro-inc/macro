@@ -198,6 +198,7 @@ import {
   getDocumentCommentTarget,
   getRowClickFallbackLocation,
   markChannelNotificationsSeenOnOpen,
+  openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
 } from './utils';
@@ -2624,4 +2625,23 @@ describe('call navigation', () => {
       });
     }
   );
+});
+
+it('notification-only Team cannot open a generic split or construct a generic URL', async () => {
+  const team: EntityData = {
+    type: 'team',
+    id: 'team-1',
+    name: 'Synthetic team',
+    ownerId: 'viewer',
+  };
+  setGlobalSplitManager(undefined);
+  const missingManager = vi.spyOn(console, 'error');
+  try {
+    await openEntityInSplitFromUnifiedList(team, {});
+    openEntityInNewTab({ entity: team });
+    expect(missingManager).not.toHaveBeenCalled();
+    expect(operationMocks.openExternalUrl).not.toHaveBeenCalled();
+  } finally {
+    missingManager.mockRestore();
+  }
 });

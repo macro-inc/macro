@@ -61456,6 +61456,21 @@
                 "enum": ["harness"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Team, listed only by attention feeds.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupTeam",
+                "description": "Team, listed only by attention feeds."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
           }
         ],
         "description": "A single item in the Soup feed."
@@ -61706,6 +61721,26 @@
                 "description": "The property value, if set"
               }
             ]
+          }
+        }
+      },
+      "SoupTeam": {
+        "type": "object",
+        "description": "A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.",
+        "required": ["id", "name", "ownerId"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team uuid."
+          },
+          "name": {
+            "type": "string",
+            "description": "The team's display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The user who owns the team."
           }
         }
       },

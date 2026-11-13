@@ -8,6 +8,7 @@ import {
   useNotificationSounds,
 } from '@app/features/notification-sounds/use-notification-sounds';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
+import { RoutineDraftsHost } from '@app/features/routines/routine-drafts-host';
 import { SearchProvider } from '@app/features/soup/search/context';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
@@ -145,7 +146,7 @@ export function AppProviders(props: ParentProps) {
               {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
               <ImperativeDialogHost />
               <AgentNavigationProvider>
-                {props.children}
+                <RoutineDraftsHost>{props.children}</RoutineDraftsHost>
               </AgentNavigationProvider>
             </IncomingMeetingInvitationsProvider>
           </SearchProvider>

@@ -105,6 +105,7 @@ type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
     notifications?: Notification[] | null;
     unreadNotifications?: ChannelEntity['unreadNotifications'];
+    unreadMentions?: ChannelEntity['unreadMentions'];
   };
 };
 
@@ -900,6 +901,8 @@ export const mapApiSoupItemToEntity = (
         type: 'channel',
         unreadNotifications: (item as SoupItemWithOptionalNotifications).data
           .unreadNotifications,
+        unreadMentions: (item as SoupItemWithOptionalNotifications).data
+          .unreadMentions,
         id: item.data.channel.id,
         name: item.data.channel.name || 'Unknown Channel',
         channelType: item.data.channel.channel_type,

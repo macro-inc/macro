@@ -4,7 +4,10 @@ import type {
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
-import { isOwnerHandoffBlockedError } from '@graphql-cache/protocol';
+import {
+  isOwnerEpochLostError,
+  isOwnerHandoffBlockedError,
+} from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -14,6 +17,7 @@ import {
   untrack,
 } from 'solid-js';
 import type { Bucket } from './types';
+import { keepUnchangedRows } from './unchanged-rows';
 
 // Only these buckets can be materialized from cache hits. Other Quick Access
 // sources (such as sessions) are merged locally. Personal contacts use their
@@ -37,6 +41,13 @@ const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
 /** Maximum cache pages inspected by one initial browse or load-more action. */
 export const MAX_BROWSE_PAGES_PER_LOAD = 4;
+/**
+ * How long a search the cache has not answered keeps reporting as pending.
+ * It outlasts the host's own wait for an owner change (its one-second read
+ * budget plus the read timeout a held search gets), so a search the host gave
+ * up on stops by then and an owner change that never completes still ends.
+ */
+export const UNANSWERED_SEARCH_LIMIT_MS = 12_000;
 
 type Request = {
   buckets: Bucket[];
@@ -47,10 +58,16 @@ type Request = {
   refreshPending: boolean;
   answered: boolean;
   awaitingEngine: boolean;
+  /** Tells the host to stop holding this search once another replaces it. */
+  superseded: AbortController;
+  giveUpTimer?: ReturnType<typeof setTimeout>;
 };
 
 function isRefusedFirstAnswer(request: Request, error: unknown): boolean {
-  return !request.answered && isOwnerHandoffBlockedError(error);
+  // Either way the cache was changing owner and a replacement engine follows.
+  const ownerChanging =
+    isOwnerHandoffBlockedError(error) || isOwnerEpochLostError(error);
+  return !request.answered && ownerChanging;
 }
 
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
@@ -91,9 +108,26 @@ export function createProjectedList<T extends { id: string }>(options: {
     untrack(loading) === 'initial'
   );
   let current: Request | undefined;
+  let engineReplacements = 0;
+  const retire = (request: Request | undefined) => {
+    request?.superseded.abort();
+    clearTimeout(request?.giveUpTimer);
+  };
   onCleanup(() => {
+    retire(current);
     current = undefined;
   });
+
+  // The search stays pending and the replacement engine still replays it
+  // whenever it arrives; this only stops telling the user that an answer is
+  // on its way. It runs from the start of the attempt because a host that is
+  // waiting for an owner has paused its own read timeouts.
+  const stopWaitingAtLimit = (request: Request) => {
+    clearTimeout(request.giveUpTimer);
+    request.giveUpTimer = setTimeout(() => {
+      if (current === request && !request.answered) setSearching(false);
+    }, UNANSWERED_SEARCH_LIMIT_MS);
+  };
 
   const finishRequest = (request: Request) => {
     if (current !== request) return;
@@ -118,7 +152,10 @@ export function createProjectedList<T extends { id: string }>(options: {
     request.busy = true;
     request.refreshPending = false;
     setLoading(append ? 'more' : 'initial');
-    if (!request.answered) setSearching(true);
+    if (!request.answered) {
+      setSearching(true);
+      stopWaitingAtLimit(request);
+    }
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
     const visibleIds = new Set([
@@ -134,6 +171,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     let foundNewRow = false;
     let cursor = append ? request.cursor : undefined;
     let pages = append ? request.pages : 0;
+    const replacementsAtStart = engineReplacements;
     const span = Telemetry.span('quick_access.search');
     span.setAttr('search.buckets', request.buckets.join(','));
     span.setAttr('search.query_length', request.query.length);
@@ -151,13 +189,16 @@ export function createProjectedList<T extends { id: string }>(options: {
           async (span) => {
             span.setAttr('search.buckets', request.buckets.join(','));
             span.setAttr('search.query_length', request.query.length);
-            const result = await options.host.search({
-              profile: 'quick-access-v1',
-              buckets: request.buckets,
-              query: request.query,
-              limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
-              ...(cursor ? { cursor } : {}),
-            });
+            const result = await options.host.search(
+              {
+                profile: 'quick-access-v1',
+                buckets: request.buckets,
+                query: request.query,
+                limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
+                ...(cursor ? { cursor } : {}),
+              },
+              { signal: request.superseded.signal }
+            );
             span.setAttr('search.result_count', result.documents.length);
             return result;
           }
@@ -193,11 +234,14 @@ export function createProjectedList<T extends { id: string }>(options: {
       request.answered = true;
       request.awaitingEngine = false;
       setError(undefined);
-      setItems([...merged.values()]);
+      // A page reader waits for a new list after each load-more, even one
+      // that found no new row; only a refresh may keep the listed array.
+      const rows = [...merged.values()];
+      setItems((shown) => (append ? rows : keepUnchangedRows(shown, rows)));
       setHasMore(cursor !== undefined);
     } catch (error) {
-      span.error('Quick Access cache search failed');
       if (current !== request) return;
+      span.error('Quick Access cache search failed');
       request.awaitingEngine = isRefusedFirstAnswer(request, error);
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
@@ -206,6 +250,10 @@ export function createProjectedList<T extends { id: string }>(options: {
       setHasMore(request.cursor !== undefined);
       console.warn('Quick Access cache search failed', error);
     } finally {
+      span.setAttr(
+        'search.engine_restarted',
+        engineReplacements !== replacementsAtStart
+      );
       span.end();
       finishRequest(request);
     }
@@ -214,6 +262,7 @@ export function createProjectedList<T extends { id: string }>(options: {
   // Nothing else replays a refused first answer: cache-change refreshes only
   // follow a write, and the menu would list no documents until one happened.
   const stopWatchingEngine = options.host.onCacheGenerationChanged?.(() => {
+    engineReplacements += 1;
     // The host reports the replacement before it starts reinitializing, so
     // read after the notification returns.
     queueMicrotask(() => {
@@ -255,6 +304,7 @@ export function createProjectedList<T extends { id: string }>(options: {
 
     // Genuine query/bucket changes, disabling, and disposal still fence off
     // obsolete responses and their queued refreshes.
+    retire(previous);
     current = undefined;
     setError(undefined);
     setHasMore(false);
@@ -281,6 +331,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       refreshPending: false,
       answered: false,
       awaitingEngine: false,
+      superseded: new AbortController(),
     };
     current = request;
     fireAndForget(fetchPages(request, request.pages, false), 'quick-access');

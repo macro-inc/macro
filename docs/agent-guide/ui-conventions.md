@@ -332,7 +332,7 @@ write shows failure feedback and leaves the card open for retry.
 Actions live in the top bar immediately before Share, with consistent compact
 buttons (labels collapse on narrow headers). There are no Actions sections in
 information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
-includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
+includes Ask Macro and Create task; PDF, calls, and pull requests include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata appears at the top of each panel, before the interactive

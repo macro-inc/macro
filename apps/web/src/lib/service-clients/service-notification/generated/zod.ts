@@ -2362,6 +2362,56 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -4602,6 +4652,56 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -6792,6 +6892,56 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -8813,6 +8963,54 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  computerId: zod
+                    .uuid()
+                    .describe('The computer that was set up.'),
+                  computerName: zod
+                    .string()
+                    .describe("The computer's name when the notice was sent."),
+                  harnessId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      "The computer's harness, once macrod has connected."
+                    ),
+                  outcome: zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['ready']),
+                        })
+                        .describe(
+                          'macrod connected for the first time: the computer is ready.'
+                        ),
+                      zod
+                        .object({
+                          failureReason: zod
+                            .string()
+                            .describe(
+                              "Why, in the words the computer's status shows."
+                            ),
+                          kind: zod.enum(['failed']),
+                        })
+                        .describe(
+                          'Setup gave up before the computer was ready.'
+                        ),
+                    ])
+                    .describe("How a computer's first setup ended."),
+                })
+                .describe(
+                  "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                ),
+              tag: zod.enum(['computer_setup']),
+            })
+            .describe(
+              'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
             ),
           zod
             .object({

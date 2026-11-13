@@ -60,6 +60,35 @@ for (const size of SIZES) {
 test('Team request cards follow current vault visibility and pass their row to the opener', async ({
   page,
 }) => {
+  // The context providers remain real; their unrelated reads use empty synthetic data.
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (loopback && request.method() === 'GET') {
+      const responses: Record<string, object> = {
+        '/__macro_dev/gateway/dss/comms/channels': {
+          items: [],
+          next_cursor: null,
+        },
+        '/__macro_dev/gateway/dss/channels/activity': [],
+        '/__macro_dev/gateway/email/email/links': { links: [] },
+      };
+      const response = responses[url.pathname];
+      if (response)
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(response),
+        });
+    }
+    if (
+      (!loopback && !['data:', 'blob:'].includes(url.protocol)) ||
+      url.pathname.startsWith('/__macro_dev/')
+    )
+      return route.abort('blockedbyclient');
+    return route.continue();
+  });
   await page.goto(`${PAGE}?passwordRequests=1`);
   const row = page.getByTestId('vault-request');
   await expect(row).toBeVisible({ timeout: 180_000 });

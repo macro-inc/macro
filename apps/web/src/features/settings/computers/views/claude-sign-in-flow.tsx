@@ -19,6 +19,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { DisabledReason } from './computer-setup-dialog';
 
 type Step = 'open' | 'code';
 
@@ -255,6 +256,11 @@ export function ClaudeSignInFlow(props: {
             >
               {t('computers.completeSignIn')}
             </Button>
+            <Show when={!code().trim()}>
+              <DisabledReason>
+                {t('computers.pasteCodeToContinue')}
+              </DisabledReason>
+            </Show>
           </Match>
         </Switch>
       </ActionDialogShell.Footer>

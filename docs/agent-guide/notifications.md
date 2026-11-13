@@ -381,6 +381,14 @@ without waiting days, set the computer's active `harness_account_logins` row's
 `expires_at` to within three days on a local stack: the notice arrives within a
 minute.
 
+`computer_setup` notifications (in-app notice, browser, and phone push) tell a
+computer's buyer that first-time setup finished ("Your computer is ready:
+connect your AI and finish setup") or failed ("<computer> could not be set
+up", with the failure reason the computer's status shows). They carry the
+computer id, name, and outcome; opening one reopens that computer's setup
+dialog on Bring your AI (see the Macro computers walkthrough in
+[settings.md](settings.md)).
+
 ## Notification sounds
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming

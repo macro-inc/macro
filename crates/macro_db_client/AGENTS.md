@@ -86,6 +86,11 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
+- `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)
+  and `call_record::get::get_accessible_call_ids` (uncached) share one run of
+  their queries between concurrent identical callers through `single_flight`.
+  The unit tests compile with the cache off; `tests/coalesced_access_lookups.rs`
+  covers the cached path and needs its own user ids per test.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;
@@ -151,7 +156,7 @@ Retain the team closure fence independently of metadata cascades; purge metadata
 only after provider namespace erasure. Keep orphan-discovery candidates durable
 with their cursor advance, and separate retry scheduling from TOTP quarantine.
 If the concurrent `password_activity_agent_requests` build (migration
-`20261112211309`) is interrupted, inspect `pg_index.indisvalid` and drop only its
+`20261113174150`) is interrupted, inspect `pg_index.indisvalid` and drop only its
 invalid index before retrying.
 
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.

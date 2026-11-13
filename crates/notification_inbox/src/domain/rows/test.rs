@@ -455,7 +455,10 @@ fn a_team_holds_one_row_per_password_request_and_none_for_invites() {
         NotificationState::Unseen,
     );
     let team = group(EntityType::Team, TEAM);
-    let listed = rows_of(&team, &[request(1, 0xA1, 1), request(2, 0xA2, 2), invite.clone()]);
+    let listed = rows_of(
+        &team,
+        &[request(1, 0xA1, 1), request(2, 0xA2, 2), invite.clone()],
+    );
     assert_eq!(
         shape(&listed),
         vec![
@@ -463,7 +466,10 @@ fn a_team_holds_one_row_per_password_request_and_none_for_invites() {
             (InboxRowType::PasswordAccessRequested, vec![uuid(1)], vec![]),
         ]
     );
-    assert!(rows_of(&team, &[invite]).is_empty(), "an invite alone lists nothing");
+    assert!(
+        rows_of(&team, &[invite]).is_empty(),
+        "an invite alone lists nothing"
+    );
 }
 
 fn calendar_reminder(id: u128, ends_minute: u32) -> FeedNotification {

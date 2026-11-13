@@ -87,6 +87,7 @@ export function getNotificationIcon(
     .with('agent_session_mentioned', () => AtIcon)
     .with('routine_run_finished', () => ClockIcon)
     .with('agent_sign_in_expiry', () => HardDrivesIcon)
+    .with('computer_setup', () => HardDrivesIcon)
     .exhaustive(() => BellIcon);
 }
 
