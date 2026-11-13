@@ -22,5 +22,6 @@ export const AudienceClass = {
   contacts_of: 'contacts_of',
   workspace: 'workspace',
   snapshot: 'snapshot',
+  person: 'person',
   github_installation: 'github_installation',
 } as const;

@@ -31174,6 +31174,7 @@
           "contacts_of",
           "workspace",
           "snapshot",
+          "person",
           "github_installation"
         ]
       },
@@ -65704,7 +65705,12 @@
       "TeamJoinKind": {
         "type": "string",
         "description": "How a member joined, without who invited them.",
-        "enum": ["invite_accepted", "domain_auto_join", "invite_link", "team_agent"]
+        "enum": [
+          "invite_accepted",
+          "domain_auto_join",
+          "invite_link",
+          "team_agent"
+        ]
       },
       "TeamMemberAvailability": {
         "type": "object",
@@ -67610,7 +67616,7 @@
               "items": {
                 "type": "string"
               },
-              "description": "Event names matched by this filter: exact names, a family wildcard\nsuch as `document.*`, or `*` for every event. Wildcards require the\n`public-event-stream` feature."
+              "description": "Event names matched by this filter: exact names, a family wildcard\nsuch as `document.*`, or `*` for every event. Live streams honour `*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature."
             },
             "ids": {
               "type": ["array", "null"],
@@ -68283,7 +68289,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Event names matched by this filter: exact names, a family wildcard\nsuch as `document.*`, or `*` for every event. Wildcards require the\n`public-event-stream` feature."
+            "description": "Event names matched by this filter: exact names, a family wildcard\nsuch as `document.*`, or `*` for every event. Live streams honour `*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature."
           },
           "ids": {
             "type": ["array", "null"],

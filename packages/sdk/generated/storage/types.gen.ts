@@ -1474,7 +1474,7 @@ export type Audience = 'members' | 'public';
 /**
  * The class of rule that decides who receives an event.
  */
-export type AudienceClass = 'entity' | 'entity_at_least' | 'recipient' | 'owner' | 'team' | 'team_admins' | 'teams_of' | 'contacts_of' | 'workspace' | 'snapshot' | 'github_installation';
+export type AudienceClass = 'entity' | 'entity_at_least' | 'recipient' | 'owner' | 'team' | 'team_admins' | 'teams_of' | 'contacts_of' | 'workspace' | 'snapshot' | 'person' | 'github_installation';
 
 /**
  * Whether missing busy blocks can safely be interpreted as free time.
@@ -24667,8 +24667,9 @@ export type Vec = Array<{
     entity_types?: Array<string> | null;
     /**
      * Event names matched by this filter: exact names, a family wildcard
-     * such as `document.*`, or `*` for every event. Wildcards require the
-     * `public-event-stream` feature.
+     * such as `document.*`, or `*` for every event. Live streams honour `*`
+     * for every caller; family wildcards, and any wildcard on a webhook,
+     * require the `public-event-stream` feature.
      */
     events: Array<string>;
     /**
@@ -25046,8 +25047,9 @@ export type WebhookFilter = {
     entity_types?: Array<string> | null;
     /**
      * Event names matched by this filter: exact names, a family wildcard
-     * such as `document.*`, or `*` for every event. Wildcards require the
-     * `public-event-stream` feature.
+     * such as `document.*`, or `*` for every event. Live streams honour `*`
+     * for every caller; family wildcards, and any wildcard on a webhook,
+     * require the `public-event-stream` feature.
      */
     events: Array<string>;
     /**
