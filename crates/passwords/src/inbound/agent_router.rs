@@ -17,7 +17,7 @@ use crate::domain::{
 use axum::{
     Json, Router,
     body::Bytes,
-    extract::{DefaultBodyLimit, FromRef, Path, Query, State},
+    extract::{DefaultBodyLimit, FromRef, Path, Query, State, rejection::BytesRejection},
     http::{HeaderMap, HeaderValue, StatusCode, header::CACHE_CONTROL},
     middleware::{from_fn, map_response},
     response::{IntoResponse, Response},
@@ -102,7 +102,8 @@ pub fn review_router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
 }
 
 /// Mark every response private; replace transport rejections (plain-text 400/422)
-/// with the sanitized `invalid_request` body. Typed agent failures pass through.
+/// with the sanitized `invalid_request` body and the CSRF check's empty 403 with
+/// `forbidden`. Typed agent failures pass through.
 async fn no_store(mut response: Response) -> Response {
     let typed = response
         .headers()
@@ -114,14 +115,14 @@ async fn no_store(mut response: Response) -> Response {
             StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
         )
     {
-        response = (
+        response = failure(
             StatusCode::BAD_REQUEST,
-            Json(AgentFailure {
-                code: AgentFailureCode::InvalidRequest,
-                retry_after_ms: None,
-            }),
-        )
-            .into_response();
+            AgentFailureCode::InvalidRequest,
+            None,
+        );
+    } else if !typed && response.status() == StatusCode::FORBIDDEN {
+        // The shared CSRF check answers an empty 403.
+        response = failure(StatusCode::FORBIDDEN, AgentFailureCode::Forbidden, None);
     }
     response
         .headers_mut()
@@ -270,7 +271,10 @@ fn human<A: MacroAuthorizationService>(
     })
 }
 
-fn body<T: DeserializeOwned>(bytes: &Bytes) -> Result<T, AgentError> {
+/// An unreadable or oversized body is only reported after admission, like
+/// malformed JSON, so a disabled route still answers `not_found`.
+fn body<T: DeserializeOwned>(bytes: &Result<Bytes, BytesRejection>) -> Result<T, AgentError> {
+    let bytes = bytes.as_ref().map_err(|_| AgentError::Invalid)?;
     serde_json::from_slice(bytes).map_err(|_| AgentError::Invalid)
 }
 
@@ -326,7 +330,7 @@ pub async fn disclose<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<Response, Response> {
     let call = call(user, team, &headers).map_err(IntoResponse::into_response)?;
     let result = state
@@ -343,7 +347,7 @@ pub async fn totp_code<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<Response, Response> {
     let call = call(user, team, &headers).map_err(IntoResponse::into_response)?;
     let result = state
@@ -360,7 +364,7 @@ pub async fn create<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path(team): Path<Uuid>,
     headers: HeaderMap,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<Response, Response> {
     let call = call(user, team, &headers).map_err(IntoResponse::into_response)?;
     match state.service.create(call, body(&bytes)).await {
@@ -377,7 +381,7 @@ pub async fn update<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<Response, Response> {
     let call = call(user, team, &headers).map_err(IntoResponse::into_response)?;
     let result = state.service.update(call, ItemId(item), body(&bytes)).await;
@@ -391,7 +395,7 @@ pub async fn set_totp<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<StatusCode, Response> {
     let call = call(user, team, &headers).map_err(IntoResponse::into_response)?;
     state
@@ -409,7 +413,7 @@ pub async fn request_access<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<Response, Response> {
     let call = call(user, team, &headers).map_err(IntoResponse::into_response)?;
     match state
@@ -463,7 +467,7 @@ pub async fn resolve<A: MacroAuthorizationService>(
     State(state): State<AgentRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item, request)): Path<(Uuid, Uuid, Uuid)>,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<Json<AgentAccessRequestState>, AgentApiError> {
     let actor = human(user)?;
     Ok(Json(
@@ -480,7 +484,7 @@ pub async fn revoke<A: MacroAuthorizationService>(
     State(state): State<AgentRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item, agent)): Path<(Uuid, Uuid, String)>,
-    bytes: Bytes,
+    bytes: Result<Bytes, BytesRejection>,
 ) -> Result<Json<AgentItemAccess>, AgentApiError> {
     let actor = human(user)?;
     let agent = MacroUserIdStr::parse_from_str(&agent)

@@ -95,3 +95,37 @@ async fn typed_failures_keep_their_codes() {
         serde_json::json!({"code": "invalid_session_attribution"})
     );
 }
+
+async fn json(app: Router, request: Request<Body>) -> (StatusCode, serde_json::Value) {
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 1 << 16).await.unwrap();
+    (status, serde_json::from_slice(&bytes).unwrap())
+}
+
+#[tokio::test]
+async fn flags_off_masks_an_oversized_body_as_not_found() {
+    let vault = vault();
+    vault.availability.enabled.store(false, Ordering::SeqCst);
+    let request = Request::post(PATH)
+        .header("authorization", "Bearer key")
+        .header("x-macro-passwords", "1")
+        .header("content-type", "application/json")
+        .body(Body::from(vec![b' '; BODY_LIMIT + 1]))
+        .unwrap();
+    let (status, body) = json(app(vault), request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, serde_json::json!({"code": "not_found"}));
+}
+
+#[tokio::test]
+async fn a_missing_csrf_header_is_a_typed_forbidden() {
+    let request = Request::post(PATH)
+        .header("authorization", "Bearer key")
+        .header("content-type", "application/json")
+        .body(Body::from("{}"))
+        .unwrap();
+    let (status, body) = json(app(vault()), request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, serde_json::json!({"code": "forbidden"}));
+}
