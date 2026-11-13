@@ -55,3 +55,20 @@ invalid:
             })
         }
     }
+  - |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) | _ => Exposure::internal_by_design("hidden catch-all"),
+            })
+        }
+    }
+  - |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) => Exposure::internal_by_design("a"),
+                rest @ _ => Exposure::internal_by_design("bound catch-all"),
+            })
+        }
+    }

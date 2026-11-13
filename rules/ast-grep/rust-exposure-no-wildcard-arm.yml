@@ -4,7 +4,8 @@ severity: error
 message: A `TopicEvent::exposure` match has a catch-all arm; list every variant so a new one must be classified.
 note: |-
   `exposure()` has no default so that every broker event declares who may see
-  it. A `_ =>` or bare-binding arm would silently classify a future variant
+  it. A `_ =>`, bare-binding or `x @ _` arm (alone or as one alternative of
+  an `|` pattern) would silently classify a future variant
   (usually as internal, sometimes as public). Name each variant, grouping
   variants that share a declaration with `|`. See
   `docs/guides/add-kafka-event.md`, "Declare exposure".
@@ -16,7 +17,9 @@ rule:
   has:
     field: pattern
     kind: match_pattern
-    regex: '^(_|[a-z][A-Za-z0-9_]*)(\s+if\b[\s\S]*)?$'
+    # A whole arm, or one top-level alternative of it, that is `_`, a bare
+    # binding, or `name @ _`: `_`, `other`, `Self::A(_) | _`, `x @ _`.
+    regex: '(^|\|)\s*(_|[a-z][A-Za-z0-9_]*(\s*@\s*_)?)\s*(\||\s+if\b[\s\S]*|$)'
   inside:
     kind: function_item
     stopBy: end

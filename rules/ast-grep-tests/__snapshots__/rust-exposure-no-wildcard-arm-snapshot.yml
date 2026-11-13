@@ -98,3 +98,65 @@ snapshots:
       style: secondary
       start: 191
       end: 196
+  ? |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) => Exposure::internal_by_design("a"),
+                rest @ _ => Exposure::internal_by_design("bound catch-all"),
+            })
+        }
+    }
+  : labels:
+    - source: rest @ _ => Exposure::internal_by_design("bound catch-all"),
+      style: primary
+      start: 191
+      end: 251
+    - source: exposure
+      style: secondary
+      start: 31
+      end: 39
+    - source: |-
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+                Ok(match self {
+                    Self::A(_) => Exposure::internal_by_design("a"),
+                    rest @ _ => Exposure::internal_by_design("bound catch-all"),
+                })
+            }
+      style: secondary
+      start: 28
+      end: 268
+    - source: rest @ _
+      style: secondary
+      start: 191
+      end: 199
+  ? |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) | _ => Exposure::internal_by_design("hidden catch-all"),
+            })
+        }
+    }
+  : labels:
+    - source: Self::A(_) | _ => Exposure::internal_by_design("hidden catch-all"),
+      style: primary
+      start: 130
+      end: 197
+    - source: exposure
+      style: secondary
+      start: 31
+      end: 39
+    - source: |-
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+                Ok(match self {
+                    Self::A(_) | _ => Exposure::internal_by_design("hidden catch-all"),
+                })
+            }
+      style: secondary
+      start: 28
+      end: 214
+    - source: Self::A(_) | _
+      style: secondary
+      start: 130
+      end: 144
