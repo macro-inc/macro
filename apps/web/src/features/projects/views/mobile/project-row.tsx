@@ -3,7 +3,9 @@ import { isMobile } from '@core/mobile/isMobile';
 import { Entity } from '@entity';
 import { Property as PropertyControl } from '@property';
 import { PropertyIconControl } from '@property/component/PropertyIconControl';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { hasValue } from '@property/utils';
 import { Show } from 'solid-js';
 import { canEditProject } from '../../core/project';
 import type { ProjectRowProps } from '../../project-row';
@@ -56,12 +58,28 @@ export function MobileProjectRow(props: ProjectRowProps) {
                 {(shown) => (
                   <>
                     <PropertyControl.Pill
-                      aria-label="Change assignees"
+                      aria-label={
+                        hasValue(shown()) ? 'Change assignees' : 'No assignee'
+                      }
                       data-blocks-navigation
                       stopPropagation={canEdit()}
                       class="flex size-9 items-center justify-center rounded-full border-0"
                     >
-                      <PropertyControl.Icon property={shown()} class="size-5" />
+                      <Show
+                        when={hasValue(shown())}
+                        fallback={
+                          <PropertyEmptyIcon
+                            propertyDefinitionId={SYSTEM_PROPERTY_IDS.ASSIGNEES}
+                            class="size-5"
+                            muted
+                          />
+                        }
+                      >
+                        <PropertyControl.Icon
+                          property={shown()}
+                          class="size-5"
+                        />
+                      </Show>
                     </PropertyControl.Pill>
                     <PropertyControl.PopoverEditor />
                   </>
