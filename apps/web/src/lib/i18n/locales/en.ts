@@ -34,6 +34,7 @@ import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
 import tabs from './en/tabs';
+import teamAgents from './en/team-agents';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -78,6 +79,7 @@ export default {
   splitMenu,
   subRoutines,
   tabs,
+  teamAgents,
   tutorials,
   viewMenus,
 };

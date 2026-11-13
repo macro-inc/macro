@@ -30,6 +30,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_ROUTINE_CODE_STEPS?: string;
   readonly VITE_ENABLE_ROUTINE_BACKGROUND_DRAFTS?: string;
   readonly VITE_ENABLE_ROUTINE_SUGGESTIONS?: string;
+  readonly VITE_ENABLE_SUGGESTIONS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTION_RESIZE?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;

@@ -192,6 +192,8 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- The SDK is a root Bun workspace member: its dependencies resolve from the
+  root `bun.lock`, and there is no `bun.lock` here.
 - Dependency changes require refreshing both platform hashes in
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode

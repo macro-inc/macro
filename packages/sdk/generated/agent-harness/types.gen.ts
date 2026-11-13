@@ -1924,6 +1924,17 @@ export type EmailSuggestions = {
 export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
+ * A plain old json error response for use with axum.
+ * yup, thats it.
+ */
+export type ErrorResponse = {
+    /**
+     * Message to explain failure
+     */
+    message: string;
+};
+
+/**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
  */
 export type ExecutionActivity = {
@@ -3213,6 +3224,32 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * One voice of the provider's catalog.
+ */
+export type Voice = {
+    /**
+     * The provider's accent label.
+     */
+    accent: string;
+    /**
+     * Languages the voice speaks.
+     */
+    languages: Array<string>;
+    /**
+     * The model to save as the agent's voice.
+     */
+    model: string;
+    /**
+     * The provider's name for the voice.
+     */
+    name: string;
+    /**
+     * The provider's gender and character tags.
+     */
+    tags: Array<string>;
 };
 
 /**
@@ -5740,3 +5777,54 @@ export type ExtractResponses = {
 };
 
 export type ExtractResponse = ExtractResponses[keyof ExtractResponses];
+
+export type GetAgentVoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/voices';
+};
+
+export type GetAgentVoicesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoicesError = GetAgentVoicesErrors[keyof GetAgentVoicesErrors];
+
+export type GetAgentVoicesResponses = {
+    200: Array<Voice>;
+};
+
+export type GetAgentVoicesResponse = GetAgentVoicesResponses[keyof GetAgentVoicesResponses];
+
+export type GetAgentVoiceSampleData = {
+    body?: never;
+    path: {
+        /**
+         * An Aura-2 model, such as aura-2-thalia-en
+         */
+        model: string;
+    };
+    query?: never;
+    url: '/voices/{model}/sample';
+};
+
+export type GetAgentVoiceSampleErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoiceSampleError = GetAgentVoiceSampleErrors[keyof GetAgentVoiceSampleErrors];
+
+export type GetAgentVoiceSampleResponses = {
+    /**
+     * WAV audio
+     */
+    200: Array<number>;
+};
+
+export type GetAgentVoiceSampleResponse = GetAgentVoiceSampleResponses[keyof GetAgentVoiceSampleResponses];

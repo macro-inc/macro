@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AcceptSuggestionRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
   AiAdmissionErrorBody,
+  AttachDraft,
   CatalogEntry,
   CheckRoutineRequest,
   CodeUpgrade,
@@ -19,10 +21,20 @@ import type {
   EmptyResponse,
   EntityAppearance,
   ExecutionRecordResponse,
-  GenerateRoutineSuggestionsParams,
+  GenerationOverview,
+  GenerationStarted,
   InProgressExecution,
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
+  ListSuggestionsParams,
+  NewSuggestion,
+  RecordSuggestionsSeenParams,
+  RegenerateSuggestionsParams,
+  RegenerationCooldown,
+  RegenerationRunning,
+  RetireSuggestion,
+  RetireSuggestionRequest,
+  RewriteSuggestion,
   RoutineCatalogParams,
   RoutineCheck,
   RoutineSuggestions,
@@ -31,6 +43,12 @@ import type {
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
   StartDraftJobRequest,
+  StartSuggestionGenerationParams,
+  SuggestionChanged,
+  SuggestionFeed,
+  SuggestionReview,
+  SuggestionsReview,
+  SuggestionWriteOutcome,
   SuggestOutcome,
   SuggestRequest,
 } from './schemas';
@@ -866,79 +884,73 @@ export const suggestRoutine = async (
   } as suggestRoutineResponse;
 };
 
-export type generateRoutineSuggestionsResponse200 = {
-  data: RoutineSuggestions;
+/**
+ * @summary What a routines generation session reads before managing suggestions.
+ */
+export type reviewRoutineSuggestionsResponse200 = {
+  data: SuggestionReview;
   status: 200;
 };
 
-export type generateRoutineSuggestionsResponse401 = {
+export type reviewRoutineSuggestionsResponse401 = {
   data: string;
   status: 401;
 };
 
-export type generateRoutineSuggestionsResponse404 = {
+export type reviewRoutineSuggestionsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reviewRoutineSuggestionsResponse404 = {
   data: string;
   status: 404;
 };
 
-export type generateRoutineSuggestionsResponse500 = {
+export type reviewRoutineSuggestionsResponse500 = {
   data: string;
   status: 500;
 };
 
-export type generateRoutineSuggestionsResponseSuccess =
-  generateRoutineSuggestionsResponse200 & {
+export type reviewRoutineSuggestionsResponseSuccess =
+  reviewRoutineSuggestionsResponse200 & {
     headers: Headers;
   };
-export type generateRoutineSuggestionsResponseError = (
-  | generateRoutineSuggestionsResponse401
-  | generateRoutineSuggestionsResponse404
-  | generateRoutineSuggestionsResponse500
+export type reviewRoutineSuggestionsResponseError = (
+  | reviewRoutineSuggestionsResponse401
+  | reviewRoutineSuggestionsResponse403
+  | reviewRoutineSuggestionsResponse404
+  | reviewRoutineSuggestionsResponse500
 ) & {
   headers: Headers;
 };
 
-export type generateRoutineSuggestionsResponse =
-  | generateRoutineSuggestionsResponseSuccess
-  | generateRoutineSuggestionsResponseError;
+export type reviewRoutineSuggestionsResponse =
+  | reviewRoutineSuggestionsResponseSuccess
+  | reviewRoutineSuggestionsResponseError;
 
-export const getGenerateRoutineSuggestionsUrl = (
-  params: GenerateRoutineSuggestionsParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/scheduled-actions/suggestions/generate?${stringifiedParams}`
-    : `/scheduled-actions/suggestions/generate`;
+export const getReviewRoutineSuggestionsUrl = () => {
+  return `/scheduled-actions/suggestions/review`;
 };
 
-export const generateRoutineSuggestions = async (
-  params: GenerateRoutineSuggestionsParams,
+export const reviewRoutineSuggestions = async (
   options?: RequestInit
-): Promise<generateRoutineSuggestionsResponse> => {
-  const res = await fetch(getGenerateRoutineSuggestionsUrl(params), {
+): Promise<reviewRoutineSuggestionsResponse> => {
+  const res = await fetch(getReviewRoutineSuggestionsUrl(), {
     ...options,
-    method: 'POST',
+    method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: generateRoutineSuggestionsResponse['data'] = body
+  const data: reviewRoutineSuggestionsResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as generateRoutineSuggestionsResponse;
+  } as reviewRoutineSuggestionsResponse;
 };
 
 export type dismissRoutineSuggestionResponse204 = {
@@ -1000,6 +1012,80 @@ export const dismissRoutineSuggestion = async (
     status: res.status,
     headers: res.headers,
   } as dismissRoutineSuggestionResponse;
+};
+
+/**
+ * @summary Retire an open suggestion that no longer fits, from a routines
+generation session.
+ */
+export type retireRoutineSuggestionResponse200 = {
+  data: SuggestOutcome;
+  status: 200;
+};
+
+export type retireRoutineSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type retireRoutineSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type retireRoutineSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type retireRoutineSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type retireRoutineSuggestionResponseSuccess =
+  retireRoutineSuggestionResponse200 & {
+    headers: Headers;
+  };
+export type retireRoutineSuggestionResponseError = (
+  | retireRoutineSuggestionResponse400
+  | retireRoutineSuggestionResponse401
+  | retireRoutineSuggestionResponse403
+  | retireRoutineSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type retireRoutineSuggestionResponse =
+  | retireRoutineSuggestionResponseSuccess
+  | retireRoutineSuggestionResponseError;
+
+export const getRetireRoutineSuggestionUrl = (id: string) => {
+  return `/scheduled-actions/suggestions/${id}/retire`;
+};
+
+export const retireRoutineSuggestion = async (
+  id: string,
+  retireSuggestion: RetireSuggestion,
+  options?: RequestInit
+): Promise<retireRoutineSuggestionResponse> => {
+  const res = await fetch(getRetireRoutineSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retireSuggestion),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retireRoutineSuggestionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retireRoutineSuggestionResponse;
 };
 
 export type getScheduledActionResponse200 = {
@@ -1882,4 +1968,1058 @@ export const activateScheduledActionTemplate = async (
     status: res.status,
     headers: res.headers,
   } as activateScheduledActionTemplateResponse;
+};
+
+/**
+ * @summary The caller's feed, for them or their own agent.
+ */
+export type listSuggestionsResponse200 = {
+  data: SuggestionFeed;
+  status: 200;
+};
+
+export type listSuggestionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listSuggestionsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type listSuggestionsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type listSuggestionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listSuggestionsResponseSuccess = listSuggestionsResponse200 & {
+  headers: Headers;
+};
+export type listSuggestionsResponseError = (
+  | listSuggestionsResponse401
+  | listSuggestionsResponse403
+  | listSuggestionsResponse404
+  | listSuggestionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listSuggestionsResponse =
+  | listSuggestionsResponseSuccess
+  | listSuggestionsResponseError;
+
+export const getListSuggestionsUrl = (params?: ListSuggestionsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions?${stringifiedParams}`
+    : `/suggestions`;
+};
+
+export const listSuggestions = async (
+  params?: ListSuggestionsParams,
+  options?: RequestInit
+): Promise<listSuggestionsResponse> => {
+  const res = await fetch(getListSuggestionsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSuggestionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSuggestionsResponse;
+};
+
+/**
+ * @summary Add a suggestion from a suggestions generation session, or a new version of the
+one with its dedup key.
+ */
+export type addSuggestionResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type addSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type addSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type addSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type addSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type addSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type addSuggestionResponseSuccess = addSuggestionResponse200 & {
+  headers: Headers;
+};
+export type addSuggestionResponseError = (
+  | addSuggestionResponse400
+  | addSuggestionResponse401
+  | addSuggestionResponse403
+  | addSuggestionResponse404
+  | addSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type addSuggestionResponse =
+  | addSuggestionResponseSuccess
+  | addSuggestionResponseError;
+
+export const getAddSuggestionUrl = () => {
+  return `/suggestions`;
+};
+
+export const addSuggestion = async (
+  newSuggestion: NewSuggestion,
+  options?: RequestInit
+): Promise<addSuggestionResponse> => {
+  const res = await fetch(getAddSuggestionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(newSuggestion),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addSuggestionResponse;
+};
+
+/**
+ * @summary Start the caller's onboarding generation, once their inbox is connected.
+ */
+export type startSuggestionGenerationResponse200 = {
+  data: GenerationStarted;
+  status: 200;
+};
+
+export type startSuggestionGenerationResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type startSuggestionGenerationResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type startSuggestionGenerationResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type startSuggestionGenerationResponseSuccess =
+  startSuggestionGenerationResponse200 & {
+    headers: Headers;
+  };
+export type startSuggestionGenerationResponseError = (
+  | startSuggestionGenerationResponse401
+  | startSuggestionGenerationResponse404
+  | startSuggestionGenerationResponse500
+) & {
+  headers: Headers;
+};
+
+export type startSuggestionGenerationResponse =
+  | startSuggestionGenerationResponseSuccess
+  | startSuggestionGenerationResponseError;
+
+export const getStartSuggestionGenerationUrl = (
+  params: StartSuggestionGenerationParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions/generate?${stringifiedParams}`
+    : `/suggestions/generate`;
+};
+
+export const startSuggestionGeneration = async (
+  params: StartSuggestionGenerationParams,
+  options?: RequestInit
+): Promise<startSuggestionGenerationResponse> => {
+  const res = await fetch(getStartSuggestionGenerationUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startSuggestionGenerationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startSuggestionGenerationResponse;
+};
+
+/**
+ * @summary The caller's suggestion generations now.
+ */
+export type getSuggestionGenerationResponse200 = {
+  data: GenerationOverview;
+  status: 200;
+};
+
+export type getSuggestionGenerationResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getSuggestionGenerationResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getSuggestionGenerationResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getSuggestionGenerationResponseSuccess =
+  getSuggestionGenerationResponse200 & {
+    headers: Headers;
+  };
+export type getSuggestionGenerationResponseError = (
+  | getSuggestionGenerationResponse401
+  | getSuggestionGenerationResponse404
+  | getSuggestionGenerationResponse500
+) & {
+  headers: Headers;
+};
+
+export type getSuggestionGenerationResponse =
+  | getSuggestionGenerationResponseSuccess
+  | getSuggestionGenerationResponseError;
+
+export const getGetSuggestionGenerationUrl = () => {
+  return `/suggestions/generation`;
+};
+
+export const getSuggestionGeneration = async (
+  options?: RequestInit
+): Promise<getSuggestionGenerationResponse> => {
+  const res = await fetch(getGetSuggestionGenerationUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSuggestionGenerationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSuggestionGenerationResponse;
+};
+
+/**
+ * @summary Start fresh suggestions for the caller: at most once an hour, and not
+while one of their generations runs.
+ */
+export type regenerateSuggestionsResponse202 = {
+  data: GenerationStarted;
+  status: 202;
+};
+
+export type regenerateSuggestionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type regenerateSuggestionsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type regenerateSuggestionsResponse409 = {
+  data: RegenerationRunning;
+  status: 409;
+};
+
+export type regenerateSuggestionsResponse429 = {
+  data: RegenerationCooldown;
+  status: 429;
+};
+
+export type regenerateSuggestionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type regenerateSuggestionsResponseSuccess =
+  regenerateSuggestionsResponse202 & {
+    headers: Headers;
+  };
+export type regenerateSuggestionsResponseError = (
+  | regenerateSuggestionsResponse401
+  | regenerateSuggestionsResponse404
+  | regenerateSuggestionsResponse409
+  | regenerateSuggestionsResponse429
+  | regenerateSuggestionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type regenerateSuggestionsResponse =
+  | regenerateSuggestionsResponseSuccess
+  | regenerateSuggestionsResponseError;
+
+export const getRegenerateSuggestionsUrl = (
+  params: RegenerateSuggestionsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions/regenerate?${stringifiedParams}`
+    : `/suggestions/regenerate`;
+};
+
+export const regenerateSuggestions = async (
+  params: RegenerateSuggestionsParams,
+  options?: RequestInit
+): Promise<regenerateSuggestionsResponse> => {
+  const res = await fetch(getRegenerateSuggestionsUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: regenerateSuggestionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as regenerateSuggestionsResponse;
+};
+
+/**
+ * @summary What a suggestions generation session reads before managing suggestions.
+ */
+export type reviewSuggestionsResponse200 = {
+  data: SuggestionsReview;
+  status: 200;
+};
+
+export type reviewSuggestionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reviewSuggestionsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reviewSuggestionsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type reviewSuggestionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reviewSuggestionsResponseSuccess = reviewSuggestionsResponse200 & {
+  headers: Headers;
+};
+export type reviewSuggestionsResponseError = (
+  | reviewSuggestionsResponse401
+  | reviewSuggestionsResponse403
+  | reviewSuggestionsResponse404
+  | reviewSuggestionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type reviewSuggestionsResponse =
+  | reviewSuggestionsResponseSuccess
+  | reviewSuggestionsResponseError;
+
+export const getReviewSuggestionsUrl = () => {
+  return `/suggestions/review`;
+};
+
+export const reviewSuggestions = async (
+  options?: RequestInit
+): Promise<reviewSuggestionsResponse> => {
+  const res = await fetch(getReviewSuggestionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reviewSuggestionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reviewSuggestionsResponse;
+};
+
+/**
+ * @summary The caller loaded the app in their time zone.
+ */
+export type recordSuggestionsSeenResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type recordSuggestionsSeenResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recordSuggestionsSeenResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type recordSuggestionsSeenResponseSuccess =
+  recordSuggestionsSeenResponse204 & {
+    headers: Headers;
+  };
+export type recordSuggestionsSeenResponseError = (
+  | recordSuggestionsSeenResponse401
+  | recordSuggestionsSeenResponse500
+) & {
+  headers: Headers;
+};
+
+export type recordSuggestionsSeenResponse =
+  | recordSuggestionsSeenResponseSuccess
+  | recordSuggestionsSeenResponseError;
+
+export const getRecordSuggestionsSeenUrl = (
+  params: RecordSuggestionsSeenParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions/seen?${stringifiedParams}`
+    : `/suggestions/seen`;
+};
+
+export const recordSuggestionsSeen = async (
+  params: RecordSuggestionsSeenParams,
+  options?: RequestInit
+): Promise<recordSuggestionsSeenResponse> => {
+  const res = await fetch(getRecordSuggestionsSeenUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recordSuggestionsSeenResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recordSuggestionsSeenResponse;
+};
+
+/**
+ * @summary The caller opened their feed: what it showed as new no longer is. The app
+sends it once the feed is on screen.
+ */
+export type recordSuggestionsViewedResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type recordSuggestionsViewedResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recordSuggestionsViewedResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type recordSuggestionsViewedResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type recordSuggestionsViewedResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type recordSuggestionsViewedResponseSuccess =
+  recordSuggestionsViewedResponse204 & {
+    headers: Headers;
+  };
+export type recordSuggestionsViewedResponseError = (
+  | recordSuggestionsViewedResponse401
+  | recordSuggestionsViewedResponse403
+  | recordSuggestionsViewedResponse404
+  | recordSuggestionsViewedResponse500
+) & {
+  headers: Headers;
+};
+
+export type recordSuggestionsViewedResponse =
+  | recordSuggestionsViewedResponseSuccess
+  | recordSuggestionsViewedResponseError;
+
+export const getRecordSuggestionsViewedUrl = () => {
+  return `/suggestions/viewed`;
+};
+
+export const recordSuggestionsViewed = async (
+  options?: RequestInit
+): Promise<recordSuggestionsViewedResponse> => {
+  const res = await fetch(getRecordSuggestionsViewedUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recordSuggestionsViewedResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recordSuggestionsViewedResponse;
+};
+
+/**
+ * @summary Change an open suggestion from a suggestions generation session.
+ */
+export type rewriteSuggestionResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type rewriteSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type rewriteSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type rewriteSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type rewriteSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type rewriteSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type rewriteSuggestionResponseSuccess = rewriteSuggestionResponse200 & {
+  headers: Headers;
+};
+export type rewriteSuggestionResponseError = (
+  | rewriteSuggestionResponse400
+  | rewriteSuggestionResponse401
+  | rewriteSuggestionResponse403
+  | rewriteSuggestionResponse404
+  | rewriteSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type rewriteSuggestionResponse =
+  | rewriteSuggestionResponseSuccess
+  | rewriteSuggestionResponseError;
+
+export const getRewriteSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}`;
+};
+
+export const rewriteSuggestion = async (
+  id: string,
+  rewriteSuggestion: RewriteSuggestion,
+  options?: RequestInit
+): Promise<rewriteSuggestionResponse> => {
+  const res = await fetch(getRewriteSuggestionUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rewriteSuggestion),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: rewriteSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as rewriteSuggestionResponse;
+};
+
+/**
+ * @summary The caller, or someone acting for them, acts on a suggestion: a background
+prompt suggestion starts its run when the person accepts it in the app (anyone
+else only takes it on); a note or prompt is done once they act on it (open its
+item or the composer), and shows in the feed's `done`. A routine suggestion is
+refused: the person saves its routine in the app, which makes it done.
+ */
+export type acceptSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type acceptSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type acceptSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type acceptSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type acceptSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type acceptSuggestionResponse409 = {
+  data: SuggestionChanged;
+  status: 409;
+};
+
+export type acceptSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type acceptSuggestionResponseSuccess = acceptSuggestionResponse204 & {
+  headers: Headers;
+};
+export type acceptSuggestionResponseError = (
+  | acceptSuggestionResponse400
+  | acceptSuggestionResponse401
+  | acceptSuggestionResponse403
+  | acceptSuggestionResponse404
+  | acceptSuggestionResponse409
+  | acceptSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type acceptSuggestionResponse =
+  | acceptSuggestionResponseSuccess
+  | acceptSuggestionResponseError;
+
+export const getAcceptSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/accept`;
+};
+
+export const acceptSuggestion = async (
+  id: string,
+  acceptSuggestionRequest: AcceptSuggestionRequest,
+  options?: RequestInit
+): Promise<acceptSuggestionResponse> => {
+  const res = await fetch(getAcceptSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(acceptSuggestionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: acceptSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as acceptSuggestionResponse;
+};
+
+/**
+ * @summary The caller, or their own agent, isn't interested in an open suggestion.
+ */
+export type dismissSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type dismissSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type dismissSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type dismissSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type dismissSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type dismissSuggestionResponseSuccess = dismissSuggestionResponse204 & {
+  headers: Headers;
+};
+export type dismissSuggestionResponseError = (
+  | dismissSuggestionResponse401
+  | dismissSuggestionResponse403
+  | dismissSuggestionResponse404
+  | dismissSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type dismissSuggestionResponse =
+  | dismissSuggestionResponseSuccess
+  | dismissSuggestionResponseError;
+
+export const getDismissSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/dismiss`;
+};
+
+export const dismissSuggestion = async (
+  id: string,
+  options?: RequestInit
+): Promise<dismissSuggestionResponse> => {
+  const res = await fetch(getDismissSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as dismissSuggestionResponse;
+};
+
+/**
+ * @summary Make a reply draft a suggestions generation session wrote the draft of an
+open reply suggestion. Nothing is sent.
+ */
+export type attachSuggestionDraftResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type attachSuggestionDraftResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type attachSuggestionDraftResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type attachSuggestionDraftResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type attachSuggestionDraftResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type attachSuggestionDraftResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type attachSuggestionDraftResponseSuccess =
+  attachSuggestionDraftResponse200 & {
+    headers: Headers;
+  };
+export type attachSuggestionDraftResponseError = (
+  | attachSuggestionDraftResponse400
+  | attachSuggestionDraftResponse401
+  | attachSuggestionDraftResponse403
+  | attachSuggestionDraftResponse404
+  | attachSuggestionDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type attachSuggestionDraftResponse =
+  | attachSuggestionDraftResponseSuccess
+  | attachSuggestionDraftResponseError;
+
+export const getAttachSuggestionDraftUrl = (id: string) => {
+  return `/suggestions/${id}/draft`;
+};
+
+export const attachSuggestionDraft = async (
+  id: string,
+  attachDraft: AttachDraft,
+  options?: RequestInit
+): Promise<attachSuggestionDraftResponse> => {
+  const res = await fetch(getAttachSuggestionDraftUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attachDraft),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: attachSuggestionDraftResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as attachSuggestionDraftResponse;
+};
+
+/**
+ * @summary The caller, or their own agent, takes back dismissing a suggestion, within
+five minutes of it.
+ */
+export type restoreSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type restoreSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type restoreSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type restoreSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type restoreSuggestionResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type restoreSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type restoreSuggestionResponseSuccess = restoreSuggestionResponse204 & {
+  headers: Headers;
+};
+export type restoreSuggestionResponseError = (
+  | restoreSuggestionResponse401
+  | restoreSuggestionResponse403
+  | restoreSuggestionResponse404
+  | restoreSuggestionResponse409
+  | restoreSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type restoreSuggestionResponse =
+  | restoreSuggestionResponseSuccess
+  | restoreSuggestionResponseError;
+
+export const getRestoreSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/restore`;
+};
+
+export const restoreSuggestion = async (
+  id: string,
+  options?: RequestInit
+): Promise<restoreSuggestionResponse> => {
+  const res = await fetch(getRestoreSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: restoreSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as restoreSuggestionResponse;
+};
+
+/**
+ * @summary Retire an open suggestion from a suggestions generation session.
+ */
+export type retireSuggestionResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type retireSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type retireSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type retireSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type retireSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type retireSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type retireSuggestionResponseSuccess = retireSuggestionResponse200 & {
+  headers: Headers;
+};
+export type retireSuggestionResponseError = (
+  | retireSuggestionResponse400
+  | retireSuggestionResponse401
+  | retireSuggestionResponse403
+  | retireSuggestionResponse404
+  | retireSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type retireSuggestionResponse =
+  | retireSuggestionResponseSuccess
+  | retireSuggestionResponseError;
+
+export const getRetireSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/retire`;
+};
+
+export const retireSuggestion = async (
+  id: string,
+  retireSuggestionRequest: RetireSuggestionRequest,
+  options?: RequestInit
+): Promise<retireSuggestionResponse> => {
+  const res = await fetch(getRetireSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retireSuggestionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retireSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retireSuggestionResponse;
 };

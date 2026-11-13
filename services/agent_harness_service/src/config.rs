@@ -50,6 +50,11 @@ macro_env_var::env_vars!(
     /// The authentication service's internal key for billing settlement and
     /// linked GitHub token lookups.
     pub struct AuthenticationServiceSecretKey;
+    /// LiveKit project key the speech gateway signs inference-only tokens
+    /// with.
+    pub struct LivekitApiKey;
+    /// LiveKit project secret; never leaves the speech gateway.
+    pub struct LivekitApiSecret;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -198,6 +203,10 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
+    /// LiveKit project key for agent call speech.
+    pub livekit_api_key: LivekitApiKey,
+    /// LiveKit project secret for agent call speech.
+    pub livekit_api_secret: LivekitApiSecret,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
@@ -254,6 +263,13 @@ pub struct Config {
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
+    /// Directory holding agent teammates' bare repos: the EFS volume every
+    /// replica mounts in AWS, a compose volume locally. Must exist.
+    pub repo_storage_root: std::path::PathBuf,
+    /// Pushes to an agent repo are refused once it reaches this size.
+    pub max_repo_size_bytes: u64,
+    /// Push budget per agent repo, shared by every replica.
+    pub pushes_per_minute: u32,
     /// Port the sandbox-facing egress proxy is served on.
     ///
     /// The shared gateway forwards `/agent-harness-egress/*` to this listener.
@@ -483,6 +499,7 @@ pub struct IncusFleetSettings {
     pub computers_control_plane_id: String,
     pub computers_host_name: String,
     pub computers_image: String,
+    pub computers_agent_image: String,
     pub computers_host_reserve_gb: u32,
     pub computers_oversell_factor: u32,
     pub computers_incus_request_timeout_secs: u64,
@@ -506,6 +523,7 @@ pub struct DockerFleetSettings {
     pub computers_control_plane_id: String,
     pub computers_host_name: String,
     pub computers_image: String,
+    pub computers_agent_image: String,
     pub computers_host_reserve_gb: u32,
     pub computers_oversell_factor: u32,
     pub computers_docker_network: String,
@@ -522,6 +540,7 @@ impl IncusFleetSettings {
             ),
             ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
             ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
             (
                 "COMPUTERS_INCUS_PROFILE",
                 self.computers_incus_profile.as_str(),
@@ -566,6 +585,7 @@ impl DockerFleetSettings {
             ),
             ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
             ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
             (
                 "COMPUTERS_DOCKER_NETWORK",
                 self.computers_docker_network.as_str(),

@@ -278,6 +278,7 @@ where
             };
             if !self.filters.iter().any(|filter| {
                 filter.accepts(&candidate.event.event_name, &candidate.event.entity_id)
+                    || filter.accepts("*", &candidate.event.entity_id)
             }) {
                 continue;
             }
