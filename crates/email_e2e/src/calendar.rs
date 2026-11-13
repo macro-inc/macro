@@ -183,16 +183,22 @@ impl Calendar {
     }
 
     /// Waits until the calendar account of the inbox `address` has finished
-    /// a sync: its first import, or the one a change at the provider started.
+    /// a sync and no sync job of it is waiting or running: its first import,
+    /// or the round a change at the provider started. Google's push only
+    /// starts a round when the last one is over, so call this between one
+    /// change at Google and the next.
     pub async fn wait_until_synced(&self, address: &str) -> Result<(), Report> {
         let mut last_seen = String::new();
         let waited = eventually(
             &format!("the calendar of {address} to finish syncing"),
             DEFAULT_TIMEOUT,
             async || {
-                let account: Option<(String, Option<String>)> = sqlx::query_as(
-                    "SELECT sync_status, last_sync_error FROM calendar_accounts \
-                     WHERE lower(provider_account_id) = lower($1)",
+                let account: Option<(String, Option<String>, i64)> = sqlx::query_as(
+                    "SELECT account.sync_status, account.last_sync_error, \
+                            (SELECT count(*) FROM calendar_backfill_jobs job \
+                             WHERE job.account_id = account.id AND job.status <> 'complete') \
+                     FROM calendar_accounts account \
+                     WHERE lower(account.provider_account_id) = lower($1)",
                 )
                 .bind(address)
                 .fetch_optional(&self.db)
@@ -200,7 +206,7 @@ impl Calendar {
                 .context("could not read the calendar account")?;
                 last_seen = format!("{account:?}");
                 Ok(account
-                    .is_some_and(|(status, _)| status == READY)
+                    .is_some_and(|(status, _, unfinished)| status == READY && unfinished == 0)
                     .then_some(()))
             },
         )

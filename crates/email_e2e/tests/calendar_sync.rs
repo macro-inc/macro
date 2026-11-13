@@ -78,6 +78,7 @@ async fn google_events_arrive_on_import_and_by_push() -> Result<(), Report> {
     let retro = events::google("Retro", events::hour_in_days(2));
     stack.gmail().add_event(ada.email(), PRIMARY, retro)?;
     calendar.wait_for_event("Retro").await?;
+    calendar.wait_until_synced(ada.email()).await?;
 
     let id = seeded["id"].as_str().unwrap_or_default();
     let rename = NewEvent::from_json(json!({ "summary": "Daily" }));
@@ -86,6 +87,7 @@ async fn google_events_arrive_on_import_and_by_push() -> Result<(), Report> {
         .change_event(ada.email(), PRIMARY, id, rename)?;
     calendar.wait_for_event("Daily").await?;
     calendar.wait_until_gone("Standup").await?;
+    calendar.wait_until_synced(ada.email()).await?;
 
     stack.gmail().delete_event(ada.email(), PRIMARY, id)?;
     calendar.wait_until_gone("Daily").await?;
@@ -349,6 +351,7 @@ async fn a_refused_google_watch_is_not_retried_on_every_sync() -> Result<(), Rep
         let event = events::google(&title, day + Duration::hours(round));
         stack.gmail().add_event(ada.email(), PRIMARY, event)?;
         calendar.wait_for_event(&title).await?;
+        calendar.wait_until_synced(ada.email()).await?;
     }
 
     let holidays = urlencoding::encode(HOLIDAYS).into_owned();
@@ -468,6 +471,7 @@ async fn the_calendar_service_answers_behind_the_gateway_prefix() -> Result<(), 
         )
         .await?;
     assert!((200..300).contains(&created.status), "{}", created.text);
+    calendar.wait_until_synced(ada.email()).await?;
     let at_google = stack.gmail().events(ada.email(), PRIMARY)?;
     let planning = at_google
         .iter()
