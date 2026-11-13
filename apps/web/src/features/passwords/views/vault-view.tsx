@@ -518,6 +518,26 @@ export function focusFromParams(
   return { itemId: params.itemId, focusRequestId };
 }
 
+/**
+ * Each focus request selects its item once, after the list loads; a failed
+ * load keeps it waiting for a retry. An item the viewer cannot see is never
+ * selected.
+ */
+export function createFocusSelection(
+  vault: VaultController,
+  focus: () => PasswordsFocus | undefined
+) {
+  let handledFocus: number | undefined;
+  createEffect(() => {
+    const current = focus();
+    if (!current || current.focusRequestId === handledFocus) return;
+    if (!vault.items.isSuccess) return;
+    handledFocus = current.focusRequestId;
+    const item = vault.loadedItems().find(({ id }) => id === current.itemId);
+    if (item) vault.select(item);
+  });
+}
+
 export function VaultView(props: {
   onGuard?: (guard: () => Promise<boolean>) => void;
   /** Absent when the agent vault is off: no agent controls render. */
@@ -525,17 +545,7 @@ export function VaultView(props: {
   focus?: PasswordsFocus;
 }) {
   const vault = createVault();
-  // Each focus request selects its item once, after the list loads; an item
-  // the viewer cannot see is never selected.
-  let handledFocus: number | undefined;
-  createEffect(() => {
-    const focus = props.focus;
-    if (!focus || focus.focusRequestId === handledFocus) return;
-    if (vault.items.isPending) return;
-    handledFocus = focus.focusRequestId;
-    const item = vault.loadedItems().find(({ id }) => id === focus.itemId);
-    if (item) vault.select(item);
-  });
+  createFocusSelection(vault, () => props.focus);
   const { source, scope } = usePasswords();
   let root: HTMLDivElement | undefined;
   const logo = loadLogo(source);
