@@ -7,12 +7,15 @@
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use rootcause::prelude::*;
+use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Connection, PgConnection, PgPool};
 use uuid::Uuid;
 
 /// The session lock that makes one process at a time build the template.
 const TEMPLATE_LOCK: i64 = 0x656d_6169_6c65_3265;
+/// How much of the migrations' digest names a template.
+const TEMPLATE_NAME_DIGITS: usize = 16;
 
 /// A scenario's own database on the suite's Postgres server.
 pub(crate) struct Database {
@@ -84,19 +87,24 @@ impl Database {
 /// Returns the name of a template database holding the current migrations,
 /// building it when this checkout's migrations have no template yet.
 ///
-/// The template is named after the migrations it holds, so checkouts with
-/// different migrations can share one server.
+/// The template is named after the content of the migrations it holds, so
+/// checkouts with different migrations can share one server and an edited
+/// migration gets a new template. Templates of other migrations stay on the
+/// server until someone drops them.
 async fn ensure_template(
     admin: &mut PgConnection,
     server: &PgConnectOptions,
 ) -> Result<String, Report> {
-    let newest = MACRO_DB_MIGRATIONS
-        .iter()
-        .map(|migration| migration.version)
-        .max()
-        .unwrap_or_default();
-    let count = MACRO_DB_MIGRATIONS.iter().count();
-    let template = format!("email_e2e_template_{newest}_{count}");
+    let mut content = Sha256::new();
+    for migration in MACRO_DB_MIGRATIONS.iter() {
+        content.update(migration.version.to_be_bytes());
+        content.update(&migration.checksum);
+    }
+    let content = hex::encode(content.finalize());
+    let template = format!(
+        "email_e2e_template_{}",
+        content.get(..TEMPLATE_NAME_DIGITS).unwrap_or(&content)
+    );
 
     sqlx::query("SELECT pg_advisory_lock($1)")
         .bind(TEMPLATE_LOCK)
