@@ -2111,11 +2111,9 @@ fn email_events_normalize_with_thread_or_link_ids_and_unchanged_envelopes() {
             "event_type": name,
             "metadata": metadata,
         });
-        let event: Event<email::domain::events::EmailTopicEvent> =
+        let event: Event<email::domain::notification_events::EmailNotificationEvent> =
             serde_json::from_value(envelope.clone()).expect("valid email event");
-        let (normalized, owner) = normalized_email_event(&event)
-            .expect("normalizes")
-            .expect("delivered event");
+        let (normalized, owner) = normalized_email_event(&event).expect("normalizes");
         assert_eq!(normalized.event_name, name);
         assert_eq!(
             normalized.entity_type,
@@ -2135,86 +2133,53 @@ fn email_events_normalize_with_thread_or_link_ids_and_unchanged_envelopes() {
     }
 }
 
-#[tokio::test]
-async fn email_internal_and_spam_events_are_skipped_without_matching() {
-    use email::domain::events::{
-        EmailTopicEvent, MessageReceivedMetadata, ThreadBackfilledMetadata, ThreadsReindexReason,
-        ThreadsReindexRequestedMetadata,
-    };
+#[test]
+fn email_internal_signals_are_not_public_events() {
+    use serde_json::json;
 
-    let link_id = Uuid::now_v7();
-    let owner = user_id(PERSONAL_WORKSPACE_ID);
-    let events = [
-        EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
-            link_id,
-            owner: owner.clone(),
-            thread_id: Uuid::now_v7(),
-        }),
-        EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
-            link_id,
-            owner: owner.clone(),
-            thread_ids: vec![Uuid::now_v7()],
-            reason: ThreadsReindexReason::ProviderChanged,
-        }),
-        EmailTopicEvent::MessageReceived(MessageReceivedMetadata {
-            link_id,
-            owner,
-            message_id: Uuid::now_v7(),
-            provider_message_id: "m".to_string(),
-            thread_id: Uuid::now_v7(),
-            provider_thread_id: "t".to_string(),
-            is_new_thread: false,
-            subject: None,
-            from_email: None,
-            from_name: None,
-            to_emails: vec![],
-            attachment_count: 0,
-            is_spam_or_trash: true,
-            received_at: None,
-        }),
-    ];
-    let access = MockAccessService::with_users(vec![]);
-    let repository = MockRepository::new(vec![], vec![]);
-    let enqueuer = MockEnqueuer::default();
-    for event in events {
-        let event = Event::new(event);
+    // Internal `macro.email` signals never reach the public topic; the
+    // producer drops them (see `EmailNotificationEvent::from_topic_event`).
+    for name in ["email.thread_backfilled", "email.threads_reindex_requested"] {
+        let envelope = json!({
+            "event_id": Uuid::now_v7(),
+            "schema_version": 1,
+            "event_type": name,
+            "metadata": {"link_id": Uuid::now_v7(), "owner": PERSONAL_WORKSPACE_ID},
+        });
         assert!(
-            normalized_email_event(&event)
-                .expect("normalizes")
-                .is_none()
+            serde_json::from_value::<
+                Event<email::domain::notification_events::EmailNotificationEvent>,
+            >(envelope)
+            .is_err(),
+            "{name} is not a public email event"
         );
-        service(access.clone(), repository.clone(), enqueuer.clone())
-            .ingest_email_event(event)
-            .await
-            .expect("skip succeeds");
     }
-    assert!(lock(&access.calls).is_empty());
-    assert!(lock(&repository.state).workspace_calls.is_empty());
-    assert!(lock(&repository.state).match_calls.is_empty());
-    assert!(lock(&enqueuer.state).attempted_messages.is_empty());
 }
 
 #[tokio::test]
 async fn email_message_matches_only_owners_personal_workspace() {
-    use email::domain::events::{EmailTopicEvent, MessageReceivedMetadata};
+    use email::domain::events::MessageReceivedMetadata;
+    use email::domain::notification_events::EmailNotificationEvent;
 
     let thread_id = Uuid::now_v7();
-    let event = Event::new(EmailTopicEvent::MessageReceived(MessageReceivedMetadata {
-        link_id: Uuid::now_v7(),
-        owner: user_id(PERSONAL_WORKSPACE_ID),
-        message_id: Uuid::now_v7(),
-        provider_message_id: "m".to_string(),
-        thread_id,
-        provider_thread_id: "t".to_string(),
-        is_new_thread: true,
-        subject: Some("Subject".to_string()),
-        from_email: None,
-        from_name: None,
-        to_emails: vec![],
-        attachment_count: 0,
-        is_spam_or_trash: false,
-        received_at: None,
-    }));
+    let event = Event::new(EmailNotificationEvent::MessageReceived(
+        MessageReceivedMetadata {
+            link_id: Uuid::now_v7(),
+            owner: user_id(PERSONAL_WORKSPACE_ID),
+            message_id: Uuid::now_v7(),
+            provider_message_id: "m".to_string(),
+            thread_id,
+            provider_thread_id: "t".to_string(),
+            is_new_thread: true,
+            subject: Some("Subject".to_string()),
+            from_email: None,
+            from_name: None,
+            to_emails: vec![],
+            attachment_count: 0,
+            is_spam_or_trash: false,
+            received_at: None,
+        },
+    ));
     let access = MockAccessService::with_users(vec![]);
     let repository = MockRepository::new(
         vec![TEAM_WORKSPACE_ID.to_string()],

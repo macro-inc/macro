@@ -41,7 +41,7 @@ struct WebhookEventIngestionConsumerGroup;
 
 impl GroupName for WebhookEventIngestionConsumerGroup {
     const GROUP_NAME: &'static str = "webhook-event-ingestion";
-    // New topics, including `macro.email`, join this group's subscription
+    // New topics, including `macro.email_notifications`, join this group's subscription
     // without committed offsets; starting at their heads avoids replaying
     // retained history.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
@@ -118,7 +118,7 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::MessageMacroEvent(event) => {
                         service.ingest_message_event(event.event().clone()).await
                     }
-                    DeclaredMacroEvent::EmailMacroEvent(event) => {
+                    DeclaredMacroEvent::EmailNotificationMacroEvent(event) => {
                         service.ingest_email_event(event.event().clone()).await
                     }
                     DeclaredMacroEvent::WebhookMacroEvent(event) => {

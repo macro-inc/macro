@@ -15,7 +15,7 @@ before changing ingestion or delivery behavior.
 - `src/inbound/kafka_consumer.rs` / `kafka_stream_consumer.rs`: ingestion
   consumers for `macro.documents`, `macro.channels`, `macro.messages`,
   `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
-  `macro.users`, `macro.call_notifications`, and `macro.email`.
+  `macro.users`, `macro.call_notifications`, and `macro.email_notifications`.
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/inbound/email_event_access.rs`: credential gate for email subscriptions.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.

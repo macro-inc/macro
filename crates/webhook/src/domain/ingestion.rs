@@ -21,7 +21,7 @@ use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::Utc;
 use documents::domain::events::DocumentTopicEvent;
-use email::domain::events::EmailTopicEvent;
+use email::domain::notification_events::{EmailNotificationEvent, EmailNotificationSubject};
 use entity_access::domain::models::{AccessError, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use futures::future::join_all;
@@ -123,10 +123,10 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
         event: Event<MessageTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 
-    /// Ingest one `macro.email` event envelope.
+    /// Ingest one `macro.email_notifications` event envelope.
     fn ingest_email_event(
         &self,
-        event: Event<EmailTopicEvent>,
+        event: Event<EmailNotificationEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 
     /// Ingest one `macro.webhooks` event envelope.
@@ -463,47 +463,15 @@ pub(crate) fn normalized_message_event(
 /// Backfill and reindex signals are internal. Received mail in spam or trash
 /// is also skipped; none of these events reach webhook subscribers.
 pub(crate) fn normalized_email_event(
-    event: &Event<EmailTopicEvent>,
-) -> Result<Option<(NormalizedWebhookEvent, MacroUserIdStr<'static>)>, WebhookEventIngestionError> {
-    let (entity_type, entity_id) = match &event.event {
-        EmailTopicEvent::LinkConnected(metadata) => (EMAIL_LINK_ENTITY_TYPE, metadata.link_id),
-        EmailTopicEvent::LinkDisconnected(metadata) => (EMAIL_LINK_ENTITY_TYPE, metadata.link_id),
-        EmailTopicEvent::LinkReauthRequired(metadata) => (EMAIL_LINK_ENTITY_TYPE, metadata.link_id),
-        EmailTopicEvent::MessageReceived(metadata) if metadata.is_spam_or_trash => return Ok(None),
-        EmailTopicEvent::MessageReceived(metadata) => {
-            (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id)
-        }
-        EmailTopicEvent::MessageDraftSynced(metadata) => {
-            (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id)
-        }
-        EmailTopicEvent::MessageSent(metadata) => (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id),
-        EmailTopicEvent::MessageDeleted(metadata) => (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id),
-        EmailTopicEvent::MessageSendQueued(metadata) => {
-            (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id)
-        }
-        EmailTopicEvent::MessageSendCancelled(metadata) => {
-            (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id)
-        }
-        EmailTopicEvent::ThreadArchived(metadata) => (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id),
-        EmailTopicEvent::ThreadTrashed(metadata) => (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id),
-        EmailTopicEvent::ThreadRead(metadata) => (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id),
-        EmailTopicEvent::ThreadStarred(metadata) => (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id),
-        EmailTopicEvent::ThreadSpamChanged(metadata) => {
-            (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id)
-        }
-        EmailTopicEvent::ThreadProjectChanged(metadata) => {
-            (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id)
-        }
-        EmailTopicEvent::ThreadLabelsUpdated(metadata) => {
-            (EMAIL_THREAD_ENTITY_TYPE, metadata.thread_id)
-        }
-        EmailTopicEvent::ThreadBackfilled(_) | EmailTopicEvent::ThreadsReindexRequested(_) => {
-            return Ok(None);
-        }
+    event: &Event<EmailNotificationEvent>,
+) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
+    let (entity_type, entity_id) = match event.event.subject() {
+        EmailNotificationSubject::Link(link_id) => (EMAIL_LINK_ENTITY_TYPE, link_id),
+        EmailNotificationSubject::Thread(thread_id) => (EMAIL_THREAD_ENTITY_TYPE, thread_id),
     };
     let entity_id = entity_id.to_string();
     let broker_envelope = serde_json::to_value(event)?;
-    Ok(Some((
+    Ok((
         normalized_event(
             event.event_id,
             event.schema_version,
@@ -513,7 +481,7 @@ pub(crate) fn normalized_email_event(
             broker_envelope,
         ),
         event.event.owner().clone(),
-    )))
+    ))
 }
 
 pub(crate) fn normalized_webhook_event(
@@ -806,11 +774,9 @@ where
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_email_event(
         &self,
-        event: Event<EmailTopicEvent>,
+        event: Event<EmailNotificationEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let Some((normalized, owner)) = normalized_email_event(&event)? else {
-            return Ok(());
-        };
+        let (normalized, owner) = normalized_email_event(&event)?;
         // Mail is private to its inbox; the owner's personal workspace is
         // the only grant, without entity access or team expansion.
         self.match_and_enqueue(normalized, vec![owner.to_string()])

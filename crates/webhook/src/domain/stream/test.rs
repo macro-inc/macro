@@ -608,15 +608,14 @@ async fn agent_session_events_fall_back_to_access_level() {
 #[tokio::test]
 async fn email_stream_requires_owner_user_scope_and_thread_filter() {
     use crate::domain::ingestion::stream::email_stream_candidate;
-    use email::domain::events::{
-        EmailEventOrigin, EmailTopicEvent, ThreadBackfilledMetadata, ThreadReadMetadata,
-    };
+    use email::domain::events::{EmailEventOrigin, ThreadReadMetadata};
+    use email::domain::notification_events::EmailNotificationEvent;
     use macro_event_broker::Event;
 
     let link_id = Uuid::now_v7();
     let thread_id = Uuid::now_v7();
     let owner = subscriber();
-    let event = Event::new(EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+    let event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
         link_id,
         owner: owner.clone(),
         actor: None,
@@ -624,9 +623,7 @@ async fn email_stream_requires_owner_user_scope_and_thread_filter() {
         is_read: true,
         origin: EmailEventOrigin::UserAction,
     }));
-    let candidate = email_stream_candidate(&event)
-        .expect("normalizes")
-        .expect("delivered");
+    let candidate = email_stream_candidate(&event).expect("normalizes");
     assert_eq!(
         candidate.audience,
         StreamAudience::User {
@@ -680,7 +677,7 @@ async fn email_stream_requires_owner_user_scope_and_thread_filter() {
         .unwrap();
     sender.send(candidate.clone()).unwrap();
 
-    let other_event = Event::new(EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+    let other_event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
         link_id,
         owner: MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap(),
         actor: None,
@@ -688,15 +685,13 @@ async fn email_stream_requires_owner_user_scope_and_thread_filter() {
         is_read: true,
         origin: EmailEventOrigin::UserAction,
     }));
-    let other_candidate = email_stream_candidate(&other_event)
-        .expect("normalizes")
-        .expect("delivered");
+    let other_candidate = email_stream_candidate(&other_event).expect("normalizes");
     sender.send(other_candidate.clone()).unwrap();
 
     let team_candidate = workspace_candidate("webhook.created", TEAM_WORKSPACE_ID);
     sender.send(team_candidate.clone()).unwrap();
 
-    let other_thread_event = Event::new(EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+    let other_thread_event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
         link_id,
         owner: subscriber(),
         actor: None,
@@ -704,9 +699,7 @@ async fn email_stream_requires_owner_user_scope_and_thread_filter() {
         is_read: true,
         origin: EmailEventOrigin::UserAction,
     }));
-    let other_thread_candidate = email_stream_candidate(&other_thread_event)
-        .expect("normalizes")
-        .expect("delivered");
+    let other_thread_candidate = email_stream_candidate(&other_thread_event).expect("normalizes");
     sender.send(other_thread_candidate.clone()).unwrap();
 
     let owner_events: Vec<_> = owner_stream.take(1).collect().await;
@@ -724,29 +717,17 @@ async fn email_stream_requires_owner_user_scope_and_thread_filter() {
         wrong_id_events[0].event_id,
         other_thread_candidate.event.event_id
     );
-
-    let skipped = Event::new(EmailTopicEvent::ThreadBackfilled(
-        ThreadBackfilledMetadata {
-            link_id: Uuid::now_v7(),
-            owner: subscriber(),
-            thread_id,
-        },
-    ));
-    assert!(
-        email_stream_candidate(&skipped)
-            .expect("normalizes")
-            .is_none()
-    );
 }
 
 #[test]
 fn email_link_stream_candidate_filters_by_link_id() {
     use crate::domain::ingestion::stream::email_stream_candidate;
-    use email::domain::events::{EmailTopicEvent, LinkDisconnectReason, LinkDisconnectedMetadata};
+    use email::domain::events::{LinkDisconnectReason, LinkDisconnectedMetadata};
+    use email::domain::notification_events::EmailNotificationEvent;
     use macro_event_broker::Event;
 
     let link_id = Uuid::now_v7();
-    let event = Event::new(EmailTopicEvent::LinkDisconnected(
+    let event = Event::new(EmailNotificationEvent::LinkDisconnected(
         LinkDisconnectedMetadata {
             link_id,
             owner: subscriber(),
@@ -754,9 +735,7 @@ fn email_link_stream_candidate_filters_by_link_id() {
             reason: LinkDisconnectReason::ManuallyDisabled,
         },
     ));
-    let candidate = email_stream_candidate(&event)
-        .expect("normalizes")
-        .expect("delivered");
+    let candidate = email_stream_candidate(&event).expect("normalizes");
 
     assert_eq!(candidate.event.event_name, "email.link_disconnected");
     assert_eq!(candidate.event.entity_type, "email_link");

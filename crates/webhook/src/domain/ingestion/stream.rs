@@ -16,7 +16,7 @@ use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
-use email::domain::events::EmailTopicEvent;
+use email::domain::notification_events::EmailNotificationEvent;
 use entity_access::domain::models::EntityType;
 use macro_event_broker::Event;
 use messages::outbound::broker::MessageTopicEvent;
@@ -80,16 +80,15 @@ pub(crate) fn message_stream_candidate(
 }
 
 pub(crate) fn email_stream_candidate(
-    event: &Event<EmailTopicEvent>,
-) -> Result<Option<StreamCandidateEvent>, WebhookEventIngestionError> {
-    Ok(
-        normalized_email_event(event)?.map(|(normalized, owner)| StreamCandidateEvent {
-            event: normalized,
-            audience: StreamAudience::User {
-                user_id: owner.to_string(),
-            },
-        }),
-    )
+    event: &Event<EmailNotificationEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let (normalized, owner) = normalized_email_event(event)?;
+    Ok(StreamCandidateEvent {
+        event: normalized,
+        audience: StreamAudience::User {
+            user_id: owner.to_string(),
+        },
+    })
 }
 
 /// `team_workspace_ids` are the user's team workspaces (resolved once per

@@ -78,7 +78,7 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 `macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
 `macro.agent_session_lifecycle`, `macro.users`, `macro.call_notifications`, and
-`macro.email`. It supports these event names:
+`macro.email_notifications`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
@@ -140,20 +140,23 @@ delivers again once it is validated. Webhooks stored before this check existed
 had any `email.*` names removed from their filters by a migration. Webhooks and streams without `email.*` event names retain their
 existing credential behavior.
 
-`email.thread_backfilled` and `email.threads_reindex_requested` are internal
-sync signals and are silently skipped. An `email.message_received` with
-`is_spam_or_trash = true` is also silently skipped, as in routines' new-mail
-trigger. These skipped events remain in the OpenAPI and SDK event union because
-it includes the whole email topic enum. The delivered payload is the broker
-envelope verbatim. Message data is limited to headers such as subject and
+Email events come from `macro.email_notifications`, not the internal
+`macro.email` topic. The email service publishes each `macro.email` event
+there too, with the same event ID and link-ID key, unless it is internal:
+`email.thread_backfilled`, `email.threads_reindex_requested`, and an
+`email.message_received` with `is_spam_or_trash = true` (as in routines'
+new-mail trigger) never reach it. The rule is
+`EmailNotificationEvent::from_topic_event` in the `email` crate, and the
+OpenAPI and SDK event unions carry `EmailNotificationEvent`, so they list only
+delivered events. The delivered payload is the broker envelope verbatim. Message data is limited to headers such as subject and
 addresses; the envelope never carries bodies, snippets, bcc addresses, or
 attachment names. Consumers read content back through the API. Email topic
 publication is best-effort and can be lost or repeated on retry. Duplicates
 carry the same IDs, so consumers treat events as idempotent state notifications.
 `metadata.origin`, where present, distinguishes Macro user actions from
 provider sync. The consumer group starts new topic partitions at the latest
-offset, so its first subscription to `macro.email` does not replay historical
-mail events.
+offset, so its first subscription to `macro.email_notifications` does not
+replay historical mail events.
 
 For document, channel, and message events, ingestion asks `EntityAccessService`
 for the people who currently have access to the entity; a message's entity is
@@ -393,8 +396,10 @@ example:
 RUST_LOG=info,webhook=trace,webhook::outbound::sqs_queue=trace
 ```
 
-Each consumed record opens a `kafka.process` span parented on the record's
-propagated trace context, so ingestion joins the publishing request's trace.
+Each consumed record, in both the ingestion consumer and the process-level
+stream consumer (`messaging.consumer.group.name = webhook-stream`), opens a
+`kafka.process` span parented on the record's propagated trace context, so
+ingestion and stream fan-out join the publishing request's trace.
 Delivery starts its own trace per queue message; correlate it by webhook or
 event ID. Ingestion spans expose event ID/name, entity type/ID, accessor count, workspace
 count, match count, and webhook ID. Worker and delivery spans expose queue

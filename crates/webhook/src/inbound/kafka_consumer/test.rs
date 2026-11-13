@@ -71,7 +71,7 @@ fn subscribes_to_all_ingestion_topics() {
             "macro.channels",
             "macro.call_notifications",
             "macro.messages",
-            "macro.email",
+            "macro.email_notifications",
             "macro.webhooks",
             "macro.agent_sessions",
             "macro.agent_session_lifecycle",
@@ -190,7 +190,7 @@ impl FlakyIngestionService {
 impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_email_event(
         &self,
-        _event: Event<email::domain::events::EmailTopicEvent>,
+        _event: Event<email::domain::notification_events::EmailNotificationEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.email_attempts.fetch_add(1, Ordering::SeqCst);
         self.ingest()
@@ -299,10 +299,11 @@ async fn permanent_webhook_failures_are_commit_safe_without_retry() {
 
 #[tokio::test]
 async fn decodes_and_dispatches_email_events() {
-    use email::domain::events::{EmailEventOrigin, EmailTopicEvent, ThreadReadMetadata};
+    use email::domain::events::{EmailEventOrigin, ThreadReadMetadata};
+    use email::domain::notification_events::EmailNotificationEvent;
 
     let link_id = Uuid::new_v4();
-    let event = Event::new(EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+    let event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
         link_id,
         owner: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user"),
         actor: None,
@@ -311,10 +312,12 @@ async fn decodes_and_dispatches_email_events() {
         origin: EmailEventOrigin::ProviderSync,
     }));
     let payload = serde_json::to_vec(&event).expect("serializable");
-    let decoded = decode_message("macro.email", &payload).expect("decodable");
+    let decoded = decode_message("macro.email_notifications", &payload).expect("decodable");
 
     match &decoded {
-        DeclaredMacroEvent::EmailMacroEvent(decoded) => assert_eq!(decoded.event(), &event),
+        DeclaredMacroEvent::EmailNotificationMacroEvent(decoded) => {
+            assert_eq!(decoded.event(), &event)
+        }
         _ => panic!("decoded into the wrong topic variant"),
     }
 
