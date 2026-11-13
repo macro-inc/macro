@@ -307,7 +307,15 @@ mail arrive (locally: insert a thread and publish `email.message_received` on
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
 under the new heading. Active searches also hide retained results and show loading
-while selected tag sets are pending. Background refreshes retain the current list. To check this,
+while selected tag sets are pending. Background refreshes retain the current list.
+
+While the search field has text the list shows only search states: no Watch
+tutorial row, a spinner while the search runs, `Keep typing to search` under 3
+characters (the search service's minimum; Focus filters its own list at any
+length), and `No results` when nothing matches. `Load More` appears only under
+result rows: a page whose hits the tab or a client-side filter drops (Archived
+keeps only archived hits) pages on by itself until a row shows or results run
+out. To check the tab switch,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
