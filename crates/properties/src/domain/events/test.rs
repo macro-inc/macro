@@ -422,15 +422,6 @@ mod exposure {
     fn entity_property_events_reach_the_carrying_entity_in_preview() {
         let events = [
             updated(EntityType::Task),
-            PropertyTopicEvent::EntityPropertyDeleted(EntityPropertyDeletedMetadata {
-                entity_property_id: uuid(ENTITY_PROPERTY_ID),
-                entity_id: ENTITY_ID.to_owned(),
-                entity_type: EntityType::Task,
-                property_definition_id: uuid(PROPERTY_DEFINITION_ID),
-                actor_user_id: None,
-                actor: None,
-                on_behalf_of: None,
-            }),
             PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
                 entity_id: ENTITY_ID.to_owned(),
                 entity_type: EntityType::Task,
@@ -503,5 +494,30 @@ mod exposure {
     fn public_payload_has_a_schema() {
         use utoipa::ToSchema as _;
         assert_eq!(PropertyPublicEvent::name(), "PropertyPublicEvent");
+    }
+
+    /// Personal tags are visible only to their owner, and the event cannot
+    /// tell a tag from any other select, so select changes and removals stay
+    /// internal until the producer says.
+    #[test]
+    fn possible_personal_tag_changes_stay_internal() {
+        let PropertyTopicEvent::EntityPropertyUpdated(mut select) = updated(EntityType::Task)
+        else {
+            unreachable!()
+        };
+        select.value = Some(PropertyValue::SelectOption(vec![uuid(OPTION_ID)]));
+        select.previous_value = None;
+        let removed = PropertyTopicEvent::EntityPropertyDeleted(EntityPropertyDeletedMetadata {
+            entity_property_id: uuid(ENTITY_PROPERTY_ID),
+            entity_id: ENTITY_ID.to_owned(),
+            entity_type: EntityType::Task,
+            property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+            actor_user_id: None,
+            actor: None,
+            on_behalf_of: None,
+        });
+        for event in [PropertyTopicEvent::EntityPropertyUpdated(select), removed] {
+            assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+        }
     }
 }

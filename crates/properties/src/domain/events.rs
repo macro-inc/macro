@@ -235,17 +235,31 @@ impl TopicEvent for PropertyTopicEvent {
             Audience, EntityRef, Exposure, PendingPhase, PublicEvent, Stage,
         };
         use public::{
-            PublicEntityPropertiesCleared, PublicEntityPropertyDeleted,
-            PublicEntityPropertyUpdated, acting, public_entity_type,
+            PublicEntityPropertiesCleared, PublicEntityPropertyUpdated, acting, public_entity_type,
         };
         use std::borrow::Cow;
 
         const NO_ENTITY_AUDIENCE: &str = "a property on a calendar event or user has no entity accessor list; it stays internal until those families have an audience";
+        const MAYBE_PERSONAL_TAG: &str = "may be a personal tag, which only its owner may see; the event carries neither the definition's data type nor its owner, so the producer must add them before select and tag changes can be public";
 
         // A property value is visible to whoever can see the entity carrying
         // it, so the audience is that entity's.
         let (name, entity_type, entity_id, payload) = match self {
             Self::EntityPropertyUpdated(metadata) => {
+                // Tags, personal ones included, hold select-option values; an
+                // update whose value is neither cannot be a tag.
+                let is_select = |value: &Option<PropertyValue>| {
+                    matches!(value, Some(PropertyValue::SelectOption(_)))
+                };
+                if is_select(&metadata.value)
+                    || is_select(&metadata.previous_value)
+                    || (metadata.value.is_none() && metadata.previous_value.is_none())
+                {
+                    return Ok(Exposure::pending(
+                        PendingPhase::ProducerChange,
+                        MAYBE_PERSONAL_TAG,
+                    ));
+                }
                 let Some(entity_type) = public_entity_type(metadata.entity_type) else {
                     return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
                 };
@@ -266,23 +280,13 @@ impl TopicEvent for PropertyTopicEvent {
                     }),
                 )
             }
-            Self::EntityPropertyDeleted(metadata) => {
-                let Some(entity_type) = public_entity_type(metadata.entity_type) else {
-                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
-                };
-                (
-                    "entity_property.deleted",
-                    entity_type,
-                    &metadata.entity_id,
-                    PropertyPublicEvent::EntityPropertyDeleted(PublicEntityPropertyDeleted {
-                        entity_property_id: metadata.entity_property_id,
-                        entity_type,
-                        entity_id: metadata.entity_id.clone(),
-                        property_definition_id: metadata.property_definition_id,
-                        actor: acting(metadata.actor.as_ref(), metadata.actor_user_id.as_ref()),
-                        on_behalf_of: metadata.on_behalf_of.clone(),
-                    }),
-                )
+            // Says which property left the entity, which for a personal tag
+            // reveals it to every viewer.
+            Self::EntityPropertyDeleted(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::ProducerChange,
+                    MAYBE_PERSONAL_TAG,
+                ));
             }
             Self::EntityPropertiesCleared(metadata) => {
                 let Some(entity_type) = public_entity_type(metadata.entity_type) else {

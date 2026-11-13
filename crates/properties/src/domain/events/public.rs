@@ -72,26 +72,6 @@ pub struct PublicEntityPropertyUpdated {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Public payload of `entity_property.deleted`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PublicEntityPropertyDeleted {
-    /// The deleted entity-property row.
-    pub entity_property_id: Uuid,
-    /// Type of the entity that carried the property.
-    pub entity_type: MacroEntityType,
-    /// The entity that carried the property.
-    pub entity_id: String,
-    /// The property definition whose value was removed.
-    pub property_definition_id: Uuid,
-    /// Who removed it, when attributable.
-    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
-    pub actor: Option<Actor<'static>>,
-    /// The user the actor acted for, when different from the actor.
-    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
-    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
-}
-
 /// Public payload of `entity_properties.cleared`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -118,9 +98,6 @@ pub enum PropertyPublicEvent {
     /// A property value on an entity was set or changed.
     #[serde(rename = "entity_property.updated")]
     EntityPropertyUpdated(PublicEntityPropertyUpdated),
-    /// A property value was removed from an entity.
-    #[serde(rename = "entity_property.deleted")]
-    EntityPropertyDeleted(PublicEntityPropertyDeleted),
     /// Every property value on an entity was removed.
     #[serde(rename = "entity_properties.cleared")]
     EntityPropertiesCleared(PublicEntityPropertiesCleared),
