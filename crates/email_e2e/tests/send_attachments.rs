@@ -763,3 +763,62 @@ async fn gmail_calendar_attachment_is_readable_and_not_a_document() -> Result<()
 async fn outlook_calendar_attachment_is_readable_and_not_a_document() -> Result<(), Report> {
     calendar_attachment_is_readable_and_not_a_document(Provider::Outlook).await
 }
+
+/// Importing a Gmail signature brings its image along. An image pasted into
+/// Gmail's signature editor from a message is a Gmail web address that only
+/// loads in the owner's signed-in browser: the import reads the image from
+/// the mailbox with the inbox's own access and stores a copy. If this fails,
+/// the saved signature shows a broken image to every recipient.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_imported_signature_keeps_an_image_pasted_from_a_message() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+
+    let unsigned = inbox.post("/email/settings/import-signature", None).await?;
+    assert_eq!(unsigned.status, 404, "{}", unsigned.text);
+
+    deliver_with_inline_logo(&stack, &inbox, "Letterhead")?;
+    let message = inbox
+        .wait_for_provider_message("the message holding the logo", |message| {
+            message.subject == "Letterhead"
+        })
+        .await?;
+    let pasted = format!(
+        "https://mail.google.com/mail/u/0?ui=2&amp;ik=0a1b2c3d4e&amp;attid=0.1&amp;th={}\
+         &amp;view=fimg&amp;fur=ip&amp;sz=s0-l75-ft&amp;disp=emb&amp;realattid={LOGO_CID}",
+        message.thread_id
+    );
+    stack.gmail().set_signature(
+        inbox.email(),
+        &format!("<div>Ada Lovelace</div><img src=\"{pasted}\" width=\"96\">"),
+    )?;
+
+    let imported = inbox
+        .post("/email/settings/import-signature", None)
+        .await?
+        .ok()
+        .context("the signature could not be imported")?;
+    let signature = imported["settings"]["signature"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(signature.contains("Ada Lovelace"), "{signature}");
+    assert!(
+        !signature.contains("mail.google.com"),
+        "the saved signature still points at Gmail's own page: {signature}"
+    );
+    assert!(
+        signature.contains("<img") && signature.contains("/static-files/"),
+        "the saved signature has no stored copy of its image: {signature}"
+    );
+    assert!(
+        stack
+            .stored_objects()
+            .iter()
+            .any(|object| object.bytes == LOGO),
+        "the image's bytes were not stored"
+    );
+
+    stack.finish().await
+}
