@@ -67,8 +67,12 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
-use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
+use suggestions::domain::service::SuggestionService;
+use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -138,6 +142,18 @@ impl RequestSessions for CorrelationSessions {
             .await
             .map_err(|error| anyhow::anyhow!("could not read a code-mode invocation: {error}"))?
             .map(|correlation| correlation.session_id))
+    }
+}
+
+#[async_trait::async_trait]
+impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
+    async fn session_of(
+        &self,
+        correlation: uuid::Uuid,
+    ) -> Result<Option<uuid::Uuid>, rootcause::Report> {
+        RequestSessions::session_of(self, correlation)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
     }
 }
 
@@ -445,10 +461,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let suggestion_code = Arc::clone(&code);
     // Which agent session a code-mode request came from, for drafts' checks
     // and suggestion sessions' suggestions.
-    let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
+    let correlation_sessions = Arc::new(CorrelationSessions(
         agent_correlation::outbound::PgCorrelationRepository(db.clone()),
     ));
-    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
+    let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
+    let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -519,6 +536,22 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: suggestions,
         authorization_state: authorization_state.clone(),
     };
+    // Suggestions: written and managed by hidden generation sessions through
+    // `macro.suggestions.*`, read and acted on by the person. Served here, under
+    // the scheduler's prefix, next to the routine suggestions they share
+    // generation with.
+    let feed_state = SuggestionRouterState {
+        service: Arc::new(SuggestionService::new(
+            Arc::new(PgSuggestionRepo::new(db.clone())),
+            Arc::new(EntitySuggestionAccess {
+                access: access.as_ref().clone(),
+                pool: db.clone(),
+            }),
+            correlation_sessions,
+            routine_flags.clone(),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
@@ -545,7 +578,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
         .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
-        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
+        .merge(suggestion_router::<_, _, ()>(feed_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
@@ -559,8 +593,16 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 fn mount_router(routes: Router) -> Router {
     Router::new().nest(GATEWAY_PATH_PREFIX, routes).merge(
         SwaggerUi::new("/scheduled-action/docs")
-            .url("/scheduled-action/api-doc/openapi.json", ApiDoc::openapi()),
+            .url("/scheduled-action/api-doc/openapi.json", openapi()),
     )
+}
+
+/// The scheduler's OpenAPI, with the suggestions routes it also serves, as
+/// `scheduling_openapi` prints it.
+fn openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = ApiDoc::openapi();
+    openapi.merge(suggestions::swagger::SuggestionsApiDoc::openapi());
+    openapi
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for
