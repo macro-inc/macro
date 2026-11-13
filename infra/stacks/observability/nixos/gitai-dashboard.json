@@ -128,7 +128,7 @@
       "id": 2,
       "type": "stat",
       "title": "AI share of added lines",
-      "description": "AI-written added lines over all added lines in committed code, for the selected range.",
+      "description": "AI-written added lines over all added lines in committed code, for the selected range. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -146,7 +146,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__range])) / sum(increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]))",
+          "expr": "sum(((increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__range]) + (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__range]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"} offset $__range)) or increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__range]) or (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__range]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"} offset $__range))) / sum(((increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) + (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__range)) or increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) or (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__range)))",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -176,7 +176,7 @@
       "id": 3,
       "type": "stat",
       "title": "Cost",
-      "description": "Model spend reported by the agents (USD) in the selected range.",
+      "description": "Model spend reported by the agents (USD) in the selected range. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -194,7 +194,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]))",
+          "expr": "sum(((increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) + (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__range)) or increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) or (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__range)))",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -224,7 +224,7 @@
       "id": 4,
       "type": "stat",
       "title": "Commits",
-      "description": "Committed events received in the selected range.",
+      "description": "Committed events received in the selected range. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -242,7 +242,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]))",
+          "expr": "sum(((increase(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) + (min_over_time(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) unless gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__range)) or increase(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) or (min_over_time(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__range]) unless gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__range)))",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -272,7 +272,7 @@
       "id": 5,
       "type": "stat",
       "title": "Agent sessions",
-      "description": "Sessions first seen in the selected range.",
+      "description": "Sessions first seen in the selected range. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -290,7 +290,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]))",
+          "expr": "sum(((increase(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) + (min_over_time(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) unless gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__range)) or increase(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) or (min_over_time(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) unless gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__range)))",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -333,7 +333,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "AI share of added lines by repo",
-      "description": "Per interval: AI-written added lines over all added lines, per repository.",
+      "description": "Per interval: AI-written added lines over all added lines, per repository. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -351,7 +351,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (repo) (increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval])) / sum by (repo) (increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]))",
+          "expr": "sum by (repo) (((increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) + (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"} offset $__interval)) or increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) or (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"} offset $__interval))) / sum by (repo) (((increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) + (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval)) or increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) or (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval)))",
           "legendFormat": "{{repo}}"
         }
       ],
@@ -384,7 +384,7 @@
       "id": 8,
       "type": "timeseries",
       "title": "AI share of added lines by tool and model",
-      "description": "Per interval: each tool and model's AI-written lines as a share of all added lines in the selected repos.",
+      "description": "Per interval: each tool and model's AI-written lines as a share of all added lines in the selected repos. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -402,7 +402,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (tool, model) (increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval])) / scalar(sum(increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval])))",
+          "expr": "sum by (tool, model) (((increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) + (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"} offset $__interval)) or increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) or (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\", tool=~\"$tool\", kind=\"ai\"} offset $__interval))) / scalar(sum(((increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) + (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval)) or increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) or (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval))))",
           "legendFormat": "{{tool}} {{model}}"
         }
       ],
@@ -440,7 +440,7 @@
       "id": 9,
       "type": "timeseries",
       "title": "Added lines per day, AI and human",
-      "description": "Added lines in Committed events per day, split by who wrote them.",
+      "description": "Added lines in Committed events per day, split by who wrote them. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -458,7 +458,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (kind) (increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]))",
+          "expr": "sum by (kind) (((increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) + (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval)) or increase(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) or (min_over_time(gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_lines_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval)))",
           "legendFormat": "{{kind}}"
         }
       ],
@@ -496,7 +496,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "Commits per day by repo",
-      "description": "Committed events per day. Commits made before git-ai was installed, or with its daemon down, are missing here; compare with the repo's own commit count to spot machines without hooks. Per-commit attribution (with or without AI lines) is not in the counters; use the read API.",
+      "description": "Committed events per day. Commits made before git-ai was installed, or with its daemon down, are missing here; compare with the repo's own commit count to spot machines without hooks. Per-commit attribution (with or without AI lines) is not in the counters; use the read API. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -514,7 +514,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (repo) (increase(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]))",
+          "expr": "sum by (repo) (((increase(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) + (min_over_time(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval)) or increase(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) or (min_over_time(gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"}[$__interval]) unless gitai_commits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", repo=~\"$repo\", author=~\"$author\"} offset $__interval)))",
           "legendFormat": "{{repo}}"
         }
       ],
@@ -565,7 +565,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "Cost per day by person",
-      "description": "Model spend (USD) per day, by the email bound to each device credential.",
+      "description": "Model spend (USD) per day, by the email bound to each device credential. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -583,7 +583,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (author) (increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]))",
+          "expr": "sum by (author) (((increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) + (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)) or increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) or (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)))",
           "legendFormat": "{{author}}"
         }
       ],
@@ -621,7 +621,7 @@
       "id": 13,
       "type": "timeseries",
       "title": "Cost per day by tool and model",
-      "description": "Model spend (USD) per day.",
+      "description": "Model spend (USD) per day. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -639,7 +639,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (tool, model) (increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]))",
+          "expr": "sum by (tool, model) (((increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) + (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)) or increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) or (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)))",
           "legendFormat": "{{tool}} {{model}}"
         }
       ],
@@ -677,7 +677,7 @@
       "id": 14,
       "type": "timeseries",
       "title": "Tokens per day by type",
-      "description": "Input, output and cache tokens per day.",
+      "description": "Input, output and cache tokens per day. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -695,7 +695,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (type) (increase(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]))",
+          "expr": "sum by (type) (((increase(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) + (min_over_time(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)) or increase(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) or (min_over_time(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)))",
           "legendFormat": "{{type}}"
         }
       ],
@@ -733,7 +733,7 @@
       "id": 15,
       "type": "timeseries",
       "title": "Tokens per day by model",
-      "description": "All token types per day, by model.",
+      "description": "All token types per day, by model. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -751,7 +751,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (model) (increase(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]))",
+          "expr": "sum by (model) (((increase(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) + (min_over_time(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)) or increase(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) or (min_over_time(gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_tokens_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)))",
           "legendFormat": "{{model}}"
         }
       ],
@@ -789,7 +789,7 @@
       "id": 16,
       "type": "table",
       "title": "Cost by person, tool and model",
-      "description": "Model spend (USD) over the selected range.",
+      "description": "Model spend (USD) over the selected range. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -807,7 +807,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(sum by (author, tool, model) (increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range])))",
+          "expr": "sort_desc(sum by (author, tool, model) (((increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) + (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__range)) or increase(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) or (min_over_time(gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__range]) unless gitai_cost_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__range))))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -847,7 +847,7 @@
       "id": 17,
       "type": "timeseries",
       "title": "Sessions per day by tool",
-      "description": "Agent sessions first seen per day.",
+      "description": "Agent sessions first seen per day. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -865,7 +865,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (tool) (increase(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]))",
+          "expr": "sum by (tool) (((increase(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) + (min_over_time(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)) or increase(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) or (min_over_time(gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"}[$__interval]) unless gitai_sessions_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\", author=~\"$author\", tool=~\"$tool\"} offset $__interval)))",
           "legendFormat": "{{tool}}"
         }
       ],
@@ -1012,7 +1012,7 @@
       "id": 21,
       "type": "timeseries",
       "title": "Redaction hits by rule",
-      "description": "Secrets masked by the server's redaction pass, per hour, by rule. A rising rule means clients are sending that kind of secret.",
+      "description": "Secrets masked by the server's redaction pass, per hour, by rule. A rising rule means clients are sending that kind of secret. Counts include each counter series' first sample (a new author, model or repo, or the first event after a restart), which a plain increase() drops; increase() still extrapolates slightly.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1030,7 +1030,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (rule) (increase(gitai_redaction_hits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\"}[$__interval]))",
+          "expr": "sum by (rule) (((increase(gitai_redaction_hits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\"}[$__interval]) + (min_over_time(gitai_redaction_hits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\"}[$__interval]) unless gitai_redaction_hits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\"} offset $__interval)) or increase(gitai_redaction_hits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\"}[$__interval]) or (min_over_time(gitai_redaction_hits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\"}[$__interval]) unless gitai_redaction_hits_total{service_name=\"gitai-service\", deployment_environment=\"$deployment_environment\"} offset $__interval)))",
           "legendFormat": "{{rule}}"
         }
       ],
