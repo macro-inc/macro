@@ -57,6 +57,8 @@ test('a pasted routine link shows and sends the routine name', async ({
   await expect(editor.getByText('Loading...')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('composer.png') });
 
+  // The name is written onto the node in the task after the chip renders.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)));
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   // The name is saved on the mention, so the sent message carries it.
   await expect(page.getByLabel('Sent message')).toContainText(
