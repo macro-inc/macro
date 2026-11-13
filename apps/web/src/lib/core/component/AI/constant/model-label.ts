@@ -105,7 +105,8 @@ function defaultModelName(
  * What to call a model: the house name when the app knows the id, otherwise
  * the runtime's own display name, otherwise the id read as a name. `name` is
  * ignored when it is just the id again, which is how a runtime says it has
- * no name for the model.
+ * no name for the model. A runtime's `default` choice reads as the model its
+ * `description` names, "Opus 4.8 (default)".
  */
 export function modelLabel(
   id: string | undefined,
