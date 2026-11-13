@@ -40,7 +40,10 @@ const COMPUTER_GUARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::fr
 pub enum PgComputerError {
     /// A database operation failed.
     #[error(transparent)]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
+    /// No connection could be had from the pool in time.
+    #[error("{0}")]
+    Unavailable(#[source] crate::domain::ports::StorageUnavailable),
     /// Stored computer data violates a domain contract.
     #[error("stored computer data is invalid: {0}")]
     Corrupt(String),
@@ -50,6 +53,17 @@ pub enum PgComputerError {
     /// Only fleet and billing effects are stored in the outbox.
     #[error("{0:?} effects are not stored in the outbox")]
     NotAnOutboxWorker(EffectWorker),
+}
+
+impl From<sqlx::Error> for PgComputerError {
+    fn from(error: sqlx::Error) -> Self {
+        match error {
+            sqlx::Error::PoolTimedOut => {
+                Self::Unavailable(crate::domain::ports::StorageUnavailable(Box::new(error)))
+            }
+            error => Self::Sqlx(error),
+        }
+    }
 }
 
 impl From<std::num::TryFromIntError> for PgComputerError {
@@ -915,38 +929,5 @@ impl ComputerRepo for PgComputerRepo {
                 })
             })
             .collect()
-    }
-
-    async fn sold_out_sizes(
-        &self,
-        catalog: &[crate::domain::size::CatalogEntry],
-        _now: DateTime<Utc>,
-    ) -> Result<Vec<ComputerSize>, PgComputerError> {
-        let free = sqlx::query_scalar!(
-            r#"
-            WITH held AS (
-                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4) AS units
-                FROM hosted_runtime WHERE (state->'phase'->>'phase') <> 'destroying'
-                UNION ALL
-                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
-                FROM computer_reservation
-            )
-            SELECT COALESCE(MAX(free), 0)::INTEGER AS "free!"
-            FROM (
-                SELECT host.sold_capacity_units - COALESCE(SUM(held.units), 0) AS free
-                FROM hosted_runtime_host host
-                LEFT JOIN held ON held.host_id = host.id
-                GROUP BY host.id, host.sold_capacity_units
-            ) hosts
-            "#,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(catalog
-            .iter()
-            .filter(|entry| i64::from(entry.resources.units()) > i64::from(free))
-            .map(|entry| entry.size)
-            .collect())
     }
 }

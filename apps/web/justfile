@@ -132,8 +132,8 @@ local-email: ensure-cache-wasm
 # with distinct CARGO_TARGET_DIR values so they do not serialize on the
 # workspace cargo lock. CI reuses a package only when nothing it is built from
 # changed (scripts/cached-wasm-build.sh keys on its sources, not on a version
-# bump); Namespace `web-ci` sccache makes the rustc invocations cheaper when it
-# does rebuild.
+# bump); in PR checks the Namespace `web-ci` sccache makes the rustc
+# invocations cheaper when it does rebuild, and deploy builds use a local one.
 #
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
@@ -151,13 +151,9 @@ ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
 [parallel]
 build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-natural-time-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
 
-build-dev: build-wasm
-    MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+build-dev: build-wasm (bundle "development")
 
-build-staging: build-wasm
-    MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+build-staging: build-wasm (bundle "staging")
 
 # Production bundles carry the native build floors checked in at
 # min-native-build.json (schema 3 manifest, see scripts/write-bundle-manifest.mjs);
@@ -168,8 +164,24 @@ build-prod: build-wasm
     set -euo pipefail
     export MIN_NATIVE_BUILD_ANDROID="${MIN_NATIVE_BUILD_ANDROID:-$(bun -e "console.log(require('./min-native-build.json').android)")}"
     export MIN_NATIVE_BUILD_IOS="${MIN_NATIVE_BUILD_IOS:-$(bun -e "console.log(require('./min-native-build.json').ios)")}"
-    MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    just --justfile "{{justfile()}}" bundle production
+
+# The Vite build into dist, plus the cache WASM's Brotli sidecar (package-dist).
+# Quality 11 takes about 20 s, so the sidecar is compressed from the wasm-pack
+# output while Vite runs: Vite copies that file into dist unchanged, and
+# package-dist uses the copy only if it decompresses to the bytes there.
+[private]
+bundle mode:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sidecar="{{cache_wasm_target}}/precompressed/cache_wasm_bg.wasm.br"
+    bun scripts/cache-wasm/cli.ts precompress --wasm src/lib/graphql-cache/wasm/cache_wasm_bg.wasm --out "$sidecar" &
+    precompress=$!
+    trap 'kill "$precompress" 2>/dev/null || true' EXIT
+    MODE="$1" NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    wait "$precompress" || echo "precompressing the cache WASM failed; package-dist compresses it instead" >&2
+    trap - EXIT
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist --precompressed "$sidecar"
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
