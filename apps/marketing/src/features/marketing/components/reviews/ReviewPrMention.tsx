@@ -110,7 +110,7 @@ export function PrPreviewCard(props: {
           <OpenIcon class="size-4" />
         </span>
       </div>
-      <div class="mb-2 line-clamp-2 px-2 text-sm font-semibold">
+      <div class="mb-2 line-clamp-2 px-2 text-sm font-medium">
         {props.pr.title}
       </div>
       <div class="flex items-center gap-3 border-t border-edge-muted p-2 text-xs text-ink-muted">

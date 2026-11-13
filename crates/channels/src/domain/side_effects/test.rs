@@ -1382,6 +1382,38 @@ fn broker_events_map_participant_joined_to_participant_added() {
 }
 
 #[test]
+fn broker_events_carry_the_requesters_name_on_a_request_to_join() {
+    use macro_event_broker::MacroEvent as _;
+    let channel_id = Uuid::new_v4();
+    let events = broker_events_for_event(&ChannelEvent::AccessRequested {
+        request: ChannelAccessRequest {
+            id: Uuid::from_u128(3),
+            channel_id,
+            requester_id: user("sarah@example.com"),
+            status: crate::domain::access_requests::ChannelAccessRequestStatus::Pending,
+            created_at: Utc::now(),
+            resolved_at: None,
+            resolved_by: None,
+        },
+        requester_name: Some("Sarah Lee".to_string()),
+        participant_user_ids: users(&["alice@example.com"]),
+        metadata: ChannelMetadata {
+            channel_type: ChannelType::Private,
+            channel_name: "design".to_string(),
+        },
+    });
+
+    assert_eq!(events.len(), 1);
+    let envelope = serde_json::to_value(events[0].event()).unwrap();
+    assert_eq!(envelope["event_type"], "channel.access_requested");
+    assert_eq!(
+        envelope["metadata"]["requester_id"],
+        "macro|sarah@example.com"
+    );
+    assert_eq!(envelope["metadata"]["requester_name"], "Sarah Lee");
+}
+
+#[test]
 fn broker_events_map_channel_updated() {
     use macro_event_broker::MacroEvent as _;
     let channel_id = Uuid::new_v4();

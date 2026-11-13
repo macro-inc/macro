@@ -31,7 +31,7 @@ it('stays off through bursts shorter than the delay', async () => {
 it('turns on after the delay and holds through a brief gap before turning off', async () => {
   const flag = setup();
   flag.setSource(true);
-  await vi.advanceTimersByTimeAsync(299);
+  await vi.advanceTimersByTimeAsync(300);
   expect(flag.steady()).toBe(false);
   await vi.advanceTimersByTimeAsync(1);
   expect(flag.steady()).toBe(true);
@@ -53,11 +53,33 @@ it('turns on after the delay and holds through a brief gap before turning off', 
 it('shows for at least the hold time once it has appeared', async () => {
   const flag = setup();
   flag.setSource(true);
-  await vi.advanceTimersByTimeAsync(300);
+  await vi.advanceTimersByTimeAsync(301);
   flag.setSource(false);
   await vi.advanceTimersByTimeAsync(400);
   expect(flag.steady()).toBe(true);
   await vi.advanceTimersByTimeAsync(100);
   expect(flag.steady()).toBe(false);
+  flag.dispose();
+});
+
+it('stays off when the thread was blocked past the delay and the answer was already waiting', async () => {
+  const flag = setup();
+  flag.setSource(true);
+  // The overdue delay timer runs first, then the task carrying the answer.
+  await vi.advanceTimersToNextTimerAsync();
+  expect(flag.steady()).toBe(false);
+  flag.setSource(false);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(flag.steady()).toBe(false);
+  flag.dispose();
+});
+
+it('still turns on after a blocked thread when the source stays on', async () => {
+  const flag = setup();
+  flag.setSource(true);
+  await vi.advanceTimersToNextTimerAsync();
+  expect(flag.steady()).toBe(false);
+  await vi.advanceTimersToNextTimerAsync();
+  expect(flag.steady()).toBe(true);
   flag.dispose();
 });

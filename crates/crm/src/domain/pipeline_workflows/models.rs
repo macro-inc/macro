@@ -1,5 +1,7 @@
 //! What the pipeline workflows take and return.
 
+use std::collections::BTreeMap;
+
 use databases::domain::models::{RowId, TableDetail, TableVersion};
 use entity_access::domain::models::AccessError;
 use uuid::Uuid;
@@ -57,6 +59,30 @@ impl PipelineOverview {
     pub(super) fn record_field(&self) -> Option<&PipelineField> {
         self.fields.iter().find(|field| field.is_record())
     }
+
+    /// The field holding the currency code of a monetary field's amounts,
+    /// found through the stable column pairing so renames keep it.
+    pub fn currency_field(&self, amount: &PipelineField) -> Option<&PipelineField> {
+        let pair = self
+            .pipeline
+            .pipeline
+            .commercial_fields
+            .money
+            .iter()
+            .find(|pair| pair.amount == amount.id)?;
+        self.fields.iter().find(|field| field.id == pair.currency)
+    }
+
+    /// Whether every entry must hold a value: the field's own rule, or a
+    /// protected Outcome or currency field.
+    pub fn requires(&self, field: &PipelineField) -> bool {
+        field.required
+            || self
+                .pipeline
+                .pipeline
+                .commercial_fields
+                .is_system_select(field.id)
+    }
 }
 
 /// One entry: the record it tracks, if any, and its filled-in fields.
@@ -68,6 +94,8 @@ pub struct PipelineEntryView {
     pub record: Option<PipelineRecord>,
     /// Its other fields that hold a value, in column order.
     pub fields: Vec<(String, FieldValue)>,
+    /// Denominations by monetary field name, resolved through stable column roles.
+    pub currencies: BTreeMap<String, String>,
 }
 
 /// Which entries to read, and how to order them.
@@ -97,6 +125,17 @@ pub struct OptionCounts {
     pub empty: usize,
 }
 
+/// A number total, grouped by denomination for monetary fields.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldTotal {
+    /// The field being summarized.
+    pub field: String,
+    /// Currency code for money, absent for ordinary numeric fields.
+    pub currency: Option<String>,
+    /// Sum of matching values in this denomination.
+    pub sum: f64,
+}
+
 /// The entries a query matched.
 #[derive(Debug, Clone)]
 pub struct FoundEntries {
@@ -112,7 +151,7 @@ pub struct FoundEntries {
     /// Matched entries per option of each single-select field.
     pub counts: Vec<OptionCounts>,
     /// Sum of each number field over the matched entries.
-    pub totals: Vec<(String, f64)>,
+    pub totals: Vec<FieldTotal>,
 }
 
 /// A record's entries in one pipeline.
@@ -180,6 +219,10 @@ pub struct FieldChange {
     pub before: Option<FieldValue>,
     /// Its value after.
     pub after: Option<FieldValue>,
+    /// Denomination of the previous amount, when this is a monetary field.
+    pub before_currency: Option<String>,
+    /// Denomination of the saved amount, when this is a monetary field.
+    pub after_currency: Option<String>,
 }
 
 /// An updated entry.
@@ -267,6 +310,10 @@ pub enum WorkflowError {
     /// what it cannot do; the message says what to change.
     #[error("{0}")]
     Invalid(String),
+    /// The caller may not make this change, such as a share from a session
+    /// whose scope shares nothing.
+    #[error("{0}")]
+    Forbidden(String),
     /// The user belongs to no team, so has no CRM.
     #[error("the user is not in a team, so they have no CRM")]
     NoTeam,

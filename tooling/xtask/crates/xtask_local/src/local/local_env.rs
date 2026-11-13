@@ -369,6 +369,17 @@ impl InfraEnv {
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
         );
+        // `AgentGitServiceUrl`'s Local default is the harness's host port,
+        // which inside a container is the caller itself. The harness builds
+        // clone URLs from it, so they resolve for Docker computers on the
+        // services network too.
+        env.insert(
+            "OVERRIDE_AGENT_GIT_SERVICE_URL".into(),
+            "http://agent-harness-service:8080/agent-git".into(),
+        );
+        // Agent teammates' bare repositories: the compose volume on the
+        // harness, mounted at the same path as the deployed EFS volume.
+        env.insert("REPO_STORAGE_ROOT".into(), "/data/agent-git".into());
         // Same split for the static file service: without this a service
         // storing a file (the agent harness re-hosting a Cursor artifact)
         // asks http://localhost:8100, the host port of the single-instance
@@ -713,6 +724,9 @@ impl BootStubEnv {
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
+        // The harness's agent repo limits; the deployed values live in Doppler.
+        env.insert("MAX_REPO_SIZE_BYTES".into(), "524288000".into());
+        env.insert("PUSHES_PER_MINUTE".into(), "30".into());
         // email_service / connection_gateway open their own Postgres pool.
         env.insert(
             "MACRO_DB_URL".into(),

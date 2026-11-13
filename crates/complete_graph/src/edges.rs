@@ -33,6 +33,7 @@ use predicate_index::{RecordKey, utc_timestamp_micros};
 use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
 };
+use tracing::Instrument;
 use uuid::Uuid;
 
 /// The types of the edge readers for soup
@@ -269,7 +270,7 @@ where
         AgentSessionBotLoader {
             load_batch: Arc::new(load_batch),
         },
-        tokio::spawn,
+        |batch| tokio::spawn(batch.in_current_span()),
     )
 }
 
@@ -467,7 +468,7 @@ where
         AgentSessionLogLoader {
             load_batch: Arc::new(load_batch),
         },
-        tokio::spawn,
+        |batch| tokio::spawn(batch.in_current_span()),
     )
 }
 

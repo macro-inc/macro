@@ -6,22 +6,34 @@ publish = false
 
 [dependencies]
 agent_correlation = { path = "../agent_correlation" }
+agent_session = { path = "../agent_session", default-features = false }
 async-trait = { workspace = true }
 axum = { workspace = true }
+channels = { path = "../channels", default-features = false, features = ["outbound"] }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
+documents = { path = "../documents", default-features = false, features = ["outbound", "ports"] }
+email = { path = "../email", default-features = false, features = ["outbound"] }
+email_utils = { path = "../email_utils" }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"] }
 feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
+kafka_util = { path = "../kafka_util" }
 macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
+macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["broker", "outbound"] }
 model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner" }
+projects = { path = "../projects", default-features = false }
+rdkafka = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shown_text = { path = "../shown_text" }
+suggestions_db_utils = { path = "../suggestions_db_utils" }
 sqlx = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
@@ -31,4 +43,9 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id" }
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
+tokio = { workspace = true, features = ["test-util"] }
+tokio-util = { workspace = true }
+tower = { workspace = true }

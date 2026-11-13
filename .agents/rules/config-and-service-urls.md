@@ -40,10 +40,10 @@ startup loudly.
 - Third-party hosts our code calls are typed the same way when a test double
   exists for them (`GmailApiUrl`, `GoogleCalendarApiUrl`, `GooglePeopleApiUrl`,
   `GoogleOauthCertsUrl`, `GoogleOauthAuthorizationUrl`, `GoogleOauthTokenUrl`,
-  `GoogleOauthRevokeUrl` for `crates/gmail_emulator`; `MicrosoftGraphUrl` for
-  `crates/outlook_emulator`): the provider's host in every environment, with
-  the override as the only way to point elsewhere. They are not part of the
-  hand-copied table below.
+  `GoogleOauthRevokeUrl`, `GoogleOauthTokenInfoUrl` for `crates/gmail_emulator`;
+  `MicrosoftGraphUrl` for `crates/outlook_emulator`): the provider's host in
+  every environment, with the override as the only way to point elsewhere.
+  They are not part of the hand-copied table below.
 - A third-party host a browser also opens gets two types, because a container
   and a browser reach a local double at different addresses:
   `MicrosoftLoginUrl` for the calls a service makes and

@@ -41,6 +41,7 @@ import { agentContextText, promptOrigin } from '../state/prompt-origin';
 import { sectionSteps } from '../state/section-steps';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import {
+  isBlankText,
   isCodeExecution,
   liveToolSegment,
   type PartSegment,
@@ -203,21 +204,34 @@ function ToolGroupPart(props: {
       ),
     })
   );
+  const rows = () => props.message.segments.flatMap((segment) => segment.rows);
+  // Until a program's saved record loads (or when it can't), the fold's rows
+  // from its receipt stand for its steps, so the run folds the same either way.
+  const receiptRows = (callId: string) =>
+    rows().filter(
+      (row) => row.id === callId || row.id.startsWith(`${callId}:`)
+    );
+  const programSteps = (program: ReturnType<typeof programs>[number]) =>
+    program.steps() || receiptRows(program.id).length;
+  const programFailures = (program: ReturnType<typeof programs>[number]) =>
+    program.steps() > 0
+      ? program.failures()
+      : receiptRows(program.id).filter((row) => row.status === 'failed').length;
   const count = () =>
     programs().reduce(
-      (total, program) => total + program.steps(),
+      (total, program) => total + programSteps(program),
       shownCalls().length
     );
   const failed = () =>
     programs().reduce(
-      (total, program) => total + program.failures(),
+      (total, program) => total + programFailures(program),
       shownCalls().filter((part) => part.status === 'failed').length
     );
   const activity = useSessionActivity(() => props.message.agentSessionId);
   const steps = () =>
     sectionSteps({
       parts: parts(),
-      rows: props.message.segments.flatMap((segment) => segment.rows),
+      rows: rows(),
       observed: (callId) =>
         programs()
           .find((program) => program.id === callId)
@@ -233,7 +247,8 @@ function ToolGroupPart(props: {
   const shownParts = () =>
     parts()
       .map((part, offset) => ({ part, index: props.start + offset }))
-      .filter(({ part }) => !isCodeModeSupportCall(part));
+      // A blank line between calls joins the run but has nothing to show.
+      .filter(({ part }) => !isCodeModeSupportCall(part) && !isBlankText(part));
   const renderParts = () => (
     <Index each={shownParts()}>
       {(shown) => (

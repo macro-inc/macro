@@ -77,6 +77,7 @@ function launch(source: {
         refresh: async () => {},
       };
     },
+    createProjectIdentitySource: unused,
     createCommands: () => ({
       createTask: vi.fn(),
       pending: () => false,

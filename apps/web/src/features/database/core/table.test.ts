@@ -2,6 +2,26 @@ import { describe, expect, it } from 'vitest';
 import type { DatabaseViewColumn } from './database-view';
 import { formatCellValue, optimisticRows, rowTitle } from './table';
 
+it('formats money with its row denomination without guessing absent row context', () => {
+  const column: DatabaseViewColumn = {
+    id: 'amount',
+    name: 'Amount',
+    dataType: 'NUMBER',
+    writable: true,
+    isMultiSelect: false,
+    options: [],
+    currencyColumnId: 'currency',
+  };
+  const amount = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 6,
+  }).format(12.5);
+  expect(formatCellValue(column, 12.5, { currency: 'EUR' })).toBe(
+    `EUR ${amount}`
+  );
+  expect(formatCellValue(column, 12.5, {})).toBe(`USD ${amount}`);
+  expect(formatCellValue(column, 12.5)).toBe('12.5');
+});
+
 describe('record title', () => {
   const entity: DatabaseViewColumn = {
     id: 'person',

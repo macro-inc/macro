@@ -12,6 +12,7 @@ import type { NewSuggestionAction } from './newSuggestionAction';
 import type { NewSuggestionPrompt } from './newSuggestionPrompt';
 import type { NewSuggestionReason } from './newSuggestionReason';
 import type { NewSuggestionRunMode } from './newSuggestionRunMode';
+import type { NewSuggestionSends } from './newSuggestionSends';
 import type { Target } from './target';
 
 /**
@@ -39,6 +40,8 @@ export interface NewSuggestion {
 dismissed. */
   reason?: NewSuggestionReason;
   runMode?: NewSuggestionRunMode;
+  /** A background prompt suggestion that posts or sends: what, and where. */
+  sends?: NewSuggestionSends;
   /** Why, in a line or two. */
   summary: string;
   /** What to do, in a few words. */

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT agent_user_id FROM hosted_runtime WHERE id = $1\n            UNION ALL\n            SELECT agent_user_id FROM computer_reservation WHERE id = $1\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f45def37c0edf429e974231fe5bee8fb2228b41a879b3421856b12f20d0f118a"
+}

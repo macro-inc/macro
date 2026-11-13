@@ -150,10 +150,15 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
 vi.mock('./AgentComposer', () => ({ AgentComposer: () => null }));
 vi.mock('./AgentPullRequestChip', () => ({ AgentPullRequestChip: () => null }));
 vi.mock('./AgentTaskChip', () => ({ AgentTaskChip: () => null }));
-vi.mock('./AgentSplitHeader', () => ({
-  AgentSplitHeader: () => null,
+vi.mock('./agent-session-header', () => ({
+  useAgentSessionHeader: () => ({}),
   agentSessionTitle: () => 'Agent session',
-  sessionRepositoryUrl: () => undefined,
+}));
+vi.mock('../views/agent-session-header', () => ({
+  AgentSessionHeader: () => null,
+}));
+vi.mock('../views/mobile/agent-session-header', () => ({
+  MobileAgentSessionHeader: () => null,
 }));
 vi.mock('./sidepanel/AgentSidePanelSections', () => ({
   AgentSidePanelSections: () => null,

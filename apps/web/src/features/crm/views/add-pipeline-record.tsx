@@ -118,7 +118,16 @@ export function AddPipelineRecordDialog(
   // One intent per dialog, so submitting again never adds a second row.
   const intentId = `pipeline-record:${createUniqueId()}`;
   const [choice, setChoice] = createSignal<RecordChoice>();
-  const [draftValues, setDraftValues] = createSignal(props.initialValues);
+  // System fields such as Outcome and currency start from their defaults.
+  const startingValues: Record<string, DatabaseCellValue> = {
+    ...Object.fromEntries(
+      props.columns
+        .filter((column) => column.defaultValue !== undefined)
+        .map((column) => [column.id, column.defaultValue ?? null])
+    ),
+    ...props.initialValues,
+  };
+  const [draftValues, setDraftValues] = createSignal(startingValues);
   const [selectedOptions, setSelectedOptions] = createSignal<
     Record<string, string>
   >(
@@ -127,7 +136,7 @@ export function AddPipelineRecordDialog(
         if (column.dataType !== 'SELECT_STRING' || column.isMultiSelect)
           return [];
         const option = column.options.find(
-          (option) => option.label === props.initialValues[column.id]
+          (option) => option.label === startingValues[column.id]
         );
         return option ? [[column.id, option.id]] : [];
       })
@@ -450,6 +459,7 @@ export function AddPipelineRecordDialog(
   const cell = (column: () => DatabaseViewColumn) => (
     <GridCell
       column={column()}
+      rowCells={values()}
       value={values()[column().id] ?? null}
       emptyLabel="Empty"
       canEdit={!pending()}

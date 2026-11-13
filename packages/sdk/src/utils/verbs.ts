@@ -91,8 +91,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   'scheduled-action': {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
-    listed: 'listScheduledActions listScheduledActionHistory',
-    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions',
+    listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
+    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
     created: 'createScheduledAction addSuggestion',
     deleted: 'deleteScheduledAction',
     edited:
@@ -101,7 +101,11 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
-    archived: 'retireSuggestion',
+    archived: 'retireSuggestion retireRoutineSuggestion',
+    linked: 'attachSuggestionDraft',
+    approved: 'acceptSuggestion',
+    rejected: 'dismissSuggestion',
+    restored: 'restoreSuggestion',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {

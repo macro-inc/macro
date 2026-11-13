@@ -1,12 +1,14 @@
 use super::*;
+use crate::domain::ports::AttachmentReadiness;
 use calendar_events::domain::{
     ics::CalendarEventIcs,
     join_requests::CalendarJoinRequest,
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarCapabilities, CalendarEventPatch,
-        CalendarEventSourceContent, CalendarMentionPreview, CalendarMentionRequestItem,
-        CalendarOccurrence, CalendarOccurrenceCursor, CalendarProvider, EventReminders,
-        EventStatus, EventType, EventVisibility, GuestPolicy, MeetingCopy, OccurrenceException,
+        CalendarEventSourceContent, CalendarFreshness, CalendarMentionPreview,
+        CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor, CalendarProvider,
+        CalendarSyncFailure, CalendarSyncHealth, CalendarSyncStatus, EventReminders, EventStatus,
+        EventType, EventVisibility, GuestPolicy, MeetingCopy, OccurrenceException,
         OccurrenceListing, TeamOutOfOffice, ViewerCapabilities, VisibleCalendar,
     },
     ports::{CalendarMutationError, CalendarRsvpScope, CalendarUpdateScope},
@@ -145,6 +147,17 @@ fn listing(calendar_id: Uuid) -> OccurrenceListing {
 struct FakeOccurrences {
     calendars: Vec<VisibleCalendar>,
     listings: Vec<OccurrenceListing>,
+    status: CalendarSyncStatus,
+    health: CalendarSyncHealth,
+}
+
+impl CalendarSyncHealthReader for FakeOccurrences {
+    async fn calendar_sync_health(
+        &self,
+        _requester_id: &str,
+    ) -> Result<CalendarSyncHealth, Report> {
+        Ok(self.health.clone())
+    }
 }
 
 impl CalendarOccurrenceService for FakeOccurrences {
@@ -159,7 +172,7 @@ impl CalendarOccurrenceService for FakeOccurrences {
     }
 
     async fn sync_status(&self, _requester_id: &str) -> Result<CalendarSyncStatus, Report> {
-        Ok(CalendarSyncStatus::Ready)
+        Ok(self.status)
     }
 
     async fn list_visible_calendars(
@@ -207,10 +220,12 @@ impl CalendarOccurrenceService for FakeOccurrences {
     }
 }
 
-/// Busy time must never read the calendar service's listing; see `busy`.
-struct NoMutations;
+/// The calendar service's listing, which only booking creation and form
+/// attachment read: busy time must never read it (see `busy`), so `None`
+/// fails a test that does.
+struct FakeMutations(Option<Vec<VisibleCalendar>>);
 
-impl calendar_events::domain::ports::CalendarMutationService for NoMutations {
+impl calendar_events::domain::ports::CalendarMutationService for FakeMutations {
     async fn create_event(
         &self,
         _requester_id: &str,
@@ -225,7 +240,10 @@ impl calendar_events::domain::ports::CalendarMutationService for NoMutations {
         &self,
         _requester_id: &str,
     ) -> Result<Vec<VisibleCalendar>, CalendarMutationError> {
-        unreachable!("busy time reads calendars in process")
+        Ok(self
+            .0
+            .clone()
+            .expect("busy time reads calendars in process"))
     }
 
     async fn update_event(
@@ -299,7 +317,7 @@ impl calendar_events::domain::ports::CalendarMutationService for NoMutations {
     }
 }
 
-impl CalendarCreationRecoveryService for NoMutations {
+impl CalendarCreationRecoveryService for FakeMutations {
     async fn delete_created_event(
         &self,
         _requester_id: &str,
@@ -320,8 +338,13 @@ async fn busy_with(coworker_counts: bool, listing: OccurrenceListing) -> Vec<Bus
                 calendar(COWORKER, "Coworker", false, coworker_counts),
             ],
             listings: vec![listing],
+            status: CalendarSyncStatus::Ready,
+            health: CalendarSyncHealth {
+                calendars: vec![synced(PRIMARY, None), synced(COWORKER, None)],
+                unlisted_inboxes: Vec::new(),
+            },
         }),
-        Arc::new(NoMutations),
+        Arc::new(FakeMutations(None)),
         None,
     );
     calendars
@@ -419,4 +442,300 @@ async fn a_snapshot_on_a_turned_off_calendar_frees_the_host() {
     snapshot.event.is_snapshot = true;
     snapshot.event.attendees = vec![host_row(AttendeeResponseStatus::Accepted, false)];
     assert!(busy_with(false, snapshot).await.is_empty());
+}
+
+/// What a calendar that retries after a transient failure shows in Settings.
+const RETRYING: &str = "Microsoft calendar synchronization will retry";
+
+/// A calendar's sync state: its last successful sync `synced_minutes_ago`
+/// (`None` before its first), with the latest attempt's `failure`.
+fn freshness(
+    calendar_id: Uuid,
+    synced_minutes_ago: Option<i64>,
+    failure: Option<CalendarSyncFailure>,
+) -> CalendarFreshness {
+    CalendarFreshness {
+        calendar_id,
+        refresh_due_at: synced_minutes_ago.map(|minutes| Utc::now() - Duration::minutes(minutes)),
+        failure,
+    }
+}
+
+/// A calendar whose last sync succeeded a minute ago, unless `failure` says
+/// the attempt after it failed.
+fn synced(calendar_id: Uuid, failure: Option<CalendarSyncFailure>) -> CalendarFreshness {
+    freshness(calendar_id, Some(1), failure)
+}
+
+/// The coworker's calendar, counting toward availability as `counts`, with
+/// the sync error its Settings row shows.
+fn coworker(counts: bool, badge: Option<&str>) -> VisibleCalendar {
+    VisibleCalendar {
+        sync_error: badge.map(str::to_owned),
+        ..calendar(COWORKER, "Coworker", false, counts)
+    }
+}
+
+/// The host's calendars holding the coworker's meeting: what the in-process
+/// reads return (`status` is the account-level sync status) and, as
+/// `listing`, the calendar service's listing booking creation reads.
+fn host(
+    calendars: Vec<VisibleCalendar>,
+    health: CalendarSyncHealth,
+    status: CalendarSyncStatus,
+) -> MacroCalendars<FakeOccurrences, FakeMutations> {
+    MacroCalendars::new(
+        Arc::new(FakeOccurrences {
+            calendars: calendars.clone(),
+            listings: vec![listing(COWORKER)],
+            status,
+            health,
+        }),
+        Arc::new(FakeMutations(Some(calendars))),
+        None,
+    )
+}
+
+async fn busy_for(
+    host: &MacroCalendars<FakeOccurrences, FakeMutations>,
+) -> Result<Vec<BusyRange>, Error> {
+    host.busy(
+        &[HOST.to_owned()],
+        starts_at() - Duration::hours(1),
+        starts_at() + Duration::hours(2),
+        None,
+    )
+    .await
+}
+
+/// Busy time beside the host's healthy primary calendar, with the coworker's
+/// calendar in the sync state `coworker_sync`.
+async fn busy_beside(
+    coworker: VisibleCalendar,
+    coworker_sync: CalendarFreshness,
+    status: CalendarSyncStatus,
+) -> Result<Vec<BusyRange>, Error> {
+    busy_for(&host(
+        vec![calendar(PRIMARY, "Host", true, true), coworker],
+        CalendarSyncHealth {
+            calendars: vec![synced(PRIMARY, None), coworker_sync],
+            unlisted_inboxes: Vec::new(),
+        },
+        status,
+    ))
+    .await
+}
+
+#[tokio::test]
+async fn a_failing_calendar_with_busy_off_never_blocks_booking() {
+    // It last synced three days ago and then failed for good.
+    let busy = busy_beside(
+        coworker(false, Some("Not Found")),
+        freshness(
+            COWORKER,
+            Some(3 * 24 * 60),
+            Some(CalendarSyncFailure::Permanent),
+        ),
+        CalendarSyncStatus::Ready,
+    )
+    .await
+    .unwrap();
+    assert!(busy.is_empty());
+}
+
+#[tokio::test]
+async fn a_counting_calendar_failing_briefly_offers_time_around_its_stored_events() {
+    let busy = busy_beside(
+        coworker(true, Some(RETRYING)),
+        freshness(COWORKER, Some(5), Some(CalendarSyncFailure::Transient)),
+        CalendarSyncStatus::Ready,
+    )
+    .await
+    .unwrap();
+    assert_eq!(busy.len(), 1);
+    assert_eq!(busy[0].start, starts_at());
+}
+
+#[tokio::test]
+async fn a_counting_calendar_failing_past_the_window_refuses() {
+    let refused = busy_beside(
+        coworker(true, Some(RETRYING)),
+        freshness(COWORKER, Some(120), Some(CalendarSyncFailure::Transient)),
+        CalendarSyncStatus::Ready,
+    )
+    .await;
+    assert!(matches!(refused, Err(Error::CalendarUnavailable)));
+}
+
+#[tokio::test]
+async fn a_counting_calendar_failing_for_good_refuses_at_once() {
+    let refused = busy_beside(
+        coworker(true, Some("Microsoft could not synchronize this calendar")),
+        synced(COWORKER, Some(CalendarSyncFailure::Permanent)),
+        CalendarSyncStatus::Ready,
+    )
+    .await;
+    assert!(matches!(refused, Err(Error::CalendarUnavailable)));
+}
+
+#[tokio::test]
+async fn a_counting_calendar_that_lost_its_grant_refuses_at_once() {
+    let refused = busy_beside(
+        coworker(true, Some("Reconnect Microsoft calendar")),
+        synced(COWORKER, Some(CalendarSyncFailure::ReauthRequired)),
+        CalendarSyncStatus::Ready,
+    )
+    .await;
+    assert!(matches!(refused, Err(Error::CalendarUnavailable)));
+}
+
+#[tokio::test]
+async fn an_account_catching_up_only_on_a_busy_off_calendar_still_offers_time() {
+    // Outlook keeps an account syncing until each of its calendars has
+    // synced once.
+    let busy = busy_beside(
+        coworker(false, None),
+        freshness(COWORKER, None, Some(CalendarSyncFailure::Transient)),
+        CalendarSyncStatus::Syncing,
+    )
+    .await
+    .unwrap();
+    assert!(busy.is_empty());
+}
+
+#[tokio::test]
+async fn a_counting_calendar_on_its_first_sync_refuses() {
+    let refused = busy_beside(
+        coworker(true, None),
+        freshness(COWORKER, None, Some(CalendarSyncFailure::Transient)),
+        CalendarSyncStatus::Syncing,
+    )
+    .await;
+    assert!(matches!(refused, Err(Error::CalendarUnavailable)));
+}
+
+#[tokio::test]
+async fn an_inbox_whose_calendars_are_not_listed_yet_refuses() {
+    let refused = busy_for(&host(
+        vec![calendar(PRIMARY, "Host", true, true)],
+        CalendarSyncHealth {
+            calendars: vec![synced(PRIMARY, None)],
+            unlisted_inboxes: vec![Uuid::from_u128(0x4)],
+        },
+        CalendarSyncStatus::Syncing,
+    ))
+    .await;
+    assert!(matches!(refused, Err(Error::CalendarUnavailable)));
+}
+
+#[tokio::test]
+async fn a_primary_calendar_failing_briefly_still_takes_the_booking() {
+    let host = host(
+        vec![VisibleCalendar {
+            sync_error: Some(RETRYING.to_owned()),
+            ..calendar(PRIMARY, "Host", true, true)
+        }],
+        CalendarSyncHealth {
+            calendars: vec![freshness(
+                PRIMARY,
+                Some(5),
+                Some(CalendarSyncFailure::Transient),
+            )],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    );
+    assert!(busy_for(&host).await.is_ok());
+    assert_eq!(host.creation_calendar(HOST).await.unwrap(), PRIMARY);
+}
+
+#[tokio::test]
+async fn a_primary_calendar_that_lost_its_grant_takes_no_booking_even_with_busy_off() {
+    let host = host(
+        vec![
+            VisibleCalendar {
+                sync_error: Some("Reconnect Microsoft calendar".to_owned()),
+                ..calendar(PRIMARY, "Host", true, false)
+            },
+            coworker(true, None),
+        ],
+        CalendarSyncHealth {
+            calendars: vec![
+                synced(PRIMARY, Some(CalendarSyncFailure::ReauthRequired)),
+                synced(COWORKER, None),
+            ],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    );
+    assert!(matches!(
+        busy_for(&host).await,
+        Err(Error::CalendarUnavailable)
+    ));
+    assert!(matches!(
+        host.creation_calendar(HOST).await,
+        Err(Error::CalendarUnavailable)
+    ));
+}
+
+#[tokio::test]
+async fn attaching_a_booking_link_follows_the_availability_rule() {
+    let primary = || calendar(PRIMARY, "Host", true, true);
+    let busy_off_failing = host(
+        vec![primary(), coworker(false, Some("Not Found"))],
+        CalendarSyncHealth {
+            calendars: vec![
+                synced(PRIMARY, None),
+                synced(COWORKER, Some(CalendarSyncFailure::Permanent)),
+            ],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    );
+    assert!(busy_off_failing.ready(HOST).await.is_ok());
+
+    let counting_stale = host(
+        vec![primary(), coworker(true, Some(RETRYING))],
+        CalendarSyncHealth {
+            calendars: vec![
+                synced(PRIMARY, None),
+                freshness(COWORKER, Some(120), Some(CalendarSyncFailure::Transient)),
+            ],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    );
+    assert!(matches!(
+        counting_stale.ready(HOST).await,
+        Err(Error::CalendarUnavailable)
+    ));
+}
+
+#[tokio::test]
+async fn a_calendar_listed_after_the_calendar_listing_counts_until_it_syncs() {
+    let unsynced = busy_for(&host(
+        vec![calendar(PRIMARY, "Host", true, true)],
+        CalendarSyncHealth {
+            calendars: vec![
+                synced(PRIMARY, None),
+                freshness(COWORKER, None, Some(CalendarSyncFailure::Transient)),
+            ],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Syncing,
+    ))
+    .await;
+    assert!(matches!(unsynced, Err(Error::CalendarUnavailable)));
+
+    let synced_since = busy_for(&host(
+        vec![calendar(PRIMARY, "Host", true, true)],
+        CalendarSyncHealth {
+            calendars: vec![synced(PRIMARY, None), synced(COWORKER, None)],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    ))
+    .await
+    .unwrap();
+    assert_eq!(synced_since.len(), 1, "its events still block their time");
 }

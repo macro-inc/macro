@@ -22,7 +22,9 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
+  - apps/web/src/features/block-md/component/Block.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
@@ -33,7 +35,6 @@ ignores:
   - apps/web/src/features/agents-view/views/AgentPicker.tsx
   - apps/web/src/features/agents-view/views/AgentsView.tsx
   - apps/web/src/features/agents-view/views/RepositoryPicker.tsx
-  - apps/web/src/features/block-agent/component/AgentSplitHeader.tsx
   - apps/web/src/features/block-agent/component/EffortSelector.tsx
   - apps/web/src/features/block-agent/ui/AgentInput.tsx
   - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx
@@ -58,11 +59,7 @@ ignores:
   - apps/web/src/features/block-image/component/ImageContent.tsx
   - apps/web/src/features/block-image/component/TopBar.tsx
   - apps/web/src/features/block-md/comments/CommentMargin.tsx
-  - apps/web/src/features/block-md/component/Block.tsx
   - apps/web/src/features/block-md/component/MarkdownPopup.tsx
-  - apps/web/src/features/block-md/component/TopBar.tsx
-  - apps/web/src/features/block-md/component/sidepanel/MarkdownSidePanelSections.tsx
-  - apps/web/src/features/block-md/component/useMarkdownDocumentTools.tsx
   - apps/web/src/features/block-pdf/component/TopBar.tsx
   - apps/web/src/features/block-pptx/pptx-block.tsx
   - apps/web/src/features/block-pr/component/Block.tsx
