@@ -2,7 +2,6 @@ import {
   NavigationStack,
   useNavigationStack,
 } from '@app/components/navigation-stack/NavigationStack';
-import { setGlobalTabManager } from '@app/signal/tabLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { render } from '@solidjs/testing-library';
 import {
@@ -12,13 +11,12 @@ import {
   createSignal,
   type ParentProps,
 } from 'solid-js';
-import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { createPreviewSelectionGuard } from './createPreviewSelectionGuard';
 import type { PreviewPanelSelection } from './previewTarget';
 import { createContentInstanceRegistry } from './split-layout/contentInstanceRegistry';
 import { SplitLayoutContext } from './split-layout/context';
 import type { SplitManager } from './split-layout/layoutManager';
-import type { TabManager } from './tab-layout/tab-manager';
 
 let manager: Pick<
   SplitManager,
@@ -143,22 +141,6 @@ it('does not move focus or toast for a conflicting restored selection', () => {
   expect(toast.alert).toHaveBeenCalledWith('Content already open');
   restored.unmount();
   first.unmount();
-});
-
-it('brings up the background tab holding a selection instead of its hidden split', () => {
-  const revealSplit = vi.fn(() => true);
-  setGlobalTabManager({ revealSplit } as unknown as TabManager);
-  onTestFinished(() => setGlobalTabManager(undefined));
-  const channel = { type: 'channel', id: 'channel' } as const;
-  const background = setup();
-  const live = setup();
-  background.stack.reset(channel);
-
-  expect(live.selectionGuard.canSelect(channel)).toBe(false);
-  expect(revealSplit).toHaveBeenCalledWith('split-1');
-  expect(activate).not.toHaveBeenCalled();
-  live.unmount();
-  background.unmount();
 });
 
 it('leaves a selection already in the URL passive as its view mounts', () => {

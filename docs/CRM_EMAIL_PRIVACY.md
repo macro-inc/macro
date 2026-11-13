@@ -91,25 +91,12 @@ this protection. Older readers and population workers fail closed on the false
 switch, so CRM availability can be temporarily reduced during rolling deployment.
 The existing CRM product rollout feature flag is unchanged.
 
-Backfill completeness needs a separate deployment ordering guarantee: older
-consumers can acknowledge work without populating records while the retired flag
-is false. The automatic deploy-all workflow therefore deploys email-service first
-and checks its pub/sub consumers against the task definition and immutable image
-produced by that update. It waits for nonzero steady capacity and actual termination
-of old tasks, including tasks whose desired status is STOPPED but which are still
-stopping. A stable rollback to an older definition fails this check. DSS deployment,
-which introduces writable consent routes, depends on that successful proof;
-frontend publication already depends on backend completion. Other services remain
-parallel. Missing or disabled email deployment, migration failure, cancellation,
-or an incomplete readiness check cannot admit DSS or report a successful rollout.
-An unchanged matching consumer revision can pass the same proof.
-
-This orders the initial automatic release without changing queue semantics or
-requiring manual deployment. Independently deploying stacks or rolling consumers
-back outside that workflow bypasses the guarantee. It is not a durable completion
-receipt for every historical job; publication remains at least once and consumers
-revalidate eligibility. The post-merge check must retain the actual worker,
-DSS and frontend deployment versions before testing consent and backfill.
+Older consumers can acknowledge backfill work without populating records while
+the retired flag is false. The initial automatic release therefore deployed
+email-service and verified its pub/sub consumers before document-storage-service.
+That one-time ordering was removed once every environment ran the new consumers;
+both services now deploy in the shared parallel matrix like every other service.
+Publication remains at least once and consumers revalidate eligibility.
 
 Current team responses report CRM available. The old team-enable endpoint no-ops
 without enrolling mailboxes; team-disable requests are rejected, preventing its

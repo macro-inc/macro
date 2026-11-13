@@ -7,9 +7,9 @@
 use harnesses::domain::models::{
     ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing,
 };
+use pairing_id::PairingId;
 use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
-use uuid::Uuid;
 
 use crate::config::{Config, HarnessCredentials};
 
@@ -28,6 +28,7 @@ pub enum ClaimStatus {
 pub struct PairingClient {
     http: reqwest::Client,
     base: String,
+    trace_parent: Option<String>,
 }
 
 impl PairingClient {
@@ -40,17 +41,26 @@ impl PairingClient {
                 .storage_url
                 .trim_end_matches('/')
                 .to_owned(),
+            trace_parent: None,
         }
     }
 
-    /// Open a pairing named after this machine. Ownership, permission bypass,
-    /// and the final name are the approving user's choice on the web.
-    pub async fn start(&self) -> rootcause::Result<CreatedPairing> {
+    /// Claim inside a Macro computer's setup trace.
+    pub fn with_trace_parent(mut self, trace_parent: Option<String>) -> Self {
+        self.trace_parent = trace_parent;
+        self
+    }
+
+    /// Open a pairing that requests `name` (see
+    /// [`crate::profiles::ConfigSelection::pairing_name`]). Ownership,
+    /// permission bypass, and the final name are the approving user's choice
+    /// on the web.
+    pub async fn start(&self, name: String) -> rootcause::Result<CreatedPairing> {
         let response = self
             .http
             .post(format!("{}/harness-pairings", self.base))
             .json(&CreatePairingRequest {
-                name: machine_name(),
+                name,
                 host: Some(host_info()),
             })
             .send()
@@ -70,12 +80,15 @@ impl PairingClient {
     /// Poll the claim once.
     pub async fn claim(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         device_secret: &str,
     ) -> rootcause::Result<ClaimStatus> {
         let response = self
             .http
             .post(format!("{}/harness-pairings/{pairing_id}/claim", self.base))
+            .headers(crate::telemetry::trace_headers(
+                self.trace_parent.as_deref(),
+            ))
             .json(&ClaimPairingRequest {
                 device_secret: device_secret.to_owned(),
             })
@@ -106,11 +119,12 @@ fn credentials_from(claimed: ClaimedPairing) -> HarnessCredentials {
     HarnessCredentials {
         harness_id: claimed.harness.id,
         token: claimed.token,
+        pairing_id: None,
     }
 }
 
-/// This machine's hostname, or `macrod` when it has none: the name a pairing
-/// requests and the panel shows before the server's name is known.
+/// This machine's hostname, or `macrod` when it has none: what a pairing's
+/// requested name starts with.
 pub fn machine_name() -> String {
     local_hostname().unwrap_or_else(|| "macrod".to_owned())
 }

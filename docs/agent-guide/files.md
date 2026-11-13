@@ -15,7 +15,7 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
-The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar (the overlay sidebar on phones) holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
 
 The document header's **Copy Share Link** and the Share dialog's **Copy Link**
 copy a standalone link to the selected file, not the current browser URL.
@@ -157,8 +157,8 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Snooze notifications…,
-Mute/Unmute notifications, Duplicate, Copy Link, Copy ID, Share, and
+unchanged. Folder menus also offer Favorite/Unfavorite, Mute/Unmute notifications
+with the shared timed-mute presets and custom time picker, Duplicate, Copy Link, Copy ID, Share, and
 owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
 **Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
 beside it (or at the top level without edit access to its parent), copying its
@@ -302,3 +302,47 @@ extension with the original. Repeat at 390px with touch enabled and at tablet
 width. Exercise a failed request, retry, cancellation, and changing selection.
 Native save/share dialogs require physical iOS/Android verification in addition
 to browser emulation.
+
+## Uploading folders
+
+Upload a folder with **Upload folders** in Cmd+K, Drive's **New** menu
+(**Upload folder**), or by dropping it on Drive or a folder. A folder may hold up
+to 10,000 files and 3 GB; past either limit a toast names the folder and the limit
+before anything is read. The app zips the folder without compression, streaming
+the picked files from disk, so in a browser memory stays flat however large the
+folder is. The desktop and mobile apps still send the zip through the native
+HTTP client, which holds it in memory while it uploads.
+
+The upload indicator above the toasts follows one folder through every stage:
+
+- **Preparing &lt;folder&gt;** with a percentage while the files are read and hashed.
+- **Uploading &lt;folder&gt;** with a percentage while the zip is sent.
+- **Processing &lt;folder&gt;** while the server unpacks it: a spinner until the
+  extractor has counted the files, then the share of files stored.
+- It ends in a toast: **Uploaded &lt;folder&gt;**; **Uploaded &lt;folder&gt;, but N of
+  M files could not be uploaded**; **Failed to upload &lt;folder&gt;**; or, when the
+  server cannot say or nothing has changed for longer than the extractor can run
+  (16 minutes), **Couldn't confirm that &lt;folder&gt; finished uploading**. It never
+  reports a failure just because processing is slow.
+
+The indicator polls the upload's status
+(`GET /projects/upload_extract/{request_id}`) as well as listening for the
+`bulk_upload` websocket result, so a dropped socket still ends in the true
+state. Once a folder is sent, the browser remembers it for the signed-in account
+until its end toast shows. After a reload or a crash, or in a tab of the same
+account opened while it processes, the indicator comes back as **Processing
+&lt;folder&gt;** and ends in the same toasts; a tab that was already open does not
+pick it up. Signing out keeps the record, and the folder resumes when that
+account signs in again; another account never sees it. A reload while a folder
+is still preparing or uploading cancels that upload. A folder sent more than a
+day earlier is dropped without a toast, and one still unfinished 90 minutes
+after it was sent, past every extractor retry, ends at once in **Couldn't
+confirm**.
+
+Verification: the shared headless Chrome runs in Docker and cannot read files on
+the host, so feed real folders through a private Playwright Chromium on the same
+machine: open **Upload folders**, catch the file chooser and pass the folder's
+path to `fileChooser.setFiles`. Check each stage's label and percentage, the
+end toast, and the uploaded tree in Drive. To check resuming, reload during
+**Processing** and open a second tab of the same account. Delete the uploaded
+folders afterwards.

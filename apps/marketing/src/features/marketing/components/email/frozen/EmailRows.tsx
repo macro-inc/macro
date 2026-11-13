@@ -1,6 +1,8 @@
-import Envelope from '@phosphor/envelope-open.svg';
+import EnvelopeUnread from '@icon/system/regular/envelope.svg';
+import EnvelopeRead from '@icon/system/regular/envelope-open.svg';
 import { Badge } from '@ui/components/Badge';
 import { For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   demoMailAccounts,
   type EmailTagId,
@@ -31,7 +33,11 @@ export function EmailTags(props: { tags?: readonly EmailTagId[] }) {
     <span class="mail-row-tags flex items-center gap-1">
       <For each={emailTags.filter((tag) => props.tags?.includes(tag.id))}>
         {(tag) => (
-          <Badge variant="outline" size="sm" class="bg-control">
+          <Badge
+            variant="outline"
+            size="sm"
+            class="h-5 border-edge bg-surface-2 px-1.5 font-normal text-ink-muted"
+          >
             <span
               class="size-2 rounded-full shrink-0"
               style={{ background: tag.color }}
@@ -44,6 +50,16 @@ export function EmailTags(props: { tags?: readonly EmailTagId[] }) {
   );
 }
 
+/** The app's email glyph: a sealed envelope until read, then an open one. */
+function EmailIcon(props: { unread?: boolean; class: string }) {
+  return (
+    <Dynamic
+      component={props.unread ? EnvelopeUnread : EnvelopeRead}
+      class={`${props.class} ${props.unread ? 'text-email' : 'text-ink-extra-muted'}`}
+    />
+  );
+}
+
 function WideRow(props: { email: DemoEmail }) {
   return (
     <div class="mail-row-wide w-full min-h-[inherit] items-center text-sm pl-(--soup-row-padding-l) pr-2 gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr] grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)_auto_8ch] [--title-width:10rem]">
@@ -52,8 +68,8 @@ function WideRow(props: { email: DemoEmail }) {
           <span class="size-1.5 rounded-full bg-accent" />
         </Show>
       </span>
-      <div class="mail-row-content font-normal truncate items-center gap-2 flex">
-        <Envelope class="size-4 shrink-0 text-ink-muted" />
+      <div class="mail-row-content font-medium truncate items-center gap-2 flex">
+        <EmailIcon unread={props.email.unread} class="size-4 shrink-0" />
         <span class="w-(--title-width) shrink-0 flex items-center gap-2">
           <span class="truncate max-w-32 flex gap-2 items-center">
             {props.email.sender}
@@ -63,7 +79,7 @@ function WideRow(props: { email: DemoEmail }) {
           </span>
         </span>
         <span class="truncate">{props.email.subject}</span>
-        <span class="text-ink/50 font-normal truncate flex-1">
+        <span class="text-ink/50 font-medium truncate flex-1">
           {props.email.snippet}
         </span>
       </div>
@@ -94,7 +110,7 @@ function NarrowRow(props: { email: DemoEmail }) {
           </Show>
         </span>
         <span class="size-11 bg-edge-muted rounded-full flex items-center justify-center">
-          <Envelope class="size-6 text-ink-muted" />
+          <EmailIcon unread={props.email.unread} class="size-6" />
         </span>
       </span>
       <span
@@ -126,6 +142,16 @@ function NarrowRow(props: { email: DemoEmail }) {
   );
 }
 
+/** Today's mail, then earlier mail, each in the order given. */
+export function newestFirst<Email extends { yesterday?: boolean }>(
+  emails: readonly Email[]
+): Email[] {
+  return [
+    ...emails.filter((email) => !email.yesterday),
+    ...emails.filter((email) => email.yesterday),
+  ];
+}
+
 export function EmailRows(props: {
   emails: readonly DemoEmail[];
   selectedId?: string;
@@ -133,38 +159,19 @@ export function EmailRows(props: {
 }) {
   return (
     <div class="mail-rows" aria-label="Email messages">
-      <For each={['Today', 'Yesterday']}>
-        {(day) => (
-          <Show
-            when={props.emails.some(
-              (email) => !!email.yesterday === (day === 'Yesterday')
-            )}
+      <For each={newestFirst(props.emails)}>
+        {(email) => (
+          <button
+            type="button"
+            class="mail-row soup-row-wide rounded-xl relative flex flex-col py-0.5 min-h-10 mx-1 hover:bg-list-hover text-left text-ink"
+            data-unread={!!email.unread}
+            aria-current={props.selectedId === email.id ? 'true' : undefined}
+            onClick={() => props.onOpen(email)}
+            aria-label={`Read ${email.subject}`}
           >
-            <div class="mail-date-group text-xs text-ink-extra-muted">
-              {day}
-            </div>
-            <For
-              each={props.emails.filter(
-                (email) => !!email.yesterday === (day === 'Yesterday')
-              )}
-            >
-              {(email) => (
-                <button
-                  type="button"
-                  class="mail-row soup-row-wide rounded-xl relative flex flex-col py-0.5 min-h-10 mx-1 hover:bg-list-hover text-left text-ink"
-                  data-unread={!!email.unread}
-                  aria-current={
-                    props.selectedId === email.id ? 'true' : undefined
-                  }
-                  onClick={() => props.onOpen(email)}
-                  aria-label={`Read ${email.subject}`}
-                >
-                  <WideRow email={email} />
-                  <NarrowRow email={email} />
-                </button>
-              )}
-            </For>
-          </Show>
+            <WideRow email={email} />
+            <NarrowRow email={email} />
+          </button>
         )}
       </For>
       <Show when={props.emails.length === 0}>

@@ -27,8 +27,10 @@ import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { debouncedDependent } from '@core/util/debounce';
+import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -150,12 +152,16 @@ export function MentionsMenu(props: MentionsMenuProps) {
 function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
 
-  const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const [searchTerm, flushSearchTerm] = flushableDebouncedDependent(
+    props.menu.searchTerm,
+    60
+  );
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
   const sessionsEnabled = () =>
     !hasCustomEntities() &&
+    props.menu.isOpen() &&
     (!props.sources || props.sources.includes('agentSessions'));
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
   const sessionList = quickAccess?.useList({
@@ -219,6 +225,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     useEntityMention({
       buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const docs = docsMention.entities;
 
@@ -227,6 +234,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     useEntityMention({
       buckets: ['channel', 'dm'],
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const channels = channelsMention.entities;
 
@@ -237,6 +245,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       useEntityMention({
         buckets: ['crm_company'],
         searchTerm: activeSearchTerm,
+        enabled: props.menu.isOpen,
       }))
     : undefined;
   const sourceEnabled = (source: MentionBucketId) =>
@@ -307,7 +316,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     : useEmailSearchMention({
         searchTerm: activeSearchTerm,
-        enabled: () => !props.sources || props.sources.includes('emails'),
+        enabled: () =>
+          props.menu.isOpen() &&
+          (!props.sources || props.sources.includes('emails')),
       });
 
   // A WhatsApp chat mentioned in a channel is shared with its members; only
@@ -416,6 +427,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const setSelectedIndexFromMouse = (index: number) => {
     if (isKeypressActive()) return;
     controller.selectItem(index);
+    selectionAnchor.hold();
   };
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -428,21 +440,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (userMention.isLoading()) return;
     return userMention.windowKey();
   };
-  let previousPeopleWindow: string | undefined;
-  let previousPeopleQuery = '';
-  createEffect(
-    on(peopleWindowKey, (key) => {
-      if (key === undefined) return;
-      if (
-        previousPeopleWindow !== undefined &&
-        key !== previousPeopleWindow &&
-        previousPeopleQuery === searchTerm()
-      )
-        controller.selectItem(0);
-      previousPeopleWindow = key;
-      previousPeopleQuery = searchTerm();
-    })
-  );
+  // "No results" is a statement about the typed term. Until the list has
+  // caught up with it and the slower sources have answered, say so instead.
+  const stillSearching = () =>
+    searchTerm() !== props.menu.searchTerm() ||
+    (sourceEnabled('users') && userMention.isLoading()) ||
+    (sourceEnabled('emails') && isLoadingMoreEmails()) ||
+    (contactsEnabled() &&
+      !!contactMention &&
+      'isLoading' in contactMention &&
+      contactMention.isLoading());
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -622,6 +629,33 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     targetItems: TARGET_ITEMS,
   });
 
+  // Sources answer within tens of milliseconds of most keystrokes. The
+  // searching label appears only for a search that is really taking a while,
+  // then stays long enough to read; until then the previous label stays, so
+  // nothing flashes between keystrokes.
+  const searchingShown = createSteadyFlag(stillSearching);
+  const emptyLabel = createMemo<string>((shown) => {
+    // A label belongs to one run of empty lists. Once rows are listed or the
+    // menu closes, the next empty list starts without it.
+    if (!menuOpen() || controller.combinedItems().length > 0) return '\u00a0';
+    if (searchingShown()) return t('commandMenu.searching');
+    return stillSearching() ? shown : t('commandMenu.noResults');
+  }, '\u00a0');
+
+  // Rows keep arriving from several sources after typing stops. The highlight
+  // follows the row the user moved to; a new search term starts from the top.
+  const selectionAnchor = createSelectionAnchor({
+    items: controller.combinedItems,
+    key: (item) => `${item.kind}:${item.id}`,
+    scope: () => `${controller.viewAllMode() ?? ''}\n${activeSearchTerm()}`,
+    selectedIndex: controller.selectedIndex,
+    setSelectedIndex: (index) => controller.selectItem(index),
+  });
+  createEffect(
+    // Set the index itself: the list is often still empty at this moment.
+    on(activeSearchTerm, () => controller.setSelectedIndex(0), { defer: true })
+  );
+
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
     'start' | 'single' | null
   >('start');
@@ -686,9 +720,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     isActive: menuOpen,
     onUp: () => {
       controller.selectPrev();
+      selectionAnchor.hold();
     },
     onDown: () => {
       controller.selectNext();
+      selectionAnchor.hold();
     },
     onLeft: () => {
       if (canExitViewAll()) {
@@ -710,6 +746,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     },
     onSelect: () => {
+      // The list trails the typed term by the debounce. Bring it up to date
+      // and act at once: a deferred pick is lost if the person keeps typing.
+      flushSearchTerm();
       const selectedItem = controller.selectedItem();
       // Keep the menu open on an offline agent so Enter reads as "not that
       // one" rather than silently dismissing with nothing inserted.
@@ -900,7 +939,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 <Show
                   when={visibleBuckets().length > 0}
                   fallback={
-                    <div class="px-2 text-ink-extra-muted">No results</div>
+                    <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
                   }
                 >
                   <div>
@@ -977,7 +1016,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 </div>
               </Show>
               <Show when={controller.combinedItems().length === 0}>
-                <div class="px-2 text-ink-extra-muted">No results</div>
+                <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
               </Show>
               <VirtualizedItemList
                 items={controller.combinedItems()}

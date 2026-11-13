@@ -1,8 +1,14 @@
 import { useCallContext } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
 import { getMeetingUrl } from '@channel/Call/call-link';
-import { CallDiscussionContent } from '@channel/Call/discussion/CallDiscussionContent';
-import { callDiscussionOf } from '@channel/Call/discussion/call-discussion';
+import {
+  type CallDiscussionAccess,
+  CallDiscussionContent,
+} from '@channel/Call/discussion/CallDiscussionContent';
+import {
+  type CallDiscussion,
+  callDiscussionOf,
+} from '@channel/Call/discussion/call-discussion';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
@@ -83,7 +89,19 @@ export function MeetingRouteContent(props: {
     return access === 'owner' || access === 'edit';
   };
 
-  const discussion = () => callDiscussionOf(record, call.activeCallId());
+  const discussion = (): CallDiscussion | undefined => {
+    const callId = call.activeCallId();
+    if (authenticated() === false) {
+      return callId ? { kind: 'call_chat', call_id: callId } : undefined;
+    }
+    return callDiscussionOf(record, callId);
+  };
+  const discussionAccess = (
+    session: { token: string; participantId: string } | undefined
+  ): CallDiscussionAccess =>
+    authenticated() === false && session
+      ? { kind: 'guest', session }
+      : { kind: 'member' };
   const [outsideCount, setOutsideCount] = createSignal(0);
 
   const source = (): MeetingPageState => {
@@ -95,6 +113,7 @@ export function MeetingRouteContent(props: {
   return (
     <MeetingPage
       source={source}
+      startedAt={() => (record.isSuccess ? record.data.startedAt : undefined)}
       participants={participantState()}
       onCallStateChange={props.onCallStateChange}
       onLeave={props.onLeave}
@@ -146,49 +165,44 @@ export function MeetingRouteContent(props: {
         <CallOverlay
           onLeave={onLeave}
           localName={name()}
+          accessMode={authenticated() === true ? 'member' : 'guest'}
           footerLeading={copyButton}
           showChat={
             authenticated() === true ||
             (authenticated() === false && !!credentials())
           }
-          guestChatSession={
-            authenticated() === false ? credentials() : undefined
-          }
           showTeamSharing={canShareWithTeam()}
           sharedWithTeam={
             record.isSuccess ? record.data.shareWithTeam : undefined
           }
-          discussion={
-            authenticated() === true
-              ? {
-                  label: () =>
-                    discussion()?.kind === 'channel_thread' && record.isSuccess
-                      ? (record.data.channelName ?? undefined)
-                      : undefined,
-                  opensByDefault: () =>
-                    !isMobile() && discussion()?.kind === 'channel_thread',
-                  hasUpdates: () => outsideCount() > 0,
-                  render: (panel) => (
-                    <CallDiscussionContent
-                      discussion={discussion}
-                      panel={panel}
-                      onViewChannel={(channelId) =>
-                        navigate(
-                          buildSimpleEntityUrl({
-                            type: 'channel',
-                            id: channelId,
-                          })
-                        )
-                      }
-                      onOutsideCountChange={setOutsideCount}
-                      host={(panel) => (
-                        <MeetingDiscussionHost>{panel()}</MeetingDiscussionHost>
-                      )}
-                    />
-                  ),
+          discussion={{
+            label: () =>
+              discussion()?.kind === 'channel_thread' && record.isSuccess
+                ? (record.data.channelName ?? undefined)
+                : undefined,
+            opensByDefault: () =>
+              !isMobile() && discussion()?.kind === 'channel_thread',
+            hasUpdates: () => outsideCount() > 0,
+            render: (panel) => (
+              <CallDiscussionContent
+                discussion={discussion}
+                access={discussionAccess(credentials())}
+                panel={panel}
+                onViewChannel={(channelId) =>
+                  navigate(
+                    buildSimpleEntityUrl({
+                      type: 'channel',
+                      id: channelId,
+                    })
+                  )
                 }
-              : undefined
-          }
+                onOutsideCountChange={setOutsideCount}
+                host={(panel) => (
+                  <MeetingDiscussionHost>{panel()}</MeetingDiscussionHost>
+                )}
+              />
+            ),
+          }}
         />
       )}
     />

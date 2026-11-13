@@ -5,6 +5,7 @@ import {
   type DatabaseQueryResult,
   queryDatabases,
 } from './query';
+import { SavedQuery, type SaveQueryOptions } from './saved-query';
 
 /**
  * Macro databases: named collections of tables, owned and shared as one
@@ -64,12 +65,16 @@ import {
  *
  * **Verify.** After a change, read back the affected schema or rows before claiming success. After an ambiguous failure, inspect the current state before retrying a create or insert. Never describe a proposed change as saved.
  *
- * **Answers.** Answer a question about the data, or a request for a chart, with a saved live query block beside a sentence stating the answer, never with a block you wrote or edited yourself: run the `SELECT` with `database.query`, save exactly that SQL with `database.saveQuery`, and put its `toBlock()` in the document. Restyle an answer with `withView`; to ask something else, save a new question. A query result, a saved question, and a document containing its block are different outcomes: say which happened.
+ * **Answers.** Answer a question about the data, or a request for a chart, with a saved live query block beside a sentence stating the answer, never with a block you wrote or edited yourself: run the `SELECT` with `database.query`, save exactly that SQL with `database.saveQuery` (or `macro.databases.saveQuery` when it spans databases), and put its `toBlock()` in the document. Restyle an answer with `withView`; to ask something else, save a new question. A query result, a saved question, and a document containing its block are different outcomes: say which happened.
  */
 export class DatabaseNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** Run one SQL statement over the caller's visible databases. Writes execute once. */
+  /**
+   * Run one SQL statement over the caller's visible databases. Writes execute once.
+   *
+   * @destructive
+   */
   query(
     sql: string,
     options?: DatabaseQueryOptions,
@@ -77,17 +82,40 @@ export class DatabaseNamespace {
     return queryDatabases(this.client, Database.byId, sql, options);
   }
 
+  /**
+   * Save a `SELECT` whose tables come from more than one database as a live
+   * question; use {@link Database.saveQuery} when every table is in one
+   * database. Answer a question about the data, or a request for a chart,
+   * with this: run the SQL with {@link query} first, then save exactly that
+   * SQL. The server refuses anything but one `SELECT` that compiles across
+   * the caller's databases, and chart columns it does not return. Put
+   * {@link SavedQuery.toBlock} in a document verbatim.
+   *
+   * @write
+   */
+  saveQuery(options: SaveQueryOptions): Promise<SavedQuery> {
+    return SavedQuery.save(this.client, {}, options);
+  }
+
   /** A handle to a database by id. Details load on first access. */
   byId(id: string): Database {
     return Database.byId(this.client, id);
   }
 
-  /** Create a database owned by the caller. */
+  /**
+   * Create a database owned by the caller.
+   *
+   * @write
+   */
   create(options: { name: string }): Promise<Database> {
     return Database.create(this.client, options);
   }
 
-  /** The databases the caller can see. */
+  /**
+   * The databases the caller can see.
+   *
+   * @readonly
+   */
   list(): Promise<Database[]> {
     return Database.list(this.client);
   }

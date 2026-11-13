@@ -1,0 +1,119 @@
+/* Spreadsheet graphics: the app's sheet chrome, grid, and collaborator cursors. */
+.sheet-story {
+  --sheet-line: #ffffff12;
+  --sheet-header: #0f1010;
+  --sheet-agent: #d97757;
+  --sheet-person: #8ab4f8;
+  position: relative;
+  margin: 20px 24px;
+  color: var(--color-ui-content-primary, #fff);
+  font: 400 13px/18px 'Inter Variable', Inter, sans-serif;
+  text-align: left;
+}
+.sheet-story svg { flex: none; width: 14px; height: 14px; }
+.sheet-avatar { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+
+/* The artboard clears backgrounds and radii two levels down; these name their parent to keep theirs. */
+.sheet-story > .sheet-frame { overflow: hidden; border: 1px solid #ffffff1a; border-radius: 12px; background: #000; }
+.sheet-title { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--sheet-line); }
+.sheet-title > svg { width: 16px; height: 16px; }
+.sheet-title strong { font-size: 13.5px; font-weight: 600; }
+.sheet-title-people { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.sheet-agent-badge { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--sheet-agent); color: #fff; }
+.sheet-agent-badge svg { width: 11px; height: 11px; }
+
+.sheet-formula { display: flex; align-items: center; height: 28px; border-bottom: 1px solid var(--sheet-line); font-size: 12px; }
+.sheet-formula > span:first-child { width: 58px; padding-left: 12px; border-right: 1px solid var(--sheet-line); line-height: 28px; }
+.sheet-formula i { margin: 0 8px; color: #737373; font-family: Georgia, serif; }
+
+.sheet-grid { position: relative; width: max-content; }
+.sheet-grid-row { display: grid; grid-template-columns: var(--sheet-columns); height: 30px; }
+.sheet-grid-row > span { display: flex; align-items: center; min-width: 0; overflow: hidden; border-right: 1px solid var(--sheet-line); border-bottom: 1px solid var(--sheet-line); white-space: nowrap; }
+.sheet-grid-letters { height: 24px; }
+.sheet-grid-letters > span, .sheet-grid-number { justify-content: center; background: var(--sheet-header); color: #a8a8a8; font-size: 11px; }
+.sheet-grid-cell { padding: 0 8px; }
+.sheet-grid-cell[data-numeric=true] { justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.sheet-grid-cell b, .sheet-written[data-bold=true] { font-weight: 600; }
+.sheet-written { animation: sheet-written 260ms ease-out; }
+@keyframes sheet-written { from { opacity: 0; transform: translateY(3px); } }
+
+/* A collaborator's cursor: a ring on their cell with their name above it. */
+.sheet-grid-cursor {
+  position: absolute; z-index: 2; box-sizing: border-box; border: 2px solid var(--tone); pointer-events: none;
+  transition: left 240ms cubic-bezier(.2, .8, .2, 1), top 240ms cubic-bezier(.2, .8, .2, 1), width 240ms ease, height 240ms ease;
+}
+.sheet-grid-cursor[data-tone=agent] { --tone: var(--sheet-agent); }
+.sheet-grid-cursor[data-tone=person] { --tone: var(--sheet-person); }
+.sheet-grid-cursor[data-tone=self] { --tone: #fff; background: #ffffff0a; }
+.sheet-grid-cursor b { position: absolute; bottom: 100%; left: -2px; display: flex; align-items: center; gap: 3px; padding: 0 5px; border-radius: 4px 4px 4px 0; background: var(--tone); color: #111; font-size: 10px; font-weight: 600; line-height: 16px; white-space: nowrap; }
+.sheet-grid-cursor b svg { width: 10px; height: 10px; }
+.sheet-grid-cursor[data-tone=agent] b { color: #fff; }
+.sheet-grid-cursor[data-tone=self] b { display: none; }
+/* A teammate's name sits over the empty end of the text cell above. */
+.sheet-grid-cursor[data-tone=person] b { right: -2px; left: auto; border-radius: 4px 4px 0 4px; }
+
+/* Floating cards use the app's elevated menu surface: a fill just above the
+   sheet, a fine outline, a lit top edge, and a soft cast shadow. */
+.sheet-story .sheet-popover {
+  border-radius: 12px; background-color: #0d0e0f;
+  box-shadow: 0 0 0 1px #0006, inset 0 1px 0 #ffffff21, inset 0 0 0 1px #ffffff12, 0 20px 44px -16px #000d, 0 4px 12px -6px #0009;
+}
+
+/* CRM: a company cell is the record, and its card opens under the row. */
+.sheet-record-link { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+.sheet-record-link svg { color: #a8a8a8; }
+.sheet-record-link span { overflow: hidden; text-decoration: underline; text-decoration-color: #ffffff59; text-underline-offset: 3px; text-overflow: ellipsis; }
+.sheet-record-link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sheet-story > .sheet-record {
+  position: absolute; z-index: 3; top: calc(64px + (var(--sheet-record-row) + 1) * 30px + 7px); left: 204px; width: 306px; box-sizing: border-box;
+  padding: 12px 14px;
+  transition: top 240ms cubic-bezier(.2, .8, .2, 1);
+}
+.sheet-record-head { display: flex; align-items: center; gap: 8px; }
+.sheet-record-head strong { font-size: 14px; font-weight: 600; }
+.sheet-record-stage { margin-left: auto; padding: 1px 8px; border-radius: 999px; background: #58ae8326; color: #7fd1a6; font-size: 11px; }
+.sheet-record-stage[data-stage=Negotiation] { background: #8ab4f826; color: #8ab4f8; }
+.sheet-record dl { display: grid; gap: 6px; margin: 12px 0; }
+.sheet-record dl > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; }
+.sheet-record dt { color: #8f8f8f; font-size: 12px; }
+.sheet-record dd { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; overflow: hidden; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-record dd svg { color: #a8a8a8; }
+.sheet-record-open { display: flex; align-items: center; gap: 6px; padding-top: 10px; border-top: 1px solid var(--sheet-line); color: #c8c8c8; font-size: 12px; }
+
+/* Chart: the selected range drawn beside the grid, and a comment on a cell. */
+.sheet-chart-layout { position: relative; display: flex; min-height: 300px; }
+.sheet-chart-layout > .sheet-grid { flex: none; }
+.sheet-chart { flex: 1; min-width: 0; margin: 0; padding: 14px 18px; border-left: 1px solid var(--sheet-line); }
+.sheet-chart figcaption { margin-bottom: 12px; color: #c8c8c8; font-size: 12px; }
+.sheet-chart-bars { display: flex; align-items: flex-end; gap: 10px; height: 136px; }
+.sheet-chart-bars > div { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; }
+.sheet-chart-bars i { width: 100%; height: calc(var(--bar) * 112px); border-radius: 4px 4px 0 0; background: linear-gradient(#85b9e8, #85b9e84d); }
+.sheet-chart-bars span { max-width: 100%; overflow: hidden; color: #8f8f8f; font-size: 10px; text-overflow: ellipsis; }
+.sheet-comment { position: absolute; top: 206px; left: 270px; z-index: 3; width: 214px; box-sizing: border-box; padding: 10px 12px; }
+.sheet-comment > div { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.sheet-comment > div strong { font-weight: 600; }
+.sheet-comment > div span { color: #8f8f8f; }
+.sheet-comment p { margin: 6px 0 8px; }
+.sheet-comment-replies { display: flex; align-items: center; gap: 6px; color: #85b9e8; font-size: 12px; }
+
+/* Upload: the read-only notice with its convert action, and the workbook's sheet tabs. */
+.sheet-upload { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--sheet-line); color: #a8a8a8; font-size: 12px; line-height: 16px; }
+.sheet-upload-action { flex: none; padding: 5px 11px; border-radius: 999px; background: #fff; color: #000; font-weight: 500; white-space: nowrap; }
+.sheet-tabs { display: flex; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--sheet-line); }
+.sheet-tabs span { padding: 3px 10px; border-radius: 7px; color: #a8a8a8; font-size: 12px; }
+.sheet-tabs span[data-active=true] { background: #ffffff1f; color: #fff; font-weight: 500; }
+.sheet-story .sheet-frame > .sheet-grid { width: auto; }
+
+/* Phone artboard. */
+.paper-feature-art[data-compact=true] .sheet-story { margin: 10px; }
+.paper-feature-art[data-compact=true] .sheet-record { left: 20px; width: 296px; }
+.paper-feature-art[data-compact=true] .sheet-chart-layout { flex-direction: column; min-height: 0; }
+.paper-feature-art[data-compact=true] .sheet-chart { padding: 12px 14px; border-top: 1px solid var(--sheet-line); border-left: 0; }
+.paper-feature-art[data-compact=true] .sheet-chart-bars { height: 96px; }
+.paper-feature-art[data-compact=true] .sheet-chart-bars i { height: calc(var(--bar) * 76px); }
+.paper-feature-art[data-compact=true] .sheet-comment { position: static; width: auto; margin: 0 12px 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-grid-cursor, .sheet-record { transition: none; }
+  .sheet-written { animation: none; }
+}

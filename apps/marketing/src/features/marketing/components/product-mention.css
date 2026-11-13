@@ -1,0 +1,53 @@
+.feature-page .product-mention {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25em;
+  background: transparent;
+  transition: background-color 160ms ease-out;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.product-mention-line { white-space: nowrap; }
+
+.product-mention > span {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.14em;
+}
+
+.product-mention svg {
+  flex: none;
+  width: 0.8em;
+  height: 0.8em;
+  align-self: center;
+}
+
+.product-mention:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.product-mention:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-page .product-mention {
+    transition: none;
+  }
+}
+
+@media (max-width: 699px) {
+  .product-feature-intro h2:has(.product-mention) {
+    white-space: normal;
+    text-wrap: balance;
+  }
+}

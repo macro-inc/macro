@@ -132,6 +132,7 @@ describe('Ask Agent without the agent composer', () => {
   it.each([
     { type: 'email' as const, id: 'email-id', name: 'Subject' },
     { type: 'project' as const, id: 'project-id', name: 'Launch' },
+    { type: 'chat' as const, id: 'chat-id', name: 'Old chat' },
     {
       type: 'channel' as const,
       id: 'channel-id',
@@ -144,8 +145,34 @@ describe('Ask Agent without the agent composer', () => {
     expect(seed.prompt).toBeUndefined();
     expect(seed.initialInput).toContain(entity.id);
     expect(seed.initialInput).toContain(entity.name);
+    if (entity.type === 'chat')
+      expect(seed.initialInput).toContain('"blockName":"chat"');
     if (entity.type === 'channel')
       expect(seed.initialInput).toContain('"channelType":"public"');
+  });
+
+  it('attaches a pull request by its Macro id and URL', async () => {
+    await openChatWithAgent({
+      type: 'pr',
+      id: 'pr-entity-id',
+      url: 'https://github.com/macro-inc/macro/pull/42',
+    });
+    const input: string =
+      mocks.startPendingSession.mock.calls[0][0].initialInput;
+    expect(input).toBe(
+      '<m-pr-mention>{"id":"pr-entity-id","url":"https://github.com/macro-inc/macro/pull/42","label":""}</m-pr-mention> '
+    );
+    const editor = createHeadlessEditor({ nodes: SupportedNodeTypes });
+    editor.update(() => $convertFromMarkdownString(input, ALL_TRANSFORMERS), {
+      discrete: true,
+    });
+    editor.getEditorState().read(() => {
+      const serialized = $convertToMarkdownString(ALL_TRANSFORMERS);
+      expect(serialized).toContain('"id":"pr-entity-id"');
+      expect(serialized).toContain(
+        '"url":"https://github.com/macro-inc/macro/pull/42"'
+      );
+    });
   });
 
   it('hands a submitted query to the agent as the first prompt', async () => {
@@ -228,6 +255,20 @@ describe('Ask Agent with the agent composer', () => {
     );
     expect(mocks.startPendingSession).not.toHaveBeenCalled();
     expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+
+  it('drafts "Continue this chat:" with the old chat mention, unsent', async () => {
+    await openChatWithAgent({ type: 'chat', id: 'chat-id', name: 'Old chat' });
+    expect(mocks.openAgentComposer).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      {
+        draft:
+          'Continue this chat: <m-document-mention>{"documentId":"chat-id","documentName":"Old chat","blockName":"chat","blockParams":{}}</m-document-mention> ',
+        handle: undefined,
+      }
+    );
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
   });
 
   it('opens the composer for a channel-message draft', async () => {

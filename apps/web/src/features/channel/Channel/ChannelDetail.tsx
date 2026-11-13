@@ -13,7 +13,6 @@ import {
   DmWorkProvider,
   DmWorkToggle,
 } from '@app/features/agent-work/views/dm-work';
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -61,6 +60,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import {
+  ActiveCallHeader,
+  JoinableCallStatus,
+} from '../Call/views/ActiveCallHeader';
 import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,
@@ -178,24 +181,29 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned.
-  const askMacroEntity = () => {
-    const type = channelType();
-    if (!type) return undefined;
-    return {
-      type: 'channel' as const,
-      id: props.channelId,
-      name: channelName() ?? 'New Channel',
-      channelType: type,
-    };
-  };
-
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-      <DmWorkToggle />
+      <Show when={activeTab() !== 'call'}>
+        <DmWorkToggle />
+      </Show>
       <DebugSuspense name="ChannelDetail.live-indicators">
         <ChannelLiveIndicators channelId={props.channelId} />
       </DebugSuspense>
+      <Show when={call.isInThisChannel()}>
+        <DebugSuspense name="ChannelDetail.active-call">
+          <ActiveCallHeader
+            channelId={props.channelId}
+            link={activeTab() === 'call'}
+          />
+        </DebugSuspense>
+      </Show>
+      <Show
+        when={!call.isInThisChannel() && ENABLE_CALLS && !channel()?.agent_dm}
+      >
+        <DebugSuspense name="ChannelDetail.joinable-call">
+          <JoinableCallStatus channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <HeaderActionGroup label="Conversation actions">
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
@@ -203,17 +211,6 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           <DebugSuspense name="ChannelDetail.call-button">
             <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
-        </Show>
-        <Show when={askMacroEntity()}>
-          {(entity) => (
-            <DebugSuspense name="ChannelDetail.ask-macro">
-              <ChatWithAgentButton
-                grouped
-                entity={entity()}
-                label="Ask Macro"
-              />
-            </DebugSuspense>
-          )}
         </Show>
       </HeaderActionGroup>
       <Show when={channelType() === ChannelType.direct_message}>
@@ -248,7 +245,10 @@ export function ChannelDetailTopBar(
   const collapse = createPriorityCollapseController();
 
   return (
-    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
+    <ViewShell.TopBar
+      ref={collapse.setRow}
+      class="@container/channel-header gap-3 py-0"
+    >
       {/* Reserve room for the tab outline inside the clipped, measured region. */}
       <PriorityCollapseOverflowSensor
         controller={collapse}

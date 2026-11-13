@@ -10,7 +10,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createGanttNow, createGanttToday } from './create-gantt-today';
-import { GanttBar } from './gantt-bar';
+import { GanttBar, GanttBarTitle } from './gantt-bar';
 import { GanttChart } from './gantt-chart';
 import {
   GanttContextProvider as Context,
@@ -512,6 +512,7 @@ export const Gantt = {
   DateHint: GanttDateHint,
   CreateArea: GanttCreateArea,
   Bar: GanttBar,
+  BarTitle: GanttBarTitle,
   UndatedChip: GanttUndatedChip,
   TodayMarker: GanttTodayMarker,
 };

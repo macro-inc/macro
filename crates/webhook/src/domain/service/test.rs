@@ -1029,6 +1029,8 @@ async fn private_and_link_local_endpoints_are_rejected() {
         "https://192.168.1.1/webhook",
         "https://169.254.169.254/latest/meta-data",
         "https://[fe80::1]/webhook",
+        "https://[::ffff:127.0.0.1]/webhook",
+        "https://100.64.0.1/webhook",
     ] {
         let mut request = create_request();
         request.endpoint_url = endpoint_url.to_string();

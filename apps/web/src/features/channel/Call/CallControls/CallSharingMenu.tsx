@@ -1,28 +1,27 @@
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { isMobile } from '@core/mobile/isMobile';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import Hash from '@icon/system/regular/hash.svg';
 import Lock from '@icon/system/regular/lock-simple.svg';
 import Users from '@icon/system/regular/users-three.svg';
 import { Button, Dropdown, SingleSelectCheck } from '@ui';
-import { createSignal, createUniqueId, For, Show } from 'solid-js';
+import {
+  type Component,
+  createSignal,
+  createUniqueId,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { CallSettingsMenu } from './CallSettingsMenu';
 
-const sharingOptions = [
-  {
-    value: 'team',
-    label: 'Team sharing',
-    description: "Share with the creator's team after the call.",
-    icon: Users,
-  },
-  {
-    value: 'private',
-    label: 'Private',
-    description: 'No automatic team access.',
-    icon: Lock,
-  },
-] as const;
-
-type SharingOption = (typeof sharingOptions)[number];
+type SharingOption = {
+  value: 'team' | 'private';
+  label: string;
+  description: string;
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+};
 
 function SharingOptionContent(props: {
   option: SharingOption;
@@ -53,14 +52,38 @@ export function CallSharingMenu(props: {
   disabled: boolean;
   onToggle: () => void;
   onOpenChange: (open: boolean) => void;
+  /** Present only when the discussion is authorized through this channel. */
+  channelName?: string;
+  compact?: boolean;
+  size?: 'md' | 'lg';
 }) {
   const [open, setOpen] = createSignal(false);
   const id = createUniqueId();
   const selected = () => (props.sharedWithTeam ? 'team' : 'private');
-  const label = () =>
-    props.sharedWithTeam
-      ? 'Call sharing: Team sharing'
-      : 'Call sharing: Private';
+  const options = (): SharingOption[] => [
+    {
+      value: 'team',
+      label: t('calls.shareWithTeam'),
+      description: t('calls.creatorTeamDescription'),
+      icon: Users,
+    },
+    {
+      value: 'private',
+      label: props.channelName ? t('calls.channelOnly') : t('calls.private'),
+      description: props.channelName
+        ? t('calls.channelOnlyDescription', { channel: props.channelName })
+        : t('calls.privateDescription'),
+      icon: props.channelName ? Hash : Lock,
+    },
+  ];
+  const label = () => {
+    if (props.sharedWithTeam) return t('calls.team');
+    return props.channelName ? t('calls.channel') : t('calls.private');
+  };
+  const sharingIcon = () => {
+    if (props.sharedWithTeam) return Users;
+    return props.channelName ? Hash : Lock;
+  };
   const setMenuOpen = (open: boolean) => {
     setOpen(open);
     props.onOpenChange(open);
@@ -73,25 +96,39 @@ export function CallSharingMenu(props: {
 
   return (
     <CallSettingsMenu
-      title="Call sharing"
+      title={t('calls.afterCallEnds')}
       open={open()}
       onOpenChange={setMenuOpen}
       trigger={(triggerProps) => (
         <Button
           {...triggerProps}
-          size={isMobile() ? 'icon-md' : 'icon-lg'}
-          aria-label={label()}
+          size={props.size ?? (props.compact ? 'md' : 'lg')}
+          variant="secondary"
+          aria-label={t('calls.sharingLabel', { mode: label() })}
           disabled={props.disabled}
-          tooltip={{ content: label(), placement: 'top', disabled: open() }}
+          tooltip={{
+            content: t('calls.sharingLabel', { mode: label() }),
+            placement: 'top',
+            disabled: open(),
+          }}
         >
-          <Show when={props.sharedWithTeam} fallback={<Lock class="size-5" />}>
-            <Users class="size-5" />
+          <Dynamic component={sharingIcon()} class="size-4" />
+          <Show when={!props.compact}>
+            <span class="not-mobile:@max-[36rem]/call-stage:hidden">
+              {label()}
+            </span>
+          </Show>
+          <Show when={!props.compact}>
+            <CaretUp class="size-3" />
           </Show>
         </Button>
       )}
       mobileContent={
-        <MobileDrawer.Section role="radiogroup" aria-label="Call sharing">
-          <For each={sharingOptions}>
+        <MobileDrawer.Section
+          role="radiogroup"
+          aria-label={t('calls.afterCallEnds')}
+        >
+          <For each={options()}>
             {(option) => (
               <MobileDrawer.Item
                 role="radio"
@@ -113,9 +150,9 @@ export function CallSharingMenu(props: {
       }
     >
       <Dropdown.Group>
-        <Dropdown.GroupLabel>Call sharing</Dropdown.GroupLabel>
+        <Dropdown.GroupLabel>{t('calls.afterCallEnds')}</Dropdown.GroupLabel>
         <Dropdown.RadioGroup value={selected()} onChange={select}>
-          <For each={sharingOptions}>
+          <For each={options()}>
             {(option) => (
               <Dropdown.RadioItem
                 value={option.value}
