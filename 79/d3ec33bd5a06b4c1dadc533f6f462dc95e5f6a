@@ -1,0 +1,22 @@
+agent-teammates/starter-agent/behavior/agent/test/telemetry.test.ts
+  s_82939d9d17c700::t_efbc909308303d 84-86,120-121
+agent-teammates/starter-agent/behavior/agent/telemetry.ts
+  s_82939d9d17c700::t_7dd99da55c7a10 126
+  s_82939d9d17c700::t_efbc909308303d 46-48,69,128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "79d3ec33bd5a06b4c1dadc533f6f462dc95e5f6a",
+  "prompts": {},
+  "sessions": {
+    "s_82939d9d17c700": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bebbfa1f-b141-4a2c-ae6c-41735d9a70be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
