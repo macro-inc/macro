@@ -18,6 +18,7 @@ import {
   isNotificationSoundTab,
   releaseNotificationSoundTab,
 } from './primitives/sound-tab';
+import { createSoundUnlock } from './primitives/sound-unlock';
 
 /**
  * The sound Macro plays for an incoming notification, if any. System alerts
@@ -43,10 +44,7 @@ export function useNotificationSounds(
 ) {
   let lastPlayedAt = Number.NEGATIVE_INFINITY;
 
-  const soundsEnabled = () => {
-    const id = userId();
-    return !!id && readNotificationSoundSettings(id).enabled;
-  };
+  createSoundUnlock(unlockNotificationSounds);
 
   if (document.hasFocus()) claimNotificationSoundTab();
   makeEventListener(window, 'focus', claimNotificationSoundTab);
@@ -55,17 +53,10 @@ export function useNotificationSounds(
   makeEventListener(window, 'pageshow', (event) => {
     if (event.persisted && document.hasFocus()) claimNotificationSoundTab();
   });
-  makeEventListener(
-    window,
-    'pointerdown',
-    () => {
-      claimNotificationSoundTab();
-      if (soundsEnabled()) {
-        fireAndForget(unlockNotificationSounds(), 'notification-sounds');
-      }
-    },
-    { capture: true, passive: true }
-  );
+  makeEventListener(window, 'pointerdown', claimNotificationSoundTab, {
+    capture: true,
+    passive: true,
+  });
 
   const unsubscribe = notificationSource.subscribe((notification) => {
     if (!isNotificationSoundTab()) return;

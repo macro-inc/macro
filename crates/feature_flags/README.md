@@ -30,12 +30,24 @@ Do not substitute an email address, derive a new ID, or share one user's snapsho
 with another. Snapshots have no automatic refresh; a new load creates a new one.
 No flag is an authorization grant by itself.
 
+## Global service evaluation
+
+Use `ServiceFeatureFlags::load_service(ServiceContext::new("service-name"))` for
+an explicit global rollout. Service contexts never fabricate Macro user IDs.
+The strict transport and snapshot validation are shared with authenticated-user
+loads. Consumers use one stable service context across human routes, background
+jobs and lifecycle calls. Consumers may require a separate authenticated-user
+load of the same key for actor cohorts; configure the service context explicitly
+alongside those actors rather than using an owner identity for background work.
+`FakeFeatureFlags::set_service` configures service results independently of users.
+
 ## PostHog adapter
 
 Construct once at the service composition root and clone to share its HTTP pool:
 
 ```rust
 use feature_flags::outbound::posthog::PostHogFeatureFlags;
+use macro_env::Environment;
 use std::time::Duration;
 
 # fn example() -> Result<(), rootcause::Report> {
@@ -43,6 +55,7 @@ let feature_flags = PostHogFeatureFlags::new(
     "https://us.i.posthog.com", // Use the project's regional ingestion origin.
     "injected-project-token".to_owned(),
     Duration::from_secs(3),
+    Environment::Develop, // The service config's `environment`.
 )?;
 # Ok(())
 # }
@@ -56,9 +69,18 @@ configuration is loaded from the environment by this crate.
 Each load makes one POST to `/flags/?v=2` with the project token and exact Macro
 user ID. `evaluation_runtime: "server"` requests server/all-runtime flags;
 `geoip_disable: true` prevents targeting by the backend's IP. Person targeting
-uses PostHog's stored properties. Group targeting and property overrides are
-not supported. Reads do not emit `$feature_flag_called` events, so this adapter
-alone does not provide experiment exposure tracking.
+uses PostHog's stored properties plus one override, `environment` (`prod`,
+`dev`, or `local`), from the environment passed at construction; nothing
+request-supplied can set it. Group targeting and other property overrides are
+not supported.
+
+Reads do not emit `$feature_flag_called` events, so this adapter alone does not
+provide experiment exposure tracking.
+
+Dev and prod share one PostHog project and the same Macro user IDs, so a flag
+targeted only at user IDs turns on in both. Target dev-only rollouts with
+`environment = dev`. The web client sends the same property: `prod`, `dev`,
+or `local` for local stack bundles.
 
 The response must contain a `flags` map and explicit boolean
 `errorsWhileComputingFlags`. Computation errors, any nonempty `quotaLimited`

@@ -35,8 +35,32 @@ fn connector_discovery_is_eager_only_in_agent_sessions() {
 }
 
 #[test]
-fn subagent_toolset_passes_schema_validation() {
-    let tools = subagent_toolset();
+fn no_host_offers_the_removed_subagent_tool() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        assert!(!tools.toolset.tools.contains_key("Subagent"), "{host:?}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == "Subagent"),
+            "{host:?}"
+        );
+    }
+    assert!(
+        !tools_for_agent_code_mode()
+            .toolset
+            .tools
+            .contains_key("Subagent")
+    );
+    assert!(!EAGER_TOOLS.contains(&"Subagent"));
+}
+
+#[test]
+fn base_toolset_passes_schema_validation() {
+    let tools = base_toolset();
     for name in [
         "ListDatabases",
         "DescribeDatabase",
@@ -113,8 +137,8 @@ fn every_tool_schema_is_one_gemini_accepts() {
                 .map(|tool| (tool.name.clone(), tool.schema.clone())),
         );
     }
-    let subagent = subagent_toolset().request_schemas().unwrap_or_default();
-    schemas.extend(subagent.into_iter().map(|tool| (tool.name, tool.schema)));
+    let base = base_toolset().request_schemas().unwrap_or_default();
+    schemas.extend(base.into_iter().map(|tool| (tool.name, tool.schema)));
     assert!(schemas.iter().any(|(name, _)| name == "DisplayResults"));
     for (name, schema) in schemas {
         assert_eq!(
@@ -131,7 +155,7 @@ fn every_tool_schema_is_one_gemini_accepts() {
 }
 
 #[test]
-fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
+fn coding_dispatch_is_available_to_every_host_but_not_the_base_toolset() {
     for host in [
         AiHost::Chat,
         AiHost::AgentSession,
@@ -150,13 +174,13 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
             assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
         }
     }
-    let subagent = subagent_toolset();
+    let base = base_toolset();
     for name in [
         "ListCodingAgents",
         "ListAgentUpdates",
         "DispatchCodingAgent",
     ] {
-        assert!(!subagent.tools.contains_key(name));
+        assert!(!base.tools.contains_key(name));
     }
 }
 
@@ -180,7 +204,11 @@ fn code_mode_runs_confirmed_actions_through_the_sdk_instead_of_the_tools() {
 fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
     let tools = tools_for_agent_code_mode();
     let prompt = tools.prompt.to_string();
-    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+    for name in [
+        "ListCodingAgents",
+        "DispatchCodingAgent",
+        "CreateAgentSession",
+    ] {
         assert!(!tools.toolset.tools.contains_key(name), "{name}");
         assert!(
             !tools.deferred.iter().any(|tool| tool.name == name),
@@ -213,6 +241,36 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "OpenDirectMessage",
         "MuteNotifications",
         "GetTeamAvailability",
+        "CreateDocument",
+        "UpdateSharing",
+        "SaveDatabaseQuery",
+        "GetCompany",
+        "CreateCompany",
+        "CreateContact",
+        "ImportCompaniesCsv",
+        "ListPipelines",
+        "CreatePipeline",
+        "FindPipelineEntries",
+        "AddToPipeline",
+        "UpdatePipelineEntries",
+        "RemoveFromPipeline",
+        "EditPipeline",
+        "ImportPipelineCsv",
+        "ExportPipelineCsv",
+        "ReadChannelMessageContext",
+        "ShareWithChannel",
+        "ListImportEntities",
+        "CreateImportEntity",
+        "DeleteImportEntity",
+        "ImportNotionPage",
+        "ListInitiatives",
+        "ReadInitiative",
+        "CreateInitiative",
+        "UpdateInitiative",
+        "UpdateInitiativeSharing",
+        "DeleteInitiative",
+        "ListAgents",
+        "ConfigureAgent",
     ] {
         assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
         assert!(
@@ -376,16 +434,8 @@ fn design_file_readers_are_available_in_every_host_with_their_guidance() {
             );
         }
     }
-    assert!(
-        subagent_toolset()
-            .tools
-            .contains_key("ReadPhotoshopDocument")
-    );
-    assert!(
-        subagent_toolset()
-            .tools
-            .contains_key("ReadIllustratorDocument")
-    );
+    assert!(base_toolset().tools.contains_key("ReadPhotoshopDocument"));
+    assert!(base_toolset().tools.contains_key("ReadIllustratorDocument"));
 }
 
 /// Document answers get the one SQL tool, not a read-only twin: the access
@@ -716,7 +766,7 @@ fn forms_are_discoverable_and_execute_directly_on_every_host() {
         }
         assert!(!tools.toolset.user_tools.contains_key("SetFormAccess"));
     }
-    let delegated = subagent_toolset();
+    let delegated = base_toolset();
     for name in ["CreateForm", "ReadForm", "EditForm", "ListForms"] {
         assert!(delegated.tools.contains_key(name));
     }
@@ -822,10 +872,11 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
+    // The SDK cannot show the model a render or render the answer cards for
+    // agent updates.
     for name in [
-        "CreateDocument",
         "RenderCanvas",
-        "Subagent",
+        "ListAgentUpdates",
         "SearchTools",
         "LoadTools",
         "BashCodeExecution",
@@ -892,7 +943,7 @@ fn session_reader_is_available_to_every_conversation_host_and_mcp() {
                 .any(|tool| tool.name == "ReadAgentSession")
         );
     }
-    assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+    assert!(base_toolset().tools.contains_key("ReadAgentSession"));
 }
 
 #[test]
@@ -991,7 +1042,7 @@ fn conversation_tools_only_advertise_new_sessions() {
             }
         }
     }
-    assert!(!subagent_toolset().tools.contains_key("ReadChat"));
+    assert!(!base_toolset().tools.contains_key("ReadChat"));
 }
 
 #[test]

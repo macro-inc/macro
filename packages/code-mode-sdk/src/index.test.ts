@@ -8,7 +8,12 @@ describe('preinstalled SDK', () => {
   it('preserves every public runtime export, including documented helpers', () => {
     expect(
       Object.keys(preinstalledSdk)
-        .filter((key) => key !== 'observeRequests' && key !== 'gateRequests')
+        .filter(
+          (key) =>
+            key !== 'observeRequests' &&
+            key !== 'gateRequests' &&
+            key !== 'sendVerbHeaders'
+        )
         .sort()
     ).toEqual(Object.keys(publicSdk).sort());
     for (const key of Object.keys(publicSdk) as Array<keyof typeof publicSdk>) {

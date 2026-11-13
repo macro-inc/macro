@@ -16,6 +16,7 @@ distribution.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the ingest/query service
   and the ports it depends on.
 - `src/outbound/pg_activity_repo.rs`: the single `activity_events` table.
+- Use `AppearanceUpdate` and `pg_activity_repo::insert_activities` to commit attributed appearance history in the entity transaction; the adapter preserves agent correlation and SDK verbs, and appearance broker events must not insert duplicate history.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
 - `src/inbound/toolset/` (`ai_tools`) and `src/inbound/axum_router.rs`
@@ -30,6 +31,7 @@ distribution.
   crate depends on this with `default-features = false` (models only) and
   implements its own event → `DomainActivity` mapping; the hosting service
   declares consumed topics and dispatches.
+- Keep appearance changes in entity history, but exclude them from personal/team feeds, contribution totals, and attribution recency.
 
 ## Boundaries
 
@@ -63,4 +65,7 @@ distribution.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
-- Session activity reads preserve `agent_correlation_id` and use session visibility; entity and subject feeds retain their existing authorization.
+- Session and other activity reads preserve `agent_correlation_id` and nullable `agent_verb`; session visibility and existing entity/subject authorization still apply. The materializer restores both envelope fields before classifying an event.
+- The session read is one scan of `activity_events_agent_session_idx`. A trigger stamps `agent_session_id` from the row's correlation on insert, so writers never set it; reads (`opened`) are left out of both the read and session delivery.
+- Correlated rows publish a separate `SessionRecorded` activity-topic event even when no subject or entity viewer is addressable. The realtime consumer broadcasts those rows to session subscribers; the GraphQL adapter resolves correlation ownership through the existing agent correlation repository.
+- The activity topic schema is v2 for the session event; older realtime consumers skip v2 frames during a rolling deployment, and new consumers skip v1 frames. Both feeds recover missed frames through authorized reads on reconnect.

@@ -1,29 +1,16 @@
 ---
-title: "Mentions"
+title: "Company graph"
 icon: "at"
 description: "How Blocks reference each other and how permissions are handled. The @mention primitive that works across every markdown surface in Macro."
 ---
 
-Mentions are how Blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, an agent or [routine](/product/routines) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's References panel.
+Your email, team chat, docs, tasks, and calls live in one workspace. Company graph connects that work through @mentions, backlinks, and shared properties, so people and agents can follow the context from one item to the next.
 
-<div className="mention-thread" role="img" aria-label="Riley replies and mentions Quinn and Harbor">
-  <div className="mention-msg">
-    <span className="chat-preview-avatar is-avery">A</span>
-    <div className="mention-body">
-      <div className="chat-preview-meta"><span className="chat-preview-name">Avery</span><span className="chat-preview-time">10:24 AM</span></div>
-      <p>The notes are in <span className="mention-doc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-10L13.5 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M13.5 3v3.5a2 2 0 0 0 2 2H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg><span className="mention-doc-name">Launch plan</span></span>.</p>
-    </div>
-  </div>
-  <div className="mention-replies">
-    <div className="mention-reply">
-      <span className="chat-preview-avatar is-riley">R</span>
-      <div className="mention-body">
-        <div className="chat-preview-meta"><span className="chat-preview-name">Riley</span><span className="chat-preview-time">10:31 AM</span></div>
-        <p>I'll ask <span className="mention-pill">@Quinn</span> to send it to <span className="mention-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 21V6.5a1.5 1.5 0 0 1 1.2-1.45l7-1.6A1.5 1.5 0 0 1 14 4.9V21m0-11h4.5a1.5 1.5 0 0 1 1.5 1.5V21M2.5 21h19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M8 10h2M8 15h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>harbor.com</span>.</p>
-      </div>
-    </div>
-  </div>
-</div>
+## Connect your work
+
+Mentions are how blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, an agent or [routine](/product/routines) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's [References panel](/concepts/blocks).
+
+<GuideGraphic kind="chat" label="A document mentioned in a channel stays linked to the conversation." />
 
 ## Mentions in Agents
 
@@ -66,3 +53,13 @@ In a document or chat, a mention is a navigable link and a source of context. In
 In a **channel** there are two special mentions on top of the normal ones: `@here` pings every participant, and `@Macro` invokes the agent inline.
 
 The agent leans on mentions heavily: anything you @mention into a chat is pulled in as context.
+
+## Previews
+
+Hover over an @mention to preview the linked task, document, or other work. The References panel on an item shows where it has been mentioned or embedded.
+
+## Embeds
+
+Create an @mention by typing **@** or dragging an item into a document. Hover over the mention and choose **Convert to embed**.
+
+Most items can be embedded read-only in a document, with editing and markup tools disabled. Embeds and mentions in documents do not grant access automatically. Share the original file with the people who need to read it; mentions in channels grant access to channel members.

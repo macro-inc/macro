@@ -69,6 +69,9 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes pass container preflight without a managed provider; only
+managed runtimes require provider account setup.
+
 Prompts to an external runtime pass `authorize_runtime` when accepted and
 `runtime_refusal` again when they dispatch, so a prompt queued before access was
 removed never runs: `RuntimeAccessFacts::may_run` requires a coding agent's
@@ -115,21 +118,35 @@ is invisible to users. A per-runtime cap on live sessions counts
 `ListedSessions::live` only.
 
 Each session's commands run one at a time on its command worker
-(`service/queue.rs`). A worker exits after `WORKER_IDLE_TIMEOUT` with nothing
-queued, and with the session it deletes, removing its map entry through
-`retire_worker`; commands are sent under the same entry lock, so one racing
-the exit either keeps the worker or starts a new one. Before an idle worker
-retires, `service/idle.rs` silently releases a quiet session (nothing admitted
-in `busy`, empty queue, no notification batch) whose runtime says the release
-is lossless (`ContainerManager::idle_release_is_lossless`: the in-process
-manager compares its live state with what the log rebuilds). An in-process
+(`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
+worker tries to release its session (`service/idle.rs`) and exits only when
+nothing is left to free (`IdleRelease::holds_nothing`: released, or another
+runtime's session, such as Cursor, a sandboxed coder or an external (macrod)
+runtime, whose queue copy and `hydrated` mark are forgotten too); a session
+still held keeps its worker, which tries again.
+A try that replayed the log and kept the session, or failed, pushes the next
+one out to twice, four times, then every sixteen times the timeout
+(`idle_wait`, `IdleRelease::backs_off`), because each such try replays the
+whole log; a try that found work open (a running turn, a busy actor) does not,
+so the session is tried again at the plain timeout. The PostHog kill switch
+`disable-agent-idle-release-retry` (`IDLE_RELEASE_NO_RETRY_FLAG`, read for the
+session's owner) turns retries off: the worker tries once and exits. A worker also exits with
+the session it deletes. Both remove its map entry through `retire_worker`;
+commands are sent under the same entry lock, so one racing the exit either
+keeps the worker or starts a new one. A try silently releases a quiet session
+(nothing admitted in `busy`, empty queue, no notification batch) whose runtime
+says the release is lossless (`ContainerManager::idle_release_is_lossless`:
+the in-process manager compares its live state with what the log rebuilds). A
+session whose row is gone has nothing left to keep and is released. An in-process
 session's actor attached here goes through
 `AgentSessionService::release_session`, never `close_session`: no
 `disconnected` frame, no `SessionStopped`, no lifecycle event or webhook, its
 claim given back under its own fence. Then `ContainerManager::release_idle`
 drops this process's runtime state, and the queue copy and `hydrated` mark are
 forgotten. The next command finds no actor and resumes from the log. Unclaimed
-warm sessions never get a worker, so they stay warm.
+warm sessions never get a worker, so they stay warm until
+`reap_warm_sessions` expires and deletes them. The `agent.session.idle_release`
+span's `outcome` names where a release stopped.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session
@@ -146,6 +163,10 @@ wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
+
+`RuntimeRegistry::computer_control` forwards typed computer commands to the
+local live connection, returning `None` when another replica owns it. The
+service composition owns cross-replica carriage and request deadlines.
 
 Each dial costs a replica a handshake, `session/list` and a reattach, so
 `inbound/runtime_gateway.rs` gives every authenticated harness a per-replica,

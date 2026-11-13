@@ -1,5 +1,6 @@
 // Agent runtimes in agent-harness-service: reattach storms when a runtime
-// dials in again, and the tokio runtime starving under them.
+// dials in again, the tokio runtime starving under them, and a task's memory
+// nearing its limit.
 //
 // New monitors, not adopted. The fields below are their contract; renaming
 // one silently empties a metric and turns its monitor into missing data:
@@ -13,6 +14,10 @@
 // - The `tokio runtime starvation detected` warning from
 //   `spawn_starvation_detector` in `crates/macro_tower_layers/src/lib.rs`,
 //   logged when a 250 ms tick runs late.
+// - The ECS Fargate integration's `ecs.fargate.mem.rss` and
+//   `ecs.fargate.mem.limit` for the `service` container of the
+//   `agent-harness-service-prod` image, per `task_arn`. Only that container
+//   reports a limit (the task's); the agent and log router report none.
 //
 // Thresholds come from the seven days to 2026-11-10 (see each monitor).
 import * as datadog from '@pulumi/datadog';
@@ -55,21 +60,30 @@ new datadog.LogsMetric('agent-harness-runtime-starvation', {
 
 const RUNBOOK = 'docs/runbooks/agent-harness-runtimes.md';
 
+const TASK = 'short_image:agent-harness-service-prod,container_name:service';
+
 const QUERIES = {
   dials:
     'sum:macro.agent_harness.runtime_reattach{env:prod} by {harness}.as_count()',
   sessions:
     'sum:macro.agent_harness.runtime_reattach.sessions{env:prod} by {harness}',
   starvation: 'sum:macro.agent_harness.runtime_starvation{env:prod}.as_count()',
+  memory: `max:ecs.fargate.mem.rss{${TASK}} by {task_arn} / max:ecs.fargate.mem.limit{${TASK}} by {task_arn} * 100`,
 };
 
 const TITLES = {
   dials: 'Agent runtime reattaching in a loop',
   sessions: 'Agent runtime reattaching too many sessions',
   starvation: 'Agent harness tokio runtime starving',
+  memory: 'Agent harness task memory near its limit',
 };
 
-const THRESHOLDS = { dials: '15', sessions: '500', starvation: '1000' };
+const THRESHOLDS = {
+  dials: '15',
+  sessions: '500',
+  starvation: '1000',
+  memory: '75',
+};
 
 // 15-minute sums, as the monitors evaluate them.
 const windowed = (query: string) => `${query}.rollup(sum, 900)`;
@@ -132,6 +146,11 @@ const dashboard = new datadog.Dashboard('agent-harness-runtimes', {
         query: windowed(QUERIES.starvation),
         critical: THRESHOLDS.starvation,
       }),
+      thresholdGraph({
+        title: TITLES.memory,
+        query: QUERIES.memory,
+        critical: THRESHOLDS.memory,
+      }),
     ]),
   ],
 });
@@ -181,4 +200,21 @@ prodMonitor('agent-harness-runtime-starvation', {
   dashboard: dashboard.url,
   runbook: `${RUNBOOK}#tokio-runtime-starving`,
   alertDetail: '{{value}} warnings in 15 minutes (threshold {{threshold}})',
+});
+
+// Resident memory has grown with every session a task touches and is not
+// given back: from 1.2 GB at boot to 5.7-6.0 GB of the 8 GiB limit over 52
+// hours to 2026-11-10, about 1% of the limit an hour, so 75% leaves most of a
+// day before an out-of-memory kill. Deploys have replaced tasks before then.
+prodMonitor('agent-harness-task-memory', {
+  title: TITLES.memory,
+  service: SERVICE,
+  query: `max(last_15m):${QUERIES.memory} > ${THRESHOLDS.memory}`,
+  monitorThresholds: { critical: THRESHOLDS.memory },
+  pages: false,
+  description:
+    'agent-harness-service task {{task_arn.name}} is using {{value}}% of its memory limit. ECS kills the task at 100%, dropping every session it serves.',
+  dashboard: dashboard.url,
+  runbook: `${RUNBOOK}#task-memory-near-its-limit`,
+  alertDetail: '{{value}}% of the memory limit (threshold {{threshold}}%)',
 });

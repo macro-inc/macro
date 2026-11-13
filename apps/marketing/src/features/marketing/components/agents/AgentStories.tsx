@@ -1,6 +1,6 @@
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import Clipboard from '@phosphor/clipboard.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clipboard from '@icon/system/regular/clipboard.svg';
 import { Button } from '@ui';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { ProductDemo } from '../product/ProductPage';

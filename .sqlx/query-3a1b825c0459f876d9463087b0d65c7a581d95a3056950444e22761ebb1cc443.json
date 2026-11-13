@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM harness_pairing_requests\n            WHERE expires_at <= now() AND status <> 'approved'\n              AND NOT EXISTS (\n                  SELECT 1 FROM harnesses h\n                  WHERE h.id = harness_pairing_requests.harness_id\n                    AND h.computer_id IS NOT NULL AND h.deleted_at IS NULL\n              )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "3a1b825c0459f876d9463087b0d65c7a581d95a3056950444e22761ebb1cc443"
+}
