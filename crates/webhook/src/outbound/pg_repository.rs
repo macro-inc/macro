@@ -190,27 +190,28 @@ impl WebhookInterest for PgRepository {
     #[tracing::instrument(skip(self), err)]
     async fn any_webhook_names(&self, event_name: &str) -> Result<bool, Self::Err> {
         let family_pattern = family_pattern(event_name);
-        // Planned per call (`persistent(false)`), not as a cached generic
-        // plan: with the names unknown, a generic plan expects an early hit
-        // and seq-scans every webhook on a miss. The `OFFSET 0` fence keeps
-        // the containment probes on `webhook_filters_gin_idx` (a BitmapOr)
-        // instead of a LIMIT-1 seq scan.
+        // The live-webhook predicates are inside the materialized CTE so the
+        // probes use the partial `webhook_filters_live_gin_idx` (a BitmapOr
+        // over live webhooks only): paused, invalid or deleted webhooks
+        // naming the event cannot make a miss look like a likely hit and
+        // push the planner onto a seq scan. Planned per call
+        // (`persistent(false)`): a cached generic plan, blind to the names,
+        // would expect an early hit and seq-scan on a miss.
         sqlx::query_scalar!(
             r#"
-            SELECT EXISTS (
+            WITH named AS MATERIALIZED (
                 SELECT 1
-                FROM (
-                    SELECT w.deleted_at, w.status, w.is_valid
-                    FROM webhook w
-                    WHERE w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($1::text)))
-                       OR w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
-                       OR w.filters @> '[{"events": ["*"]}]'::jsonb
-                    OFFSET 0
-                ) named
-                WHERE named.deleted_at IS NULL
-                  AND named.status = 'active'
-                  AND named.is_valid
-            ) AS "wanted!"
+                FROM webhook w
+                WHERE w.deleted_at IS NULL
+                  AND w.status = 'active'
+                  AND w.is_valid
+                  AND (
+                      w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($1::text)))
+                      OR w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
+                      OR w.filters @> '[{"events": ["*"]}]'::jsonb
+                  )
+            )
+            SELECT EXISTS (SELECT 1 FROM named) AS "wanted!"
             "#,
             event_name,
             &family_pattern,

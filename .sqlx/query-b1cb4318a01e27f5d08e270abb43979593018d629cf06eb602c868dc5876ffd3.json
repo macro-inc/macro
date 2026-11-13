@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH named AS MATERIALIZED (\n                SELECT 1\n                FROM webhook w\n                WHERE w.deleted_at IS NULL\n                  AND w.status = 'active'\n                  AND w.is_valid\n                  AND (\n                      w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($1::text)))\n                      OR w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))\n                      OR w.filters @> '[{\"events\": [\"*\"]}]'::jsonb\n                  )\n            )\n            SELECT EXISTS (SELECT 1 FROM named) AS \"wanted!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "wanted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b1cb4318a01e27f5d08e270abb43979593018d629cf06eb602c868dc5876ffd3"
+}
