@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import type { FileTypeString, MimeType } from '@core/block';
+import { getFolderZipSha256 } from '@core/client/zipWorkerClient';
 import { toast } from '@core/component/Toast/Toast';
 import {
   trackUpload,
@@ -15,17 +16,28 @@ import {
   uploadNativeStagedFileToPresignedUrl,
 } from '@core/mobile/nativeStagedUpload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { ResultError } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
-import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import {
   DOCUMENT_NAME_TOO_LONG_CODE,
   storageServiceClient,
 } from '@service-storage/client';
+import type { UploadFolderProgress } from '@service-storage/generated/schemas/uploadFolderProgress';
 import { filenameWithoutExtension } from '@service-storage/util/filename';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { storageWS } from '@service-storage/websocket';
+import { match } from 'ts-pattern';
 import { FileTypeMap } from '../fileTypeMap';
+import { waitForFolderUpload } from './folderUploadStatus';
+import {
+  forgetPendingFolderUpload,
+  type PendingFolderUpload,
+  readPendingFolderUploads,
+  rememberPendingFolderUpload,
+} from './pendingFolderUploads';
 import { uploadDocx } from './uploadDocx';
 
 /**
@@ -41,7 +53,7 @@ export class DocumentNameTooLongError extends Error {
 
 const uploadWithPresignedUrl = async (params: {
   presignedUrl: string;
-  buffer: ArrayBuffer;
+  buffer: Blob;
   sha: string;
   type: MimeType;
   onProgress?: (sent: number | null) => void;
@@ -170,18 +182,22 @@ async function uploadWithProgress(
     });
   }
 
+  if (isZip && options?.unzipFolder) {
+    return uploadFolderZip(file, name, options, progress, handleUploadError);
+  }
+
   let source: UploadSource;
   try {
-    source = await resolveUploadSource(file);
+    source = await resolveUploadSource(file, progress?.preparing);
   } catch (error) {
     return handleUploadError(error instanceof Error ? error : String(error));
   }
   const { sha } = source;
   const putFile = async (presignedUrl: string, type: MimeType) => {
-    if (source.kind === 'bytes') {
+    if (source.kind === 'file') {
       const sent = await uploadWithPresignedUrl({
         presignedUrl,
-        buffer: source.buffer,
+        buffer: source.file,
         sha,
         type,
         onProgress: progress?.sending,
@@ -204,47 +220,6 @@ async function uploadWithProgress(
       return false;
     }
   };
-
-  if (isZip && options?.unzipFolder) {
-    const res = await storageServiceClient.projects.createUploadZipRequest({
-      sha,
-      name,
-      parentId: options?.projectId,
-    });
-    if (res.isErr()) {
-      return handleUploadError(res.error);
-    }
-
-    const { presignedUrl, requestId } = res.value;
-
-    if (
-      !presignedUrl ||
-      !requestId ||
-      !(await putFile(presignedUrl, 'application/zip'))
-    ) {
-      return handleUploadError('Failed to upload zip file');
-    }
-
-    const projectIdPromise = waitBulkUploadStatus(requestId);
-
-    fireAndForget(
-      projectIdPromise.then((projectId) => {
-        if (projectId) {
-          toast.success(`Uploaded ${name}`);
-        } else {
-          toast.failure(`Failed to upload ${name}`);
-        }
-      }),
-      'file-upload'
-    );
-
-    return {
-      type: 'folder',
-      name,
-      requestId,
-      projectId: projectIdPromise,
-    };
-  }
 
   // Handle docx file upload
   let jobId: string | undefined;
@@ -323,4 +298,168 @@ async function uploadWithProgress(
     documentId,
     fileType,
   };
+}
+
+/**
+ * Sends a folder zipped by `zipFiles`. The zip is uploaded straight from the
+ * picked files with the hash it was written with, so it is never read whole
+ * into memory, then followed through the server's extraction.
+ */
+async function uploadFolderZip(
+  file: File,
+  name: string,
+  options: UploadFileOptions,
+  progress: UploadProgressHandle | undefined,
+  handleUploadError: (err: ResultError<string>[] | Error | string) => never
+): Promise<PendingFolderUploadResult> {
+  const sha = getFolderZipSha256(file);
+  if (!sha) return handleUploadError('Folder was not prepared for upload');
+
+  const requestId = await Telemetry.span('folder_upload.send', async (span) => {
+    span.setAttr('folder_upload.zip_bytes', file.size);
+    const res = await storageServiceClient.projects.createUploadZipRequest({
+      sha,
+      name,
+      parentId: options.projectId,
+    });
+    if (res.isErr()) {
+      return handleUploadError(res.error);
+    }
+
+    const { presignedUrl, requestId } = res.value;
+    if (!presignedUrl || !requestId) {
+      return handleUploadError('Failed to upload zip file');
+    }
+    span.setAttr('folder_upload.request_id', requestId);
+
+    const sent = await uploadToPresignedUrl({
+      presignedUrl,
+      buffer: file,
+      sha,
+      type: 'application/zip',
+      onProgress: progress?.sending,
+    });
+    if (sent.isErr()) {
+      return handleUploadError('Failed to upload zip file');
+    }
+    return requestId;
+  });
+  progress?.processing(null);
+
+  // Lets a tab opened or reloaded later show how the folder ends.
+  const userId = cachedUserId();
+  const sentAt = Date.now();
+  if (userId) rememberPendingFolderUpload(userId, { requestId, name, sentAt });
+
+  return {
+    type: 'folder',
+    name,
+    requestId,
+    projectId: settleFolderUpload(requestId, name, progress, {
+      userId,
+      sentAt,
+      resumed: false,
+    }),
+  };
+}
+
+/** Request ids this tab is following to their end. */
+const followedFolderUploads = new Set<string>();
+
+/**
+ * Follows the folders this account sent before the page loaded, showing each
+ * as Processing until the server says how it ended.
+ */
+export function resumePendingFolderUploads(userId: string): Promise<void>[] {
+  return readPendingFolderUploads(userId)
+    .filter((upload) => !followedFolderUploads.has(upload.requestId))
+    .map((upload) => followResumedFolderUpload(userId, upload));
+}
+
+async function followResumedFolderUpload(
+  userId: string,
+  upload: PendingFolderUpload
+) {
+  const progress = trackUpload(upload.name, 0);
+  progress.processing(null);
+  try {
+    await settleFolderUpload(upload.requestId, upload.name, progress, {
+      userId,
+      sentAt: upload.sentAt,
+      resumed: true,
+    });
+  } finally {
+    progress.done();
+  }
+}
+
+function partialUploadMessage(
+  name: string,
+  progress: UploadFolderProgress | undefined
+): string {
+  if (!progress || progress.filesFailed === 0) {
+    return `Some files in ${name} could not be uploaded`;
+  }
+  return `Uploaded ${name}, but ${progress.filesFailed} of ${progress.filesTotal} files could not be uploaded`;
+}
+
+/**
+ * Waits for the server to finish the folder and tells the user how it ended.
+ * Resolves to the created folder's id, or undefined when there is none.
+ */
+async function settleFolderUpload(
+  requestId: string,
+  name: string,
+  progress: UploadProgressHandle | undefined,
+  follow: { userId: string | undefined; sentAt: number; resumed: boolean }
+): Promise<string | undefined> {
+  followedFolderUploads.add(requestId);
+  // A reload resumes the folder, but an automatic one would still interrupt it.
+  const releaseReloadHold = holdAutomaticReload();
+  try {
+    const outcome = await Telemetry.span(
+      'folder_upload.server',
+      async (span) => {
+        span.setAttr('folder_upload.request_id', requestId);
+        span.setAttr('folder_upload.resumed', follow.resumed);
+        const outcome = await waitForFolderUpload(
+          requestId,
+          (fraction) => progress?.processing(fraction),
+          { sentAt: follow.sentAt }
+        );
+        span.setAttr('folder_upload.outcome', outcome.status);
+        if (outcome.status === 'failed' || outcome.status === 'unknown') {
+          span.error(new Error(`folder upload ended ${outcome.status}`));
+        }
+        return outcome;
+      }
+    );
+    if (follow.userId) forgetPendingFolderUpload(follow.userId, requestId);
+    return match(outcome)
+      .with({ status: 'completed' }, ({ projectId }) => {
+        toast.success(`Uploaded ${name}`);
+        return projectId;
+      })
+      .with({ status: 'partially_completed' }, ({ projectId, progress }) => {
+        toast.alert(partialUploadMessage(name, progress));
+        return projectId;
+      })
+      .with({ status: 'failed' }, () => {
+        toast.failure(`Failed to upload ${name}`);
+        return undefined;
+      })
+      .with({ status: 'unknown' }, () => {
+        // A resumed folder may have been sent long ago; don't promise it soon.
+        toast.alert(
+          follow.resumed
+            ? `Couldn't confirm that ${name} finished uploading. Check Drive.`
+            : `Couldn't confirm that ${name} finished uploading. Check Drive in a few minutes.`
+        );
+        return undefined;
+      })
+      .exhaustive(() => undefined);
+  } finally {
+    followedFolderUploads.delete(requestId);
+    releaseReloadHold();
+  }
 }

@@ -1,3 +1,4 @@
+import { ItemDndProvider } from '@components/app/ItemDragAndDrop';
 import '@app/index.css';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -64,6 +65,19 @@ source.createFolder = async (name, parentId) => {
   }
   return createFolder(name, parentId);
 };
+// Count metadata mutations so pointer tests can distinguish cancellation from a no-op tree.
+let folderMoves = 0;
+const moveFolder = source.moveFolder;
+source.moveFolder = async (id, parentId) => {
+  document.body.dataset.folderMoves = String(++folderMoves);
+  return moveFolder(id, parentId);
+};
+let itemMoves = 0;
+const moveItem = source.move;
+source.move = async (item, folderId) => {
+  document.body.dataset.itemMoves = String(++itemMoves);
+  return moveItem(item, folderId);
+};
 const View = () => (
   <QueryClientProvider
     client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -86,11 +100,13 @@ const View = () => (
         importResume: createMemoryImportResume(),
       }}
     >
-      <div class="relative h-dvh bg-panel text-ink">
-        <VaultView />
-        <FloatRegionHost />
-        <ToastRegion />
-      </div>
+      <ItemDndProvider>
+        <div class="relative h-dvh bg-panel text-ink">
+          <VaultView />
+          <FloatRegionHost />
+          <ToastRegion />
+        </div>
+      </ItemDndProvider>
     </PasswordsProvider>
   </QueryClientProvider>
 );

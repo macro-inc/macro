@@ -1,3 +1,4 @@
+import { DragSessionSensors } from '@app/components/drag-drop/drag-session-sensors';
 import {
   useViewShell,
   ViewShell,
@@ -56,6 +57,7 @@ import {
   type PasswordItem,
   type PasswordKind,
 } from '../core/types';
+import { createPasswordFolderDrag } from '../primitives/folder-drag';
 import { createVault, type VaultController } from '../primitives/vault';
 import { ImportDialog } from './import-dialog';
 
@@ -497,7 +499,8 @@ export function VaultView(props: {
   onGuard?: (guard: () => Promise<boolean>) => void;
 }) {
   const vault = createVault();
-  const { source } = usePasswords();
+  const { source, scope } = usePasswords();
+  let root: HTMLDivElement | undefined;
   const logo = loadLogo(source);
   const [editingFolder, setEditingFolder] = createSignal<FolderEditing>();
   const [expandedIds, setExpandedIds] = createSignal<string[]>([]);
@@ -582,6 +585,17 @@ export function VaultView(props: {
       if (item && item.folderId !== folderId) await vault.move(item, folderId);
     },
   };
+  const drag = createPasswordFolderDrag({
+    scope,
+    folders: vault.loadedFolders,
+    items: vault.loadedItems,
+    moveFolder: async (id, parentId) => {
+      const moved = await commands.move(id, parentId);
+      if (moved && parentId) expand(parentId);
+      return moved;
+    },
+    moveItem: commands.moveItem,
+  });
   const selectFilter = (filter: PasswordFilter) => {
     vault.setFilter(filter);
     setMobileFolders(false);
@@ -629,10 +643,25 @@ export function VaultView(props: {
       ),
     onFilter: selectFilter,
     commands,
+    drag,
   });
 
   return (
-    <div class="flex h-full min-h-0 flex-col" data-passwords-vault>
+    <div ref={root} class="flex h-full min-h-0 flex-col" data-passwords-vault>
+      <Show when={drag}>
+        {(drag) => (
+          <DragSessionSensors
+            reuseProviderSensors
+            getViewport={() => (drag().isDragging() ? root : undefined)}
+            nestedScroll={{
+              viewportSelector: '[data-view-sidebar-content]',
+              horizontalOutside: false,
+            }}
+            axis="both"
+            onCancel={drag().cancel}
+          />
+        )}
+      </Show>
       <Show when={leave()}>
         {(resolve) => (
           <LeavePrompt
@@ -828,6 +857,7 @@ export function VaultView(props: {
                     onSelect={vault.select}
                     onSelectDraft={vault.selectDraft}
                     loadLogo={logo}
+                    drag={drag}
                   />
                   <Show
                     when={
