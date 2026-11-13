@@ -165,10 +165,14 @@ impl CatalogueRepository for PgSlackRepository {
         conversations: &[String],
     ) -> ExternalChatResult<Vec<VisibleAdoption>> {
         Ok(sqlx::query!(
-            r#"SELECT id, remote_id, name, user_id FROM external_chat
-            WHERE provider = 'slack' AND remote_id = ANY($1) AND state = 'active'
-              AND external_chat_can_view(id, $2)
-            ORDER BY created_at DESC LIMIT 1000"#,
+            r#"SELECT e.id, e.remote_id, e.name, e.user_id, EXISTS (
+                SELECT 1 FROM slack_chat_membership m JOIN slack_account a ON a.id = m.account_id
+                WHERE m.chat_id = e.id AND m.consent_ended_at IS NULL AND m.generation = a.generation
+                  AND a.user_id = e.user_id AND a.state IN ('connecting', 'connected')) AS "observed!"
+            FROM external_chat e
+            WHERE e.provider = 'slack' AND e.remote_id = ANY($1) AND e.state = 'active'
+              AND external_chat_can_view(e.id, $2)
+            ORDER BY e.created_at DESC LIMIT 1000"#,
             conversations,
             user.as_ref()
         )
@@ -181,6 +185,7 @@ impl CatalogueRepository for PgSlackRepository {
             id: row.id,
             name: row.name,
             owner_id: row.user_id,
+            observed: row.observed,
         })
         .collect())
     }

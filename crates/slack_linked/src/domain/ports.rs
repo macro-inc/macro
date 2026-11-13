@@ -182,6 +182,9 @@ pub struct VisibleAdoption {
     pub name: String,
     /// The person who added it.
     pub owner_id: String,
+    /// One of the owner's active accounts observes it; after a disconnect or
+    /// a session end it doesn't, until they add it again.
+    pub observed: bool,
 }
 
 /// The catalogue the session service keeps.

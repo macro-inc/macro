@@ -366,7 +366,7 @@ conversations can't be posted to (`sendReason: not_allowed`).
 | KMS or Slack unavailable, `ratelimited` | unchanged | unchanged | nothing; retried with backoff (`Retry-After`) |
 | Conversation unshared or severed (`frozen_reason`) | unchanged | `frozen`: read-only | "This conversation was disconnected" |
 | The person left the conversation | unchanged | membership `remote_member = false`; can't send | `sendReason: not_allowed` |
-| The owner disconnects | `disconnected` | kept, read-only | |
+| The owner disconnects | `disconnected` | kept, read-only | signing in again lists them as addable; adding one resumes the same chat |
 
 Session end notifies the owner once per generation with an
 `external_chat_account_ended` notification (`{provider, accountName,

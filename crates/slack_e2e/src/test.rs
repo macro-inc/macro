@@ -572,6 +572,38 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     .await
     .expect("the account is connected again");
     assert!(slack.calls_of("auth.signout").is_empty());
+    // The chat no account observes is offered again; adding it resumes the
+    // same chat.
+    let offered = wait_for_rows(&pool, WAIT, || async {
+        service.conversations(&alice).await.ok().and_then(|list| {
+            list.conversations
+                .into_iter()
+                .find(|c| c.remote_id == CHANNEL && c.can_add)
+        })
+    })
+    .await
+    .expect("the channel can be added again");
+    assert!(offered.added.is_none());
+    let resumed = chats
+        .add(
+            &alice,
+            &AddChat {
+                provider: ExternalChatProvider::Slack,
+                remote_id: CHANNEL.to_owned(),
+                kind: ExternalChatKind::Group,
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    assert_eq!(resumed.id, chat.id);
+    let listed = service.conversations(&alice).await.unwrap();
+    let listed = listed
+        .conversations
+        .iter()
+        .find(|c| c.remote_id == CHANNEL)
+        .unwrap();
+    assert_eq!(listed.added.as_ref().map(|added| added.id), Some(chat.id));
 
     // Slack revokes the session: logged out, credentials wiped, chat kept.
     slack.end_session(TOKEN, "token_revoked");

@@ -323,14 +323,18 @@ fn adoption_of(
     adoptions: &[VisibleAdoption],
     conversation: &str,
 ) -> (Option<ChatReference>, Option<SharedChatReference>) {
-    let mine = adoptions
+    let own = adoptions
         .iter()
-        .find(|adoption| adoption.remote_id == conversation && adoption.owner_id == user.as_ref())
+        .find(|adoption| adoption.remote_id == conversation && adoption.owner_id == user.as_ref());
+    // Their own chat that no account observes any more is added again (the
+    // same chat) rather than shown as added.
+    let mine = own
+        .filter(|adoption| adoption.observed)
         .map(|adoption| ChatReference {
             id: adoption.id,
             name: adoption.name.clone(),
         });
-    let shared = mine.is_none().then(|| {
+    let shared = own.is_none().then(|| {
         adoptions
             .iter()
             .filter(|_| !conversation.starts_with('D'))
