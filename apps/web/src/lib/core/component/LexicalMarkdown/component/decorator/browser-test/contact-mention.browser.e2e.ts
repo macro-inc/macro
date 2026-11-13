@@ -46,6 +46,7 @@ async function expectFits(page: Page, label: string, truncates: boolean) {
   });
 
   // The truncation is pure CSS: the message keeps the height it mounted at.
+  await page.evaluate(() => document.fonts.ready);
   await expect(section.getByTestId('height-history')).toHaveText(/^\d+$/);
 }
 
@@ -76,17 +77,24 @@ for (const layout of LAYOUTS) {
         .getByRole('region', { name: 'Person', exact: true })
         .locator('[data-contact-mention]')
         .hover();
+      const card = page
+        .getByText('Click to view contact details', { exact: true })
+        .locator('..');
+      const cardBox = (await card.boundingBox())!;
       // The address is both the card's name and its email line here.
-      const lines = page.getByText(PERSON, { exact: true });
+      const lines = card.getByText(PERSON, { exact: true });
       await expect(lines).toHaveCount(2);
       for (const line of await lines.all()) {
-        await expect(line).toBeVisible();
-        const fits = await line.evaluate((element) => {
-          const card = element.closest('.w-64')!.getBoundingClientRect();
-          const box = element.getBoundingClientRect();
-          return box.left >= card.left && box.right <= card.right;
-        });
-        expect(fits).toBe(true);
+        const box = (await line.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(cardBox.x);
+        expect(box.x + box.width).toBeLessThanOrEqual(
+          cardBox.x + cardBox.width
+        );
+        // Wrapped, not run past its line box and cut off by the card.
+        const overflow = await line.evaluate(
+          (element) => element.scrollWidth - element.clientWidth
+        );
+        expect(overflow).toBe(0);
       }
     });
   });
