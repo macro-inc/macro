@@ -16,7 +16,7 @@ use super::ics::{
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
 use super::labels::{EventCopy, EventLabels};
 use super::meeting_links::{
-    CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
+    MacroCallEventError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
 };
 use super::models::{
     ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
@@ -437,6 +437,19 @@ pub trait CalendarCopyConfirmation: Send + Sync + 'static {
         inbox: Option<&str>,
         change: CopyChange,
     ) -> impl Future<Output = Result<Option<CopyRefusal>, CalendarMutationError>> + Send;
+}
+
+/// Reads what an update builds on when it has to add to stored content.
+pub trait CalendarEventDetailsReader: Send + Sync + 'static {
+    /// The stored details of the event or occurrence `scope` addresses,
+    /// refused like an update when the requester cannot write that copy.
+    fn details_for_update(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        scope: &CalendarUpdateScope,
+    ) -> impl Future<Output = Result<EventDetails, CalendarMutationError>> + Send;
 }
 
 /// Inbound service port labelling events for a reader outside the calendar,
@@ -1135,15 +1148,15 @@ pub trait CalendarEventForwardSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send;
 }
 
-/// Inbound service port creating events that carry a Macro call.
+/// Inbound service port writing events that carry a Macro call.
 ///
-/// The meeting is minted before the calendar write, so the one invitation
-/// attendees receive already names the call, and its join link travels in
-/// the event's description and location. Hosts that mint meetings compose a
+/// The meeting is minted before the calendar write, so the one invitation or
+/// update attendees receive already names the call, and its join link travels
+/// in the event's description and location. Hosts that mint meetings compose a
 /// [`CalendarMutationService`] with a [`MeetingLinkProvider`] through
-/// [`super::meeting_links::create_event_with_macro_call`]; hosts that are
-/// not the calendar write authority forward the request to the calendar
-/// service.
+/// [`super::meeting_links::create_event_with_macro_call`] and
+/// [`super::meeting_links::update_event_with_macro_call`]; hosts that are not
+/// the calendar write authority forward the request to the calendar service.
 pub trait CalendarMacroCallService: Send + Sync + 'static {
     /// Mint a Macro call for `draft` and create the event carrying its link.
     fn create_event_with_macro_call(
@@ -1152,7 +1165,17 @@ pub trait CalendarMacroCallService: Send + Sync + 'static {
         email_link_id: Option<Uuid>,
         calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
-    ) -> impl Future<Output = Result<CalendarEvent, CreateEventWithMacroCallError>> + Send;
+    ) -> impl Future<Output = Result<CalendarEvent, MacroCallEventError>> + Send;
+
+    /// Switch an event to a Macro call, applying `patch` in the same write.
+    fn update_event_with_macro_call(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
+    ) -> impl Future<Output = Result<CalendarEvent, MacroCallEventError>> + Send;
 }
 
 /// Outbound port minting Macro meetings for calendar events.

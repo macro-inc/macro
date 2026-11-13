@@ -325,6 +325,9 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Superseded in the SDK by createCrmPipelineWithFields, which also takes
+  // stages and fields.
+  'createCrmPipeline',
   // Chat sidebar section editing and discovery remain app-only navigation.
   'createChannelSection',
   'deleteChannelSection',
@@ -390,11 +393,18 @@ export const storageExcluded = [
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Status of the web app's own folder upload; uploads aren't an SDK surface.
+  'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',
   'getViewsHandler',
   // Guest chat uses a live RTC session token, not SDK account credentials.
+  'guestCallChatDeleteMessage',
+  'guestCallChatPatchMessage',
   'guestCallChatPost',
+  'guestCallChatPostMessage',
+  'guestCallChatReactMessage',
   'guestCallChatRead',
+  'guestCallChatReadThread',
   'handler',
   'healthHandler',
   'ingestTranscript',

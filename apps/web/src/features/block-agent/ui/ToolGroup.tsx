@@ -28,7 +28,8 @@ export interface ToolGroupProps {
   activeIndex?: number;
   /**
    * The session's live one-line status over these calls, shown in place of
-   * the title while the turn is in this run; the count stays beside it.
+   * the title while the turn is in this run. It is the turn's one working
+   * indicator, so it carries no count.
    */
   summary?: string;
   defaultOpen?: boolean;
@@ -164,14 +165,9 @@ export function ToolGroup(props: ToolGroupProps) {
           fallback={<TextShimmer text={title()} active={props.active} />}
         >
           {(summary) => (
-            <>
-              <span class="min-w-0 truncate">
-                <TextShimmer text={summary()} active />
-              </span>
-              <Show when={props.count > 0}>
-                <span class="shrink-0 text-xs tabular-nums">{props.count}</span>
-              </Show>
-            </>
+            <span class="min-w-0 truncate">
+              <TextShimmer text={summary()} active />
+            </span>
           )}
         </Show>
         <DisclosureCaret open={expanded()} />

@@ -1567,9 +1567,11 @@ export type CreateAgentSessionRequest = {
      */
     owner?: string | null;
     /**
-     * First prompt to deliver once the session is running. Managed sessions
-     * only - an external runtime sends its own first prompt through the
-     * control endpoint. Omitted, the session opens idle.
+     * First prompt to deliver once the session is running. The managed shape
+     * only: a persona its operator runs gets it through the session's control
+     * path once its runtime opens the session, while a runtime opening its
+     * own (the `workspace` shape) sends its first prompt through the control
+     * endpoint. Omitted, the session opens idle.
      */
     prompt?: string | null;
     promptActionId?: null | AgentActionId;

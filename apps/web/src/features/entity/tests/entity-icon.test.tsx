@@ -36,6 +36,7 @@ vi.mock('@queries/channel/channel-participants', () => ({
 }));
 vi.mock('@app/util/favorites', () => ({
   favoriteIconType: () => 'channel',
+  useFavoriteAppearance: () => () => undefined,
 }));
 
 const channelPicture = vi.hoisted(() => ({
