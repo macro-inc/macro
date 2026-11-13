@@ -23,6 +23,7 @@ import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { CallWaveform } from '../../../channel/Call/components/CallWaveform';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
+import { ChannelMentionCount } from './ChannelCountPill';
 import {
   type ChannelRailRow,
   rowKeyForChannel,
@@ -252,6 +253,8 @@ export type ConversationCardProps = ChannelRailItemProps & {
   showLatestMessage?: boolean;
   senderId?: string;
   mentionedCurrentUser: boolean;
+  /** Unread messages that mention the viewer, from `mentionCount`. */
+  mentions?: number;
 };
 
 function UserDisplayName(props: { id: MacroId }) {
@@ -285,6 +288,8 @@ export function ConversationCard(props: ConversationCardProps) {
   const latestRootMessage = () => props.channel.latestRootMessage;
   const hasMessageMetadata = () =>
     Boolean(latestRootMessage()?.threadId || props.mentionedCurrentUser);
+  // The mention count takes the unread dot's place, as on channel rows.
+  const showUnreadDot = () => props.unread && !((props.mentions ?? 0) > 0);
 
   return (
     <div
@@ -318,7 +323,7 @@ export function ConversationCard(props: ConversationCardProps) {
         <ChannelAvatar channel={props.channel} size="md" />
         <div class="min-w-0 flex-1 overflow-hidden">
           <span class="flex min-w-0 items-center gap-2">
-            <Show when={props.unread}>
+            <Show when={showUnreadDot()}>
               <span
                 aria-label="Unread"
                 class="size-2 shrink-0 rounded-full bg-accent touch:absolute touch:left-2 touch:top-7.5 touch:-translate-y-1/2"
@@ -348,6 +353,7 @@ export function ConversationCard(props: ConversationCardProps) {
                 </Tooltip>
               )}
             </Show>
+            <ChannelMentionCount count={props.mentions ?? 0} />
           </span>
           <Show when={props.showLatestMessage !== false}>
             <Show when={hasMessageMetadata()}>
