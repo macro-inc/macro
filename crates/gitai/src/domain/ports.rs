@@ -72,10 +72,6 @@ pub struct SessionUpdate {
     pub first_seen: Option<u64>,
     /// Latest event time in this update; the entry keeps the maximum.
     pub last_seen: Option<u64>,
-    /// Transcript lines added.
-    pub event_count: u64,
-    /// Token and cost change.
-    pub tokens: TokenDelta,
     /// Commits this session wrote lines of.
     pub commit_shas: Vec<String>,
 }
@@ -130,8 +126,10 @@ pub trait IndexStore: Send + Sync + 'static {
         shas: &[String],
     ) -> impl Future<Output = Result<HashSet<String>, Self::Err>> + Send;
 
-    /// Indexes one stored transcript chunk under its session, at `s3_key`.
-    /// `false` when that chunk was already indexed (a retried batch).
+    /// Indexes one stored transcript chunk under its session, at `s3_key`,
+    /// and adds its lines to the session's `event_count` in the same
+    /// transaction. `false` (and no count) when that chunk was already
+    /// indexed (a retried batch).
     fn put_session_chunk(
         &self,
         chunk: &SessionChunk,
@@ -139,14 +137,16 @@ pub trait IndexStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Stores a token bucket revision if it is newer than the stored one, and
-    /// returns how much it changed the totals; `None` for a stale revision.
+    /// adds how much it changed the totals to the session's counters in the
+    /// same transaction. Returns that change; `None` for a stale or already
+    /// stored revision.
     fn record_token_bucket(
         &self,
         bucket: &TokenBucket,
     ) -> impl Future<Output = Result<Option<TokenDelta>, Self::Err>> + Send;
 
-    /// Applies an update to a session's entry, creating it if needed. `true`
-    /// when it was created.
+    /// Applies an update to a session's entry, creating it if needed. Safe to
+    /// repeat: it sets no counters. `true` when it was created.
     fn update_session(
         &self,
         update: &SessionUpdate,

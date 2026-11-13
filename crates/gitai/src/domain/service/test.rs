@@ -639,3 +639,51 @@ async fn cas_objects_are_acknowledged_and_not_stored() {
     assert_eq!(hashes, vec!["h1"]);
     assert!(objects.objects.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn a_retry_after_a_partial_index_failure_applies_session_counters_once() {
+    let (service, _, index, metrics) = service();
+    let credential = mint(&service).await;
+    let identity = device(&service, &credential).await;
+    let session = "s_cccccccccccccc";
+    let body = serde_json::to_vec(&json!({
+        "v": 1,
+        "events": [
+            crate::read_fakes::session_event(session, 1_794_543_002, 2),
+            crate::read_fakes::session_event(session, 1_794_543_001, 1),
+            crate::read_fakes::token_usage(session, 1_000, 200, 1_500_000),
+        ],
+    }))
+    .unwrap();
+
+    // The transcript's session update and chunk succeed; the token bucket's
+    // session update fails, so the client retries the whole batch.
+    index.state.lock().unwrap().fail_session_update = Some(2);
+    let first = service.ingest_metrics(&identity, &headers(), &body).await;
+    assert!(matches!(first, Err(GitaiError::Internal(_))));
+    for _ in 0..2 {
+        service
+            .ingest_metrics(&identity, &headers(), &body)
+            .await
+            .unwrap();
+    }
+
+    let state = index.state.lock().unwrap();
+    let stored = &state.sessions[session];
+    assert_eq!(stored.event_count, 2);
+    assert_eq!(stored.tokens.input, 1_000);
+    assert_eq!(stored.tokens.cost_micro_usd, 1_500_000);
+    let input_tokens: u64 = metrics
+        .all()
+        .iter()
+        .filter_map(|metric| match metric {
+            Metric::Tokens {
+                kind: TokenKind::Input,
+                count,
+                ..
+            } => Some(*count),
+            _ => None,
+        })
+        .sum();
+    assert_eq!(input_tokens, 1_000);
+}

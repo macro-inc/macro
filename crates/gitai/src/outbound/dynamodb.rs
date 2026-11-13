@@ -14,7 +14,10 @@
 use std::collections::{HashMap, HashSet};
 
 use aws_sdk_dynamodb::error::SdkError;
-use aws_sdk_dynamodb::types::{AttributeValue, KeysAndAttributes, ReturnValue};
+use aws_sdk_dynamodb::operation::transact_write_items::TransactWriteItemsError;
+use aws_sdk_dynamodb::types::{
+    AttributeValue, KeysAndAttributes, Put, ReturnValue, TransactWriteItem, Update,
+};
 use chrono::{DateTime, Utc};
 
 use crate::domain::ingest::{CommitRecord, SessionChunk, TokenBucket, TokenCounts, TokenDelta};
@@ -34,6 +37,9 @@ const CREDENTIAL_SK: &str = "CREDENTIAL";
 const CREDENTIALS_GSI1PK: &str = "CREDENTIALS";
 const COMMIT_SK: &str = "COMMIT";
 const SESSION_SK: &str = "SESSION";
+
+/// Times a token bucket is re-read after a concurrent revision won the race.
+const TOKEN_BUCKET_ATTEMPTS: usize = 3;
 
 /// `BatchGetItem` takes at most 100 keys.
 const BATCH_GET_LIMIT: usize = 100;
@@ -59,6 +65,9 @@ pub enum DynamoIndexError {
     /// `BatchGetItem` kept returning unprocessed keys.
     #[error("DynamoDB left keys unprocessed")]
     Unprocessed,
+    /// A token bucket kept changing under a concurrent writer.
+    #[error("a token bucket kept changing while it was recorded")]
+    Contended,
 }
 
 impl<E> From<SdkError<E>> for DynamoIndexError
@@ -78,6 +87,23 @@ fn is_condition_failure<E: aws_sdk_dynamodb::error::ProvideErrorMetadata>(
         .as_service_error()
         .and_then(|e| e.code())
         .is_some_and(|code| code == "ConditionalCheckFailedException")
+}
+
+/// Whether a transaction was cancelled because a condition was false.
+fn is_transaction_condition_failure(error: &SdkError<TransactWriteItemsError>) -> bool {
+    let Some(TransactWriteItemsError::TransactionCanceledException(cancelled)) =
+        error.as_service_error()
+    else {
+        return false;
+    };
+    cancelled
+        .cancellation_reasons()
+        .iter()
+        .any(|reason| reason.code() == Some("ConditionalCheckFailed"))
+}
+
+fn build_error(error: aws_sdk_dynamodb::error::BuildError) -> DynamoIndexError {
+    DynamoIndexError::Request(Box::new(error.into()))
 }
 
 fn s(value: impl Into<String>) -> AttributeValue {
@@ -133,6 +159,39 @@ impl DynamoIndex {
             .into_iter()
             .next()
             .and_then(|mut item| item.remove(PK)))
+    }
+
+    /// The update adding a token change to a session's counters; `None` when
+    /// nothing changed.
+    fn add_tokens(&self, pk: &str, delta: &TokenDelta) -> Result<Option<Update>, DynamoIndexError> {
+        let counters = [
+            ("input_tokens", delta.input),
+            ("output_tokens", delta.output),
+            ("cache_read_tokens", delta.cache_read),
+            ("cache_write_tokens", delta.cache_write),
+            ("cost_micro_usd", delta.cost_micro_usd),
+        ];
+        let mut update = Update::builder()
+            .table_name(&self.table)
+            .key(PK, s(pk))
+            .key(SK, s(SESSION_SK));
+        let mut adds = Vec::new();
+        for (name, change) in counters {
+            if change != 0 {
+                update = update
+                    .expression_attribute_names(format!("#{name}"), name)
+                    .expression_attribute_values(format!(":{name}"), n(change));
+                adds.push(format!("#{name} :{name}"));
+            }
+        }
+        if adds.is_empty() {
+            return Ok(None);
+        }
+        let update = update
+            .update_expression(format!("ADD {}", adds.join(", ")))
+            .build()
+            .map_err(build_error)?;
+        Ok(Some(update))
     }
 
     /// Keeps the earliest `first_seen` and latest `last_seen` across
@@ -386,11 +445,10 @@ impl IndexStore for DynamoIndex {
         chunk: &SessionChunk,
         s3_key: &str,
     ) -> Result<bool, Self::Err> {
-        let result = self
-            .client
-            .put_item()
+        let pk = session_pk(&chunk.session_id);
+        let put = Put::builder()
             .table_name(&self.table)
-            .item(PK, s(session_pk(&chunk.session_id)))
+            .item(PK, s(pk.clone()))
             .item(
                 SK,
                 s(format!("CHUNK#{:010}#{}", chunk.first_ts, chunk.chunk_id)),
@@ -400,52 +458,100 @@ impl IndexStore for DynamoIndex {
             .item("first_ts", n(chunk.first_ts))
             .item("last_ts", n(chunk.last_ts))
             .condition_expression("attribute_not_exists(pk)")
+            .build()
+            .map_err(build_error)?;
+        let count = Update::builder()
+            .table_name(&self.table)
+            .key(PK, s(pk))
+            .key(SK, s(SESSION_SK))
+            .update_expression("ADD #count :count")
+            .expression_attribute_names("#count", "event_count")
+            .expression_attribute_values(":count", n(chunk.events.len()))
+            .build()
+            .map_err(build_error)?;
+
+        let result = self
+            .client
+            .transact_write_items()
+            .transact_items(TransactWriteItem::builder().put(put).build())
+            .transact_items(TransactWriteItem::builder().update(count).build())
             .send()
             .await;
         match result {
             Ok(_) => Ok(true),
-            Err(error) if is_condition_failure(&error) => Ok(false),
+            Err(error) if is_transaction_condition_failure(&error) => Ok(false),
             Err(error) => Err(error.into()),
         }
     }
 
+    /// Reads the stored revision, then writes the new one together with the
+    /// session's counter change, on condition that the stored revision is
+    /// still the one read. A concurrent revision makes it read again.
     #[tracing::instrument(name = "gitai.dynamodb.record_token_bucket", skip_all, fields(session_id = %bucket.session_id), err)]
     async fn record_token_bucket(
         &self,
         bucket: &TokenBucket,
     ) -> Result<Option<TokenDelta>, Self::Err> {
-        let mut item: HashMap<String, AttributeValue> = serde_dynamo::to_item(bucket)?;
-        item.insert(PK.to_owned(), s(session_pk(&bucket.session_id)));
-        item.insert(
-            SK.to_owned(),
-            s(format!(
-                "TOKENS#{}#{}#{:010}",
-                bucket.model, bucket.speed, bucket.bucket_ts
-            )),
+        let pk = session_pk(&bucket.session_id);
+        let sk = format!(
+            "TOKENS#{}#{}#{:010}",
+            bucket.model, bucket.speed, bucket.bucket_ts
         );
-        let result = self
-            .client
-            .put_item()
-            .table_name(&self.table)
-            .set_item(Some(item))
-            .condition_expression("attribute_not_exists(pk) OR emitted_seq < :seq")
-            .expression_attribute_values(":seq", n(bucket.emitted_seq))
-            .return_values(ReturnValue::AllOld)
-            .send()
-            .await;
-        let old = match result {
-            Ok(output) => output.attributes.unwrap_or_default(),
-            Err(error) if is_condition_failure(&error) => return Ok(None),
-            Err(error) => return Err(error.into()),
-        };
-        let previous = TokenCounts {
-            input: number(&old, "input"),
-            output: number(&old, "output"),
-            cache_read: number(&old, "cache_read"),
-            cache_write: number(&old, "cache_write"),
-            cost_micro_usd: number(&old, "cost_micro_usd"),
-        };
-        Ok(Some(bucket.counts.delta_since(&previous)))
+        let mut item: HashMap<String, AttributeValue> = serde_dynamo::to_item(bucket)?;
+        item.insert(PK.to_owned(), s(pk.clone()));
+        item.insert(SK.to_owned(), s(sk.clone()));
+
+        for _ in 0..TOKEN_BUCKET_ATTEMPTS {
+            let stored = self
+                .client
+                .get_item()
+                .table_name(&self.table)
+                .key(PK, s(pk.clone()))
+                .key(SK, s(sk.clone()))
+                .consistent_read(true)
+                .send()
+                .await?
+                .item;
+            let stored_seq = stored.as_ref().map(|old| number(old, "emitted_seq"));
+            if stored_seq.is_some_and(|seq| seq >= bucket.emitted_seq) {
+                return Ok(None);
+            }
+            let old = stored.unwrap_or_default();
+            let previous = TokenCounts {
+                input: number(&old, "input"),
+                output: number(&old, "output"),
+                cache_read: number(&old, "cache_read"),
+                cache_write: number(&old, "cache_write"),
+                cost_micro_usd: number(&old, "cost_micro_usd"),
+            };
+            let delta = bucket.counts.delta_since(&previous);
+
+            let put = Put::builder()
+                .table_name(&self.table)
+                .set_item(Some(item.clone()));
+            let put = match stored_seq {
+                Some(seq) => put
+                    .condition_expression("emitted_seq = :seq")
+                    .expression_attribute_values(":seq", n(seq)),
+                None => put.condition_expression("attribute_not_exists(pk)"),
+            };
+            let mut transaction = self.client.transact_write_items().transact_items(
+                TransactWriteItem::builder()
+                    .put(put.build().map_err(build_error)?)
+                    .build(),
+            );
+            if let Some(counters) = self.add_tokens(&pk, &delta)? {
+                transaction = transaction
+                    .transact_items(TransactWriteItem::builder().update(counters).build());
+            }
+
+            match transaction.send().await {
+                Ok(_) => return Ok(Some(delta)),
+                Err(error) if is_transaction_condition_failure(&error) => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Err(DynamoIndexError::Contended)
     }
 
     #[tracing::instrument(name = "gitai.dynamodb.update_session", skip_all, fields(session_id = %update.session_id), err)]
@@ -509,23 +615,6 @@ impl IndexStore for DynamoIndex {
             sets.push("#model = :model".to_owned());
         }
 
-        let counters = [
-            (
-                "event_count",
-                i64::try_from(update.event_count).unwrap_or(i64::MAX),
-            ),
-            ("input_tokens", update.tokens.input),
-            ("output_tokens", update.tokens.output),
-            ("cache_read_tokens", update.tokens.cache_read),
-            ("cache_write_tokens", update.tokens.cache_write),
-            ("cost_micro_usd", update.tokens.cost_micro_usd),
-        ];
-        for (name, change) in counters {
-            if change != 0 {
-                alias(name, n(change));
-                adds.push(format!("#{name} :{name}"));
-            }
-        }
         if !update.commit_shas.is_empty() {
             alias(
                 "commit_shas",

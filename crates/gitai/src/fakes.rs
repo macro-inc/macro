@@ -1,7 +1,6 @@
 //! In-memory fakes of the ports, for domain and HTTP tests.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
@@ -130,6 +129,10 @@ pub(crate) struct MemoryIndexState {
     pub(crate) chunks: HashMap<String, BTreeMap<String, String>>,
     pub(crate) buckets: HashMap<String, (u64, TokenCounts)>,
     pub(crate) sessions: HashMap<String, MemorySession>,
+    /// Session updates made so far, counting failed ones.
+    pub(crate) session_updates: u32,
+    /// The session update (1-based, in call order) that fails.
+    pub(crate) fail_session_update: Option<u32>,
 }
 
 /// The index in maps, with the adapter's semantics (conditional writes,
@@ -140,7 +143,7 @@ pub(crate) struct MemoryIndex {
 }
 
 impl IndexStore for MemoryIndex {
-    type Err = Infallible;
+    type Err = InjectedFailure;
 
     async fn insert_credential(&self, credential: &StoredCredential) -> Result<(), Self::Err> {
         self.state
@@ -224,7 +227,12 @@ impl IndexStore for MemoryIndex {
         let mut state = self.state.lock().unwrap();
         let chunks = state.chunks.entry(chunk.session_id.clone()).or_default();
         let sort_key = format!("{:010}#{}", chunk.first_ts, chunk.chunk_id);
-        Ok(chunks.insert(sort_key, s3_key.to_owned()).is_none())
+        let new = chunks.insert(sort_key, s3_key.to_owned()).is_none();
+        if new {
+            let session = state.sessions.entry(chunk.session_id.clone()).or_default();
+            session.event_count += u64::try_from(chunk.events.len()).unwrap();
+        }
+        Ok(new)
     }
 
     async fn record_token_bucket(
@@ -244,11 +252,22 @@ impl IndexStore for MemoryIndex {
             .buckets
             .insert(key, (bucket.emitted_seq, bucket.counts));
         let previous = previous.map(|(_, counts)| counts).unwrap_or_default();
-        Ok(Some(bucket.counts.delta_since(&previous)))
+        let delta = bucket.counts.delta_since(&previous);
+        let session = state.sessions.entry(bucket.session_id.clone()).or_default();
+        session.tokens.input += delta.input;
+        session.tokens.output += delta.output;
+        session.tokens.cache_read += delta.cache_read;
+        session.tokens.cache_write += delta.cache_write;
+        session.tokens.cost_micro_usd += delta.cost_micro_usd;
+        Ok(Some(delta))
     }
 
     async fn update_session(&self, update: &SessionUpdate) -> Result<bool, Self::Err> {
         let mut state = self.state.lock().unwrap();
+        state.session_updates += 1;
+        if state.fail_session_update == Some(state.session_updates) {
+            return Err(InjectedFailure);
+        }
         let created = !state.sessions.contains_key(&update.session_id);
         let session = state.sessions.entry(update.session_id.clone()).or_default();
         if session.external_session_id.is_none() {
@@ -272,12 +291,6 @@ impl IndexStore for MemoryIndex {
         if let Some(last) = update.last_seen {
             session.last_seen = Some(session.last_seen.map_or(last, |l| l.max(last)));
         }
-        session.event_count += update.event_count;
-        session.tokens.input += update.tokens.input;
-        session.tokens.output += update.tokens.output;
-        session.tokens.cache_read += update.tokens.cache_read;
-        session.tokens.cache_write += update.tokens.cache_write;
-        session.tokens.cost_micro_usd += update.tokens.cost_micro_usd;
         session
             .commit_shas
             .extend(update.commit_shas.iter().cloned());

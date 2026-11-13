@@ -51,7 +51,10 @@ agents use for attribution. `services/gitai_service` wires it up.
   failures (the client retries).
 - Every string of a kept event is redacted before any write or log.
 - Retries are safe: transcript chunk ids are content hashes, token buckets keep
-  the highest `emitted_seq`, commits count in metrics only when new.
+  the highest `emitted_seq`, commits count in metrics only when new. Session
+  counters (`event_count`, tokens, cost) change only in the same DynamoDB
+  transaction as the chunk or bucket item they come from; every other session
+  field is set idempotently and reapplied on a retry.
 - Notes uploads are stored only for commits already indexed (a note carries no
   repository). CAS uploads are acknowledged and discarded (no repository, no
   producer in 1.7.7).

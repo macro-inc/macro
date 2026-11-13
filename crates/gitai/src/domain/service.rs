@@ -486,16 +486,12 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
             }
         }
 
+        // Session fields first: they are idempotent (first writer wins,
+        // min/max), so a retried batch reapplies them safely, and the update
+        // that creates the entry is the one counted as a new session. The
+        // counters then move in the same transaction as the chunk or token
+        // bucket they come from, so they apply exactly once across retries.
         for chunk in &plan.sessions {
-            let new = self
-                .index
-                .put_session_chunk(chunk, &chunk.key())
-                .await
-                .map_err(internal)?;
-            // A retried batch re-indexes nothing, so counts stay exact.
-            if !new {
-                continue;
-            }
             self.update_session(SessionUpdate {
                 session_id: chunk.session_id.clone(),
                 external_session_id: chunk.external_session_id.clone(),
@@ -506,25 +502,16 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
                 transcript_prefix: Some(layout::transcript_prefix(&chunk.tool, &chunk.session_id)),
                 first_seen: Some(chunk.first_ts),
                 last_seen: Some(chunk.last_ts),
-                event_count: u64::try_from(chunk.events.len()).unwrap_or(u64::MAX),
                 ..SessionUpdate::default()
             })
             .await?;
+            self.index
+                .put_session_chunk(chunk, &chunk.key())
+                .await
+                .map_err(internal)?;
         }
 
         for bucket in &plan.token_buckets {
-            let Some(delta) = self
-                .index
-                .record_token_bucket(bucket)
-                .await
-                .map_err(internal)?
-            else {
-                continue;
-            };
-            if delta.is_zero() {
-                continue;
-            }
-            self.record_token_metrics(bucket, &delta);
             self.update_session(SessionUpdate {
                 session_id: bucket.session_id.clone(),
                 external_session_id: bucket.external_session_id.clone(),
@@ -533,10 +520,17 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
                 repository: Some(bucket.repository.clone()),
                 author: Some(bucket.author.clone()),
                 hostname: Some(bucket.hostname.clone()),
-                tokens: delta,
                 ..SessionUpdate::default()
             })
             .await?;
+            let delta = self
+                .index
+                .record_token_bucket(bucket)
+                .await
+                .map_err(internal)?;
+            if let Some(delta) = delta.filter(|delta| !delta.is_zero()) {
+                self.record_token_metrics(bucket, &delta);
+            }
         }
         Ok(())
     }
