@@ -30,6 +30,8 @@ export function ArtifactFrame(props: {
   eager?: boolean;
   /** A navigation key pressed while focus is inside the frame. */
   onKey?: (key: string) => void;
+  /** The frame's document loaded, so it can be shown without a blank flash. */
+  onLoad?: () => void;
 }) {
   let host!: HTMLDivElement;
   let frame: HTMLIFrameElement | undefined;
@@ -154,6 +156,7 @@ export function ArtifactFrame(props: {
                 onLoad={() => {
                   // The message and the load event can arrive in either order.
                   loads += 1;
+                  props.onLoad?.();
                   clearTimeout(checkLoad);
                   checkLoad = setTimeout(() => {
                     if (loads > announced) restart();

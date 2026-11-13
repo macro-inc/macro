@@ -12,7 +12,9 @@ import type { GraphicsEditor, TextMeasurer } from '@macro-inc/graphics';
 import {
   createGraphicsEditor,
   createGraphicsEditorFromBackend,
+  type SlideTransition,
   screenToWorld,
+  setAllTransitionsCommand,
 } from '@macro-inc/graphics';
 import {
   createLoroGraphicsBackendFromDoc,
@@ -27,6 +29,7 @@ import {
   ArtifactLibraryContext,
   NO_ARTIFACT_LIBRARY,
 } from './context/artifact-library';
+import { PresentationContext } from './context/presentation';
 import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
 import { registerCanvasNextHotkeys } from './hotkeys';
@@ -95,7 +98,47 @@ export function CanvasNextEditor(props: {
         setArtifactLibrary(backend.artifactLibrary.read())
       )
     );
+  // Shared canvases keep the deck default in their root map; a canvas without
+  // a backend (fixtures, local scenes) keeps it for the session.
+  const [deckDefault, setDeckDefaultValue] = createSignal<
+    SlideTransition | undefined
+  >(backend?.presentation.read().transition);
+  if (backend)
+    onCleanup(
+      backend.presentation.subscribe(() =>
+        setDeckDefaultValue(backend.presentation.read().transition)
+      )
+    );
+  const setDeckDefault = (
+    transition: SlideTransition | null,
+    everySlide: boolean
+  ) => {
+    if (!backend) {
+      if (everySlide)
+        editor.execute(setAllTransitionsCommand, { transition: null });
+      setDeckDefaultValue(transition ?? undefined);
+      return;
+    }
+    if (!everySlide) {
+      backend.presentation.edit({ transition });
+      return;
+    }
+    // One commit, so one undo step restores both the slides and the default.
+    const cleared = setAllTransitionsCommand.apply(
+      { document: editor.document, selection: [] },
+      { transition: null }
+    ).document;
+    backend.commit(cleared, [], { transition });
+  };
   return (
+    <PresentationContext.Provider
+      value={{
+        deckDefault,
+        get setDeckDefault() {
+          return props.canEdit && !props.isEmbedded ? setDeckDefault : undefined;
+        },
+      }}
+    >
     <ArtifactLibraryContext.Provider
       value={{
         library: artifactLibrary,
@@ -132,6 +175,7 @@ export function CanvasNextEditor(props: {
         </Show>
       </StaticMarkdownContext>
     </ArtifactLibraryContext.Provider>
+    </PresentationContext.Provider>
   );
 }
 
