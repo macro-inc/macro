@@ -1,0 +1,411 @@
+crates/search_service/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 65-76
+crates/macro_auth/src/middleware/decode_jwt/fusionauth_access_token_test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 106
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 275-276,285,291-292,314,331,378,388-397,404
+crates/agent_harness/src/outbound/prompt_mentions.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 127-131,133
+crates/entity_access_db_utils/src/project_grants.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 10,12-13,56-233,236-240
+crates/macro_db_client/migrations/20261109212700_unify_suggestion_generation.sql
+  s_3c6362fd17dcc4::t_a478843db567ca 21
+apps/web/src/features/channel/Input/Layout.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 46
+.agents/rules/web/mobile.md
+  s_3c6362fd17dcc4::t_a478843db567ca 129-132
+crates/macro_authorization/src/inbound/axum/policy.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 36-39,290-293
+crates/chat/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 55-59
+services/static_file_service/src/api/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-120
+apps/web/src/features/block-agent/ui/AgentInput.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 365
+crates/search_service/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 17,28
+crates/initiative/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 56-64
+crates/opensearch_client/src/search/documents/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 505-778
+crates/entity_access_db_utils/src/direct_share.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 102-107
+crates/crm/src/domain/pipeline_workflows/models.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 270-273
+crates/feature_flags/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 28-29
+  s_3c6362fd17dcc4::t_491690d9e632ac 30-31
+crates/search_service/src/outbound/term_matching/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-158
+crates/projects/src/domain/entity_mutation.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 32-34
+crates/documents/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 154-163
+crates/entity_access_db_utils/src/channel_share.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 3-4,21-27
+crates/initiative/src/outbound/pg_initiative_repo/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 576-651
+crates/projects/src/domain/models.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 182-185
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 207-219,222,227,234
+crates/opensearch_client/src/search/documents.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1,30-52,60-62,78-91,134,146,186-190,192-193,255-256,258,269,277-284,286-290,292-293,296-313,316-317,319,324-388,491-493,495-496,505-514,563,581,633-634,644-645,649-652,656
+crates/projects/src/outbound/pg_project_repo/create.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 71-79
+crates/search_service/src/api/context.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 43-44
+packages/code-mode-sdk/README.md
+  s_3c6362fd17dcc4::t_a478843db567ca 58-59
+services/agent_harness_service/src/code_mode/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 158-171,224,226,311-354,388-394,400-412,414,425-649
+services/authentication_service/src/api/jwt/macro_api_token.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 97-99
+crates/agent_correlation/src/inbound.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 4,6,63,100-119,147-151,177-202,205-206,222-225,231-233,240-241,247-248,254-256,259-260,269-292
+  s_3c6362fd17dcc4::t_343ae826f2b2d8 293
+crates/documents/src/outbound/pg_document_repo/tests.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 3738-3936
+crates/email/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 94-96,128-131
+crates/email/src/outbound/email_pg_repo/thread.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 451,461,463-474
+crates/entity_access_management/src/outbound/pg_repo.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 106-116
+crates/documents/src/inbound/axum_router/edit_document.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 70-73
+crates/agent_correlation/src/scope.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 23-29,72-108,176-180,253-259,261-264,268-313,316-334
+packages/sdk/generated/search/types.gen.ts
+  s_3c6362fd17dcc4::t_a478843db567ca 2501-2505,2538-2543
+services/mcp_auth_proxy/src/inbound/middleware.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 166-180
+crates/graphql_initiative/src/lib.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 32
+.github/workspace-dep-closures.json
+  s_3c6362fd17dcc4::t_a478843db567ca 7,1356,2885,3791,4816,5693,6123,6163,6956,7348,7483,7521,7525-7527,7535,7539,7544-7546,7554,7559,7618,7646,7688,7742,8127,9635,10423,10452,11637,11689,11729,11765,12042,12187,12190-12192,12198,12933,12987,13030,14344,14522,14559,14563-14565,14573,15521,15573,15945,16430,16479,16884,16948,16994
+crates/opensearch_client/src/search/call_records/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-29
+crates/forms/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 63-65
+crates/macro_authorization/src/inbound/axum/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 44-45,98-103,1433-1446
+  s_3c6362fd17dcc4::t_65e0afc41b4c42 1447-1448
+crates/search_service/src/api/search/caller.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 12
+apps/web/src/components/app/mobile/SwipeDownDismissKeyboard.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 17-27,57-58,62-65,73-89
+crates/chat/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 15,37
+services/document_storage_service/src/api/context.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 958,1110
+services/static_file_service/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 12,42-45
+crates/initiative/src/inbound/toolset.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 90-92
+crates/initiative/src/domain/models.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 222-225
+crates/models_permissions/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 8,22-24
+crates/agent_egress/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 9-10
+crates/chat/src/inbound/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 44-45,118,120-123,665-668,670,831-874
+  s_3c6362fd17dcc4::t_e10c2195ee304a 875
+crates/documents/src/domain/entity_mutation.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 38-40
+crates/entity_access_db_utils/src/scoped_grants/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-667
+crates/macro_auth/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 52-54
+crates/search_service/src/outbound.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 2
+crates/share_permission_db_utils/src/lib.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 296-297,306-308
+services/authentication_service/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 173-174
+apps/web/src/features/block-agent/component/AgentMessage.test.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 716-754
+apps/web/src/components/app/mobile/SwipeDownDismissKeyboard.test.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 1-110
+crates/databases/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 77-78
+crates/documents/src/inbound/axum_router.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 191
+crates/call/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 89-92
+crates/opensearch_client/src/search/call_records.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 36-46,253,444-446
+services/document_storage_service/src/server.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 953-957,2459
+crates/documents/src/outbound/pg_document_repo.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 696-710,719-727
+apps/web/src/features/email-compose/views/reply-input.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 542-543,655
+crates/models_search/src/unified.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 12,118-123
+  s_3c6362fd17dcc4::t_87009f6a3d5782 124
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 23-30
+crates/databases/src/outbound/pg_databases_repo/folders.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 3-5,41-50
+crates/entity_access_db_utils/src/team_share.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 7,89-95,113,120,130
+crates/opensearch_client/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 69-81
+crates/call/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 11,43
+crates/search_service/src/outbound/term_matching.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-153
+crates/share_permission_db_utils/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 14-15
+crates/agent_correlation/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 12-14,22-30,33-39,41-43,46-53,56-60
+crates/initiative/src/inbound/axum_router/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 674-710
+crates/macro_authorization/src/outbound/macro_auth/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 148,174,197,209-226
+  s_3c6362fd17dcc4::t_456a1f6d3b0607 227
+crates/search_service/src/api/search/terms.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 7-8,10-14,76-98
+  s_3c6362fd17dcc4::t_22b24fbc67f1cd 99-100
+crates/models_permissions/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 14-15,26-27
+crates/search_service/src/api/search/simple/simple_unified/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 620,695
+crates/code_mode_assets/src/lib.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 19-22
+crates/projects/src/outbound/pg_project_repo/edit.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 49-60
+apps/web/src/lib/core/component/ForwardMessageComposer.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 170
+crates/entity_access_db_utils/src/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 48,1132-1137,1164-1169,1181-1186,1194-1199
+apps/web/src/lib/core/component/AI/component/input/ChatInput.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 449
+crates/macro_authorization/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 53-54,68-71
+services/agent_harness_service/src/cognition/api/stream/chat_message/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 132-183
+crates/ai_tools/src/search/search_service/content.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 165-166
+crates/call/src/inbound/axum_router/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 515-746
+crates/entity_access_management/src/outbound/pg_repo/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 935-1050
+crates/macro_authorization/src/lib.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 26
+crates/agent_correlation/src/context.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 3-5,20-22,31-32,51-53,58-101,150-151,153-160
+crates/skills/src/outbound/search_service_searcher.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 61
+crates/crm/src/inbound/toolset/pipelines.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 467
+crates/models_permissions/src/share_permission.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 58-59,61-65
+services/mcp_auth_proxy/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 128
+crates/entity_access_db_utils/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 22-29,40-41,45,60-71
+crates/email/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 47,55
+crates/agent_correlation/src/scope/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 70-71,82-85,92-133,149-199
+crates/agent_egress/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 75-77
+crates/crm/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 19,65,117
+crates/macro_auth/src/middleware/decode_jwt/agent_test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 19,93,124,146-190
+  s_3c6362fd17dcc4::t_e7bc53f1b0106a 191
+crates/models_search/src/lib.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 57-71
+packages/code-mode-sdk/scripts/generate.ts
+  s_3c6362fd17dcc4::t_a478843db567ca 176-181
+services/agent_harness_service/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 169-176,192-194
+.agents/skills/migration-review/SKILL.md
+  s_3c6362fd17dcc4::t_a478843db567ca 34-50
+services/agent_harness_service/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 226-227
+crates/projects/src/inbound/axum_router/edit_project.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 48-52,55
+crates/entity_access_db_utils/src/lib.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 11,24,26,30-32,42-48,98-106,131,139,155,166,182,199,229-230,233-239,252,262-264,269,273-281,300,429-438
+crates/local_e2e_test_support/src/jwt.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 102
+crates/opensearch_client/src/search/chats/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 45-49
+crates/agent_correlation/src/inbound/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 39-47,59-60,131,275-528
+crates/macro_auth/src/middleware/decode_jwt.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 451
+crates/email/src/outbound/email_pg_repo/test/thread.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 818-869
+packages/sdk/specs/search.json
+  s_3c6362fd17dcc4::t_a478843db567ca 4772-4776,4807-4810
+crates/external_chat/src/inbound/router.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 118
+crates/call/src/inbound/axum_router.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 471-473,865-870
+crates/initiative/src/outbound/pg_initiative_repo/test/access.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 62-100
+crates/opensearch_client/src/search/chats.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 36-40,167
+crates/initiative/src/inbound/axum_router/update.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 45-49
+crates/search_service/src/api/search/terms/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-2,115-190
+crates/search_service/src/domain/term_matching.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-11
+services/mcp_auth_proxy/src/inbound/middleware/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 44-127
+crates/entity_access_db_utils/src/scoped_grants.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1-132
+services/static_file_service/src/api.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 49,74-97,113-117,119,121-123
+crates/initiative/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 11,32,69
+services/document_storage_service/src/api/saved_views/definitions.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 174-181,185-190,195-196,313-315,352-354
+crates/entity_access_management/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 22-24
+services/document_storage_service/src/api/threads/edit_thread.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 71-83
+crates/projects/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 74-78
+apps/web/src/features/next-soup/queries/search-request.ts
+  s_3c6362fd17dcc4::t_a478843db567ca 201,215
+crates/entity_access_db_utils/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 9
+crates/macro_authorization/src/outbound/macro_auth.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 50-52
+crates/search_service/src/api/swagger.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 37,55
+crates/ai_tools/src/search/search_service/name.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 165
+crates/code_mode_assets/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 7-8
+crates/documents/src/inbound/axum_router/create_task.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 58-60
+apps/web/src/features/command/rank-command-search-items.test.ts
+  s_3c6362fd17dcc4::t_a478843db567ca 219-274
+crates/chat/src/outbound/postgres/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1439-1530
+crates/forms/src/outbound/pg_forms_repo/folders.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 3-5,41-50
+apps/web/src/features/agents-view/components/ChatComposer.tsx
+  s_3c6362fd17dcc4::t_a478843db567ca 264
+crates/opensearch_client/src/search/unified.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 23,97,243
+crates/crm/tests/pipeline_workflows/http.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 392-411
+crates/initiative/src/outbound/pg_initiative_repo/test/history.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 78
+crates/documents/src/domain/create/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 577-608
+crates/documents/src/inbound/axum_router/tests.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 155-156,461,463-467,2310-2337
+  s_3c6362fd17dcc4::t_57ba463284329c 2338
+crates/projects/src/inbound/axum_router/tests.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 907-943
+crates/agent_correlation/src/context/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 25-76
+crates/initiative/src/inbound/axum_router.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 218
+crates/projects/src/inbound/axum_router.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 101
+crates/projects/src/outbound/pg_project_repo/tests.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1207-1273
+crates/properties/src/outbound/permission_service.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 212
+docs/agent-guide/channels.md
+  s_3c6362fd17dcc4::t_a478843db567ca 468-471
+crates/documents/src/domain/create.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 195-196,201
+docs/guides/add-http-endpoint.md
+  s_3c6362fd17dcc4::t_a478843db567ca 51
+packages/sdk/generated/search/index.ts
+  s_3c6362fd17dcc4::t_a478843db567ca 4
+services/agent_harness_service/src/code_mode.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 6,145-148,194-198,203-205,252-307,309-312,315
+apps/web/src/features/command/rank-command-search-items.ts
+  s_3c6362fd17dcc4::t_a478843db567ca 3,31-44,113,159-178
+crates/chat/src/outbound/postgres.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 147-154,338-347
+crates/documents/src/outbound/pg_document_repo/create.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 485-494
+crates/entity_access_management/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 33
+crates/documents/src/domain/service.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 1905-1907,1913-1921,1928-1936
+crates/macro_auth/src/macro_api_token.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 38-42,69-71,88
+services/agent_harness_service/src/cognition/api/stream/chat_message.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 6-8,207-214
+  s_3c6362fd17dcc4::t_f53a2d0515c9bc 215
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 2-4,124,131-133
+services/document_storage_service/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 124-128
+services/document_storage_service/src/api/saved_views/definitions/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 329-410
+crates/chat/src/inbound/http/router.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 12-14,25,375-381
+crates/documents/src/domain/models.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 40-43,541-542,617-618
+crates/search_service/src/domain.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 2
+crates/documents/src/outbound/pg_document_repo/edit.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 19-32
+services/static_file_service/Cargo.toml
+  s_3c6362fd17dcc4::t_a478843db567ca 25-26,62-65
+crates/models_permissions/src/share_permission/test.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 326-358
+crates/macro_authorization/src/domain/models.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 46-49
+crates/crm/src/inbound/pipeline_workflows.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 451-454,598
+crates/search_service/src/api/search/simple/simple_unified.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 20-22,138-140,221,329,402-411,413-470,479-480,495
+crates/search_service/src/lib.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 11-12
+crates/chat/src/inbound/error_response.rs
+  s_3c6362fd17dcc4::t_a478843db567ca 20-23
+crates/crm/AGENTS.md
+  s_3c6362fd17dcc4::t_a478843db567ca 187-189
+.sqlx/query-24fd6d677711704d8863e6547e94fdcae63c2e486f349766bfd59369a1dee716.json
+  s_3c6362fd17dcc4::t_00d0784c1630f4 1-28
+.sqlx/query-55a1a97ca6974cc9b81da28780aa12c055c0f9a9f7be5b5a427a95a639ee6088.json
+  s_3c6362fd17dcc4::t_aa932c37238f3b 1-26
+.sqlx/query-d364b39659c47a1f1cde5629d2682a47839fbb2ffd31ba736654f08c4dfa2037.json
+  s_3c6362fd17dcc4::t_9a86aa7aada8fe 1-28
+.sqlx/query-d8de5ab9f935e84be5635cdf0453e1bf7515f6fa6df22ecdbcffad7ebadc1442.json
+  s_3c6362fd17dcc4::t_98063ba288f407 1-58
+Cargo.lock
+  s_3c6362fd17dcc4::t_0352777a68e9bf 423,677,4098,4479,5582,7459,7990,8008,11310,13831,13842,18282,18292,19969,19998
+apps/web/src/lib/service-clients/service-search/generated/models/index.ts
+  s_3c6362fd17dcc4::t_3b6ce5a25b2537 363
+apps/web/src/lib/service-clients/service-search/generated/models/termMatching.ts
+  s_3c6362fd17dcc4::t_626c0d4ddd3d49 1-17
+apps/web/src/lib/service-clients/service-search/generated/models/unifiedSearchRequest.ts
+  s_3c6362fd17dcc4::t_7c3c911cff64a1 11,34-37
+apps/web/src/lib/service-clients/service-search/openapi.json
+  s_3c6362fd17dcc4::t_42b0a15781384c 4772-4776,4807-4810
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "82de38c4efe0aee2ca48563e953f4593fad24ca0",
+  "prompts": {},
+  "sessions": {
+    "s_3c6362fd17dcc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02467add-a007-41c9-9280-bad5f33c09fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
