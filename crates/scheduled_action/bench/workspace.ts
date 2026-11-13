@@ -35,6 +35,9 @@ const PEOPLE: Record<string, [first: string, last: string]> = {
 
 export const email = (person: string) => `${person}@${DOMAIN}`;
 
+/** A seeded person's first and last name. */
+export const fullName = (person: string): [first: string, last: string] => PEOPLE[person];
+
 /** Channel name to the people in it besides Riley, who owns them all. */
 const CHANNELS: Record<string, string[]> = {
   general: Object.keys(PEOPLE).filter((p) => p !== OWNER),

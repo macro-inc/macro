@@ -4,7 +4,7 @@
 // request names has exactly one match, except where a case checks a name
 // with none or two.
 
-import { FIXTURE, email } from './workspace';
+import { FIXTURE, email, fullName } from './workspace';
 
 export { FIXTURE };
 
@@ -270,15 +270,37 @@ const uses = (name: string): Expectation => ({
   holds: (draft, { ids }) => (Boolean(ids[name]) && body(draft).includes(ids[name])) || knobNamed(draft, name),
 });
 
-/** Uses none of these look-alikes by id: the exact name was asked for. */
+/** `text` as a pattern that matches only itself. */
+const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Uses none of these look-alikes: not by id, nor by a knob or a code string
+ * naming it, the ways `uses` accepts. The exact name was asked for.
+ */
 const notAny = (names: string[]): Expectation => ({
   says: `uses none of ${names.join(', ')}`,
-  holds: (draft, { ids }) => names.every((name) => !ids[name] || !body(draft).includes(ids[name])),
+  holds: (draft, { ids }) =>
+    names.every(
+      (name) =>
+        !(ids[name] && body(draft).includes(ids[name])) && !knobNamed(draft, name) && !sourceNames(draft, literally(name)),
+    ),
 });
 
-/** Whether the draft names a person: their email (inside their user id too), or their direct message with the owner. */
-const names = (draft: DraftResult, key: string, ids: Record<string, string>) =>
-  body(draft).includes(email(key)) || Boolean(ids[`dm-${key}`] && body(draft).includes(ids[`dm-${key}`]));
+/**
+ * Whether the draft names a person: their email (inside their user id too),
+ * their direct message with the owner, or their name, first or full, in a
+ * knob or a code string.
+ */
+const names = (draft: DraftResult, key: string, ids: Record<string, string>) => {
+  const [first, last] = fullName(key);
+  return (
+    body(draft).includes(email(key)) ||
+    Boolean(ids[`dm-${key}`] && body(draft).includes(ids[`dm-${key}`])) ||
+    knobNamed(draft, first) ||
+    knobNamed(draft, `${first} ${last}`) ||
+    sourceNames(draft, `${literally(first)}(?: ${literally(last)})?`)
+  );
+};
 
 const person = (key: string): Expectation => ({
   says: `names ${key}`,
@@ -470,9 +492,9 @@ export const CASES: Case[] = [
         says: 'leaves the missing #marketing channel for the person to pick',
         // Neither a look-alike's id, nor a channel made for it, nor the name
         // itself, in a knob or as a string in a code step's source.
-        holds: (draft, { ids, made }) =>
-          !['product-marketing', 'marketing-site', 'launch'].some((name) => body(draft).includes(ids[name] ?? '-')) &&
-          !made.some((id) => body(draft).includes(id)) &&
+        holds: (draft, context) =>
+          notAny(['product-marketing', 'marketing-site', 'launch']).holds(draft, context) &&
+          !context.made.some((id) => body(draft).includes(id)) &&
           !knobNamed(draft, 'marketing') &&
           !sourceNames(draft, 'marketing'),
       },
