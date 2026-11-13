@@ -1,12 +1,16 @@
-//! One AI edit is one undo step however slowly its ops arrive: every op after
-//! the first carries an explicit history merge (Source applies all of an edit's
-//! ops in one synchronous loop, so its undo never sees a gap between them).
+//! AI-edit undo grouping is the editor's history rule, as in Source: the app
+//! groups AI ops by registerLoroHistory's 400 ms window (strict: 399 ms merges,
+//! 400 ms splits; Lexical's getMergeAction and Loro's mergeInterval agree), not
+//! one step per edit. Source rows: apps/web applyAiOps.source-controls.test.ts
+//! ('around the 400 ms window', 'Loro mergeInterval alone').
 use super::*;
 use serde_json::json;
 use std::sync::atomic::AtomicI64;
 
 /// Far beyond the history delay window.
 const SLOW_OP_GAP_MS: u64 = 5_000;
+/// The app editor's history delay: `history(400, loroManager)`.
+const SOURCE_DELAY_MS: u64 = 400;
 
 fn now(time: u64) -> Now {
     Now {
@@ -59,102 +63,49 @@ fn surface() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
     (surface, doc, view)
 }
 
-fn set_text(
-    surface: &mut EditorSurface,
-    doc: &LoroDoc,
-    view: &mut Vec<ViewEffect>,
-    time: u64,
-    node: &str,
-    text: &str,
-    merge: bool,
-) {
-    let command = macro_document_model::surface::decode_command(
-        "group-c.ai-op",
-        &json!({"op":{"kind":"setText","node":node,"text":text},"merge":merge}).to_string(),
-        0,
-        None,
-    )
-    .expect("decode AI op")
-    .expect("registered AI op");
-    surface
-        .apply(
-            doc,
-            Input::Command {
-                command,
-                selection: ViewSelection::KeepModel,
-            },
-            now(time),
-            Access::Edit,
-            view,
-        )
-        .expect("apply AI op");
-}
-
 #[test]
-fn a_slow_ai_edit_still_undoes_and_redoes_as_one_step() {
-    let (mut surface, doc, mut view) = surface();
-    let before = surface.state().to_json().expect("before");
-    set_text(
-        &mut surface,
-        &doc,
-        &mut view,
-        1_000,
-        "alphaId1",
-        "Omega beta gamma",
-        false,
-    );
-    set_text(
-        &mut surface,
-        &doc,
-        &mut view,
-        1_000 + SLOW_OP_GAP_MS,
-        "secondId",
-        "Final line",
-        true,
-    );
-    let after = surface.state().to_json().expect("after");
+fn ai_ops_group_by_the_400_ms_history_window_like_source() {
+    let mut rows = Vec::new();
+    for gap in [0, SOURCE_DELAY_MS - 1, SOURCE_DELAY_MS, 500] {
+        let (mut surface, doc, mut view) = surface();
+        let before = surface.state().to_json().expect("before");
+        op(
+            &mut surface,
+            &doc,
+            &mut view,
+            1_000,
+            1,
+            json!({"kind":"setText","node":"alphaId1","text":"Omega beta gamma"}),
+        );
+        let after_first = surface.state().to_json().expect("after first");
+        op(
+            &mut surface,
+            &doc,
+            &mut view,
+            1_000 + gap,
+            2,
+            json!({"kind":"setText","node":"secondId","text":"Final line"}),
+        );
+        assert_eq!(
+            &*surface.state().root_text_content(),
+            "Omega beta gamma\n\nFinal line"
+        );
+        surface
+            .apply(&doc, Input::Undo, now(20_000), Access::Edit, &mut view)
+            .expect("undo");
+        let undo1 = surface.state().to_json().expect("undo");
+        let merged = if undo1 == before {
+            true
+        } else {
+            assert_eq!(undo1, after_first, "gap {gap}: one undo reverts one op");
+            false
+        };
+        rows.push((gap, merged));
+    }
+    // Source: 0 and 399 merge into one undo step; 400 and 500 are two.
     assert_eq!(
-        &*surface.state().root_text_content(),
-        "Omega beta gamma\n\nFinal line"
-    );
-    surface
-        .apply(&doc, Input::Undo, now(20_000), Access::Edit, &mut view)
-        .expect("undo");
-    assert_eq!(surface.state().to_json().expect("undo"), before);
-    surface
-        .apply(&doc, Input::Redo, now(21_000), Access::Edit, &mut view)
-        .expect("redo");
-    assert_eq!(surface.state().to_json().expect("redo"), after);
-}
-
-#[test]
-fn without_the_merge_flag_slow_ops_are_separate_undo_steps() {
-    let (mut surface, doc, mut view) = surface();
-    set_text(
-        &mut surface,
-        &doc,
-        &mut view,
-        1_000,
-        "alphaId1",
-        "Omega beta gamma",
-        false,
-    );
-    set_text(
-        &mut surface,
-        &doc,
-        &mut view,
-        1_000 + SLOW_OP_GAP_MS,
-        "secondId",
-        "Final line",
-        false,
-    );
-    surface
-        .apply(&doc, Input::Undo, now(20_000), Access::Edit, &mut view)
-        .expect("undo");
-    // The control: only the later op is undone, so the merge flag is what joins them.
-    assert_eq!(
-        &*surface.state().root_text_content(),
-        "Omega beta gamma\n\nSecond line"
+        rows,
+        vec![(0, true), (399, true), (400, false), (500, false)]
     );
 }
 
@@ -163,12 +114,12 @@ fn op(
     doc: &LoroDoc,
     view: &mut Vec<ViewEffect>,
     time: u64,
+    invocation: u32,
     op: serde_json::Value,
-    merge: bool,
 ) {
     let command = macro_document_model::surface::decode_command(
         "group-c.ai-op",
-        &json!({"op":op,"merge":merge}).to_string(),
+        &json!({"op":op,"invocation":invocation}).to_string(),
         0,
         None,
     )
@@ -212,13 +163,13 @@ fn a_refused_op_mid_edit_changes_no_history() {
         &doc,
         &mut view,
         1_000,
+        1,
         json!({"kind":"setText","node":"alphaId1","text":"Omega beta gamma"}),
-        false,
     );
     let after_first = surface.state().to_json().expect("after first");
     assert!(refusals(&view).is_empty());
 
-    // Select everything, then refuse a merged op far from the first.
+    // Select everything, then refuse an op far from the first.
     surface
         .apply(
             &doc,
@@ -239,14 +190,17 @@ fn a_refused_op_mid_edit_changes_no_history() {
         &doc,
         &mut view,
         1_000 + 2 * SLOW_OP_GAP_MS,
+        2,
         json!({"kind":"replaceText","node":"secondId","find":"absent","to":"x","scope":{"kind":"all"}}),
-        true,
     );
-    assert_eq!(refusals(&view), vec![json!({"cause":"findMissed"})]);
+    assert_eq!(
+        refusals(&view),
+        vec![json!({"cause":"findMissed","invocation":2})]
+    );
     assert_eq!(surface.state().to_json().expect("refused"), after_first);
     assert_eq!(surface.state().selection().cloned(), selection);
 
-    // An unmerged op 50 ms after the refusal: had the refusal moved the history
+    // An op 50 ms after the refusal: had the refusal moved the history
     // clock, this op would fall inside the merge window and join the first
     // op's step, so one undo would return to `before`.
     view.clear();
@@ -255,8 +209,8 @@ fn a_refused_op_mid_edit_changes_no_history() {
         &doc,
         &mut view,
         1_000 + 2 * SLOW_OP_GAP_MS + 50,
+        3,
         json!({"kind":"setText","node":"secondId","text":"Final line"}),
-        false,
     );
     assert!(refusals(&view).is_empty());
     surface
