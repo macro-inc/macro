@@ -1,0 +1,38 @@
+[package]
+edition = "2024"
+name = "agent_wakes"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound"]
+# The axum router.
+inbound = ["dep:axum", "dep:base64", "dep:macro_authorization", "macro_authorization/axum", "schema"]
+# Postgres, S3 and the feature flag.
+outbound = ["dep:aws-sdk-s3", "dep:feature_flags", "dep:sqlx", "dep:urlencoding", "macro_user_id/sqlx"]
+# OpenAPI schemas for the wire types.
+schema = ["dep:utoipa"]
+
+[dependencies]
+aws-sdk-s3 = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+feature_flags = { path = "../feature_flags", optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
+macro_user_id = { path = "../macro_user_id" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["chrono", "json"], optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+uuid = { workspace = true, features = ["v7"] }

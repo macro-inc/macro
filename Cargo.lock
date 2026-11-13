@@ -1059,6 +1059,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_wakes"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-s3",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "feature_flags",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
