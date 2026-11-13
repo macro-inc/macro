@@ -1,15 +1,11 @@
-/**
- * Coalesce a burst, then repeat if another invalidation arrives during the read.
- * `join` shares a read already in flight instead of queueing another behind it,
- * for a poll that needs a recent read rather than one that starts after a change.
- */
+/** Coalesce a burst, then repeat if another invalidation arrives during the read. */
 export function createTrailingRefetch(
   enabled: () => boolean,
   refetch: () => Promise<unknown>
 ) {
   let pending: Promise<void> | undefined;
   let requested = false;
-  const refresh = () => {
+  return () => {
     if (!enabled()) return Promise.resolve();
     requested = true;
     pending ??= Promise.resolve().then(async () => {
@@ -33,5 +29,4 @@ export function createTrailingRefetch(
     });
     return pending;
   };
-  return Object.assign(refresh, { join: () => pending ?? refresh() });
 }

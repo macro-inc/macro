@@ -1,4 +1,3 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import {
   registerActivityRevalidator,
   revalidateActivityQueries,
@@ -7,12 +6,10 @@ import { queryClient } from '@queries/client';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { createTrailingRefetch } from '@queries/trailing-refetch';
-import { createHiddenDeferral } from '@queries/visible-refresh';
 import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
-import { makeEventListener } from '@solid-primitives/event-listener';
 import type { QueryClient } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
 import { onCleanup } from 'solid-js';
@@ -36,15 +33,11 @@ export async function refreshProjectQueries(
   ]);
 }
 
-/** The longest a visible project goes without an authorized read. */
-const POLL_INTERVAL_MS = 30_000;
-
 /**
- * Fields update locally and activity pushes refetch, but a permission or
- * membership change can reach the viewer through neither, only through an
- * authorized read. So a visible project polls: 30 s after its last read and
- * when its window gains focus. A hidden tab sends no polls; if one fell due, it
- * reads once on becoming visible.
+ * Reads a mounted project again when an activity push or a Soup websocket
+ * reconnect revalidates it. Nothing reads it on a timer or on focus, so a
+ * share, unshare or membership change reaches an open project only with a
+ * later push or a reopen.
  */
 export function registerProjectRevalidation(
   client: () => Client,
@@ -52,40 +45,9 @@ export function registerProjectRevalidation(
   refetch: () => Promise<unknown>
 ) {
   let disposed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const schedule = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      schedule();
-      due.request();
-    }, POLL_INTERVAL_MS);
-  };
-  const refresh = createTrailingRefetch(
-    () => !disposed && enabled(),
-    () => {
-      schedule();
-      return refetch();
-    }
-  );
-  // A poll joins a read in flight, so becoming visible and the focus that
-  // follows it send one read between them.
-  const due = createHiddenDeferral(() =>
-    fireAndForget(poll(refresh.join), 'project-revalidation')
-  );
-  schedule();
-  onCleanup(makeEventListener(window, 'focus', due.request));
+  const refresh = createTrailingRefetch(() => !disposed && enabled(), refetch);
   onCleanup(registerActivityRevalidator({ client, refresh }));
   onCleanup(() => {
     disposed = true;
-    clearTimeout(timer);
-    due.dispose();
   });
-}
-
-async function poll(read: () => Promise<void>) {
-  try {
-    await read();
-  } catch (error) {
-    console.warn('Project query revalidation failed', error);
-  }
 }

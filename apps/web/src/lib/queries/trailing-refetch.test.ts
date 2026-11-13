@@ -46,27 +46,3 @@ it('does not run a trailing read after its owner is disabled', async () => {
   await Promise.all([first, newer, refresh()]);
   expect(fetch).toHaveBeenCalledOnce();
 });
-
-it('joins a read in flight instead of queueing another behind it', async () => {
-  let complete!: () => void;
-  const fetch = vi
-    .fn()
-    .mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          complete = resolve;
-        })
-    )
-    .mockResolvedValue(undefined);
-  const refresh = createTrailingRefetch(() => true, fetch);
-  const first = refresh();
-  await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-  const joined = refresh.join();
-  complete();
-  await Promise.all([first, joined]);
-  expect(fetch).toHaveBeenCalledOnce();
-
-  // With nothing in flight, joining starts a read.
-  await refresh.join();
-  expect(fetch).toHaveBeenCalledTimes(2);
-});

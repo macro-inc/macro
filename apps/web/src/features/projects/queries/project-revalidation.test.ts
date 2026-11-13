@@ -27,7 +27,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
 
 import { registerProjectRevalidation } from './project-revalidation';
 
-const POLL_MS = 30_000;
 let visibility: DocumentVisibilityState = 'visible';
 
 beforeEach(() => {
@@ -68,81 +67,69 @@ function register(enabled = () => true) {
   return { read, answer, dispose };
 }
 
-it('polls a visible project 30 s after its last read', async () => {
+it('sends no read 30 s, or any time, after the last one', async () => {
   const { read, answer, dispose } = register();
 
-  await vi.advanceTimersByTimeAsync(POLL_MS - 1);
+  await vi.advanceTimersByTimeAsync(30_000);
   expect(read).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(1);
-  expect(read).toHaveBeenCalledOnce();
-  await answer();
 
-  // An activity push reads too, so the next poll waits a full interval after it.
-  await vi.advanceTimersByTimeAsync(10_000);
+  // Not after a push's read either.
   const pushed = activity.refresh?.();
   await vi.advanceTimersByTimeAsync(0);
-  expect(read).toHaveBeenCalledTimes(2);
   await answer();
   await pushed;
-  await vi.advanceTimersByTimeAsync(POLL_MS - 1);
-  expect(read).toHaveBeenCalledTimes(2);
-  await vi.advanceTimersByTimeAsync(1);
-  expect(read).toHaveBeenCalledTimes(3);
+  expect(read).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  expect(read).toHaveBeenCalledOnce();
   dispose();
 });
 
-it('sends no polls while hidden and reads once when shown and focused', async () => {
-  const { read, answer, dispose } = register();
-  setVisibility('hidden');
+it('sends no read when the window gains focus or the tab is shown', async () => {
+  const { read, dispose } = register();
 
-  await vi.advanceTimersByTimeAsync(3 * POLL_MS);
   window.dispatchEvent(new Event('focus'));
   await vi.advanceTimersByTimeAsync(0);
   expect(read).not.toHaveBeenCalled();
 
-  // Becoming visible catches up, and the focus that follows shares that read.
+  setVisibility('hidden');
+  await vi.advanceTimersByTimeAsync(5 * 60_000);
   setVisibility('visible');
   window.dispatchEvent(new Event('focus'));
   await vi.advanceTimersByTimeAsync(0);
-  expect(read).toHaveBeenCalledOnce();
-  await answer();
-
-  await vi.advanceTimersByTimeAsync(POLL_MS - 1);
-  expect(read).toHaveBeenCalledOnce();
-  await vi.advanceTimersByTimeAsync(1);
-  expect(read).toHaveBeenCalledTimes(2);
+  expect(read).not.toHaveBeenCalled();
   dispose();
 });
 
-it('reads on focus but not on a show with no poll due', async () => {
+it('reads once for an activity push or reconnect, and once more for pushes during it', async () => {
   const { read, answer, dispose } = register();
-  setVisibility('hidden');
-  await vi.advanceTimersByTimeAsync(POLL_MS / 2);
-  setVisibility('visible');
-  await vi.advanceTimersByTimeAsync(0);
-  expect(read).not.toHaveBeenCalled();
 
-  window.dispatchEvent(new Event('focus'));
+  const first = activity.refresh?.();
   await vi.advanceTimersByTimeAsync(0);
   expect(read).toHaveBeenCalledOnce();
+
+  // Pushes that arrive while the read is in flight share one trailing read.
+  const second = activity.refresh?.();
+  const third = activity.refresh?.();
   await answer();
+  expect(read).toHaveBeenCalledTimes(2);
+  await answer();
+  await Promise.all([first, second, third]);
+  expect(read).toHaveBeenCalledTimes(2);
   dispose();
 });
 
 it('stays quiet when disabled or disposed', async () => {
   const disabled = register(() => false);
-  await vi.advanceTimersByTimeAsync(2 * POLL_MS);
-  window.dispatchEvent(new Event('focus'));
-  await vi.advanceTimersByTimeAsync(0);
+  await disabled.answer();
+  await activity.refresh?.();
   expect(disabled.read).not.toHaveBeenCalled();
   disabled.dispose();
 
   const disposed = register();
-  setVisibility('hidden');
-  await vi.advanceTimersByTimeAsync(POLL_MS);
   disposed.dispose();
-  setVisibility('visible');
+  expect(activity.refresh).toBeUndefined();
+  await vi.advanceTimersByTimeAsync(60_000);
   window.dispatchEvent(new Event('focus'));
-  await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+  await vi.advanceTimersByTimeAsync(0);
   expect(disposed.read).not.toHaveBeenCalled();
 });

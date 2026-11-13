@@ -230,8 +230,9 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
   });
   expect(mocks.page).not.toHaveBeenCalled();
   expect(mocks.soup).toHaveBeenCalledTimes(2);
+  // Nothing reads an open project again on a timer.
   await vi.advanceTimersByTimeAsync(30_000);
-  expect(callsFor('Initiative')).toHaveLength(2);
+  expect(callsFor('Initiative')).toHaveLength(1);
 
   setEnabled(false);
   const soupRequests = mocks.soup.mock.calls.length;
@@ -244,7 +245,7 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     queryClient.invalidateQueries(),
   ]);
   await vi.advanceTimersByTimeAsync(60_000);
-  expect(callsFor('Initiative')).toHaveLength(2);
+  expect(callsFor('Initiative')).toHaveLength(1);
 
   expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
   setEnabled(true);
