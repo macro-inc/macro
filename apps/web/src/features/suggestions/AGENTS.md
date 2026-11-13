@@ -34,8 +34,8 @@ only, behind `enable-suggestions`.
 
 ## Start here
 
-- `core/suggestion.ts`: the suggestion model, `suggestionStatus`, feed order and filters.
-- `primitives/feed.ts`: card actions and held dismissals.
+- `core/suggestion.ts`: the suggestion and feed model, the tab filter.
+- `primitives/feed.ts`: card actions, dismiss and undo.
 - `route-views.tsx`, `home-priorities.tsx`: the two production compositions.
 
 ## Scope
@@ -55,16 +55,20 @@ only, behind `enable-suggestions`.
 
 - Clicking Run on a background suggestion is the approval: the card must show
   `sends` (or that it sends nothing) before Run, and there is no approval UI.
-- The server has no un-dismiss. A dismissal is held with Undo and sent a few
-  seconds after the last one, or when the person leaves (`sendDismissals`,
-  with `keepalive` on unload). Splits can stay mounted after navigating away,
-  so leaving alone would not send it. A refused dismissal puts the card
-  back with the failed-action line. Dismissing a running suggestion stops its
-  run, and the control and the dismissed row say so.
-- The feed keeps the server's order (most important first); only done suggestions
-  move, to the end. The server decides what is done: accepting anything but a
-  background suggestion makes it `done`. An `accepted` background suggestion with no run
-  was taken on for the person by an agent; it stays open and Run starts it.
+- The server decides and the page shows: each suggestion's `status`, the
+  feed's order (what waits or runs, then what is done), the tab `counts`,
+  `isNew`, what a finished one left (`result`, absent until its run
+  settled), and a reply's `waitingSince`, `from` and draft `preview`. Don't
+  derive any of these here. Home asks for its rows with `?limit=5`
+  (`queries/top-suggestions.ts`).
+- A dismissal is sent at once; the suggestion stays as a row for the visit,
+  and Undo calls `POST /suggestions/{id}/restore`, which the server allows
+  for a few minutes. A refused dismissal leaves the card with the
+  failed-action line; a refused Undo says it may be too late. Dismissing a
+  running suggestion stops its run (the control and the row say so), and
+  restoring it brings it back open, not running.
+- Leaving For you calls `POST /suggestions/viewed` (also on `pagehide`, with
+  `keepalive`): what is proposed after that is new next time.
 - Accept sends the suggestion's `updatedAt` as the card read it. If the suggestion was
   rewritten since, the server refuses (409) and answers with the suggestion as it
   is now: the source puts that in the feed and answers `changed`, and the
@@ -83,18 +87,14 @@ only, behind `enable-suggestions`.
   second block repeating the first: a background run shows its summary and
   what it sends, not its prompt (Open in chat shows that); a drafted reply
   shows the draft in place of the summary; every finished suggestion is one
-  row. The parts that read the app's items (`SuggestionItemParts`: source
-  link, draft text, waiting time) are supplied by `suggestion-items.tsx`.
+  row. The one part that reads the app's items (`SuggestionItemParts`: the
+  source link's icon and name) is supplied by `suggestion-items.tsx`.
 - Nothing on a card is loud: the main action is the app's `secondary`
   button and the other a `ghost` one (no `primary`: several white buttons on
   one page read as shouting), line icons take the muted ink, and dismiss
   shows on hover or keyboard focus. Colour is left to the tile (each kind has
   its own, from the routine cards' tints), the state badges and the values
   AI picked.
-- The API has no due or waiting times. A reply suggestion's "waiting 2 days" and
-  the sender on its chip come from the email thread itself
-  (`queries/suggestion-thread.ts`, `core/thread.ts`): the last message, when the
-  person didn't write it. Without that, a card shows when the suggestion arrived.
-- Violet marks what AI picked (a routine's values) and the dot on an suggestion new
-  since the last visit.
+- The API has no due times; a reply's "waiting 2 days" is the feed's
+  `waitingSince`. Without it a card shows when the suggestion arrived.
 - Gate every entry point with `useSuggestionsFlag`, which is also false on touch.
