@@ -29,6 +29,14 @@ struct FakeRepo {
 }
 
 impl FakeRepo {
+    /// Overwrite the current view with one today's schema can't decode, as a
+    /// rollback or a renamed variant would leave it.
+    fn break_current_view(&self, id: DashboardId) {
+        if let Some(stored) = self.dashboards.lock().unwrap().get_mut(&id) {
+            stored.view = json!({ "widgets": [{ "type": "from-the-future" }] });
+        }
+    }
+
     fn record(
         &self,
         id: DashboardId,
@@ -57,7 +65,7 @@ impl DashboardRepo for FakeRepo {
             owner_id: new.owner_id.clone(),
             title: new.view.title.clone(),
             version: Version::FIRST,
-            view: new.view.clone(),
+            view: serde_json::to_value(&new.view).unwrap(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -67,6 +75,19 @@ impl DashboardRepo for FakeRepo {
             .insert(new.id, stored.clone());
         self.record(new.id, Version::FIRST, &new.owner_id, &new.view);
         Ok(stored)
+    }
+
+    async fn head(&self, id: DashboardId) -> Result<Option<DashboardHead>, Infallible> {
+        Ok(self
+            .dashboards
+            .lock()
+            .unwrap()
+            .get(&id)
+            .map(|stored| DashboardHead {
+                id,
+                owner_id: stored.owner_id.clone(),
+                version: stored.version,
+            }))
     }
 
     async fn get(&self, id: DashboardId) -> Result<Option<StoredDashboard>, Infallible> {
@@ -104,7 +125,7 @@ impl DashboardRepo for FakeRepo {
                 return Ok(None);
             }
             stored.version = stored.version.next();
-            stored.view = new.view.clone();
+            stored.view = serde_json::to_value(&new.view).unwrap();
             stored.title = new.view.title.clone();
             stored.clone()
         };
@@ -313,6 +334,19 @@ async fn dashboards_are_not_found_with_the_flag_off() {
     ));
     assert!(matches!(
         service.home(&user(STRANGER), &user(AGENT)).await,
+        Err(DashboardError::NotFound)
+    ));
+    // The flag answers before the body is checked.
+    assert!(matches!(
+        service
+            .patch_pane(
+                &user(STRANGER),
+                dashboard.id,
+                String::new(),
+                json!({ "type": "nope" }),
+                None
+            )
+            .await,
         Err(DashboardError::NotFound)
     ));
 }
@@ -557,6 +591,65 @@ async fn a_home_must_be_a_dashboard_its_account_can_edit() {
     ));
     assert!(matches!(
         service.set_home(&user(STRANGER), dashboard.id).await,
+        Err(DashboardError::NotFound)
+    ));
+}
+
+/// A current view the schema no longer decodes reads as unreadable, never as
+/// an internal error, and its owner can still replace, revert or delete it.
+#[tokio::test]
+async fn an_undecodable_current_view_stays_repairable_by_its_owner() {
+    let service = service(&[], &[]);
+    let dashboard = service.create(&user(AGENT), view("First")).await.unwrap();
+    service.repo.break_current_view(dashboard.id);
+
+    assert!(matches!(
+        service.get(&user(AGENT), dashboard.id).await,
+        Err(DashboardError::Unreadable(1))
+    ));
+    assert!(matches!(
+        service
+            .patch_pane(
+                &user(AGENT),
+                dashboard.id,
+                "intro".to_owned(),
+                json!({ "type": "md", "id": "intro", "markdown": "x" }),
+                None
+            )
+            .await,
+        Err(DashboardError::Unreadable(1))
+    ));
+    service.set_home(&user(AGENT), dashboard.id).await.unwrap();
+    assert!(matches!(
+        service.home(&user(AGENT), &user(AGENT)).await,
+        Err(DashboardError::Unreadable(1))
+    ));
+    assert_eq!(
+        service
+            .versions(&user(AGENT), dashboard.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let replaced = service
+        .update(&user(AGENT), dashboard.id, view("Fixed"), None)
+        .await
+        .unwrap();
+    assert_eq!(markdown_of(&replaced, 0), "Fixed");
+
+    service.repo.break_current_view(dashboard.id);
+    let reverted = service
+        .revert(&user(AGENT), dashboard.id, Version::FIRST)
+        .await
+        .unwrap();
+    assert_eq!(markdown_of(&reverted, 0), "First");
+
+    service.repo.break_current_view(dashboard.id);
+    service.delete(&user(AGENT), dashboard.id).await.unwrap();
+    assert!(matches!(
+        service.get(&user(AGENT), dashboard.id).await,
         Err(DashboardError::NotFound)
     ));
 }

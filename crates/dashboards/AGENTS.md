@@ -39,15 +39,20 @@ dashboard at one; the web shows an agent account's home on its page.
 
 ## Gotchas
 
-- Access: the owner owns; owners and admins of any team the owner belongs to
-  edit; anything else comes from `entity_access` grants. People never edit a
+- Access: the owner owns; when the owner is an agent account (`"User"."isAgent"`),
+  owners and admins of any team it belongs to edit all of its dashboards; anything
+  else, including a human's dashboard, comes only from `entity_access` grants. People never edit a
   dashboard in the app in v1, only through the API.
 - Every route answers 404 unless `enable-agent-dashboards` is on for the
   caller, and a caller without access gets 404, never 403.
 - A save is a compare-and-set on `current_version`; a lost race is 409. A
   pane patch without `expectedVersion` rereads and retries.
-- Old versions are stored undecoded on read and decoded again on revert,
-  because the view schema moves on.
+- Views are read undecoded and decoded only where a view is returned or
+  patched, because the view schema moves on: access checks read only the
+  owner and version (`DashboardRepo::head`), and a current view that no
+  longer decodes answers 422 (`DashboardError::Unreadable`) on get, home and
+  pane patch, while update, revert and delete still work. Revert decodes the
+  old version again.
 - Not a Soup kind: dashboards are not in Home, Recent, search or Drive, and
   have no trash; delete is permanent and owner-only.
 - A new widget variant needs arms in `dynamic_ui`'s `pane.rs` walkers.

@@ -28367,6 +28367,7 @@ export type GetHomeDashboardErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     404: ErrorResponse;
+    422: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -28420,6 +28421,7 @@ export type GetDashboardData = {
 export type GetDashboardErrors = {
     401: ErrorResponse;
     404: ErrorResponse;
+    422: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -28482,6 +28484,7 @@ export type PatchDashboardPaneErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     409: ErrorResponse;
+    422: ErrorResponse;
     500: ErrorResponse;
 };
 

@@ -13,8 +13,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    DashboardId, DashboardSummary, DashboardVersion, DashboardVersionSummary, NewDashboard,
-    NewVersion, StoredDashboard, Version,
+    DashboardHead, DashboardId, DashboardSummary, DashboardVersion, DashboardVersionSummary,
+    NewDashboard, NewVersion, StoredDashboard, Version,
 };
 use crate::domain::ports::DashboardRepo;
 
@@ -37,7 +37,7 @@ pub enum PgDashboardRepoError {
     /// The query failed.
     #[error("dashboard query failed")]
     Sqlx(#[from] sqlx::Error),
-    /// A stored row doesn't decode: a view, a user id or a version.
+    /// A stored row doesn't decode: a user id or a version.
     #[error("stored dashboard is malformed: {0}")]
     Malformed(String),
 }
@@ -86,7 +86,7 @@ impl TryFrom<DashboardRow> for StoredDashboard {
             owner_id: user_id(row.user_id)?,
             title: row.title,
             version: version(row.current_version)?,
-            view: serde_json::from_value(row.view).map_err(malformed)?,
+            view: row.view,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
@@ -142,10 +142,29 @@ impl DashboardRepo for PgDashboardRepo {
             owner_id: dashboard.owner_id.clone(),
             title,
             version: Version::FIRST,
-            view: dashboard.view.clone(),
+            view,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
+    }
+
+    #[tracing::instrument(skip_all, fields(dashboard_id = %id), err)]
+    async fn head(&self, id: DashboardId) -> Result<Option<DashboardHead>, Self::Err> {
+        let row = sqlx::query!(
+            "SELECT user_id, current_version FROM dashboard_entities WHERE id = $1",
+            id.0,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|row| {
+            Ok(DashboardHead {
+                id,
+                owner_id: user_id(row.user_id)?,
+                version: version(row.current_version)?,
+            })
+        })
+        .transpose()
     }
 
     #[tracing::instrument(skip_all, fields(dashboard_id = %id), err)]
@@ -246,7 +265,7 @@ impl DashboardRepo for PgDashboardRepo {
             owner_id: user_id(row.user_id)?,
             title,
             version: version(row.current_version)?,
-            view: new.view.clone(),
+            view,
             created_at: row.created_at,
             updated_at: row.updated_at,
         }))

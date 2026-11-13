@@ -271,6 +271,7 @@ where
         (status = 200, body = Dashboard),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 422, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -349,6 +350,7 @@ where
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 409, body = ErrorResponse),
+        (status = 422, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -586,6 +588,7 @@ where
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 422, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -611,6 +614,7 @@ impl IntoResponse for DashboardError {
             DashboardError::Forbidden(_) => StatusCode::FORBIDDEN,
             DashboardError::Invalid(_) => StatusCode::BAD_REQUEST,
             DashboardError::Conflict(_) => StatusCode::CONFLICT,
+            DashboardError::Unreadable(_) => StatusCode::UNPROCESSABLE_ENTITY,
             DashboardError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

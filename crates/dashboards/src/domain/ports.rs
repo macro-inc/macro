@@ -4,7 +4,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::models::{
-    Dashboard, DashboardError, DashboardId, DashboardSummary, DashboardVersion,
+    Dashboard, DashboardError, DashboardHead, DashboardId, DashboardSummary, DashboardVersion,
     DashboardVersionSummary, NewDashboard, NewVersion, StoredDashboard, Version,
 };
 
@@ -19,7 +19,13 @@ pub trait DashboardRepo: Send + Sync + 'static {
         dashboard: &NewDashboard,
     ) -> impl Future<Output = Result<StoredDashboard, Self::Err>> + Send;
 
-    /// The dashboard at its current version.
+    /// The dashboard's owner and current version, without its view.
+    fn head(
+        &self,
+        id: DashboardId,
+    ) -> impl Future<Output = Result<Option<DashboardHead>, Self::Err>> + Send;
+
+    /// The dashboard at its current version, its view undecoded.
     fn get(
         &self,
         id: DashboardId,

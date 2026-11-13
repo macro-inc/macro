@@ -10,7 +10,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use serde_json::Value;
 
 use super::models::{
-    Dashboard, DashboardError, DashboardId, DashboardSummary, DashboardVersion,
+    Dashboard, DashboardError, DashboardHead, DashboardId, DashboardSummary, DashboardVersion,
     DashboardVersionSummary, LIST_PAGE, MAX_VIEW_BYTES, NewDashboard, NewVersion, StoredDashboard,
     VERSION_PAGE, Version,
 };
@@ -110,16 +110,27 @@ where
         }
     }
 
-    /// The dashboard and the caller's access, when they have at least
-    /// `required`. A caller who can't read it learns nothing of it.
+    /// The dashboard's owner and version and the caller's access, when
+    /// dashboards are on for them and they have at least `required`.
     async fn authorize(
         &self,
         actor: &MacroUserIdStr<'_>,
         id: DashboardId,
         required: AccessLevel,
-    ) -> Result<(StoredDashboard, AccessLevel), DashboardError> {
+    ) -> Result<(DashboardHead, AccessLevel), DashboardError> {
         self.require_enabled(actor).await?;
+        self.check_access(actor, id, required).await
+    }
 
+    /// [`Self::authorize`] for a caller already through the flag. It never
+    /// reads the view, so a view that no longer decodes can't lock its owner
+    /// out. A caller who can't read it learns nothing of it.
+    async fn check_access(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        id: DashboardId,
+        required: AccessLevel,
+    ) -> Result<(DashboardHead, AccessLevel), DashboardError> {
         let Some(level) = self
             .access
             .access_level(actor, id)
@@ -129,7 +140,7 @@ where
             return Err(DashboardError::NotFound);
         };
 
-        let Some(stored) = self.repo.get(id).await.map_err(internal)? else {
+        let Some(head) = self.repo.head(id).await.map_err(internal)? else {
             return Err(DashboardError::NotFound);
         };
 
@@ -139,7 +150,29 @@ where
             ));
         }
 
-        Ok((stored, level))
+        Ok((head, level))
+    }
+
+    /// The dashboard at its current version with its view decoded.
+    async fn current(&self, id: DashboardId) -> Result<(StoredDashboard, View), DashboardError> {
+        let Some(stored) = self.repo.get(id).await.map_err(internal)? else {
+            return Err(DashboardError::NotFound);
+        };
+        let view = decode_view(&stored.view).map_err(|_| {
+            tracing::warn!(
+                dashboard_id = %id,
+                version = stored.version.0,
+                "stored dashboard view no longer matches the view schema"
+            );
+            DashboardError::Unreadable(stored.version.0)
+        })?;
+        Ok((stored, view))
+    }
+
+    /// The dashboard as a caller with `level` reads it.
+    async fn read(&self, id: DashboardId, level: AccessLevel) -> Result<Dashboard, DashboardError> {
+        let (stored, view) = self.current(id).await?;
+        Ok(Dashboard::read_as(stored, view, level))
     }
 
     /// Save `view` on top of `replaces`, or answer the conflict.
@@ -151,23 +184,20 @@ where
         view: View,
         level: AccessLevel,
     ) -> Result<Dashboard, DashboardError> {
-        let saved = self
-            .repo
-            .save_version(&NewVersion {
-                id,
-                replaces,
-                author_id: actor.clone(),
-                view,
-            })
-            .await
-            .map_err(internal)?;
+        let new = NewVersion {
+            id,
+            replaces,
+            author_id: actor.clone(),
+            view,
+        };
+        let saved = self.repo.save_version(&new).await.map_err(internal)?;
 
         let Some(saved) = saved else {
             return Err(DashboardError::Conflict(replaces.0));
         };
 
         tracing::Span::current().record("version", saved.version.0);
-        Ok(Dashboard::read_as(saved, level))
+        Ok(Dashboard::read_as(saved, new.view, level))
     }
 }
 
@@ -194,17 +224,14 @@ where
         let id = DashboardId::generate();
         tracing::Span::current().record("dashboard_id", tracing::field::display(id));
 
-        let stored = self
-            .repo
-            .create(&NewDashboard {
-                id,
-                owner_id: actor.clone(),
-                view,
-            })
-            .await
-            .map_err(internal)?;
+        let new = NewDashboard {
+            id,
+            owner_id: actor.clone(),
+            view,
+        };
+        let stored = self.repo.create(&new).await.map_err(internal)?;
 
-        Ok(Dashboard::read_as(stored, AccessLevel::Owner))
+        Ok(Dashboard::read_as(stored, new.view, AccessLevel::Owner))
     }
 
     #[tracing::instrument(name = "dashboard.list", skip_all, err)]
@@ -226,8 +253,8 @@ where
         actor: &MacroUserIdStr<'static>,
         id: DashboardId,
     ) -> Result<Dashboard, DashboardError> {
-        let (stored, level) = self.authorize(actor, id, AccessLevel::View).await?;
-        Ok(Dashboard::read_as(stored, level))
+        let (_, level) = self.authorize(actor, id, AccessLevel::View).await?;
+        self.read(id, level).await
     }
 
     #[tracing::instrument(
@@ -243,9 +270,9 @@ where
         view: Value,
         expected: Option<Version>,
     ) -> Result<Dashboard, DashboardError> {
-        let (stored, level) = self.authorize(actor, id, AccessLevel::Edit).await?;
+        let (head, level) = self.authorize(actor, id, AccessLevel::Edit).await?;
         let view = checked_view(&view)?;
-        let replaces = expected.unwrap_or(stored.version);
+        let replaces = expected.unwrap_or(head.version);
 
         self.save(actor, id, replaces, view, level).await
     }
@@ -264,6 +291,10 @@ where
         widget: Value,
         expected: Option<Version>,
     ) -> Result<Dashboard, DashboardError> {
+        // The flag comes first: with dashboards off every request is 404,
+        // whatever its body.
+        self.require_enabled(actor).await?;
+
         let pane = PaneId::try_new(pane)
             .map_err(|_| DashboardError::Invalid("A pane id is 1 to 64 characters.".to_owned()))?;
         let widget = checked_widget(widget)?;
@@ -277,7 +308,8 @@ where
         };
 
         for attempt in 1..=attempts {
-            let (stored, level) = self.authorize(actor, id, AccessLevel::Edit).await?;
+            let (_, level) = self.check_access(actor, id, AccessLevel::Edit).await?;
+            let (stored, mut view) = self.current(id).await?;
 
             if let Some(expected) = expected
                 && expected != stored.version
@@ -285,7 +317,6 @@ where
                 return Err(DashboardError::Conflict(expected.0));
             }
 
-            let mut view = stored.view;
             if !view.replace_pane(&pane, widget.clone()) {
                 return Err(DashboardError::Invalid(format!(
                     "No widget has the pane id \"{pane}\"."
@@ -344,7 +375,7 @@ where
         id: DashboardId,
         version: Version,
     ) -> Result<Dashboard, DashboardError> {
-        let (stored, level) = self.authorize(actor, id, AccessLevel::Edit).await?;
+        let (head, level) = self.authorize(actor, id, AccessLevel::Edit).await?;
 
         let Some(earlier) = self.repo.version(id, version).await.map_err(internal)? else {
             return Err(DashboardError::NotFound);
@@ -358,7 +389,7 @@ where
             ))
         })?;
 
-        self.save(actor, id, stored.version, view, level).await
+        self.save(actor, id, head.version, view, level).await
     }
 
     #[tracing::instrument(name = "dashboard.delete", skip_all, fields(dashboard_id = %id), err)]
@@ -409,7 +440,7 @@ where
         };
         tracing::Span::current().record("dashboard_id", tracing::field::display(id));
 
-        let (stored, level) = self.authorize(actor, id, AccessLevel::View).await?;
-        Ok(Dashboard::read_as(stored, level))
+        let (_, level) = self.check_access(actor, id, AccessLevel::View).await?;
+        self.read(id, level).await
     }
 }

@@ -72,7 +72,7 @@ async fn a_created_dashboard_reads_back_with_its_owner_grant(pool: PgPool) {
     assert_eq!(created.title.as_deref(), Some("Ops"));
     let read = repo.get(id).await.unwrap().unwrap();
     assert_eq!(read.version, Version::FIRST);
-    assert_eq!(read.view, view("Hello"));
+    assert_eq!(read.view, serde_json::to_value(view("Hello")).unwrap());
     assert_eq!(read.owner_id.as_ref(), AGENT);
     assert_eq!(
         owner_grants(&pool, id).await,
@@ -121,7 +121,10 @@ async fn a_save_moves_the_current_version_only_from_the_one_it_read(pool: PgPool
 
     assert_eq!(first.map(|saved| saved.version), Some(Version(2)));
     assert_eq!(second, None);
-    assert_eq!(repo.get(id).await.unwrap().unwrap().view, view("Two"));
+    assert_eq!(
+        repo.get(id).await.unwrap().unwrap().view,
+        serde_json::to_value(view("Two")).unwrap()
+    );
 
     let history = repo.versions(id, 10).await.unwrap();
     assert_eq!(
@@ -183,4 +186,35 @@ async fn a_home_points_at_the_latest_dashboard_set(pool: PgPool) {
 
     repo.clear_home(&user(AGENT)).await.unwrap();
     assert_eq!(repo.home(&user(AGENT)).await.unwrap(), None);
+}
+
+/// A current view today's schema can't decode still reads back, raw, with
+/// its owner and version, so the service can let the owner repair it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_view_that_no_longer_decodes_still_reads_back(pool: PgPool) {
+    seed_user(&pool, AGENT).await;
+    let repo = PgDashboardRepo::new(pool.clone());
+    let id = DashboardId::generate();
+    repo.create(&NewDashboard {
+        id,
+        owner_id: user(AGENT),
+        view: view("Hi"),
+    })
+    .await
+    .unwrap();
+    let unknown = json!({ "widgets": [{ "type": "from-the-future" }] });
+    sqlx::query!(
+        "UPDATE dashboard_versions SET view = $2 WHERE dashboard_id = $1",
+        id.0,
+        unknown,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let head = repo.head(id).await.unwrap().unwrap();
+    assert_eq!(head.owner_id.as_ref(), AGENT);
+    assert_eq!(head.version, Version::FIRST);
+    assert_eq!(repo.get(id).await.unwrap().unwrap().view, unknown);
+    assert_eq!(repo.head(DashboardId::generate()).await.unwrap(), None);
 }

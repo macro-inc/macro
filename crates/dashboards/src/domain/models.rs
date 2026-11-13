@@ -54,6 +54,18 @@ impl Version {
     }
 }
 
+/// Who owns a dashboard and its current version, read without its view so
+/// an access check never depends on the view decoding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DashboardHead {
+    /// Its id.
+    pub id: DashboardId,
+    /// Who created it, and so owns it.
+    pub owner_id: MacroUserIdStr<'static>,
+    /// The current version.
+    pub version: Version,
+}
+
 /// A dashboard as it is stored, before the caller's access is known.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StoredDashboard {
@@ -65,8 +77,9 @@ pub struct StoredDashboard {
     pub title: Option<String>,
     /// The current version.
     pub version: Version,
-    /// The current view.
-    pub view: View,
+    /// The current view, undecoded: a view saved under an older or newer
+    /// schema may not decode, and that must not lock its owner out.
+    pub view: serde_json::Value,
     /// When it was created.
     pub created_at: DateTime<Utc>,
     /// When its current version was saved.
@@ -98,14 +111,15 @@ pub struct Dashboard {
 }
 
 impl Dashboard {
-    /// The stored dashboard as a caller with `access_level` reads it.
-    pub fn read_as(stored: StoredDashboard, access_level: AccessLevel) -> Self {
+    /// The stored dashboard, whose view decodes to `view`, as a caller with
+    /// `access_level` reads it.
+    pub fn read_as(stored: StoredDashboard, view: View, access_level: AccessLevel) -> Self {
         Self {
             id: stored.id,
             owner_id: stored.owner_id,
             title: stored.title,
             version: stored.version,
-            view: stored.view,
+            view,
             access_level,
             created_at: stored.created_at,
             updated_at: stored.updated_at,
@@ -197,6 +211,12 @@ pub enum DashboardError {
     /// The view, pane or version given doesn't work.
     #[error("{0}")]
     Invalid(String),
+    /// The current version's view no longer matches the view schema. The
+    /// owner can still save a new view, revert or delete it.
+    #[error(
+        "version {0} of this dashboard no longer matches the view schema; save a new view, revert to an earlier version, or delete it"
+    )]
+    Unreadable(u32),
     /// Someone saved a newer version first.
     #[error("the dashboard changed since version {0}; read it again and retry")]
     Conflict(u32),
