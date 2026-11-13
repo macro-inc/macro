@@ -220,13 +220,16 @@ export function PrDetailActions(props: {
       <Show when={props.detail}>
         {(detail) => (
           <>
-            <AskMacroButton
-              entity={{
-                type: 'pr',
-                id: detail().id,
-                url: detail().pullRequest.url ?? prHtmlUrl(detail().prRef),
-              }}
-            />
+            <HeaderActionGroup label="Actions">
+              <AskMacroButton
+                grouped
+                entity={{
+                  type: 'pr',
+                  id: detail().id,
+                  url: detail().pullRequest.url ?? prHtmlUrl(detail().prRef),
+                }}
+              />
+            </HeaderActionGroup>
             <HeaderActionGroup label="Sharing">
               <Tooltip label="Share pull request">
                 <HeaderActionButton

@@ -46,7 +46,8 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   detail toggle). Detail-header groups use `sm` labelled segments and `icon-sm`
   icon-only segments, and detail-header `Tabs` use `size="sm"` (28px controls);
   list-header groups and Tabs (any header with New or Search) use `md` /
-  `icon-md`, matching New and Search. A labelled
+  `icon-md`, matching New and Search; so does a bar whose tabs are a 32px
+  `TabSelector` (the routine header). A labelled
   action outside an island (`HeaderActionButton`, `ChatWithAgentButton`) is
   32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`.
   Keep 8px between islands. Filter, sort, group, and download live in the header, never
