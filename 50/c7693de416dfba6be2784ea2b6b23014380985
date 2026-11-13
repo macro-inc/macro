@@ -1,0 +1,278 @@
+crates/suggestions/src/outbound/pg_suggestion_repo/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-270
+crates/ai_usage/AGENTS.md
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 73-74
+crates/scheduled_action/AGENTS.md
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 242
+crates/scheduled_action/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 626-628
+crates/scheduled_action/src/outbound/pg_agent_routines/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 81-84,163-194
+  s_48270cd6f8d6f1::t_c5bf8f052c5189 195
+.github/workspace-dep-closures.json
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1007,1018,1208,2094,2283,3650,4663,6006,6808,9912,11823,13788,14445-14448,15489-15531
+crates/macro_db_client/migrations/20261110011716_delete_suggestions_with_their_kind_rows.sql
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-29
+services/agent_harness_service/Cargo.toml
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 174
+crates/scheduled_action/src/outbound/pg_agent_routines.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 5,18,30-39,93-97,99-107,117
+apps/web/src/features/dynamic-ui/widgets/panes/agent-pane.tsx
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 4
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 9
+crates/suggestions/src/outbound/suggestion_access.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-104
+apps/web/src/lib/i18n/locales/en/dynamic-ui.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 33
+crates/scheduled_action/src/domain/agent_routines.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 133-135,142-143
+packages/sdk/specs/scheduled-action.json
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1865-2335,2836-2840,3571-3575,3605-3635,3876-3880,3908-3981,4068-4123,4622-4626,5165-5280,5286-5424,5440-5459,5547-5550
+crates/suggestions/src/domain/service/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-742
+crates/suggestions/Cargo.toml
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-34
+crates/suggestions/src/domain.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-7
+crates/ai_usage/src/domain/spend/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 93-96,166-173
+  s_48270cd6f8d6f1::t_2ca34d193d80b0 174-177
+docs/agent-guide/ai-chat.md
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1938
+services/agent_harness_service/src/scheduling.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 75,77-80,153-164,469,472-473,554-569,597-598,612,616-622
+  s_48270cd6f8d6f1::t_d9fdc4b9ed01cb 623
+crates/macro_db_client/migrations/20261113071144_require_valid_ai_usage_user_id_created_at_total_idx.sql
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-21
+crates/scheduled_action/Cargo.toml
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 57
+crates/ai_usage/src/outbound/pg_agent_spend_repo.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 73-83
+crates/ai_usage/src/domain/spend.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 135,137-139,210-215
+crates/ai_usage/src/outbound/pg_agent_spend_repo/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 187,191
+packages/sdk/src/coverage/skipped.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 306-310
+crates/shown_text/src/lib.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-55
+crates/suggestions/src/domain/service.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-783
+apps/web/src/features/dynamic-ui/widgets/agent-panes/agent-panes.test.tsx
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 56,82,97-110,112-127,135-136,138-140,148-155
+  s_48270cd6f8d6f1::t_3969d4b377e619 156-157
+crates/shown_text/AGENTS.md
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-16
+crates/suggestions/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-208
+crates/macro_db_client/migrations/20261113071145_drop_ai_usage_user_id_created_at_idx_concurrently.sql
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-5
+crates/suggestions/src/inbound/router.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-349
+crates/graphql_activity/src/feed.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 58-59,101-105,132-137
+crates/suggestions/AGENTS.md
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-53
+crates/complete_graph/src/schema/test/team_activity.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 98-103
+crates/suggestions/src/swagger.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-36
+packages/sdk/generated/scheduled-action/index.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 4
+crates/scheduled_action/src/domain/agent_routines/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 34-37,165,167-173
+crates/suggestions/src/outbound.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-4
+services/agent_harness_service/src/scheduling_openapi.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 2,5,7-9
+crates/macro_db_client/migrations/20261109204236_create_suggestions.sql
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-146
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 285-289,670-674,683-687,805-809,831-876,927-970,1269-1273,1571-1644,1650-1721,1727-1744,2616-2843
+packages/sdk/src/utils/verbs.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 96-97,100,105
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Routines.tsx
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 7,12,31-33,51-53,71,114,135-141
+  s_48270cd6f8d6f1::t_b5aac44618e1e1 142-143
+crates/suggestions/src/domain/check.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-188
+static_assets/schema.graphql
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 21-22
+crates/scheduled_action/src/domain/suggestions/decode.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 10-12,18-19
+crates/suggestions/src/lib.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-9
+crates/suggestions/src/domain/check/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-80
+crates/suggestions/src/outbound/pg_suggestion_repo.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-632
+apps/web/src/features/routines/components/routine-row.tsx
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 60-61,93-95,98,141-147,149-155
+crates/suggestions/src/outbound/suggestion_access/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-122
+packages/sdk/src/macro.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 40,149-151,281,599-608
+crates/shown_text/Cargo.toml
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-9
+crates/suggestions/src/domain/model.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-504
+packages/sdk/src/entities/suggestions/suggestion.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-189
+crates/suggestions/src/inbound.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-3
+packages/code-mode-sdk/scripts/catalog.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 15
+packages/sdk/src/entities/suggestions/namespace.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-121
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 5,260-332
+Cargo.toml
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 13-14
+crates/shown_text/src/test.rs
+  s_48270cd6f8d6f1::t_6ddb79a282bb7d 1-29
+.sqlx/query-01eb14cb8c7c1faa4c5d13c97a9d97cbec184e57e5eea2dbb264a69483cadae6.json
+  s_48270cd6f8d6f1::t_4e7945ff4f9080 1-16
+.sqlx/query-07a3ff65b0a96ec5a892c569e1522b69e18b147ea0da4afc3c411a39f48c8c10.json
+  s_48270cd6f8d6f1::t_dc9f511d7da2d9 1-19
+.sqlx/query-1ad7f1a99752f68c3f3e5644664f9550012eabbb4dd304a7f433ac039f997d08.json
+  s_48270cd6f8d6f1::t_70c0ac481ecf76 1-113
+.sqlx/query-1ed6b395099ac068ce8a09378fb78d2da515fc6fdacc85896e99beb561f02b9a.json
+  s_48270cd6f8d6f1::t_4d3278a9bd080d 1-15
+.sqlx/query-264ebb2ef651c7f941fd3f7002966fce40dc2eb6e2ba61dcf9e91e5f0461b502.json
+  s_48270cd6f8d6f1::t_2cdd7a87fb47f3 1-22
+.sqlx/query-3657d2e96212cc08f581f73732bfc8c4bf091a9ae17744393c904bcd53493554.json
+  s_48270cd6f8d6f1::t_df2615cdfe2c73 1-14
+.sqlx/query-3695104edcb1ee81b608f51b2811939844181574134903eb2f5864e78a0eff0d.json
+  s_48270cd6f8d6f1::t_1d1bd562ea298b 1-19
+.sqlx/query-3724df4a44e3a29fe796946c153be07505c110008a1715b658c436367e9655c2.json
+  s_48270cd6f8d6f1::t_37b06322f3a326 1-113
+.sqlx/query-40c2ecf48cd9331bc7ad891dfccca26fca7c3d97fea2d71dfe66c4c4d60966c8.json
+  s_48270cd6f8d6f1::t_110d2be54ea855 1-23
+.sqlx/query-47fa1b1a37185ebc6b5a36033c909b053028fdf46c8ce0b108a189394f225703.json
+  s_48270cd6f8d6f1::t_e1fa9e2f38e0cf 1-113
+.sqlx/query-4a9fae9c247744155e6abe9247eed1a65dd1ab7213ae1a1bb4d4ffeb5c287186.json
+  s_48270cd6f8d6f1::t_109459f26e2371 1-23
+.sqlx/query-67e5d3c2425f1205dfb2afa55350608bcc84016efb6d8e5cae62eb415ea6bd31.json
+  s_48270cd6f8d6f1::t_a5d5aaafd00fca 1-29
+.sqlx/query-6ee4b2f6563817cdb381a90beff0eb3497ecef00973494908ac93fb4ed9133a8.json
+  s_48270cd6f8d6f1::t_bb11cfa9261168 1-23
+.sqlx/query-6fda63285354f5fe8efc4d98532a3a90d1d1d14f1411ed618d947ef15c8c7c6a.json
+  s_48270cd6f8d6f1::t_0d143c0370ba61 1-46
+.sqlx/query-7301f31193361efb521f26bed9081117cc9d5f5b59af7fc15e13a0f345624913.json
+  s_48270cd6f8d6f1::t_7cb7121399b026 1-22
+.sqlx/query-7ba719b758d1a3a24c627f2b34a35de8df960cc448f7a61bc9ebbfdb4e361679.json
+  s_48270cd6f8d6f1::t_6752021ac3d1d2 1-15
+.sqlx/query-8ab9cc02bf64f9a72693234064db0d67efc3cf048c4e05a484742ef002c49b6d.json
+  s_48270cd6f8d6f1::t_eb9404c7666a84 1-22
+.sqlx/query-9595ac18c57196225c318aa1025606f96b8753f8875ed8ca7e0a4adfc5ecbb94.json
+  s_48270cd6f8d6f1::t_dd12ba3a811ed7 1-113
+.sqlx/query-c6254f74c16dd7e2859093f5e5667e2a33d31951acad311d562e044ce9f7fbd9.json
+  s_48270cd6f8d6f1::t_ee2305ab8aa00e 1-40
+.sqlx/query-db2b7cf7c5b2d7070f2580fff2d33ed25593b5e37e7ce0bf230e9aebb29a4ec7.json
+  s_48270cd6f8d6f1::t_7fb4948ffb4426 1-23
+.sqlx/query-df0bea500ad8f386dc768c1d90de56d0aea23cb44af5b51adea76ec709eec3c5.json
+  s_48270cd6f8d6f1::t_1637d5e982183e 1-23
+Cargo.lock
+  s_48270cd6f8d6f1::t_50b38c5c51f1d7 735,18053,18994-19001,20171-20201
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_48270cd6f8d6f1::t_0ae65c5f5af64f 27-29,38-40,1951-2428
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/category.ts
+  s_48270cd6f8d6f1::t_a322b3c8141620 2-6,9-12,14-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/entityAction.ts
+  s_48270cd6f8d6f1::t_85d7ee3ebe301b 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/entityType.ts
+  s_48270cd6f8d6f1::t_bfd6e6cea7443d 1-41
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_48270cd6f8d6f1::t_d70cfa9a65442c 50,113,117,143,149-153,162-169,217,266-269,271-282,293-294
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/kindName.ts
+  s_48270cd6f8d6f1::t_79b420694b7960 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestion.ts
+  s_48270cd6f8d6f1::t_1b7d2caa7394be 1-46
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionAction.ts
+  s_48270cd6f8d6f1::t_dd68d887ff8d66 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionPrompt.ts
+  s_48270cd6f8d6f1::t_453c185f6e57be 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionReason.ts
+  s_48270cd6f8d6f1::t_928e045f1efe9c 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionRunMode.ts
+  s_48270cd6f8d6f1::t_f6d9a039d6a4c2 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/retireSuggestionRequest.ts
+  s_48270cd6f8d6f1::t_df30b8e1e5079e 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestion.ts
+  s_48270cd6f8d6f1::t_c3b86f667acb5e 1-36
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionAbout.ts
+  s_48270cd6f8d6f1::t_82f23058e4c9cb 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionCategories.ts
+  s_48270cd6f8d6f1::t_e5f7a8f9977aa4 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionImportance.ts
+  s_48270cd6f8d6f1::t_830ad0fa1a9b90 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionPrompt.ts
+  s_48270cd6f8d6f1::t_1d27529235459e 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionSummary.ts
+  s_48270cd6f8d6f1::t_a61e2eb9625548 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionTitle.ts
+  s_48270cd6f8d6f1::t_565e28d8c0d34a 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/runMode.ts
+  s_48270cd6f8d6f1::t_074a1a10035ef7 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestion.ts
+  s_48270cd6f8d6f1::t_dc266b05ae0156 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOf.ts
+  s_48270cd6f8d6f1::t_2c76ee64a66b99 1-45
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOfStateReason.ts
+  s_48270cd6f8d6f1::t_3076bbbb0c194b 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionFeed.ts
+  s_48270cd6f8d6f1::t_ac16477afed007 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKind.ts
+  s_48270cd6f8d6f1::t_af0e79c67df980 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOf.ts
+  s_48270cd6f8d6f1::t_f546b8822ced39 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfKind.ts
+  s_48270cd6f8d6f1::t_377eacc59fd49c 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfSix.ts
+  s_48270cd6f8d6f1::t_df5c3489ed0b80 1-17
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfSixKind.ts
+  s_48270cd6f8d6f1::t_cec8a5312fdb71 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfThree.ts
+  s_48270cd6f8d6f1::t_efe55f47aeeee4 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfThreeDraft.ts
+  s_48270cd6f8d6f1::t_697bd1e067eea4 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfThreeKind.ts
+  s_48270cd6f8d6f1::t_b78aae4e70e952 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionState.ts
+  s_48270cd6f8d6f1::t_9d39e9e438e9e8 1-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionWriteOutcome.ts
+  s_48270cd6f8d6f1::t_1ffc24a724b203 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionWriteOutcomeSuggestion.ts
+  s_48270cd6f8d6f1::t_f99861b3653086 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionsReview.ts
+  s_48270cd6f8d6f1::t_2846178feab746 1-33
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/target.ts
+  s_48270cd6f8d6f1::t_bac28bb3a175c2 1-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/targetPartId.ts
+  s_48270cd6f8d6f1::t_10679095459fd1 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_48270cd6f8d6f1::t_d02df2508e803b 1865-2335,2836-2840,3571-3575,3605-3635,3876-3880,3908-3981,4068-4123,4622-4626,5165-5280,5286-5424,5440-5459,5547-5550
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_48270cd6f8d6f1::t_8de1ea484f6e30 11-12
+crates/shown_text/CLAUDE.md
+  s_48270cd6f8d6f1::t_25b060f4cc0783 1
+crates/suggestions/CLAUDE.md
+  s_48270cd6f8d6f1::t_423613a60d120b 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "50c7693de416dfba6be2784ea2b6b23014380985",
+  "prompts": {},
+  "sessions": {
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
