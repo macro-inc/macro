@@ -421,6 +421,7 @@ export const storageExcluded = [
   'passwordsFolders',
   'passwordsGrants',
   'passwordsHistory',
+  'passwordsImportBatch',
   'passwordsList',
   'passwordsMoveFolder',
   'passwordsPatch',

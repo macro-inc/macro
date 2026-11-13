@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4)",
+  "query": "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4) ON CONFLICT(team_id,id) DO NOTHING",
   "describe": {
     "columns": [],
     "parameters": {
@@ -13,5 +13,5 @@
     },
     "nullable": []
   },
-  "hash": "8284f328d667483d5e536ec89bd69fdb440dcb9ce8080ee3108f167b431fafd0"
+  "hash": "1eac6f9a88de4d4eb9981113c3d2dc01b3d92d17331b294da46f10f71ef402d0"
 }
