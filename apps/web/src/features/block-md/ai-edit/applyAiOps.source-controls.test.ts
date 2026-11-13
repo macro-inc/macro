@@ -73,6 +73,8 @@ type Commit = {
   readonly dirtyElements: number;
   /** Nodes created, updated or destroyed, over every node class. */
   readonly mutated: number;
+  /** The committed state is the previous state object itself. */
+  readonly sameState: boolean;
 };
 
 type Reported = {
@@ -160,7 +162,7 @@ async function rig(markdown: string): Promise<Rig> {
   const commits: Commit[] = [];
   const mutations: string[] = [];
   editor.registerUpdateListener(
-    ({ editorState, tags, dirtyElements, mutatedNodes }) => {
+    ({ editorState, prevEditorState, tags, dirtyElements, mutatedNodes }) => {
       commits.push({
         tags: [...tags].sort(),
         selection: editorState.read(() => describeSelection()),
@@ -170,6 +172,7 @@ async function rig(markdown: string): Promise<Rig> {
           (total, nodes) => total + nodes.size,
           0
         ),
+        sameState: editorState === prevEditorState,
       });
     }
   );
@@ -525,6 +528,7 @@ describe('Source applyAiOps controls', () => {
       text: 'Alpha beta gamma\n\nkept\n\nSecond line',
       dirtyElements: 0,
       mutated: 0,
+      sameState: true,
     });
     expect(result.reported).toEqual([
       {
