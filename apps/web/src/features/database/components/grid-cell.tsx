@@ -981,6 +981,9 @@ function InlineEditor(props: {
                 'min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none',
               autoFocus: true,
               selectAll: props.selectAll,
+              // Enter saves and moves down; Shift+Enter would move up, and the
+              // next line typed would land in the record above.
+              lineBreakOnShiftEnter: true,
               inferType: props.column.inferType,
               onInferMention: (mention) => {
                 // Removing a focused editor can synchronously blur it. The typed
