@@ -20,7 +20,7 @@ export type GetItemsSoupParams = {
   /**
  * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
 Missing definitions, unsupported types, and mismatched values sort as missing.
-`name` orders by the item's own name, case-insensitively, unnamed last.
+`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
 Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
 Defaults to viewed_at.
  */

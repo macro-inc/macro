@@ -2133,9 +2133,9 @@ export type GraphqlSimpleSortMethod =
   /** Sort by creation timestamp. */
   | 'CREATED_AT'
   /**
-   * Sort by the item's own name, case-insensitively, unnamed last, then
-   * newest update and ID. Database rows have no name here and sort last.
-   * Omits the same sources `PROPERTY` does.
+   * Sort by the item's own name, case-insensitively in ICU root collation
+   * order, unnamed last, then newest update and ID. Database rows have no
+   * name here and sort last. Omits the same sources `PROPERTY` does.
    */
   | 'NAME'
   /**
