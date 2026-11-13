@@ -101,7 +101,10 @@ event (`lagged`, `revoked`, `reset`).
 - The writer's kill switch stops every live stream's events, flagged or not
   (the old per-process consumer is gone); webhooks are unaffected.
 - Without the flag a stream behaves as before: no cursors, SSE ids are event
-  ids, wildcards are literal names, preview events are never delivered.
+  ids, `*` matches every stable event (main's contract; agents rely on it),
+  `family.*` is a literal name, preview events are never delivered, and any
+  `*` string passes validation as a literal. `filters::WildcardSupport` says
+  which wildcards each delivery honours.
 
 ## Related
 

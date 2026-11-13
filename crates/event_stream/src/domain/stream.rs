@@ -8,16 +8,18 @@
 //! deleted (`revoked`), when its cursor leaves the replay window (`reset`),
 //! or at shutdown.
 //!
-//! Cursors, replay, wildcards and preview events need the
+//! Cursors, replay, family wildcards and preview events need the
 //! `public-event-stream` flag. Without it a stream behaves as before: live
-//! only, SSE ids are broker event ids, wildcards are literal names.
+//! only, SSE ids are broker event ids, `*` matches every stable event and
+//! `family.*` is a literal name.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::access::{AudienceResolver, Candidate};
 use crate::domain::filters::{
-    self, FilterSubject, MAX_STREAM_FILTERS, MAX_WEBHOOK_FILTERS, WebhookFilters, validate_filters,
+    self, FilterSubject, MAX_STREAM_FILTERS, MAX_WEBHOOK_FILTERS, WebhookFilters, WildcardSupport,
+    validate_filters,
 };
 use crate::domain::models::{
     CloseReason, ControlEvent, Cursor, LogEntry, PrincipalKind, StreamItem, StreamPrincipal,
@@ -253,7 +255,7 @@ where
         } else {
             MAX_WEBHOOK_FILTERS
         };
-        validate_filters(&request.filters, max_filters)
+        validate_filters(&request.filters, max_filters, preview)
             .map_err(|error| StreamError::BadRequest(error.0))?;
 
         // Without the flag a stream has no cursors: `Last-Event-ID` carries a
@@ -495,7 +497,11 @@ where
             entity_type: &public.event.entity_type,
             entity_id: &public.event.entity_id,
         };
-        if !filters::any_accepts(&self.filters, subject, self.preview) {
+        if !filters::any_accepts(
+            &self.filters,
+            subject,
+            WildcardSupport::for_stream(self.preview),
+        ) {
             return Ok(None);
         }
         if !eligible(&self.principal, self.preview, &public.event, public.stage) {

@@ -910,8 +910,14 @@ pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSin
 pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
 /// Type alias for the product webhook service.
-pub(crate) type DssWebhookService =
-    WebhookServiceImpl<PgWebhookRepo, ReqwestWebhookValidationClient, DssEventBroker>;
+pub(crate) type DssWebhookService = WebhookServiceImpl<
+    PgWebhookRepo,
+    ReqwestWebhookValidationClient,
+    DssEventBroker,
+    event_stream::outbound::preview_flag::FeatureFlagPreview<
+        feature_flags::outbound::posthog::PostHogFeatureFlags,
+    >,
+>;
 
 /// Type alias for the product webhook rate limiter.
 pub(crate) type DssWebhookRateLimiter =

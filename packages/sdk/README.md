@@ -890,9 +890,10 @@ for await (const event of stream) {
 - `macro.events.catalog()` lists the events your credential can receive, with
   their entity types, who receives them and their stage.
 
-`subscribe()` and `catalog()` are beta. Cursors and replay, wildcards, the
+`subscribe()` and `catalog()` are beta. Cursors and replay, family wildcards, the
 catalog and the `preview` families need the `public-event-stream` feature
-flag. Without it the stream is live only: no replay from the cursor, wildcards match nothing,
+flag. Without it the stream is live only: no replay from the cursor, `'*'` matches every
+stable event but family wildcards match nothing,
 preview events are not delivered, and `catalog()` answers 404. A bot listens as
 the user it acts for.
 

@@ -20,7 +20,7 @@ use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::{AccessError, AccessLevel, EntityType};
 use entity_access::domain::ports::EntityAccessService;
-use event_stream::domain::filters::{self, FilterSubject};
+use event_stream::domain::filters::{self, FilterSubject, WildcardSupport};
 use event_stream::domain::normalize::NormalizeError;
 use event_stream::domain::ports::{
     GithubClaims, InstallationOwners, PreviewFlag, TeamDirectory, TeamRole,
@@ -552,7 +552,7 @@ where
                     .all(|filter| !filter.uses_wildcards() && filter.entity_types.is_none());
             if decided_by_repository
                 || (stage == Stage::Stable
-                    && filters::any_accepts(&webhook.filters, subject, false))
+                    && filters::any_accepts(&webhook.filters, subject, WildcardSupport::None))
             {
                 admitted.push(webhook);
                 continue;
@@ -561,7 +561,9 @@ where
                 Ok(owner) => self.preview.enabled_for(&owner).await,
                 Err(_) => false,
             };
-            if owner_flagged && filters::any_accepts(&webhook.filters, subject, true) {
+            if owner_flagged
+                && filters::any_accepts(&webhook.filters, subject, WildcardSupport::Full)
+            {
                 admitted.push(webhook);
             }
         }

@@ -16,9 +16,12 @@ use super::{
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
+use crate::domain::ingestion::NoPreview;
 use chrono::Utc;
+use event_stream::domain::ports::PreviewFlag;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
 use url::Url;
 
 const MAX_NAME_LEN: usize = 128;
@@ -26,12 +29,27 @@ const MAX_NAMESPACE_LEN: usize = 128;
 const VALIDATION_EVENT_NAME: &str = "webhook.validation.test";
 
 /// Webhook service implementation.
-#[derive(Debug, Clone)]
-pub struct WebhookServiceImpl<R, V, B> {
+#[derive(Debug)]
+pub struct WebhookServiceImpl<R, V, B, P = NoPreview> {
     repo: R,
     validation_client: V,
     endpoint_scheme_policy: WebhookEndpointSchemePolicy,
     event_broker: B,
+    /// The creator's `public-event-stream` flag: only flagged creators get
+    /// their wildcard syntax checked.
+    preview: Arc<P>,
+}
+
+impl<R: Clone, V: Clone, B: Clone, P> Clone for WebhookServiceImpl<R, V, B, P> {
+    fn clone(&self) -> Self {
+        Self {
+            repo: self.repo.clone(),
+            validation_client: self.validation_client.clone(),
+            endpoint_scheme_policy: self.endpoint_scheme_policy,
+            event_broker: self.event_broker.clone(),
+            preview: self.preview.clone(),
+        }
+    }
 }
 
 impl<R, V, B> WebhookServiceImpl<R, V, B> {
@@ -57,6 +75,21 @@ impl<R, V, B> WebhookServiceImpl<R, V, B> {
             validation_client,
             endpoint_scheme_policy,
             event_broker,
+            preview: Arc::new(NoPreview),
+        }
+    }
+}
+
+impl<R, V, B, P> WebhookServiceImpl<R, V, B, P> {
+    /// Evaluate the `public-event-stream` flag for webhook creators with
+    /// `preview`.
+    pub fn with_preview_flag<P2>(self, preview: Arc<P2>) -> WebhookServiceImpl<R, V, B, P2> {
+        WebhookServiceImpl {
+            repo: self.repo,
+            validation_client: self.validation_client,
+            endpoint_scheme_policy: self.endpoint_scheme_policy,
+            event_broker: self.event_broker,
+            preview,
         }
     }
 }
@@ -109,12 +142,17 @@ fn validate_endpoint_url(
     Ok(())
 }
 
-/// Validate a filter set for persistence: the same rules a live stream
-/// applies, so a filter set is valid for both deliveries or neither.
-pub(crate) fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookError> {
+/// Validate a filter set for persistence. Wildcard syntax is checked only
+/// for a flagged creator; anyone else may persist any non-empty string, a
+/// literal name, as before wildcards existed.
+pub(crate) fn validate_filters(
+    filters: &WebhookFilters,
+    creator_flagged: bool,
+) -> Result<(), WebhookError> {
     event_stream::domain::filters::validate_filters(
         filters,
         event_stream::domain::filters::MAX_WEBHOOK_FILTERS,
+        creator_flagged,
     )
     .map_err(|error| WebhookError::BadRequest(error.0))
 }
@@ -122,16 +160,18 @@ pub(crate) fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookEr
 fn validate_create_request(
     request: &CreateWebhookRequest,
     endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    creator_flagged: bool,
 ) -> Result<(), WebhookError> {
     validate_name(&request.name)?;
     validate_namespace(&request.namespace)?;
     validate_endpoint_url(&request.endpoint_url, endpoint_scheme_policy)?;
-    validate_filters(&request.filters)
+    validate_filters(&request.filters, creator_flagged)
 }
 
 fn validate_patch_request(
     request: &PatchWebhookRequest,
     endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    creator_flagged: bool,
 ) -> Result<(), WebhookError> {
     if let Some(name) = &request.name {
         validate_name(name)?;
@@ -140,7 +180,7 @@ fn validate_patch_request(
         validate_endpoint_url(endpoint_url, endpoint_scheme_policy)?;
     }
     if let Some(filters) = &request.filters {
-        validate_filters(filters)?;
+        validate_filters(filters, creator_flagged)?;
     }
     Ok(())
 }
@@ -169,7 +209,7 @@ fn validation_response(
     }
 }
 
-impl<R, V, B> WebhookServiceImpl<R, V, B>
+impl<R, V, B, P> WebhookServiceImpl<R, V, B, P>
 where
     R: WebhookRepo,
     V: WebhookValidationClient,
@@ -260,18 +300,20 @@ where
     }
 }
 
-impl<R, V, B> WebhookService for WebhookServiceImpl<R, V, B>
+impl<R, V, B, P> WebhookService for WebhookServiceImpl<R, V, B, P>
 where
     R: WebhookRepo,
     V: WebhookValidationClient,
     B: MacroEventBroker + Clone,
+    P: PreviewFlag,
 {
     async fn create_webhook(
         &self,
         caller: MacroUserIdStr<'static>,
         request: CreateWebhookRequest,
     ) -> Result<Webhook, WebhookError> {
-        validate_create_request(&request, self.endpoint_scheme_policy)?;
+        let creator_flagged = self.preview.enabled_for(&caller).await;
+        validate_create_request(&request, self.endpoint_scheme_policy, creator_flagged)?;
 
         let workspace_id = self
             .workspace_id_for_scope(caller.clone(), request.scope)
@@ -351,7 +393,14 @@ where
         let webhook = self
             .load_authorized_webhook(caller.clone(), webhook_id.clone())
             .await?;
-        validate_patch_request(&request, self.endpoint_scheme_policy)?;
+        let creator_flagged = match request.filters {
+            Some(_) => match MacroUserIdStr::try_from(webhook.created_by_user_id.clone()) {
+                Ok(creator) => self.preview.enabled_for(&creator).await,
+                Err(_) => false,
+            },
+            None => false,
+        };
+        validate_patch_request(&request, self.endpoint_scheme_policy, creator_flagged)?;
 
         let requested_name = request.name.clone();
         let requested_endpoint_url = request.endpoint_url.clone();

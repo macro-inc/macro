@@ -43,8 +43,10 @@ before changing ingestion or delivery behavior.
   ("Make a family public"); ingestion needs no per-event code beyond one
   `ingest_public_event` arm in `src/inbound/kafka_consumer.rs`. A new
   `Audience` class needs its workspace mapping in `src/domain/ingestion.rs`.
-- Preview events and wildcard filter matches need the creator's
-  `public-event-stream` flag: `admitted_webhooks` in `src/domain/ingestion.rs`.
+- Preview events and wildcard filter matches (`*` included, unlike live
+  streams) need the creator's `public-event-stream` flag: `admitted_webhooks`
+  in `src/domain/ingestion.rs`. Wildcard syntax is validated only for a
+  flagged creator (`WebhookServiceImpl::with_preview_flag`).
 - Change delivery retry behavior: `src/domain/delivery.rs` → README's retry
   schedule table (keep them in sync).
 

@@ -346,7 +346,26 @@ async fn with_the_flag_preview_events_and_wildcards_arrive() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn invalid_filters_are_refused() {
+async fn a_flagged_callers_malformed_wildcard_is_refused() {
+    let harness = Harness::default();
+    let reader = user("reader@example.com");
+    harness.preview.enable(&reader);
+
+    let opened = harness
+        .open(
+            person(&reader),
+            WebhookScope::User,
+            filter(&["doc*ument"]),
+            None,
+        )
+        .await;
+
+    assert!(matches!(opened, Err(StreamError::BadRequest(_))));
+}
+
+/// Without the flag any `*` string is a literal name, as before wildcards.
+#[tokio::test(start_paused = true)]
+async fn an_unflagged_callers_odd_star_string_is_a_literal() {
     let harness = Harness::default();
     let reader = user("reader@example.com");
 
@@ -359,7 +378,7 @@ async fn invalid_filters_are_refused() {
         )
         .await;
 
-    assert!(matches!(opened, Err(StreamError::BadRequest(_))));
+    assert!(opened.is_ok());
 }
 
 #[tokio::test(start_paused = true)]

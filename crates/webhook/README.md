@@ -198,8 +198,10 @@ shared with live streams.
 `*`. Wildcards expand at match time against the event catalog
 (`event_stream::domain::catalog`), so a new event in a family arrives without
 editing the webhook. They need the `public-event-stream` feature flag for the
-webhook's creator; without it a wildcard is a literal name that matches
-nothing, as before.
+webhook's creator; without it a wildcard, `*` included, is a literal name that
+matches nothing, as before, and any `*` string is accepted as such. (Live
+streams honour `*` without the flag.) For a flagged creator a `*` entry that
+is neither `*` nor `family.*` is a 400.
 
 ```json
 [

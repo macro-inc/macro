@@ -1439,6 +1439,39 @@ fn a_webhook_holds_up_to_50_filters() {
     let fifty: WebhookFilters = (0..50).flat_map(|_| valid_filters()).collect();
     let fifty_one: WebhookFilters = (0..51).flat_map(|_| valid_filters()).collect();
 
-    assert!(super::validate_filters(&fifty).is_ok());
-    assert_bad_request(super::validate_filters(&fifty_one));
+    assert!(super::validate_filters(&fifty, false).is_ok());
+    assert_bad_request(super::validate_filters(&fifty_one, false));
+}
+
+/// The `public-event-stream` flag for every user, or none.
+struct Flagged(bool);
+
+impl event_stream::domain::ports::PreviewFlag for Flagged {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'static>) -> bool {
+        self.0
+    }
+}
+
+/// A malformed wildcard is a literal name for an unflagged creator, as
+/// before wildcards existed, and a 400 for a flagged one.
+#[tokio::test]
+async fn only_a_flagged_creator_has_wildcard_syntax_checked() {
+    let mut request = create_request();
+    request.filters[0].events = vec!["doc*".to_string()];
+    let service = |flagged| {
+        WebhookServiceImpl::new(
+            FakeRepo::default(),
+            FakeValidationClient::default(),
+            NoopMacroEventBroker,
+        )
+        .with_preview_flag(Arc::new(Flagged(flagged)))
+    };
+
+    assert!(
+        service(false)
+            .create_webhook(caller(), request.clone())
+            .await
+            .is_ok()
+    );
+    assert_bad_request(service(true).create_webhook(caller(), request).await);
 }

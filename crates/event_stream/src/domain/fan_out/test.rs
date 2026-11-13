@@ -1149,3 +1149,173 @@ async fn an_unflagged_bot_still_receives_its_users_addressed_events() {
         Some("call.ringing")
     );
 }
+
+/// `*` on a stream (main's contract, no flag needed).
+mod wildcard_streams {
+    use super::*;
+    use crate::domain::filters::WebhookFilter;
+    use crate::domain::models::NormalizedEvent;
+    use event_exposure::Stage;
+
+    const OTHER_DOC: &str = "0193b3a0-0000-7000-8000-00000000d0c2";
+
+    fn preview(event: NormalizedEvent, audience: Audience) -> LogRecord {
+        let mut record = public(event, audience);
+        if let Some(event) = record.event.as_mut() {
+            event.stage = Stage::Preview;
+        }
+        record
+    }
+
+    /// Every stable event the user may see, whatever its type, and nothing
+    /// they may not: entity access is still checked per event. Preview
+    /// events stay behind the flag.
+    #[tokio::test(start_paused = true)]
+    async fn wildcard_stream_delivers_future_event_types_only_with_current_access() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        harness
+            .access
+            .grant(EntityType::Document, DOC, reader.as_ref());
+        let mut stream = harness
+            .open(person(&reader), WebhookScope::User, filter(&["*"]), None)
+            .await
+            .unwrap();
+
+        for record in [
+            public(
+                event("document.updated", "document", OTHER_DOC),
+                entity(EntityType::Document, OTHER_DOC),
+            ),
+            public(
+                event("webhook.created", "webhook", "wh_foreign"),
+                Audience::Workspace {
+                    workspace_id: "someone-else".to_owned(),
+                },
+            ),
+            preview(
+                event("document.content_changed", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ),
+            public(
+                event("document.updated", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ),
+            public(
+                event("webhook.created", "webhook", "wh_1"),
+                Audience::Workspace {
+                    workspace_id: reader.as_ref().to_owned(),
+                },
+            ),
+        ] {
+            harness.publish(record).await;
+        }
+
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("document.updated")
+        );
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("webhook.created")
+        );
+        assert_eq!(stream.next_event_name().await, None);
+    }
+
+    /// With the flag the same `*` also carries preview events.
+    #[tokio::test(start_paused = true)]
+    async fn a_flagged_wildcard_stream_also_receives_preview_events() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        harness.preview.enable(&reader);
+        harness
+            .access
+            .grant(EntityType::Document, DOC, reader.as_ref());
+        let mut stream = harness
+            .open(person(&reader), WebhookScope::User, filter(&["*"]), None)
+            .await
+            .unwrap();
+
+        harness
+            .publish(preview(
+                event("document.content_changed", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ))
+            .await;
+
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("document.content_changed")
+        );
+    }
+
+    /// `*` widens the event names, never the entity ids.
+    #[tokio::test(start_paused = true)]
+    async fn wildcard_stream_preserves_entity_id_filters() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        for doc in [DOC, OTHER_DOC] {
+            harness
+                .access
+                .grant(EntityType::Document, doc, reader.as_ref());
+        }
+        let mut stream = harness
+            .open(
+                person(&reader),
+                WebhookScope::User,
+                vec![WebhookFilter {
+                    events: vec!["*".to_owned()],
+                    ids: Some(vec![DOC.to_owned()]),
+                    entity_types: None,
+                }],
+                None,
+            )
+            .await
+            .unwrap();
+
+        for doc in [OTHER_DOC, DOC] {
+            harness
+                .publish(public(
+                    event("document.updated", "document", doc),
+                    entity(EntityType::Document, doc),
+                ))
+                .await;
+        }
+
+        match stream.next_now().await {
+            Some(crate::domain::models::StreamItem::Event { event, .. }) => {
+                assert_eq!(event.entity_id, DOC);
+            }
+            other => panic!("expected the event on {DOC}, got {other:?}"),
+        }
+        assert_eq!(stream.next_event_name().await, None);
+    }
+
+    /// A family wildcard stays a literal name without the flag.
+    #[tokio::test(start_paused = true)]
+    async fn an_unflagged_family_wildcard_matches_nothing() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        harness
+            .access
+            .grant(EntityType::Document, DOC, reader.as_ref());
+        let mut stream = harness
+            .open(
+                person(&reader),
+                WebhookScope::User,
+                filter(&["document.*"]),
+                None,
+            )
+            .await
+            .unwrap();
+
+        harness
+            .publish(public(
+                event("document.updated", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ))
+            .await;
+
+        assert_eq!(stream.next_event_name().await, None);
+    }
+}

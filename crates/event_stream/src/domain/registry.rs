@@ -6,7 +6,7 @@
 //! filters checked and their audience resolved.
 
 use crate::domain::catalog::{self, ACCOUNT_HOLDER_FAMILIES};
-use crate::domain::filters::{self, ALL_EVENTS, FilterSubject, WebhookFilters};
+use crate::domain::filters::{self, ALL_EVENTS, FilterSubject, WebhookFilters, WildcardSupport};
 use crate::domain::models::{CloseReason, Cursor, NormalizedEvent, StreamPrincipal, WebhookScope};
 use event_exposure::Stage;
 use std::collections::{HashMap, HashSet};
@@ -116,7 +116,9 @@ impl Registry {
 
         for filter in registration.filters.iter() {
             for pattern in &filter.events {
-                if registration.preview && pattern == ALL_EVENTS {
+                // `*` works on every stream (stable events only without the
+                // flag, which `eligible` enforces); families need the flag.
+                if pattern == ALL_EVENTS {
                     index.all_events.insert(id);
                 } else if let Some(family) = filters::wildcard_family(pattern)
                     && registration.preview
@@ -208,7 +210,11 @@ impl Registry {
         ids.into_iter()
             .filter_map(|id| {
                 let registration = &index.streams.get(&id)?.registration;
-                if !filters::any_accepts(&registration.filters, subject, registration.preview) {
+                if !filters::any_accepts(
+                    &registration.filters,
+                    subject,
+                    WildcardSupport::for_stream(registration.preview),
+                ) {
                     return None;
                 }
                 if !eligible(&registration.principal, registration.preview, event, stage) {
