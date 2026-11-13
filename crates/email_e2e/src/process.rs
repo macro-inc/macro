@@ -30,17 +30,14 @@ impl ServiceProcess {
         log_dir: &Path,
     ) -> Result<Self, Report> {
         let binary = binary_dir()?.join(name);
-        if !binary.is_file() {
-            bail!(
-                "{} is missing: build it with `cargo build -p email_service --bin email_service --bin pubsub_workers -p calendar_service --bin calendar_service`, \
-                 or run the suite with `just email-e2e`",
-                binary.display()
-            );
-        }
 
         let log_path = log_dir.join(format!("{name}.log"));
-        let log =
-            std::fs::File::create(&log_path).context("could not create the service's log file")?;
+        // Appended, so a restarted service keeps what it logged before.
+        let log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .context("could not open the service's log file")?;
         let child = Command::new(&binary)
             .env_clear()
             .envs(env)
@@ -100,6 +97,22 @@ impl ServiceProcess {
             tracing::warn!(error = ?error, service = self.name, "could not stop a service");
         }
     }
+}
+
+/// Fails when one of the service binaries has not been built.
+pub(crate) fn ensure_built(names: &[&str]) -> Result<(), Report> {
+    let dir = binary_dir()?;
+    for name in names {
+        let binary = dir.join(name);
+        if !binary.is_file() {
+            bail!(
+                "{} is missing: build it with `cargo build -p email_service --bin email_service --bin pubsub_workers -p calendar_service --bin calendar_service`, \
+                 or run the suite with `just email-e2e`",
+                binary.display()
+            );
+        }
+    }
+    Ok(())
 }
 
 /// The directory holding the service binaries: `EMAIL_E2E_BIN_DIR`, or the

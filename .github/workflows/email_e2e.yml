@@ -266,5 +266,5 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
 concurrency:
-  group: email-e2e-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
+  group: email-e2e-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}
   cancel-in-progress: true

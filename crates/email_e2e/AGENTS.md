@@ -17,13 +17,13 @@ scenarios.
   production queues with their dead-letter queues, an in-memory S3 and CDN
   (`src/aws.rs`), stand-ins for the other Macro services that record what
   they were asked (`src/macro_services.rs`), and the two service processes.
-  Scenarios run in parallel and share nothing but the three servers.
+  Scenarios run in parallel and share nothing but the four servers (Postgres, Redis, SQS, Kafka).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
   started with an environment the harness builds (`src/stack/environment.rs`)
   and nothing else. Build them before running; `just email-e2e` does.
 - Each scenario's service logs are in
   `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers}.log`.
-  A failing scenario prints the directory and the end of both logs.
+  A failing scenario prints the directory and the end of the logs.
 
 ## Writing a scenario
 
@@ -61,6 +61,8 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   `stack.send_to_queue("scheduled" | "link-manager" | "sfs-delete", …)`.
 - One file per area in `tests/` (`gmail.rs`, `outlook.rs`, …); each file is a
   test binary, so keep shared helpers in the harness, not in `tests/`.
+- Every scenario is `#[tokio::test(flavor = "multi_thread")]`: the stack's
+  cleanup after a failure needs a second runtime thread.
 - Name the test for the behaviour, and say in its doc comment what goes wrong
   when it fails.
 - A scenario for a bug that is not fixed yet asserts the right behaviour and
@@ -119,6 +121,9 @@ calendar.patch(&format!("/events/{}", item["event"]["id"].as_str().unwrap()), &c
 - `just email-e2e` (in `nix develop`), with `EMAIL_E2E_SQS_URL` pointing at
   an ElasticMQ, `EMAIL_E2E_KAFKA_BROKERS` at a Kafka broker, and Postgres and Redis from `DATABASE_URL`/`REDIS_URI` or
   `EMAIL_E2E_DATABASE_URL`/`EMAIL_E2E_REDIS_URL`.
+- No ElasticMQ at hand: `docker run -p 9324:9324
+  softwaremill/elasticmq-native:1.7.1`, then
+  `EMAIL_E2E_SQS_URL=http://127.0.0.1:9324`.
 - A new or changed scenario: `just email-e2e --stress-count 20 <name>` passes.
 - CI: the `Email end-to-end` workflow (`xtask_workflows`' `email_e2e.rs`)
   runs the suite on pushes to `main` that change backend code and, within
