@@ -318,6 +318,8 @@ pub struct NewReservation {
     pub extra_items: Vec<SubscriptionItem>,
     /// The purchase's trace context, carried to the computer.
     pub provision_traceparent: Option<String>,
+    /// The agent teammate the computer is bought for, if any.
+    pub agent: Option<MacroUserIdStr<'static>>,
 }
 
 /// Capacity held on a host for a purchase whose charge is being confirmed.
@@ -349,6 +351,8 @@ pub struct Reservation {
     pub provision_traceparent: Option<String>,
     /// After this the confirm worker settles the charge and stops replaying it.
     pub expires_at: DateTime<Utc>,
+    /// The agent teammate the computer is bought for, if any.
+    pub agent: Option<MacroUserIdStr<'static>>,
     /// When the purchase began.
     pub created_at: DateTime<Utc>,
 }
@@ -547,6 +551,19 @@ pub struct HostAllocation {
     pub memory_gib: u32,
     /// Root disk in GiB sold on the host.
     pub disk_gib: u32,
+}
+
+impl HostAllocation {
+    /// Whether a computer of `units` fits on the host while awake.
+    pub fn runs(&self, units: u32) -> bool {
+        units <= self.host.awake_capacity_units
+    }
+
+    /// Whether the host can sell a computer of `units`: it runs it and has
+    /// that much sold capacity left, as `ComputerRepo::reserve` decides.
+    pub fn sells(&self, units: u32) -> bool {
+        self.runs(units) && self.sold_units + units <= self.host.sold_capacity_units
+    }
 }
 
 /// What a host reports when it registers.

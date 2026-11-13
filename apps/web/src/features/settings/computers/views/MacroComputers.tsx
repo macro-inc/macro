@@ -23,7 +23,7 @@ import { useIsTeamAdmin } from '@queries/team/teams';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   MachineCardError,
@@ -46,9 +46,14 @@ import {
   type OffersFailure,
   offersFailure,
 } from '../core/computer-display';
+import {
+  computerSetupRequest,
+  consumeComputerSetupRequest,
+} from '../primitives/setup-request';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
 import { ComputerBuyFlow } from './computer-buy-flow';
+import type { SetupStepId } from './computer-setup-dialog';
 
 /** Opens Billing, where a trialing team ends its trial or a team subscribes. */
 function BillingButton() {
@@ -417,9 +422,23 @@ export function MacroComputers(props: {
 
   const [buying, setBuying] = createSignal(false);
   const [settingUp, setSettingUp] = createSignal<string>();
+  // Set when a setup notification reopens the flow: it lands on Bring your AI.
+  const [resumeAt, setResumeAt] =
+    createSignal<Exclude<SetupStepId, 'computer'>>();
   const [signingIn, setSigningIn] = createSignal<string>();
   const [releasing, setReleasing] = createSignal<ComputerStatus>();
   const [releaseError, setReleaseError] = createSignal<string>();
+
+  // A setup notification, or its link opened cold, names the computer.
+  createEffect(
+    on(computerSetupRequest, (request) => {
+      if (!request) return;
+      setBuying(false);
+      setResumeAt('claude');
+      setSettingUp(request.computerId);
+      consumeComputerSetupRequest(request.id);
+    })
+  );
 
   const harnessFor = (computer: ComputerStatus) =>
     props.harnesses.find((candidate) => candidate.id === computer.harnessId);
@@ -484,7 +503,10 @@ export function MacroComputers(props: {
                   canManage={isAdmin()}
                   canManageClaude={canManageClaude(computer)}
                   canFinishSetup={isAdmin()}
-                  onFinishSetup={() => setSettingUp(computer.id)}
+                  onFinishSetup={() => {
+                    setResumeAt(undefined);
+                    setSettingUp(computer.id);
+                  }}
                   onSignIn={() => setSigningIn(computer.id)}
                   onRelease={() => {
                     setReleaseError(undefined);
@@ -528,9 +550,11 @@ export function MacroComputers(props: {
       <ComputerBuyFlow
         open={buying() || !!settingUp()}
         computerId={settingUp()}
+        resumeStep={resumeAt()}
         onClose={() => {
           setBuying(false);
           setSettingUp(undefined);
+          setResumeAt(undefined);
         }}
       />
       <Show when={byId(signingIn())?.harnessId}>

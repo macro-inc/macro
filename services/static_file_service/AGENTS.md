@@ -9,7 +9,7 @@ handle upload.
 
 ## Start here
 
-- `src/api.rs` + `src/api/context.rs`: router setup and shared `AppState`.
+- `src/api.rs` + `src/api/context.rs`: router setup (`app`) and shared `AppState`.
 - `src/api/file/`: the HTTP surface — `put_presigned_url.rs` (upload),
   `get_file.rs`, `metadata.rs`, `delete_file.rs`, `bulk_delete_file.rs`.
 - `src/api/event/`: S3 event handling (`s3_create.rs`, `s3_message.rs`) that
@@ -39,6 +39,10 @@ handle upload.
 - A file is "pending" in DynamoDB until the S3 create event
   (`src/api/event/s3_create.rs`) marks it uploaded — a client finishing a
   presigned PUT does not itself update file state.
+- Every route runs behind `agent_correlation::inbound::enforce_signed_scope`:
+  a code-mode credential is refused (403) outside the session scope it signs
+  (`agent_scope`). This service has no database, so it checks the signed
+  claim, not the stored correlation; keep new routes inside `app`.
 - `tree_trace` and `dynamodb_client_test` are test-only Cargo features; don't
   enable them in a deployed build.
 

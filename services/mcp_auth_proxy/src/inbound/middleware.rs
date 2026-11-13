@@ -1,4 +1,4 @@
-//! Bearer token middleware for the protected MCP endpoint.
+//! Existing user API keys and JWT bearer authentication for protected MCP.
 
 #[cfg(test)]
 mod test;
@@ -32,6 +32,8 @@ pub struct BearerAuth {
     pub jwt_args: JwtValidationArgs,
     /// Which client each OAuth access token was issued to.
     pub clients: AccessTokenClients,
+    /// Optional standard revocable user-key authorizer.
+    pub user_api_keys: Option<std::sync::Arc<dyn crate::domain::user_api_keys::McpUserApiKeys>>,
 }
 
 /// Which kind of credential authenticated an MCP request.
@@ -113,7 +115,7 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
     response
 }
 
-/// Validates `Authorization: Bearer <token>` and stores the authenticated
+/// Validates an existing user API key or `Authorization: Bearer <token>` and stores the authenticated
 /// [`MacroUserIdStr`], its [`McpAuthMethod`], and its [`ToolCaller`] in the
 /// request extensions. Every authenticated request carries a caller:
 /// - a Macro API token signed for an agent (only key holders such as the
@@ -121,13 +123,26 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
 ///   [`ToolCaller::Agent`];
 /// - an OAuth access token is [`ToolCaller::McpClient`], named after the
 ///   client the broker issued it to;
-/// - any other Macro API token is a pasted key, [`ToolCaller::ApiKey`].
+/// - an existing user API key or any other Macro API token is [`ToolCaller::ApiKey`].
 #[tracing::instrument(skip_all, fields(caller = tracing::field::Empty))]
 pub async fn validate_bearer(
     axum::extract::State(auth): axum::extract::State<BearerAuth>,
     mut request: Request<Body>,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    if let Some(keys) = &auth.user_api_keys
+        && let Some(key) = request
+            .headers()
+            .get("x-macro-user-api-key")
+            .and_then(|value| value.to_str().ok())
+        && let Some(user_id) = keys.user(key).await
+    {
+        tracing::Span::current().record("caller", tracing::field::debug(&ToolCaller::ApiKey));
+        request.extensions_mut().insert(user_id);
+        request.extensions_mut().insert(McpAuthMethod::ApiKey);
+        request.extensions_mut().insert(ToolCaller::ApiKey);
+        return next.run(request).await;
+    }
     let token = request
         .headers()
         .get(axum::http::header::AUTHORIZATION)
@@ -148,6 +163,21 @@ pub async fn validate_bearer(
         }
     };
 
+    // A code-mode credential signed with its session's scope is checked per
+    // request path; MCP calls tools at one path and has no session to scope
+    // their own credentials to, so it accepts none of them.
+    if let JwtToken::MacroApiToken(api) = &jwt_token
+        && api.agent_scope.is_some()
+    {
+        tracing::warn!(
+            agent_correlation_id = ?api.agent_correlation_id,
+            agent_session_id = ?api.agent_session_id,
+            "refused a scoped code-mode credential at the MCP endpoint"
+        );
+        let mut response = Response::new(Body::empty());
+        *response.status_mut() = StatusCode::FORBIDDEN;
+        return response;
+    }
     if let JwtToken::MacroApiToken(api) = &jwt_token
         && api.agent_id.is_some()
         && let Some(session) = api.agent_session_id

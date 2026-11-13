@@ -19,3 +19,9 @@ export const queryClient = new QueryClient({
 export function useQueryClient() {
   return queryClient;
 }
+
+/** Nothing persists in the fixture: every persistence call resolves at once. */
+export const queryPersistence = new Proxy(
+  {},
+  { get: () => async () => undefined }
+);
