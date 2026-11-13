@@ -145,6 +145,7 @@ function InMacroHarness() {
     <main class="w-72 bg-panel p-2 text-ink">
       <InMacroChats
         label="WhatsApp"
+        sectionLabels={{ direct: 'Direct messages', groups: 'Groups' }}
         chats={queryReadyGate(chats) ? chats.data : undefined}
         isPending={chats.isPending}
         isError={chats.isError}

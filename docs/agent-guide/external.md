@@ -91,7 +91,8 @@ outside the workspace.
 
 `apps/web/tests/functional/slack-linked.spec.ts` is the reference mock for
 `/slack-linked/*`. Never sign a real Slack account in from an automated run.
-External shows it under its **Slack** sidebar entry; `/external?slackLogin=<attempt
+External shows it under its **Slack** sidebar entry, whose added chats sit in
+**Direct messages** and **Channels** sections; `/external?slackLogin=<attempt
 id|browser>` opens External on it and resumes that sign-in (or opens Slack's own
 in Macro desktop), then drops the param.
 

@@ -93,6 +93,7 @@ export function ExternalView() {
   const inMacroChats = (provider: ExternalChatProvider) => (
     <InMacroChats
       label={providerIdentity(provider).label}
+      sectionLabels={providerIdentity(provider).sectionLabels}
       chats={providerChats(provider)}
       isPending={chats.isPending}
       isError={chats.isError}
