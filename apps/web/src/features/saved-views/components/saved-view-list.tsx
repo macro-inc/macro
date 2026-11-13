@@ -1,9 +1,11 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from '@core/component/ContextMenu';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
@@ -64,28 +66,48 @@ function Items(props: {
   label: string;
   ref?: (element: HTMLElement) => void;
   children: JSX.Element;
+  mobile?: boolean;
 }) {
-  return (
+  return props.mobile ? (
+    <MobileDrawer.Section aria-label={props.label} class="mx-0">
+      {props.children}
+    </MobileDrawer.Section>
+  ) : (
     <ViewSidebar.Nav ref={props.ref} aria-label={props.label} class="relative">
       {props.children}
     </ViewSidebar.Nav>
   );
 }
 
-function Draft(props: { onSelect: () => void }) {
+function Draft(props: { onSelect: () => void; mobile?: boolean }) {
   return (
-    <ViewSidebar.Item
-      active
-      onClick={props.onSelect}
-      title={t('viewMenus.newViewDraft')}
-      aria-label={t('viewMenus.newViewDraft')}
+    <Show
+      when={props.mobile}
+      fallback={
+        <ViewSidebar.Item
+          active
+          onClick={props.onSelect}
+          title={t('viewMenus.newViewDraft')}
+          aria-label={t('viewMenus.newViewDraft')}
+        >
+          <ViewSidebar.Icon>
+            <BookmarkIcon class="size-4" />
+          </ViewSidebar.Icon>
+          <span class="truncate italic">{t('viewMenus.newView')}</span>
+          <span class="ml-auto text-xs text-ink-muted">
+            {t('viewMenus.draft')}
+          </span>
+        </ViewSidebar.Item>
+      }
     >
-      <ViewSidebar.Icon>
-        <BookmarkIcon class="size-4" />
-      </ViewSidebar.Icon>
-      <span class="truncate italic">{t('viewMenus.newView')}</span>
-      <span class="ml-auto text-xs text-ink-muted">{t('viewMenus.draft')}</span>
-    </ViewSidebar.Item>
+      <MobileDrawer.Item onClick={props.onSelect} class="h-12 text-accent">
+        <BookmarkIcon class="size-5 shrink-0" />
+        <span class="min-w-0 flex-1 truncate italic">
+          {t('viewMenus.newView')}
+        </span>
+        <span class="text-xs">{t('viewMenus.draft')}</span>
+      </MobileDrawer.Item>
+    </Show>
   );
 }
 
@@ -105,11 +127,12 @@ export function SavedViewListRow(props: {
   onSelect: () => void;
   scopeKey: string | undefined;
   menu: (defer: (action: () => void) => void) => JSX.Element;
+  reorder?: SavedViewRowReorder;
   /** Status beside the name, such as an unread marker. */
   trailing?: JSX.Element;
   /** Spoken with the name, since the trailing status is decorative. */
   statusLabel?: string;
-  reorder?: SavedViewRowReorder;
+  mobile?: boolean;
 }) {
   const [menuAnchor, setMenuAnchor] = createSignal<HTMLElement>();
   let pending: { scopeKey: string | undefined; run: () => void } | undefined;
@@ -155,31 +178,59 @@ export function SavedViewListRow(props: {
         classList={{ 'opacity-40': props.reorder?.dragging() }}
         onMouseDown={props.reorder?.onMouseDown}
       >
-        <ViewSidebar.Item
-          active={props.selected}
-          onClick={props.onSelect}
-          class={hasTrailing() ? 'pr-15' : 'pr-10'}
-          title={label()}
-          aria-label={label()}
+        <Show
+          when={props.mobile}
+          fallback={
+            <ViewSidebar.Item
+              active={props.selected}
+              onClick={props.onSelect}
+              class={hasTrailing() ? 'pr-15' : 'pr-10'}
+              title={label()}
+              aria-label={label()}
+            >
+              <ViewSidebar.Icon>
+                <BookmarkIcon class="size-4" />
+              </ViewSidebar.Icon>
+              <span class="truncate">{props.view.name}</span>
+            </ViewSidebar.Item>
+          }
         >
-          <ViewSidebar.Icon>
-            <BookmarkIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="truncate">{props.view.name}</span>
-        </ViewSidebar.Item>
+          <MobileDrawer.Item
+            aria-current={props.selected ? 'page' : undefined}
+            aria-label={label()}
+            title={label()}
+            onClick={props.onSelect}
+            class="h-12 gap-3 pr-24 text-base aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent"
+          >
+            <BookmarkIcon class="size-5 shrink-0" />
+            <span class="min-w-0 flex-1 truncate">{props.view.name}</span>
+            <Show when={props.selected}>
+              <CheckIcon class="size-5 shrink-0" />
+            </Show>
+          </MobileDrawer.Item>
+        </Show>
         {/* The actions sit before the status, which keeps the icon rail. */}
         <div
           class="pointer-events-none absolute top-1/2 flex -translate-y-1/2 items-center gap-0.5"
           classList={{
-            'right-(--sidebar-item-inset)': hasTrailing(),
-            'right-(--sidebar-action-inset)': !hasTrailing(),
+            'right-3': props.mobile,
+            'right-(--sidebar-item-inset)': !props.mobile && hasTrailing(),
+            'right-(--sidebar-action-inset)': !props.mobile && !hasTrailing(),
           }}
         >
           {/* Hover reveals the actions; keyboard focus and an open menu keep them. */}
-          <div class="pointer-events-auto opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 has-[[data-expanded]]:opacity-100 touch:opacity-100">
+          <div
+            class={
+              props.mobile
+                ? 'pointer-events-auto opacity-100'
+                : 'pointer-events-auto opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 has-[[data-expanded]]:opacity-100 touch:opacity-100'
+            }
+          >
             <Dropdown placement="bottom-end">
               <Dropdown.Trigger
                 as={ViewSidebar.Control}
+                variant="ghost"
+                size="icon-xs"
                 aria-label={t('viewMenus.viewActions', {
                   name: props.view.name,
                 })}
@@ -196,7 +247,7 @@ export function SavedViewListRow(props: {
               </Dropdown.Content>
             </Dropdown>
           </div>
-          <Show when={hasTrailing()}>
+          <Show when={hasTrailing() && !props.mobile}>
             <ViewSidebar.Trailing>
               {props.trailing}
               <Show when={props.view.sharedTeamId}>
@@ -205,6 +256,9 @@ export function SavedViewListRow(props: {
             </ViewSidebar.Trailing>
           </Show>
         </div>
+        <Show when={props.mobile && props.view.sharedTeamId}>
+          <UsersIcon class="pointer-events-none absolute right-12 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+        </Show>
       </ContextMenuTrigger>
       <ContextMenu.Portal
         mount={menuAnchor()?.closest<HTMLElement>('.portal-scope') ?? undefined}

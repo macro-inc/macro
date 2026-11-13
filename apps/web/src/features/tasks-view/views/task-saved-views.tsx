@@ -1,11 +1,9 @@
 import { t } from '@app/lib/i18n';
-import { replacePaneSearchParams } from '@app/lib/split-router';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
-import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
@@ -41,6 +39,7 @@ import {
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import { TASK_VIEWER } from '../filters/task-facets';
+import { useTaskProjectLabels } from '../filters/task-project-options';
 import {
   decodeTaskSavedView,
   materializeTaskSavedView,
@@ -51,7 +50,6 @@ import {
 } from '../filters/task-saved-view';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
-import { tasksTabSearch, tasksTabSearchCodec } from '../tasks-tab-search';
 import { useTasksView } from '../tasks-view-context';
 
 const LAYOUT_LABELS = { list: 'List', board: 'Board', gantt: 'Gantt' };
@@ -60,9 +58,13 @@ function TaskSavedViewSummary(props: {
   config: TaskSavedViewConfig;
   omittedFilters?: TaskSavedViewIssue[];
 }) {
-  const { state } = useTasksView();
+  const { state, projectsEnabled } = useTasksView();
   const filters = useTaskFilters();
   const selection = () => materializeTaskSavedView(props.config);
+  const projects = useTaskProjectLabels(
+    () => selection().facets.project ?? [],
+    projectsEnabled
+  );
   const dueDateLabel = () => {
     const filter = props.config.dueDate;
     if (!filter) return;
@@ -89,7 +91,7 @@ function TaskSavedViewSummary(props: {
           unchanged.
         </p>
       </Show>
-      <For each={filters.groups()}>
+      <For each={filters.groups().filter((group) => group.id !== 'project')}>
         {(group) => (
           <Show when={(selection().facets[group.id] ?? []).length}>
             <p>
@@ -110,6 +112,14 @@ function TaskSavedViewSummary(props: {
           </Show>
         )}
       </For>
+      <Show when={projects().length}>
+        <p>
+          Project:{' '}
+          {projects()
+            .map((option) => option.label)
+            .join(', ')}
+        </p>
+      </Show>
       <Show when={dueDateLabel()}>{(label) => <p>Due date: {label()}</p>}</Show>
       <p>Layout: {LAYOUT_LABELS[props.config.layout]}</p>
       <p>
@@ -308,6 +318,8 @@ function TaskSavedViewMenuItems(props: {
   };
   return (
     <SavedViewMenuItems
+      editLabel="Rename"
+      deleteLabel="Delete"
       owned={props.record.ownerId === viewerId()}
       onEdit={edit}
       onDelete={remove}
@@ -315,9 +327,6 @@ function TaskSavedViewMenuItems(props: {
         const record = props.record;
         props.defer(() => create(record));
       }}
-      onCopyLink={() =>
-        fireAndForget(copySavedViewLink(props.record.id), 'saved-views')
-      }
     />
   );
 }
@@ -499,21 +508,6 @@ export function TaskSavedViewsPicker() {
       )}
     </Show>
   );
-}
-
-async function copySavedViewLink(id: string) {
-  const params = tasksTabSearchCodec.serialize({
-    ...tasksTabSearch.defaults,
-    savedView: id,
-  });
-  if (!params) return;
-  const url = new URL('/app/component/tasks', window.location.origin);
-  replacePaneSearchParams(url.searchParams, [
-    { [tasksTabSearch.namespace]: params },
-  ]);
-  if (await writeClipboardData({ 'text/plain': url.toString() }))
-    toast.success('Link copied');
-  else toast.failure('Could not copy link');
 }
 
 export function TaskSaveViewButton() {

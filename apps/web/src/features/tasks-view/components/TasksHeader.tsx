@@ -8,6 +8,7 @@ import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
@@ -31,10 +32,19 @@ export type TasksHeaderProps = {
 
 export function TaskViewBreadcrumbItem() {
   const { state, savedViews } = useTasksView();
-  const tabTitle = () =>
-    state.savedViewActive && savedViews
-      ? taskSavedViewTitle(savedViews.view())
-      : (TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks');
+  const projectViews = useProjectSavedViews();
+  const projectSavedView = () =>
+    projectViews?.active() ? projectViews.draft.view() : undefined;
+  const savedViewActive = () =>
+    state.savedViewActive || projectSavedView()?.kind === 'saved';
+  const tabTitle = () => {
+    const projectView = projectSavedView();
+    if (projectView?.kind === 'saved') return projectView.record.name;
+    if (projectView?.kind === 'new') return 'New view';
+    if (state.savedViewActive && savedViews)
+      return taskSavedViewTitle(savedViews.view());
+    return TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
+  };
 
   return (
     <ViewBreadcrumbs.Item
@@ -45,7 +55,7 @@ export function TaskViewBreadcrumbItem() {
       {(item) => {
         const label = () => (
           <>
-            <Show when={state.savedViewActive}>
+            <Show when={savedViewActive()}>
               <BookmarkIcon class="size-4 shrink-0" aria-hidden="true" />
             </Show>
             <span class="truncate">{tabTitle()}</span>

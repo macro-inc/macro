@@ -1,5 +1,5 @@
 import { openExternalUrl } from '@core/util/url';
-import { type Component, type JSXElement, Show } from 'solid-js';
+import { type Component, children, type JSXElement, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 import { PillButton } from './PillButton';
@@ -20,6 +20,8 @@ export interface EmptyStatePanelProps {
   descriptionClass?: string;
   topSpacerClass?: string;
   primaryAction?: EmptyStateAction;
+  /** Custom primary control, such as a create menu, instead of a single action. */
+  primaryActionContent?: JSXElement;
   actionsClass?: string;
   /**
    * When set, renders a secondary "Documentation" button that opens the given
@@ -41,6 +43,7 @@ export interface EmptyStatePanelProps {
 const DEFAULT_GRAPHIC_CLASS = 'h-48 w-48 text-ink-muted';
 
 export function EmptyStatePanel(props: EmptyStatePanelProps) {
+  const primaryActionContent = children(() => props.primaryActionContent);
   return (
     <div
       role="status"
@@ -103,7 +106,13 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
             {props.description}
           </p>
         </Show>
-        <Show when={props.primaryAction || props.documentationUrl}>
+        <Show
+          when={
+            primaryActionContent() ||
+            props.primaryAction ||
+            props.documentationUrl
+          }
+        >
           <div
             class={cn(
               'mt-3 flex flex-wrap gap-2 @max-sm:w-full @max-sm:flex-col',
@@ -111,16 +120,23 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
               props.actionsClass
             )}
           >
-            <Show when={props.primaryAction}>
-              {(action) => (
-                <PillButton
-                  tone="cta"
-                  icon={action().icon}
-                  onClick={action().onClick}
-                >
-                  {action().label}
-                </PillButton>
-              )}
+            <Show
+              when={primaryActionContent()}
+              fallback={
+                <Show when={props.primaryAction}>
+                  {(action) => (
+                    <PillButton
+                      tone="cta"
+                      icon={action().icon}
+                      onClick={action().onClick}
+                    >
+                      {action().label}
+                    </PillButton>
+                  )}
+                </Show>
+              }
+            >
+              {primaryActionContent()}
             </Show>
             <Show when={props.documentationUrl}>
               {(url) => (

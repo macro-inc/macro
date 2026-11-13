@@ -1,12 +1,5 @@
-import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
-import {
-  makeCopyEntityIdAction,
-  makeCopyLinkAction,
-} from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import {
@@ -14,29 +7,17 @@ import {
   projectTaskRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
-import { toast } from '@core/component/Toast/Toast';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { enableEntityAppearance } from '@core/constant/featureFlags';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import type { Property } from '@property/types';
-import { Tabs } from '@ui';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
-import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
+import { Match, Show, Suspense, Switch } from 'solid-js';
 import type { TaskCreateOptions } from '../tasks-view/types';
-import { DeleteProjectsDialog } from './components/delete-projects-dialog';
-import { ProjectMenuDropdown } from './components/project-row-menu';
 import { ProjectContentSkeleton } from './components/project-skeletons';
-import { RenameProjectDialog } from './components/rename-project-dialog';
 import {
   type ProjectSource,
   type ProjectsContext,
@@ -45,16 +26,16 @@ import {
 import {
   canDiscussProject,
   canEditProject,
-  type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
-import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
 import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
+import { MobileProjectDetailHeader } from './views/mobile/project-detail-header';
+import { ProjectDetailHeader } from './views/project-detail-header';
 import { ProjectWorkspace } from './views/project-workspace';
 
 type ProjectBreadcrumbProps = {
@@ -106,6 +87,16 @@ export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
   );
 }
 
+export type ProjectDetailHeaderProps = {
+  source: ProjectSource;
+  commands: ReturnType<ProjectsContext['createCommands']>;
+  section: ProjectSection;
+  onSectionChange(section: ProjectSection): void;
+  onShare(): void;
+  onDelete(): void;
+  hotkeyScope: string;
+};
+
 type ProjectDetailProps = {
   route: ProjectRoute;
   navigationRequest?: number;
@@ -113,123 +104,6 @@ type ProjectDetailProps = {
   onDelete?(): void;
   onSectionChange?(section: ProjectSection): void;
 };
-
-function ProjectTitleMenu(props: {
-  project: ProjectDetailData;
-  source: ProjectSource;
-  commands: ReturnType<ProjectsContext['createCommands']>;
-  section: ProjectSection;
-  onShare(): void;
-  onDelete(): void;
-}) {
-  const definitions = useProjectsContext().createPropertyDefinitionsSource();
-  const layout = useSplitLayout();
-  const copyLink = makeCopyLinkAction();
-  const copyId = makeCopyEntityIdAction();
-  const changeIcon = useChangeEntityIcon();
-  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
-  const [renaming, setRenaming] = createSignal(false);
-  const [deleting, setDeleting] = createSignal(false);
-  const [error, setError] = createSignal<string>();
-  const definition = (id: string) =>
-    definitions
-      .properties()
-      .find((property) => property.propertyDefinitionId === id);
-  const ownValue = (property: Property) =>
-    props.source
-      .properties()
-      .find(
-        (current) =>
-          current.propertyDefinitionId === property.propertyDefinitionId
-      ) ?? property;
-  const setOption = async (property: Property, optionId: string) => {
-    try {
-      await props.commands.saveProperty(props.project.id, ownValue(property), {
-        valueType: 'SELECT_STRING',
-        values: [optionId],
-      });
-    } catch (error) {
-      console.error('Failed to update project', error);
-      toast.failure(`Could not update ${property.displayName.toLowerCase()}`);
-    }
-  };
-  const deleteProject = async () => {
-    setError(undefined);
-    try {
-      await props.commands.delete(props.project.id);
-      props.onDelete();
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : 'Could not delete project.'
-      );
-    }
-  };
-  return (
-    <>
-      <ProjectMenuDropdown
-        targets={() => [
-          { project: props.project, properties: props.source.properties() },
-        ]}
-        status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
-        priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
-        canOpenInNewSplit={globalSplitManager()?.canAppendSplit() ?? false}
-        onOpenInNewSplit={(row) =>
-          openProject(layout, row.project.id, {
-            section: props.section,
-            newSplit: true,
-          })
-        }
-        onRename={() => setRenaming(true)}
-        onChangeIcon={
-          appearanceFlag().enabled
-            ? (row) =>
-                changeIcon({
-                  type: 'initiative',
-                  id: row.project.id,
-                  name: row.project.name,
-                  ownerId: props.project.ownerId,
-                  appearance: row.project.appearance,
-                })
-            : undefined
-        }
-        onSetOption={(_, property, optionId) =>
-          fireAndForget(setOption(property, optionId), 'projects')
-        }
-        onCopyLink={(row) =>
-          fireAndForget(
-            copyLink.executeByBlock(row.project.id, 'initiative'),
-            'projects'
-          )
-        }
-        onCopyId={(row) =>
-          fireAndForget(copyId.executeById(row.project.id), 'projects')
-        }
-        onShare={props.onShare}
-        onDelete={() => {
-          setError(undefined);
-          setDeleting(true);
-        }}
-      />
-      <Show when={renaming()}>
-        <RenameProjectDialog
-          name={props.project.name}
-          onOpenChange={setRenaming}
-          onRename={(name) => props.commands.rename(props.project.id, name)}
-        />
-      </Show>
-      <Show when={deleting()}>
-        <DeleteProjectsDialog
-          count={1}
-          pending={props.commands.pending()}
-          error={error()}
-          onOpenChange={setDeleting}
-          onDelete={() => fireAndForget(deleteProject(), 'projects')}
-        />
-      </Show>
-    </>
-  );
-}
-
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
@@ -242,10 +116,14 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const navigate = useNavigate();
   const section = (section: ProjectSection) => {
     if (props.onSectionChange) return props.onSectionChange(section);
-    return navigate({
-      route: projectDetailRoute,
-      params: { projectId: props.route.id, section },
-    });
+    // Router navigation pushes history and records the navigation interaction.
+    fireAndForget(
+      navigate({
+        route: projectDetailRoute,
+        params: { projectId: props.route.id, section },
+      }),
+      'project-detail'
+    );
   };
   const createTask = (options?: TaskCreateOptions) => {
     const projectId = props.route.id;
@@ -263,63 +141,30 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
+  const header: ProjectDetailHeaderProps = {
+    source,
+    commands,
+    get section() {
+      return props.route.section;
+    },
+    onSectionChange: section,
+    onShare: openShare,
+    onDelete:
+      props.onDelete ??
+      (() => navigate({ route: tasksSplitRoute, params: {} })),
+    hotkeyScope: panel.splitHotkeyScope,
+  };
   return (
     <>
       <Show when={props.breadcrumb}>
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
-      <EntityDetailTopBar
-        titleMenu={
-          <Show when={source.project()}>
-            {(project) => (
-              <ProjectTitleMenu
-                project={project()}
-                source={source}
-                commands={commands}
-                section={props.route.section}
-                onShare={openShare}
-                onDelete={
-                  props.onDelete ??
-                  (() => navigate({ route: tasksSplitRoute, params: {} }))
-                }
-              />
-            )}
-          </Show>
-        }
-        navigation={(compact) => (
-          <Tabs
-            aria-label={t('tabs.projectSections')}
-            touch="inset"
-            class="shrink-0"
-            options={[
-              {
-                value: 'overview',
-                label: t('tabs.project-overview'),
-                icon: compact() ? SquaresFourIcon : undefined,
-              },
-              {
-                value: 'tasks',
-                label: t('tabs.project-tasks'),
-                icon: compact() ? getIconConfig('task').icon : undefined,
-              },
-            ]}
-            iconOnly={compact()}
-            value={props.route.section}
-            onChange={section}
-          />
-        )}
+      <Show
+        when={isTouchDevice()}
+        fallback={<ProjectDetailHeader {...header} />}
       >
-        <Show when={source.project()}>
-          {(project) => (
-            <ShareTrigger
-              onClick={openShare}
-              id={project().id}
-              blockType="initiative"
-              hotkeyScope={panel.splitHotkeyScope}
-            />
-          )}
-        </Show>
-      </EntityDetailTopBar>
+        <MobileProjectDetailHeader {...header} />
+      </Show>
       <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}

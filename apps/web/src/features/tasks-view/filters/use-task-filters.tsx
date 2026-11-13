@@ -8,6 +8,7 @@ import {
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
+import { beginInteraction } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
 import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
 import { PropertyValueIcon } from '@property/component/propertyValue';
@@ -29,6 +30,10 @@ import {
   TASK_VIEWER,
 } from './task-facets';
 import { taskPeopleSource, taskViewerOption } from './task-people-options';
+import {
+  taskProjectSource,
+  useTaskProjectLabels,
+} from './task-project-options';
 
 const AI_FILTER_STALE_MESSAGE =
   'The account or filters changed. Try the request again.';
@@ -44,12 +49,20 @@ export type TaskFilterGroupId =
   | 'priority'
   | 'assignees'
   | 'created-by'
+  | 'project'
   | 'tags'
   | 'due_date';
 
 export function useTaskFilters() {
-  const { state, setFacets, setState, savedViews, savedViewScope } =
-    useTasksView();
+  const {
+    state,
+    setFacets,
+    setState,
+    savedViews,
+    savedViewScope,
+    showProjectFilter,
+    projectsEnabled,
+  } = useTasksView();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
   const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
@@ -73,6 +86,11 @@ export function useTaskFilters() {
   );
   const labels = useContactFilterLabels(selectedPeople);
   const createPeopleSource = taskPeopleSource(!!savedViews);
+  const projectOptions = useTaskProjectLabels(
+    () => state.facets.project ?? [],
+    projectsEnabled
+  );
+  const createProjectSource = taskProjectSource(projectsEnabled);
   const peopleOptions = (group: 'assignees' | 'created-by') =>
     (state.facets[group] ?? []).flatMap((id) => {
       const option =
@@ -182,6 +200,17 @@ export function useTaskFilters() {
         options: peopleOptions('created-by'),
         createSource: createPeopleSource,
       },
+      ...(showProjectFilter()
+        ? [
+            {
+              id: 'project' as const,
+              label: 'Project',
+              searchPlaceholder: 'Search projects...',
+              options: projectOptions(),
+              createSource: createProjectSource,
+            },
+          ]
+        : []),
       ...(tagGroup().options.length > 0 || (state.facets.tags?.length ?? 0) > 0
         ? [
             {
@@ -218,10 +247,17 @@ export function useTaskFilters() {
       return;
     }
     const update = selected ? addUnique(optionId) : removeValue(optionId);
-    setFacets({
-      ...state.facets,
-      [groupId]: update(state.facets[groupId]),
+    const interaction = beginInteraction('tasks.filter', {
+      attributes: { 'task.filter.group': groupId },
     });
+    try {
+      setFacets({
+        ...state.facets,
+        [groupId]: update(state.facets[groupId]),
+      });
+    } finally {
+      interaction.end();
+    }
   };
 
   const activeCount = () =>

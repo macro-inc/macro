@@ -1,4 +1,5 @@
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   type Accessor,
   createComputed,
@@ -16,6 +17,7 @@ import type {
   SplitManager,
   SplitState,
 } from '../layoutManager';
+import { createMobileBackNavigation } from './createMobileBackNavigation';
 import type { MobilePaneStack } from './createMobilePaneStack';
 import { createMobileSplitMotion } from './createMobileSplitMotion';
 
@@ -56,14 +58,22 @@ function createPaneSlots(stack: MobilePaneStack): Accessor<Slots> {
 export function MobileSplitContainer(props: MobileSplitContainerProps) {
   const { splitManager, stack } = props;
 
-  useAndroidBackNavigation(() =>
-    runSplitBack({
-      canGoBack: stack.canGoBack,
-      goBack: stack.goBack,
-    })
-  );
+  const back = createMobileBackNavigation({
+    stack,
+    phone: isMobile,
+    getSplit: splitManager.getSplit,
+  });
+  useAndroidBackNavigation(() => runSplitBack(back));
 
-  const motion = createMobileSplitMotion({ stack });
+  const motion = createMobileSplitMotion({
+    stack,
+    inPaneBack: {
+      canGoBack: back.canGoBackInPane,
+      goBack: () => {
+        runSplitBack(back);
+      },
+    },
+  });
   const slots = createPaneSlots(stack);
 
   const paneFor = (id: SplitId) =>
@@ -73,8 +83,8 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
       if (!split || !rawHandle) return undefined;
       const handle: SplitHandle = {
         ...rawHandle,
-        goBack: () => stack.goBack(),
-        canGoBack: () => stack.canGoBack(),
+        goBack: () => back.goBack(id),
+        canGoBack: () => back.canGoBack(id),
       };
       return { split, handle };
     });

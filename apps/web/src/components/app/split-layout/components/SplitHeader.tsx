@@ -43,6 +43,10 @@ import {
 import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import {
+  projectBackFallback,
+  projectLocation,
+} from '../project-back-navigation';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import { SplitHeaderContextMenu } from './SplitHeaderContextMenu';
@@ -113,15 +117,17 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   );
 }
 
-function hasAgentsBackFallback(content: SplitContent) {
-  return (
-    content.type === 'agent' || (isTouchDevice() && content.type === 'chat')
-  );
+function splitBackFallback(content: SplitContent): SplitContent | undefined {
+  if (content.type === 'agent' || (isTouchDevice() && content.type === 'chat'))
+    return { type: 'component', id: 'agents' };
+  if (isMobile()) return projectBackFallback(content);
 }
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
+  const fallback = () => splitBackFallback(context.handle.content());
+  const canGoBack = () => context.handle.canGoBack() || Boolean(fallback());
   return (
     <Button
       variant="ghost"
@@ -129,21 +135,14 @@ function SplitBackButton() {
       tooltip={{ content: t('splitMenu.goBack'), hotkey: TOKENS.split.go.back }}
       size="icon-sm"
       class="p-1 touch:active:bg-transparent"
-      disabled={
-        !context.handle.canGoBack() &&
-        !hasAgentsBackFallback(context.handle.content())
-      }
+      disabled={!canGoBack()}
       onClick={() =>
         runSplitBack({
-          canGoBack: () =>
-            context.handle.canGoBack() ||
-            hasAgentsBackFallback(context.handle.content()),
+          canGoBack,
           goBack: () => {
             if (!context.handle.canGoBack()) {
-              context.handle.replace({
-                next: { type: 'component', id: 'agents' },
-                mergeHistory: true,
-              });
+              const next = fallback();
+              if (next) context.handle.replace({ next, mergeHistory: true });
             } else context.handle.goBack();
           },
         })
@@ -365,6 +364,7 @@ export function SplitHeader(props: {
 
   const hideMobileBack = () => {
     const content = panel.handle.content();
+    if (isMobile() && projectLocation(content)?.kind === 'detail') return false;
     return (
       isListViewID(content.id) ||
       (content.type === 'component' &&
@@ -465,7 +465,7 @@ export function SplitHeader(props: {
               class={cn(
                 'relative gap-0 px-1',
                 ((!panel.handle.canGoBack() &&
-                  !hasAgentsBackFallback(panel.handle.content())) ||
+                  !splitBackFallback(panel.handle.content())) ||
                   hideMobileBack()) &&
                   'hidden'
               )}

@@ -1,4 +1,6 @@
+import type { ProjectFilters } from '@app/features/projects/core/project';
 import type { FacetSelection } from '@app/features/soup/filters/facets';
+import type { Accessor } from 'solid-js';
 
 export { referenceRequests } from './task-filter-people';
 export {
@@ -23,6 +25,8 @@ export const [taskState, setTaskState] = createStore({
   search: '',
   sort: [{ id: 'updated_at', reversed: false }],
   groupBy: 'priority',
+  singleProject: false,
+  projectsEnabled: true,
 });
 export const [navigation, setNavigation] = createSignal({ id: 'tasks' });
 export function useTasksView() {
@@ -33,6 +37,10 @@ export function useTasksView() {
       setTaskState('facets', reconcile(facets)),
     savedViews: { view: () => ({ kind: 'builtin' }) },
     savedViewScope: navigation,
+    showProjectFilter: () =>
+      !taskState.singleProject &&
+      (taskState.projectsEnabled || Boolean(taskState.facets.project?.length)),
+    projectsEnabled: () => taskState.projectsEnabled,
     setPrimarySort: (id: string) =>
       setTaskState('sort', [{ id, reversed: false }]),
   };
@@ -89,4 +97,56 @@ export async function dcsCompletion(request: {
       },
     ],
   });
+}
+
+export const PROJECT_A = '10000000-0000-4000-8000-000000000001';
+export const PROJECT_B = '10000000-0000-4000-8000-000000000002';
+const PROJECTS = [
+  { id: PROJECT_A, name: 'Alpha launch' },
+  { id: PROJECT_B, name: 'Beta launch' },
+];
+
+export function getGraphqlSoupClient() {
+  throw new Error('Project transport is supplied by the fixture');
+}
+export function createProjectIdentityQuery(
+  _client: unknown,
+  _viewer: unknown,
+  id: Accessor<string>
+) {
+  return {
+    get isSuccess() {
+      return PROJECTS.some((project) => project.id === id());
+    },
+    get data() {
+      return PROJECTS.find((project) => project.id === id());
+    },
+  };
+}
+
+export function createProjectSoupSource(
+  _client: unknown,
+  filters: Accessor<ProjectFilters>,
+  enabled: Accessor<boolean>
+) {
+  const [expanded, setExpanded] = createSignal(false);
+  const visible = () => {
+    if (!enabled()) return [];
+    const search = filters().query?.toLowerCase() ?? '';
+    const matches = PROJECTS.filter((project) =>
+      project.name.toLowerCase().includes(search)
+    );
+    return expanded() || search ? matches : matches.slice(0, 1);
+  };
+  return {
+    rows: () => visible().map((project) => ({ project, properties: [] })),
+    loading: () => false,
+    loadingMore: () => false,
+    error: () => undefined,
+    hasMore: () => enabled() && !filters().query && !expanded(),
+    loadMore: async () => {
+      setExpanded(true);
+    },
+    refresh: async () => {},
+  };
 }

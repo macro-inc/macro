@@ -6,6 +6,8 @@ import {
   SplitRouter,
   type SplitRouterMiddleware,
   type SplitRoutes,
+  usePane,
+  useSplitRouter,
 } from '@app/lib/split-router';
 import { SplitRouterProvider } from '@app/lib/split-router/solid/context';
 import { paneRoute } from '@app/routes/app-route';
@@ -20,8 +22,11 @@ import {
   driveTabRoute,
   homeSplitRoute,
   notFoundRoute,
+  projectDetailRoute,
+  projectTaskRoute,
   searchRoute,
   taskDetailRoute,
+  tasksProjectsRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -37,6 +42,7 @@ import {
   splitContentFromLocation,
 } from '../split-router/legacy-route';
 import { useViewRestoration } from '../view-restoration';
+import { viewRestorationKey } from '../view-restoration-key';
 
 const mocks = vi.hoisted(() => ({
   manager: undefined as SplitManager | undefined,
@@ -79,14 +85,30 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionWebsocketEffect: vi.fn(),
 }));
 
-function RememberedView() {
-  useViewRestoration();
+function EntrySelection() {
   const [selection, setSelection] = useEntryState<string[]>('view.selection', {
     default: [],
   });
   mocks.selection = selection;
   mocks.setSelection = setSelection;
   return null;
+}
+
+function RememberedView() {
+  useViewRestoration();
+  const pane = usePane();
+  const router = useSplitRouter();
+  const key = () => {
+    const location = router.entry(pane())!.location;
+    return viewRestorationKey(splitContentFromLocation(location).id, location);
+  };
+  // Like the Tasks route, keep retention mounted while each destination owns
+  // a fresh stateful subtree when switching between Tasks and Projects.
+  return (
+    <Show keyed when={key()}>
+      {(_key) => <EntrySelection />}
+    </Show>
+  );
 }
 
 function AuthenticatedView() {
@@ -141,7 +163,14 @@ function setup(
             {
               ...tasksSplitRoute,
               component: AuthenticatedView,
-              children: [taskDetailRoute],
+              children: [
+                taskDetailRoute,
+                tasksProjectsRoute,
+                {
+                  ...projectDetailRoute,
+                  children: [projectTaskRoute],
+                },
+              ],
             },
             { ...searchRoute, component: AuthenticatedView },
             notFoundRoute,
@@ -306,6 +335,111 @@ describe('opt-in view restoration', () => {
     expect(router.entry(pane)?.location.route.matches.at(-1)?.id).toBe(
       'view-channels'
     );
+  });
+
+  it('restores Tasks and Projects to their own dock destinations', async () => {
+    const { router, manager } = setup('/tasks/task-one');
+    const pane = router.panes()[0]!;
+    mocks.setSelection?.(['task-selection']);
+    await router.navigatePane(pane, '/tasks/projects');
+    expect(
+      manager.viewState.get('tasks')?.location.route.matches.at(-1)?.id
+    ).toBe('tasks-task');
+    mocks.setSelection?.(['project-selection']);
+    await router.navigatePane(pane, '/home');
+
+    manager.openWithSplit({ type: 'component', id: 'tasks' }, { resume: true });
+    await router.settled();
+    expect(router.entry(pane)?.location.route.matches.at(-1)).toMatchObject({
+      id: 'tasks-task',
+      params: { taskId: 'task-one' },
+    });
+    expect(mocks.selection()).toEqual(['task-selection']);
+    await router.navigatePane(pane, '/home');
+    expect(
+      manager.viewState.get('projects')?.location.route.matches.at(-1)?.id
+    ).toBe('tasks-projects');
+
+    manager.openWithSplit(
+      {
+        type: 'component',
+        id: 'tasks',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'view-tasks', params: {} },
+              { id: 'tasks-projects', params: { projectsTab: 'projects' } },
+            ],
+          },
+          search: { tasks: { tab: ['projects'] } },
+        },
+      },
+      { resume: true }
+    );
+    await router.settled();
+    expect(router.entry(pane)?.location.route.matches.at(-1)?.id).toBe(
+      'tasks-projects'
+    );
+    expect(mocks.selection()).toEqual(['project-selection']);
+  });
+
+  it('keeps native Projects and Tasks dock restoration independent', async () => {
+    const { router, manager } = setup('/tasks/projects', { stacked: true });
+    mocks.setSelection?.(['project-selection']);
+    manager.replaceAllSplits(
+      { type: 'component', id: 'tasks' },
+      { resume: true }
+    );
+    await router.settled();
+    expect(
+      router.entry(router.panes()[0]!)?.location.route.matches.at(-1)?.id
+    ).toBe('view-tasks');
+    expect(mocks.selection()).toEqual([]);
+    expect(
+      manager.viewState.get('projects')?.entryState?.['view.selection']
+    ).toEqual(['project-selection']);
+    mocks.setSelection?.(['task-selection']);
+    manager.replaceAllSplits(
+      {
+        type: 'component',
+        id: 'tasks',
+        entryMetadata: {
+          route: paneRoute(
+            { id: 'view-tasks', params: {} },
+            { id: 'tasks-projects', params: { projectsTab: 'projects' } }
+          ),
+          search: { tasks: { tab: ['projects'] } },
+        },
+      },
+      { resume: true }
+    );
+    await router.settled();
+    expect(
+      router.entry(router.panes()[0]!)?.location.route.matches.at(-1)?.id
+    ).toBe('tasks-projects');
+    expect(mocks.selection()).toEqual(['project-selection']);
+    manager.replaceAllSplits(
+      { type: 'component', id: 'tasks' },
+      { resume: true }
+    );
+    await router.settled();
+    expect(
+      router.entry(router.panes()[0]!)?.location.route.matches.at(-1)?.id
+    ).toBe('view-tasks');
+    expect(mocks.selection()).toEqual(['task-selection']);
+  });
+
+  it('does not retain a blocked switch from Tasks to Projects', async () => {
+    const { router, manager, setRetaining } = setup('/tasks/task-one');
+    const pane = router.panes()[0]!;
+    mocks.setSelection?.(['task-selection']);
+    router.registerGuard(pane, Number.MAX_SAFE_INTEGER, () => false);
+    const before = router.entry(pane);
+    await router.navigatePane(pane, '/tasks/projects');
+    expect(router.entry(pane)).toBe(before);
+    setRetaining(false);
+    expect(manager.viewState.get('tasks')).toBeUndefined();
+    expect(manager.viewState.get('projects')).toBeUndefined();
   });
 
   it('captures direct departures but keeps explicit links and new splits fresh', async () => {

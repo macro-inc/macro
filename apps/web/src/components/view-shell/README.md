@@ -51,3 +51,8 @@ until `open`, then Main fills it and `ViewNavigationControls` shows Back,
 calling `onBack`, in place of Show navigation. The list stays mounted, hidden
 and inert, so it keeps its scroll, and takes focus when Back returns to it.
 Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
+
+`ViewBreadcrumbs.Outlet` accepts `activeItem` to replace the current breadcrumb
+with a title control while retaining parent navigation. `EntityDetailTopBar`
+uses this slot for its title menu; appending the title as outlet children would
+render the same entity twice.

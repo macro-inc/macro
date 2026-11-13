@@ -3,6 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
   type Accessor,
+  children,
   createMemo,
   createSignal,
   type JSX,
@@ -23,6 +24,7 @@ export function EntityDetailTopBar(
     titleMenu?: JSX.Element;
   }>
 ) {
+  const titleMenu = children(() => props.titleMenu);
   const [topBar, setTopBar] = createSignal<HTMLDivElement>();
   const size = createElementSize(topBar);
   const compact = createMemo(
@@ -38,10 +40,9 @@ export function EntityDetailTopBar(
     >
       <ViewBreadcrumbs.Outlet
         aria-label="Task location"
+        activeItem={titleMenu()}
         fallback={<EntityDetailBreadcrumbSkeleton />}
-      >
-        {props.titleMenu}
-      </ViewBreadcrumbs.Outlet>
+      />
       <Show when={props.navigation}>
         {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
       </Show>

@@ -11,7 +11,7 @@ The single-row desktop header contains the title, `Filter`, a separate
 (`Ctrl+F` opens it). The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
-and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
+Project, and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
 clicking a row or its checkbox toggles and stays open, Enter adds and closes, and
 Shift/Only selects just one option and stays open. Escape dismisses the menu.
 Assignee uses the team/agent roster and retains selected outsiders. Created by
@@ -20,6 +20,15 @@ open; search and Next options replace that window without losing selections. Me
 is a semantic viewer choice, distinct from the named fixed self option.
 Unavailable selected IDs remain selected, and Only changes its own group without
 clearing other restrictions.
+With Projects enabled, Project offers accessible task projects (not Drive folders),
+including read-only projects, with their existing cube icon and name. Search and
+Next options use the same paginated source as the project picker; selected projects
+stay available across pages. Multiple projects are ORed and combine with other
+facets using AND, including in text search and saved views. A project's own task
+list hides this redundant facet. There is no No project filter because the search
+API cannot express project absence. AI does not resolve projects: choose these
+manually after applying an AI filter. Verify selection, clearing, save/reopen, and
+search in both the desktop menu and phone filter drawer.
 The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
 description such as `urgent and high priority tasks that are not completed` and press
 Enter. It replaces the current selection with the matching Status, Priority, Assignee,
@@ -42,17 +51,28 @@ search field above New. It shares the current Tasks or Projects list query.
 The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (when
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
-when the user has a team. The Projects list uses the same menu. Mobile creation
-controls are unchanged. With Projects enabled, the collapsible `Projects` section
-appears above `Saved views`. It contains `My projects` (assigned to the viewer),
-`All projects` (all accessible projects), and `Created by me` (owned by the viewer).
-These replace the old Projects tab and individual-project shortcut list. The plus
-beside the section opens the project composer even while collapsed.
-On mobile, one `Projects` pill opens a drawer with the same three views; the
-active pill shows the selected view's name. Selecting a task or saved view clears
-the project pill's active state. Project scoping applies before pagination and
-cannot be removed by clearing editable filters. Opening a project and returning
-through its breadcrumb retains the selected project view.
+when the user has a team. The Projects list uses the same menu. With Projects
+enabled, the collapsible `Projects` section appears above task `Saved views`.
+It contains `My projects` (assigned to the viewer), `All projects`, `Created by me`,
+and saved project views. The plus beside the section opens the project composer.
+Phones have a separate `Projects` destination in the bottom navigation's More
+menu (or dock after customization), not a Projects pill inside Tasks. Each destination
+restores its own last view; switching to Tasks must not reopen Projects. Its floating
+`Project` action opens the initiative composer, not the Drive folder dialog. The phone
+header has one title island with the current view icon, name, and caret; the filter
+island sits on the right. Its views sheet groups built-in and saved project views
+in 48px cards, marks the selected view with accent and a check, and puts New view
+at the bottom. Saved views show sharing marks and action menus. The filter button
+opens Sort, Group, Status, Priority, Assignee, and Due date controls. Project rows
+keep Status, Priority, Assignees, Due date, and Updated columns on desktop/tablet.
+A 14px progress ring follows the project name; hover or focus reveals its count.
+Headers become icons at 840px and below. Updated fades and collapses over 160ms
+at 600px, without animation under reduced motion. Phone rows use the same 44px
+grid and narrow insets as tasks, with Status, Priority, and a lead avatar trailing.
+Unassigned projects use the same dashed-user No assignee placeholder as tasks.
+Opening a project
+pushes its detail and Back returns to the collection. Project scope applies
+before pagination and cannot be removed by clearing editable filters.
 Cached project rows remain available through offline/background refresh failures.
 Cache misses, server/permission errors, and failed continuation requests retain
 failure and retry controls.
@@ -990,7 +1010,7 @@ Choose a view in the `Projects` section in Tasks, or open
 `/app/component/tasks-projects` for All projects. Project view links use the Tasks
 search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
 Desktop project-view titles open the same view switcher as Tasks; individual
-project names remain content titles. Mobile keeps the Projects picker.
+project names remain content titles. Mobile keeps the Projects picker. In a project detail, the phone title island shows the project appearance and name; open it to switch between Overview and Tasks, share, copy the link, or rename when editing is allowed.
 Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
@@ -1003,11 +1023,19 @@ end loads more projects; `Load more projects` also continues the list.
 Keyboard movement changes focus; Enter opens the focused project and
 Shift-selection opens it in a new split. Folders remain separate in Files.
 
-The Projects list's Tasks column shows a borderless progress pill: `3 of 8 done`,
-`All done`, or `No tasks`. Its 12px neutral ring fills clockwise in the accent
-color and stays empty when there are no tasks. Counts come from the
-permission-aware project summary in the list response, not by loading every
-task; they describe the project rather than the current task-list filters.
+The Projects list shows a 14px progress ring immediately after each project name,
+inside a 22px tooltip target. Counts describe the permission-aware, unfiltered
+project summary rather than the current task filters. The ring is empty when
+there are no tasks; Status, Priority, Assignees, Due date, and Updated remain
+separate desktop columns.
+
+An empty Projects collection uses the same centered EmptyStatePanel: “No projects
+yet”, “Group related tasks into a project to track them together.”, New project,
+and the book-icon Documentation action. When filters or the selected scope hide
+all projects, show “No projects in this view” with the standard filtered copy and
+Clear Filters when editable filters or search are active. Clearing removes those
+filters and search, not the selected built-in scope; scope-only empty views do not
+show a no-op Clear Filters action.
 
 On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
 bar per visible project from Created at to Due date, using the same search,
@@ -1077,12 +1105,13 @@ including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar; below 600px they collapse to icons, with tooltips on
 desktop, and the project name truncates instead. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
-Close or Escape clears the query and restores focus to the button. The task
-toolbar stays the same height and scrolls
-horizontally in narrow splits, keeping list controls, Add existing tasks, and New
-task accessible. Opening an associated task extends the breadcrumb trail; choose
-the project breadcrumb to return, or Projects to restore the collection and its
-filters, groups, and scroll position. Project URLs retain identity and section:
+Close or Escape clears the query and restores focus to the button. The desktop
+task toolbar keeps one 32px Add task dropdown with New task (C) and Add existing
+tasks; opening the menu alone never creates a task. On phones, the floating Task
+control uses the standard stacked MobileCreateMenu, not a bottom drawer.
+Opening an associated task extends the breadcrumb trail;
+choose the project breadcrumb to return, or Projects to restore the collection.
+Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
 in the project title and Projects row menus, copy `/app/initiative/<project-id>`,
 which opens the project in Tasks; pasting it, or an older
@@ -1163,19 +1192,52 @@ Layout, sort direction, and grouping use `projectTasks.layout`, `projectTasks.so
 `projectTasks.sortReversed`, and `projectTasks.groupBy` URL parameters, independent
 of the main Tasks view's controls. Saved project entry state remains the fallback
 when URL parameters are absent. Use
-`New task` to create a task in the project: the composer opens with its Project
-set to this project (change or clear it like any property), and the create
-request carries it, so there is no separate assignment step. The new row appears
-once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. The section tabs
-use the same control as Channels. Editors can choose `Add existing tasks` beside
-`New task`; both actions use bordered buttons with a background. `Add existing
-tasks` opens an anchored task-selector dropdown: search, select several, and
-confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
-the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
-already in this project are excluded. Adding a task moves it from its previous
-project. A partial failure keeps only
-failed tasks selected for retry, and a request failure preserves the selection.
+`Add task` → `New task` to create a task in the project: the composer opens with
+its Project set to this project (change or clear it like any property), and the
+create request carries it, so there is no separate assignment step. The new row
+appears once the task is created. Verify this with GraphQL Soup both enabled and
+disabled. Desktop and tablet section tabs stay unchanged. On phone Overview,
+the header shows Back, the truncating project title, a Tasks island with the
+project's completion ring, then Details. Share stays in the title drawer and
+appears before Details in the phone Tasks header. Tap Tasks to push the project's
+Tasks view; the header caret and hardware/browser Back return to Overview.
+From Overview, the same caret-only Back island returns to the previous Projects
+list, retaining its selected view and filters. Direct links also show the caret:
+it returns from Tasks to Overview, then to Projects without reopening the direct
+link. Phones have no Overview/Tasks tabs. The title island opens the standard
+actions-only drawer, without a View group. Check both sections at 390px with
+a long project name: all controls stay visible, the title truncates, and the
+ring uses the same completed/total counts as the project list. Also check
+Back, Forward, Share, Details, and opening a title action from either section.
+
+Choose `Add existing tasks` from Add task on desktop, or from the floating Task
+control's stacked menu on phones. Search, select several, and confirm `Add N tasks`.
+Next options/PageDown appends later loaded task pages. Escape or Cancel dismisses
+without assigning tasks. Tasks already in this project are excluded. Adding a task
+moves it from its previous project. Partial failures retain only failed tasks for
+retry; request failures retain the full selection.
+
+When the authorized project has no task IDs, all layouts show the centered,
+borderless tasks empty state immediately, even while a filtered layout query is
+pending. It says “No tasks yet” and “Add tasks to plan and track this project's
+work.” Editors get a filled Add task menu; everyone gets Documentation with a
+book icon, opening https://docs.macro.com/product/projects in a new tab. The phone
+floating Task control remains available. If linked tasks exist but search, filters,
+or hidden completed tasks remove them from the view, keep the filtered-empty
+message instead; no project-empty illustration is shown.
+
+### Saved project views
+
+Change project filters, sort, grouping, or layout and choose Save view. Name the
+view and optionally share it with the current team. The view appears below the
+built-in views in the desktop Projects section and in the phone Projects picker.
+Opening it reapplies its settings; search text and scroll are not saved. Assigned
+to me and Created by me remain relative to whoever opens the definition.
+Use a row's menu to Edit its name/sharing, Duplicate a private copy, or Delete.
+Owners use Save changes for temporary setting edits; Reset restores the confirmed
+settings. Leaving the collection discards temporary edits without changing the
+saved definition. On phones Gantt definitions render as List without rewriting
+the saved layout. Unknown definitions show an error instead of unfiltered rows.
 
 The regular Tasks list includes a Project column. Its cell is a regular property
 cell: clicking it opens the same entity dropdown as the other property columns,

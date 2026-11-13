@@ -19,6 +19,11 @@
   transition: grid-template-columns 160ms ease;
 }
 
+/* Project metadata uses task tracks but keeps Updated through 600px. */
+.task-grid-row.task-grid-icon-creator.project-grid-row {
+  --task-col-timestamp: 4.5rem;
+}
+
 .task-grid-icon-creator .task-updated-cell {
   min-width: 0;
   overflow: hidden;
@@ -74,6 +79,12 @@
     opacity: 0;
     transform: translateX(4px);
     visibility: hidden;
+  }
+}
+
+@container u-list (max-width: 600px) {
+  .task-grid-row.task-grid-icon-creator.project-grid-row {
+    --task-col-timestamp: 0rem;
   }
 }
 

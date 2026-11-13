@@ -2020,6 +2020,8 @@ export function ShareTrigger(props: {
   hotkeyScope?: string;
   copyLink?: () => void;
   size?: 'sm' | 'md';
+  /** Compact mobile headers keep Copy link in the title drawer. */
+  showCopyLink?: boolean;
 }) {
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
@@ -2180,15 +2182,17 @@ export function ShareTrigger(props: {
           }}
         />
 
-        <CopyButton
-          as={ButtonGroup.Button}
-          variant="ghost"
-          tooltip="Copy Share Link"
-          size={iconSize()}
-          onClick={ShareLinkAction().action}
-        >
-          <Dynamic component={ShareLinkAction().icon} class="size-3.5" />
-        </CopyButton>
+        <Show when={props.showCopyLink !== false}>
+          <CopyButton
+            as={ButtonGroup.Button}
+            variant="ghost"
+            tooltip="Copy Share Link"
+            size={iconSize()}
+            onClick={ShareLinkAction().action}
+          >
+            <Dynamic component={ShareLinkAction().icon} class="size-3.5" />
+          </CopyButton>
+        </Show>
       </div>
     </HeaderActionGroup>
   );

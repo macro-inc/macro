@@ -5,22 +5,39 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps, useContext } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  type ParentProps,
+  Show,
+  useContext,
+} from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { SplitHeaderLeft, SplitHeaderRight } from '../components/SplitHeader';
-import { SplitPanel } from '../components/SplitPanel';
-import { SplitPanelContext, type SplitPanelContextType } from '../context';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '../split-layout/components/SplitHeader';
+import { SplitPanel } from '../split-layout/components/SplitPanel';
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '../split-layout/context';
 import type {
   SplitContent,
   SplitHandle,
   SplitId,
   SplitState,
-} from '../layoutManager';
+} from '../split-layout/layoutManager';
+import { MobileHeader } from './mobile-header';
 
 const routeState = vi.hoisted(() => ({ externalChat: false }));
 
 // Keep the production panel, header, portal contributions, and target refs.
 // Collection data, routing, and unrelated chrome are outside this lifecycle test.
+vi.mock('@components/app/side-panel', () => ({
+  SidePanel: { Toggle: () => null },
+  useSidePanel: () => undefined,
+}));
 vi.mock('@app/features/access-requests/context/visit', () => ({
   AccessRequestVisitProvider: (props: ParentProps) => props.children,
 }));
@@ -37,7 +54,8 @@ vi.mock('@app/features/next-soup/soup-view/soup-view-context', () => ({
 vi.mock('@app/features/next-soup/utils', () => ({
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
-vi.mock('@app/lib/split-router', () => ({
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useOptionalSplitRouter: () => ({
     entry: () => ({
       location: {
@@ -84,7 +102,8 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
 }));
 vi.mock('@entity', () => ({ isEntityDragEvent: () => false }));
 vi.mock('@app/components/view-shell', () => ({ ViewBreadcrumbs: {} }));
-vi.mock('@ui', () => {
+vi.mock('@ui', async () => {
+  const { cn } = await import('../../ui/utils/classname');
   const Container = (props: ParentProps) => <div>{props.children}</div>;
   return {
     Panel: Object.assign(Container, {
@@ -92,19 +111,35 @@ vi.mock('@ui', () => {
       Toolbar: Container,
       Body: Container,
     }),
-    Button: Container,
+    Button: (props: {
+      children?: JSX.Element;
+      disabled?: boolean;
+      'aria-label'?: string;
+      onClick?: () => void;
+    }) => (
+      <button
+        type="button"
+        disabled={props.disabled}
+        aria-label={props['aria-label']}
+        onClick={props.onClick}
+      >
+        {props.children}
+      </button>
+    ),
     Layer: Container,
-    cn: () => '',
+    cn,
   };
 });
-vi.mock('../layout', () => ({
+vi.mock('../split-layout/layout', () => ({
   useSplitLayout: () => ({ getSplitCount: () => 1, insertSplit: vi.fn() }),
 }));
-vi.mock('../registerSplitHotkeys', () => ({ registerSplitHotkeys: () => {} }));
-vi.mock('../utils/createSplitAutofocus', () => ({
+vi.mock('../split-layout/registerSplitHotkeys', () => ({
+  registerSplitHotkeys: () => {},
+}));
+vi.mock('../split-layout/utils/createSplitAutofocus', () => ({
   createSplitAutofocus: () => {},
 }));
-vi.mock('../components/SplitHeaderContextMenu', () => ({
+vi.mock('../split-layout/components/SplitHeaderContextMenu', () => ({
   SplitHeaderContextMenu: (props: ParentProps) => props.children,
 }));
 
@@ -124,12 +159,16 @@ it('mounts header contributions when chrome appears and follows its replacement 
     }
   );
   const [composable, setComposable] = createSignal(true);
+  const [projectHeader, setProjectHeader] = createSignal(false);
   const id = 'header-target-test' as SplitId;
   const [content, setContent] = createSignal<SplitContent>({
     type: 'component',
     id: 'mail',
   });
   let mountedViews = 0;
+  const replace = vi.fn();
+  const goBack = vi.fn();
+  const [canGoBack, setCanGoBack] = createSignal(false);
   let panel: SplitPanelContextType | undefined;
   const split: SplitState = {
     id,
@@ -155,6 +194,25 @@ it('mounts header contributions when chrome appears and follows its replacement 
           <>
             <button
               type="button"
+              onClick={() => setProjectHeader((value) => !value)}
+            >
+              Toggle project header
+            </button>
+            <Show when={projectHeader()}>
+              <MobileHeader
+                trailing={
+                  <MobileHeader.Island>
+                    <button type="button">Project details</button>
+                  </MobileHeader.Island>
+                }
+              >
+                <MobileHeader.Island>
+                  <button type="button">Project title</button>
+                </MobileHeader.Island>
+              </MobileHeader>
+            </Show>
+            <button
+              type="button"
               onClick={() => setComposable((value) => !value)}
             >
               Toggle header
@@ -176,7 +234,7 @@ it('mounts header contributions when chrome appears and follows its replacement 
     content,
     unregisterContentChangeListener: () => {},
     registerContentChangeListener: () => {},
-    replace: () => {},
+    replace,
     adoptContentId: () => {},
     removeFromHistory: () => {},
     toggleSpotlight: () => {},
@@ -185,13 +243,14 @@ it('mounts header contributions when chrome appears and follows its replacement 
     isSpotLight: () => false,
     isPopover: () => false,
     displayName: () => 'Mail',
-    canGoBack: () => false,
+    // The shell receives both ordinary history and direct-link availability.
+    canGoBack,
     isActive: () => true,
     isFirst: () => true,
     goForward: () => {},
     isLast: () => true,
     activate: () => {},
-    goBack: () => {},
+    goBack,
     goBackTo: () => false,
     close: () => {},
     reset: () => {},
@@ -221,6 +280,75 @@ it('mounts header contributions when chrome appears and follows its replacement 
   const toggle = screen.getByRole('button', { name: 'Toggle header' });
   expect(container.querySelector('[data-split-header]')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Unread' })).toBeNull();
+
+  const toggleProject = screen.getByRole('button', {
+    name: 'Toggle project header',
+  });
+  fireEvent.click(toggleProject);
+  const projectChrome = container.querySelector<HTMLElement>(
+    '[data-split-header]'
+  );
+  expect(projectChrome).not.toBeNull();
+  if (!projectChrome) throw new Error('Expected the project header to mount');
+  expect(
+    within(projectChrome).getByRole('button', { name: 'Project title' })
+  ).toBeTruthy();
+  expect(
+    within(projectChrome).getByRole('button', { name: 'Project details' })
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Unread' })).toBeNull();
+  setContent({
+    type: 'component',
+    id: 'tasks',
+    entryMetadata: {
+      route: {
+        matches: [
+          { id: 'view-tasks', params: {} },
+          {
+            id: 'tasks-project',
+            params: {
+              projectId: '00000000-0000-4000-8000-000000000001',
+              section: 'overview',
+            },
+          },
+        ],
+      },
+    },
+  });
+  const back = within(projectChrome).getByRole('button', { name: /go back/i });
+  expect(back.hasAttribute('disabled')).toBe(false);
+  expect(
+    back.closest('[data-header-island]')?.classList.contains('hidden')
+  ).toBe(false);
+  fireEvent.click(back);
+  expect(replace).toHaveBeenCalledWith({
+    mergeHistory: true,
+    next: expect.objectContaining({
+      entryMetadata: expect.objectContaining({
+        route: expect.objectContaining({
+          matches: expect.arrayContaining([
+            expect.objectContaining({ id: 'tasks-projects' }),
+          ]),
+        }),
+      }),
+    }),
+  });
+  setCanGoBack(true);
+  fireEvent.click(back);
+  expect(goBack).toHaveBeenCalledOnce();
+  expect(replace).toHaveBeenCalledOnce();
+  expect(
+    back.closest('[data-header-island]')?.classList.contains('hidden')
+  ).toBe(false);
+  setCanGoBack(false);
+  setContent({ type: 'component', id: 'mail' });
+  fireEvent.click(toggleProject);
+  expect(projectChrome.isConnected).toBe(false);
+  expect(panel?.layoutRefs.headerLeft).toBeUndefined();
+  expect(panel?.layoutRefs.headerRight).toBeUndefined();
+  expect(screen.getByRole('textbox', { name: 'Retained view' })).toBe(
+    retainedView
+  );
 
   fireEvent.click(toggle);
   const firstHeader = container.querySelector<HTMLElement>(

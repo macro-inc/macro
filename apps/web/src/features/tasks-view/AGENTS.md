@@ -8,7 +8,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 - `tasks-view.tsx` and `tasks-view-context.tsx`: independent saved-view list/detail query composition, filter state, router integration, and task-list source ownership.
 - `filters/task-saved-view.ts`: strict capture and permissive reading of supported filters, with diagnostics for skipped conditions.
-- `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
+- `primitives/create-task-saved-view-draft.ts`: task encoding and confirmed tag bindings over `saved-views/primitives/create-saved-view-draft.ts`, which owns dirty state, retained edits, and revision-aware reconciliation.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
 
@@ -16,19 +16,21 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep Priority groups in Urgent, High, Medium, Low order with unset priority last through the shared Soup group comparator; group presentation does not follow item sort direction or stored option display order.
-- Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
-- Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
+- Filter tasks by Project through the existing Project entity-reference property, with OR within projects and AND across facets; keep IDs in saved views and entry state, use the authorized paged project picker source (including read-only projects), and omit the facet in a single-project host. No project and AI project resolution remain unsupported.
+- Keep desktop project navigation in the Projects section above task Saved views, with assigned-to-me, all-accessible, created-by-me, and saved project views; give phones a separate Projects dock destination and picker.
+- Keep built-in task and project navigation icons in `components/task-view-icons.tsx`; reuse that mapping in the Projects phone header and picker without importing the sidebar.
+- Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture. Key the stateful Tasks workspace by its Tasks/Projects restoration destination so switching dock views reloads only that destination's entry state.
 - Align wide desktop group-header glyphs with the first row control; keep caret containers square and preserve each header's caret-to-content gap and value-icon slot across widths without changing padding, the 44px touch target, or the layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
 - Pin the current list group header within its scroller until the next header replaces it; retain the real virtual row, mobile chrome clearance, collapse controls, and unobscured keyboard targets.
-- Keep desktop and tablet task rows on the shared column grid at every pane width with the column header mounted; use the headerless narrow row layout only on phones.
+- Keep desktop and tablet task rows on the shared column grid at every pane width with `ListColumnHeader` cells; use the headerless `NarrowRowGrid` layout only on phones.
 - Set task-list horizontal padding from its container width: 8px below 640px, 12px from 640px, and 4px on phones.
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
 - Keep leading task status icons at 18px and priority icons at 16px desktop/20px phone without flex shrinking; use 16px Status/Priority selector icons, the shared 12px property default elsewhere unless a surface overrides it, and preserve 16px group-header carets and existing hit targets.
 - Give list Due date glyphs the shared 12px base size and the existing 16px compact-column override; never leave calendar SVG dimensions implicit.
 - Mix light-theme due-date warnings with 40% foreground in list and board values for contrast; keep dark-theme warnings, global warning tokens, and status colors unchanged.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
-- Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
+- Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; share their presentation through `PropertyIconControl`, place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Order trailing task properties as Due date, Project, then Assignees in wide and narrow rows and title pills; show both avatars for exactly two compact assignees, otherwise one avatar plus the remaining count, anchored left in a fixed-width slot so overflow grows right.
 - At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, Due date, and Updated headers; keep Project at 32px and Assignees at 44px, with the assignee header aligned to the first avatar and collapsed property pills padded 4px on both axes.
 - Size Updated from its measured, untruncated header with a 56px content minimum for single-line timestamps; share the width across rows, retain existing Created by spacing, and fade/collapse Updated over 160ms at 600px, disabling motion for reduced-motion preferences.
@@ -53,7 +55,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep embedded Project/CRM task consumers free of saved-view management.
 - Show filled Save view and Save changes actions; place mobile creation in a borderless, edge-to-edge info banner overlaying filter content immediately above the footer with unpunctuated copy and a leading bookmark icon on its button only when filters, due date, layout, grouping, or sort differ from the built-in tab defaults, excluding search.
 - Render Save view and draft Cancel as separate standalone buttons; preserve their existing dialog and cancellation behavior.
-- Keep sidebar actions targeted to their own record; Edit combines naming and sharing without saving temporary settings, and Duplicate starts with a prefilled private copy and warns before omitting unsupported settings.
+- Keep sidebar actions targeted to their own record; Rename opens naming and sharing without saving temporary settings, and Duplicate starts with a prefilled private copy and warns before omitting unsupported settings.
 - Keep saved-view names and menus in the mobile picker; overlay creation above the filter drawer footer on a drawer-colored backing without blocking the last scrollable controls, and put Save changes at the footer's right edge, opposite Clear all.
 - Place the saved-view picker after Filters and before built-in mobile tabs; omit duplicate headers and general create controls, but offer Create view in the empty state.
 - Group the shared sidebar and picker empty state in a subtly bordered, rounded container with 12px padding, the inherited background, and no shadow: “Your go-to views”, “Save your setup for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without a separate illustration; keep the sidebar header's icon-only plus available in every section state, and isolate both creation buttons' keyboard scopes from task-list selection shortcuts.

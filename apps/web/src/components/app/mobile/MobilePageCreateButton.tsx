@@ -45,6 +45,7 @@ const NEW_ITEM_LABELS: Partial<Record<MobileNavViewId, TranslationKey>> = {
   channels: 'mobile.newMessage',
   documents: 'mobile.newDocument',
   tasks: 'mobile.newTask',
+  projects: 'viewMenus.newProject',
   companies: 'mobile.newCompany',
 };
 

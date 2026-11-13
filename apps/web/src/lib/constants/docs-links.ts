@@ -3,6 +3,9 @@ import type { ListView } from '@app/constants/list-views';
 /** Base URL for the public documentation site. */
 export const DOCS_BASE = 'https://docs.macro.com';
 
+/** Task projects have their own collection rather than a legacy ListView. */
+export const PROJECTS_DOCS_URL = `${DOCS_BASE}/product/projects`;
+
 /**
  * Public documentation page for each list view. Views without an entry have no
  * docs page yet, so callers should render no link for them.

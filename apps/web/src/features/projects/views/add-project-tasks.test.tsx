@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { AddProjectTasks } from '../add-project-tasks';
 import type { ProjectDetail } from '../core/project';
-import { AddProjectTasks } from './add-project-tasks';
 
 const mock = vi.hoisted(() => ({ assignTasks: vi.fn() }));
 vi.mock('@ui', async () => ({
@@ -16,7 +16,7 @@ vi.mock('@ui', async () => ({
 vi.mock('@core/component/HoverCard', () => ({
   useIsInsideHoverCard: () => false,
 }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('../context/projects-context', () => ({
   useProjectsContext: () => ({
     createCommands: () => ({ assignTasks: mock.assignTasks }),

@@ -6,6 +6,7 @@ import {
   enableCalendarScheduling,
   enableCrm,
   enablePasswords,
+  enableProjects,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -26,6 +27,7 @@ import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import CubeIcon from '@icon/system/regular/cube.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
@@ -113,6 +115,13 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     iconActive: ListChecksFillIcon,
   },
   {
+    id: 'projects',
+    get label() {
+      return t('viewMenus.projects');
+    },
+    icon: CubeIcon,
+  },
+  {
     id: 'calls',
     get label() {
       return t('nav.calls');
@@ -163,6 +172,7 @@ export function useMobileDockViews() {
   const passwordsAvailable = () =>
     passwords().enabled && team.isSuccess && Boolean(team.data?.team);
   const external = useFeatureFlag(enableWhatsappLinked);
+  const projects = useFeatureFlag(enableProjects);
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'calendar' || calendarEnabled()
@@ -172,5 +182,6 @@ export function useMobileDockViews() {
       .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
       .filter((view) => view.id !== 'passwords' || passwordsAvailable())
       .filter((view) => view.id !== 'external' || external().enabled)
+      .filter((view) => view.id !== 'projects' || projects().enabled)
   );
 }

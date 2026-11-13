@@ -183,6 +183,14 @@ safe areas. Also change display size with the keyboard hidden: bottom composers
 must remain visible before the keyboard is opened again. Editors expose labeled
 multiline textboxes for TalkBack.
 
+On native phones, opening Tasks from a project's Overview pushes an internal
+route step. The header caret and Android Back pop that step to Overview
+without closing the project pane, even when it is the only pane. An edge swipe
+pops the same step without previewing an unrelated pane. The next Back keeps
+the usual pane-stack behavior. Tasks entries without a preceding Overview,
+nested task routes, different-project history, and tablets retain their
+existing behavior.
+
 With the keyboard closed, the Android dock sits above the measured system
 navigation inset with the usual 12px gutter. Check both gesture and three-button
 navigation, including after rotation and display-size changes. Opening the
@@ -368,6 +376,10 @@ title, matching other mobile routes.
 
 Projects are enabled by default in development; production uses the PostHog
 `enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
+Phones expose Projects as its own dock/More destination, separate from Tasks.
+It opens the shared project collection, whose picker includes saved project views.
+Project definitions use the `sN.projects.savedView` search parameter; opening a
+project pushes detail and Back returns to that collection.
 When disabled, project navigation,
 creation, assignment, chips, and Cmd+K results are hidden; direct project links
 return to Tasks after flags resolve. Existing Files folders stay available.
