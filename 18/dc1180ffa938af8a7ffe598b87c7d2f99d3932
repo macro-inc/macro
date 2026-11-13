@@ -1,0 +1,33 @@
+apps/web/src/lib/service-clients/service-cognition/generated/client.ts
+  s_f8637ee5891fc4::t_67a3797f190318 11,39,176-258
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/agentSpendResponse.ts
+  s_f8637ee5891fc4::t_8de180e9913003 1-27
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/currency.ts
+  s_f8637ee5891fc4::t_682526910d52dd 1-16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/getAgentSpendHandlerParams.ts
+  s_f8637ee5891fc4::t_1c5b68db49c291 1-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/index.ts
+  s_f8637ee5891fc4::t_847ba030dfb4e6 13,104,157,335-336
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/spendBucket.ts
+  s_f8637ee5891fc4::t_a419bb79b0addd 1-19
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/spendBucketTotal.ts
+  s_f8637ee5891fc4::t_8e7b2dc21a0b7d 1-16
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_f8637ee5891fc4::t_78a23e24d9ff1c 76-137,3750-3781,4560-4564,7278-7299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "18dc1180ffa938af8a7ffe598b87c7d2f99d3932",
+  "prompts": {},
+  "sessions": {
+    "s_f8637ee5891fc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f6871d74-299c-48cf-b7e6-17f827d232b1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
