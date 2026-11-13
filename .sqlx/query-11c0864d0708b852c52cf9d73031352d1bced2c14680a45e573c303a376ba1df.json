@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT dd.id\n            FROM crm_domain_directory dd\n            WHERE dd.id IN (\n                    SELECT w.id\n                    FROM crm_domain_directory w\n                    WHERE w.enriched_at IS NULL\n                      AND NOT w.enrichment_exhausted\n                      AND NOT w.enrichment_untracked\n                      AND (COALESCE(w.enrichment_attempted_at, '-infinity'), w.created_at)\n                          < (COALESCE($3::timestamptz, '-infinity'),\n                             COALESCE($4::timestamptz, '-infinity'))\n                    ORDER BY COALESCE(w.enrichment_attempted_at, '-infinity'), w.created_at\n                    LIMIT $1\n                )\n              AND (dd.enrichment_attempts >= $2\n                   OR NOT EXISTS (SELECT 1 FROM crm_domains d WHERE d.domain = dd.domain))\n            FOR UPDATE SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int2",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "11c0864d0708b852c52cf9d73031352d1bced2c14680a45e573c303a376ba1df"
+}
