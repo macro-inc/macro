@@ -9,7 +9,8 @@
 SET LOCAL lock_timeout = '3s';
 
 CREATE TABLE agent_wakes (
-    agent_user_id    TEXT        NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
+    agent_user_id    TEXT        NOT NULL REFERENCES "User" (id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
     wake_id          TEXT        NOT NULL,
     system           TEXT        NOT NULL,
     phase            SMALLINT    NOT NULL CHECK (phase BETWEEN 0 AND 2),
