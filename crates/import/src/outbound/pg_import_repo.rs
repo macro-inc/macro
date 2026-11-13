@@ -316,11 +316,11 @@ impl ImportRepo for PgImportRepo {
         match stored.status {
             // Already imported: first mapping wins; return the stored row.
             ImportStatus::Imported => Ok(stored),
-            // A running import holds it; never overwrite its work.
-            ImportStatus::Importing => Err(ImportError::ImportRunning),
-            ImportStatus::Staged | ImportStatus::Discarded => Err(ImportError::Other(
-                anyhow::anyhow!("imported upsert skipped a {} row", stored.status.as_ref()),
-            )),
+            // The upsert only skips importing rows, so the row was held by a
+            // running import, which may have finished or failed since.
+            ImportStatus::Importing | ImportStatus::Staged | ImportStatus::Discarded => {
+                Err(ImportError::ImportRunning)
+            }
         }
     }
 

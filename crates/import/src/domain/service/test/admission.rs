@@ -389,17 +389,9 @@ impl ConnectorSelect for NoConnector {
 }
 
 #[derive(Default)]
-pub(in crate::domain::service) struct Creator(AtomicUsize, Hidden);
-
-/// Whether the fake hides every entity from the caller.
-#[derive(Default)]
-pub(in crate::domain::service) struct Hidden(bool);
-
-impl Creator {
-    /// A creator whose entities the caller cannot see.
-    pub(in crate::domain::service) fn hiding() -> Self {
-        Self(AtomicUsize::new(0), Hidden(true))
-    }
+pub(in crate::domain::service) struct Creator {
+    pub(in crate::domain::service) created: AtomicUsize,
+    pub(in crate::domain::service) hidden_from_caller: bool,
 }
 
 impl EntityCreator for Creator {
@@ -409,7 +401,7 @@ impl EntityCreator for Creator {
         _: ImportSource,
         _: &str,
     ) -> anyhow::Result<bool> {
-        Ok(!self.1.0)
+        Ok(!self.hidden_from_caller)
     }
     async fn create_task(
         &self,
@@ -418,7 +410,7 @@ impl EntityCreator for Creator {
         _: &str,
         _: &ImportedTaskProperties,
     ) -> anyhow::Result<String> {
-        self.0.fetch_add(1, Ordering::SeqCst);
+        self.created.fetch_add(1, Ordering::SeqCst);
         Ok(Uuid::now_v7().to_string())
     }
     async fn create_notion_document(
@@ -429,7 +421,7 @@ impl EntityCreator for Creator {
         _: &NotionLinks,
         _: &ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
-        self.0.fetch_add(1, Ordering::SeqCst);
+        self.created.fetch_add(1, Ordering::SeqCst);
         Ok(Uuid::now_v7().to_string())
     }
     async fn create_channel(
@@ -439,7 +431,7 @@ impl EntityCreator for Creator {
         target: &ImportTargetReservation,
         _: &[String],
     ) -> anyhow::Result<Uuid> {
-        self.0.fetch_add(1, Ordering::SeqCst);
+        self.created.fetch_add(1, Ordering::SeqCst);
         Ok(target.channel_id)
     }
 }
@@ -545,7 +537,7 @@ async fn notion_direct_import_succeeds_and_denied_fallback_releases_claim() {
                 .status,
             ImportStatus::Imported
         );
-        assert_eq!(service.creator.0.load(Ordering::SeqCst), 1);
+        assert_eq!(service.creator.created.load(Ordering::SeqCst), 1);
     }
 }
 
@@ -579,7 +571,7 @@ async fn delayed_notion_work_rechecks_current_allowance_and_mixed_work_survives(
         .unwrap_err();
     assert_eq!(error.downcast_ref::<AiAdmissionError>(), Some(&denied()));
     tokio::time::timeout(Duration::from_secs(2), async {
-        while service.creator.0.load(Ordering::SeqCst) < 2 {
+        while service.creator.created.load(Ordering::SeqCst) < 2 {
             tokio::task::yield_now().await;
         }
     })
@@ -604,7 +596,10 @@ async fn recording_an_import_refuses_an_entity_the_caller_cannot_see() {
     let service = ImportServiceImpl::new(
         repo.clone(),
         Arc::new(NoConnector),
-        Arc::new(Creator::hiding()),
+        Arc::new(Creator {
+            created: AtomicUsize::new(0),
+            hidden_from_caller: true,
+        }),
         Arc::new(ai_usage::NoOpUsageRecorder),
     );
 

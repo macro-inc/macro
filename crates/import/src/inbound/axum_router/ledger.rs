@@ -368,12 +368,9 @@ impl IntoResponse for LedgerError {
             Self::Import(error @ ImportError::EntityNotAccessible(_)) => {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
-            Self::Import(error @ ImportError::ImportRunning) => {
-                (StatusCode::CONFLICT, error.to_string()).into_response()
-            }
-            Self::Import(error @ ImportError::NotionNotConnected) => {
-                (StatusCode::CONFLICT, error.to_string()).into_response()
-            }
+            Self::Import(
+                error @ (ImportError::ImportRunning | ImportError::NotionNotConnected),
+            ) => (StatusCode::CONFLICT, error.to_string()).into_response(),
             // The tools hand these messages to the model; keep them for SDK callers too.
             Self::Import(error @ ImportError::Other(_)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()

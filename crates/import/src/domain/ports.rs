@@ -64,6 +64,9 @@ pub enum ImportError {
     /// A running import holds the ledger row; recording now would overwrite its work.
     #[error("a running import is copying this item; wait for it to finish")]
     ImportRunning,
+    /// The entity-access check itself failed, so access is unknown.
+    #[error("could not check access to the entity")]
+    AccessCheck(#[source] anyhow::Error),
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -505,8 +508,10 @@ pub struct NotionUserLink {
     pub email: String,
 }
 
-/// Creates the Macro entities imports become. Implemented by the host
-/// service against its real document/channel services; the fixed
+/// Creates the Macro entities imports become, and checks the caller can see
+/// an existing one before it is recorded as an import. Implemented by the
+/// host service against its real document/channel and entity-access
+/// services; the fixed
 /// source → entity-type mapping is enforced by the import service, which
 /// only ever calls the creator matching the row's source.
 pub trait EntityCreator: Send + Sync + 'static {
