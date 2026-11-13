@@ -13,8 +13,10 @@ jobs:
       run: |
         set -euo pipefail
         db=target/advisory-dbs/advisory-db-3157b0e258782691
+        rm -rf "$db"
         git init -q "$db"
-        git -C "$db" fetch -q --depth 1 https://github.com/rustsec/advisory-db "$(cat .github/advisory-db-rev)"
+        git -C "$db" remote add -t main origin https://github.com/rustsec/advisory-db
+        git -C "$db" fetch -q --depth 1 origin "$(cat .github/advisory-db-rev)"
         git -C "$db" checkout -q --detach FETCH_HEAD
         echo "advisory-db at $(git -C "$db" log -1 --format='%h %cI')"
       shell: bash

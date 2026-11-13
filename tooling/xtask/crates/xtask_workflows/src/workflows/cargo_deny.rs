@@ -60,14 +60,22 @@ fn checkout() -> Step<Use> {
 
 /// Clone the pinned commit where cargo-deny looks for the database. The action
 /// runs in a container that sees only the workspace, so it goes there.
+///
+/// A later `cargo deny check` without `--disable-fetch` runs `git fetch` here,
+/// then resets to the first ref in `FETCH_HEAD`. On this detached clone that
+/// is `main` only because `origin` tracks nothing else; with every branch, it
+/// would be whichever advisory-db branch sorts first. Without a remote, the
+/// fetch would fail and cargo-deny, which ignores that, would stay on the pin.
 pub(crate) fn fetch_advisory_db() -> Step<Run> {
     Step::new("Fetch the pinned advisory database")
         .run(format!(
             indoc::indoc! {r#"
                 set -euo pipefail
                 db={db}
+                rm -rf "$db"
                 git init -q "$db"
-                git -C "$db" fetch -q --depth 1 https://github.com/rustsec/advisory-db "$(cat {rev})"
+                git -C "$db" remote add -t main origin https://github.com/rustsec/advisory-db
+                git -C "$db" fetch -q --depth 1 origin "$(cat {rev})"
                 git -C "$db" checkout -q --detach FETCH_HEAD
                 echo "advisory-db at $(git -C "$db" log -1 --format='%h %cI')"
             "#},
