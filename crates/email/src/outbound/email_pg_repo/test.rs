@@ -26,6 +26,7 @@ mod subject_filter;
 mod thread;
 mod thread_archive;
 mod thread_labels;
+mod thread_lookup;
 mod thread_redirect;
 mod thread_unread;
 

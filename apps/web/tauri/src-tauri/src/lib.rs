@@ -93,6 +93,15 @@ fn embedded_bundle_build() -> u64 {
         .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer")
 }
 
+/// When this native binary was compiled, in Unix milliseconds. Unlike the
+/// JavaScript build time, OTA bundle updates do not change it.
+#[tauri::command]
+fn get_native_build_time() -> u64 {
+    env!("MACRO_NATIVE_BUILD_TIME_MS")
+        .parse()
+        .expect("MACRO_NATIVE_BUILD_TIME_MS must be an unsigned integer")
+}
+
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
@@ -451,6 +460,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
             is_ipad,
+            get_native_build_time,
             get_pending_share_filenames,
             pop_shared_files,
             clear_shared_files,

@@ -199,6 +199,13 @@ tools — hexagonal, heavily feature-gated.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
 - Spam and Trash seed candidates from indexed provider labels/folder state plus pending positive moves, then recheck canonical mailbox facts before pagination. Order by the latest matching message date; metadata touches and unrelated replies must not move folder rows. Only Trash relaxes the default trash exclusion.
+- A thread read by id (`emailThread`, `soupUpdates` hydration, mutation replies)
+  renders as All Mail shows it, else as its Spam or Trash row
+  (`thread_previews_by_id` in `domain/service/previews.rs`); All Mail alone
+  misses every spam-only or trash-only thread. Read the folders one thread at a
+  time, at most `MAX_FOLDER_LOOKUPS` per read: the folder scan reaches only that
+  thread's messages through an equality on its id, and an `OR` of ids reads the
+  inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
 
@@ -357,6 +364,9 @@ tools — hexagonal, heavily feature-gated.
   `pending`, since claims skip `confirming` ones while those still block later
   commands, as reconnect (`email_service` `mailbox_init.rs`) and `rebind_work` in
   `outbound/mailbox_pg/lifecycle.rs` do; thread operations omit older generations.
+  The same bumps delete older generations' `email_sync_streams` and
+  `email_message_reconciliation` rows: claims never take them, and left in place
+  they stay due and every lease claim reads past them.
 
 ## Related
 

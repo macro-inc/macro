@@ -149,13 +149,25 @@ pub(crate) async fn mailbox_request<T: IntoResponse>(
 }
 
 /// Serves a request that has no mailbox token, such as a token refresh.
+///
+/// A fault that names no mailbox answers before the handler runs, so the
+/// request changes nothing, as when Google fails it: a code stays unspent
+/// and can be retried. Only the handler knows the request's mailbox, so a
+/// fault that names one replaces the response after the handler has run.
 pub(crate) async fn open_request(
     emulator: &GmailEmulator,
     route: Route,
     handler: impl FnOnce(&mut State) -> (Option<String>, Response),
 ) -> Response {
     let (mailbox, delay, response) = emulator.with_state(|state| {
+        let (error, delay) = fault(state, None, route);
+        if let Some(error) = error {
+            return (None, delay, error.into_response());
+        }
         let (mailbox, response) = handler(state);
+        if delay.is_some() || mailbox.is_none() {
+            return (mailbox, delay, response);
+        }
         let (error, delay) = fault(state, mailbox.as_deref(), route);
         match error {
             Some(error) => (mailbox, delay, error.into_response()),
