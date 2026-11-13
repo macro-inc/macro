@@ -142,8 +142,26 @@ against the first:
   leaves 1. A side with no answer counts as the slower; pairs where neither
   answered, or the eval itself failed on either side, are left out.
 - **quality**: the share passing every check may not fall by more than
-  `QUALITY_MARGIN` (`report.ts`), what main against main moves by at this size;
-  a bigger fall is a loss whatever the time.
+  the arm's `QUALITY_MARGIN` (`report.ts`), what main against main moves by
+  at this size; a bigger fall is a loss whatever the time.
+
+### Main's baseline and noise
+
+Main at b23b613b5d, on a stack on main's schema, 2 rounds of the 20 cases
+under each of two copies of the same harness build (80 drafts per arm),
+measured on 2026-11-12 and 13:
+
+| Arm | median | p90 | worst | under 15 s | every check | mechanical | run | judge (keep) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `draft` | 26.7 s | 47.6 s | 84.2 s | 19% | 68% | 95% | 55% | 4.2 (79%) |
+| `bare` | 26.8 s | 45.7 s | 59.6 s | 30% | 83% | 100% | 73% | 4.4 (86%) |
+
+`noise` on the two copies: time within ×0.93–1.15 (`draft`) and ×0.97–1.16
+(`bare`); the share passing every check within ±12.5% and ±6.25%, which
+are the margins. Two rounds give 40 pairs; a comparison of more rounds has a
+narrower interval, so this margin lets it fall a little further than chance
+would. The judge, against 20 drafts graded by hand, made the same keep-or-fix
+call on 16.
 
 `harness --bin <dir>` points the stack at one build; `reread` checks results
 again after a change to the checks (`--traces` reads the traces again,

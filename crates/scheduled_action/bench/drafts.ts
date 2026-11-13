@@ -503,7 +503,11 @@ function compare(args: string[]) {
     const first = files[0];
     const last = files[files.length - 1];
     lines.push('', `### ${last.label} against ${first.label}`, '');
-    lines.push(...verdictLines(verdict(first.attempts, last.attempts, Number(values.margin ?? QUALITY_MARGIN))));
+    if (values.margin === undefined && first.arm !== last.arm) {
+      throw new Error(`${first.label} is the ${first.arm} arm and ${last.label} the ${last.arm} arm: pass --margin`);
+    }
+    const margin = values.margin === undefined ? QUALITY_MARGIN[first.arm] : Number(values.margin);
+    lines.push(...verdictLines(verdict(first.attempts, last.attempts, margin)));
   }
   const report = `${lines.join('\n')}\n`;
   if (values.out) writeFileSync(values.out, report);
@@ -638,10 +642,11 @@ const USAGE = `usage:
   drafts.ts run --label <build> --out <file.json> [--arm draft|bare] [--rounds 3]
       [--cases a,b] [--model m] [--no-run-checks] [--no-judge] [--append]
   drafts.ts ab --a <label> --a-bin <dir> --b <label> --b-bin <dir> --dir <out>
-      [--arm draft|bare] [--rounds 4] [...run options]
+      [--arm draft|bare] [--rounds 3] [...run options]
       interleaved rounds of two harness builds, swapping the stack's harness;
       --rounds is the total, so the same command again finishes a stopped run
-  drafts.ts compare <a.json> [<b.json>...] [--margin 0.1] [--out report.md]
+  drafts.ts compare <a.json> [<b.json>...] [--margin <share>] [--out report.md]
+      the margin defaults to the arm's measured noise (QUALITY_MARGIN)
   drafts.ts noise <a.json> <b.json>    one build against itself: the margin to use
   drafts.ts reread [--traces] [--judge] <results.json>...
   drafts.ts calibrate --grades <grades.json> <results.json>...

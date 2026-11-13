@@ -142,10 +142,12 @@ export function summaryRow(name: string, row: Summary) {
 
 /**
  * How far the share of drafts passing every check may fall before a change
- * counts as drafting worse. Measured by running main against itself (see
- * README); a run of a different size needs its own measurement.
+ * counts as drafting worse, per arm: half the width of the 95% interval main
+ * moved by against itself (`noise`), at main b23b613b5d over 40 pairs, two
+ * rounds of the 20 cases (see README). A run of a different size needs its
+ * own measurement.
  */
-export const QUALITY_MARGIN = 0.1;
+export const QUALITY_MARGIN: Record<Arm, number> = { draft: 0.125, bare: 0.0625 };
 
 /** A seeded generator, so a verdict is the same every time it's computed. */
 function random(seed: number) {
@@ -221,7 +223,7 @@ const SLACK = 1e-9;
  * answered or the eval failed on either side are left out.
  * Quality: the share passing every check may not fall by more than `margin`.
  */
-export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Verdict {
+export function verdict(a: Attempt[], b: Attempt[], margin: number): Verdict {
   const sample = pairs(a, b);
   if (sample.length < 5) throw new Error(`only ${sample.length} paired attempts; run both sides on the same rounds`);
   // Time compares the pairs where either side answered and the eval itself
