@@ -158,7 +158,7 @@ export function RecipientList(props: {
                 when={props.inFlight && recipient.isSender && recipient.access}
               >
                 <Button
-                  variant="accent"
+                  variant="primary"
                   size="sm"
                   onClick={() => props.onSign(recipient)}
                 >
