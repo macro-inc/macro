@@ -132,6 +132,7 @@ export function dependencies(
           'defineStyle',
           'defineComponent',
           'presentOrder',
+          'presentationTransition',
         ].includes(op.kind)
     )
   ) {

@@ -1,4 +1,11 @@
-import { ARTIFACT_HTML_MAX_LENGTH } from '@macro-inc/graphics';
+import {
+  ARTIFACT_HTML_MAX_LENGTH,
+  SLIDE_TRANSITION_KINDS,
+  TRANSITION_DIRECTIONS,
+  TRANSITION_DURATION_MAX_MS,
+  TRANSITION_DURATION_MIN_MS,
+  TRANSITION_EASINGS,
+} from '@macro-inc/graphics';
 import { ARTIFACT_LIBRARY_ENTRY_MAX_LENGTH } from '@macro-inc/graphics/loro';
 import { z } from 'zod';
 
@@ -56,6 +63,19 @@ const artifactTitle = z.string().max(200);
 const designSize = z.number().positive().max(10_000);
 const libraryName = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const librarySource = z.string().max(ARTIFACT_LIBRARY_ENTRY_MAX_LENGTH);
+const transition = z
+  .object({
+    kind: z.enum(SLIDE_TRANSITION_KINDS),
+    durationMs: z
+      .number()
+      .int()
+      .min(TRANSITION_DURATION_MIN_MS)
+      .max(TRANSITION_DURATION_MAX_MS)
+      .optional(),
+    easing: z.enum(TRANSITION_EASINGS).optional(),
+    direction: z.enum(TRANSITION_DIRECTIONS).optional(),
+  })
+  .strict();
 
 export const canvasOpSchema = z.discriminatedUnion('kind', [
   z
@@ -154,6 +174,7 @@ export const canvasOpSchema = z.discriminatedUnion('kind', [
       height: size.optional(),
       designWidth: designSize.optional(),
       designHeight: designSize.optional(),
+      transition: transition.optional(),
     })
     .strict(),
   z
@@ -164,6 +185,8 @@ export const canvasOpSchema = z.discriminatedUnion('kind', [
       html: artifactHtml.optional(),
       designWidth: designSize.optional(),
       designHeight: designSize.optional(),
+      /** Null removes the slide's own transition, so it uses the deck default. */
+      transition: transition.nullable().optional(),
     })
     .strict(),
   z
@@ -189,6 +212,12 @@ export const canvasOpSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('presentOrder'), ids }).strict(),
+  z
+    .object({
+      kind: z.literal('presentationTransition'),
+      transition: transition.nullable(),
+    })
+    .strict(),
 ]);
 export const canvasOpsSchema = z.array(canvasOpSchema).max(100);
 export type CanvasOp = z.infer<typeof canvasOpSchema>;
@@ -202,5 +231,6 @@ const ARTIFACT_OPS: ReadonlySet<CanvasOp['kind']> = new Set([
   'defineStyle',
   'defineComponent',
   'presentOrder',
+  'presentationTransition',
 ]);
 export const isArtifactOp = (op: CanvasOp) => ARTIFACT_OPS.has(op.kind);
