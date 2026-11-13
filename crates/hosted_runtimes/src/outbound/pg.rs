@@ -966,38 +966,4 @@ impl ComputerRepo for PgComputerRepo {
             })
             .collect()
     }
-
-    async fn sold_out_sizes(
-        &self,
-        catalog: &[crate::domain::size::CatalogEntry],
-        _now: DateTime<Utc>,
-    ) -> Result<Vec<ComputerSize>, PgComputerError> {
-        let free = sqlx::query_scalar!(
-            r#"
-            WITH held AS (
-                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4) AS units
-                FROM hosted_runtime
-                WHERE (state->'phase'->>'phase') <> 'destroying' AND team_id IS NOT NULL
-                UNION ALL
-                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
-                FROM computer_reservation
-            )
-            SELECT COALESCE(MAX(free), 0)::INTEGER AS "free!"
-            FROM (
-                SELECT host.sold_capacity_units - COALESCE(SUM(held.units), 0) AS free
-                FROM hosted_runtime_host host
-                LEFT JOIN held ON held.host_id = host.id
-                GROUP BY host.id, host.sold_capacity_units
-            ) hosts
-            "#,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(catalog
-            .iter()
-            .filter(|entry| i64::from(entry.resources.units()) > i64::from(free))
-            .map(|entry| entry.size)
-            .collect())
-    }
 }

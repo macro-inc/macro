@@ -279,7 +279,9 @@ impl<
         }
     }
 
-    /// Every size with its price and availability.
+    /// Every size some host can run awake, with its price and availability.
+    /// A size too large for every host is left out rather than sold out:
+    /// waiting for capacity would never make it available.
     #[tracing::instrument(skip(self, user_id), err)]
     pub async fn offers(
         &self,
@@ -288,23 +290,23 @@ impl<
     ) -> Result<Vec<SizeOffer>, ComputerError> {
         self.require_rollout(&user_id).await?;
         self.require_attached().await?;
-        let sold_out = self
-            .repo
-            .sold_out_sizes(&self.catalog, self.clock.now())
-            .await
-            .map_err(internal)?;
+        let hosts = self.repo.allocation().await.map_err(internal)?;
 
         let billing = self.purchase_billing(team_id).await?;
         let mut offers = Vec::new();
         for entry in &self.catalog {
             let size = entry.size;
+            let units = entry.resources.units();
+            if !hosts.iter().any(|host| host.runs(units)) {
+                continue;
+            }
             offers.push(SizeOffer {
                 size,
                 vcpus: entry.resources.vcpus.get(),
                 memory_gb: entry.resources.memory_gib.get(),
                 disk_gb: entry.resources.disk_gib.get(),
                 quote: self.quote(team_id, size, &billing).await?,
-                sold_out: sold_out.contains(&size),
+                sold_out: !hosts.iter().any(|host| host.sells(units)),
             });
         }
         Ok(offers)

@@ -97,7 +97,7 @@ pub struct DueTimer {
 /// Why units could not be reserved.
 #[derive(Debug, thiserror::Error)]
 pub enum ReserveError<Err> {
-    /// No host has enough sale capacity.
+    /// No host that can run the size awake has enough sale capacity.
     #[error("no host has room for this size")]
     SoldOut,
     /// Reservation storage failed.
@@ -144,10 +144,11 @@ pub trait ComputerRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Self::BillingGuard, Self::Err>> + Send;
 
     /// Under the host lock: return what `reservation.purchase_key` already
-    /// led to, or hold the purchase's units on the host with the most sold
+    /// led to, or hold the purchase's units until `expires_at` on the host,
+    /// among those whose awake capacity fits them, with the most sold
     /// capacity left (sold capacity minus live computers and
     /// reservations, expired or not: an expired one may still settle as
-    /// charged) until `expires_at`.
+    /// charged).
     fn reserve(
         &self,
         reservation: NewReservation,
@@ -383,13 +384,6 @@ pub trait ComputerRepo: Send + Sync + 'static {
 
     /// Every host with what its computers and reservations hold, by host id.
     fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
-
-    /// Sizes that no host can sell at `now`.
-    fn sold_out_sizes(
-        &self,
-        catalog: &[crate::domain::size::CatalogEntry],
-        now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 }
 
 /// Errors from billing a team.

@@ -194,10 +194,14 @@ attempt, so a busy database never fails a computer or abandons a removal.
 - **Capacity**: free sold units are sold capacity minus the units of live
   bought computers (phase not `destroying`) and every reservation, expired or not
   (an expired one may still settle as charged), reserved under
-  the host lock. `GET /team/computers/offers` reports `soldOut` per size; a
-  purchase no host can fit returns `ComputerError::SoldOut(size)` (409, "No
-  capacity for <size> right now") before billing. `ComputerRepo::allocation`
-  reads the same holdings per host; see Observability for its gauges.
+  the host lock. A size is only reserved on a host whose awake capacity
+  fits it, so a sold computer can always be powered on somewhere.
+  `GET /team/computers/offers`, computed from `ComputerRepo::allocation`,
+  omits sizes no host can run awake (waiting would never make them
+  available) and reports `soldOut` for the rest; a purchase no host can fit
+  returns `ComputerError::SoldOut(size)` (409, "No capacity for <size> right
+  now") before billing. `allocation` reads the same holdings per host; see
+  Observability for its gauges.
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { billing, purchase_key, team_id, created_by, size, name, extra_items })`
   → `Purchase::{Ready(id), Confirming(id)}`. The client's `purchase_key` (one
   per Buy dialog, reused on retry) makes `ComputerRepo::reserve` return what

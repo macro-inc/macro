@@ -4,31 +4,44 @@ use super::*;
 async fn offers_use_free_sold_units_per_size(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool, policy());
-    // 24 GB: 3 awake units, sold 3x.
+    // 32 GB: 4 awake units, sold 3x.
     repo.register_host(HostRegistration {
         name: "capacity-test".to_owned(),
-        memory_gb: 24,
+        memory_gb: 32,
         reserve_gb: 0,
         oversell_factor: 3,
         image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
     })
     .await
     .unwrap();
-    assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog(), now())
-            .await
-            .unwrap(),
-        vec![]
-    );
-    for id in [1, 2, 3, 4, 5, 6] {
+    assert_eq!(sold_out(&repo).await, vec![]);
+    for id in 1..=9 {
         bought(&repo, id).await;
     }
-    assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog(), now())
-            .await
-            .unwrap(),
-        vec![ComputerSize::Xl]
-    );
+    assert_eq!(sold_out(&repo).await, vec![ComputerSize::Xl]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reserve_skips_hosts_too_small_to_wake_the_size(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool, policy());
+    // 31 GB, 7 reserved: 3 awake units, sold 3x. An XL needs 4 awake units.
+    let small = host(&repo, "runtime-dev-1", 31, 7, 3).await;
+    let mut xl = standard(1);
+    xl.size = ComputerSize::Xl;
+    xl.resources.memory_gib = MemoryGib::new(32);
+
+    assert!(matches!(
+        repo.reserve(xl.clone(), now(), now() + Duration::minutes(15))
+            .await,
+        Err(ReserveError::SoldOut)
+    ));
+
+    // 40 GB: 5 awake units, sold once. It runs the XL though it has less
+    // sold capacity left than the small host.
+    let large = host(&repo, "capacity-test", 40, 0, 1).await;
+    assert_eq!(reserve(&repo, xl).await.host, large.id);
+    assert_ne!(small.id, large.id);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
