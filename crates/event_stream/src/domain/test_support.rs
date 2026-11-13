@@ -25,6 +25,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
+/// Each principal's granted level, by (entity type, entity id, principal).
+type GrantLevels = HashMap<(EntityType, String, String), MinAccessLevel>;
+
+/// Each team's members and their roles.
+type TeamMembers = HashMap<Uuid, Vec<(MacroUserIdStr<'static>, TeamRole)>>;
+
 pub fn user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(&format!("macro|{email}"))
         .unwrap()
@@ -43,7 +49,7 @@ pub struct AccessState {
 #[derive(Clone, Default)]
 pub struct FakeAccess {
     pub state: Arc<Mutex<AccessState>>,
-    pub levels: Arc<Mutex<HashMap<(EntityType, String, String), MinAccessLevel>>>,
+    pub levels: Arc<Mutex<GrantLevels>>,
     pub list_calls: Arc<AtomicUsize>,
     pub exact_calls: Arc<AtomicUsize>,
 }
@@ -156,7 +162,7 @@ impl AccessDirectory for FakeAccess {
 
 #[derive(Clone, Default)]
 pub struct FakeTeams {
-    pub members: Arc<Mutex<HashMap<Uuid, Vec<(MacroUserIdStr<'static>, TeamRole)>>>>,
+    pub members: Arc<Mutex<TeamMembers>>,
 }
 
 impl FakeTeams {
