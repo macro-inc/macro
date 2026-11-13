@@ -1,0 +1,31 @@
+Cargo.lock
+  s_8703f73ae8e37d::t_2eb26087e3fa1d 8156,8168,8187
+crates/event_stream/Cargo.toml
+  s_8703f73ae8e37d::t_93e8d0c02aeabf 113-115
+crates/event_stream/src/inbound/stream_router/test.rs
+  s_4a88f0d5bec835::t_59afbb4cbaa6f0 60-367
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "14f5a2a5fa6c8ed9bc051a6c5c0bbc2d3f47e258",
+  "prompts": {},
+  "sessions": {
+    "s_4a88f0d5bec835": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50b3830b-5833-42b8-bc02-d8e2b6aadd09",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
