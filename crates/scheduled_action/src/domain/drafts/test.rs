@@ -234,7 +234,7 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     }
 }
 
-/// Stands in for the SDK's routines guide, which `agent_code_mode` tests.
+/// Stands in for `routine_program::WRITING`.
 const GUIDE: &str = "Find the item whose name is exactly the name used.";
 
 fn agent() -> DraftAgent {
@@ -413,7 +413,7 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     assert!(prompt.contains("macro.routines.check"), "{prompt}");
     // The rules every session follows, read from one place, plus drafting's.
     assert!(
-        prompt.contains(&format!("<routines-guide>\n{GUIDE}\n</routines-guide>")),
+        prompt.contains(&format!("<writing-routines>\n{GUIDE}\n</writing-routines>")),
         "{prompt}"
     );
     assert!(prompt.contains("You can't ask them anything"), "{prompt}");

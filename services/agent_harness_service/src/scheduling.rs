@@ -397,8 +397,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::clone(&hand_backs),
             DraftAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
-                // Generated from the SDK at build time, so it is always there.
-                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+                guide: routine_program::WRITING,
             },
         )
         .with_session_creations(Arc::new(ActivityCreations(
@@ -472,7 +471,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         routine_flags.clone(),
         SuggestionAgent {
             bot: bot_id::MACRO_NEW_BOT_ID,
-            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            guide: routine_program::WRITING,
             model: chat::domain::models::FREE_MODEL.to_owned(),
         },
         lifecycle.workers.clone(),

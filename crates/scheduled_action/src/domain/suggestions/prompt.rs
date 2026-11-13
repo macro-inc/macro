@@ -2,7 +2,7 @@
 //! and apps as untrusted data.
 
 use chrono::{SecondsFormat, Utc};
-use routine_program::{CATALOG, CODE_STEPS, CatalogRoutine, STEP_CONTEXT, Surface};
+use routine_program::{CATALOG, CatalogRoutine, STEP_CONTEXT, Surface};
 use serde_json::{Value, json};
 
 use super::decode::line;
@@ -40,7 +40,7 @@ pub struct BriefData<'a> {
     pub agent_model: &'a str,
     /// Whether code steps can be written.
     pub code: bool,
-    /// The SDK's routines guide.
+    /// How to write a routine: `routine_program::WRITING`.
     pub guide: &'a str,
 }
 
@@ -59,7 +59,7 @@ pub fn brief(data: &BriefData<'_>) -> String {
     let timezone = data.timezone;
     let steps = if data.code {
         format!(
-            "Steps run in order. Prefer a code step whenever code can do the job. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```"
+            "An Ask AI step is `{{type: 'agent', model: '{model}', instructions}}`.\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```"
         )
     } else {
         format!(
@@ -82,9 +82,9 @@ pub fn brief(data: &BriefData<'_>) -> String {
         "{task}
 Now is {now}; the user's time zone is {timezone}. Cron schedules take `timezone: '{timezone}'`.
 
-<routines-guide>
+<writing-routines>
 {guide}
-</routines-guide>
+</writing-routines>
 
 {steps}
 

@@ -25,7 +25,7 @@ use anyhow::Result;
 use bot_id::BotId;
 use chrono::{SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
+use routine_program::{CATALOG, RoutineProgram, STEP_CONTEXT, Step};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -218,9 +218,9 @@ pub struct InvalidDraft(pub String);
 pub struct DraftAgent {
     /// The in-process Macro agent.
     pub bot: BotId,
-    /// How to write a routine: the SDK's routines guide, the same text every
-    /// code-mode session reads (`agent_code_mode::entity_guide("routines")`).
-    /// The brief adds only what is particular to drafting.
+    /// How to write a routine: `routine_program::WRITING`, the text the
+    /// Compose Routines skill also carries. The brief adds only what is
+    /// particular to drafting.
     pub guide: &'static str,
 }
 
@@ -778,7 +778,7 @@ fn brief(
     let model = &context.agent_model;
     let steps = if code {
         format!(
-            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
+            "An Ask AI step is `{{type: 'agent', model: '{model}', instructions}}`.\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
             catalog_examples(context.conditions)
         )
     } else {
@@ -797,14 +797,14 @@ fn brief(
 
 You are setting up this routine for {owner}, with their access; they review the draft before it is saved. Now is {now}; their time zone is {timezone}. Work in code mode: read the SDK methods you use with ReadCodeDocs, and do the whole job in as few ExecuteCode programs as you can.
 
-Follow the routines guide, which every session follows when it sets up a routine:
-<routines-guide>
+Write it as every writer of routines does:
+<writing-routines>
 {guide}
-</routines-guide>
+</writing-routines>
 
 For this draft:
 
-1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
+1. Find the items the words name with one `macro.search.names([...])` call: the item is the match marked `exact`. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
 
 2. Don't create the routine itself, run it or test it: you hand it back for them to review.
 
