@@ -1,0 +1,32 @@
+tooling/xtask/crates/xtask_local/src/local/computers/test.rs
+  s_c1146e8a8b951b::t_1f49e2e120d1a0 317-328
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_c1146e8a8b951b::t_1f49e2e120d1a0 549-555,558-567,624-626,632,661-670,694,696-717,722-723,726-729,731,733-744
+  s_c6fe7b7c1d36f7::t_e13ff3486976db 745-748
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build.rs
+  s_c6fe7b7c1d36f7::t_51120f0b3e9e16 199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "52fabf5c8cd7417d02194b222f59f4088d2402f5",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
