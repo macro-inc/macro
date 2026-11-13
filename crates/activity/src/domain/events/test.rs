@@ -114,3 +114,85 @@ fn payload_actions_carry_their_columns() {
     let record = row.into_record().expect("decodes");
     assert_eq!(record.subject_id, "macro|boss@example.com");
 }
+
+fn wire_row() -> ActivityWireRow {
+    ActivityWireRow {
+        agent_correlation_id: Some(Uuid::from_u128(9)),
+        agent_verb: Some("edit".to_owned()),
+        id: Uuid::from_u128(7),
+        actor_id: "macro|actor@example.com".to_owned(),
+        subject_id: "macro|actor@example.com".to_owned(),
+        entity_type: EntityType::Document,
+        entity_id: "doc-1".to_owned(),
+        action: "renamed".to_owned(),
+        action_payload: Some(json!({ "from": "Secret plan", "to": "Public plan" })),
+        occurred_at: chrono::DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+            .unwrap()
+            .with_timezone(&Utc),
+    }
+}
+
+#[test]
+fn recorded_activity_reaches_only_its_recipient_without_action_payloads() {
+    use macro_event_broker::exposure::{Audience, EntityRef, Exposure, Stage};
+
+    let event = ActivityTopicEvent::Recorded {
+        recipient_id: "macro|reader@example.com".to_owned(),
+        activities: vec![wire_row()],
+    };
+    let Exposure::Public(public) = event.exposure().expect("valid exposure") else {
+        panic!("activity.recorded must be public");
+    };
+    assert_eq!(public.name, "activity.recorded");
+    assert_eq!(public.stage, Stage::Preview);
+    assert_eq!(
+        public.entity,
+        EntityRef::new(EntityType::User, "macro|reader@example.com")
+    );
+    assert_eq!(
+        public.audience,
+        Audience::Recipient {
+            user_id: user("macro|reader@example.com")
+        }
+    );
+    assert_eq!(
+        serde_json::to_value(public.payload.as_ref()).unwrap(),
+        json!({
+            "event_type": "activity.recorded",
+            "metadata": {
+                "activities": [{
+                    "id": "00000000-0000-0000-0000-000000000007",
+                    "actor_id": "macro|actor@example.com",
+                    "subject_id": "macro|actor@example.com",
+                    "entity_type": "document",
+                    "entity_id": "doc-1",
+                    "action": "renamed",
+                    "occurred_at": "2026-01-02T03:04:05Z"
+                }]
+            }
+        })
+    );
+}
+
+#[test]
+fn a_malformed_recipient_is_rejected() {
+    let event = ActivityTopicEvent::Recorded {
+        recipient_id: "bot|1".to_owned(),
+        activities: vec![],
+    };
+    assert!(event.exposure().is_err());
+}
+
+#[test]
+fn session_rows_and_invalidations_stay_internal() {
+    use macro_event_broker::exposure::Exposure;
+
+    for event in [
+        ActivityTopicEvent::SessionRecorded {
+            activities: vec![wire_row()],
+        },
+        ActivityTopicEvent::Invalidated,
+    ] {
+        assert!(matches!(event.exposure(), Ok(Exposure::Internal(_))));
+    }
+}

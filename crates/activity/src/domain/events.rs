@@ -135,7 +135,7 @@ impl TopicEvent for ActivityTopicEvent {
     // Older consumers skip the new session event during rolling deployment.
     const SCHEMA_VERSION: u8 = 2;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = ActivityPublicEvent;
 
     fn exposure(
         &self,
@@ -143,17 +143,88 @@ impl TopicEvent for ActivityTopicEvent {
         macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
         macro_event_broker::exposure::ExposureError,
     > {
-        use macro_event_broker::exposure::{Exposure, PendingPhase};
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, Exposure, PublicEvent, Stage, parse_user_id,
+        };
+        use std::borrow::Cow;
 
-        Ok(match self {
-            Self::Recorded { .. } => Exposure::pending(
-                PendingPhase::PersonalFamilies,
-                "Recipient(recipient_id), parsing the untyped recipient_id; project row ids, actor, entity and action",
-            ),
-            Self::SessionRecorded { .. } | Self::Invalidated => Exposure::internal_by_design(
+        match self {
+            Self::Recorded {
+                recipient_id,
+                activities,
+            } => {
+                let user_id = parse_user_id(recipient_id)?;
+                // The recipient's feed is personal: only them, never their teams.
+                Ok(Exposure::Public(PublicEvent {
+                    name: ACTIVITY_RECORDED,
+                    entity: EntityRef::new(EntityType::User, recipient_id.clone()),
+                    audience: Audience::Recipient { user_id },
+                    stage: Stage::Preview,
+                    payload: Cow::Owned(ActivityPublicEvent::Recorded(ActivityRecorded {
+                        activities: activities.iter().map(PublicActivity::from).collect(),
+                    })),
+                }))
+            }
+            Self::SessionRecorded { .. } | Self::Invalidated => Ok(Exposure::internal_by_design(
                 "session-viewer rows and global invalidations are app cache signals",
-            ),
-        })
+            )),
+        }
+    }
+}
+
+const ACTIVITY_RECORDED: &str = "activity.recorded";
+
+/// The public projection of [`ActivityTopicEvent`], delivered only to the
+/// addressed recipient.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum ActivityPublicEvent {
+    /// Activities the recipient may see were recorded.
+    #[serde(rename = "activity.recorded")]
+    Recorded(ActivityRecorded),
+}
+
+/// Public body of `activity.recorded`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ActivityRecorded {
+    /// The recorded rows, in recording order.
+    pub activities: Vec<PublicActivity>,
+}
+
+/// One recorded activity: who did what to which entity, without the action's
+/// payload (read it back through the activity API).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct PublicActivity {
+    /// The activity id.
+    pub id: Uuid,
+    /// Who acted, as a principal string (`macro|…` or `bot|…`).
+    pub actor_id: String,
+    /// Whose activity this is, as a principal string.
+    pub subject_id: String,
+    /// The kind of entity acted on.
+    pub entity_type: EntityType,
+    /// The entity acted on.
+    pub entity_id: String,
+    /// The action tag, such as `created`.
+    pub action: String,
+    /// When it happened.
+    pub occurred_at: DateTime<Utc>,
+}
+
+impl From<&ActivityWireRow> for PublicActivity {
+    fn from(row: &ActivityWireRow) -> Self {
+        Self {
+            id: row.id,
+            actor_id: row.actor_id.clone(),
+            subject_id: row.subject_id.clone(),
+            entity_type: row.entity_type,
+            entity_id: row.entity_id.clone(),
+            action: row.action.clone(),
+            occurred_at: row.occurred_at,
+        }
     }
 }
 
