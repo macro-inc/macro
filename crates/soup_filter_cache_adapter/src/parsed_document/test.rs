@@ -12,7 +12,7 @@ fn parses_a_document_text_once_and_shares_it() {
 }
 
 #[test]
-fn keeps_only_recent_documents_and_never_an_invalid_one() {
+fn keeps_only_recent_documents_and_reports_an_invalid_one_each_time() {
     let oldest = "query Oldest { user { id } }";
     let before = parsed_document(oldest).unwrap();
     for index in 0..RECENT_DOCUMENTS {
