@@ -1,8 +1,8 @@
 //! An in-process SQS endpoint speaking the AWS JSON 1.0 protocol.
 //!
 //! The production `sqs_client::SQS` and `sqs_worker::SQSWorker` send real SDK
-//! requests here. Sends, deletes and visibility changes are recorded for the
-//! simulation, which owns delivery and the virtual clock.
+//! requests here. Sends, deletes and visibility changes are only recorded;
+//! the harness using it decides when and how messages are delivered.
 
 use axum::Router;
 use axum::body::Bytes;

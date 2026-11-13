@@ -75,3 +75,31 @@ async fn a_refresh_token_mints_access_tokens_until_the_grant_is_revoked() {
     let revoked = client(&emulator).get_profile(access).await.unwrap_err();
     assert_eq!(revoked.status().unwrap().as_u16(), 401);
 }
+
+#[tokio::test]
+async fn a_grant_without_the_gmail_scope_is_refused_gmail_calls() {
+    let mut mailbox = crate::SeedMailbox::new(ADA);
+    mailbox.scopes = Some(vec![
+        "openid".to_string(),
+        "https://www.googleapis.com/auth/userinfo.email".to_string(),
+    ]);
+    let emulator = crate::GmailEmulator::start(crate::Seed {
+        mailboxes: vec![mailbox],
+        ..crate::Seed::default()
+    })
+    .await
+    .unwrap();
+    let client = client(&emulator);
+    let token = emulator.access_token(ADA).unwrap();
+
+    let refused = client.list_messages(&token, 10, &["INBOX"]).await;
+
+    let error = refused.unwrap_err();
+    assert_eq!(error.status().map(|status| status.as_u16()), Some(403));
+    assert!(
+        error
+            .body()
+            .unwrap_or_default()
+            .contains("insufficientPermissions")
+    );
+}

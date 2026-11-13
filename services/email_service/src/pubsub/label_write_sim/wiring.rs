@@ -1,52 +1,11 @@
-//! The production Gmail client and request gate wired to the fake Gmail, and
-//! direct access to the gate's Redis state, the pending label write markers
-//! and queued label writes.
+//! Direct access to the Gmail request gate's Redis state, the pending label
+//! write markers and queued label writes.
 
-use crate::outbound::email_api::{
-    EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
-};
 use email::domain::ports::EmailService;
-use email_api_client::GmailApiClientRepository;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
 use sqlx::PgPool;
 use uuid::Uuid;
-
-pub fn redis_client(client: redis::Client) -> crate::util::redis::RedisClient {
-    crate::util::redis::RedisClient::new(client, 60)
-}
-
-pub async fn gmail_api(
-    db: PgPool,
-    redis: &redis::Client,
-    gmail_url: &str,
-    services_url: &str,
-    sqs_client: sqs_client::SQS,
-) -> GmailApi {
-    let client = gmail_client::GmailClient::new_with_urls(
-        Some("projects/sim/topics/gmail".to_string()),
-        gmail_url.to_string(),
-        format!("{services_url}/people"),
-        format!("{services_url}/certs"),
-        "sim".to_string(),
-    );
-    GmailApi::new(
-        GmailApiClientRepository::new(client),
-        EmailServiceTokenSource::new(
-            db,
-            redis.get_multiplexed_async_connection().await.unwrap(),
-            authentication_service_client::AuthServiceClient::new(
-                "secret".to_string(),
-                services_url.to_string(),
-            ),
-            sqs_client,
-        ),
-        RedisGmailRequestGate::new(
-            redis.get_connection_manager().await.unwrap(),
-            RateBudget::Live,
-        ),
-    )
-}
 
 fn gate_keys(link_id: Uuid) -> [String; 6] {
     let scope = format!("gmail:{{{link_id}}}");

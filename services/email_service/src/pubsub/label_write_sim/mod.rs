@@ -5,7 +5,6 @@
 //! Gmail and the database end on the user's last effective action.
 
 mod fake_gmail;
-mod fake_sqs;
 mod sim;
 mod test;
 mod wiring;

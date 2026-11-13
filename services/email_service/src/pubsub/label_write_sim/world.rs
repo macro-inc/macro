@@ -8,11 +8,12 @@
 //! the auth service, SFS, DSS and connection gateway.
 
 use super::fake_gmail::{FakeGmail, GmailMessage, GmailState};
-use super::fake_sqs::{self, FakeSqs};
 use super::wiring;
 use crate::composition::workers::CrmMetadataResolver;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use crate::pubsub::inbox_sync::worker::InboxSyncContext;
+use crate::pubsub::test_support::fake_sqs::{self, FakeSqs};
+use crate::pubsub::test_support::{self, GmailEndpoints, InboxSyncWiring};
 use axum::Router;
 use axum::response::IntoResponse;
 use email::domain::service::EmailServiceImpl;
@@ -214,9 +215,7 @@ impl World {
         queues: Queues,
         label_write_batches: bool,
     ) -> World {
-        let redis_url =
-            std::env::var("REDIS_URI").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
-        let redis_client = redis::Client::open(redis_url).expect("redis url");
+        let redis_client = redis::Client::open(test_support::redis_url()).expect("redis url");
         let redis = redis_client
             .get_multiplexed_async_connection()
             .await
@@ -230,11 +229,15 @@ impl World {
             .email_backfill_queue(&format!("{services_url}/queue/backfill"))
             .email_link_manager_queue(&format!("{services_url}/queue/link-manager"))
             .sfs_uploader_queue(&format!("{services_url}/queue/sfs"));
-        let email_api = wiring::gmail_api(
+        let email_api = test_support::gmail_api(
             db.clone(),
             &redis_client,
-            &gmail.url,
-            services_url,
+            GmailEndpoints {
+                gmail: &gmail.url,
+                people: &format!("{services_url}/people"),
+                certs: &format!("{services_url}/certs"),
+                auth: services_url,
+            },
             sqs_client.clone(),
         )
         .await;
@@ -259,45 +262,14 @@ impl World {
                 unfurl::outbound::ReqwestUnfurlFetcher::new().expect("unfurl fetcher"),
             ))),
         );
-        let sync_context = |retry_worker: bool, queue: &str| {
-            crate::pubsub::inbox_sync::worker::context(
-                db.clone(),
-                &worker(queue),
-                sqs_client.clone(),
-                Arc::new(contacts::domain::service::SqsContactsIngress {
-                    queue: contacts::outbound::ingress::SqsContactsQueue::new(
-                        sqs_sdk.clone(),
-                        format!("{services_url}/queue/contacts"),
-                    ),
-                }),
-                email_api.clone(),
-                wiring::redis_client(redis_client.clone()),
-                Arc::new(notification::domain::service::SqsNotificationIngress {
-                    queue: notification::outbound::queue::SqsQueue::new(
-                        sqs_sdk.clone(),
-                        format!("{services_url}/queue/notifications"),
-                    ),
-                }),
-                static_file_service_client::StaticFileServiceClient::new(
-                    "key".to_string(),
-                    services_url.to_string(),
-                ),
-                connection_gateway_client::client::ConnectionGatewayClient::new(
-                    "key".to_string(),
-                    services_url.to_string(),
-                ),
-                document_storage_service_client::DocumentStorageServiceClient::new(
-                    "key".to_string(),
-                    services_url.to_string(),
-                ),
-                Arc::new(system_properties::SystemPropertiesServiceImpl::new(
-                    system_properties::PgSystemPropertiesRepository::new(db.clone()),
-                )),
-                crm_service.clone(),
-                broker.clone(),
-                false,
-                retry_worker,
-            )
+        let sync_wiring = InboxSyncWiring {
+            db: &db,
+            sqs_sdk: &sqs_sdk,
+            sqs_client: &sqs_client,
+            email_api: &email_api,
+            redis: &redis_client,
+            broker: &broker,
+            services_url,
         };
         let email = EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),
@@ -317,8 +289,8 @@ impl World {
         World {
             ops: ops_context(false, &queues.ops),
             ops_retry: ops_context(true, &queues.ops_retry),
-            sync: sync_context(false, &queues.sync),
-            sync_retry: sync_context(true, &queues.sync_retry),
+            sync: sync_wiring.context(false, &queues.sync),
+            sync_retry: sync_wiring.context(true, &queues.sync_retry),
             backfill: crate::pubsub::backfill::worker::context(
                 db.clone(),
                 &worker(&queues.sync),
@@ -330,7 +302,7 @@ impl World {
                     ),
                 }),
                 email_api.clone(),
-                wiring::redis_client(redis_client.clone()),
+                test_support::redis_client(redis_client.clone()),
                 Arc::new(notification::domain::service::SqsNotificationIngress {
                     queue: notification::outbound::queue::SqsQueue::new(
                         sqs_sdk.clone(),
