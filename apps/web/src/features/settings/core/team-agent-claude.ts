@@ -1,4 +1,5 @@
 import type { ClaudeModeResponse } from '@service-agent-harness/generated/schemas';
+import type { TeamAgent } from '@service-auth/team-agents';
 import type { Harness } from '@service-storage/client';
 import { match } from 'ts-pattern';
 
@@ -10,7 +11,7 @@ export type AgentClaudeState = 'loading' | 'credits' | 'signed_in' | 'expired';
  * computer first connects, so there is none before then.
  */
 export function agentComputerHarness(
-  computerId: string | null,
+  computerId: TeamAgent['computerId'],
   harnesses: readonly Harness[] | undefined
 ): Harness | undefined {
   if (!computerId) return undefined;

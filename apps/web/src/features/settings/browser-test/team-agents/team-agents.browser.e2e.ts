@@ -179,53 +179,6 @@ async function scriptAuthService(
       return json(201, agent);
     }
 
-    // macrod enrolls each agent's computer as a runtime its admins own.
-    if (path.endsWith('/harnesses') && request.method() === 'GET')
-      return json(
-        200,
-        backend.agents.map((agent) => ({
-          id: `harness-${agent.name.toLowerCase()}`,
-          kind: 'macrod',
-          name: agent.name,
-          owner: { type: 'user', user_id: agent.userId },
-          access: 'owner',
-          shared_team_ids: [],
-          allow_permission_bypass: false,
-          created_by: agent.userId,
-          created_at: agent.createdAt,
-          updated_at: agent.createdAt,
-          connected: backend.computerConnected,
-          last_connected_at: null,
-          computer_id: `computer-${agent.name.toLowerCase()}`,
-          claude_mode: backend.claude.mode,
-        }))
-      );
-
-    const claude = path.match(
-      /\/harnesses\/([^/]+)\/(claude-sign-in(?:\/complete)?|claude-sign-out|claude-mode)$/
-    );
-    if (claude) {
-      const action = claude[2] ?? '';
-      backend.claudeCalls.push(
-        `${decodeURIComponent(claude[1] ?? '')} ${action}`
-      );
-      if (action === 'claude-mode') return json(200, backend.claude);
-      if (action === 'claude-sign-in')
-        return json(200, {
-          url: 'https://claude.com/cai/oauth/authorize?state=scripted',
-        });
-      if (action === 'claude-sign-in/complete') {
-        backend.claudeCodes.push(request.postDataJSON().code);
-        backend.claude = {
-          mode: 'own_account',
-          account: { signedInAt: '2026-11-13T09:00:00Z', signedInBy: OWNER },
-        };
-        return json(200, { signedIn: true });
-      }
-      backend.claude = { mode: 'macro_credits' };
-      return json(200, backend.claude);
-    }
-
     if (path.endsWith('/voices')) return json(200, VOICES);
     const sample = path.match(/\/voices\/([^/]+)\/sample$/);
     if (sample) {
@@ -283,6 +236,67 @@ async function scriptAuthService(
 
     // Nothing else is part of this flow.
     return json(404, { message: 'not scripted' });
+  });
+
+  // The agent harness and its runtime list: registered last, so tried first.
+  await page.route('**/harnesses**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const json = (status: number, body: unknown) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+    // macrod enrolls each agent's computer as a runtime its admins own.
+    if (path.endsWith('/harnesses') && request.method() === 'GET')
+      return json(
+        200,
+        backend.agents.map((agent) => ({
+          id: `harness-${agent.name.toLowerCase()}`,
+          kind: 'macrod',
+          name: agent.name,
+          owner: { type: 'user', user_id: agent.userId },
+          access: 'owner',
+          shared_team_ids: [],
+          allow_permission_bypass: false,
+          created_by: agent.userId,
+          created_at: agent.createdAt,
+          updated_at: agent.createdAt,
+          connected: backend.computerConnected,
+          last_connected_at: null,
+          computer_id: `computer-${agent.name.toLowerCase()}`,
+          claude_mode: backend.claude.mode,
+        }))
+      );
+
+    const claude = path.match(
+      /\/harnesses\/([^/]+)\/(claude-sign-in(?:\/complete)?|claude-sign-out|claude-mode)$/
+    );
+    if (claude) {
+      const action = claude[2] ?? '';
+      backend.claudeCalls.push(
+        `${decodeURIComponent(claude[1] ?? '')} ${action}`
+      );
+      if (action === 'claude-mode') return json(200, backend.claude);
+      if (action === 'claude-sign-in')
+        return json(200, {
+          url: 'https://claude.com/cai/oauth/authorize?state=scripted',
+        });
+      if (action === 'claude-sign-in/complete') {
+        backend.claudeCodes.push(request.postDataJSON().code);
+        backend.claude = {
+          mode: 'own_account',
+          account: { signedInAt: '2026-11-13T09:00:00Z', signedInBy: OWNER },
+        };
+        return json(200, { signedIn: true });
+      }
+      backend.claude = { mode: 'macro_credits' };
+      return json(200, backend.claude);
+    }
+
+    return route.fallback();
   });
 
   return backend;

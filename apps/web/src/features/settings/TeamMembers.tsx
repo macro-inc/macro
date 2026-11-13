@@ -60,7 +60,6 @@ import {
 } from 'solid-js';
 import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
-import { TeamAgentClaude } from './views/team-agent-claude';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
 import {
@@ -76,6 +75,7 @@ import {
   canRemoveTeamMember,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
+import { TeamAgentClaude } from './views/team-agent-claude';
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
