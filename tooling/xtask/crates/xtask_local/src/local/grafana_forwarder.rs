@@ -257,11 +257,21 @@ fn export_endpoint(env: &str) -> &str {
 }
 
 /// `OTEL_RESOURCE_ATTRIBUTES` for `instance`'s services while forwarding is on,
-/// so the hosted Grafana can tell this machine's stacks apart.
-pub(super) fn resource_attributes(instance: &Instance) -> Option<String> {
+/// so the hosted Grafana can tell this machine's stacks apart: `existing`, the
+/// value the env already has, plus the instance.
+pub(super) fn resource_attributes(instance: &Instance, existing: Option<&str>) -> Option<String> {
     let paths = Paths::for_user()?;
     Forwarding::load(&paths).ok().flatten()?;
-    Some(format!("{INSTANCE_ATTRIBUTE}={}", instance.name()))
+    Some(with_instance(existing, instance.name()))
+}
+
+/// `existing` resource attributes with the instance attribute added.
+fn with_instance(existing: Option<&str>, instance: &str) -> String {
+    let attribute = format!("{INSTANCE_ATTRIBUTE}={instance}");
+    match existing.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(existing) => format!("{existing},{attribute}"),
+        None => attribute,
+    }
 }
 
 /// The run_local dashboard filtered to this machine, while forwarding to the

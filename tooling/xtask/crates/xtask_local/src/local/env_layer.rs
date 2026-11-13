@@ -173,7 +173,10 @@ pub fn resolve(
             );
             // Forwarded to the hosted Grafana, a machine's stacks share one
             // `host.name`: the instance tells them apart.
-            if let Some(attributes) = super::grafana_forwarder::resource_attributes(instance) {
+            let existing = env.get("OTEL_RESOURCE_ATTRIBUTES").map(String::as_str);
+            if let Some(attributes) =
+                super::grafana_forwarder::resource_attributes(instance, existing)
+            {
                 env.insert("OTEL_RESOURCE_ATTRIBUTES".into(), attributes);
             }
         }

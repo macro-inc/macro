@@ -3,7 +3,7 @@ use std::path::Path;
 
 use xtask_local_telemetry::{ForwardingError, Paths, Switch};
 
-use super::{Forwarder, export_endpoint, is_instance_network};
+use super::{Forwarder, export_endpoint, is_instance_network, with_instance};
 
 const TOKEN: &str = "secret-0123456789abcdef0123456789abcdef";
 
@@ -111,4 +111,14 @@ fn instance_networks_are_the_services_networks_of_macro_projects() {
     assert!(!is_instance_network("macro-channels-b_auth-internal"));
     assert!(!is_instance_network("bridge"));
     assert!(!is_instance_network("other_services"));
+}
+
+#[test]
+fn the_instance_is_added_to_existing_resource_attributes() {
+    assert_eq!(with_instance(None, "ltg"), "macro.local.instance=ltg");
+    assert_eq!(with_instance(Some(" "), "ltg"), "macro.local.instance=ltg");
+    assert_eq!(
+        with_instance(Some("service.namespace=macro"), "ltg"),
+        "service.namespace=macro,macro.local.instance=ltg"
+    );
 }

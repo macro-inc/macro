@@ -1306,8 +1306,8 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
                 .reconcile(stage)
                 .inspect_err(|e| {
                     stage.note(&format!(
-                        "  WARNING: could not start the Grafana forwarder ({e:#}); \
-                         telemetry stays local"
+                        "  WARNING: could not start or update the Grafana forwarder \
+                         ({e:#}); forwarding left as it was"
                     ));
                 })
                 .is_ok()
