@@ -37,6 +37,7 @@ import {
 } from '@ui';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -504,6 +505,11 @@ export function InviteToTeamDialog(props: {
     if (flag.enabled || flag.loading) setInvitedAgent(agent);
     else close();
   };
+  // The rollout settled off, or was turned off, after the invite.
+  createEffect(() => {
+    const flag = computersFlag();
+    if (invitedAgent() && !flag.loading && !flag.enabled) close();
+  });
   // The addresses just invited; set once sending succeeds to show the
   // heads-up step.
   const [sent, setSent] = createSignal<string[]>();
@@ -589,6 +595,7 @@ export function InviteToTeamDialog(props: {
             <AgentClaudeStep
               teamId={props.teamId}
               agent={agent()}
+              enabled={computersFlag().enabled}
               onDone={close}
             />
           </ActionDialogShell>

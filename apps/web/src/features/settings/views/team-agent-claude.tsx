@@ -31,7 +31,10 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
   const harnesses = useHarnessesQuery();
   const harness = () => {
     if (!computers().enabled) return undefined;
-    const found = agentComputerHarness(props.agent.computerId, harnesses.data);
+    const found = agentComputerHarness(
+      props.agent.computerId,
+      harnesses.isSuccess ? harnesses.data : undefined
+    );
     return found?.access === 'owner' ? found : undefined;
   };
   const harnessId = () => harness()?.id;

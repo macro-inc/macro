@@ -18,6 +18,8 @@ import { agentComputerHarness } from '../core/team-agent-claude';
 export function AgentClaudeStep(props: {
   teamId: string;
   agent: TeamAgent;
+  /** The computers rollout, which Claude sign-in sits behind. */
+  enabled: boolean;
   onDone: () => void;
 }) {
   // The invite answers before the computer is bought or enrolled; the team's
@@ -28,7 +30,9 @@ export function AgentClaudeStep(props: {
   );
   const harnesses = useHarnessesQuery();
   const live = () =>
-    agents.data?.agents.find((agent) => agent.userId === props.agent.userId);
+    (agents.isSuccess ? agents.data.agents : []).find(
+      (agent) => agent.userId === props.agent.userId
+    );
   const computerId = () => live()?.computerId ?? props.agent.computerId;
   // Setup stopped: nothing will connect until someone acts on the computer.
   const failed = () => live()?.status === 'failed';
@@ -37,8 +41,12 @@ export function AgentClaudeStep(props: {
   // so a half-pasted code is not thrown away.
   let readyHarnessId: string | undefined;
   const harnessId = createMemo(() => {
+    if (!props.enabled) return undefined;
     if (readyHarnessId) return readyHarnessId;
-    const harness = agentComputerHarness(computerId(), harnesses.data);
+    const harness = agentComputerHarness(
+      computerId(),
+      harnesses.isSuccess ? harnesses.data : undefined
+    );
     if (harness?.connected) readyHarnessId = harness.id;
     return readyHarnessId;
   });

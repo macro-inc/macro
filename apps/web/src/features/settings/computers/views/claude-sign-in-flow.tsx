@@ -225,6 +225,20 @@ export function ClaudeSignInFlow(props: {
         </Show>
       </ActionDialogShell.Body>
       <ActionDialogShell.Footer>
+        {/* Offered at every step, failed ones too; not while a pasted code is
+            being checked, which may still sign the computer in. */}
+        <Show when={props.onUseCredits}>
+          {(useCredits) => (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={complete.isPending}
+              onClick={useCredits()}
+            >
+              {t('computers.claudeUseCreditsInstead')}
+            </Button>
+          )}
+        </Show>
         <Switch>
           <Match when={restart()}>
             {(label) => (
@@ -234,13 +248,6 @@ export function ClaudeSignInFlow(props: {
             )}
           </Match>
           <Match when={step() === 'open'}>
-            <Show when={props.onUseCredits}>
-              {(useCredits) => (
-                <Button type="button" variant="ghost" onClick={useCredits()}>
-                  {t('computers.claudeUseCreditsInstead')}
-                </Button>
-              )}
-            </Show>
             <a
               href={url()}
               target="_blank"
@@ -253,13 +260,6 @@ export function ClaudeSignInFlow(props: {
             </a>
           </Match>
           <Match when={step() === 'code'}>
-            <Show when={props.onUseCredits}>
-              {(useCredits) => (
-                <Button type="button" variant="ghost" onClick={useCredits()}>
-                  {t('computers.claudeUseCreditsInstead')}
-                </Button>
-              )}
-            </Show>
             <Button
               type="button"
               variant="primary"

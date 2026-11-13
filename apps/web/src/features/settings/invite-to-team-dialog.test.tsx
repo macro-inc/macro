@@ -21,6 +21,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => ({
+    isSuccess: true,
     get data() {
       return mocks.harnesses();
     },
@@ -81,6 +82,7 @@ vi.mock('@queries/team-agents/team-agents', () => ({
     mutateAsync: mocks.createAgent,
   }),
   useTeamAgentsQuery: () => ({
+    isSuccess: true,
     get data() {
       return { agents: mocks.agents() };
     },
@@ -336,9 +338,12 @@ describe('InviteToTeamDialog agent teammates', () => {
       connected: true,
     };
 
-    async function inviteAda(onClose: () => void) {
+    async function inviteAda(
+      onClose: () => void,
+      computers = { enabled: true, loading: false }
+    ) {
       setFlag({ enabled: true, loading: false });
-      setComputersFlag({ enabled: true, loading: false });
+      setComputersFlag(computers);
       mocks.createAgent.mockResolvedValue(ada);
       openAsAdmin(onClose);
       fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
@@ -402,6 +407,19 @@ describe('InviteToTeamDialog agent teammates', () => {
         entry: 'team_agent_invite',
         code: 'code-123',
       });
+    });
+
+    it('leaves once the computers rollout settles off', async () => {
+      const onClose = vi.fn();
+      await inviteAda(onClose, { enabled: false, loading: true });
+      setAgents([{ ...ada, computerId: 'computer-ada' }]);
+      setHarnesses([adaHarness]);
+      // Not known to be on: nothing starts a sign-in.
+      expect(mocks.startSignIn).not.toHaveBeenCalled();
+
+      setComputersFlag({ enabled: false, loading: false });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(mocks.startSignIn).not.toHaveBeenCalled();
     });
 
     it('lets the inviter skip and keep Macro credits while the computer starts', async () => {
