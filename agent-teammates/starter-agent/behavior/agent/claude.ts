@@ -3,7 +3,8 @@ import {
 	type query,
 	tool,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { Agent, EventContext } from "@muppet/lib/core/agent";
+import type { EventContext, WakeContext, Woke } from "@muppet/lib/core/agent";
+import type { Wake } from "@muppet/lib/utilities/telemetry";
 import { z } from "zod";
 import { type Guard, refusal } from "./guard.ts";
 
@@ -16,6 +17,17 @@ export type Profile = {
 	readonly cwd: string;
 	/** Other directories the run may work in. */
 	readonly directories: readonly string[];
+};
+
+/** What a wake tells its telemetry as it learns it: the session it runs as, what it spent, and why it failed. */
+export type Observer = Pick<
+	Wake<string, string>,
+	"session" | "usage" | "error"
+>;
+
+/** An agent whose wake can be observed (`behavior/agent/telemetry.ts`); unobserved, it is an ordinary muppet `Agent`. */
+export type ClaudeAgent = {
+	readonly wake: (wake: WakeContext, observe?: Observer) => Promise<Woke>;
 };
 
 /**
@@ -47,8 +59,8 @@ export const agentClaude = ({
 	readonly guards: readonly Guard[];
 	/** Receives a line when a wake starts and one when it ends, for the log. */
 	readonly record: (entry: object) => Promise<void>;
-}): Agent => ({
-	wake: async ({ request, systemPrompt, event, state }) => {
+}): ClaudeAgent => ({
+	wake: async ({ request, systemPrompt, event, state }, observe) => {
 		const capabilities = createSdkMcpServer({
 			name: server,
 			tools: [
@@ -148,6 +160,7 @@ export const agentClaude = ({
 				// The session id ties this wake to its transcript, so it can be traced while it runs.
 				if (message.type === "system" && message.subtype === "init") {
 					session = message.session_id;
+					observe?.session({ agent: "claude", id: session, model });
 					await record({
 						event: event.name,
 						phase: "start",
@@ -155,6 +168,12 @@ export const agentClaude = ({
 					});
 				}
 				if (message.type === "result") {
+					observe?.usage({
+						costUsd: message.total_cost_usd,
+						turns: message.num_turns,
+						inputTokens: message.usage.input_tokens,
+						outputTokens: message.usage.output_tokens,
+					});
 					await record({
 						event: event.name,
 						session_id: message.session_id,
@@ -171,6 +190,7 @@ export const agentClaude = ({
 			return { kind: "failed", error: "session ended without a result" };
 		} catch (error) {
 			if (!late) throw error;
+			observe?.error("timeout");
 			await record({
 				event: event.name,
 				session_id: session,
