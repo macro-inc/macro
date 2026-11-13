@@ -747,5 +747,8 @@ async fn event_type_filter_limits_unseen_mentions_past_newer_sends(pool: PgPool)
     let read = get_filtered_entity_notifications(&pool, viewer, vec![channel.clone()], query)
         .await
         .unwrap();
-    assert!(read[&channel].is_empty(), "reading the mentions clears them");
+    assert!(
+        read[&channel].is_empty(),
+        "reading the mentions clears them"
+    );
 }
