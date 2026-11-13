@@ -1950,6 +1950,37 @@ impl ToolEntityCreator {
 }
 
 impl import::domain::ports::EntityCreator for ToolEntityCreator {
+    async fn can_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: import::domain::models::ImportSource,
+        entity_id: &str,
+    ) -> anyhow::Result<bool> {
+        use import::domain::models::ImportSource;
+        let entity_type = match source {
+            ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => {
+                model_entity::EntityType::Document
+            }
+            ImportSource::Slack => model_entity::EntityType::Channel,
+        };
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(user, None, entity_id, entity_type)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(
+                entity_access::domain::models::AccessError::Unauthorized
+                | entity_access::domain::models::AccessError::UnauthorizedWithMessage(_)
+                | entity_access::domain::models::AccessError::NotFound(_)
+                | entity_access::domain::models::AccessError::BadRequest(_),
+            ) => Ok(false),
+            Err(error) => Err(anyhow::anyhow!(
+                "could not check access to imported entity {entity_id}: {error:?}"
+            )),
+        }
+    }
+
     async fn create_task(
         &self,
         user: &MacroUserIdStr<'static>,

@@ -289,7 +289,7 @@ impl ImportRepo for PgImportRepo {
             SET status = 'imported', metadata = EXCLUDED.metadata,
                 entity_id = EXCLUDED.entity_id, entity_type = EXCLUDED.entity_type,
                 team_id = EXCLUDED.team_id, last_error = NULL, updated_at = NOW()
-            WHERE import_entity.status <> 'imported'
+            WHERE import_entity.status NOT IN ('imported', 'importing')
             RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
                       initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
                       updated_at
@@ -306,13 +306,21 @@ impl ImportRepo for PgImportRepo {
         )
         .fetch_optional(&self.pool)
         .await?;
-        match row {
-            Some(row) => row.try_into(),
+        if let Some(row) = row {
+            return row.try_into();
+        }
+        let stored = self
+            .get_own_by_foreign_id(user, source, foreign_id)
+            .await?
+            .ok_or_else(|| ImportError::Other(anyhow::anyhow!("imported upsert vanished")))?;
+        match stored.status {
             // Already imported: first mapping wins; return the stored row.
-            None => self
-                .get_own_by_foreign_id(user, source, foreign_id)
-                .await?
-                .ok_or_else(|| ImportError::Other(anyhow::anyhow!("imported upsert vanished"))),
+            ImportStatus::Imported => Ok(stored),
+            // A running import holds it; never overwrite its work.
+            ImportStatus::Importing => Err(ImportError::ImportRunning),
+            ImportStatus::Staged | ImportStatus::Discarded => Err(ImportError::Other(
+                anyhow::anyhow!("imported upsert skipped a {} row", stored.status.as_ref()),
+            )),
         }
     }
 

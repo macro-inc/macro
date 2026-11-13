@@ -347,16 +347,23 @@ impl ImportRepo for Repo {
     async fn upsert_imported(
         &self,
         _: &MacroUserIdStr<'static>,
-        _: ImportSource,
+        source: ImportSource,
         _: ImportKind,
         _: Initiator,
-        _: &str,
-        _: &serde_json::Value,
-        _: &str,
-        _: &str,
+        foreign_id: &str,
+        metadata: &serde_json::Value,
+        entity_id: &str,
+        entity_type: &str,
         _: Option<Uuid>,
     ) -> Result<ImportEntity> {
-        unreachable!()
+        let mut row = self.seed(source);
+        row.foreign_id = foreign_id.into();
+        row.status = ImportStatus::Imported;
+        row.metadata = metadata.clone();
+        row.entity_id = Some(entity_id.into());
+        row.entity_type = Some(entity_type.into());
+        *self.0.lock().unwrap().rows.last_mut().unwrap() = row.clone();
+        Ok(row)
     }
 }
 
@@ -382,8 +389,28 @@ impl ConnectorSelect for NoConnector {
 }
 
 #[derive(Default)]
-pub(in crate::domain::service) struct Creator(AtomicUsize);
+pub(in crate::domain::service) struct Creator(AtomicUsize, Hidden);
+
+/// Whether the fake hides every entity from the caller.
+#[derive(Default)]
+pub(in crate::domain::service) struct Hidden(bool);
+
+impl Creator {
+    /// A creator whose entities the caller cannot see.
+    pub(in crate::domain::service) fn hiding() -> Self {
+        Self(AtomicUsize::new(0), Hidden(true))
+    }
+}
+
 impl EntityCreator for Creator {
+    async fn can_view(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: &str,
+    ) -> anyhow::Result<bool> {
+        Ok(!self.1.0)
+    }
     async fn create_task(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -569,4 +596,66 @@ async fn delayed_notion_work_rechecks_current_allowance_and_mixed_work_survives(
         ImportStatus::Staged
     );
     assert_eq!(admission.calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn recording_an_import_refuses_an_entity_the_caller_cannot_see() {
+    let repo = Repo::default();
+    let service = ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        Arc::new(Creator::hiding()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    );
+
+    let result = service
+        .record_imported(
+            &user(),
+            Initiator::Chat,
+            ImportSource::Notion,
+            "0123456789abcdef0123456789abcdef",
+            serde_json::json!({"title": "A page"}),
+            "01a1d1b4-61e8-7257-847a-0581a7c45b83",
+        )
+        .await;
+
+    assert!(
+        matches!(
+            &result,
+            Err(ImportError::EntityNotAccessible(id)) if id == "01a1d1b4-61e8-7257-847a-0581a7c45b83"
+        ),
+        "{result:?}"
+    );
+    assert!(repo.0.lock().unwrap().rows.is_empty());
+}
+
+#[tokio::test]
+async fn recording_an_import_of_a_visible_entity_writes_the_row() {
+    let repo = Repo::default();
+    let service = ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        Arc::new(Creator::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    );
+
+    let row = service
+        .record_imported(
+            &user(),
+            Initiator::Chat,
+            ImportSource::Notion,
+            "0123456789abcdef0123456789abcdef",
+            serde_json::json!({"title": "A page"}),
+            "01a1d1b4-61e8-7257-847a-0581a7c45b83",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(row.status, ImportStatus::Imported);
+    assert_eq!(
+        row.entity_id.as_deref(),
+        Some("01a1d1b4-61e8-7257-847a-0581a7c45b83")
+    );
+    assert_eq!(row.entity_type.as_deref(), Some("md"));
+    assert_eq!(repo.0.lock().unwrap().rows.len(), 1);
 }

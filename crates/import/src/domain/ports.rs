@@ -58,6 +58,12 @@ pub enum ImportError {
     /// The import is not in a state that allows this; the message says why.
     #[error("{0}")]
     NotReady(&'static str),
+    /// The caller cannot see the Macro entity they asked to record as an import.
+    #[error("you cannot access entity {0}, so it cannot be recorded as imported")]
+    EntityNotAccessible(String),
+    /// A running import holds the ledger row; recording now would overwrite its work.
+    #[error("a running import is copying this item; wait for it to finish")]
+    ImportRunning,
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -504,6 +510,16 @@ pub struct NotionUserLink {
 /// source → entity-type mapping is enforced by the import service, which
 /// only ever calls the creator matching the row's source.
 pub trait EntityCreator: Send + Sync + 'static {
+    /// Whether `user` can view `entity_id`, an entity of `source`'s fixed
+    /// type, before it is recorded as that source's import. Recording an
+    /// entity grants nothing, so an entity the user cannot see is refused.
+    fn can_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        entity_id: &str,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
     /// Create a task document, applying `properties` best-effort once the
     /// task exists. Returns the new entity id.
     fn create_task(

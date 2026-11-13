@@ -365,6 +365,12 @@ impl IntoResponse for LedgerError {
             Self::Import(error @ ImportError::Metadata(_)) => {
                 (StatusCode::BAD_REQUEST, error.to_string()).into_response()
             }
+            Self::Import(error @ ImportError::EntityNotAccessible(_)) => {
+                (StatusCode::FORBIDDEN, error.to_string()).into_response()
+            }
+            Self::Import(error @ ImportError::ImportRunning) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
             Self::Import(error @ ImportError::NotionNotConnected) => {
                 (StatusCode::CONFLICT, error.to_string()).into_response()
             }
