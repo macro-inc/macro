@@ -45,11 +45,16 @@ export function threadRepliesQueryOptions(
   parent: MessageParent,
   messageId: string
 ) {
+  const networkMode = channelReadNetworkMode(parent);
   return {
     queryKey: messageKeys.threadReplies(parent, messageId).queryKey,
     queryFn: () => fetchMessageThread(parent, messageId),
-    networkMode: channelReadNetworkMode(parent),
-    retry: retryOnceOnline(defaultQueryRetry),
+    networkMode,
+    // Only a read that runs offline can fail offline; other reads keep the
+    // retry their caller gives them.
+    ...(networkMode === 'offlineFirst' && {
+      retry: retryOnceOnline(defaultQueryRetry),
+    }),
     staleTime: Infinity,
   };
 }

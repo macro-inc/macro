@@ -72,6 +72,15 @@ describe('retryOnceOnline', () => {
     expect(retry(1, failed)).toBe(false);
   });
 
+  it('counts failures from before the connection dropped', () => {
+    const retry = retryOnceOnline(once);
+    expect(retry(0, failed)).toBe(true);
+    onlineManager.setOnline(false);
+    expect(retry(1, failed)).toBe(true);
+    onlineManager.setOnline(true);
+    expect(retry(2, failed)).toBe(false);
+  });
+
   it('still ends on an error the policy never retries', () => {
     const retry = retryOnceOnline(once);
     onlineManager.setOnline(false);

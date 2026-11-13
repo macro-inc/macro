@@ -74,7 +74,7 @@ export function retryOnceOnline(policy: RetryPolicy): RetryPolicy {
     if (failureCount === 0) offlineFailures = 0;
     if (!onlineManager.isOnline()) {
       if (!policy(0, error)) return false;
-      offlineFailures = failureCount + 1;
+      offlineFailures += 1;
       return true;
     }
     return policy(failureCount - offlineFailures, error);
