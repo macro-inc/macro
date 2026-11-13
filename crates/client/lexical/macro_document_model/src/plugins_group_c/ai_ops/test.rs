@@ -3,6 +3,9 @@
 //! apps/web `block-corpus.app-profile.source-controls.test.ts` from the
 //! ai-editing worker's headless cases). Source skips a refused op and applies
 //! the ops after it.
+use crate::plugins_group_b::{
+    CodeLanguageRequest, CodeToken, CodeTokenError, CodeTokenProvider, CodeTokenRequest, CodeTokens,
+};
 use crate::{EditorType, surface};
 use lexical_model::*;
 use serde_json::Value;
@@ -105,7 +108,7 @@ fn op_command(op: &Value, invocation: u32) -> Command {
 
 /// Apply like the host: every op in order, each with its own token; a refused
 /// op is recorded and the ones after it still apply. Returns the refused indices.
-fn replay(editor: &mut Editor, ops: &[Value]) -> Vec<usize> {
+fn replay_ops(editor: &mut Editor, ops: &[Value]) -> Vec<usize> {
     let mut refused = Vec::new();
     for (index, op) in ops.iter().enumerate() {
         let invocation = u32::try_from(index + 1).expect("token");
@@ -134,7 +137,7 @@ fn text_ops_reach_the_source_doc_state() {
 
         let mut native = editor();
         load(&mut native, &entry.seed);
-        let refused = replay(&mut native, &entry.ops);
+        let refused = replay_ops(&mut native, &entry.ops);
         let actual = stable_ids(&export(&native), &seed_ids);
 
         // Compare against Source's result as the native model represents it.
@@ -611,6 +614,103 @@ fn block_editor() -> Editor {
     .expect("surface")
 }
 
+/// TEST-ONLY replay of the Prism tokens the Source oracle recorded for each
+/// code block, keyed by (language, text). It is not a tokenizer: with it the
+/// corpus checks native retyping and token application, not Prism parity
+/// (that is the stage browser run's, with the app's real Prism).
+struct SourcePrismReplay(std::collections::HashMap<(String, String), Vec<CodeToken>>);
+
+impl SourcePrismReplay {
+    fn from_corpus(corpus: &[BlockEntry]) -> Self {
+        fn walk(
+            value: &Value,
+            out: &mut std::collections::HashMap<(String, String), Vec<CodeToken>>,
+        ) {
+            let Some(children) = value.get("children").and_then(Value::as_array) else {
+                return;
+            };
+            if matches!(value["type"].as_str(), Some("custom-code" | "code")) {
+                let language = value["language"].as_str().unwrap_or_default().to_owned();
+                let mut text = String::new();
+                let mut tokens = Vec::new();
+                for child in children {
+                    match child["type"].as_str() {
+                        Some("linebreak") => {
+                            text.push('\n');
+                            tokens.push(CodeToken::LineBreak);
+                        }
+                        Some("tab") => {
+                            text.push('\t');
+                            tokens.push(CodeToken::Tab);
+                        }
+                        _ => {
+                            let run = child["text"].as_str().unwrap_or_default();
+                            text.push_str(run);
+                            tokens.push(CodeToken::Text {
+                                text: run.to_owned(),
+                                highlight_type: child["highlightType"].as_str().map(str::to_owned),
+                            });
+                        }
+                    }
+                }
+                out.insert((language, text), tokens);
+            }
+            for child in children {
+                walk(child, out);
+            }
+        }
+        let mut recorded = std::collections::HashMap::new();
+        for entry in corpus {
+            walk(&entry.state["root"], &mut recorded);
+        }
+        Self(recorded)
+    }
+}
+
+impl CodeTokenProvider for SourcePrismReplay {
+    fn is_loaded(&self, request: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError> {
+        Ok(self
+            .0
+            .keys()
+            .any(|(language, _)| language == request.language))
+    }
+    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError> {
+        // Texts Source never tokenized (intermediate states) stay one plain run.
+        Ok(self
+            .0
+            .get(&(request.language.to_owned(), request.text.to_owned()))
+            .cloned()
+            .unwrap_or_else(|| {
+                if request.text.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![CodeToken::Text {
+                        text: request.text.to_owned(),
+                        highlight_type: None,
+                    }]
+                }
+            }))
+    }
+}
+
+/// The block editor with the recorded Source Prism tokens installed.
+fn block_editor_replaying(replay: &std::sync::Arc<SourcePrismReplay>) -> Editor {
+    let provider: std::sync::Arc<dyn CodeTokenProvider> = replay.clone();
+    crate::node_ids::NodeIdPlugin::register(
+        surface::preset_builder_with_mode_and_tokens(
+            EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+            CodeTokens::new(provider, "source-prism-replay"),
+        )
+        .extension_state(crate::NodeClock(std::sync::Arc::new(|| 1234))),
+        &BLOCK_ID_CLASSES,
+        None,
+        [5; 32],
+    )
+    .build()
+    .expect("surface")
+}
+
 /// Seed ids and op refs stay verbatim; every other id is renamed `<newN>` in
 /// document order, so freshly minted ids compare one to one, not as one bucket.
 fn minted_bijection(value: &Value, kept: &HashSet<String>) -> Value {
@@ -707,6 +807,7 @@ fn native_import_matches_the_app_source_load() {
 fn block_ops_reach_the_source_doc_state() {
     let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
     assert!(!corpus.is_empty());
+    let replay = std::sync::Arc::new(SourcePrismReplay::from_corpus(&corpus));
     let mut rows = Vec::new();
     let mut failed = 0;
     for entry in corpus {
@@ -719,9 +820,9 @@ fn block_ops_reach_the_source_doc_state() {
         collect_ids(&entry.seed, &mut kept);
         let refs: HashSet<String> = entry.refs.iter().cloned().collect();
 
-        let mut native = block_editor();
+        let mut native = block_editor_replaying(&replay);
         load(&mut native, &entry.seed);
-        let refused = replay(&mut native, &entry.ops);
+        let refused = replay_ops(&mut native, &entry.ops);
         let exported = export(&native);
 
         // Lineage on raw values, before any renaming.
@@ -1029,4 +1130,86 @@ fn the_removal_prediction_matches_the_real_removal() {
     }
     // Every removeNode/moveNode case whose node resolves.
     assert!(checked >= 11, "checked {checked}");
+}
+
+/// Source `nextVersionId`: a retyped block's id is the old id with `~v1`, or
+/// the next version when already versioned. As in the app, whose nodeIdPlugin
+/// drops a destroyed node's id when the retype commits, the old id no longer
+/// resolves afterwards.
+#[test]
+fn a_retyped_block_takes_the_next_version_id() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let entry = corpus
+        .iter()
+        .find(|entry| entry.name == "setBlockType paragraph to heading 3")
+        .expect("paragraph seed");
+    let mut native = block_editor();
+    load(&mut native, &entry.loaded);
+    let first_id = |native: &Editor| -> String {
+        let view = native.state().view();
+        let key = view.first_child(NodeKey::ROOT).expect("block");
+        crate::node_ids::get_id(view, key)
+            .expect("id")
+            .map(|id| id.to_string())
+            .unwrap_or_default()
+    };
+    let retype = |native: &mut Editor, node: &str, block: Value| {
+        let mut op = serde_json::json!({"kind":"setBlockType","node":node});
+        for (key, value) in block.as_object().expect("block fields") {
+            op[key] = value.clone();
+        }
+        native.dispatch(&op_command(&op, 7)).expect("dispatch")
+    };
+    let (handled, _) = retype(
+        &mut native,
+        "s0000001",
+        serde_json::json!({"block":"heading","level":3}),
+    );
+    assert_eq!(handled, Handled::Yes);
+    assert_eq!(first_id(&native), "s0000001~v1");
+    let (handled, commit) = retype(
+        &mut native,
+        "s0000001",
+        serde_json::json!({"block":"quote"}),
+    );
+    assert_eq!(handled, Handled::No);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"unknownNode","invocation":7})]
+    );
+    let (handled, _) = retype(
+        &mut native,
+        "s0000001~v1",
+        serde_json::json!({"block":"quote"}),
+    );
+    assert_eq!(handled, Handled::Yes);
+    assert_eq!(first_id(&native), "s0000001~v2");
+}
+
+/// Lexical `ListItemNode.setIndent` throws on a negative indent: native refuses
+/// it at that op with the typed number problem.
+#[test]
+fn a_negative_indent_is_an_invalid_number() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let entry = corpus
+        .iter()
+        .find(|entry| entry.name == "setIndent to a negative level fails")
+        .expect("list seed");
+    let mut native = block_editor();
+    load(&mut native, &entry.loaded);
+    let before = export(&native);
+    let (handled, commit) = native
+        .dispatch(&op_command(&entry.ops[0], 7))
+        .expect("dispatch");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({
+            "cause": "invalidNumber",
+            "field": "indent",
+            "problem": "negative",
+            "invocation": 7
+        })]
+    );
 }

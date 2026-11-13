@@ -543,6 +543,42 @@ export const BLOCK_CASES: readonly BlockCase[] = [
     markdown: '- a\n  - a1\n- b\n  - b1\n- c',
     ops: [{ kind: 'moveNode', node: [0, 2], at: { after: [0, 3, 0, 0] } }],
   },
+  // Lexical ListItemNode.setIndent floors a fraction, throws on a negative and
+  // loops one nesting level per step up to the target.
+  {
+    name: 'setIndent to a fractional level floors it',
+    markdown: '- one\n- two',
+    ops: [{ kind: 'setIndent', node: [0, 1], indent: 1.7 }],
+  },
+  {
+    name: 'setIndent to a negative level fails',
+    markdown: '- one\n- two',
+    ops: [{ kind: 'setIndent', node: [0, 1], indent: -1 }],
+  },
+  {
+    // 20 levels: deeper nesting exceeds serde_json's default recursion
+    // limit (128) when the native tests parse the corpus.
+    name: 'setIndent to level 20',
+    markdown: '- one\n- two',
+    ops: [{ kind: 'setIndent', node: [0, 1], indent: 20 }],
+  },
+  // A retyped block gets a versioned id, and the old id still resolves to it.
+  {
+    name: 'setBlockType then address the old id',
+    markdown: 'Alpha',
+    ops: [
+      { kind: 'setBlockType', node: block(0), block: 'heading', level: 2 },
+      { kind: 'appendText', node: block(0), text: ' more' },
+    ],
+  },
+  {
+    name: 'setBlockType twice through the old id',
+    markdown: 'Alpha',
+    ops: [
+      { kind: 'setBlockType', node: block(0), block: 'heading', level: 2 },
+      { kind: 'setBlockType', node: block(0), block: 'quote' },
+    ],
+  },
 ];
 
 /** Durable id of a seed node by top-level index or child path. */

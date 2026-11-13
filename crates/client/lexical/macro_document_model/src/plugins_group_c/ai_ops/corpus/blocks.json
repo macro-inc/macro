@@ -6814,5 +6814,1296 @@
     },
     "failedAt": null,
     "refs": []
+  },
+  {
+    "name": "setIndent to a fractional level floors it",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setIndent",
+        "node": "s0000003",
+        "indent": 1.7
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "detail": 0,
+                            "format": 0,
+                            "mode": "normal",
+                            "style": "",
+                            "text": "two",
+                            "type": "text",
+                            "version": 1,
+                            "$": {
+                              "id": "s0000002"
+                            }
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 1,
+                        "type": "listitem",
+                        "version": 1,
+                        "$": {
+                          "id": "s0000003"
+                        },
+                        "value": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "task-list",
+                    "version": 1,
+                    "$": {
+                      "id": "<new0>"
+                    },
+                    "listType": "bullet",
+                    "start": 1,
+                    "tag": "ul"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "<new1>"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": []
+  },
+  {
+    "name": "setIndent to a negative level fails",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setIndent",
+        "node": "s0000003",
+        "indent": -1
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "failedAt": 0,
+    "refs": []
+  },
+  {
+    "name": "setIndent to level 20",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setIndent",
+        "node": "s0000003",
+        "indent": 20
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [
+                                      {
+                                        "children": [
+                                          {
+                                            "children": [
+                                              {
+                                                "children": [
+                                                  {
+                                                    "children": [
+                                                      {
+                                                        "children": [
+                                                          {
+                                                            "children": [
+                                                              {
+                                                                "children": [
+                                                                  {
+                                                                    "children": [
+                                                                      {
+                                                                        "children": [
+                                                                          {
+                                                                            "children": [
+                                                                              {
+                                                                                "children": [
+                                                                                  {
+                                                                                    "children": [
+                                                                                      {
+                                                                                        "children": [
+                                                                                          {
+                                                                                            "children": [
+                                                                                              {
+                                                                                                "children": [
+                                                                                                  {
+                                                                                                    "children": [
+                                                                                                      {
+                                                                                                        "children": [
+                                                                                                          {
+                                                                                                            "children": [
+                                                                                                              {
+                                                                                                                "children": [
+                                                                                                                  {
+                                                                                                                    "children": [
+                                                                                                                      {
+                                                                                                                        "children": [
+                                                                                                                          {
+                                                                                                                            "children": [
+                                                                                                                              {
+                                                                                                                                "children": [
+                                                                                                                                  {
+                                                                                                                                    "children": [
+                                                                                                                                      {
+                                                                                                                                        "children": [
+                                                                                                                                          {
+                                                                                                                                            "children": [
+                                                                                                                                              {
+                                                                                                                                                "children": [
+                                                                                                                                                  {
+                                                                                                                                                    "children": [
+                                                                                                                                                      {
+                                                                                                                                                        "children": [
+                                                                                                                                                          {
+                                                                                                                                                            "children": [
+                                                                                                                                                              {
+                                                                                                                                                                "children": [
+                                                                                                                                                                  {
+                                                                                                                                                                    "children": [
+                                                                                                                                                                      {
+                                                                                                                                                                        "children": [
+                                                                                                                                                                          {
+                                                                                                                                                                            "children": [
+                                                                                                                                                                              {
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                  {
+                                                                                                                                                                                    "detail": 0,
+                                                                                                                                                                                    "format": 0,
+                                                                                                                                                                                    "mode": "normal",
+                                                                                                                                                                                    "style": "",
+                                                                                                                                                                                    "text": "two",
+                                                                                                                                                                                    "type": "text",
+                                                                                                                                                                                    "version": 1,
+                                                                                                                                                                                    "$": {
+                                                                                                                                                                                      "id": "s0000002"
+                                                                                                                                                                                    }
+                                                                                                                                                                                  }
+                                                                                                                                                                                ],
+                                                                                                                                                                                "direction": null,
+                                                                                                                                                                                "format": "",
+                                                                                                                                                                                "indent": 20,
+                                                                                                                                                                                "type": "listitem",
+                                                                                                                                                                                "version": 1,
+                                                                                                                                                                                "$": {
+                                                                                                                                                                                  "id": "s0000003"
+                                                                                                                                                                                },
+                                                                                                                                                                                "value": 1
+                                                                                                                                                                              }
+                                                                                                                                                                            ],
+                                                                                                                                                                            "direction": null,
+                                                                                                                                                                            "format": "",
+                                                                                                                                                                            "indent": 0,
+                                                                                                                                                                            "type": "task-list",
+                                                                                                                                                                            "version": 1,
+                                                                                                                                                                            "$": {
+                                                                                                                                                                              "id": "<new0>"
+                                                                                                                                                                            },
+                                                                                                                                                                            "listType": "bullet",
+                                                                                                                                                                            "start": 1,
+                                                                                                                                                                            "tag": "ul"
+                                                                                                                                                                          }
+                                                                                                                                                                        ],
+                                                                                                                                                                        "direction": null,
+                                                                                                                                                                        "format": "",
+                                                                                                                                                                        "indent": 19,
+                                                                                                                                                                        "type": "listitem",
+                                                                                                                                                                        "version": 1,
+                                                                                                                                                                        "$": {
+                                                                                                                                                                          "id": "<new1>"
+                                                                                                                                                                        },
+                                                                                                                                                                        "value": 1
+                                                                                                                                                                      }
+                                                                                                                                                                    ],
+                                                                                                                                                                    "direction": null,
+                                                                                                                                                                    "format": "",
+                                                                                                                                                                    "indent": 0,
+                                                                                                                                                                    "type": "task-list",
+                                                                                                                                                                    "version": 1,
+                                                                                                                                                                    "$": {
+                                                                                                                                                                      "id": "<new2>"
+                                                                                                                                                                    },
+                                                                                                                                                                    "listType": "bullet",
+                                                                                                                                                                    "start": 1,
+                                                                                                                                                                    "tag": "ul"
+                                                                                                                                                                  }
+                                                                                                                                                                ],
+                                                                                                                                                                "direction": null,
+                                                                                                                                                                "format": "",
+                                                                                                                                                                "indent": 18,
+                                                                                                                                                                "type": "listitem",
+                                                                                                                                                                "version": 1,
+                                                                                                                                                                "$": {
+                                                                                                                                                                  "id": "<new3>"
+                                                                                                                                                                },
+                                                                                                                                                                "value": 1
+                                                                                                                                                              }
+                                                                                                                                                            ],
+                                                                                                                                                            "direction": null,
+                                                                                                                                                            "format": "",
+                                                                                                                                                            "indent": 0,
+                                                                                                                                                            "type": "task-list",
+                                                                                                                                                            "version": 1,
+                                                                                                                                                            "$": {
+                                                                                                                                                              "id": "<new4>"
+                                                                                                                                                            },
+                                                                                                                                                            "listType": "bullet",
+                                                                                                                                                            "start": 1,
+                                                                                                                                                            "tag": "ul"
+                                                                                                                                                          }
+                                                                                                                                                        ],
+                                                                                                                                                        "direction": null,
+                                                                                                                                                        "format": "",
+                                                                                                                                                        "indent": 17,
+                                                                                                                                                        "type": "listitem",
+                                                                                                                                                        "version": 1,
+                                                                                                                                                        "$": {
+                                                                                                                                                          "id": "<new5>"
+                                                                                                                                                        },
+                                                                                                                                                        "value": 1
+                                                                                                                                                      }
+                                                                                                                                                    ],
+                                                                                                                                                    "direction": null,
+                                                                                                                                                    "format": "",
+                                                                                                                                                    "indent": 0,
+                                                                                                                                                    "type": "task-list",
+                                                                                                                                                    "version": 1,
+                                                                                                                                                    "$": {
+                                                                                                                                                      "id": "<new6>"
+                                                                                                                                                    },
+                                                                                                                                                    "listType": "bullet",
+                                                                                                                                                    "start": 1,
+                                                                                                                                                    "tag": "ul"
+                                                                                                                                                  }
+                                                                                                                                                ],
+                                                                                                                                                "direction": null,
+                                                                                                                                                "format": "",
+                                                                                                                                                "indent": 16,
+                                                                                                                                                "type": "listitem",
+                                                                                                                                                "version": 1,
+                                                                                                                                                "$": {
+                                                                                                                                                  "id": "<new7>"
+                                                                                                                                                },
+                                                                                                                                                "value": 1
+                                                                                                                                              }
+                                                                                                                                            ],
+                                                                                                                                            "direction": null,
+                                                                                                                                            "format": "",
+                                                                                                                                            "indent": 0,
+                                                                                                                                            "type": "task-list",
+                                                                                                                                            "version": 1,
+                                                                                                                                            "$": {
+                                                                                                                                              "id": "<new8>"
+                                                                                                                                            },
+                                                                                                                                            "listType": "bullet",
+                                                                                                                                            "start": 1,
+                                                                                                                                            "tag": "ul"
+                                                                                                                                          }
+                                                                                                                                        ],
+                                                                                                                                        "direction": null,
+                                                                                                                                        "format": "",
+                                                                                                                                        "indent": 15,
+                                                                                                                                        "type": "listitem",
+                                                                                                                                        "version": 1,
+                                                                                                                                        "$": {
+                                                                                                                                          "id": "<new9>"
+                                                                                                                                        },
+                                                                                                                                        "value": 1
+                                                                                                                                      }
+                                                                                                                                    ],
+                                                                                                                                    "direction": null,
+                                                                                                                                    "format": "",
+                                                                                                                                    "indent": 0,
+                                                                                                                                    "type": "task-list",
+                                                                                                                                    "version": 1,
+                                                                                                                                    "$": {
+                                                                                                                                      "id": "<new10>"
+                                                                                                                                    },
+                                                                                                                                    "listType": "bullet",
+                                                                                                                                    "start": 1,
+                                                                                                                                    "tag": "ul"
+                                                                                                                                  }
+                                                                                                                                ],
+                                                                                                                                "direction": null,
+                                                                                                                                "format": "",
+                                                                                                                                "indent": 14,
+                                                                                                                                "type": "listitem",
+                                                                                                                                "version": 1,
+                                                                                                                                "$": {
+                                                                                                                                  "id": "<new11>"
+                                                                                                                                },
+                                                                                                                                "value": 1
+                                                                                                                              }
+                                                                                                                            ],
+                                                                                                                            "direction": null,
+                                                                                                                            "format": "",
+                                                                                                                            "indent": 0,
+                                                                                                                            "type": "task-list",
+                                                                                                                            "version": 1,
+                                                                                                                            "$": {
+                                                                                                                              "id": "<new12>"
+                                                                                                                            },
+                                                                                                                            "listType": "bullet",
+                                                                                                                            "start": 1,
+                                                                                                                            "tag": "ul"
+                                                                                                                          }
+                                                                                                                        ],
+                                                                                                                        "direction": null,
+                                                                                                                        "format": "",
+                                                                                                                        "indent": 13,
+                                                                                                                        "type": "listitem",
+                                                                                                                        "version": 1,
+                                                                                                                        "$": {
+                                                                                                                          "id": "<new13>"
+                                                                                                                        },
+                                                                                                                        "value": 1
+                                                                                                                      }
+                                                                                                                    ],
+                                                                                                                    "direction": null,
+                                                                                                                    "format": "",
+                                                                                                                    "indent": 0,
+                                                                                                                    "type": "task-list",
+                                                                                                                    "version": 1,
+                                                                                                                    "$": {
+                                                                                                                      "id": "<new14>"
+                                                                                                                    },
+                                                                                                                    "listType": "bullet",
+                                                                                                                    "start": 1,
+                                                                                                                    "tag": "ul"
+                                                                                                                  }
+                                                                                                                ],
+                                                                                                                "direction": null,
+                                                                                                                "format": "",
+                                                                                                                "indent": 12,
+                                                                                                                "type": "listitem",
+                                                                                                                "version": 1,
+                                                                                                                "$": {
+                                                                                                                  "id": "<new15>"
+                                                                                                                },
+                                                                                                                "value": 1
+                                                                                                              }
+                                                                                                            ],
+                                                                                                            "direction": null,
+                                                                                                            "format": "",
+                                                                                                            "indent": 0,
+                                                                                                            "type": "task-list",
+                                                                                                            "version": 1,
+                                                                                                            "$": {
+                                                                                                              "id": "<new16>"
+                                                                                                            },
+                                                                                                            "listType": "bullet",
+                                                                                                            "start": 1,
+                                                                                                            "tag": "ul"
+                                                                                                          }
+                                                                                                        ],
+                                                                                                        "direction": null,
+                                                                                                        "format": "",
+                                                                                                        "indent": 11,
+                                                                                                        "type": "listitem",
+                                                                                                        "version": 1,
+                                                                                                        "$": {
+                                                                                                          "id": "<new17>"
+                                                                                                        },
+                                                                                                        "value": 1
+                                                                                                      }
+                                                                                                    ],
+                                                                                                    "direction": null,
+                                                                                                    "format": "",
+                                                                                                    "indent": 0,
+                                                                                                    "type": "task-list",
+                                                                                                    "version": 1,
+                                                                                                    "$": {
+                                                                                                      "id": "<new18>"
+                                                                                                    },
+                                                                                                    "listType": "bullet",
+                                                                                                    "start": 1,
+                                                                                                    "tag": "ul"
+                                                                                                  }
+                                                                                                ],
+                                                                                                "direction": null,
+                                                                                                "format": "",
+                                                                                                "indent": 10,
+                                                                                                "type": "listitem",
+                                                                                                "version": 1,
+                                                                                                "$": {
+                                                                                                  "id": "<new19>"
+                                                                                                },
+                                                                                                "value": 1
+                                                                                              }
+                                                                                            ],
+                                                                                            "direction": null,
+                                                                                            "format": "",
+                                                                                            "indent": 0,
+                                                                                            "type": "task-list",
+                                                                                            "version": 1,
+                                                                                            "$": {
+                                                                                              "id": "<new20>"
+                                                                                            },
+                                                                                            "listType": "bullet",
+                                                                                            "start": 1,
+                                                                                            "tag": "ul"
+                                                                                          }
+                                                                                        ],
+                                                                                        "direction": null,
+                                                                                        "format": "",
+                                                                                        "indent": 9,
+                                                                                        "type": "listitem",
+                                                                                        "version": 1,
+                                                                                        "$": {
+                                                                                          "id": "<new21>"
+                                                                                        },
+                                                                                        "value": 1
+                                                                                      }
+                                                                                    ],
+                                                                                    "direction": null,
+                                                                                    "format": "",
+                                                                                    "indent": 0,
+                                                                                    "type": "task-list",
+                                                                                    "version": 1,
+                                                                                    "$": {
+                                                                                      "id": "<new22>"
+                                                                                    },
+                                                                                    "listType": "bullet",
+                                                                                    "start": 1,
+                                                                                    "tag": "ul"
+                                                                                  }
+                                                                                ],
+                                                                                "direction": null,
+                                                                                "format": "",
+                                                                                "indent": 8,
+                                                                                "type": "listitem",
+                                                                                "version": 1,
+                                                                                "$": {
+                                                                                  "id": "<new23>"
+                                                                                },
+                                                                                "value": 1
+                                                                              }
+                                                                            ],
+                                                                            "direction": null,
+                                                                            "format": "",
+                                                                            "indent": 0,
+                                                                            "type": "task-list",
+                                                                            "version": 1,
+                                                                            "$": {
+                                                                              "id": "<new24>"
+                                                                            },
+                                                                            "listType": "bullet",
+                                                                            "start": 1,
+                                                                            "tag": "ul"
+                                                                          }
+                                                                        ],
+                                                                        "direction": null,
+                                                                        "format": "",
+                                                                        "indent": 7,
+                                                                        "type": "listitem",
+                                                                        "version": 1,
+                                                                        "$": {
+                                                                          "id": "<new25>"
+                                                                        },
+                                                                        "value": 1
+                                                                      }
+                                                                    ],
+                                                                    "direction": null,
+                                                                    "format": "",
+                                                                    "indent": 0,
+                                                                    "type": "task-list",
+                                                                    "version": 1,
+                                                                    "$": {
+                                                                      "id": "<new26>"
+                                                                    },
+                                                                    "listType": "bullet",
+                                                                    "start": 1,
+                                                                    "tag": "ul"
+                                                                  }
+                                                                ],
+                                                                "direction": null,
+                                                                "format": "",
+                                                                "indent": 6,
+                                                                "type": "listitem",
+                                                                "version": 1,
+                                                                "$": {
+                                                                  "id": "<new27>"
+                                                                },
+                                                                "value": 1
+                                                              }
+                                                            ],
+                                                            "direction": null,
+                                                            "format": "",
+                                                            "indent": 0,
+                                                            "type": "task-list",
+                                                            "version": 1,
+                                                            "$": {
+                                                              "id": "<new28>"
+                                                            },
+                                                            "listType": "bullet",
+                                                            "start": 1,
+                                                            "tag": "ul"
+                                                          }
+                                                        ],
+                                                        "direction": null,
+                                                        "format": "",
+                                                        "indent": 5,
+                                                        "type": "listitem",
+                                                        "version": 1,
+                                                        "$": {
+                                                          "id": "<new29>"
+                                                        },
+                                                        "value": 1
+                                                      }
+                                                    ],
+                                                    "direction": null,
+                                                    "format": "",
+                                                    "indent": 0,
+                                                    "type": "task-list",
+                                                    "version": 1,
+                                                    "$": {
+                                                      "id": "<new30>"
+                                                    },
+                                                    "listType": "bullet",
+                                                    "start": 1,
+                                                    "tag": "ul"
+                                                  }
+                                                ],
+                                                "direction": null,
+                                                "format": "",
+                                                "indent": 4,
+                                                "type": "listitem",
+                                                "version": 1,
+                                                "$": {
+                                                  "id": "<new31>"
+                                                },
+                                                "value": 1
+                                              }
+                                            ],
+                                            "direction": null,
+                                            "format": "",
+                                            "indent": 0,
+                                            "type": "task-list",
+                                            "version": 1,
+                                            "$": {
+                                              "id": "<new32>"
+                                            },
+                                            "listType": "bullet",
+                                            "start": 1,
+                                            "tag": "ul"
+                                          }
+                                        ],
+                                        "direction": null,
+                                        "format": "",
+                                        "indent": 3,
+                                        "type": "listitem",
+                                        "version": 1,
+                                        "$": {
+                                          "id": "<new33>"
+                                        },
+                                        "value": 1
+                                      }
+                                    ],
+                                    "direction": null,
+                                    "format": "",
+                                    "indent": 0,
+                                    "type": "task-list",
+                                    "version": 1,
+                                    "$": {
+                                      "id": "<new34>"
+                                    },
+                                    "listType": "bullet",
+                                    "start": 1,
+                                    "tag": "ul"
+                                  }
+                                ],
+                                "direction": null,
+                                "format": "",
+                                "indent": 2,
+                                "type": "listitem",
+                                "version": 1,
+                                "$": {
+                                  "id": "<new35>"
+                                },
+                                "value": 1
+                              }
+                            ],
+                            "direction": null,
+                            "format": "",
+                            "indent": 0,
+                            "type": "task-list",
+                            "version": 1,
+                            "$": {
+                              "id": "<new36>"
+                            },
+                            "listType": "bullet",
+                            "start": 1,
+                            "tag": "ul"
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 1,
+                        "type": "listitem",
+                        "version": 1,
+                        "$": {
+                          "id": "<new37>"
+                        },
+                        "value": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "task-list",
+                    "version": 1,
+                    "$": {
+                      "id": "<new38>"
+                    },
+                    "listType": "bullet",
+                    "start": 1,
+                    "tag": "ul"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "<new39>"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": []
+  },
+  {
+    "name": "setBlockType then address the old id",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setBlockType",
+        "node": "s0000001",
+        "block": "heading",
+        "level": 2
+      },
+      {
+        "kind": "appendText",
+        "node": "s0000001",
+        "text": " more"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha more",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "heading",
+            "version": 1,
+            "$": {
+              "id": "<new0>"
+            },
+            "tag": "h2"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": []
+  },
+  {
+    "name": "setBlockType twice through the old id",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setBlockType",
+        "node": "s0000001",
+        "block": "heading",
+        "level": 2
+      },
+      {
+        "kind": "setBlockType",
+        "node": "s0000001",
+        "block": "quote"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "quote",
+            "version": 1,
+            "$": {
+              "id": "<new0>"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": []
   }
 ]

@@ -255,7 +255,15 @@ async function replay(entry: HeadlessEntry): Promise<Replayed> {
   });
 }
 
-type Deltas = Record<string, { seed: string[]; state: string[] }>;
+type Deltas = Record<
+  string,
+  {
+    seed: string[];
+    state: string[];
+    /** Set when the app refuses different ops than the headless Doc. */
+    refused?: { headless: number[]; app: number[] };
+  }
+>;
 
 /** The headless text corpus marks every minted id `<new>`; compare in its terms. */
 function oneBucket(value: unknown): unknown {
@@ -298,16 +306,21 @@ async function generate(
     const target = app[index];
     if (!target) throw new Error(`missing ${entry.name}`);
     // Source reports the op the headless Doc stopped at, then carries on.
-    expect(target.refused, entry.name).toEqual(
-      entry.failedAt === null ? [] : [entry.failedAt]
-    );
+    const headlessRefused = entry.failedAt === null ? [] : [entry.failedAt];
     const view = (value: unknown) =>
       (bucketed ? oneBucket(value) : value) as Json;
     const seed: string[] = [];
     diff(entry.seed as never, view(target.seed), '', seed);
     const state: string[] = [];
     diff(entry.state as never, view(target.state), '', state);
-    deltas[entry.name] = { seed, state };
+    deltas[entry.name] =
+      JSON.stringify(target.refused) === JSON.stringify(headlessRefused)
+        ? { seed, state }
+        : {
+            seed,
+            state,
+            refused: { headless: headlessRefused, app: target.refused },
+          };
   }
   return deltas;
 }
@@ -319,6 +332,15 @@ const LOADED_METADATA =
   '.root.$.documentMetadata: app-only {"version":10,"environmentTags":null}';
 
 /** Every seed and state gains documentMetadata; returns the other state deltas. */
+/** Cases where the app refuses different ops than the headless Doc. */
+function refusalDifferences(deltas: Deltas) {
+  return Object.fromEntries(
+    Object.entries(deltas).flatMap(([name, { refused }]) =>
+      refused ? [[name, refused]] : []
+    )
+  );
+}
+
 function beyondMetadata(deltas: Deltas): Record<string, string[]> {
   for (const { seed, state } of Object.values(deltas)) {
     expect(seed).toEqual([STORED_METADATA]);
@@ -338,6 +360,7 @@ test('the native text-op corpus is the app Source profile of the headless cases'
   const deltas = await generate('text.json', 'text.app.json');
   const out = process.env.AI_EDIT_APP_PROFILE_TEXT_OUT;
   if (out) writeFileSync(out, `${JSON.stringify(deltas, null, 2)}\n`);
+  expect(refusalDifferences(deltas)).toEqual({});
   expect(beyondMetadata(deltas)).toEqual({
     // The op after the refused one applies.
     'a missed replaceText keeps the earlier op and stops': [
@@ -365,6 +388,19 @@ test('the native block-op corpus is the app Source profile of the headless cases
       '.root.children[0].children[0].$.id: "s0000000" -> "<new0>"',
       '.root.children[0].$.id: "s0000001" -> "ref-kept"',
     ],
+    // The app's nodeIdPlugin drops a retyped block's old id when the retype
+    // commits (its destroyed-node cleanup), so a later op cannot address it.
+    'setBlockType then address the old id': [
+      '.root.children[0].children[0].text: "Alpha more" -> "Alpha"',
+    ],
+    'setBlockType twice through the old id': [
+      '.root.children[0].type: "quote" -> "heading"',
+      '.root.children[0].tag: app-only "h2"',
+    ],
+  });
+  expect(refusalDifferences(deltas)).toEqual({
+    'setBlockType then address the old id': { headless: [], app: [1] },
+    'setBlockType twice through the old id': { headless: [], app: [1] },
   });
 });
 
