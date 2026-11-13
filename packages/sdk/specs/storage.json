@@ -18426,6 +18426,163 @@
         }
       }
     },
+    "/events/catalog": {
+      "get": {
+        "tags": ["events"],
+        "summary": "List the public events this credential can receive.",
+        "operationId": "event_catalog",
+        "responses": {
+          "200": {
+            "description": "The events this credential can receive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventCatalog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No acting user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The catalog is not enabled for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/stream": {
+      "get": {
+        "tags": ["events"],
+        "summary": "Stream matching public events to the caller over Server-Sent Events.",
+        "operationId": "stream_events",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Personal or team workspace whose webhook lifecycle events are delivered.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WebhookScope"
+            }
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "description": "URL-encoded JSON array of filters, identical to the persisted webhook\n`filters` field.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Resume after this cursor (an SSE `id`). `Last-Event-ID` wins when both\nare sent. Requires the `public-event-stream` feature; ignored without\nit.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events stream of matching public events, ending with a `lagged`, `revoked` or `reset` control event when the server closes it",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No acting user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The cursor is older than the replay window: resync, then reconnect without a cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many concurrent streams for this credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/external-chats": {
       "get": {
         "tags": ["whatsapp_linked::inbound::router"],
@@ -28052,8 +28209,8 @@
     "/webhook/events/stream": {
       "get": {
         "tags": ["webhook"],
-        "summary": "Stream matching broker events to the caller over Server-Sent Events.",
-        "operationId": "stream_events",
+        "summary": "OpenAPI entry for [`stream_events`] under its original path, kept while\nclients still call it; the route itself is served by [`stream_events`].",
+        "operationId": "stream_events_alias",
         "parameters": [
           {
             "name": "scope",
@@ -28067,7 +28224,16 @@
           {
             "name": "filters",
             "in": "query",
-            "description": "URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.",
+            "description": "URL-encoded JSON array of filters, identical to the persisted webhook\n`filters` field.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Resume after this cursor (an SSE `id`). `Last-Event-ID` wins when both\nare sent. Requires the `public-event-stream` feature; ignored without\nit.",
             "required": false,
             "schema": {
               "type": "string"
@@ -28076,7 +28242,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Server-Sent Events stream of matching broker events",
+            "description": "Server-Sent Events stream; see `/events/stream`",
             "content": {
               "text/event-stream": {
                 "schema": {
@@ -28095,8 +28261,38 @@
               }
             }
           },
+          "401": {
+            "description": "No acting user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Cursor older than the replay window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many concurrent streams",
             "content": {
               "application/json": {
                 "schema": {
@@ -29085,6 +29281,40 @@
               "$ref": "#/components/schemas/ActiveMeeting"
             },
             "description": "Persistent meeting invitations for currently active sessions."
+          }
+        }
+      },
+      "ActivityPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Activities the recipient may see were recorded.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["activity.recorded"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ActivityRecorded",
+                "description": "Activities the recipient may see were recorded."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`ActivityTopicEvent`], delivered only to the\naddressed recipient."
+      },
+      "ActivityRecorded": {
+        "type": "object",
+        "description": "Public body of `activity.recorded`.",
+        "required": ["activities"],
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicActivity"
+            },
+            "description": "The recorded rows, in recording order."
           }
         }
       },
@@ -30930,6 +31160,23 @@
         "description": "Who may respond to a form.",
         "enum": ["members", "public"]
       },
+      "AudienceClass": {
+        "type": "string",
+        "description": "The class of rule that decides who receives an event.",
+        "enum": [
+          "entity",
+          "entity_at_least",
+          "recipient",
+          "owner",
+          "team",
+          "team_admins",
+          "teams_of",
+          "contacts_of",
+          "workspace",
+          "snapshot",
+          "github_installation"
+        ]
+      },
       "AvailabilityCoverage": {
         "type": "string",
         "description": "Whether missing busy blocks can safely be interpreted as free time.",
@@ -31407,6 +31654,74 @@
         "description": "Channel type for a channel containing a bot.",
         "enum": ["public", "private", "direct_message", "team"]
       },
+      "BotCreated": {
+        "type": "object",
+        "description": "Public body of `bot.created`.",
+        "required": [
+          "bot_id",
+          "kind",
+          "owner",
+          "name",
+          "handle",
+          "actor",
+          "created_at"
+        ],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who created it."
+          },
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The bot."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was created."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BotKind",
+            "description": "Its kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/BotOwner",
+            "description": "The owning user or team."
+          }
+        }
+      },
+      "BotDeleted": {
+        "type": "object",
+        "description": "Public body of `bot.deleted`.",
+        "required": ["bot_id", "owner", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who deleted it."
+          },
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The bot."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/BotOwner",
+            "description": "The owning user or team."
+          }
+        }
+      },
+      "BotField": {
+        "type": "string",
+        "description": "A bot field an update changed.",
+        "enum": ["name", "handle", "description", "avatar_url"]
+      },
       "BotId": {
         "type": "string"
       },
@@ -31486,6 +31801,56 @@
           }
         }
       },
+      "BotPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A bot was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["bot.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/BotCreated",
+                "description": "A bot was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A bot was updated.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["bot.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/BotUpdated",
+                "description": "A bot was updated."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A bot was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["bot.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/BotDeleted",
+                "description": "A bot was deleted."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`BotTopicEvent`], delivered to the bot's owning\nuser or team. Thin: ids, kind, owner, names and who acted; never the\ndescription, avatar or tokens."
+      },
       "BotSenderProfile": {
         "type": "object",
         "description": "Public bot profile attached to bot-authored messages.",
@@ -31542,6 +31907,45 @@
           "token_prefix": {
             "type": "string",
             "description": "Display prefix of the bearer token. The raw secret is never stored here."
+          }
+        }
+      },
+      "BotUpdated": {
+        "type": "object",
+        "description": "Public body of `bot.updated`.",
+        "required": ["bot_id", "owner", "actor", "changed", "updated_at"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who updated it."
+          },
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The bot."
+          },
+          "changed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BotField"
+            },
+            "description": "Which fields the update set."
+          },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "New handle, when it changed."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name, when it changed."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/BotOwner",
+            "description": "The owning user or team."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was updated."
           }
         }
       },
@@ -31871,6 +32275,18 @@
           "visibility": {
             "$ref": "#/components/schemas/EventVisibility",
             "description": "Event visibility."
+          }
+        }
+      },
+      "CalendarEventChange": {
+        "type": "object",
+        "description": "Public body of every calendar event: which event changed.",
+        "required": ["event_id"],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The calendar event."
           }
         }
       },
@@ -32301,6 +32717,56 @@
             "description": "Aggregate ingestion state; clients render a skeleton while `syncing`."
           }
         }
+      },
+      "CalendarPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A calendar event was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["calendar_event.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CalendarEventChange",
+                "description": "A calendar event was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A calendar event was updated.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["calendar_event.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CalendarEventChange",
+                "description": "A calendar event was updated."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A calendar event was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["calendar_event.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CalendarEventChange",
+                "description": "A calendar event was deleted."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of a [`CalendarTopicEvent`], delivered only to the\ncalendar's owner. Clients read the event back through the API."
       },
       "CalendarSyncStatus": {
         "type": "string",
@@ -32823,6 +33289,11 @@
           }
         }
       },
+      "CallRecordChange": {
+        "type": "string",
+        "description": "What a [`CallTopicEvent::RecordUpdated`] changed, without the new values.",
+        "enum": ["name", "team_sharing"]
+      },
       "CallRecordGuest": {
         "type": "object",
         "description": "A non-account guest as returned in a [`CallRecord`].",
@@ -32946,6 +33417,56 @@
             "description": "When the call started (created_at for active, started_at for archived)."
           }
         }
+      },
+      "CallRecordPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A call record's name or team sharing changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.record_updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicCallRecordUpdated",
+                "description": "A call record's name or team sharing changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call record was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.record_deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicCallRecordDeleted",
+                "description": "A call record was deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call record was imported from a connected meeting provider.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.record_imported"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicCallRecordImported",
+                "description": "A call record was imported from a connected meeting provider."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of the call-record events on [`MacroCallsTopic`].\nLive call facts are public through `macro.call_notifications` instead."
       },
       "CallRecordSource": {
         "type": "object",
@@ -33413,6 +33934,35 @@
         "type": "string",
         "description": "Whether a column's values convert to a type.",
         "enum": ["safe", "checked", "never"]
+      },
+      "CatalogEntry": {
+        "type": "object",
+        "description": "One registered public event.",
+        "required": ["name", "entity_types", "audience", "stage"],
+        "properties": {
+          "audience": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudienceClass"
+            },
+            "description": "The rule classes that can admit a subscriber."
+          },
+          "entity_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The public entity types its `entity_type` can be."
+          },
+          "name": {
+            "type": "string",
+            "description": "The public event name."
+          },
+          "stage": {
+            "type": "string",
+            "description": "Rollout stage: `preview` events need the `public-event-stream` flag."
+          }
+        }
       },
       "CellBorders": {
         "type": "object",
@@ -34766,6 +35316,11 @@
           }
         }
       },
+      "ChatChange": {
+        "type": "string",
+        "description": "What a [`ChatTopicEvent::Updated`] changed, without the new values.",
+        "enum": ["name", "project", "sharing"]
+      },
       "ChatFilters": {
         "type": "object",
         "description": "The chat filters used to filter down what chats you search over.",
@@ -34807,6 +35362,121 @@
             "description": "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
           }
         }
+      },
+      "ChatMessageRole": {
+        "type": "string",
+        "description": "Role of the sender of a chat message.\n\nDefined locally so the wire contract does not depend on another crate's\nserde attributes.",
+        "enum": ["user", "assistant", "system"]
+      },
+      "ChatPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A chat was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["chat.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicChatCreated",
+                "description": "A chat was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A chat's name, project or sharing changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["chat.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicChatUpdated",
+                "description": "A chat's name, project or sharing changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A chat was moved to the trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["chat.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicChatTrash",
+                "description": "A chat was moved to the trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A chat was restored from the trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["chat.restored"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicChatTrash",
+                "description": "A chat was restored from the trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A chat was copied.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["chat.copied"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicChatCopied",
+                "description": "A chat was copied."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was added to a chat.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["chat.message_sent"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicChatMessageSent",
+                "description": "A message was added to a chat."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was deleted from a chat.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["chat.message_deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicChatMessageDeleted",
+                "description": "A message was deleted from a chat."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`ChatTopicEvent`], delivered under the same\nevent names."
       },
       "ClaimPairingRequest": {
         "type": "object",
@@ -38048,6 +38718,116 @@
         ],
         "description": "One write to a database: its tables, columns, options, rows or views,\ngrouped by the resource it changes. A request's ops apply in order and\ntogether, or not at all, and every op names a table of the database the\nrequest is for (or, creating one, adds it there)."
       },
+      "DatabasePublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A database was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["database.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDatabaseCreated",
+                "description": "A database was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A database was renamed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["database.renamed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDatabaseChange",
+                "description": "A database was renamed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A database was moved to the trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["database.trashed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDatabaseChange",
+                "description": "A database was moved to the trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A database was restored from the trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["database.restored"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDatabaseChange",
+                "description": "A database was restored from the trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Rows or schema changed in one or more tables.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["database.tables_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDatabaseTablesChanged",
+                "description": "Rows or schema changed in one or more tables."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Who the database is shared with changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["database.sharing_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDatabaseChange",
+                "description": "Who the database is shared with changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The database's icon or color changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["database.appearance_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDatabaseChange",
+                "description": "The database's icon or color changed."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`DatabaseTopicEvent`], delivered under the same\nevent names."
+      },
       "DatabaseQueryRequest": {
         "type": "object",
         "description": "One SQL statement with an optional default database and optimistic write guards.",
@@ -38475,6 +39255,41 @@
             ]
           }
         }
+      },
+      "DocumentChangePublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A document's content changed: an upload or a live-collab snapshot.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.content_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDocumentContentChanged",
+                "description": "A document's content changed: an upload or a live-collab snapshot."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document's icon or color changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.appearance_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicDocumentAppearanceChanged",
+                "description": "A document's icon or color changed."
+              }
+            }
+          }
+        ],
+        "description": "Thin projections of document edits that were not delivered before\nprojections existed."
       },
       "DocumentContent": {
         "type": "object",
@@ -39198,6 +40013,19 @@
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
+      },
+      "DocumentPublicEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DocumentTopicEvent",
+            "description": "Lifecycle events delivered unchanged since before projections, so\ntheir wire shape stays exactly the broker's."
+          },
+          {
+            "$ref": "#/components/schemas/DocumentChangePublicEvent",
+            "description": "Content and appearance edits, as thin projections."
+          }
+        ],
+        "description": "The public projection of [`DocumentTopicEvent`]."
       },
       "DocumentPurgedMetadata": {
         "type": "object",
@@ -42680,6 +43508,11 @@
         "description": "The audience affected by a domain exclusion.",
         "enum": ["team", "personal"]
       },
+      "EmailEventOrigin": {
+        "type": "string",
+        "description": "Whether a change was initiated by a Macro user action or first observed\nsyncing from the email provider. Lets automation ignore its own echoes.",
+        "enum": ["user_action", "provider_sync"]
+      },
       "EmailFilters": {
         "type": "object",
         "description": "The email filters used to filter down what emails you search over.",
@@ -42908,6 +43741,281 @@
           }
         }
       },
+      "EmailLabel": {
+        "type": "object",
+        "description": "A user label in a public email event.",
+        "required": ["provider_label_id"],
+        "properties": {
+          "label_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Macro's label id, when the label is known locally."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Label name, when known."
+          },
+          "provider_label_id": {
+            "type": "string",
+            "description": "Provider label id."
+          }
+        }
+      },
+      "EmailLinkConnected": {
+        "type": "object",
+        "description": "Public body of `email.link_connected`.",
+        "required": ["link_id", "provider", "is_primary", "connected_at"],
+        "properties": {
+          "connected_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the inbox was connected."
+          },
+          "is_primary": {
+            "type": "boolean",
+            "description": "Whether this is the owner's primary inbox."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The connected inbox."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Email provider, such as `GMAIL`."
+          }
+        }
+      },
+      "EmailLinkDisconnected": {
+        "type": "object",
+        "description": "Public body of `email.link_disconnected`.",
+        "required": ["link_id", "reason"],
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The disconnected inbox."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/LinkDisconnectReason",
+            "description": "Why it was disconnected."
+          }
+        }
+      },
+      "EmailLinkReauthRequired": {
+        "type": "object",
+        "description": "Public body of `email.link_reauth_required`.",
+        "required": ["link_id", "observed_at"],
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox needing re-authentication."
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the dead grant was observed."
+          }
+        }
+      },
+      "EmailMessageDeleted": {
+        "type": "object",
+        "description": "Public body of `email.message_deleted`.",
+        "required": ["link_id", "thread_id", "message_id"],
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox the message belonged to."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The deleted message."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailMessageReceived": {
+        "type": "object",
+        "description": "Public body of `email.message_received`.",
+        "required": [
+          "link_id",
+          "thread_id",
+          "message_id",
+          "is_new_thread",
+          "attachment_count",
+          "is_spam_or_trash"
+        ],
+        "properties": {
+          "attachment_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of attachments.",
+            "minimum": 0
+          },
+          "is_new_thread": {
+            "type": "boolean",
+            "description": "Whether the message started a thread new to this inbox."
+          },
+          "is_spam_or_trash": {
+            "type": "boolean",
+            "description": "Whether it arrived as spam or trash."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox that received the message."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message."
+          },
+          "received_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider-reported receive time."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailMessageSendCancelled": {
+        "type": "object",
+        "description": "Public body of `email.message_send_cancelled`.",
+        "required": ["link_id", "thread_id", "message_id", "reason"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who cancelled the send."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox the message would have been sent from."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/SendCancelReason",
+            "description": "Why it was cancelled."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailMessageSendQueued": {
+        "type": "object",
+        "description": "Public body of `email.message_send_queued`.",
+        "required": [
+          "link_id",
+          "thread_id",
+          "message_id",
+          "scheduled_send_at",
+          "is_scheduled"
+        ],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who queued the send."
+              }
+            ]
+          },
+          "is_scheduled": {
+            "type": "boolean",
+            "description": "`true` for a scheduled send, `false` for the undo window."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox the message will be sent from."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message."
+          },
+          "scheduled_send_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message is scheduled to leave."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailMessageSent": {
+        "type": "object",
+        "description": "Public body of `email.message_sent`.",
+        "required": ["link_id", "thread_id", "message_id", "origin", "sent_at"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who sent it; absent when first observed from the provider."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox the message was sent from."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Whether it was sent through Macro or observed from the provider."
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the provider accepted it."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
       "EmailPrivacyChange": {
         "oneOf": [
           {
@@ -43014,6 +44122,236 @@
           }
         }
       },
+      "EmailPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An inbox was connected.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_connected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkConnected",
+                "description": "An inbox was connected."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An inbox was disconnected.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_disconnected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkDisconnected",
+                "description": "An inbox was disconnected."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An inbox's provider grant went dead and needs re-authentication.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_reauth_required"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkReauthRequired",
+                "description": "An inbox's provider grant went dead and needs re-authentication."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new inbound message was stored.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_received"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageReceived",
+                "description": "A new inbound message was stored."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The provider accepted a sent message.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_sent"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSent",
+                "description": "The provider accepted a sent message."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was permanently deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageDeleted",
+                "description": "A message was permanently deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A send was queued (undo window or scheduled send).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_send_queued"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSendQueued",
+                "description": "A send was queued (undo window or scheduled send)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A queued send was cancelled.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_send_cancelled"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSendCancelled",
+                "description": "A queued send was cancelled."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was archived or moved back to the inbox.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_archived"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadArchived",
+                "description": "A thread was archived or moved back to the inbox."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was trashed or restored.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_trashed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadTrashed",
+                "description": "A thread was trashed or restored."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was marked read or unread.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_read"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadRead",
+                "description": "A thread was marked read or unread."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was starred or unstarred.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_starred"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadStarred",
+                "description": "A thread was starred or unstarred."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was marked or unmarked spam.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_spam_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadSpamChanged",
+                "description": "A thread was marked or unmarked spam."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was assigned to or removed from a project.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_project_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadProjectChanged",
+                "description": "A thread was assigned to or removed from a project."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread's user labels changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_labels_updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadLabelsUpdated",
+                "description": "A thread's user labels changed."
+              }
+            }
+          }
+        ],
+        "description": "A public `macro.email` event, delivered only to the mailbox owner."
+      },
       "EmailReminderCondition": {
         "type": "string",
         "description": "When an email follow-up should return the conversation.",
@@ -43050,6 +44388,261 @@
             "type": "string",
             "format": "uuid",
             "description": "Original email identity, never a mirror reminder identity."
+          }
+        }
+      },
+      "EmailThreadArchived": {
+        "type": "object",
+        "description": "Public body of `email.thread_archived`.",
+        "required": ["link_id", "thread_id", "archived", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who changed it; absent for provider-initiated changes."
+              }
+            ]
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "`true` when archived, `false` when moved back to the inbox."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox holding the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailThreadLabelsUpdated": {
+        "type": "object",
+        "description": "Public body of `email.thread_labels_updated`.",
+        "required": ["link_id", "thread_id", "added", "removed", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who changed the labels; absent for provider-initiated changes."
+              }
+            ]
+          },
+          "added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLabel"
+            },
+            "description": "User labels added."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox holding the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLabel"
+            },
+            "description": "User labels removed."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailThreadProjectChanged": {
+        "type": "object",
+        "description": "Public body of `email.thread_project_changed`.",
+        "required": ["link_id", "thread_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who changed the project."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox holding the thread."
+          },
+          "previous_project_id": {
+            "type": ["string", "null"],
+            "description": "Project before the change, when any."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "Project after the change; absent when removed from its project."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailThreadRead": {
+        "type": "object",
+        "description": "Public body of `email.thread_read`.",
+        "required": ["link_id", "thread_id", "is_read", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who changed it; absent for provider-initiated changes."
+              }
+            ]
+          },
+          "is_read": {
+            "type": "boolean",
+            "description": "`true` when read, `false` when unread."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox holding the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailThreadSpamChanged": {
+        "type": "object",
+        "description": "Public body of `email.thread_spam_changed`.",
+        "required": ["link_id", "thread_id", "spam", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who changed it; absent for provider-initiated changes."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox holding the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "spam": {
+            "type": "boolean",
+            "description": "`true` when marked spam, `false` when unmarked."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailThreadStarred": {
+        "type": "object",
+        "description": "Public body of `email.thread_starred`.",
+        "required": ["link_id", "thread_id", "starred", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who changed it; absent for provider-initiated changes."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox holding the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "starred": {
+            "type": "boolean",
+            "description": "`true` when starred, `false` when unstarred."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          }
+        }
+      },
+      "EmailThreadTrashed": {
+        "type": "object",
+        "description": "Public body of `email.thread_trashed`.",
+        "required": ["link_id", "thread_id", "trashed", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who changed it; absent for provider-initiated changes."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox holding the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread."
+          },
+          "trashed": {
+            "type": "boolean",
+            "description": "`true` when trashed, `false` when restored."
           }
         }
       },
@@ -43594,6 +45187,20 @@
           "message": {
             "type": "string",
             "description": "Message to explain failure"
+          }
+        }
+      },
+      "EventCatalog": {
+        "type": "object",
+        "description": "The public events visible to a credential.",
+        "required": ["events"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "description": "Every event this credential can receive, with its entity types, rule\nclasses and rollout stage."
           }
         }
       },
@@ -46411,6 +48018,116 @@
           }
         }
       },
+      "FormPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A form was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["form.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicFormCreated",
+                "description": "A form was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A form was renamed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["form.renamed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicFormChange",
+                "description": "A form was renamed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A form was moved to the trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["form.trashed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicFormChange",
+                "description": "A form was moved to the trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A trashed form was restored.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["form.restored"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicFormChange",
+                "description": "A trashed form was restored."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Who the form is shared with changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["form.sharing_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicFormChange",
+                "description": "Who the form is shared with changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone responded; delivered to the form's editors only.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["form.response_submitted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicFormResponseSubmitted",
+                "description": "Someone responded; delivered to the form's editors only."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The form's icon or color changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["form.appearance_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicFormChange",
+                "description": "The form's icon or color changed."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`FormTopicEvent`], delivered under the same\nevent names."
+      },
       "FormPublicationProblem": {
         "oneOf": [
           {
@@ -47862,6 +49579,26 @@
           }
         }
       },
+      "GithubPullRequestPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Stored pull request metadata changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["github_pull_request.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicGithubPullRequestUpdated",
+                "description": "Stored pull request metadata changed."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`GithubPullRequestTopicEvent`], delivered under\nthe same event names."
+      },
       "GithubPullRequestReview": {
         "type": "object",
         "description": "A reviewer's latest submitted review on a pull request.",
@@ -48010,6 +49747,69 @@
             "description": "The user's most recently synced GitHub login, when known."
           }
         }
+      },
+      "GithubWebhookDelivery": {
+        "type": "object",
+        "description": "Public body of `github_webhook.received`.",
+        "required": ["event"],
+        "properties": {
+          "action": {
+            "type": ["string", "null"],
+            "description": "The payload's `action`, such as `completed`; absent for events like `push`."
+          },
+          "event": {
+            "type": "string",
+            "description": "The `X-GitHub-Event` header, such as `workflow_run`."
+          },
+          "repository": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubWebhookDeliveryRepository",
+                "description": "The repository it is about, when it is about one."
+              }
+            ]
+          }
+        }
+      },
+      "GithubWebhookDeliveryRepository": {
+        "type": "object",
+        "description": "A repository in a public GitHub delivery.",
+        "required": ["id", "full_name"],
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "description": "`owner/name` at the time of the delivery."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "GitHub's numeric repository id.",
+            "minimum": 0
+          }
+        }
+      },
+      "GithubWebhookPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Macro's GitHub App received and verified a delivery.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["github_webhook.received"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/GithubWebhookDelivery",
+                "description": "Macro's GitHub App received and verified a delivery."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`GithubWebhookTopicEvent`]: what kind of\ndelivery arrived and for which repository. Never the raw payload or the\nsender; read details from GitHub."
       },
       "GroupedInitialParams": {
         "type": "object",
@@ -49376,6 +51176,71 @@
           }
         }
       },
+      "InitiativePublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An initiative was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["initiative.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicInitiativeChange",
+                "description": "An initiative was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An initiative's name, sharing or collaborators changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["initiative.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicInitiativeChange",
+                "description": "An initiative's name, sharing or collaborators changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An initiative's icon or color changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["initiative.appearance_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicInitiativeChange",
+                "description": "An initiative's icon or color changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An initiative was permanently deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["initiative.purged"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicInitiativePurged",
+                "description": "An initiative was permanently deleted."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`InitiativeTopicEvent`], delivered under the\nsame event names."
+      },
       "InitiativeSort": {
         "type": "string",
         "description": "Supported collection ordering. Every ordering uses id as its final tie breaker.",
@@ -49851,6 +51716,17 @@
         },
         "additionalProperties": false
       },
+      "LinkDisconnectReason": {
+        "type": "string",
+        "description": "Why an email link (connected inbox) was disconnected.",
+        "enum": [
+          "unused",
+          "inactive",
+          "manually_disabled",
+          "user_deleted",
+          "access_revoked"
+        ]
+      },
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
@@ -50314,6 +52190,41 @@
             "description": "Persistent meeting invitations, most recently created first."
           }
         }
+      },
+      "MentionPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A mention was added to an entity, such as a document.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["mention.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicMention",
+                "description": "A mention was added to an entity, such as a document."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A mention was removed from an entity.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["mention.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicMention",
+                "description": "A mention was removed from an entity."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`MentionTopicEvent`], delivered to the explicit\naccessors of the entity the mention appears in."
       },
       "MergeMode": {
         "type": "string",
@@ -52083,6 +53994,98 @@
           }
         }
       },
+      "NotificationChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The notification's state changed.",
+            "required": ["notification_id", "state", "change"],
+            "properties": {
+              "change": {
+                "type": "string",
+                "enum": ["updated"]
+              },
+              "notification_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification."
+              },
+              "state": {
+                "$ref": "#/components/schemas/NotificationState",
+                "description": "Its state after the change."
+              },
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When it was seen, if it has been."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The notification was deleted for the recipient.",
+            "required": ["notification_id", "change"],
+            "properties": {
+              "change": {
+                "type": "string",
+                "enum": ["deleted"]
+              },
+              "notification_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification."
+              }
+            }
+          }
+        ],
+        "description": "One notification's change in `notification.updated`."
+      },
+      "NotificationCreated": {
+        "type": "object",
+        "description": "Public body of `notification.created`.",
+        "required": [
+          "notification_id",
+          "kind",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "The entity the notification is about."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "Type of the entity the notification is about."
+          },
+          "kind": {
+            "type": "string",
+            "description": "The notification kind, such as `channel_mention`."
+          },
+          "notification_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The notification."
+          },
+          "sender_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who triggered it, when a user did."
+              }
+            ]
+          }
+        }
+      },
       "NotificationFilters": {
         "type": "object",
         "description": "Notification-level filters that apply to an entity type.",
@@ -52097,10 +54100,59 @@
         },
         "additionalProperties": false
       },
+      "NotificationPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A notification was delivered to the recipient.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["notification.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/NotificationCreated",
+                "description": "A notification was delivered to the recipient."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The recipient's notifications changed state or were deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["notification.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/NotificationUpdated",
+                "description": "The recipient's notifications changed state or were deleted."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`NotificationTopicEvent`]. Each event goes only\nto the users it addresses; the body is what they all share, never the\nnotification's content (read it back through the notification API)."
+      },
       "NotificationState": {
         "type": "string",
         "description": "The mutually exclusive lifecycle states of a user's notification.",
         "enum": ["unseen", "seen", "done"]
+      },
+      "NotificationUpdated": {
+        "type": "object",
+        "description": "Public body of `notification.updated`.",
+        "required": ["changes"],
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationChange"
+            },
+            "description": "What changed, per notification."
+          }
+        }
       },
       "NumberOperator": {
         "type": "string",
@@ -54578,6 +56630,11 @@
           }
         }
       },
+      "ProjectChange": {
+        "type": "string",
+        "description": "What a [`ProjectTopicEvent::Updated`] changed, without the new values.",
+        "enum": ["name", "parent", "sharing"]
+      },
       "ProjectDeleteResponseData": {
         "type": "object",
         "description": "Identifiers affected by a recursive project soft deletion.",
@@ -54729,6 +56786,101 @@
             "format": "date-time"
           }
         }
+      },
+      "ProjectPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A project was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["project.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicProjectCreated",
+                "description": "A project was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A project's name, parent or sharing changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["project.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicProjectUpdated",
+                "description": "A project's name, parent or sharing changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A project tree was moved to the trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["project.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicProjectTree",
+                "description": "A project tree was moved to the trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A project tree was restored from the trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["project.restored"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicProjectTree",
+                "description": "A project tree was restored from the trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A project tree was permanently deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["project.permanently_deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicProjectTree",
+                "description": "A project tree was permanently deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An uploaded project tree was made live.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["project.uploaded"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicProjectTree",
+                "description": "An uploaded project tree was made live."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of [`ProjectTopicEvent`], delivered under the same\nevent names."
       },
       "PropertyBucketing": {
         "oneOf": [
@@ -55081,6 +57233,116 @@
         ],
         "description": "Defines who owns a property - user-scoped, team-scoped, database-scoped, or system."
       },
+      "PropertyPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A property value on an entity was set or changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["entity_property.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicEntityPropertyUpdated",
+                "description": "A property value on an entity was set or changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Every property value on an entity was removed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["entity_properties.cleared"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicEntityPropertiesCleared",
+                "description": "Every property value on an entity was removed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property definition was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["property.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicPropertyCreated",
+                "description": "A property definition was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property definition was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["property.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicPropertyDeleted",
+                "description": "A property definition was deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An option was added to a property definition.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["property_option.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicPropertyOption",
+                "description": "An option was added to a property definition."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property option changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["property_option.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicPropertyOption",
+                "description": "A property option changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property option was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["property_option.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PublicPropertyOptionDeleted",
+                "description": "A property option was deleted."
+              }
+            }
+          }
+        ],
+        "description": "The public projection of\n[`PropertyTopicEvent`](super::PropertyTopicEvent), delivered under the\nsame event names."
+      },
       "PropertyValue": {
         "oneOf": [
           {
@@ -55217,6 +57479,792 @@
           }
         ],
         "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
+      },
+      "PublicActivity": {
+        "type": "object",
+        "description": "One recorded activity: who did what to which entity, without the action's\npayload (read it back through the activity API).",
+        "required": [
+          "id",
+          "actor_id",
+          "subject_id",
+          "entity_type",
+          "entity_id",
+          "action",
+          "occurred_at"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action tag, such as `created`."
+          },
+          "actor_id": {
+            "type": "string",
+            "description": "Who acted, as a principal string (`macro|…` or `bot|…`)."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "The entity acted on."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The kind of entity acted on."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The activity id."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it happened."
+          },
+          "subject_id": {
+            "type": "string",
+            "description": "Whose activity this is, as a principal string."
+          }
+        }
+      },
+      "PublicCallRecordDeleted": {
+        "type": "object",
+        "description": "Public payload of `call.record_deleted`.",
+        "required": ["call_id", "channel_id"],
+        "properties": {
+          "actor_user_id": {
+            "type": ["string", "null"],
+            "description": "The user who deleted it, if any."
+          },
+          "call_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The deleted call record."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel that contained it."
+          }
+        }
+      },
+      "PublicCallRecordImported": {
+        "type": "object",
+        "description": "Public payload of `call.record_imported`.",
+        "required": ["call_id"],
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The created or refreshed call record."
+          }
+        }
+      },
+      "PublicCallRecordUpdated": {
+        "type": "object",
+        "description": "Public payload of `call.record_updated`.",
+        "required": ["call_id", "changes"],
+        "properties": {
+          "actor_user_id": {
+            "type": ["string", "null"],
+            "description": "The user who updated it, if any."
+          },
+          "call_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call record."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordChange"
+            },
+            "description": "What changed; read the record for the new values."
+          },
+          "channel_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel containing it, if any."
+          }
+        }
+      },
+      "PublicChatCopied": {
+        "type": "object",
+        "description": "Public payload of `chat.copied`.",
+        "required": ["chat_id", "source_chat_id"],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The new chat."
+          },
+          "source_chat_id": {
+            "type": "string",
+            "description": "The chat it was copied from."
+          }
+        }
+      },
+      "PublicChatCreated": {
+        "type": "object",
+        "description": "Public payload of `chat.created`.",
+        "required": ["chat_id"],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The created chat."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "The project it was created in, when any."
+          }
+        }
+      },
+      "PublicChatMessageDeleted": {
+        "type": "object",
+        "description": "Public payload of `chat.message_deleted`.",
+        "required": ["chat_id", "message_id"],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The chat the message was in."
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The deleted message."
+          }
+        }
+      },
+      "PublicChatMessageSent": {
+        "type": "object",
+        "description": "Public payload of `chat.message_sent`: no content, model or attachments.",
+        "required": ["chat_id", "message_id", "role"],
+        "properties": {
+          "actor_user_id": {
+            "type": ["string", "null"],
+            "description": "The user who sent it, for user messages."
+          },
+          "chat_id": {
+            "type": "string",
+            "description": "The chat the message is in."
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The new message."
+          },
+          "role": {
+            "$ref": "#/components/schemas/ChatMessageRole",
+            "description": "Who the message is from."
+          }
+        }
+      },
+      "PublicChatTrash": {
+        "type": "object",
+        "description": "Public payload of `chat.deleted` and `chat.restored`.",
+        "required": ["chat_id"],
+        "properties": {
+          "actor_user_id": {
+            "type": ["string", "null"],
+            "description": "The user who acted, if any."
+          },
+          "chat_id": {
+            "type": "string",
+            "description": "The chat moved to or out of the trash."
+          }
+        }
+      },
+      "PublicChatUpdated": {
+        "type": "object",
+        "description": "Public payload of `chat.updated`.",
+        "required": ["chat_id", "actor_user_id", "changes"],
+        "properties": {
+          "actor_user_id": {
+            "type": "string",
+            "description": "The user who updated it."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatChange"
+            },
+            "description": "What changed; read the chat for the new values."
+          },
+          "chat_id": {
+            "type": "string",
+            "description": "The updated chat."
+          }
+        }
+      },
+      "PublicDatabaseChange": {
+        "type": "object",
+        "description": "Public payload of most `database.*` events: which database changed, who\ndid it and nothing else. Read the database for its new state.",
+        "required": ["database_id"],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who acted, when attributable."
+          },
+          "database_id": {
+            "type": "string",
+            "description": "The database."
+          },
+          "on_behalf_of": {
+            "type": ["string", "null"],
+            "description": "The user the actor acted for, when different from the actor."
+          }
+        }
+      },
+      "PublicDatabaseCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicDatabaseChange",
+            "description": "The created database, with who created it."
+          },
+          {
+            "type": "object",
+            "required": ["created_at"],
+            "properties": {
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Creation time reported by the repository."
+              }
+            }
+          }
+        ],
+        "description": "Public payload of `database.created`."
+      },
+      "PublicDatabaseTablesChanged": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicDatabaseChange",
+            "description": "The database, with who wrote."
+          },
+          {
+            "type": "object",
+            "required": ["tables"],
+            "properties": {
+              "tables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PublicTableVersion"
+                },
+                "description": "Every table the write touched; read them for their rows."
+              }
+            }
+          }
+        ],
+        "description": "Public payload of `database.tables_changed`."
+      },
+      "PublicDocumentAppearanceChanged": {
+        "type": "object",
+        "description": "Public payload of `document.appearance_changed`: the icon or color\nchanged. Read the document for the new appearance.",
+        "required": ["document_id"],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who changed it, when attributable."
+          },
+          "document_id": {
+            "type": "string",
+            "description": "The document."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user the actor acted for, if any."
+              }
+            ]
+          }
+        }
+      },
+      "PublicDocumentContentChanged": {
+        "type": "object",
+        "description": "Public payload of `document.content_changed`: new bytes were stored or a\nlive document's content moved. Read the document for the content.",
+        "required": ["document_id", "editors"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The document."
+          },
+          "document_version_id": {
+            "type": ["string", "null"],
+            "description": "The version written, when the write was versioned."
+          },
+          "editors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDocumentEditor"
+            },
+            "description": "Who edited since the previous notification; empty when unknown, as\nfor uploads."
+          }
+        }
+      },
+      "PublicDocumentEditor": {
+        "type": "object",
+        "description": "An editor of a document content change.",
+        "required": ["actor"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "User or bot that edited."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User the actor acted for, if any."
+              }
+            ]
+          }
+        }
+      },
+      "PublicEntityPropertiesCleared": {
+        "type": "object",
+        "description": "Public payload of `entity_properties.cleared`.",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who cleared them, when attributable."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "The entity whose properties were cleared."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "Type of the entity whose properties were cleared."
+          },
+          "on_behalf_of": {
+            "type": ["string", "null"],
+            "description": "The user the actor acted for, when different from the actor."
+          }
+        }
+      },
+      "PublicEntityPropertyUpdated": {
+        "type": "object",
+        "description": "Public payload of `entity_property.updated`: which property of which\nentity changed, by whom, from what to what. Property values are small\nstructured data that whoever can see the entity can read.",
+        "required": [
+          "entity_property_id",
+          "entity_type",
+          "entity_id",
+          "property_definition_id",
+          "updated_at"
+        ],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who changed it, when attributable."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "The entity carrying the property."
+          },
+          "entity_property_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The entity-property row."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "Type of the entity carrying the property."
+          },
+          "on_behalf_of": {
+            "type": ["string", "null"],
+            "description": "The user the actor acted for, when different from the actor."
+          },
+          "previous_value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyValue",
+                "description": "The value before the change; `None` when newly attached or not\ncaptured."
+              }
+            ]
+          },
+          "property_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The property definition whose value changed."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the value changed."
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyValue",
+                "description": "The value after the change; `None` when cleared without removing the\nrow."
+              }
+            ]
+          }
+        }
+      },
+      "PublicFormChange": {
+        "type": "object",
+        "description": "Public payload of most `form.*` events: which form changed and who did\nit. Read the form for its new state.",
+        "required": ["form_id"],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who acted, when attributable."
+          },
+          "form_id": {
+            "type": "string",
+            "description": "The form."
+          },
+          "on_behalf_of": {
+            "type": ["string", "null"],
+            "description": "The user the actor acted for, when different from the actor."
+          }
+        }
+      },
+      "PublicFormCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicFormChange",
+            "description": "The created form, with who created it."
+          },
+          {
+            "type": "object",
+            "required": ["database_id", "created_at"],
+            "properties": {
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was created."
+              },
+              "database_id": {
+                "type": "string",
+                "description": "The database holding its responses."
+              }
+            }
+          }
+        ],
+        "description": "Public payload of `form.created`."
+      },
+      "PublicFormResponseSubmitted": {
+        "type": "object",
+        "description": "Public payload of `form.response_submitted`: where the response is, not\nwhat it says or who gave it.",
+        "required": ["form_id", "response_id", "submitted_at"],
+        "properties": {
+          "form_id": {
+            "type": "string",
+            "description": "The form."
+          },
+          "response_id": {
+            "type": "string",
+            "description": "The ledger entry."
+          },
+          "row_id": {
+            "type": ["string", "null"],
+            "description": "The row holding the answers, when one was written."
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was submitted."
+          }
+        }
+      },
+      "PublicGithubPullRequestUpdated": {
+        "type": "object",
+        "description": "Public payload of `github_pull_request.updated`: which pull request\nchanged. Its Macro records belong to different owners, so their ids stay\nout; read the pull request by key for the new state.",
+        "required": ["github_key"],
+        "properties": {
+          "github_key": {
+            "type": "string",
+            "description": "The pull request's lowercased `owner/repo/pull/number` key."
+          }
+        }
+      },
+      "PublicInitiativeChange": {
+        "type": "object",
+        "description": "Public payload of `initiative.created`, `initiative.updated` and\n`initiative.appearance_changed`: which initiative changed, who did it and\nwhen. Read the initiative for its new state.",
+        "required": ["initiative_id", "occurred_at"],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Principal that made the change, when attributable."
+          },
+          "initiative_id": {
+            "type": "string",
+            "description": "Initiative that changed."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the committed change."
+          },
+          "on_behalf_of": {
+            "type": ["string", "null"],
+            "description": "User the actor acted for, when any."
+          }
+        }
+      },
+      "PublicInitiativePurged": {
+        "type": "object",
+        "description": "Public payload of `initiative.purged`.",
+        "required": ["initiative_id"],
+        "properties": {
+          "initiative_id": {
+            "type": "string",
+            "description": "The permanently deleted initiative."
+          }
+        }
+      },
+      "PublicMention": {
+        "type": "object",
+        "description": "Public body of a mention event: where the mention is and what it names.",
+        "required": [
+          "source_type",
+          "source_id",
+          "mentioned_kind",
+          "mentioned_id"
+        ],
+        "properties": {
+          "mentioned_id": {
+            "type": "string",
+            "description": "The mentioned entity."
+          },
+          "mentioned_kind": {
+            "type": "string",
+            "description": "Kind of the mentioned entity, such as `user` or `document`."
+          },
+          "source_id": {
+            "type": "string",
+            "description": "The entity the mention appears in."
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "Type of the entity the mention appears in."
+          }
+        }
+      },
+      "PublicProjectCreated": {
+        "type": "object",
+        "description": "Public payload of `project.created`.",
+        "required": ["project_id"],
+        "properties": {
+          "created_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Creation time reported by the repository."
+          },
+          "parent_project_id": {
+            "type": ["string", "null"],
+            "description": "Its parent project, when it has one."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "The created project."
+          }
+        }
+      },
+      "PublicProjectTree": {
+        "type": "object",
+        "description": "Public payload of `project.deleted`, `project.restored`,\n`project.permanently_deleted` and `project.uploaded`: the root project of\nthe tree. Child ids are left out; each child is read, or emits, on its own.",
+        "required": ["project_id"],
+        "properties": {
+          "actor_user_id": {
+            "type": ["string", "null"],
+            "description": "The authenticated user who acted, if any."
+          },
+          "parent_project_id": {
+            "type": ["string", "null"],
+            "description": "The root project's parent, when it has one."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "The root project of the affected tree."
+          }
+        }
+      },
+      "PublicProjectUpdated": {
+        "type": "object",
+        "description": "Public payload of `project.updated`.",
+        "required": ["project_id", "changes"],
+        "properties": {
+          "actor_user_id": {
+            "type": ["string", "null"],
+            "description": "The authenticated user who updated it, if any."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectChange"
+            },
+            "description": "What changed; read the project for the new values."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "The updated project."
+          }
+        }
+      },
+      "PublicPropertyCreated": {
+        "type": "object",
+        "description": "Public payload of `property.created`.",
+        "required": [
+          "property_definition_id",
+          "owner",
+          "display_name",
+          "data_type",
+          "is_multi_select",
+          "created_at"
+        ],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who created it, absent for a system operation."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was created."
+          },
+          "data_type": {
+            "$ref": "#/components/schemas/DataType",
+            "description": "Accepted data type."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "is_multi_select": {
+            "type": "boolean",
+            "description": "Whether it accepts several values."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/PropertyOwner",
+            "description": "The user, team or database that owns it."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The property definition."
+          }
+        }
+      },
+      "PublicPropertyDeleted": {
+        "type": "object",
+        "description": "Public payload of `property.deleted`.",
+        "required": [
+          "property_definition_id",
+          "owner",
+          "display_name",
+          "data_type"
+        ],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who deleted it, absent for a system operation."
+          },
+          "data_type": {
+            "$ref": "#/components/schemas/DataType",
+            "description": "Data type at deletion."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Display name at deletion."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/PropertyOwner",
+            "description": "The user, team or database that owned it."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The deleted property definition."
+          }
+        }
+      },
+      "PublicPropertyOption": {
+        "type": "object",
+        "description": "Public payload of `property_option.created` and `property_option.updated`:\nthe option as it now is.",
+        "required": [
+          "option_id",
+          "property_definition_id",
+          "value",
+          "display_order"
+        ],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who changed it, absent for a system operation."
+          },
+          "color": {
+            "type": ["string", "null"],
+            "description": "Display color, when set."
+          },
+          "display_order": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Ordering position."
+          },
+          "option_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The option."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its property definition."
+          },
+          "value": {
+            "$ref": "#/components/schemas/PropertyOptionValue",
+            "description": "The selectable value."
+          }
+        }
+      },
+      "PublicPropertyOptionDeleted": {
+        "type": "object",
+        "description": "Public payload of `property_option.deleted`.",
+        "required": ["option_id", "property_definition_id"],
+        "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who deleted it, absent for a system operation."
+          },
+          "option_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The deleted option."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its property definition."
+          }
+        }
+      },
+      "PublicTableVersion": {
+        "type": "object",
+        "description": "One table a write touched and the version it moved to.",
+        "required": ["table_id", "version"],
+        "properties": {
+          "table_id": {
+            "type": "string",
+            "description": "The table written."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Its version after the write."
+          }
+        }
       },
       "QueryDefinition": {
         "type": "object",
@@ -56619,6 +59667,11 @@
             "description": "The gate."
           }
         }
+      },
+      "SendCancelReason": {
+        "type": "string",
+        "description": "Why a queued send was cancelled before reaching the provider.",
+        "enum": ["undo", "thread_trashed"]
       },
       "SessionDeletedMetadata": {
         "type": "object",
@@ -62307,6 +65360,26 @@
           }
         }
       },
+      "TeamAutoJoinDomainToggled": {
+        "type": "object",
+        "description": "Public body of `team.auto_join_domain_toggled`.",
+        "required": ["team_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who changed it."
+          },
+          "auto_join_domain": {
+            "type": ["string", "null"],
+            "description": "The enabled domain; absent when disabled."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          }
+        }
+      },
       "TeamAvailability": {
         "type": "object",
         "description": "Availability for exactly the members selected by the domain service.",
@@ -62542,6 +65615,97 @@
         "description": "What a user exposes through their team membership.",
         "enum": ["all", "busy_only", "none"]
       },
+      "TeamCreated": {
+        "type": "object",
+        "description": "Public body of `team.created`.",
+        "required": ["team_id", "name", "slug", "owner"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The owning user."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Stable slug."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          }
+        }
+      },
+      "TeamDeleted": {
+        "type": "object",
+        "description": "Public body of `team.deleted`: the team id only.",
+        "required": ["team_id"],
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The deleted team."
+          }
+        }
+      },
+      "TeamInviteCreated": {
+        "type": "object",
+        "description": "Public body of `team.invite_created`.",
+        "required": ["team_id", "invite_id", "email", "invited_by"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The invited email address."
+          },
+          "invite_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The invite."
+          },
+          "invited_by": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who sent the invite."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          }
+        }
+      },
+      "TeamInviteResolved": {
+        "type": "object",
+        "description": "Public body of `team.invite_rejected` and `team.invite_revoked`.",
+        "required": ["team_id", "invite_id", "email", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The invitee who rejected it, or the admin who revoked it."
+          },
+          "email": {
+            "type": "string",
+            "description": "The invited email address."
+          },
+          "invite_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The invite."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          }
+        }
+      },
+      "TeamJoinKind": {
+        "type": "string",
+        "description": "How a member joined, without who invited them.",
+        "enum": ["invite_accepted", "domain_auto_join", "invite_link"]
+      },
       "TeamMemberAvailability": {
         "type": "object",
         "description": "Busy time and confidence for one explicitly included person.",
@@ -62568,6 +65732,89 @@
           "userId": {
             "type": "string",
             "description": "Macro identifier of the included person."
+          }
+        }
+      },
+      "TeamMemberJoined": {
+        "type": "object",
+        "description": "Public body of `team.member_joined`.",
+        "required": ["team_id", "member_id", "role", "join_method"],
+        "properties": {
+          "join_method": {
+            "$ref": "#/components/schemas/TeamJoinKind",
+            "description": "How they joined."
+          },
+          "member_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The new member."
+          },
+          "role": {
+            "$ref": "#/components/schemas/TeamRole",
+            "description": "Their role."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          }
+        }
+      },
+      "TeamMemberRemoved": {
+        "type": "object",
+        "description": "Public body of `team.member_removed`.",
+        "required": ["team_id", "member_id", "removed_by", "role"],
+        "properties": {
+          "member_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The removed member."
+          },
+          "removed_by": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who removed them (themselves when they left)."
+          },
+          "role": {
+            "$ref": "#/components/schemas/TeamRole",
+            "description": "Their role before removal."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          }
+        }
+      },
+      "TeamMemberRoleChanged": {
+        "type": "object",
+        "description": "Public body of `team.member_role_changed`.",
+        "required": ["team_id", "actor", "member_id", "role"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who changed the role."
+          },
+          "member_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The member whose role changed."
+          },
+          "previous_role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TeamRole",
+                "description": "Previous role, when known."
+              }
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/TeamRole",
+            "description": "New role."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
           }
         }
       },
@@ -62615,10 +65862,189 @@
           }
         }
       },
+      "TeamPublicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A team was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamCreated",
+                "description": "A team was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A team's name or slug changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamUpdated",
+                "description": "A team's name or slug changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A team was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamDeleted",
+                "description": "A team was deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An invitation was created. Admins only.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.invite_created"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamInviteCreated",
+                "description": "An invitation was created. Admins only."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An invitation was rejected. Admins only.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.invite_rejected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamInviteResolved",
+                "description": "An invitation was rejected. Admins only."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An invitation was revoked. Admins only.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.invite_revoked"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamInviteResolved",
+                "description": "An invitation was revoked. Admins only."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user joined the team.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.member_joined"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamMemberJoined",
+                "description": "A user joined the team."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A member was removed or left.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.member_removed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamMemberRemoved",
+                "description": "A member was removed or left."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A member's role changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.member_role_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamMemberRoleChanged",
+                "description": "A member's role changed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The automatic-join domain changed. Admins only.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["team.auto_join_domain_toggled"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TeamAutoJoinDomainToggled",
+                "description": "The automatic-join domain changed. Admins only."
+              }
+            }
+          }
+        ],
+        "description": "A public `macro.teams` event."
+      },
       "TeamRole": {
         "type": "string",
         "description": "The role a user has within a team.\n\nOrdered least to most privileged so comparisons reflect access strength.",
         "enum": ["member", "admin", "owner"]
+      },
+      "TeamUpdated": {
+        "type": "object",
+        "description": "Public body of `team.updated`.",
+        "required": ["team_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Who updated it."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name, when it changed."
+          },
+          "slug": {
+            "type": ["string", "null"],
+            "description": "New slug, when it changed."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          }
+        }
       },
       "TextDirection": {
         "type": "string",
@@ -64169,22 +67595,29 @@
         "type": "array",
         "items": {
           "type": "object",
-          "description": "Event and optional entity-id constraints used to match webhook deliveries.",
+          "description": "Event and optional entity constraints that select deliveries. Every\npresent constraint must accept an event for the filter to.",
           "required": ["events"],
           "properties": {
+            "entity_types": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string"
+              },
+              "description": "Entity types matched by this filter, such as `document` or `channel`.\nWhen absent, the filter matches every entity type."
+            },
             "events": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "Event names matched by this filter."
+              "description": "Event names matched by this filter: exact names, a family wildcard\nsuch as `document.*`, or `*` for every event. Wildcards require the\n`public-event-stream` feature."
             },
             "ids": {
               "type": ["array", "null"],
               "items": {
                 "type": "string"
               },
-              "description": "Entity ids matched by this filter. When absent, the filter matches all entity ids."
+              "description": "Entity ids matched by this filter. When absent, the filter matches all\nentity ids."
             }
           },
           "additionalProperties": false
@@ -64743,7 +68176,7 @@
       "WebhookEvent": {
         "oneOf": [
           {
-            "$ref": "#/components/schemas/DocumentTopicEvent",
+            "$ref": "#/components/schemas/DocumentPublicEvent",
             "description": "Document lifecycle events from the `macro.documents` topic."
           },
           {
@@ -64760,40 +68193,111 @@
           },
           {
             "$ref": "#/components/schemas/AgentSessionLifecycleEvent",
-            "description": "Agent session lifecycle events from the `macro.agent_session_lifecycle`\ntopic."
+            "description": "Agent session lifecycle events from the\n`macro.agent_session_lifecycle` topic."
           },
           {
             "$ref": "#/components/schemas/UserTopicEvent",
             "description": "User profile events from the `macro.users` topic."
+          },
+          {
+            "$ref": "#/components/schemas/ProjectPublicEvent",
+            "description": "Project lifecycle events from the `macro.projects` topic."
+          },
+          {
+            "$ref": "#/components/schemas/ChatPublicEvent",
+            "description": "AI chat events from the `macro.chats` topic."
+          },
+          {
+            "$ref": "#/components/schemas/DatabasePublicEvent",
+            "description": "Database events from the `macro.databases` topic."
+          },
+          {
+            "$ref": "#/components/schemas/FormPublicEvent",
+            "description": "Form events from the `macro.forms` topic."
+          },
+          {
+            "$ref": "#/components/schemas/InitiativePublicEvent",
+            "description": "Initiative events from the `macro.initiatives` topic."
+          },
+          {
+            "$ref": "#/components/schemas/PropertyPublicEvent",
+            "description": "Entity property values, property definitions and options from the\n`macro.properties` topic."
+          },
+          {
+            "$ref": "#/components/schemas/CallRecordPublicEvent",
+            "description": "Call record events from the `macro.calls` topic."
+          },
+          {
+            "$ref": "#/components/schemas/GithubPullRequestPublicEvent",
+            "description": "Pull request events from the `macro.github_pull_requests` topic."
+          },
+          {
+            "$ref": "#/components/schemas/EmailPublicEvent",
+            "description": "The owner's mailbox events from the `macro.email` topic."
+          },
+          {
+            "$ref": "#/components/schemas/CalendarPublicEvent",
+            "description": "The owner's calendar changes from the `macro.calendar` topic."
+          },
+          {
+            "$ref": "#/components/schemas/ActivityPublicEvent",
+            "description": "A user's activity feed from the `macro.activity` topic."
+          },
+          {
+            "$ref": "#/components/schemas/NotificationPublicEvent",
+            "description": "A user's notifications from the `macro.notifications` topic."
+          },
+          {
+            "$ref": "#/components/schemas/MentionPublicEvent",
+            "description": "Entity mentions in documents from the `macro.mentions` topic."
+          },
+          {
+            "$ref": "#/components/schemas/TeamPublicEvent",
+            "description": "Team events from the `macro.teams` topic."
+          },
+          {
+            "$ref": "#/components/schemas/BotPublicEvent",
+            "description": "Bot lifecycle from the `macro.bots` topic, for the owning user or team."
+          },
+          {
+            "$ref": "#/components/schemas/GithubWebhookPublicEvent",
+            "description": "GitHub App deliveries from the `macro.github_webhooks` topic."
           }
         ],
-        "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `message.posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."
+        "description": "Any public event deliverable by webhook or stream, as its payload\n(`event_type` and `metadata`); delivered inside the broker\nenvelope. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union, and\n`webhook.*` and `agent_trigger.*` are delivered outside it."
       },
       "WebhookFilter": {
         "type": "object",
-        "description": "Event and optional entity-id constraints used to match webhook deliveries.",
+        "description": "Event and optional entity constraints that select deliveries. Every\npresent constraint must accept an event for the filter to.",
         "required": ["events"],
         "properties": {
+          "entity_types": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Entity types matched by this filter, such as `document` or `channel`.\nWhen absent, the filter matches every entity type."
+          },
           "events": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Event names matched by this filter."
+            "description": "Event names matched by this filter: exact names, a family wildcard\nsuch as `document.*`, or `*` for every event. Wildcards require the\n`public-event-stream` feature."
           },
           "ids": {
             "type": ["array", "null"],
             "items": {
               "type": "string"
             },
-            "description": "Entity ids matched by this filter. When absent, the filter matches all entity ids."
+            "description": "Entity ids matched by this filter. When absent, the filter matches all\nentity ids."
           }
         },
         "additionalProperties": false
       },
       "WebhookScope": {
         "type": "string",
-        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`/`FromStr`\nspell the same names as serde, for query strings and config values.",
+        "description": "Personal or team workspace whose webhook lifecycle events a stream\ndelivers. Clients serialize this, so both derives are used. `Display` and\n`FromStr` spell the same names as serde.",
         "enum": ["user", "team"]
       },
       "WebhookStatus": {

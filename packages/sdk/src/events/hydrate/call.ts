@@ -6,7 +6,10 @@ import { User } from '../../entities/users/user';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEvent } from '../types';
 
-export type CallEvent = Extract<MacroEvent, { event_type: `call.${string}` }>;
+export type CallEvent = Exclude<
+  Extract<MacroEvent, { event_type: `call.${string}` }>,
+  { event_type: `call.record_${string}` }
+>;
 
 /** Attach call, channel, meeting, and actor handles to call notifications. */
 export function hydrateCallEvent(client: MacroClient, event: CallEvent) {

@@ -24,7 +24,7 @@ import type {
   TakenId,
   UpdateSharePermissionRequestV2,
 } from '../../../generated/storage/types.gen';
-import { MacroApiError, MacroError, unwrap } from '../../utils';
+import { MacroApiError, MacroError, unwrap } from '../../utils/unwrap';
 import type { MacroClient } from '../../utils/client';
 import type { Channel } from '../channels/channel';
 import { shareWithChannel } from '../channels/share';

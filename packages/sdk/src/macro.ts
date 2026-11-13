@@ -122,7 +122,24 @@ export {
   type UiOpenResult,
   type UiTarget,
 } from './entities/ui/namespace';
-export type { ListenOptions, MacroEvents } from './events/receiver';
+export type {
+  ListenOptions,
+  MacroEvents,
+  SubscribedEvent,
+  SubscribeOptions,
+} from './events/receiver';
+export {
+  type EventStream,
+  type EventStreamCloseReason,
+  EventStreamResetError,
+} from './events/subscribe';
+export type {
+  EventMap,
+  EventName,
+  EventPattern,
+  EventPayload,
+  MacroEvent,
+} from './events/types';
 export {
   here,
   type Interpolation,

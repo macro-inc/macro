@@ -229,6 +229,27 @@ export type ActiveMeetingsResponse = {
 };
 
 /**
+ * Activities the recipient may see were recorded.
+ */
+export type ActivityPublicEvent = {
+    event_type: 'activity.recorded';
+    /**
+     * Activities the recipient may see were recorded.
+     */
+    metadata: ActivityRecorded;
+};
+
+/**
+ * Public body of `activity.recorded`.
+ */
+export type ActivityRecorded = {
+    /**
+     * The recorded rows, in recording order.
+     */
+    activities: Array<PublicActivity>;
+};
+
+/**
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
@@ -1451,6 +1472,11 @@ export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 
 export type Audience = 'members' | 'public';
 
 /**
+ * The class of rule that decides who receives an event.
+ */
+export type AudienceClass = 'entity' | 'entity_at_least' | 'recipient' | 'owner' | 'team' | 'team_admins' | 'teams_of' | 'contacts_of' | 'workspace' | 'snapshot' | 'github_installation';
+
+/**
  * Whether missing busy blocks can safely be interpreted as free time.
  */
 export type AvailabilityCoverage = 'complete' | 'unknown';
@@ -1794,6 +1820,63 @@ export type BotChannel = {
  */
 export type BotChannelType = 'public' | 'private' | 'direct_message' | 'team';
 
+/**
+ * Public body of `bot.created`.
+ */
+export type BotCreated = {
+    /**
+     * Who created it.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The bot.
+     */
+    bot_id: BotId;
+    /**
+     * When it was created.
+     */
+    created_at: string;
+    /**
+     * Stable handle.
+     */
+    handle: string;
+    /**
+     * Its kind.
+     */
+    kind: BotKind;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * The owning user or team.
+     */
+    owner: BotOwner;
+};
+
+/**
+ * Public body of `bot.deleted`.
+ */
+export type BotDeleted = {
+    /**
+     * Who deleted it.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The bot.
+     */
+    bot_id: BotId;
+    /**
+     * The owning user or team.
+     */
+    owner: BotOwner;
+};
+
+/**
+ * A bot field an update changed.
+ */
+export type BotField = 'name' | 'handle' | 'description' | 'avatar_url';
+
 export type BotId = string;
 
 /**
@@ -1842,6 +1925,31 @@ export type BotOwnerProfile = {
      */
     name: string;
     owner?: null | BotOwner;
+};
+
+/**
+ * The public projection of [`BotTopicEvent`], delivered to the bot's owning
+ * user or team. Thin: ids, kind, owner, names and who acted; never the
+ * description, avatar or tokens.
+ */
+export type BotPublicEvent = {
+    event_type: 'bot.created';
+    /**
+     * A bot was created.
+     */
+    metadata: BotCreated;
+} | {
+    event_type: 'bot.updated';
+    /**
+     * A bot was updated.
+     */
+    metadata: BotUpdated;
+} | {
+    event_type: 'bot.deleted';
+    /**
+     * A bot was deleted.
+     */
+    metadata: BotDeleted;
 };
 
 /**
@@ -1894,6 +2002,40 @@ export type BotToken = {
      * Display prefix of the bearer token. The raw secret is never stored here.
      */
     token_prefix: string;
+};
+
+/**
+ * Public body of `bot.updated`.
+ */
+export type BotUpdated = {
+    /**
+     * Who updated it.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The bot.
+     */
+    bot_id: BotId;
+    /**
+     * Which fields the update set.
+     */
+    changed: Array<BotField>;
+    /**
+     * New handle, when it changed.
+     */
+    handle?: string | null;
+    /**
+     * New display name, when it changed.
+     */
+    name?: string | null;
+    /**
+     * The owning user or team.
+     */
+    owner: BotOwner;
+    /**
+     * When it was updated.
+     */
+    updated_at: string;
 };
 
 /**
@@ -2131,6 +2273,16 @@ export type CalendarEvent = {
      * Event visibility.
      */
     visibility: EventVisibility;
+};
+
+/**
+ * Public body of every calendar event: which event changed.
+ */
+export type CalendarEventChange = {
+    /**
+     * The calendar event.
+     */
+    event_id: string;
 };
 
 /**
@@ -2462,6 +2614,30 @@ export type CalendarOccurrenceResponse = {
 };
 
 /**
+ * The public projection of a [`CalendarTopicEvent`], delivered only to the
+ * calendar's owner. Clients read the event back through the API.
+ */
+export type CalendarPublicEvent = {
+    event_type: 'calendar_event.created';
+    /**
+     * A calendar event was created.
+     */
+    metadata: CalendarEventChange;
+} | {
+    event_type: 'calendar_event.updated';
+    /**
+     * A calendar event was updated.
+     */
+    metadata: CalendarEventChange;
+} | {
+    event_type: 'calendar_event.deleted';
+    /**
+     * A calendar event was deleted.
+     */
+    metadata: CalendarEventChange;
+};
+
+/**
  * Aggregate ingestion state across every calendar account visible to a
  * requester, letting clients render progressively while sources build.
  */
@@ -2767,6 +2943,11 @@ export type CallRecord = {
 };
 
 /**
+ * What a [`CallTopicEvent::RecordUpdated`] changed, without the new values.
+ */
+export type CallRecordChange = 'name' | 'team_sharing';
+
+/**
  * A non-account guest as returned in a [`CallRecord`].
  */
 export type CallRecordGuest = {
@@ -2848,6 +3029,30 @@ export type CallRecordPreviewData = {
      * When the call started (created_at for active, started_at for archived).
      */
     startedAt: string;
+};
+
+/**
+ * The public projection of the call-record events on [`MacroCallsTopic`].
+ * Live call facts are public through `macro.call_notifications` instead.
+ */
+export type CallRecordPublicEvent = {
+    event_type: 'call.record_updated';
+    /**
+     * A call record's name or team sharing changed.
+     */
+    metadata: PublicCallRecordUpdated;
+} | {
+    event_type: 'call.record_deleted';
+    /**
+     * A call record was deleted.
+     */
+    metadata: PublicCallRecordDeleted;
+} | {
+    event_type: 'call.record_imported';
+    /**
+     * A call record was imported from a connected meeting provider.
+     */
+    metadata: PublicCallRecordImported;
 };
 
 /**
@@ -3219,6 +3424,28 @@ export type CardPosition = {
  * Whether a column's values convert to a type.
  */
 export type CastVerdict = 'safe' | 'checked' | 'never';
+
+/**
+ * One registered public event.
+ */
+export type CatalogEntry = {
+    /**
+     * The rule classes that can admit a subscriber.
+     */
+    audience: Array<AudienceClass>;
+    /**
+     * The public entity types its `entity_type` can be.
+     */
+    entity_types: Array<string>;
+    /**
+     * The public event name.
+     */
+    name: string;
+    /**
+     * Rollout stage: `preview` events need the `public-event-stream` flag.
+     */
+    stage: string;
+};
 
 /**
  * Borders to change in [`EditOp::FormatCells`](super::EditOp::FormatCells).
@@ -4104,6 +4331,11 @@ export type Chat = {
 };
 
 /**
+ * What a [`ChatTopicEvent::Updated`] changed, without the new values.
+ */
+export type ChatChange = 'name' | 'project' | 'sharing';
+
+/**
  * The chat filters used to filter down what chats you search over.
  */
 export type ChatFilters = {
@@ -4134,6 +4366,62 @@ export type ChatFilters = {
      * Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles.
      */
     role?: Array<string>;
+};
+
+/**
+ * Role of the sender of a chat message.
+ *
+ * Defined locally so the wire contract does not depend on another crate's
+ * serde attributes.
+ */
+export type ChatMessageRole = 'user' | 'assistant' | 'system';
+
+/**
+ * The public projection of [`ChatTopicEvent`], delivered under the same
+ * event names.
+ */
+export type ChatPublicEvent = {
+    event_type: 'chat.created';
+    /**
+     * A chat was created.
+     */
+    metadata: PublicChatCreated;
+} | {
+    event_type: 'chat.updated';
+    /**
+     * A chat's name, project or sharing changed.
+     */
+    metadata: PublicChatUpdated;
+} | {
+    event_type: 'chat.deleted';
+    /**
+     * A chat was moved to the trash.
+     */
+    metadata: PublicChatTrash;
+} | {
+    event_type: 'chat.restored';
+    /**
+     * A chat was restored from the trash.
+     */
+    metadata: PublicChatTrash;
+} | {
+    event_type: 'chat.copied';
+    /**
+     * A chat was copied.
+     */
+    metadata: PublicChatCopied;
+} | {
+    event_type: 'chat.message_sent';
+    /**
+     * A message was added to a chat.
+     */
+    metadata: PublicChatMessageSent;
+} | {
+    event_type: 'chat.message_deleted';
+    /**
+     * A message was deleted from a chat.
+     */
+    metadata: PublicChatMessageDeleted;
 };
 
 /**
@@ -6429,6 +6717,54 @@ export type DatabaseOp = {
 };
 
 /**
+ * The public projection of [`DatabaseTopicEvent`], delivered under the same
+ * event names.
+ */
+export type DatabasePublicEvent = {
+    event_type: 'database.created';
+    /**
+     * A database was created.
+     */
+    metadata: PublicDatabaseCreated;
+} | {
+    event_type: 'database.renamed';
+    /**
+     * A database was renamed.
+     */
+    metadata: PublicDatabaseChange;
+} | {
+    event_type: 'database.trashed';
+    /**
+     * A database was moved to the trash.
+     */
+    metadata: PublicDatabaseChange;
+} | {
+    event_type: 'database.restored';
+    /**
+     * A database was restored from the trash.
+     */
+    metadata: PublicDatabaseChange;
+} | {
+    event_type: 'database.tables_changed';
+    /**
+     * Rows or schema changed in one or more tables.
+     */
+    metadata: PublicDatabaseTablesChanged;
+} | {
+    event_type: 'database.sharing_changed';
+    /**
+     * Who the database is shared with changed.
+     */
+    metadata: PublicDatabaseChange;
+} | {
+    event_type: 'database.appearance_changed';
+    /**
+     * The database's icon or color changed.
+     */
+    metadata: PublicDatabaseChange;
+};
+
+/**
  * One SQL statement with an optional default database and optimistic write guards.
  */
 export type DatabaseQueryRequest = {
@@ -6714,6 +7050,24 @@ export type DocumentBasic = {
     owner: string;
     projectId?: string | null;
     subType?: null | DocumentSubType;
+};
+
+/**
+ * Thin projections of document edits that were not delivered before
+ * projections existed.
+ */
+export type DocumentChangePublicEvent = {
+    event_type: 'document.content_changed';
+    /**
+     * A document's content changed: an upload or a live-collab snapshot.
+     */
+    metadata: PublicDocumentContentChanged;
+} | {
+    event_type: 'document.appearance_changed';
+    /**
+     * A document's icon or color changed.
+     */
+    metadata: PublicDocumentAppearanceChanged;
 };
 
 /**
@@ -7147,6 +7501,11 @@ export type DocumentPreviewDataSubType = {
 } | {
     type: 'initiative_description';
 };
+
+/**
+ * The public projection of [`DocumentTopicEvent`].
+ */
+export type DocumentPublicEvent = DocumentTopicEvent | DocumentChangePublicEvent;
 
 /**
  * Metadata for [`DocumentTopicEvent::Purged`].
@@ -9055,6 +9414,12 @@ export type EffectSpecSoftEdgeOptions = string | {
 export type EmailBlockScope = 'team' | 'personal';
 
 /**
+ * Whether a change was initiated by a Macro user action or first observed
+ * syncing from the email provider. Lets automation ignore its own echoes.
+ */
+export type EmailEventOrigin = 'user_action' | 'provider_sync';
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
@@ -9221,6 +9586,203 @@ export type EmailFollowupResponse = {
 };
 
 /**
+ * A user label in a public email event.
+ */
+export type EmailLabel = {
+    /**
+     * Macro's label id, when the label is known locally.
+     */
+    label_id?: string | null;
+    /**
+     * Label name, when known.
+     */
+    name?: string | null;
+    /**
+     * Provider label id.
+     */
+    provider_label_id: string;
+};
+
+/**
+ * Public body of `email.link_connected`.
+ */
+export type EmailLinkConnected = {
+    /**
+     * When the inbox was connected.
+     */
+    connected_at: string;
+    /**
+     * Whether this is the owner's primary inbox.
+     */
+    is_primary: boolean;
+    /**
+     * The connected inbox.
+     */
+    link_id: string;
+    /**
+     * Email provider, such as `GMAIL`.
+     */
+    provider: string;
+};
+
+/**
+ * Public body of `email.link_disconnected`.
+ */
+export type EmailLinkDisconnected = {
+    /**
+     * The disconnected inbox.
+     */
+    link_id: string;
+    /**
+     * Why it was disconnected.
+     */
+    reason: LinkDisconnectReason;
+};
+
+/**
+ * Public body of `email.link_reauth_required`.
+ */
+export type EmailLinkReauthRequired = {
+    /**
+     * The inbox needing re-authentication.
+     */
+    link_id: string;
+    /**
+     * When the dead grant was observed.
+     */
+    observed_at: string;
+};
+
+/**
+ * Public body of `email.message_deleted`.
+ */
+export type EmailMessageDeleted = {
+    /**
+     * The inbox the message belonged to.
+     */
+    link_id: string;
+    /**
+     * The deleted message.
+     */
+    message_id: string;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.message_received`.
+ */
+export type EmailMessageReceived = {
+    /**
+     * Number of attachments.
+     */
+    attachment_count: number;
+    /**
+     * Whether the message started a thread new to this inbox.
+     */
+    is_new_thread: boolean;
+    /**
+     * Whether it arrived as spam or trash.
+     */
+    is_spam_or_trash: boolean;
+    /**
+     * The inbox that received the message.
+     */
+    link_id: string;
+    /**
+     * The message.
+     */
+    message_id: string;
+    /**
+     * Provider-reported receive time.
+     */
+    received_at?: string | null;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.message_send_cancelled`.
+ */
+export type EmailMessageSendCancelled = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The inbox the message would have been sent from.
+     */
+    link_id: string;
+    /**
+     * The message.
+     */
+    message_id: string;
+    /**
+     * Why it was cancelled.
+     */
+    reason: SendCancelReason;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.message_send_queued`.
+ */
+export type EmailMessageSendQueued = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * `true` for a scheduled send, `false` for the undo window.
+     */
+    is_scheduled: boolean;
+    /**
+     * The inbox the message will be sent from.
+     */
+    link_id: string;
+    /**
+     * The message.
+     */
+    message_id: string;
+    /**
+     * When the message is scheduled to leave.
+     */
+    scheduled_send_at: string;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.message_sent`.
+ */
+export type EmailMessageSent = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The inbox the message was sent from.
+     */
+    link_id: string;
+    /**
+     * The message.
+     */
+    message_id: string;
+    /**
+     * Whether it was sent through Macro or observed from the provider.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * When the provider accepted it.
+     */
+    sent_at: string;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
@@ -9286,6 +9848,101 @@ export type EmailPrivacySettings = {
 };
 
 /**
+ * A public `macro.email` event, delivered only to the mailbox owner.
+ */
+export type EmailPublicEvent = {
+    event_type: 'email.link_connected';
+    /**
+     * An inbox was connected.
+     */
+    metadata: EmailLinkConnected;
+} | {
+    event_type: 'email.link_disconnected';
+    /**
+     * An inbox was disconnected.
+     */
+    metadata: EmailLinkDisconnected;
+} | {
+    event_type: 'email.link_reauth_required';
+    /**
+     * An inbox's provider grant went dead and needs re-authentication.
+     */
+    metadata: EmailLinkReauthRequired;
+} | {
+    event_type: 'email.message_received';
+    /**
+     * A new inbound message was stored.
+     */
+    metadata: EmailMessageReceived;
+} | {
+    event_type: 'email.message_sent';
+    /**
+     * The provider accepted a sent message.
+     */
+    metadata: EmailMessageSent;
+} | {
+    event_type: 'email.message_deleted';
+    /**
+     * A message was permanently deleted.
+     */
+    metadata: EmailMessageDeleted;
+} | {
+    event_type: 'email.message_send_queued';
+    /**
+     * A send was queued (undo window or scheduled send).
+     */
+    metadata: EmailMessageSendQueued;
+} | {
+    event_type: 'email.message_send_cancelled';
+    /**
+     * A queued send was cancelled.
+     */
+    metadata: EmailMessageSendCancelled;
+} | {
+    event_type: 'email.thread_archived';
+    /**
+     * A thread was archived or moved back to the inbox.
+     */
+    metadata: EmailThreadArchived;
+} | {
+    event_type: 'email.thread_trashed';
+    /**
+     * A thread was trashed or restored.
+     */
+    metadata: EmailThreadTrashed;
+} | {
+    event_type: 'email.thread_read';
+    /**
+     * A thread was marked read or unread.
+     */
+    metadata: EmailThreadRead;
+} | {
+    event_type: 'email.thread_starred';
+    /**
+     * A thread was starred or unstarred.
+     */
+    metadata: EmailThreadStarred;
+} | {
+    event_type: 'email.thread_spam_changed';
+    /**
+     * A thread was marked or unmarked spam.
+     */
+    metadata: EmailThreadSpamChanged;
+} | {
+    event_type: 'email.thread_project_changed';
+    /**
+     * A thread was assigned to or removed from a project.
+     */
+    metadata: EmailThreadProjectChanged;
+} | {
+    event_type: 'email.thread_labels_updated';
+    /**
+     * A thread's user labels changed.
+     */
+    metadata: EmailThreadLabelsUpdated;
+};
+
+/**
  * When an email follow-up should return the conversation.
  */
 export type EmailReminderCondition = 'if_no_reply' | 'regardless';
@@ -9316,6 +9973,174 @@ export type EmailReminderSummary = {
      * Original email identity, never a mirror reminder identity.
      */
     threadId: string;
+};
+
+/**
+ * Public body of `email.thread_archived`.
+ */
+export type EmailThreadArchived = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * `true` when archived, `false` when moved back to the inbox.
+     */
+    archived: boolean;
+    /**
+     * The inbox holding the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.thread_labels_updated`.
+ */
+export type EmailThreadLabelsUpdated = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * User labels added.
+     */
+    added: Array<EmailLabel>;
+    /**
+     * The inbox holding the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * User labels removed.
+     */
+    removed: Array<EmailLabel>;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.thread_project_changed`.
+ */
+export type EmailThreadProjectChanged = {
+    /**
+     * Who changed the project.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The inbox holding the thread.
+     */
+    link_id: string;
+    /**
+     * Project before the change, when any.
+     */
+    previous_project_id?: string | null;
+    /**
+     * Project after the change; absent when removed from its project.
+     */
+    project_id?: string | null;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.thread_read`.
+ */
+export type EmailThreadRead = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * `true` when read, `false` when unread.
+     */
+    is_read: boolean;
+    /**
+     * The inbox holding the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.thread_spam_changed`.
+ */
+export type EmailThreadSpamChanged = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The inbox holding the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * `true` when marked spam, `false` when unmarked.
+     */
+    spam: boolean;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.thread_starred`.
+ */
+export type EmailThreadStarred = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The inbox holding the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * `true` when starred, `false` when unstarred.
+     */
+    starred: boolean;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Public body of `email.thread_trashed`.
+ */
+export type EmailThreadTrashed = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The inbox holding the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The thread.
+     */
+    thread_id: string;
+    /**
+     * `true` when trashed, `false` when restored.
+     */
+    trashed: boolean;
 };
 
 /**
@@ -9611,6 +10436,17 @@ export type ErrorResponse = {
      * Message to explain failure
      */
     message: string;
+};
+
+/**
+ * The public events visible to a credential.
+ */
+export type EventCatalog = {
+    /**
+     * Every event this credential can receive, with its entity types, rule
+     * classes and rollout stage.
+     */
+    events: Array<CatalogEntry>;
 };
 
 /**
@@ -11177,6 +12013,54 @@ export type FormLayout = {
 };
 
 /**
+ * The public projection of [`FormTopicEvent`], delivered under the same
+ * event names.
+ */
+export type FormPublicEvent = {
+    event_type: 'form.created';
+    /**
+     * A form was created.
+     */
+    metadata: PublicFormCreated;
+} | {
+    event_type: 'form.renamed';
+    /**
+     * A form was renamed.
+     */
+    metadata: PublicFormChange;
+} | {
+    event_type: 'form.trashed';
+    /**
+     * A form was moved to the trash.
+     */
+    metadata: PublicFormChange;
+} | {
+    event_type: 'form.restored';
+    /**
+     * A trashed form was restored.
+     */
+    metadata: PublicFormChange;
+} | {
+    event_type: 'form.sharing_changed';
+    /**
+     * Who the form is shared with changed.
+     */
+    metadata: PublicFormChange;
+} | {
+    event_type: 'form.response_submitted';
+    /**
+     * Someone responded; delivered to the form's editors only.
+     */
+    metadata: PublicFormResponseSubmitted;
+} | {
+    event_type: 'form.appearance_changed';
+    /**
+     * The form's icon or color changed.
+     */
+    metadata: PublicFormChange;
+};
+
+/**
  * An editor's saved draft is not yet the version respondents can use.
  */
 export type FormPublicationProblem = {
@@ -12147,6 +13031,17 @@ export type GithubPullRequestLabel = {
 };
 
 /**
+ * Stored pull request metadata changed.
+ */
+export type GithubPullRequestPublicEvent = {
+    event_type: 'github_pull_request.updated';
+    /**
+     * Stored pull request metadata changed.
+     */
+    metadata: PublicGithubPullRequestUpdated;
+};
+
+/**
  * A reviewer's latest submitted review on a pull request.
  */
 export type GithubPullRequestReview = {
@@ -12271,6 +13166,46 @@ export type GithubUserFacet = {
      * The user's most recently synced GitHub login, when known.
      */
     login?: string | null;
+};
+
+/**
+ * Public body of `github_webhook.received`.
+ */
+export type GithubWebhookDelivery = {
+    /**
+     * The payload's `action`, such as `completed`; absent for events like `push`.
+     */
+    action?: string | null;
+    /**
+     * The `X-GitHub-Event` header, such as `workflow_run`.
+     */
+    event: string;
+    repository?: null | GithubWebhookDeliveryRepository;
+};
+
+/**
+ * A repository in a public GitHub delivery.
+ */
+export type GithubWebhookDeliveryRepository = {
+    /**
+     * `owner/name` at the time of the delivery.
+     */
+    full_name: string;
+    /**
+     * GitHub's numeric repository id.
+     */
+    id: number;
+};
+
+/**
+ * Macro's GitHub App received and verified a delivery.
+ */
+export type GithubWebhookPublicEvent = {
+    event_type: 'github_webhook.received';
+    /**
+     * Macro's GitHub App received and verified a delivery.
+     */
+    metadata: GithubWebhookDelivery;
 };
 
 /**
@@ -13197,6 +14132,36 @@ export type InitiativePropertySnapshot = {
 };
 
 /**
+ * The public projection of [`InitiativeTopicEvent`], delivered under the
+ * same event names.
+ */
+export type InitiativePublicEvent = {
+    event_type: 'initiative.created';
+    /**
+     * An initiative was created.
+     */
+    metadata: PublicInitiativeChange;
+} | {
+    event_type: 'initiative.updated';
+    /**
+     * An initiative's name, sharing or collaborators changed.
+     */
+    metadata: PublicInitiativeChange;
+} | {
+    event_type: 'initiative.appearance_changed';
+    /**
+     * An initiative's icon or color changed.
+     */
+    metadata: PublicInitiativeChange;
+} | {
+    event_type: 'initiative.purged';
+    /**
+     * An initiative was permanently deleted.
+     */
+    metadata: PublicInitiativePurged;
+};
+
+/**
  * Supported collection ordering. Every ordering uses id as its final tie breaker.
  */
 export type InitiativeSort = 'updated' | 'name' | 'due';
@@ -13465,6 +14430,11 @@ export type LinePatch = {
      */
     width?: number | null;
 };
+
+/**
+ * Why an email link (connected inbox) was disconnected.
+ */
+export type LinkDisconnectReason = 'unused' | 'inactive' | 'manually_disabled' | 'user_deleted' | 'access_revoked';
 
 /**
  * Defines who can access an item through its share link.
@@ -13819,6 +14789,24 @@ export type MeetingsResponse = {
      * Persistent meeting invitations, most recently created first.
      */
     meetings: Array<Meeting>;
+};
+
+/**
+ * The public projection of [`MentionTopicEvent`], delivered to the explicit
+ * accessors of the entity the mention appears in.
+ */
+export type MentionPublicEvent = {
+    event_type: 'mention.created';
+    /**
+     * A mention was added to an entity, such as a document.
+     */
+    metadata: PublicMention;
+} | {
+    event_type: 'mention.deleted';
+    /**
+     * A mention was removed from an entity.
+     */
+    metadata: PublicMention;
 };
 
 /**
@@ -14928,6 +15916,58 @@ export type NewView = {
 };
 
 /**
+ * One notification's change in `notification.updated`.
+ */
+export type NotificationChange = {
+    change: 'updated';
+    /**
+     * The notification.
+     */
+    notification_id: string;
+    /**
+     * Its state after the change.
+     */
+    state: NotificationState;
+    /**
+     * When it was seen, if it has been.
+     */
+    viewed_at?: string | null;
+} | {
+    change: 'deleted';
+    /**
+     * The notification.
+     */
+    notification_id: string;
+};
+
+/**
+ * Public body of `notification.created`.
+ */
+export type NotificationCreated = {
+    /**
+     * When it was created.
+     */
+    created_at: string;
+    /**
+     * The entity the notification is about.
+     */
+    entity_id: string;
+    /**
+     * Type of the entity the notification is about.
+     */
+    entity_type: EntityType;
+    /**
+     * The notification kind, such as `channel_mention`.
+     */
+    kind: string;
+    /**
+     * The notification.
+     */
+    notification_id: string;
+    sender_id?: null | MacroUserIdStr;
+};
+
+/**
  * Notification-level filters that apply to an entity type.
  */
 export type NotificationFilters = {
@@ -14939,9 +15979,38 @@ export type NotificationFilters = {
 };
 
 /**
+ * The public projection of [`NotificationTopicEvent`]. Each event goes only
+ * to the users it addresses; the body is what they all share, never the
+ * notification's content (read it back through the notification API).
+ */
+export type NotificationPublicEvent = {
+    event_type: 'notification.created';
+    /**
+     * A notification was delivered to the recipient.
+     */
+    metadata: NotificationCreated;
+} | {
+    event_type: 'notification.updated';
+    /**
+     * The recipient's notifications changed state or were deleted.
+     */
+    metadata: NotificationUpdated;
+};
+
+/**
  * The mutually exclusive lifecycle states of a user's notification.
  */
 export type NotificationState = 'unseen' | 'seen' | 'done';
+
+/**
+ * Public body of `notification.updated`.
+ */
+export type NotificationUpdated = {
+    /**
+     * What changed, per notification.
+     */
+    changes: Array<NotificationChange>;
+};
 
 /**
  * How a number cell compares to a number.
@@ -16466,6 +17535,11 @@ export type Project = {
 };
 
 /**
+ * What a [`ProjectTopicEvent::Updated`] changed, without the new values.
+ */
+export type ProjectChange = 'name' | 'parent' | 'sharing';
+
+/**
  * Identifiers affected by a recursive project soft deletion.
  */
 export type ProjectDeleteResponseData = {
@@ -16532,6 +17606,48 @@ export type ProjectPreviewData = {
     owner: string;
     path: Array<string>;
     updatedAt?: string | null;
+};
+
+/**
+ * The public projection of [`ProjectTopicEvent`], delivered under the same
+ * event names.
+ */
+export type ProjectPublicEvent = {
+    event_type: 'project.created';
+    /**
+     * A project was created.
+     */
+    metadata: PublicProjectCreated;
+} | {
+    event_type: 'project.updated';
+    /**
+     * A project's name, parent or sharing changed.
+     */
+    metadata: PublicProjectUpdated;
+} | {
+    event_type: 'project.deleted';
+    /**
+     * A project tree was moved to the trash.
+     */
+    metadata: PublicProjectTree;
+} | {
+    event_type: 'project.restored';
+    /**
+     * A project tree was restored from the trash.
+     */
+    metadata: PublicProjectTree;
+} | {
+    event_type: 'project.permanently_deleted';
+    /**
+     * A project tree was permanently deleted.
+     */
+    metadata: PublicProjectTree;
+} | {
+    event_type: 'project.uploaded';
+    /**
+     * An uploaded project tree was made live.
+     */
+    metadata: PublicProjectTree;
 };
 
 /**
@@ -16712,6 +17828,55 @@ export type PropertyOwner = {
 };
 
 /**
+ * The public projection of
+ * [`PropertyTopicEvent`](super::PropertyTopicEvent), delivered under the
+ * same event names.
+ */
+export type PropertyPublicEvent = {
+    event_type: 'entity_property.updated';
+    /**
+     * A property value on an entity was set or changed.
+     */
+    metadata: PublicEntityPropertyUpdated;
+} | {
+    event_type: 'entity_properties.cleared';
+    /**
+     * Every property value on an entity was removed.
+     */
+    metadata: PublicEntityPropertiesCleared;
+} | {
+    event_type: 'property.created';
+    /**
+     * A property definition was created.
+     */
+    metadata: PublicPropertyCreated;
+} | {
+    event_type: 'property.deleted';
+    /**
+     * A property definition was deleted.
+     */
+    metadata: PublicPropertyDeleted;
+} | {
+    event_type: 'property_option.created';
+    /**
+     * An option was added to a property definition.
+     */
+    metadata: PublicPropertyOption;
+} | {
+    event_type: 'property_option.updated';
+    /**
+     * A property option changed.
+     */
+    metadata: PublicPropertyOption;
+} | {
+    event_type: 'property_option.deleted';
+    /**
+     * A property option was deleted.
+     */
+    metadata: PublicPropertyOptionDeleted;
+};
+
+/**
  * Property value (service representation).
  *
  * Represents the actual value stored for an entity property.
@@ -16776,6 +17941,636 @@ export type PropertyValue = {
      * Multi-select: {"type": "Link", "value": ["https://example.com", "https://other.com"]} (length 0+)
      */
     value: Array<string>;
+};
+
+/**
+ * One recorded activity: who did what to which entity, without the action's
+ * payload (read it back through the activity API).
+ */
+export type PublicActivity = {
+    /**
+     * The action tag, such as `created`.
+     */
+    action: string;
+    /**
+     * Who acted, as a principal string (`macro|…` or `bot|…`).
+     */
+    actor_id: string;
+    /**
+     * The entity acted on.
+     */
+    entity_id: string;
+    /**
+     * The kind of entity acted on.
+     */
+    entity_type: EntityType;
+    /**
+     * The activity id.
+     */
+    id: string;
+    /**
+     * When it happened.
+     */
+    occurred_at: string;
+    /**
+     * Whose activity this is, as a principal string.
+     */
+    subject_id: string;
+};
+
+/**
+ * Public payload of `call.record_deleted`.
+ */
+export type PublicCallRecordDeleted = {
+    /**
+     * The user who deleted it, if any.
+     */
+    actor_user_id?: string | null;
+    /**
+     * The deleted call record.
+     */
+    call_id: string;
+    /**
+     * The channel that contained it.
+     */
+    channel_id: string;
+};
+
+/**
+ * Public payload of `call.record_imported`.
+ */
+export type PublicCallRecordImported = {
+    /**
+     * The created or refreshed call record.
+     */
+    call_id: string;
+};
+
+/**
+ * Public payload of `call.record_updated`.
+ */
+export type PublicCallRecordUpdated = {
+    /**
+     * The user who updated it, if any.
+     */
+    actor_user_id?: string | null;
+    /**
+     * The call record.
+     */
+    call_id: string;
+    /**
+     * What changed; read the record for the new values.
+     */
+    changes: Array<CallRecordChange>;
+    /**
+     * The channel containing it, if any.
+     */
+    channel_id?: string | null;
+};
+
+/**
+ * Public payload of `chat.copied`.
+ */
+export type PublicChatCopied = {
+    /**
+     * The new chat.
+     */
+    chat_id: string;
+    /**
+     * The chat it was copied from.
+     */
+    source_chat_id: string;
+};
+
+/**
+ * Public payload of `chat.created`.
+ */
+export type PublicChatCreated = {
+    /**
+     * The created chat.
+     */
+    chat_id: string;
+    /**
+     * The project it was created in, when any.
+     */
+    project_id?: string | null;
+};
+
+/**
+ * Public payload of `chat.message_deleted`.
+ */
+export type PublicChatMessageDeleted = {
+    /**
+     * The chat the message was in.
+     */
+    chat_id: string;
+    /**
+     * The deleted message.
+     */
+    message_id: string;
+};
+
+/**
+ * Public payload of `chat.message_sent`: no content, model or attachments.
+ */
+export type PublicChatMessageSent = {
+    /**
+     * The user who sent it, for user messages.
+     */
+    actor_user_id?: string | null;
+    /**
+     * The chat the message is in.
+     */
+    chat_id: string;
+    /**
+     * The new message.
+     */
+    message_id: string;
+    /**
+     * Who the message is from.
+     */
+    role: ChatMessageRole;
+};
+
+/**
+ * Public payload of `chat.deleted` and `chat.restored`.
+ */
+export type PublicChatTrash = {
+    /**
+     * The user who acted, if any.
+     */
+    actor_user_id?: string | null;
+    /**
+     * The chat moved to or out of the trash.
+     */
+    chat_id: string;
+};
+
+/**
+ * Public payload of `chat.updated`.
+ */
+export type PublicChatUpdated = {
+    /**
+     * The user who updated it.
+     */
+    actor_user_id: string;
+    /**
+     * What changed; read the chat for the new values.
+     */
+    changes: Array<ChatChange>;
+    /**
+     * The updated chat.
+     */
+    chat_id: string;
+};
+
+/**
+ * Public payload of most `database.*` events: which database changed, who
+ * did it and nothing else. Read the database for its new state.
+ */
+export type PublicDatabaseChange = {
+    /**
+     * Who acted, when attributable.
+     */
+    actor?: string | null;
+    /**
+     * The database.
+     */
+    database_id: string;
+    /**
+     * The user the actor acted for, when different from the actor.
+     */
+    on_behalf_of?: string | null;
+};
+
+/**
+ * Public payload of `database.created`.
+ */
+export type PublicDatabaseCreated = PublicDatabaseChange & {
+    /**
+     * Creation time reported by the repository.
+     */
+    created_at: string;
+};
+
+/**
+ * Public payload of `database.tables_changed`.
+ */
+export type PublicDatabaseTablesChanged = PublicDatabaseChange & {
+    /**
+     * Every table the write touched; read them for their rows.
+     */
+    tables: Array<PublicTableVersion>;
+};
+
+/**
+ * Public payload of `document.appearance_changed`: the icon or color
+ * changed. Read the document for the new appearance.
+ */
+export type PublicDocumentAppearanceChanged = {
+    /**
+     * Who changed it, when attributable.
+     */
+    actor?: string | null;
+    /**
+     * The document.
+     */
+    document_id: string;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * Public payload of `document.content_changed`: new bytes were stored or a
+ * live document's content moved. Read the document for the content.
+ */
+export type PublicDocumentContentChanged = {
+    /**
+     * The document.
+     */
+    document_id: string;
+    /**
+     * The version written, when the write was versioned.
+     */
+    document_version_id?: string | null;
+    /**
+     * Who edited since the previous notification; empty when unknown, as
+     * for uploads.
+     */
+    editors: Array<PublicDocumentEditor>;
+};
+
+/**
+ * An editor of a document content change.
+ */
+export type PublicDocumentEditor = {
+    /**
+     * User or bot that edited.
+     */
+    actor: string;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * Public payload of `entity_properties.cleared`.
+ */
+export type PublicEntityPropertiesCleared = {
+    /**
+     * Who cleared them, when attributable.
+     */
+    actor?: string | null;
+    /**
+     * The entity whose properties were cleared.
+     */
+    entity_id: string;
+    /**
+     * Type of the entity whose properties were cleared.
+     */
+    entity_type: EntityType;
+    /**
+     * The user the actor acted for, when different from the actor.
+     */
+    on_behalf_of?: string | null;
+};
+
+/**
+ * Public payload of `entity_property.updated`: which property of which
+ * entity changed, by whom, from what to what. Property values are small
+ * structured data that whoever can see the entity can read.
+ */
+export type PublicEntityPropertyUpdated = {
+    /**
+     * Who changed it, when attributable.
+     */
+    actor?: string | null;
+    /**
+     * The entity carrying the property.
+     */
+    entity_id: string;
+    /**
+     * The entity-property row.
+     */
+    entity_property_id: string;
+    /**
+     * Type of the entity carrying the property.
+     */
+    entity_type: EntityType;
+    /**
+     * The user the actor acted for, when different from the actor.
+     */
+    on_behalf_of?: string | null;
+    previous_value?: null | PropertyValue;
+    /**
+     * The property definition whose value changed.
+     */
+    property_definition_id: string;
+    /**
+     * When the value changed.
+     */
+    updated_at: string;
+    value?: null | PropertyValue;
+};
+
+/**
+ * Public payload of most `form.*` events: which form changed and who did
+ * it. Read the form for its new state.
+ */
+export type PublicFormChange = {
+    /**
+     * Who acted, when attributable.
+     */
+    actor?: string | null;
+    /**
+     * The form.
+     */
+    form_id: string;
+    /**
+     * The user the actor acted for, when different from the actor.
+     */
+    on_behalf_of?: string | null;
+};
+
+/**
+ * Public payload of `form.created`.
+ */
+export type PublicFormCreated = PublicFormChange & {
+    /**
+     * When it was created.
+     */
+    created_at: string;
+    /**
+     * The database holding its responses.
+     */
+    database_id: string;
+};
+
+/**
+ * Public payload of `form.response_submitted`: where the response is, not
+ * what it says or who gave it.
+ */
+export type PublicFormResponseSubmitted = {
+    /**
+     * The form.
+     */
+    form_id: string;
+    /**
+     * The ledger entry.
+     */
+    response_id: string;
+    /**
+     * The row holding the answers, when one was written.
+     */
+    row_id?: string | null;
+    /**
+     * When it was submitted.
+     */
+    submitted_at: string;
+};
+
+/**
+ * Public payload of `github_pull_request.updated`: which pull request
+ * changed. Its Macro records belong to different owners, so their ids stay
+ * out; read the pull request by key for the new state.
+ */
+export type PublicGithubPullRequestUpdated = {
+    /**
+     * The pull request's lowercased `owner/repo/pull/number` key.
+     */
+    github_key: string;
+};
+
+/**
+ * Public payload of `initiative.created`, `initiative.updated` and
+ * `initiative.appearance_changed`: which initiative changed, who did it and
+ * when. Read the initiative for its new state.
+ */
+export type PublicInitiativeChange = {
+    /**
+     * Principal that made the change, when attributable.
+     */
+    actor?: string | null;
+    /**
+     * Initiative that changed.
+     */
+    initiative_id: string;
+    /**
+     * Time of the committed change.
+     */
+    occurred_at: string;
+    /**
+     * User the actor acted for, when any.
+     */
+    on_behalf_of?: string | null;
+};
+
+/**
+ * Public payload of `initiative.purged`.
+ */
+export type PublicInitiativePurged = {
+    /**
+     * The permanently deleted initiative.
+     */
+    initiative_id: string;
+};
+
+/**
+ * Public body of a mention event: where the mention is and what it names.
+ */
+export type PublicMention = {
+    /**
+     * The mentioned entity.
+     */
+    mentioned_id: string;
+    /**
+     * Kind of the mentioned entity, such as `user` or `document`.
+     */
+    mentioned_kind: string;
+    /**
+     * The entity the mention appears in.
+     */
+    source_id: string;
+    /**
+     * Type of the entity the mention appears in.
+     */
+    source_type: EntityType;
+};
+
+/**
+ * Public payload of `project.created`.
+ */
+export type PublicProjectCreated = {
+    /**
+     * Creation time reported by the repository.
+     */
+    created_at?: string | null;
+    /**
+     * Its parent project, when it has one.
+     */
+    parent_project_id?: string | null;
+    /**
+     * The created project.
+     */
+    project_id: string;
+};
+
+/**
+ * Public payload of `project.deleted`, `project.restored`,
+ * `project.permanently_deleted` and `project.uploaded`: the root project of
+ * the tree. Child ids are left out; each child is read, or emits, on its own.
+ */
+export type PublicProjectTree = {
+    /**
+     * The authenticated user who acted, if any.
+     */
+    actor_user_id?: string | null;
+    /**
+     * The root project's parent, when it has one.
+     */
+    parent_project_id?: string | null;
+    /**
+     * The root project of the affected tree.
+     */
+    project_id: string;
+};
+
+/**
+ * Public payload of `project.updated`.
+ */
+export type PublicProjectUpdated = {
+    /**
+     * The authenticated user who updated it, if any.
+     */
+    actor_user_id?: string | null;
+    /**
+     * What changed; read the project for the new values.
+     */
+    changes: Array<ProjectChange>;
+    /**
+     * The updated project.
+     */
+    project_id: string;
+};
+
+/**
+ * Public payload of `property.created`.
+ */
+export type PublicPropertyCreated = {
+    /**
+     * Who created it, absent for a system operation.
+     */
+    actor?: string | null;
+    /**
+     * When it was created.
+     */
+    created_at: string;
+    /**
+     * Accepted data type.
+     */
+    data_type: DataType;
+    /**
+     * Display name.
+     */
+    display_name: string;
+    /**
+     * Whether it accepts several values.
+     */
+    is_multi_select: boolean;
+    /**
+     * The user, team or database that owns it.
+     */
+    owner: PropertyOwner;
+    /**
+     * The property definition.
+     */
+    property_definition_id: string;
+};
+
+/**
+ * Public payload of `property.deleted`.
+ */
+export type PublicPropertyDeleted = {
+    /**
+     * Who deleted it, absent for a system operation.
+     */
+    actor?: string | null;
+    /**
+     * Data type at deletion.
+     */
+    data_type: DataType;
+    /**
+     * Display name at deletion.
+     */
+    display_name: string;
+    /**
+     * The user, team or database that owned it.
+     */
+    owner: PropertyOwner;
+    /**
+     * The deleted property definition.
+     */
+    property_definition_id: string;
+};
+
+/**
+ * Public payload of `property_option.created` and `property_option.updated`:
+ * the option as it now is.
+ */
+export type PublicPropertyOption = {
+    /**
+     * Who changed it, absent for a system operation.
+     */
+    actor?: string | null;
+    /**
+     * Display color, when set.
+     */
+    color?: string | null;
+    /**
+     * Ordering position.
+     */
+    display_order: number;
+    /**
+     * The option.
+     */
+    option_id: string;
+    /**
+     * Its property definition.
+     */
+    property_definition_id: string;
+    /**
+     * The selectable value.
+     */
+    value: PropertyOptionValue;
+};
+
+/**
+ * Public payload of `property_option.deleted`.
+ */
+export type PublicPropertyOptionDeleted = {
+    /**
+     * Who deleted it, absent for a system operation.
+     */
+    actor?: string | null;
+    /**
+     * The deleted option.
+     */
+    option_id: string;
+    /**
+     * Its property definition.
+     */
+    property_definition_id: string;
+};
+
+/**
+ * One table a write touched and the version it moved to.
+ */
+export type PublicTableVersion = {
+    /**
+     * The table written.
+     */
+    table_id: string;
+    /**
+     * Its version after the write.
+     */
+    version: number;
 };
 
 /**
@@ -17676,6 +19471,11 @@ export type SectionCount = {
      */
     section: string;
 };
+
+/**
+ * Why a queued send was cancelled before reaching the provider.
+ */
+export type SendCancelReason = 'undo' | 'thread_trashed';
 
 /**
  * The session was deleted.
@@ -21314,6 +23114,24 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * Public body of `team.auto_join_domain_toggled`.
+ */
+export type TeamAutoJoinDomainToggled = {
+    /**
+     * Who changed it.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The enabled domain; absent when disabled.
+     */
+    auto_join_domain?: string | null;
+    /**
+     * The team.
+     */
+    team_id: string;
+};
+
+/**
  * Availability for exactly the members selected by the domain service.
  */
 export type TeamAvailability = {
@@ -21489,6 +23307,87 @@ export type TeamCalendarPage = {
 export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
 
 /**
+ * Public body of `team.created`.
+ */
+export type TeamCreated = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * The owning user.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Stable slug.
+     */
+    slug: string;
+    /**
+     * The team.
+     */
+    team_id: string;
+};
+
+/**
+ * Public body of `team.deleted`: the team id only.
+ */
+export type TeamDeleted = {
+    /**
+     * The deleted team.
+     */
+    team_id: string;
+};
+
+/**
+ * Public body of `team.invite_created`.
+ */
+export type TeamInviteCreated = {
+    /**
+     * The invited email address.
+     */
+    email: string;
+    /**
+     * The invite.
+     */
+    invite_id: string;
+    /**
+     * Who sent the invite.
+     */
+    invited_by: MacroUserIdStr;
+    /**
+     * The team.
+     */
+    team_id: string;
+};
+
+/**
+ * Public body of `team.invite_rejected` and `team.invite_revoked`.
+ */
+export type TeamInviteResolved = {
+    /**
+     * The invitee who rejected it, or the admin who revoked it.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The invited email address.
+     */
+    email: string;
+    /**
+     * The invite.
+     */
+    invite_id: string;
+    /**
+     * The team.
+     */
+    team_id: string;
+};
+
+/**
+ * How a member joined, without who invited them.
+ */
+export type TeamJoinKind = 'invite_accepted' | 'domain_auto_join' | 'invite_link';
+
+/**
  * Busy time and confidence for one explicitly included person.
  */
 export type TeamMemberAvailability = {
@@ -21508,6 +23407,73 @@ export type TeamMemberAvailability = {
      * Macro identifier of the included person.
      */
     userId: string;
+};
+
+/**
+ * Public body of `team.member_joined`.
+ */
+export type TeamMemberJoined = {
+    /**
+     * How they joined.
+     */
+    join_method: TeamJoinKind;
+    /**
+     * The new member.
+     */
+    member_id: MacroUserIdStr;
+    /**
+     * Their role.
+     */
+    role: TeamRole;
+    /**
+     * The team.
+     */
+    team_id: string;
+};
+
+/**
+ * Public body of `team.member_removed`.
+ */
+export type TeamMemberRemoved = {
+    /**
+     * The removed member.
+     */
+    member_id: MacroUserIdStr;
+    /**
+     * Who removed them (themselves when they left).
+     */
+    removed_by: MacroUserIdStr;
+    /**
+     * Their role before removal.
+     */
+    role: TeamRole;
+    /**
+     * The team.
+     */
+    team_id: string;
+};
+
+/**
+ * Public body of `team.member_role_changed`.
+ */
+export type TeamMemberRoleChanged = {
+    /**
+     * Who changed the role.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The member whose role changed.
+     */
+    member_id: MacroUserIdStr;
+    previous_role?: null | TeamRole;
+    /**
+     * New role.
+     */
+    role: TeamRole;
+    /**
+     * The team.
+     */
+    team_id: string;
 };
 
 /**
@@ -21545,11 +23511,98 @@ export type TeamOutOfOfficeResponse = {
 };
 
 /**
+ * A public `macro.teams` event.
+ */
+export type TeamPublicEvent = {
+    event_type: 'team.created';
+    /**
+     * A team was created.
+     */
+    metadata: TeamCreated;
+} | {
+    event_type: 'team.updated';
+    /**
+     * A team's name or slug changed.
+     */
+    metadata: TeamUpdated;
+} | {
+    event_type: 'team.deleted';
+    /**
+     * A team was deleted.
+     */
+    metadata: TeamDeleted;
+} | {
+    event_type: 'team.invite_created';
+    /**
+     * An invitation was created. Admins only.
+     */
+    metadata: TeamInviteCreated;
+} | {
+    event_type: 'team.invite_rejected';
+    /**
+     * An invitation was rejected. Admins only.
+     */
+    metadata: TeamInviteResolved;
+} | {
+    event_type: 'team.invite_revoked';
+    /**
+     * An invitation was revoked. Admins only.
+     */
+    metadata: TeamInviteResolved;
+} | {
+    event_type: 'team.member_joined';
+    /**
+     * A user joined the team.
+     */
+    metadata: TeamMemberJoined;
+} | {
+    event_type: 'team.member_removed';
+    /**
+     * A member was removed or left.
+     */
+    metadata: TeamMemberRemoved;
+} | {
+    event_type: 'team.member_role_changed';
+    /**
+     * A member's role changed.
+     */
+    metadata: TeamMemberRoleChanged;
+} | {
+    event_type: 'team.auto_join_domain_toggled';
+    /**
+     * The automatic-join domain changed. Admins only.
+     */
+    metadata: TeamAutoJoinDomainToggled;
+};
+
+/**
  * The role a user has within a team.
  *
  * Ordered least to most privileged so comparisons reflect access strength.
  */
 export type TeamRole = 'member' | 'admin' | 'owner';
+
+/**
+ * Public body of `team.updated`.
+ */
+export type TeamUpdated = {
+    /**
+     * Who updated it.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * New display name, when it changed.
+     */
+    name?: string | null;
+    /**
+     * New slug, when it changed.
+     */
+    slug?: string | null;
+    /**
+     * The team.
+     */
+    team_id: string;
+};
 
 /**
  * A text direction (`ST_TextVerticalType`).
@@ -22608,11 +24661,19 @@ export type ValidateWebhookResponse = {
 
 export type Vec = Array<{
     /**
-     * Event names matched by this filter.
+     * Entity types matched by this filter, such as `document` or `channel`.
+     * When absent, the filter matches every entity type.
+     */
+    entity_types?: Array<string> | null;
+    /**
+     * Event names matched by this filter: exact names, a family wildcard
+     * such as `document.*`, or `*` for every event. Wildcards require the
+     * `public-event-stream` feature.
      */
     events: Array<string>;
     /**
-     * Entity ids matched by this filter. When absent, the filter matches all entity ids.
+     * Entity ids matched by this filter. When absent, the filter matches all
+     * entity ids.
      */
     ids?: Array<string> | null;
 }>;
@@ -22965,34 +25026,41 @@ export type Webhook = {
 };
 
 /**
- * Any entity event deliverable to a webhook endpoint.
- *
- * Serialized bodies carry an `event_type` tag naming the event (for example
- * `document.created` or `message.posted`) and a `metadata` object
- * with the event payload. Endpoint validation additionally sends a
- * `WebhookValidationTestEvent`, which is not part of this union.
+ * Any public event deliverable by webhook or stream, as its payload
+ * (`event_type` and `metadata`); delivered inside the broker
+ * envelope. Endpoint validation additionally sends a
+ * `WebhookValidationTestEvent`, which is not part of this union, and
+ * `webhook.*` and `agent_trigger.*` are delivered outside it.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
+export type WebhookEvent = DocumentPublicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent | ProjectPublicEvent | ChatPublicEvent | DatabasePublicEvent | FormPublicEvent | InitiativePublicEvent | PropertyPublicEvent | CallRecordPublicEvent | GithubPullRequestPublicEvent | EmailPublicEvent | CalendarPublicEvent | ActivityPublicEvent | NotificationPublicEvent | MentionPublicEvent | TeamPublicEvent | BotPublicEvent | GithubWebhookPublicEvent;
 
 /**
- * Event and optional entity-id constraints used to match webhook deliveries.
+ * Event and optional entity constraints that select deliveries. Every
+ * present constraint must accept an event for the filter to.
  */
 export type WebhookFilter = {
     /**
-     * Event names matched by this filter.
+     * Entity types matched by this filter, such as `document` or `channel`.
+     * When absent, the filter matches every entity type.
+     */
+    entity_types?: Array<string> | null;
+    /**
+     * Event names matched by this filter: exact names, a family wildcard
+     * such as `document.*`, or `*` for every event. Wildcards require the
+     * `public-event-stream` feature.
      */
     events: Array<string>;
     /**
-     * Entity ids matched by this filter. When absent, the filter matches all entity ids.
+     * Entity ids matched by this filter. When absent, the filter matches all
+     * entity ids.
      */
     ids?: Array<string> | null;
 };
 
 /**
- * Scope that owns a newly-created webhook.
- *
- * Clients serialize this, so both derives are used. `Display`/`FromStr`
- * spell the same names as serde, for query strings and config values.
+ * Personal or team workspace whose webhook lifecycle events a stream
+ * delivers. Clients serialize this, so both derives are used. `Display` and
+ * `FromStr` spell the same names as serde.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -31381,6 +33449,100 @@ export type GetEntityPermissionResponses = {
 
 export type GetEntityPermissionResponse = GetEntityPermissionResponses[keyof GetEntityPermissionResponses];
 
+export type EventCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/events/catalog';
+};
+
+export type EventCatalogErrors = {
+    /**
+     * No acting user
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * The catalog is not enabled for this user
+     */
+    404: ErrorResponse;
+};
+
+export type EventCatalogError = EventCatalogErrors[keyof EventCatalogErrors];
+
+export type EventCatalogResponses = {
+    /**
+     * The events this credential can receive
+     */
+    200: EventCatalog;
+};
+
+export type EventCatalogResponse = EventCatalogResponses[keyof EventCatalogResponses];
+
+export type StreamEventsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Personal or team workspace whose webhook lifecycle events are delivered.
+         */
+        scope: WebhookScope;
+        /**
+         * URL-encoded JSON array of filters, identical to the persisted webhook
+         * `filters` field.
+         */
+        filters?: string;
+        /**
+         * Resume after this cursor (an SSE `id`). `Last-Event-ID` wins when both
+         * are sent. Requires the `public-event-stream` feature; ignored without
+         * it.
+         */
+        cursor?: string;
+    };
+    url: '/events/stream';
+};
+
+export type StreamEventsErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * No acting user
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * The cursor is older than the replay window: resync, then reconnect without a cursor
+     */
+    410: ErrorResponse;
+    /**
+     * Too many concurrent streams for this credential
+     */
+    429: ErrorResponse;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type StreamEventsError = StreamEventsErrors[keyof StreamEventsErrors];
+
+export type StreamEventsResponses = {
+    /**
+     * Server-Sent Events stream of matching public events, ending with a `lagged`, `revoked` or `reset` control event when the server closes it
+     */
+    200: string;
+};
+
+export type StreamEventsResponse = StreamEventsResponses[keyof StreamEventsResponses];
+
 export type ExternalChatsData = {
     body?: never;
     path?: never;
@@ -35384,7 +37546,7 @@ export type EditProjectV2Responses = {
 
 export type EditProjectV2Response = EditProjectV2Responses[keyof EditProjectV2Responses];
 
-export type StreamEventsData = {
+export type StreamEventsAliasData = {
     body?: never;
     path?: never;
     query: {
@@ -35393,39 +37555,57 @@ export type StreamEventsData = {
          */
         scope: WebhookScope;
         /**
-         * URL-encoded JSON array of webhook filters, identical to the persisted
-         * webhook `filters` field.
+         * URL-encoded JSON array of filters, identical to the persisted webhook
+         * `filters` field.
          */
         filters?: string;
+        /**
+         * Resume after this cursor (an SSE `id`). `Last-Event-ID` wins when both
+         * are sent. Requires the `public-event-stream` feature; ignored without
+         * it.
+         */
+        cursor?: string;
     };
     url: '/webhook/events/stream';
 };
 
-export type StreamEventsErrors = {
+export type StreamEventsAliasErrors = {
     /**
      * Bad request
      */
     400: ErrorResponse;
     /**
+     * No acting user
+     */
+    401: ErrorResponse;
+    /**
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * Cursor older than the replay window
+     */
+    410: ErrorResponse;
+    /**
+     * Too many concurrent streams
+     */
+    429: ErrorResponse;
     /**
      * Internal server error
      */
     500: ErrorResponse;
 };
 
-export type StreamEventsError = StreamEventsErrors[keyof StreamEventsErrors];
+export type StreamEventsAliasError = StreamEventsAliasErrors[keyof StreamEventsAliasErrors];
 
-export type StreamEventsResponses = {
+export type StreamEventsAliasResponses = {
     /**
-     * Server-Sent Events stream of matching broker events
+     * Server-Sent Events stream; see `/events/stream`
      */
     200: string;
 };
 
-export type StreamEventsResponse = StreamEventsResponses[keyof StreamEventsResponses];
+export type StreamEventsAliasResponse = StreamEventsAliasResponses[keyof StreamEventsAliasResponses];
 
 export type ListWebhooksData = {
     body?: never;

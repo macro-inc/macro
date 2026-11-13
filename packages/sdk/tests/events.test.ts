@@ -75,7 +75,7 @@ describe('MacroEvents', () => {
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
     const url = new URL(request?.url ?? '');
     expect(url.origin + url.pathname).toBe(
-      'https://storage.example.test/webhook/events/stream',
+      'https://storage.example.test/events/stream',
     );
     expect(url.searchParams.get('scope')).toBe('user');
     expect(JSON.parse(url.searchParams.get('filters') ?? '[]')).toEqual([
@@ -110,6 +110,43 @@ describe('MacroEvents', () => {
     expect(JSON.parse(url.searchParams.get('filters') ?? '[]')).toEqual([
       { events: ['message.posted'], ids: ['chan_1'] },
     ]);
+  });
+
+  test('listen() reconnects against a server without cursors and continues live after a reset', async () => {
+    const requests: Request[] = [];
+    const bodies = [
+      // A server without the beta: SSE ids are event ids, then it closes.
+      `id: e1\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e1' })}\n\n`,
+      'event: reset\ndata: {"type":"reset"}\n\n',
+      `id: e2\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e2' })}\n\n`,
+    ];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return new Response(bodies.shift() ?? '', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const seen: string[] = [];
+    const twice = Promise.withResolvers<void>();
+    macro.events.on('document.created', (event) => {
+      seen.push(event.document.id);
+      if (seen.length === 2) twice.resolve();
+    });
+    const stop = await macro.events.listen();
+    await twice.promise;
+    stop();
+
+    expect(seen).toEqual(['doc_1', 'doc_1']);
+    expect(requests[1]?.headers.get('last-event-id')).toBe('e1');
+    // After the reset it reconnects live, without a cursor.
+    expect(requests[2]?.headers.get('last-event-id')).toBeNull();
   });
 
   test('listen() throws when there are no filters or handlers', async () => {
