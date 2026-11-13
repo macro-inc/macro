@@ -313,7 +313,8 @@ views/shared/<name>-parts.tsx  parts both views render
   (`components/app/mobile-header`). While it is mounted it owns the pane's
   header: nothing else in the pane can add to it. A file block's mobile header
   uses `MobileBlockHeader` from the same directory: the file's title with its
-  menu, the permissions badge, the islands the view passes, and Info. A mobile
+  menu, the view's own left islands, the permissions badge, then the view's
+  right islands and Info. A mobile
   view may branch on `isMobile()` / `mobile:` for phone versus tablet.
 - **A block's desktop header uses `BlockToolbar`**
   (`components/app/block-toolbar`): its tools in one group, the side panel's

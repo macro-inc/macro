@@ -20,8 +20,10 @@ export function MobilePdfHeader() {
   return (
     <>
       <MobileBlockHeader
+        id={documentId}
+        name={fileName()}
+        iconType="pdf"
         itemType={itemType}
-        fallbackName="Unknown Filename"
         menuTools={[actions.askMacro, actions.share]}
         ops={ops}
         trailing={

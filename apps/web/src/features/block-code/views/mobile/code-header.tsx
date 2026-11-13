@@ -1,5 +1,7 @@
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import { isMobile } from '@core/mobile/isMobile';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { Show } from 'solid-js';
 import { CodeFileTypeChip } from '../../component/CodeFileTypeChip';
 import { CodeModeControl } from '../../component/CodeModeControl';
@@ -13,10 +15,16 @@ import {
  * mode on tablets, and Info.
  */
 export function MobileCodeHeader(props: CodeHeaderProps) {
+  const blockId = useBlockId();
+  const blockAlias = useBlockAliasedName();
+  const name = useBlockDocumentName();
   const { ops, actions } = useCodeHeaderTools();
 
   return (
     <MobileBlockHeader
+      id={blockId}
+      name={name() ?? ''}
+      iconType={blockAlias}
       badges={<CodeFileTypeChip />}
       menuTools={[actions.askMacro, actions.share]}
       ops={ops}
