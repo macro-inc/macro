@@ -2409,6 +2409,96 @@
         }
       }
     },
+    "/suggestions/{id}/draft": {
+      "put": {
+        "tags": ["suggestions"],
+        "summary": "Make a reply draft a suggestions generation session wrote the draft of an\nopen reply suggestion. Nothing is sent.",
+        "operationId": "attach_suggestion_draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the draft is now the suggestion's, replacing its old one, and what to fix when it isn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may attach a draft",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the user, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions/{id}/retire": {
       "post": {
         "tags": ["suggestions"],
@@ -2859,6 +2949,23 @@
           }
         ],
         "description": "The source of an entity's custom icon."
+      },
+      "AttachDraft": {
+        "type": "object",
+        "description": "A reply draft a session wrote for an open reply suggestion, as the user,\nthrough `macro.email.createDraft`. It replaces the suggestion's draft, if any;\nnothing is ever sent.",
+        "required": ["emailDraftId", "reason"],
+        "properties": {
+          "emailDraftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The email draft: an unsent draft in one of the user's own inboxes, in\nthe thread the suggestion is about."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          }
+        },
+        "additionalProperties": false
       },
       "CatalogEntry": {
         "type": "object",
@@ -5590,7 +5697,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/Target",
-                    "description": "The draft made for it, once made."
+                    "description": "A reply suggestion's draft, once a session wrote one: the email thread\nit is in, with the draft as the part."
                   }
                 ]
               },

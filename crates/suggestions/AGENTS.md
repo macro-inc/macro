@@ -43,6 +43,18 @@ scheduler's spec.
   row (that log is for sessions), and a record that keeps failing is skipped.
 - Every accepted write adds a `suggestion_change` row (old and new values and
   the session's reason). Changes are silent to the person.
+- Reply drafts: a suggestions session may write a reply as the person
+  (`macro.email.createDraft`, never sent) and attach it to an open entity
+  suggestion with action `reply` (`PUT /suggestions/{id}/draft`, `suggestion.attachDraft`). The
+  draft must be an unsent draft in one of the person's own inboxes (not a
+  delegated one; `SuggestionDrafts`, read through the email domain's `EmailRepo`),
+  in an email thread the suggestion is about. It is stored as the `suggestion_target` of
+  role `draft` (the thread, with the draft as the part); a new one replaces
+  it, logged as `rewritten` with `{"draft": ...}` before and after. While a
+  suggestion has a draft, its `about` keeps the draft's thread. A sent draft
+  resolves the suggestion through `email.message_sent` on that thread, like any
+  reply. Deleting a draft publishes no event (`email.message_deleted` comes
+  only from provider sync), so the link stays until a session replaces it.
 
 ## Start here
 

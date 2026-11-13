@@ -11,7 +11,7 @@ use super::*;
 use crate::domain::model::{Category, EntityAction, RunMode};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
-const OWNER: &str = "macro|suggestions-owner@macro.com";
+pub(crate) const OWNER: &str = "macro|suggestions-owner@macro.com";
 const OTHER: &str = "macro|suggestions-other@macro.com";
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
@@ -21,7 +21,7 @@ fn user(id: &'static str) -> MacroUserIdStr<'static> {
 /// Items the person can open: all but those named in `denied`. A part is
 /// its item's when its id starts with the item's.
 #[derive(Default)]
-struct FakeAccess {
+pub(crate) struct FakeAccess {
     denied: Mutex<HashSet<String>>,
 }
 
@@ -34,6 +34,37 @@ impl SuggestionAccess for FakeAccess {
 
     async fn is_part_of(&self, target: &Target, part: &str) -> Result<bool, Self::Err> {
         Ok(part.starts_with(&target.entity_id))
+    }
+}
+
+/// Unsent email drafts: draft → (whose own inbox it is in, its thread).
+#[derive(Default)]
+pub(crate) struct FakeDrafts(Mutex<HashMap<Uuid, (&'static str, Uuid)>>);
+
+impl FakeDrafts {
+    /// A new draft of `owner`'s in `thread`.
+    fn write(&self, owner: &'static str, thread: Uuid) -> Uuid {
+        let draft = Uuid::now_v7();
+        self.0.lock().unwrap().insert(draft, (owner, thread));
+        draft
+    }
+}
+
+impl SuggestionDrafts for FakeDrafts {
+    type Err = std::convert::Infallible;
+
+    async fn email_draft_thread(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        draft: Uuid,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .get(&draft)
+            .filter(|(owner, _)| *owner == user.as_ref())
+            .map(|(_, thread)| *thread))
     }
 }
 
@@ -112,17 +143,19 @@ impl RoutineSuggestionDismissal for FakeDismissal {
     }
 }
 
-type Service = SuggestionService<PgSuggestionRepo, FakeAccess, FakeFeatureFlags>;
+pub(crate) type Service =
+    SuggestionService<PgSuggestionRepo, FakeAccess, FakeDrafts, FakeFeatureFlags>;
 
-struct Harness {
-    service: Service,
+pub(crate) struct Harness {
+    pub(crate) service: Service,
     access: Arc<FakeAccess>,
+    drafts: Arc<FakeDrafts>,
     audience: Arc<FakeAudience>,
     dismissal: Arc<FakeDismissal>,
     pool: PgPool,
 }
 
-async fn harness(pool: PgPool, flag: bool) -> Harness {
+pub(crate) async fn harness(pool: PgPool, flag: bool) -> Harness {
     for id in [OWNER, OTHER] {
         crate::outbound::pg_suggestion_repo::test::insert_user(&pool, id).await;
     }
@@ -137,12 +170,14 @@ async fn harness(pool: PgPool, flag: bool) -> Harness {
         );
     }
     let access = Arc::new(FakeAccess::default());
+    let drafts = Arc::new(FakeDrafts::default());
     let audience = Arc::new(FakeAudience::default());
     let dismissal = Arc::new(FakeDismissal::default());
     Harness {
         service: SuggestionService::new(
             Arc::new(PgSuggestionRepo::new(pool.clone())),
             Arc::clone(&access),
+            Arc::clone(&drafts),
             Arc::new(SameSession),
             Arc::new(RowSessions(pool.clone())),
             audience.clone(),
@@ -150,6 +185,7 @@ async fn harness(pool: PgPool, flag: bool) -> Harness {
             Some(flags),
         ),
         access,
+        drafts,
         audience,
         dismissal,
         pool,
@@ -181,7 +217,7 @@ fn prompt_suggestion(key: &str, title: &str) -> NewSuggestion {
     }
 }
 
-fn entity_suggestion(key: &str) -> NewSuggestion {
+pub(crate) fn entity_suggestion(key: &str) -> NewSuggestion {
     NewSuggestion {
         kind: KindName::Entity,
         dedup_key: key.to_owned(),
@@ -240,7 +276,7 @@ impl Harness {
 
     /// An open session of `kind` in `owner`'s running generation, started
     /// when none is running.
-    async fn session(&self, owner: &str, kind: &str) -> Uuid {
+    pub(crate) async fn session(&self, owner: &str, kind: &str) -> Uuid {
         sqlx::query!(
             r#"INSERT INTO suggestion_generation (id, user_id, trigger, status, started_at)
                VALUES ($1, $2, 'nightly', 'generating', now())
@@ -292,7 +328,11 @@ impl Harness {
         .unwrap();
     }
 
-    async fn suggest(&self, session: Uuid, request: NewSuggestion) -> SuggestionWriteOutcome {
+    pub(crate) async fn suggest(
+        &self,
+        session: Uuid,
+        request: NewSuggestion,
+    ) -> SuggestionWriteOutcome {
         self.service
             .suggest(&principal(OWNER), Some(session), request)
             .await
@@ -1435,8 +1475,312 @@ async fn a_run_whose_session_is_missing_is_given_up_after_its_start_window(pool:
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
 
-/// A session that never took its prompt but can't be deleted keeps its run
-/// open, so no second session starts while it might still take it.
+/// A reply suggestion about email thread `thread`.
+fn reply_suggestion(key: &str, thread: Uuid) -> NewSuggestion {
+    let mut suggestion = entity_suggestion(key);
+    suggestion.about = vec![Target {
+        entity_type: EntityType::EmailThread,
+        entity_id: thread.to_string(),
+        part_id: None,
+    }];
+    suggestion
+}
+
+fn attach(draft: Uuid, reason: &str) -> AttachDraft {
+    AttachDraft {
+        email_draft_id: draft,
+        reason: reason.to_owned(),
+    }
+}
+
+/// `draft` as a suggestion keeps it: the thread, with the draft as the part.
+fn draft_target(thread: Uuid, draft: Uuid) -> Target {
+    Target {
+        entity_type: EntityType::EmailThread,
+        entity_id: thread.to_string(),
+        part_id: Some(draft.to_string()),
+    }
+}
+
+impl Harness {
+    async fn attach(
+        &self,
+        session: Uuid,
+        suggestion: Uuid,
+        request: AttachDraft,
+    ) -> SuggestionWriteOutcome {
+        self.service
+            .attach_draft(&principal(OWNER), Some(session), suggestion, request)
+            .await
+            .unwrap()
+    }
+
+    /// The change log's rewrites of `suggestion`: (old, new, reason).
+    async fn rewrites(
+        &self,
+        suggestion: Uuid,
+    ) -> Vec<(
+        Option<serde_json::Value>,
+        Option<serde_json::Value>,
+        Option<String>,
+    )> {
+        sqlx::query!(
+            r#"SELECT old_value, new_value, reason FROM suggestion_change
+               WHERE subject_id = $1 AND action = 'rewritten' ORDER BY created_at, id"#,
+            suggestion,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.old_value, row.new_value, row.reason))
+        .collect()
+    }
+}
+
+fn problems(outcome: &SuggestionWriteOutcome) -> String {
+    assert!(
+        !outcome.ok,
+        "expected a refusal, got {:?}",
+        outcome.suggestion
+    );
+    outcome.problems.join(" | ")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_draft_is_attached_only_to_an_open_reply_suggestion_in_its_thread(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let thread = Uuid::now_v7();
+    let mine = h.drafts.write(OWNER, thread);
+    let elsewhere = h.drafts.write(OWNER, Uuid::now_v7());
+    let theirs = h.drafts.write(OTHER, thread);
+
+    let prompt = h
+        .suggest(
+            session,
+            prompt_suggestion("quotes:compare", "Compare quotes"),
+        )
+        .await
+        .suggestion
+        .unwrap();
+    let mut review = reply_suggestion("thread:review", thread);
+    review.action = Some(EntityAction::Review);
+    let review = h.suggest(session, review).await.suggestion.unwrap();
+    for suggestion in [prompt.id, review.id] {
+        let refused = h
+            .attach(session, suggestion, attach(mine, "Drafted the reply"))
+            .await;
+        assert!(
+            problems(&refused).contains("only for an entity suggestion with action `reply`"),
+            "{refused:?}"
+        );
+    }
+
+    let reply = h
+        .suggest(session, reply_suggestion("thread:reply", thread))
+        .await
+        .suggestion
+        .unwrap();
+    for (draft, problem) in [
+        (theirs, "no unsent draft in the user's own inboxes"),
+        (Uuid::now_v7(), "no unsent draft in the user's own inboxes"),
+        (
+            elsewhere,
+            "another thread than the one this suggestion is about",
+        ),
+    ] {
+        let refused = h
+            .attach(session, reply.id, attach(draft, "Drafted it"))
+            .await;
+        assert!(problems(&refused).contains(problem), "{refused:?}");
+    }
+    let refused = h.attach(session, reply.id, attach(mine, "")).await;
+    assert!(problems(&refused).contains("`reason`"), "{refused:?}");
+
+    let attached = h
+        .attach(
+            session,
+            reply.id,
+            attach(mine, "Drafted the headcount reply"),
+        )
+        .await;
+    assert!(attached.ok, "{:?}", attached.problems);
+    let expected = SuggestionKind::Entity {
+        action: EntityAction::Reply,
+        draft: Some(draft_target(thread, mine)),
+    };
+    assert_eq!(attached.suggestion.unwrap().kind, expected);
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let shown = feed
+        .suggestions
+        .iter()
+        .find(|suggestion| suggestion.id == reply.id)
+        .unwrap();
+    assert_eq!(shown.kind, expected);
+
+    let retired = h
+        .service
+        .retire(
+            &principal(OWNER),
+            Some(session),
+            reply.id,
+            RetireSuggestionRequest {
+                reason: "Answered by phone".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(retired.ok, "{:?}", retired.problems);
+    let refused = h.attach(session, reply.id, attach(mine, "Again")).await;
+    assert!(problems(&refused).contains("only attached to an open suggestion"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_new_draft_replaces_the_old_one_and_the_log_keeps_both(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let thread = Uuid::now_v7();
+    let first = h.drafts.write(OWNER, thread);
+    let second = h.drafts.write(OWNER, thread);
+    let reply = h
+        .suggest(session, reply_suggestion("thread:reply", thread))
+        .await
+        .suggestion
+        .unwrap();
+
+    assert!(
+        h.attach(session, reply.id, attach(first, "First take"))
+            .await
+            .ok
+    );
+    let replaced = h
+        .attach(session, reply.id, attach(second, "Shorter, with the date"))
+        .await;
+    assert!(replaced.ok, "{:?}", replaced.problems);
+    assert_eq!(
+        replaced.suggestion.unwrap().kind,
+        SuggestionKind::Entity {
+            action: EntityAction::Reply,
+            draft: Some(draft_target(thread, second)),
+        }
+    );
+    // The same draft again changes nothing.
+    assert!(h.attach(session, reply.id, attach(second, "Same")).await.ok);
+
+    let as_json = |draft: Option<Uuid>| {
+        Some(serde_json::json!({
+            "draft": draft.map(|draft| serde_json::to_value(draft_target(thread, draft)).unwrap())
+        }))
+    };
+    assert_eq!(
+        h.rewrites(reply.id).await,
+        vec![
+            (
+                as_json(None),
+                as_json(Some(first)),
+                Some("First take".to_owned())
+            ),
+            (
+                as_json(Some(first)),
+                as_json(Some(second)),
+                Some("Shorter, with the date".to_owned())
+            ),
+        ]
+    );
+    let drafts = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM suggestion_target WHERE suggestion_id = $1 AND role = 'draft'"#,
+        reply.id,
+    )
+    .fetch_one(&h.pool)
+    .await
+    .unwrap();
+    assert_eq!(drafts, 1);
+
+    // The suggestion stays about the thread its draft is in.
+    let refused = h
+        .service
+        .rewrite(
+            &principal(OWNER),
+            Some(session),
+            reply.id,
+            RewriteSuggestion {
+                about: Some(vec![Target {
+                    entity_type: EntityType::EmailThread,
+                    entity_id: Uuid::now_v7().to_string(),
+                    part_id: None,
+                }]),
+                reason: "Another thread".to_owned(),
+                ..RewriteSuggestion::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(problems(&refused).contains("this suggestion's draft is in email_thread"));
+    let refused = h
+        .suggest(session, reply_suggestion("thread:reply", Uuid::now_v7()))
+        .await;
+    assert!(problems(&refused).contains("this suggestion's draft is in email_thread"));
+    let reworded = h
+        .service
+        .rewrite(
+            &principal(OWNER),
+            Some(session),
+            reply.id,
+            RewriteSuggestion {
+                title: Some("Send the headcount".to_owned()),
+                reason: "Clearer".to_owned(),
+                ..RewriteSuggestion::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(reworded.ok, "{:?}", reworded.problems);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_the_persons_open_suggestions_session_attaches_drafts(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let suggestions = h.session(OWNER, "suggestions").await;
+    let routines = h.session(OWNER, "routines").await;
+    let others = h.session(OTHER, "suggestions").await;
+    let thread = Uuid::now_v7();
+    let draft = h.drafts.write(OWNER, thread);
+    let reply = h
+        .suggest(suggestions, reply_suggestion("thread:reply", thread))
+        .await
+        .suggestion
+        .unwrap();
+    for correlation in [None, Some(routines), Some(others), Some(Uuid::now_v7())] {
+        let result = h
+            .service
+            .attach_draft(
+                &principal(OWNER),
+                correlation,
+                reply.id,
+                attach(draft, "Drafted"),
+            )
+            .await;
+        assert!(
+            matches!(result, Err(SuggestionError::NotGenerating)),
+            "{result:?}"
+        );
+    }
+    let unknown = h
+        .service
+        .attach_draft(
+            &principal(OWNER),
+            Some(suggestions),
+            Uuid::now_v7(),
+            attach(draft, "Drafted"),
+        )
+        .await;
+    assert!(
+        matches!(unknown, Err(SuggestionError::NotFound)),
+        "{unknown:?}"
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_unprompted_session_that_cant_be_deleted_keeps_its_run(pool: PgPool) {
     let mut h = harness(pool, true).await;
@@ -1523,8 +1867,6 @@ async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
     );
 }
 
-/// A background prompt suggestion may say what its run posts or sends; running it
-/// approves exactly that, and other suggestions can't carry it.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_background_suggestion_says_what_it_sends_and_running_it_approves_that(pool: PgPool) {
     let mut h = harness(pool, true).await;

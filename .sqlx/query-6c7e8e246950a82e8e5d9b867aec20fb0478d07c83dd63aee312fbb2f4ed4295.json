@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM suggestion_target WHERE suggestion_id = $1 AND role = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c7e8e246950a82e8e5d9b867aec20fb0478d07c83dd63aee312fbb2f4ed4295"
+}

@@ -41,6 +41,7 @@ export * from './appearanceIconOneOf';
 export * from './appearanceIconOneOfKind';
 export * from './appearanceIconOneOfThree';
 export * from './appearanceIconOneOfThreeKind';
+export * from './attachDraft';
 export * from './catalogEntry';
 export * from './catalogEntryCode';
 export * from './catalogEntryNamedKnobs';

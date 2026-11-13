@@ -198,6 +198,23 @@ export type AppearanceIcon = {
 };
 
 /**
+ * A reply draft a session wrote for an open reply suggestion, as the user,
+ * through `macro.email.createDraft`. It replaces the suggestion's draft, if any;
+ * nothing is ever sent.
+ */
+export type AttachDraft = {
+    /**
+     * The email draft: an unsent draft in one of the user's own inboxes, in
+     * the thread the suggestion is about.
+     */
+    emailDraftId: string;
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+};
+
+/**
  * One of Macro's routines, ready to start a new routine from.
  */
 export type CatalogEntry = {
@@ -2976,6 +2993,43 @@ export type DismissSuggestionResponses = {
 };
 
 export type DismissSuggestionResponse = DismissSuggestionResponses[keyof DismissSuggestionResponses];
+
+export type AttachSuggestionDraftData = {
+    body: AttachDraft;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/draft';
+};
+
+export type AttachSuggestionDraftErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may attach a draft
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type AttachSuggestionDraftError = AttachSuggestionDraftErrors[keyof AttachSuggestionDraftErrors];
+
+export type AttachSuggestionDraftResponses = {
+    /**
+     * Whether the draft is now the suggestion's, replacing its old one, and what to fix when it isn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type AttachSuggestionDraftResponse = AttachSuggestionDraftResponses[keyof AttachSuggestionDraftResponses];
 
 export type RetireSuggestionData = {
     body: RetireSuggestionRequest;
