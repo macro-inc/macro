@@ -5,6 +5,8 @@
     reason = "test support: database DDL and seed rows are not checked against the query cache"
 )]
 
+use std::time::Duration;
+
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use rootcause::prelude::*;
 use sha2::{Digest, Sha256};
@@ -12,10 +14,16 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Connection, PgConnection, PgPool};
 use uuid::Uuid;
 
+use crate::wait::eventually;
+
 /// The session lock that makes one process at a time build the template.
 const TEMPLATE_LOCK: i64 = 0x656d_6169_6c65_3265;
 /// How much of the migrations' digest names a template.
 const TEMPLATE_NAME_DIGITS: usize = 16;
+/// Postgres's error code for a database other sessions are connected to.
+const OBJECT_IN_USE: &str = "55006";
+/// How long a clone waits for the template to be free.
+const TEMPLATE_BUSY_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// A scenario's own database on the suite's Postgres server.
 pub(crate) struct Database {
@@ -36,12 +44,25 @@ impl Database {
 
         let template = ensure_template(&mut admin, &server).await?;
         let name = format!("email_e2e_{}", Uuid::now_v7().simple());
-        sqlx::query(&format!(
-            r#"CREATE DATABASE "{name}" TEMPLATE "{template}""#
-        ))
-        .execute(&mut admin)
-        .await
-        .context("could not create the scenario database")?;
+        let clone = format!(r#"CREATE DATABASE "{name}" TEMPLATE "{template}""#);
+        // A session connected to the template (someone looking at it on a
+        // shared server) refuses the clone only while it is connected.
+        eventually(
+            "the template database to be free of other sessions",
+            TEMPLATE_BUSY_TIMEOUT,
+            async || match sqlx::query(&clone).execute(&mut admin).await {
+                Ok(_) => Ok(Some(())),
+                Err(sqlx::Error::Database(error))
+                    if error.code().as_deref() == Some(OBJECT_IN_USE) =>
+                {
+                    Ok(None)
+                }
+                Err(error) => Err(report!(error)
+                    .context("could not create the scenario database")
+                    .into_dynamic()),
+            },
+        )
+        .await?;
 
         let pool = PgPoolOptions::new()
             .max_connections(4)
@@ -138,6 +159,8 @@ async fn build_template(
             .fetch_one(&mut *admin)
             .await?;
     if exists {
+        // Templates built before they were closed to connections.
+        close_to_connections(admin, template).await?;
         return Ok(());
     }
 
@@ -166,5 +189,17 @@ async fn build_template(
     ))
     .execute(&mut *admin)
     .await?;
+    close_to_connections(admin, template).await
+}
+
+/// Stops new sessions from connecting to the template: one connected to it
+/// makes every clone fail.
+async fn close_to_connections(admin: &mut PgConnection, template: &str) -> Result<(), Report> {
+    sqlx::query(&format!(
+        r#"ALTER DATABASE "{template}" WITH ALLOW_CONNECTIONS false"#
+    ))
+    .execute(&mut *admin)
+    .await
+    .context("could not close the template database to connections")?;
     Ok(())
 }
