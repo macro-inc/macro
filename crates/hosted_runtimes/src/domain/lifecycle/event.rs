@@ -43,9 +43,12 @@ pub enum Event {
     /// but a give-up before the computer next boots is not paged: a team
     /// retrying repeatedly must not page on-call each time.
     TeamRetry,
-    /// A fleet effect failed after its retries; an operator looks.
+    /// A fleet effect failed after its retries, or for good at once; an
+    /// operator looks.
     EffectFailed {
-        /// Reason for this decision or failure.
+        /// What failed, as the team sees it.
+        failure: Failure,
+        /// The full error, for the logs and the operator page.
         reason: String,
     },
     /// Stop billing at `at`, the end of the current period. The item is

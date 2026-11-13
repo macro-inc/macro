@@ -25,6 +25,13 @@ mounted by authentication_service.
   host): it paged, and `OperatorRetry` restarts it.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
+  A failed fleet effect retries with backoff up to `MAX_EFFECT_ATTEMPTS`, except
+  a `FleetError::is_permanent` one (Incus refused the request as invalid), which
+  fails the computer at once (`EffectFailed`, shown to the team as Failed).
+  A give-up stores a `lifecycle::Failure` kind; `ComputerStatus.failureReason`
+  is its fixed user-safe sentence, and the raw error stays in the logs and the
+  operator page. `setup.stepStartedAt` is when the current setup step began
+  (null for Booting, which records no start).
 - Keep literal purchase resources in the versioned `domain::size::current_catalog`.
 - Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
   reserves sold units on a host; starting checks awake units (`Context::host_has_room`).
@@ -63,6 +70,12 @@ as named policy constants. Every backoff goes through
 (`CAPACITY_BACKOFF`, `RESTART_BACKOFF`, `BILLING_BACKOFF`, the operator's
 fleet and registration backoffs); never hand-roll doubling.
 Reject invalid stored numeric capacity and retry counts rather than substituting values.
+In agent_harness_service the operator's repository has its own small pool
+(`OPERATOR_CONNECTIONS`, a 10 s acquire timeout), apart from the session pool.
+A pool timeout reaches the domain as `ports::StorageUnavailable`
+(`ComputerError::is_storage_unavailable`): a pass skips its tick and warns once
+per outage, and a fleet or billing effect is retried later without spending an
+attempt, so a busy database never fails a computer or abandons a removal.
 
 ## Contracts
 
@@ -165,7 +178,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   for good and converts only if the subscription carries an item with the
   computer's id; otherwise the reservation is deleted. An error shown to the
   buyer therefore always means nothing was charged. Status/list show a
-  reservation as status `purchasing` (setup step Creating); every request on
+  reservation as status `purchasing` (setup step `billing`); every request on
   it is `ComputerError::NotPurchased` (409).
 - **Billing**: cancel removes the item at once without proration (the period
   is paid) → `EndsAt{at = period end}` and a `BillingEnds` timer at `at` that
@@ -181,7 +194,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   definitely ended is skipped), apply the event, and remove the item again if
   the lifecycle refuses it. Release now removes the item and destroys.
   `RemoveBillingItem{item}` skips an item the computer is billed on again,
-  keys each attempt `computer-remove:{effect}:{attempt}`, treats an item or
+  keys its removal `computer-remove:{effect}:{generation}`, the same key on
+  every retry (only a generation given up while its outcome was unknown moves
+  to the next; one that applied ends the effect), treats an item or
   subscription (or team) already gone as removed and, after `MAX_BILLING_ATTEMPTS`, logs `computer billing item
   removal abandoned` (a Datadog monitor in `infra/stacks/monitoring`) and
   stops. `observe_subscription(team, SubscriptionObserved)` is the one billing
@@ -260,9 +275,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   (`AdminTeamRole`), as Claude sign-in is (owner access to the computer's
   harness, the web's `canManageClaude`); others get 403.
 - **Status**: `ComputerService::list(team_id)` →
-  `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
-  Connecting → Ready, positions 1–4) until macrod first connects. A purchase
-  being confirmed reports status `purchasing`, step Creating (1 of 4).
+  `ComputerStatus` with `setup: Option<SetupProgress>` (Billing →
+  Creating → Booting → Connecting → Ready, positions 1–5) until macrod first
+  connects. A purchase being confirmed (its subscription change not settled,
+  possibly waiting on another change in flight) reports status `purchasing`,
+  step `billing` (1 of 5); a converted computer starts at Creating.
   Billing is `billing` (`purchasing`, `active`, `past_due`, `ending`,
   `ended`, `comped`) with `cancelsAt`, `canUndoCancel`, `retainedUntil`,
   `canRestore`, `pastDueSince` and `compReason`. Readable by any team member.
@@ -289,7 +306,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - **Data disk**: every computer has one, created with the guest and deleted
   by `Fleet::destroy` after the instance (Incus keeps custom volumes). Incus:
   block volume `<instance>-data` in the configured pool, disk device `data`
-  in the instance create request, so no instance exists without it; the guest
+  in the instance create request, so no instance exists without it. The
+  instance sets `migration.stateful=false`: Incus attaches extra disks to a
+  stateful VM only from a shared pool, and stop is always a cold shutdown. The guest
   mounts it at `/home` and keeps `/var/lib/macrod` there. Docker: named
   volumes `macro-computer-<id>-home` (`/home`) and `-macrod`
   (`/var/lib/macrod`). Create and destroy are idempotent and leave no volume
