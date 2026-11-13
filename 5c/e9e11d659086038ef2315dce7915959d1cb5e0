@@ -1,0 +1,73 @@
+crates/event_stream/src/domain/catalog.rs
+  s_8703f73ae8e37d::t_8ecd0df4fb0b71 1-145
+crates/event_stream/src/outbound/redis_log/test.rs
+  s_8703f73ae8e37d::t_4d560afae63d3d 1-116
+crates/event_stream/src/domain/fan_out/test.rs
+  s_8703f73ae8e37d::t_f80c0e39ed3604 1-549
+crates/event_stream/src/lib.rs
+  s_8703f73ae8e37d::t_05c094d7d4dee9 1-12
+crates/event_stream/src/domain/registry.rs
+  s_8703f73ae8e37d::t_8ecd0df4fb0b71 1-92,96-99,101,103-105,108,110-212,216-296
+  s_8703f73ae8e37d::t_83cf8c9318af52 93-95,100,102,106-107,109,213-215
+crates/event_stream/src/domain/stream.rs
+  s_8703f73ae8e37d::t_05c094d7d4dee9 210-215,398-404
+  s_8703f73ae8e37d::t_83cf8c9318af52 1-209,216-397,405-624
+crates/event_stream/src/domain/ports.rs
+  s_8703f73ae8e37d::t_8ecd0df4fb0b71 1-23,25-161
+  s_8703f73ae8e37d::t_05c094d7d4dee9 24
+crates/event_stream/src/outbound/redis_log.rs
+  s_8703f73ae8e37d::t_05c094d7d4dee9 1-133,135-378
+  s_8703f73ae8e37d::t_8148862101f07a 134
+crates/event_stream/src/domain/access.rs
+  s_8703f73ae8e37d::t_8ecd0df4fb0b71 1-525
+crates/event_stream/Cargo.toml
+  s_8703f73ae8e37d::t_cd3e3bf88327a9 1-35
+crates/event_stream/src/outbound.rs
+  s_8703f73ae8e37d::t_05c094d7d4dee9 1-5
+crates/event_stream/src/domain/test_support.rs
+  s_8703f73ae8e37d::t_05c094d7d4dee9 1-468
+crates/event_stream/src/domain/fan_out.rs
+  s_8703f73ae8e37d::t_83cf8c9318af52 1-169
+Cargo.lock
+  s_8703f73ae8e37d::t_4f219b7e71feb4 8120,8126-8151
+Cargo.toml
+  s_8703f73ae8e37d::t_dd2625b27cf963 68
+crates/event_stream/src/domain.rs
+  s_8703f73ae8e37d::t_4d1fe8aead118a 1-23
+crates/event_stream/src/domain/access/test.rs
+  s_8703f73ae8e37d::t_2016ed60b61122 1
+crates/event_stream/src/domain/catalog/test.rs
+  s_8703f73ae8e37d::t_50b0148426b300 1
+crates/event_stream/src/domain/filters.rs
+  s_8703f73ae8e37d::t_69c2cd2109f133 1-200
+crates/event_stream/src/domain/filters/test.rs
+  s_8703f73ae8e37d::t_783161acdbc9c4 1
+crates/event_stream/src/domain/models.rs
+  s_8703f73ae8e37d::t_a53a863762b45a 1-321
+crates/event_stream/src/domain/models/test.rs
+  s_8703f73ae8e37d::t_a09f94bd4dbd17 1
+crates/event_stream/src/domain/normalize.rs
+  s_8703f73ae8e37d::t_6c585c4c4692d3 1-69
+crates/event_stream/src/domain/normalize/test.rs
+  s_8703f73ae8e37d::t_a7137de8129af1 1
+crates/event_stream/src/domain/registry/test.rs
+  s_8703f73ae8e37d::t_01a53a487245bb 1
+crates/event_stream/src/domain/stream/test.rs
+  s_8703f73ae8e37d::t_bd58b63298ba8d 1-336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5ce9e11d659086038ef2315dce7915959d1cb5e0",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
