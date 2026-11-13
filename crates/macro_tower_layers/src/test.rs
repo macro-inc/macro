@@ -260,6 +260,11 @@ async fn starvation_detector_warns_when_runtime_blocked() {
         assert_eq!(fields.get("expected_ms").unwrap(), "10");
         assert_eq!(fields.get("actual_ms").unwrap(), "50");
         assert_eq!(fields.get("delay_ms").unwrap(), "40");
+        assert_eq!(
+            fields.contains_key("cpu_wait_ms"),
+            cfg!(target_os = "linux")
+        );
+        assert_eq!(fields.contains_key("cpu_run_ms"), cfg!(target_os = "linux"));
     }
 
     // The next on-time tick must not emit another starvation warning.

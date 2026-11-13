@@ -12953,6 +12953,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "http 1.4.0",
+ "nom 8.0.0",
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry_sdk",

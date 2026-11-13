@@ -44,12 +44,20 @@ session there.
 ## Tokio runtime starving
 
 agent-harness-service logged more than 1,000 starvation warnings in
-15 minutes: its runtime threads are blocked, so requests, websockets and
-leases stall.
+15 minutes: its runtime ticks ran late, so requests, websockets and leases
+stall.
 
 - Group the warnings by `host` to find the replica, and look for a reattach
   storm or a slow blocking call on it at the same time.
 - `@delay_ms` above 1,000 means ticks ran over a second late.
+- `@cpu_wait_ms` near or above `@delay_ms` means the process's threads were
+  waiting for a CPU: the task spent its CPU quota for the 100 ms period, or
+  other processes held the CPUs. A task that keeps logging one constant
+  `@delay_ms` is hitting its quota. Moving work off the runtime does not help
+  there; less CPU or a larger task does.
+- `@cpu_wait_ms` near zero with `@cpu_run_ms` above `@delay_ms` means a task
+  held a runtime thread with CPU-heavy work. Both near zero means a thread
+  blocked off the CPU (synchronous I/O or DNS, a `std::sync` lock).
 
 ## Task memory near its limit
 

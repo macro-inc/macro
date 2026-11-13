@@ -3,6 +3,8 @@
 
 #[cfg(test)]
 mod test;
+mod thread_cpu;
+
 use std::{
     sync::{
         Arc,
@@ -10,6 +12,7 @@ use std::{
     },
     time::Duration,
 };
+use thread_cpu::ThreadCpuTimes;
 
 use axum::extract::MatchedPath;
 use http::{HeaderValue, Request, Response};
@@ -239,23 +242,40 @@ type ServiceBuilderAlias = ServiceBuilder<
 /// Spawns a background task that detects tokio runtime starvation.
 ///
 /// Ticks on `interval` and warns if the actual time between ticks exceeds it.
-/// A large gap indicates the tokio runtime is not polling tasks promptly, typically caused
-/// by blocking work (e.g. synchronous DNS resolution) on the runtime threads.
+/// A large gap means the tokio runtime is not polling tasks promptly. On Linux
+/// the warning carries what this process's threads did during the late
+/// interval, summed across threads, which tells the causes apart:
+///
+/// - `cpu_wait_ms` near or above `delay_ms`: threads were runnable but got no
+///   CPU. The container's CPU quota was spent for the current period (every
+///   thread then waits for the next one) or other processes held the CPUs.
+/// - `cpu_wait_ms` near zero and `cpu_run_ms` above `delay_ms`: a task held a
+///   runtime thread with CPU-heavy work.
+/// - Both near zero: a runtime thread blocked off the CPU, such as synchronous
+///   I/O, synchronous DNS resolution or a contended `std::sync` lock.
 pub fn spawn_starvation_detector(interval: Duration) {
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(interval);
         tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
         // consume the immediate first tick
         tick.tick().await;
+        let mut threads_before = ThreadCpuTimes::sample();
         loop {
             let before = tokio::time::Instant::now();
             tick.tick().await;
             let elapsed = before.elapsed();
+            let threads_now = ThreadCpuTimes::sample();
+            let threads = threads_now
+                .zip(threads_before)
+                .map(|(now, before)| now.since(before));
+            threads_before = threads_now;
             if elapsed > interval + Duration::from_millis(5) {
                 tracing::warn!(
                     expected_ms = interval.as_millis() as u64,
                     actual_ms = elapsed.as_millis() as u64,
                     delay_ms = elapsed.saturating_sub(interval).as_millis() as u64,
+                    cpu_wait_ms = threads.map(|threads| threads.wait.as_millis() as u64),
+                    cpu_run_ms = threads.map(|threads| threads.run.as_millis() as u64),
                     "tokio runtime starvation detected"
                 );
             }
