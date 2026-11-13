@@ -127,7 +127,9 @@ where
             .map_err(Into::<anyhow::Error>::into)
             .inspect_err(|error| tracing::warn!(?error, "requester name lookup failed"))
             .ok()
-            .and_then(|mut names| names.remove(&user));
+            .and_then(|mut names| names.remove(&user))
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty());
         let (request, created) = self
             .repo
             .create_access_request(&ChannelAccessRequest {
