@@ -35,6 +35,7 @@ ignores:
   - apps/web/src/features/block-pptx/pptx-block.tsx
   - apps/web/src/features/block-project/component/Block.tsx
   - apps/web/src/features/block-psd/psd-block.tsx
+  - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-unknown/component/Block.tsx
   - apps/web/src/features/block-video/component/Block.tsx
   - apps/web/src/features/block-write/DocxBlock.tsx
@@ -70,7 +71,6 @@ ignores:
   - apps/web/src/features/block-pr/component/Block.tsx
   - apps/web/src/features/block-pr/hooks/usePrShare.tsx
   - apps/web/src/features/block-pr/views/PrDetail.tsx
-  - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-spreadsheet/components/FormulaInput.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetSheetTabs.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetToolbar.tsx
