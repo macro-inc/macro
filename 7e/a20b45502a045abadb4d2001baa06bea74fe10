@@ -1,0 +1,19 @@
+apps/web/src/features/dynamic-ui/widgets/wakes/format.test.ts
+  s_1a160bdcc4840e::t_20ba3696184541 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7ea20b45502a045abadb4d2001baa06bea74fe10",
+  "prompts": {},
+  "sessions": {
+    "s_1a160bdcc4840e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca46859a-a519-4aa8-af99-2ea84729a9f4",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
