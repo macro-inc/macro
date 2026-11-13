@@ -163,8 +163,12 @@ export interface CacheHost {
   ): Promise<ReadRecordsByKeysResult>;
   /** Context-aware contact policy; absent on disabled/older host adapters. */
   readonly people?: PeopleCache;
-  /** Searches the compact write-through materialized projection. */
-  search(args: SearchCacheArgs): Promise<SearchCachePage>;
+  /** Searches the compact write-through materialized projection. Aborting
+   * `signal` releases a search the caller has superseded. */
+  search(
+    args: SearchCacheArgs,
+    options?: { signal?: AbortSignal }
+  ): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   /** Answers a calendar viewport from the local range index. */

@@ -1,8 +1,0 @@
-.email-signal-tabs { display: flex; gap: 2px; }
-.email-signal-tabs button {
-  display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 0; border-radius: 8px;
-  background: none; color: var(--color-ink-muted); font: inherit;
-}
-.email-signal-tabs button[aria-pressed=true] { background: var(--color-active); color: var(--color-ink); }
-.email-signal-tabs button:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 1px; }
-.email-signal-tabs svg { width: 14px; height: 14px; }

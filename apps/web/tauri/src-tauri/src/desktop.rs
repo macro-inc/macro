@@ -7,6 +7,8 @@
 //! version bump or store release (see apps/web/scripts/android-native.mjs and
 //! tooling/xtask/.../scripts/ios_native_tree.sh).
 
+#[cfg(target_os = "macos")]
+pub(crate) mod app_menu;
 pub(crate) mod macrod;
 pub(crate) mod main_window;
 pub(crate) mod pasteboard;

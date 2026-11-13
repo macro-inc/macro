@@ -14,9 +14,11 @@ use routine_program::Surface;
 use serde::Deserialize;
 use utoipa::IntoParams;
 
-use crate::domain::suggestions::model::{RoutineSuggestions, SuggestOutcome, SuggestRequest};
+use crate::domain::suggestions::model::{
+    RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
+};
 use crate::domain::suggestions::ports::RoutineSuggestionApi;
-use crate::inbound::axum_router::{CatalogQuery, ScheduledActionApiError};
+use crate::inbound::axum_router::ScheduledActionApiError;
 
 #[cfg(test)]
 mod test;
@@ -63,8 +65,12 @@ where
             get(list_suggestions::<S, Auth>).post(suggest_routine::<S, Auth>),
         )
         .route(
-            "/scheduled-actions/suggestions/generate",
-            post(generate_suggestions::<S, Auth>),
+            "/scheduled-actions/suggestions/review",
+            get(review_suggestions::<S, Auth>),
+        )
+        .route(
+            "/scheduled-actions/suggestions/{id}/retire",
+            post(retire_suggestion::<S, Auth>),
         )
         .route(
             "/scheduled-actions/suggestions/{id}/dismiss",
@@ -107,35 +113,6 @@ where
     let suggestions = state
         .service
         .suggestions(&user.authorization.macro_user_id, query.surface)
-        .await?;
-    Ok(Json(suggestions))
-}
-
-#[utoipa::path(
-    post,
-    path = "/scheduled-actions/suggestions/generate",
-    tag = "scheduled actions",
-    operation_id = "generate_routine_suggestions",
-    params(CatalogQuery),
-    responses(
-        (status = 200, body = RoutineSuggestions, description = "The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing"),
-        (status = 401, body = String),
-        (status = 404, body = String, description = "Routine suggestions are off for the caller"),
-        (status = 500, body = String),
-    )
-)]
-pub async fn generate_suggestions<S, Auth>(
-    State(state): State<RoutineSuggestionRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOnly>,
-    Query(query): Query<CatalogQuery>,
-) -> Result<Json<RoutineSuggestions>, ScheduledActionApiError>
-where
-    S: RoutineSuggestionApi,
-    Auth: MacroAuthorizationService,
-{
-    let suggestions = state
-        .service
-        .generate(&user.authorization.macro_user_id, query.timezone)
         .await?;
     Ok(Json(suggestions))
 }
@@ -203,6 +180,69 @@ where
         state
             .service
             .suggest(&principal, correlation, request)
+            .await?,
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/suggestions/review",
+    tag = "scheduled actions",
+    operation_id = "review_routine_suggestions",
+    responses(
+        (status = 200, body = SuggestionReview, description = "Every suggestion AI made for the user, open or not"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a routines generation session may review"),
+        (status = 404, body = String, description = "Routine suggestions are off for the user"),
+        (status = 500, body = String),
+    )
+)]
+/// What a routines generation session reads before managing suggestions.
+pub async fn review_suggestions<S, Auth>(
+    State(state): State<RoutineSuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+) -> Result<Json<SuggestionReview>, ScheduledActionApiError>
+where
+    S: RoutineSuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let correlation = agent_correlation::context::current();
+    Ok(Json(state.service.review(&principal, correlation).await?))
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/suggestions/{id}/retire",
+    tag = "scheduled actions",
+    operation_id = "retire_routine_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    request_body = RetireSuggestion,
+    responses(
+        (status = 200, body = SuggestOutcome, description = "Whether the suggestion was retired, and why not when it wasn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a routines generation session may retire"),
+        (status = 500, body = String),
+    )
+)]
+/// Retire an open suggestion that no longer fits, from a routines
+/// generation session.
+pub async fn retire_suggestion<S, Auth>(
+    State(state): State<RoutineSuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    Path(id): Path<Uuid>,
+    body: Result<Json<RetireSuggestion>, JsonRejection>,
+) -> Result<Json<SuggestOutcome>, ScheduledActionApiError>
+where
+    S: RoutineSuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .retire(&principal, correlation, id, request)
             .await?,
     ))
 }

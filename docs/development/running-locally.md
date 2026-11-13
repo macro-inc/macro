@@ -139,7 +139,7 @@ Local authentication includes a working signing key pair for Macro API tokens,
 which settings actions such as enabling CRM require. New teams start with CRM
 disabled; enable it in Settings > CRM before creating pipelines.
 
-The stack supplies stubbed values for required configuration, including third-party integrations (Google, GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. Local auth, documents, and search work independently. The agent harness currently also requires a configured Google Gmail identity provider for its public MCP routes; without real Google OAuth configuration, it exits during startup.
+The stack supplies stubbed values for required configuration, including third-party integrations (GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. Local auth, documents, and search work independently. Google is the exception: without a real Google OAuth client the stack runs the [Gmail emulator](#google-sign-in-and-gmail-without-a-google-account) in Google's place, so Google sign-in, Gmail linking and mail sync work with seeded users.
 
 To use a real integration locally, supply its keys via `--env-file` — see [Integration Secrets](#integration-secrets) below.
 
@@ -184,6 +184,11 @@ translate that public endpoint back to LocalStack internally. If a download or
 upload still attempts HTTP localhost, rebuild the services, reload the generated
 environment and proxy, and hard-refresh the browser to discard cached URLs.
 
+Static-file permalinks also use the
+machine's HTTPS proxy hostname at `/static-file`. This applies to headless
+stacks too, so a remote browser can load images even when the local frontend
+origin is localhost.
+
 If LocalStack loses its temporary resources after a restart, restore missing
 buckets, queues, tables, and keys without resetting Postgres or volumes:
 `cargo x localstack-provision --instance <name>`. This restores resources, not
@@ -193,6 +198,90 @@ The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
+
+### Google sign-in and Gmail without a Google account
+
+A stack whose environment names no real Google OAuth client (`--no-doppler`
+without Google keys in `--env-file`) starts the Gmail emulator
+(`crates/gmail_emulator`) as the `gmail_emulator` service. FusionAuth's `google`
+and `google_gmail` identity providers and the services' Google URLs
+(`OVERRIDE_GMAIL_API_URL`, `OVERRIDE_GOOGLE_OAUTH_TOKEN_URL` and the rest, in
+`xtask_local`'s `google_emulator.rs`) point at it. Nothing talks to Google.
+
+- **Continue with Google** opens the emulator's page in place of Google's. Pick
+  one of the seeded users (`ada@example.com`, `bob@example.com`,
+  `carol@example.com`, from `crates/gmail_emulator/seed.example.yaml`). A first
+  sign-in creates the Macro account and connects that user's mailbox.
+- **Connect another account** in Email, and the email steps of onboarding, open
+  the same page; pick another seeded user to add their mailbox.
+- The page and the emulator's control API are at the `gmail_emulator` port,
+  `http://localhost:8480` on the default instance and the window's port on a
+  named one (`docker compose port gmail_emulator 8080`). Add users and mail
+  while the stack runs with `POST /_emulator/seed`; deliver new mail with
+  `POST /_emulator/mailboxes/{email}/messages`. See the crate's `AGENTS.md`.
+- Like FusionAuth's own pages, the sign-in page is addressed as `localhost`,
+  so sign in with Google from a browser on this machine.
+- The emulator keeps its state in memory: restarting its container returns it
+  to the seed, while Macro's database keeps what it synced.
+- FusionAuth only gets the emulator's identity providers when its database
+  is first filled. A stack created before the emulator existed, or with
+  different Google keys, stops at "Waiting for FusionAuth" and says so:
+  start it once with `--fresh`.
+- The emulator is also those users' Google Calendar: the seed file gives them
+  calendars with repeating events, the calendar service syncs them, and the
+  emulator pushes each change to its webhook. Put an event on a calendar with
+  `POST /_emulator/mailboxes/{email}/calendars/primary/events` (Google's event
+  resource). A mailbox added through **Connect another account** gets calendar
+  sync. One connected only by signing in does not yet: the email service reads
+  that grant's scopes from Google's token-info endpoint, which is not behind a
+  service URL override.
+
+With real Google keys the emulator does not start and Google is used as before.
+
+### Microsoft sign-in and Outlook without a Microsoft account
+
+A stack whose environment names no real Microsoft OAuth client
+(`MICROSOFT_CLIENT_ID` absent from Doppler and `--env-file`) starts the Outlook
+emulator (`crates/outlook_emulator`) as the `outlook_emulator` service.
+FusionAuth's `microsoft` identity provider and the services' Microsoft URLs
+(`OVERRIDE_MICROSOFT_GRAPH_URL`, `OVERRIDE_MICROSOFT_LOGIN_URL`,
+`OVERRIDE_MICROSOFT_LOGIN_PAGE_URL`, with the emulator's OAuth client and the
+Outlook switches, in `xtask_local`'s `microsoft_emulator.rs`) point at it.
+The authentication service runs without a PostHog key there, so
+`OUTLOOK_CONNECTIONS_ENABLED` alone admits new Outlook connections, not the
+`enable-outlook` flag. Nothing talks to Microsoft.
+
+- **Continue with Microsoft** opens the emulator's page in place of Microsoft's.
+  Pick one of the seeded users (`ada@example.com`, `bob@example.com`,
+  `carol@example.com`, from `crates/outlook_emulator/seed.example.yaml`). A first
+  sign-in creates the Macro account.
+- **Connect Outlook**, in onboarding and in Email, opens the same page; pick a
+  seeded user to connect their mailbox. Sign-in and the mailbox are separate
+  grants, as with Microsoft, so a Microsoft sign-up connects its mailbox in the
+  onboarding email step.
+- The page and the emulator's control API are at the `outlook_emulator` port,
+  `http://localhost:8481` on the default instance and the window's port on a
+  named one (`docker compose port outlook_emulator 8080`). Add users, mail and
+  calendars while the stack runs with `POST /_emulator/seed`; deliver new mail with
+  `POST /_emulator/mailboxes/{email}/messages`. See the crate's `AGENTS.md`.
+- Like FusionAuth's own pages, the sign-in page is addressed as `localhost`,
+  so sign in with Microsoft from a browser on this machine.
+- The emulator keeps its state in memory: restarting its container returns it
+  to the seed, while Macro's database keeps what it synced and the refresh
+  tokens it holds stop working. Reconnect the mailbox after a restart.
+- Change notifications are not delivered: Graph subscriptions need an HTTPS
+  webhook, and the stack's services reach each other over HTTP. Mail that
+  arrives at the emulator later shows up with the next sync, not at once.
+- A connected mailbox's Outlook calendars sync from the emulator too: the
+  seed gives Ada and Bob calendars with repeating events, and events created
+  or changed in Macro are written to the emulator. The calendar service polls
+  every two minutes, so a change made in the emulator
+  (`POST /_emulator/mailboxes/{email}/calendars/default/events`) shows up
+  with the next poll.
+
+With a real Microsoft client in the environment the emulator does not start.
+Sign in with Microsoft is then unavailable locally, as before: the stack defines
+no `microsoft` identity provider for a real client.
 
 ### Recover an existing instance without resetting data
 
@@ -271,12 +360,13 @@ project and Compose files, or Compose `down`/`up` without `--volumes`. The xtask
 up/down paths can reset metadata or remove volumes, and stack init snapshots do
 not include the vault.
 
-A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, and the agent harness additionally needs the Google Gmail identity provider created from real Google OAuth configuration:
+A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, except Google, which the Gmail emulator stands in for:
 
 | Integration | Keys | Stub behavior |
 | --- | --- | --- |
-| Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | Google SSO and Gmail inbox linking are unavailable. Local signup still works. The email service skips inbox syncing without a Gmail grant. The agent harness cannot start its public MCP routes without the Google Gmail identity provider. |
+| Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | The Gmail emulator answers in Google's place: Google sign-in and Gmail linking work with its seeded users, never a real account. Real keys (a `GOCSPX-` secret) switch the stack to Google. |
 | Pipedream | `PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET`, `PIPEDREAM_PROJECT_ID` | Placeholders satisfy the harness configuration loader; Pipedream integrations require real credentials. |
+| Microsoft login / Outlook | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | The Outlook emulator answers in Microsoft's place: Microsoft sign-in, Outlook linking and Outlook calendar sync work with its seeded users, never a real account. A real client id switches the emulator off. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
 | Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |
@@ -321,9 +411,16 @@ Older local-tool builds can recreate the shared LGTM collector and drop other
 stacks' network attachments. For a static frontend refresh, reuse the
 complete recorded binary set with `just stack update --frontend --binaries-dir
 <recorded-dir> --instance <name>` to avoid backend builds and collector startup.
-`--traces off` also skips collector startup, but omits automatic backend OTLP
-wiring and disables Vite browser telemetry. When collecting trace proof, preserve
-explicit backend and browser exporter settings and connect the existing collector
+`--traces off` skips collector startup, omits automatic backend OTLP wiring,
+and disables Vite browser telemetry and the local Docker sync-service exporter.
+For both local and dev runs, the resolved tracing policy owns
+`SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT`: it is empty when tracing is off or
+no collector is available, and uses the collector's HTTP intake when enabled.
+The Compose launcher removes an inherited shell value for this key so its
+explicit generated env file remains authoritative. The Docker worker forwards
+the resulting value through Wrangler `--var`; direct Compose defaults to an
+empty endpoint, with no fallback hostname. Deployed Worker settings are separate.
+When collecting trace proof, enable tracing and connect the existing collector
 to the instance's services network with the `otel-collector` alias, without
 restarting it.
 
@@ -439,6 +536,11 @@ allocator or with `--port-base`. Other commands find the window themselves, so
 repeat only `--instance`. Startup prints the window; `just status_local` and
 `just stack status --json` print the endpoints.
 
+Local signup and onboarding screens provide **Bypass** for any account. Before
+signup it skips the opening slides, not authentication; after sign-in it records
+both onboarding and tutorial completion. See the
+[onboarding guide](../agent-guide/onboarding.md#onboarding-bypass--apponboarding).
+
 If a program outside this tooling takes a port during the build, the start moves
 to another window instead of failing at `docker compose up`.
 
@@ -541,6 +643,164 @@ cannot retain the app's secure login cookies; use the printed HTTPS URL.
 The stack launches Vite directly with Node (available in the Nix shell), because
 Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket
 upgrades. Bun is still used for dependency installation and builds.
+
+## Macro Computers
+
+`agent_harness_service` runs the Macro computer control plane when
+`COMPUTERS_FLEET` is `incus` or `docker`. The stack sets every `COMPUTERS_*`
+value from the fleet you pick. An enabled fleet requires explicit configuration;
+missing values fail startup with the variable name. With no attached fleet, omit
+`COMPUTERS_FLEET` and every `COMPUTERS_*` setting. Local orchestration emits none when
+computers are off. Each enrollment carries a typed deployment (agent harness,
+document storage, app and egress URLs) that the harness resolves through
+`macro_service_urls` when it issues the enrollment; xtask sets the harness's
+`OVERRIDE_*` values to the addresses the fleet's guests reach.
+
+`COMPUTER_RETENTION_DAYS` (default `14`) and `COMPUTER_PAST_DUE_GRACE_DAYS`
+(default `7`) set Macro computers' retention and past-due grace in both
+authentication_service and agent_harness_service; set them only to override.
+
+Harness config required for either fleet:
+`COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
+`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
+Local orchestration supplies reserve `7` GB and oversell factor `3` for both
+fleets. The Docker image is `macro-box:latest`; for Incus set
+`COMPUTERS_INCUS_IMAGE` to the versioned alias imported on `runtime-dev-1`
+(`macro-box/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
+xtask fails when it is unset.
+
+Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
+`COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
+Incus additionally requires `COMPUTERS_INCUS_URL`,
+`COMPUTERS_INCUS_CLIENT_CERT`, `COMPUTERS_INCUS_CLIENT_KEY`,
+`COMPUTERS_INCUS_SERVER_CERT`, and these explicit settings:
+
+| Variable | Local value |
+| --- | --- |
+| `COMPUTERS_INCUS_PROFILE` | `macro-box` |
+| `COMPUTERS_INCUS_STORAGE_POOL` | `default` |
+| `COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS` | `90` |
+| `COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS` | `10` |
+| `COMPUTERS_INCUS_OPERATION_WAIT_SECS` | `60` |
+| `COMPUTERS_INCUS_OPERATION_WAITS` | `15` |
+| `COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS` | `60` |
+| `COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS` | `60` |
+
+Authentication does not read a fleet selector. It resolves physical attachment on
+every computer HTTP request from the owning host heartbeat (fresh within five
+minutes); without attachment these routes answer typed 503 before reads, billing
+or queued effects. The operator refreshes its heartbeat at startup and every
+60-second reconcile pass. PostHog `enable-macro-computers` is the only product
+rollout gate. Absent attachment is not a feature switch.
+
+Configure all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values or none;
+partial groups and malformed IDs fail startup and Doppler validation even without
+a fleet. Preserve configured prices when detaching a fleet: billing cleanup and
+reconciliation still need them. Pure catalog/spec access does not require prices
+or attachment. No size or interval receives a fallback price. Local Doppler supplies test-mode prices.
+`--no-doppler` supplies explicit
+placeholder price IDs for startup only; replace them with real test prices
+before buying a computer.
+
+Provision the same required keys in each service's deployment Doppler config
+before enabling a fleet there. Request/connect/operation/state-change/shutdown
+deadlines are infrastructure config; lifecycle retention, retry and
+reconciliation timings remain named policy constants.
+
+Select a fleet with:
+
+| Flag | Fleet | Computers run on |
+| --- | --- | --- |
+| none (`run_local`), `--computers docker` | `docker` | this machine's Docker daemon |
+| `--computers-incus`, `--computers incus` | `incus` | VMs on `runtime-dev-1` |
+| `--no-computers`, `--computers off`, none (`stack up`) | off | nowhere; no control plane |
+
+`stack up` defaults to off so agents and CI do not build the computer image;
+`stack update` keeps the fleet `up` recorded. `run_dev` never runs computers.
+
+### Docker (default)
+
+`run_local` builds the image with `nix build .#macro-box-docker` and loads it
+as `macro-box:latest`. Nix caches the build, and the load only runs again when
+the store path or the daemon's image changes
+(`infra/local/generated/.macro-box-image`). The first build is slow; pass
+`--no-computers` to skip it.
+
+Computers are privileged `macro-box` containers named `macro-computer-<id>`
+on the instance's `<project>_services` network, so macrod dials the agent
+harness, document storage, and auth in-network. The harness drives the daemon
+through the Docker socket it already mounts for sandboxes. Enrollments are
+written to `infra/local/generated/<instance>/computers/enrollments`, which is
+mounted into the harness at the same absolute path, because the daemon resolves
+bind sources on the host. The harness writes them as root. Each computer's
+`/home` and `/var/lib/macrod` are named volumes (`macro-computer-<id>-home`,
+`-macrod`), like an Incus computer's data disk; releasing the computer
+deletes them. Starting the stack again removes the
+instance's computer containers and volumes along with its data.
+
+Computers use a separate local-only HTTP listener on the same Caddy proxy:
+`http://proxy:<ComputerGateway port>` inside Docker. Incus guests use the devbox's
+tailnet address and the published host port; the browser keeps its HTTPS origin. This
+avoids guest host-DNS entries, importing the local TLS CA, or bypassing TLS.
+`OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL` uses `ws(s)`;
+`OVERRIDE_MCP_SERVICE_URL` is a service base (the consumer appends `/mcp`).
+Regenerate the instance env and Compose config after changing fleets or URL
+mappings. A recreate consumes the current deployment addresses and fresh credentials.
+
+### Incus on runtime-dev-1
+
+```bash
+COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
+```
+
+This path is currently unavailable: `runtime-dev-1` no longer joins a tailnet
+(it serves the hosted dev control plane over WireGuard; see
+[`nix/hosts/README.md`](../../nix/hosts/README.md)). It needs the devbox and
+runtime logged into the same Tailscale tailnet.
+`tailscale ip -4 runtime-dev-1` must return an IPv4 address before startup;
+xtask fails loudly if it cannot resolve one. Set `COMPUTERS_INCUS_ADDRESS=<IPv4>`
+to override discovery. Compose receives the numeric
+`COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, so it needs no MagicDNS
+and no socat/IAP sidecars.
+
+This needs the control-plane identity
+`~/.config/macro-computers/dev-client.{crt,key}` (see
+[`nix/hosts/README.md`](../../nix/hosts/README.md) for enrollment, rebuild,
+firewall rules and IAP recovery). On first use xtask fetches the server
+certificate over Tailscale into `~/.config/macro-computers/dev-server.crt`,
+verifying the pinned SHA-256 fingerprint before saving it and on every start.
+The Incus client pins the certificate bytes, so SAN/name mismatch is expected
+and does not weaken verification.
+
+Enrollment stores the fleet-reachable egress URL in macrod’s config. Computer
+sessions use it for first-party MCP servers and the Anthropic gateway, while
+other paired runtimes keep the stack’s external egress URL.
+
+Boxes reach the stack directly over the devbox tailnet address, resolved once
+at stack start with `tailscale ip -4`. Missing, ambiguous, or non-tailnet output
+fails startup. This address must match the runtime's
+`macro.computers.controlPlaneAddress` (`100.116.73.13` in the checked-in config).
+The runtime permits only the control-plane TCP host ports (agent egress, harness,
+document storage, auth, computer gateway, connection gateway) and
+masquerades them to `tailscale0`; other tailnet destinations are dropped.
+Cognition and scheduled actions keep their harness route prefixes; MCP is the
+harness service base, and the connection endpoint uses `ws`. The launcher uses
+the same direct devbox address for the API gateway URL. Reused
+harness ports are emitted once in the host-port list; each of the default and
+120 standard named windows is checked against the evaluated Nix allowlist.
+Custom `--port-base` values need a matching `controlPlanePorts` option update.
+The devbox firewall must accept those ports from the runtime's tailnet address;
+see the exact INPUT and Docker forwarding rules in the host README.
+
+Existing VMs survive stack database replacement; handle their cleanup explicitly.
+
+
+Check the generated wiring without starting anything:
+
+```bash
+cargo x validate-local-compose --instance computers --computers-incus
+```
 
 ## Port Conflicts (macOS)
 

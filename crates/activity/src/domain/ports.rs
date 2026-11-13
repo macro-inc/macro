@@ -14,7 +14,7 @@ use super::{
 };
 
 /// Human-readable metadata for a property referenced by an activity event.
-#[cfg(feature = "ai_tools")]
+#[cfg(feature = "reads")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivityPropertyMetadata {
     /// The property definition's display name.
@@ -31,7 +31,7 @@ pub struct ActivityPropertyMetadata {
 /// return only metadata the viewer may read. Resolution is best-effort: an
 /// unavailable secondary service returns an empty map so the primary activity
 /// read can still succeed.
-#[cfg(feature = "ai_tools")]
+#[cfg(feature = "reads")]
 #[async_trait::async_trait]
 pub trait ActivityMetadataResolver: Send + Sync + 'static {
     /// Resolve the requested property definition ids for `viewer`.

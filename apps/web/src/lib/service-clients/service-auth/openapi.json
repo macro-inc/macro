@@ -4138,6 +4138,445 @@
         }
       }
     },
+    "/team/computers": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "The team's computers, oldest first.",
+        "operationId": "list_team_computers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ComputerStatus"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Buy a computer for the team, billed on the team subscription. An error\nmeans nothing was charged; 202 means the charge is still being confirmed.",
+        "operationId": "purchase_team_computer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Purchased"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Purchased"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/offers": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Every size with its price and availability.",
+        "operationId": "list_team_computer_offers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SizeOffer"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/cancel": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Stop billing at the end of the current period.",
+        "operationId": "cancel_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Keep a computer that was canceled at period end.",
+        "operationId": "undo_cancel_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/power": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Turn a computer on or off. A computer that is off keeps its disk and stays billed.",
+        "operationId": "set_team_computer_power",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PowerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/release": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Stop billing and destroy the computer now, without a refund.",
+        "operationId": "release_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/restore": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Keep a computer whose billing ended, during retention: re-adds its\nbilling item (the rest of the period is invoiced now) and keeps the\nstopped computer and its disk.",
+        "operationId": "restore_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/retry": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Retry a failed computer without changing billing.",
+        "operationId": "retry_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/setup-complete": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Mark the guided setup after buying the computer finished. Idempotent;\nallowed to the team's owner and admins, like Claude sign-in.",
+        "operationId": "complete_team_computer_setup",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/crm": {
       "patch": {
         "tags": ["teams::inbound::axum_router::patch_team_crm_settings"],
@@ -6689,6 +7128,23 @@
           }
         }
       },
+      "BillingInterval": {
+        "type": "string",
+        "description": "How often the team subscription bills.",
+        "enum": ["month", "year"]
+      },
+      "BillingStatus": {
+        "type": "string",
+        "description": "Where a computer's billing stands, as its team sees it.",
+        "enum": [
+          "purchasing",
+          "active",
+          "past_due",
+          "ending",
+          "ended",
+          "comped"
+        ]
+      },
       "ChangePlanRequest": {
         "type": "object",
         "description": "Request body for switching plans",
@@ -6874,6 +7330,172 @@
         "type": "string",
         "description": "Device authorization state visible to its initiating user.",
         "enum": ["pending", "connected", "expired", "failed"]
+      },
+      "ComputerSize": {
+        "type": "string",
+        "description": "A size a team can buy.",
+        "enum": ["standard", "large", "xl"]
+      },
+      "ComputerStatus": {
+        "type": "object",
+        "description": "A computer as its team sees it.",
+        "required": [
+          "id",
+          "name",
+          "size",
+          "vcpus",
+          "memoryGib",
+          "diskGib",
+          "catalogEntry",
+          "status",
+          "poweredOn",
+          "canUndoCancel",
+          "canRestore",
+          "createdAt",
+          "purchasedBy",
+          "agentCount"
+        ],
+        "properties": {
+          "agentCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Agents bound to the computer's live harness, teammates' private ones\nincluded: the ones releasing it deletes.",
+            "minimum": 0
+          },
+          "billing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BillingStatus",
+                "description": "Where billing stands; unknown for quarantined records."
+              }
+            ]
+          },
+          "canRestore": {
+            "type": "boolean",
+            "description": "Whether the computer can be restored (`POST .../restore`): billing\nended and the disk is still retained."
+          },
+          "canUndoCancel": {
+            "type": "boolean",
+            "description": "Whether a cancel at period end can still be undone (until `cancelsAt`)."
+          },
+          "cancelsAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When billing stops, for a computer canceled at period end."
+          },
+          "catalogEntry": {
+            "type": "string",
+            "description": "Versioned catalog entry saved at purchase."
+          },
+          "compReason": {
+            "type": ["string", "null"],
+            "description": "Present for a comped purchase, including after release."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time the computer was reserved."
+          },
+          "defaultAgentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Bot id of the coding agent the computer came with; null until macrod\nfirst connects. It can name an agent the team since deleted."
+          },
+          "diskGib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Root disk limit saved at purchase."
+          },
+          "failureReason": {
+            "type": ["string", "null"],
+            "description": "Why the computer failed, as a short sentence safe to show; present\nwhen it failed and the cause is known. The full error is only in the logs."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Harness claimed by this guest."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable resource identity."
+          },
+          "memoryGib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Memory limit saved at purchase."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "pastDueSince": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Since when the team subscription is past due."
+          },
+          "poweredOn": {
+            "type": "boolean",
+            "description": "Whether validated state requests power on; false for quarantined records."
+          },
+          "purchasedBy": {
+            "type": "string",
+            "description": "The Macro user who bought it. The team's owner and admins, not the\nbuyer, finish its setup and manage its Claude account."
+          },
+          "retainedUntil": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the disk is destroyed, for a computer whose billing ended."
+          },
+          "setup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SetupProgress",
+                "description": "Present until the computer first connects."
+              }
+            ]
+          },
+          "setupCompletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the team finished the guided setup; null while it is unfinished."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComputerStatusKind",
+            "description": "Observed guest status."
+          },
+          "vcpus": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Virtual CPU count."
+          }
+        }
+      },
+      "ComputerStatusKind": {
+        "type": "string",
+        "description": "The coarse status the team sees.",
+        "enum": [
+          "setting_up",
+          "needs_attention",
+          "waiting_for_capacity",
+          "ready",
+          "starting",
+          "stopping",
+          "stopped",
+          "failed",
+          "purchasing",
+          "released"
+        ]
       },
       "CreateAccountMergeRequest": {
         "type": "object",
@@ -8557,6 +9179,17 @@
           }
         }
       },
+      "PowerBody": {
+        "type": "object",
+        "description": "Body of a power change.",
+        "required": ["on"],
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "Requested power state."
+          }
+        }
+      },
       "ProfilePictureQueryParams": {
         "type": "object",
         "required": ["url"],
@@ -8611,6 +9244,47 @@
           "status": {
             "$ref": "#/components/schemas/GtmInviteLinkStatus",
             "description": "Whether the link can still be used."
+          }
+        }
+      },
+      "PurchaseBody": {
+        "type": "object",
+        "description": "Body of a team purchase.",
+        "required": ["purchaseKey", "size"],
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "purchaseKey": {
+            "type": "string",
+            "description": "The client's key for this purchase: one per Buy dialog, sent again\nwhen the purchase is retried, so a retry never charges twice."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PurchaseState": {
+        "type": "string",
+        "description": "Where a purchase stands when its request returns.",
+        "enum": ["ready", "confirming"]
+      },
+      "Purchased": {
+        "type": "object",
+        "description": "Answer of a purchase.",
+        "required": ["computerId", "state"],
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Computer this operation addresses."
+          },
+          "state": {
+            "$ref": "#/components/schemas/PurchaseState",
+            "description": "Whether the computer exists yet."
           }
         }
       },
@@ -8673,6 +9347,34 @@
           }
         }
       },
+      "Quote": {
+        "type": "object",
+        "description": "What one computer of a size costs the team.",
+        "required": ["size", "priceId", "amount", "currency", "interval"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "In the currency's smallest unit."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Billing currency code."
+          },
+          "interval": {
+            "$ref": "#/components/schemas/BillingInterval",
+            "description": "Subscription billing interval."
+          },
+          "priceId": {
+            "type": "string",
+            "description": "Stripe price saved for billing replay."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          }
+        }
+      },
       "RedeemGtmInviteLinkRequest": {
         "type": "object",
         "description": "Request body to redeem a link.",
@@ -8681,6 +9383,17 @@
           "token": {
             "type": "string",
             "description": "The token from the link URL."
+          }
+        }
+      },
+      "ReleaseBody": {
+        "type": "object",
+        "description": "Body of a release.",
+        "required": ["confirmName"],
+        "properties": {
+          "confirmName": {
+            "type": "string",
+            "description": "The computer's name, typed to confirm."
           }
         }
       },
@@ -8869,6 +9582,76 @@
           }
         }
       },
+      "SetupProgress": {
+        "type": "object",
+        "description": "Setup progress, for invite and purchase flows to show.",
+        "required": ["step", "position", "total"],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1-based position of `step`.",
+            "minimum": 0
+          },
+          "step": {
+            "$ref": "#/components/schemas/SetupStep",
+            "description": "Current setup stage."
+          },
+          "stepStartedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When `step` began; null when it is not recorded."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of setup stages.",
+            "minimum": 0
+          }
+        }
+      },
+      "SetupStep": {
+        "type": "string",
+        "description": "Steps a new computer goes through, in order.",
+        "enum": ["billing", "creating", "booting", "connecting", "ready"]
+      },
+      "SizeOffer": {
+        "type": "object",
+        "description": "A size with its resources, price and whether it can be bought now.",
+        "required": ["size", "vcpus", "memoryGb", "diskGb", "quote", "soldOut"],
+        "properties": {
+          "diskGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Root disk size in GiB.",
+            "minimum": 0
+          },
+          "memoryGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Memory in GiB.",
+            "minimum": 0
+          },
+          "quote": {
+            "$ref": "#/components/schemas/Quote",
+            "description": "Price for one computer."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          },
+          "soldOut": {
+            "type": "boolean",
+            "description": "Whether no host can currently sell this size."
+          },
+          "vcpus": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Virtual CPU count.",
+            "minimum": 0
+          }
+        }
+      },
       "SsoRequiredResponse": {
         "type": "object",
         "required": ["idp_id"],
@@ -8919,10 +9702,199 @@
           }
         }
       },
+      "SubscriptionBilling": {
+        "type": "object",
+        "description": "Actual current recurring items and the provider's next invoice preview.",
+        "required": [
+          "currency",
+          "interval",
+          "humanSeats",
+          "lineItems",
+          "subscriptionTotal"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string",
+            "description": "The subscription's ISO currency, as returned by the provider."
+          },
+          "humanSeats": {
+            "$ref": "#/components/schemas/SubscriptionSeatTotal",
+            "description": "Paid seat allocations."
+          },
+          "interval": {
+            "$ref": "#/components/schemas/BillingInterval",
+            "description": "The actual recurring billing interval shared by these items."
+          },
+          "lineItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionBillingLineItem"
+            },
+            "description": "Real provider line items, allocated only when their ownership is known."
+          },
+          "nextInvoice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubscriptionNextInvoice",
+                "description": "Provider invoice preview, absent when no upcoming invoice is available."
+              }
+            ]
+          },
+          "subscriptionTotal": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recurring item subtotal in minor units, before invoice adjustments."
+          }
+        }
+      },
+      "SubscriptionBillingLineItem": {
+        "type": "object",
+        "description": "An allocated provider item or an explicitly included computer.",
+        "required": ["kind", "quantity", "amount", "name", "included"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current recurring amount for this allocated quantity, in minor units."
+          },
+          "computerId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Identified computer, absent for aggregate or unattributed items."
+          },
+          "included": {
+            "type": "boolean",
+            "description": "Included without a subscription charge."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SubscriptionBillingLineKind",
+            "description": "Actual billing category; unmatched quantities stay `other`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Entity name or provider item description."
+          },
+          "plan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeatPlan",
+                "description": "Seat plan, where applicable."
+              }
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual subscription quantity allocated to this row.",
+            "minimum": 0
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerSize",
+                "description": "Identified computer's catalog size."
+              }
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerStatusKind",
+                "description": "Computer status supplied by its owning service."
+              }
+            ]
+          },
+          "unitAmount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Provider price per unit in minor units, when fixed."
+          }
+        }
+      },
+      "SubscriptionBillingLineKind": {
+        "type": "string",
+        "description": "What an actual subscription item pays for.",
+        "enum": ["human_seat", "computer", "other"]
+      },
+      "SubscriptionItem": {
+        "type": "object",
+        "description": "A Stripe price and how many of it to add to the team subscription.",
+        "required": ["priceId", "quantity"],
+        "properties": {
+          "priceId": {
+            "type": "string",
+            "description": "Stripe price saved for billing replay."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Added to the item's current quantity.",
+            "minimum": 0
+          }
+        }
+      },
+      "SubscriptionNextInvoice": {
+        "type": "object",
+        "description": "Provider-confirmed next invoice, including its adjustments and credits.",
+        "required": ["amount"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual upcoming invoice amount due in minor units."
+          },
+          "date": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider's next payment or due date, when supplied."
+          }
+        }
+      },
+      "SubscriptionSeatTotal": {
+        "type": "object",
+        "description": "Billed seat quantity and current recurring amount in minor units.",
+        "required": ["quantity", "amount"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual recurring price times allocated quantity, in minor units."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual billed quantity allocated to this seat kind.",
+            "minimum": 0
+          }
+        }
+      },
       "SubscriptionStatus": {
         "type": "object",
         "description": "Current renewal and scheduled change; empty for accounts without a subscription.",
         "properties": {
+          "billing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubscriptionBilling",
+                "description": "Actual provider billing details, exposed only to its billing administrator."
+              }
+            ]
+          },
           "renewalDate": {
             "type": ["string", "null"],
             "format": "date-time",

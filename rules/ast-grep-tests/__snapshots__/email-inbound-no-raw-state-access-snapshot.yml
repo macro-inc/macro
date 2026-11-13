@@ -1,0 +1,200 @@
+id: email-inbound-no-raw-state-access
+snapshots:
+  ? |
+    async fn context(ctx: Context) { ctx.db.begin().await; }
+  : labels:
+    - source: ctx.db
+      style: primary
+      start: 33
+      end: 39
+    - source: db
+      style: secondary
+      start: 37
+      end: 39
+    - source: 'async fn context(ctx: Context) { ctx.db.begin().await; }'
+      style: secondary
+      start: 0
+      end: 56
+    - source: '{ ctx.db.begin().await; }'
+      style: secondary
+      start: 31
+      end: 56
+  ? |
+    async fn process(ctx: Context) { ctx.db.begin().await; }
+  : labels:
+    - source: ctx.db
+      style: primary
+      start: 33
+      end: 39
+    - source: db
+      style: secondary
+      start: 37
+      end: 39
+    - source: 'async fn process(ctx: Context) { ctx.db.begin().await; }'
+      style: secondary
+      start: 0
+      end: 56
+    - source: '{ ctx.db.begin().await; }'
+      style: secondary
+      start: 31
+      end: 56
+  ? |
+    async fn process(db: Pool) { db.begin().await; }
+  : labels:
+    - source: db.begin()
+      style: primary
+      start: 29
+      end: 39
+    - source: db
+      style: secondary
+      start: 29
+      end: 31
+    - source: db.begin
+      style: secondary
+      start: 29
+      end: 37
+    - source: 'async fn process(db: Pool) { db.begin().await; }'
+      style: secondary
+      start: 0
+      end: 48
+    - source: '{ db.begin().await; }'
+      style: secondary
+      start: 27
+      end: 48
+  ? |
+    async fn process(pool: PgPool) { pool.acquire().await; }
+  : labels:
+    - source: pool.acquire()
+      style: primary
+      start: 33
+      end: 47
+    - source: pool
+      style: secondary
+      start: 33
+      end: 37
+    - source: pool.acquire
+      style: secondary
+      start: 33
+      end: 45
+    - source: 'async fn process(pool: PgPool) { pool.acquire().await; }'
+      style: secondary
+      start: 0
+      end: 56
+    - source: '{ pool.acquire().await; }'
+      style: secondary
+      start: 31
+      end: 56
+  ? |
+    async fn process(sqs_client: Queue) { sqs_client.send_message().await; }
+  : labels:
+    - source: sqs_client.send_message()
+      style: primary
+      start: 38
+      end: 63
+    - source: sqs_client
+      style: secondary
+      start: 38
+      end: 48
+    - source: sqs_client.send_message
+      style: secondary
+      start: 38
+      end: 61
+    - source: 'async fn process(sqs_client: Queue) { sqs_client.send_message().await; }'
+      style: secondary
+      start: 0
+      end: 72
+    - source: '{ sqs_client.send_message().await; }'
+      style: secondary
+      start: 36
+      end: 72
+  ? |
+    async fn process(state: Context) { state.email_api.send().await; }
+  : labels:
+    - source: state.email_api
+      style: primary
+      start: 35
+      end: 50
+    - source: email_api
+      style: secondary
+      start: 41
+      end: 50
+    - source: 'async fn process(state: Context) { state.email_api.send().await; }'
+      style: secondary
+      start: 0
+      end: 66
+    - source: '{ state.email_api.send().await; }'
+      style: secondary
+      start: 33
+      end: 66
+  ? |
+    fn process(ctx: Context) { let db = &ctx.db; }
+  : labels:
+    - source: ctx.db
+      style: primary
+      start: 37
+      end: 43
+    - source: db
+      style: secondary
+      start: 41
+      end: 43
+    - source: 'fn process(ctx: Context) { let db = &ctx.db; }'
+      style: secondary
+      start: 0
+      end: 46
+    - source: '{ let db = &ctx.db; }'
+      style: secondary
+      start: 25
+      end: 46
+  ? |
+    fn process(state: Context) { let _ = state.redis_client; }
+  : labels:
+    - source: state.redis_client
+      style: primary
+      start: 37
+      end: 55
+    - source: redis_client
+      style: secondary
+      start: 43
+      end: 55
+    - source: 'fn process(state: Context) { let _ = state.redis_client; }'
+      style: secondary
+      start: 0
+      end: 58
+    - source: '{ let _ = state.redis_client; }'
+      style: secondary
+      start: 27
+      end: 58
+  ? |
+    struct Context { db: Pool }
+  : labels:
+    - source: 'db: Pool'
+      style: primary
+      start: 17
+      end: 25
+    - source: db
+      style: secondary
+      start: 17
+      end: 19
+  ? |
+    struct Context { email_api: Provider }
+  : labels:
+    - source: 'email_api: Provider'
+      style: primary
+      start: 17
+      end: 36
+    - source: email_api
+      style: secondary
+      start: 17
+      end: 26
+  ? |
+    struct Context { pool: PgPool }
+    async fn process(ctx: Context) { ctx.pool.acquire().await; }
+  : labels:
+    - source: 'pool: PgPool'
+      style: primary
+      start: 17
+      end: 29
+    - source: pool
+      style: secondary
+      start: 17
+      end: 21

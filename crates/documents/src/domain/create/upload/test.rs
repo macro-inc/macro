@@ -90,6 +90,7 @@ impl DocumentCreationService for RecordingService {
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
                     DocumentResponseMetadata {
+                        appearance: None,
                         document_id: DOCUMENT_ID.to_string(),
                         document_version_id: 1,
                         owner: principal.owner(),

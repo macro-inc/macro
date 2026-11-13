@@ -24,13 +24,13 @@ fn checking_service(
     let repo = Arc::new(FakeRepo::default());
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
-    TestService::new(
+    ScheduledActionServiceImpl::new(
         Arc::clone(&repo),
         Arc::new(FakeExecutor::default()),
         tx,
         grants(&repo),
     )
-    .with_event_management_enabled(true)
+    .with_event_routines(Rollout(Some(true)))
     .with_code(Arc::new(Checker::default()), Arc::new(NoCodeUpgrades))
     .with_draft_hand_backs(hand_backs, sessions)
 }
@@ -60,7 +60,7 @@ async fn a_check_says_what_saving_would_refuse_and_saves_nothing() {
     let repo = Arc::new(FakeRepo::default());
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         Arc::clone(&repo),
         Arc::new(FakeExecutor::default()),
         tx,

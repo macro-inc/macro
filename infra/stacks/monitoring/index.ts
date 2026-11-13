@@ -21,6 +21,8 @@ import './goalert';
 import './monitors/ai-editing';
 import './monitors/ai-providers';
 import './monitors/calls';
+import './monitors/computer-capacity';
+import './monitors/computers';
 import './monitors/graphql-soup';
 import './monitors/harness-presence';
 import './monitors/harness-runtimes';

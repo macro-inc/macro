@@ -15,14 +15,17 @@ import type { ChatMessageWithAttachments } from '@service-cognition/generated/sc
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
-import { AssistantMessageParts } from './AssistantMessageParts';
+import {
+  AssistantMessageParts,
+  onlyToolLookups,
+} from './AssistantMessageParts';
 
-function messageContentIsEmpty(content: ChatMessageContent) {
-  if (typeof content === 'string' || Array.isArray(content)) {
-    return content.length === 0;
-  } else {
-    return false;
+export function messageContentIsEmpty(content: ChatMessageContent) {
+  if (typeof content === 'string') return content.length === 0;
+  if (Array.isArray(content)) {
+    return content.length === 0 || onlyToolLookups(content);
   }
+  return false;
 }
 
 function extractMessageText(content: ChatMessageContent) {

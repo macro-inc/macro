@@ -5,9 +5,10 @@ import { prepareCrmContactEdit } from '@service-storage/crm-contact-edit';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { useMutation } from '@tanstack/solid-query';
-import type { CrmContact } from '../core/contact';
+import type { ContactEmailChange, CrmContact } from '../core/contact';
 import {
   contactEditDetailsFilter,
+  sameContactIdentity,
   updateContactEditDetails,
 } from './contact-edit-refresh';
 import type { CrmRecordDependencies } from './dependencies';
@@ -90,12 +91,7 @@ export async function editContact(
           if (company.isOk()) companyName = company.value.name ?? null;
         }
         const current = deps.client.getQueryData<CrmContactResponse>(key);
-        if (
-          !cache.isCurrent() ||
-          current?.email !== fresh.email ||
-          current?.companyId !== fresh.companyId
-        )
-          return;
+        if (!cache.isCurrent() || !sameContactIdentity(current, fresh)) return;
         await span.span('crm.contact_edit.cache', () =>
           cache.commit(fresh, companyName)
         );
@@ -134,8 +130,7 @@ export async function editContact(
       if (
         !cache.isCurrent() ||
         current?.updatedAt !== contact.updatedAt ||
-        current.email !== contact.email ||
-        current.companyId !== contact.companyId
+        !sameContactIdentity(current, contact)
       ) {
         if (cache.isCurrent()) await refresh(true);
         return contact;
@@ -159,13 +154,20 @@ export function useSetContactEmailMutation(deps: CrmRecordDependencies) {
       mutationFn: ({
         contact,
         email,
+        change,
       }: {
         contact: CrmContact;
         email: string;
+        change: ContactEmailChange;
       }) =>
-        editContact(deps, contact, 'email', () =>
-          deps.storage.setContactEmail({ contactId: contact.id, email })
-        ),
+        editContact(deps, contact, 'email', () => {
+          const write = {
+            add: deps.storage.addContactEmail,
+            remove: deps.storage.removeContactEmail,
+            primary: deps.storage.setContactEmail,
+          }[change];
+          return write({ contactId: contact.id, email });
+        }),
     }),
     () => deps.client
   );
@@ -179,10 +181,16 @@ export function useSetContactCompanyMutation(deps: CrmRecordDependencies) {
         companyId,
       }: {
         contact: CrmContact;
-        companyId: string;
+        /** Null removes the company. */
+        companyId: string | null;
       }) =>
         editContact(deps, contact, 'company', () =>
-          deps.storage.setContactCompany({ contactId: contact.id, companyId })
+          companyId
+            ? deps.storage.setContactCompany({
+                contactId: contact.id,
+                companyId,
+              })
+            : deps.storage.unlinkContactCompany({ contactId: contact.id })
         ),
     }),
     () => deps.client
