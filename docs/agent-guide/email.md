@@ -480,6 +480,14 @@ show their latest message in that folder, and folder membership is checked befor
 pagination. These views load server pages; full-text search and offline predicate
 filtering are not available for them yet.
 
+Opening a row loads the thread by id. A thread whose every message is in Spam or
+Trash renders as its folder row does, while All Mail lists and previews still leave
+it out, so it opens whether it is read or unread. Mark read and unread, Not spam,
+Restore, Report spam and Delete then return the thread's new state instead of a
+"not found" error that rolls the action back. Check an unread and a read row in each
+folder: the thread opens, the row turns read and stays in its folder, and it never
+appears in All Mail.
+
 Spam and Trash order threads by their latest message in that folder. Reading a thread or receiving a newer message outside the folder does not change that folder cursor. Pending provider moves affect folder membership immediately.
 
 Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
