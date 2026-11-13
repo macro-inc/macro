@@ -1,6 +1,7 @@
 //! Authorization, retry recovery and product policy independent of either persistence adapter.
 use super::{models::*, ports::*};
 use chrono::Utc;
+use password_import::vault;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -427,7 +428,7 @@ impl PasswordService {
         if command.expected_version != record.metadata.version {
             return Err(Error::Conflict);
         }
-        if command.name.trim().is_empty() || command.name.len() > 200 {
+        if command.name.trim().is_empty() || command.name.len() > vault::MAX_NAME_BYTES {
             return Err(Error::Invalid);
         }
         self.validate_folder(team, command.folder_id).await?;
@@ -663,7 +664,7 @@ impl PasswordService {
         self.repository.move_folder(team, id, parent_id).await
     }
     fn folder_name(name: String) -> Result<String, Error> {
-        if name.trim().is_empty() || name.len() > 200 {
+        if name.trim().is_empty() || name.len() > vault::MAX_FOLDER_NAME_BYTES {
             return Err(Error::Invalid);
         }
         Ok(name)
@@ -702,7 +703,9 @@ impl PasswordService {
             return Ok(());
         }
         let action = if let Some(key) = key {
-            if key.0.len() > 1024 || !lazy_regex::regex_is_match!(r"^[A-Z2-7]+=*$", &key.0) {
+            if key.0.len() > vault::MAX_TOTP_SEED_BYTES
+                || !lazy_regex::regex_is_match!(r"^[A-Z2-7]+=*$", &key.0)
+            {
                 return Err(Error::Invalid);
             }
             let key_id = TotpKeyId(Uuid::now_v7());

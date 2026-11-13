@@ -1,8 +1,11 @@
 //! Folder invariants checked with the tree lock in the same metadata transaction.
 use super::*;
 
-const MAX_FOLDERS: usize = 500;
+const MAX_FOLDERS: usize = password_import::vault::MAX_TEAM_FOLDERS;
+/// The recursive queries below spell this depth (8) and one past the folder cap
+/// (501) as literals; keep them in step with the vault limits.
 const MAX_DEPTH: i32 = 8;
+const _: () = assert!(MAX_DEPTH as usize == password_import::vault::MAX_FOLDER_DEPTH);
 
 /// `New` is a plain insert, so a reused id fails; only `Ensure` tolerates an
 /// existing row (it already looked under the tree lock).

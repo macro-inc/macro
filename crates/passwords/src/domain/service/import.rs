@@ -35,8 +35,8 @@ impl PasswordService {
         self.membership(actor, team).await?;
         if import_id.get_version_num() != 7
             || import_id.get_variant() != uuid::Variant::RFC4122
-            || batch.items.len() > 25
-            || batch.folders.len() > 200
+            || batch.items.len() > vault::MAX_IMPORT_BATCH_ITEMS
+            || batch.folders.len() > vault::MAX_IMPORT_BATCH_FOLDERS
         {
             return Err(Error::Invalid);
         }

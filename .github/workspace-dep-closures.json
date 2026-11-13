@@ -2698,6 +2698,7 @@
       "crates/onboarding",
       "crates/openbao_client",
       "crates/pairing_id",
+      "crates/password_import",
       "crates/passwords",
       "crates/pptx_engine",
       "crates/prompt",
@@ -5887,6 +5888,7 @@
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
       "crates/pairing_id",
+      "crates/password_import",
       "crates/passwords",
       "crates/pipedream_mcp",
       "crates/pptx_engine",
@@ -12881,6 +12883,7 @@
       "crates/notification",
       "crates/notification_state",
       "crates/openbao_client",
+      "crates/password_import",
       "crates/passwords",
       "crates/prompt",
       "crates/properties",
@@ -16652,6 +16655,10 @@
     ],
     "natural_time": [
       "crates/natural_time"
+    ],
+    "password_import_wasm": [
+      "crates/password_import",
+      "crates/password_import_wasm"
     ],
     "pptx_engine": [
       "crates/pptx_engine"

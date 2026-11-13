@@ -106,3 +106,30 @@ fn format_names_round_trip() {
     }
     assert!(parse_format("lastpass").is_none());
 }
+
+/// The web client reads the limits from this file; it must match the Rust
+/// constants. On a mismatch, replace the file with the printed value.
+#[test]
+fn web_limits_file_matches_the_vault_limits() {
+    use password_import::vault;
+    let limits = Limits::default();
+    let expected = serde_json::json!({
+        "maxInputBytes": limits.max_input_bytes,
+        "maxItems": limits.max_items,
+        "maxTeamFolders": vault::MAX_TEAM_FOLDERS,
+        "maxFolderDepth": vault::MAX_FOLDER_DEPTH,
+        "maxImportBatchItems": vault::MAX_IMPORT_BATCH_ITEMS,
+        "maxImportBatchFolders": vault::MAX_IMPORT_BATCH_FOLDERS,
+        "maxImportBatchBytes": vault::MAX_IMPORT_BATCH_BYTES,
+    });
+    let web: Value = serde_json::from_str(include_str!(
+        "../../../apps/web/src/lib/core/password-import/limits.json"
+    ))
+    .expect("limits.json is JSON");
+    assert_eq!(
+        web,
+        expected,
+        "apps/web/src/lib/core/password-import/limits.json should be:\n{}",
+        serde_json::to_string_pretty(&expected).expect("serializes")
+    );
+}

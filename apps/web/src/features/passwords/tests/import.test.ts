@@ -1,3 +1,4 @@
+import LIMITS from '@core/password-import/limits.json';
 import type {
   ParsedImportFolder,
   ParsedImportItem,
@@ -6,9 +7,13 @@ import { NOOP_SPAN } from '@macro-inc/observability';
 import { describe, expect, it } from 'vitest';
 import type { ImportBatchBody } from '../context/passwords-context';
 import {
+  BATCH_BYTES,
+  BATCH_ITEMS,
   checkFolders,
   duplicateKeys,
   foldersFor,
+  MAX_FOLDER_DEPTH,
+  MAX_TEAM_FOLDERS,
   planBatches,
   uniqueRootFolderName,
 } from '../core/import';
@@ -144,6 +149,16 @@ describe('duplicateKeys', () => {
       existing
     );
     expect([...keys].sort()).toEqual(['card', 'same']);
+  });
+});
+
+describe('limits', () => {
+  it('match the vault limits the Rust crates check', () => {
+    expect(MAX_TEAM_FOLDERS).toBe(LIMITS.maxTeamFolders);
+    expect(MAX_FOLDER_DEPTH).toBe(LIMITS.maxFolderDepth);
+    expect(BATCH_ITEMS).toBe(LIMITS.maxImportBatchItems);
+    // A budget under the body limit leaves room for the folder tree and JSON.
+    expect(BATCH_BYTES).toBeLessThan(LIMITS.maxImportBatchBytes);
   });
 });
 
@@ -285,6 +300,28 @@ describe('sendImport', () => {
     expect(waits).toHaveLength(1);
   });
 
+  it('resends an item whose folder was deleted mid-import', async () => {
+    const requests: ImportBatchBody[] = [];
+    const source = createFakePasswordSource([], {
+      requests,
+      folderMissing: new Map([['row:1', 1]]),
+    });
+    const outcome = await sendImport(
+      source,
+      {
+        importId: IMPORT_ID,
+        format: 'bitwarden_csv',
+        target: { kind: 'root' },
+        private: true,
+        items: [item('row:1')],
+        folders: [],
+      },
+      { span: NOOP_SPAN, onProgress: () => {}, wait: noWait }
+    );
+    expect(outcome).toMatchObject({ created: 1, failed: 0 });
+    expect(requests).toHaveLength(2);
+  });
+
   it('gives up on an item that stays busy and counts it failed', async () => {
     const source = createFakePasswordSource([], {
       busy: new Map([['row:1', 10]]),
@@ -328,6 +365,32 @@ describe('sendImport', () => {
       failed: 25,
       interrupted: true,
     });
+  });
+
+  it('sends a rejected batch once and goes on with the rest', async () => {
+    const requests: ImportBatchBody[] = [];
+    const source = createFakePasswordSource([], {
+      requests,
+      failRequests: 1,
+      failWith: 'rejected',
+    });
+    const items = Array.from({ length: 30 }, (_, index) =>
+      item(`row:${index + 1}`)
+    );
+    const outcome = await sendImport(
+      source,
+      {
+        importId: IMPORT_ID,
+        format: 'one_password_csv',
+        target: { kind: 'root' },
+        private: false,
+        items,
+        folders: [],
+      },
+      { span: NOOP_SPAN, onProgress: () => {}, wait: noWait }
+    );
+    expect(requests).toHaveLength(2);
+    expect(outcome).toMatchObject({ created: 5, failed: 25 });
   });
 
   it('counts items a rerun of the same import already landed as already present', async () => {

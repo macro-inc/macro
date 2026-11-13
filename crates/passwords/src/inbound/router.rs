@@ -44,7 +44,9 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
     Router::new()
         .route(
             "/teams/{team}/imports/{import_id}/items",
-            post(super::import::import_batch::<A>).layer(DefaultBodyLimit::max(4 * 1024 * 1024)),
+            post(super::import::import_batch::<A>).layer(DefaultBodyLimit::max(
+                password_import::vault::MAX_IMPORT_BATCH_BYTES,
+            )),
         )
         .route("/teams", get(teams::<A>))
         .route("/teams/{team}/items", get(list::<A>).post(create::<A>))

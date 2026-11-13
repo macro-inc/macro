@@ -1,6 +1,7 @@
-//! The vault's own limits on one item. Imports apply them before the preview,
-//! so its counts are what the vault will accept. The vault's own write checks
-//! must use the same values.
+//! The vault's limits: one item, a team's folders, and one import batch.
+//! `crates/passwords` validates with these constants, imports apply the item
+//! limits before the preview so its counts are what the vault will accept, and
+//! the web client reads them from `password_import_wasm`'s `limits.json`.
 
 /// Longest item name, in bytes.
 pub const MAX_NAME_BYTES: usize = 200;
@@ -19,6 +20,18 @@ pub const MAX_TOTP_SEED_BYTES: usize = 1024;
 /// Most bytes one item may take as JSON, escapes included. Each limit above
 /// allows more in total than one write request carries.
 pub const MAX_ITEM_JSON_BYTES: usize = 1024 * 1024;
+
+/// Most folders one team may have.
+pub const MAX_TEAM_FOLDERS: usize = 500;
+/// Deepest folder nesting, counting a top-level folder as depth one.
+pub const MAX_FOLDER_DEPTH: usize = 8;
+
+/// Most items in one import batch request.
+pub const MAX_IMPORT_BATCH_ITEMS: usize = 25;
+/// Most source folders in one import batch request.
+pub const MAX_IMPORT_BATCH_FOLDERS: usize = 200;
+/// Largest import batch request body.
+pub const MAX_IMPORT_BATCH_BYTES: usize = 4 * 1024 * 1024;
 
 /// The vault's login URL rule: at most [`MAX_URL_BYTES`], http(s), a host,
 /// and no credentials.

@@ -3,9 +3,13 @@
  * worker is created on the call, never at module load (iOS deadlocks on eager
  * module workers), and terminated after it answers.
  */
+import LIMITS from './limits.json';
 import type { ParseReply } from './types';
 
 export async function parseExportFile(file: File): Promise<ParseReply> {
+  // Refused before reading: a multi-gigabyte file would be allocated first.
+  if (file.size > LIMITS.maxInputBytes)
+    return { outcome: 'failed', error: { code: 'too_large' } };
   const buffer = await file.arrayBuffer();
   const worker = new Worker(
     new URL('./password-import.worker.ts', import.meta.url),

@@ -6,7 +6,11 @@ export const VAULT_LIST_CAP = 500;
 /** Names searched one by one when the loaded list is capped. */
 export const MAX_DUPLICATE_SEARCHES = 100;
 
-/** Vault folder limits (`crates/passwords`): per team, and depth from the root. */
+/**
+ * Vault folder limits: per team, and depth from the root. These and the batch
+ * limits mirror `password_import::vault` (`@core/password-import/limits.json`);
+ * a test checks they match.
+ */
 export const MAX_TEAM_FOLDERS = 500;
 export const MAX_FOLDER_DEPTH = 8;
 /** The server takes at most 25 items and a 4 MiB body per batch. */
@@ -36,7 +40,6 @@ export type ImportFolderNode = {
   path: readonly string[];
 };
 
-/** Item failures worth sending again: the vault was busy or briefly unavailable. */
 /**
  * `base`, or the first free `numbered(n)` (n = 2, 3, …) when a root folder
  * already has that name, ignoring case.
@@ -56,10 +59,6 @@ export function uniqueRootFolderName(
     const name = numbered(number);
     if (!taken.has(name.toLowerCase())) return name;
   }
-}
-
-export function isRetryable(code: string | undefined) {
-  return code === 'busy' || code === 'vault_unavailable';
 }
 
 /** Distinct item names, for searching the vault when its list is capped. */

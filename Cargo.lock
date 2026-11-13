@@ -15331,6 +15331,7 @@ dependencies = [
  "model_user",
  "openbao_client",
  "opentelemetry",
+ "password_import",
  "rootcause",
  "serde",
  "serde_json",
