@@ -1,0 +1,40 @@
+apps/web/src/lib/analytics/posthog.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 4,16-17,19-34,36-50,52,54-67,69-90
+apps/web/src/lib/core/component/UserCardDrawer.test.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 26-27
+apps/web/src/features/agent-dashboards/agent-profile.test.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 1-95
+apps/web/src/features/dynamic-ui/widgets/panes/agent-scope.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 1-28
+apps/web/src/features/agent-dashboards/agent-profile.ts
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 1,37-40,44-46,52
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/UserMention.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 76-80
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/UserMention.test.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 1-80
+docs/agent-guide/agent-dashboards.md
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 35-36,56
+apps/web/src/lib/core/component/UserTooltip.test.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 45-46
+apps/web/src/features/agent-dashboards/views/shared/dashboard-body.test.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 6-7,11-16,20,62-76
+  s_48270cd6f8d6f1::t_b2a2ec61f3ccc0 77
+apps/web/src/features/agent-dashboards/views/shared/dashboard-panes.tsx
+  s_48270cd6f8d6f1::t_a2aeafba0dcbd0 5,54-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5c428a2a08d1c0b8f00bf5980b7e2885c9a47c61",
+  "prompts": {},
+  "sessions": {
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
