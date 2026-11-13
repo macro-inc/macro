@@ -446,6 +446,9 @@ pub enum UsageError {
     /// The actor cannot administer AI usage or pricing.
     #[error("admin access required")]
     Forbidden,
+    /// The entity does not exist, or the actor may not know it does.
+    #[error("not found")]
+    NotFound,
     /// A rate was negative or non-finite.
     #[error("prices must be finite and non-negative")]
     InvalidPricing,

@@ -77,6 +77,7 @@ fn prefixed_openapi() -> utoipa::openapi::OpenApi {
 fn api_router(api_context: ApiContext) -> Router {
     let memory_service = api_context.memory_service.clone();
     let usage_service = api_context.usage_service.clone();
+    let agent_spend_service = api_context.agent_spend_service.clone();
     let ai_projections_service = api_context.ai_projections_service.clone();
     let import_service = api_context.import_service.clone();
     let onboarding_service = api_context.onboarding_service.clone();
@@ -170,6 +171,12 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(ai_usage::inbound::ai_usage_router(
             ai_usage::inbound::AiUsageRouterState {
                 service: usage_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(ai_usage::inbound::agent_spend_router(
+            ai_usage::inbound::AgentSpendRouterState {
+                service: agent_spend_service,
                 authorization_state: authorization_state.clone(),
             },
         ))

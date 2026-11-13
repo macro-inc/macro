@@ -1,16 +1,18 @@
-//! Admin-only HTTP API for querying AI cost and re-pricing models.
+//! HTTP API for AI cost.
 //!
-//! Every route is restricted to Macro admins — callers whose user id resolves
-//! to an `@macro.com` email.
+//! The usage and pricing routes are restricted to Macro admins — callers
+//! whose user id resolves to an `@macro.com` email. The agent spend route is
+//! for an agent account and its team's owners and admins.
 
-use super::models::UsageSummary;
+use super::models::{AgentSpendResponse, UsageSummary};
+use crate::domain::spend::{AgentSpendService, SpendBucket};
 use crate::domain::{AiFeature, ModelPricing, UsageApiParams, UsageError, UsageService};
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
 };
 use chrono::{DateTime, Utc};
 use macro_authorization::{
@@ -19,7 +21,7 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 /// Request body for [`get_usage_handler`].
 #[derive(Debug, Default, Deserialize, ToSchema)]
@@ -146,6 +148,7 @@ where
 fn error_response(error: UsageError, context: &str) -> Response {
     let (status, message) = match error {
         UsageError::Forbidden => (StatusCode::FORBIDDEN, "admin access required"),
+        UsageError::NotFound => (StatusCode::NOT_FOUND, "not found"),
         UsageError::InvalidPricing => (
             StatusCode::BAD_REQUEST,
             "prices must be finite and non-negative",
@@ -260,6 +263,102 @@ pub async fn set_pricing_handler<T: UsageService, Auth: MacroAuthorizationServic
     {
         Ok(()) => StatusCode::OK.into_response(),
         Err(error) => error_response(error, "failed to set pricing"),
+    }
+}
+
+/// Router state for the agent spend route.
+pub struct AgentSpendRouterState<T, Auth> {
+    /// The agent spend service.
+    pub service: Arc<T>,
+    /// The authorization state used by the request extractors.
+    pub authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<T, Auth> Clone for AgentSpendRouterState<T, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<T, Auth> FromRef<AgentSpendRouterState<T, Auth>> for Arc<T> {
+    fn from_ref(state: &AgentSpendRouterState<T, Auth>) -> Self {
+        state.service.clone()
+    }
+}
+
+impl<T, Auth> FromRef<AgentSpendRouterState<T, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &AgentSpendRouterState<T, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+/// Build the agent spend router.
+pub fn agent_spend_router<T, Auth, S>(state: AgentSpendRouterState<T, Auth>) -> Router<S>
+where
+    T: AgentSpendService,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + Clone + 'static,
+{
+    Router::new()
+        .route(
+            "/ai-cost/agents/{agent_id}/spend",
+            get(get_agent_spend_handler::<T, Auth>),
+        )
+        .with_state(state)
+}
+
+/// Query parameters for [`get_agent_spend_handler`].
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct AgentSpendQuery {
+    /// The period each bucket covers; `day` when omitted.
+    #[serde(default)]
+    pub bucket: SpendBucket,
+}
+
+/// An agent account's AI spend, bucketed by UTC day (last 30 days), ISO week
+/// (last 26), month (last 12), or year (last 5). Readable by the agent itself
+/// and by owners and admins of a team it belongs to, behind the
+/// `enable-agent-dashboards` flag; anyone else gets 404.
+#[utoipa::path(
+    get,
+    path = "/ai-cost/agents/{agent_id}/spend",
+    params(
+        ("agent_id" = String, Path, description = "The agent account's Macro user id"),
+        AgentSpendQuery,
+    ),
+    responses(
+        (status = 200, description = "Spend per bucket", body = AgentSpendResponse),
+        (status = 400, description = "Invalid bucket"),
+        (status = 404, description = "No such agent, or not readable", body = ErrorBody),
+        (status = 500, description = "Internal server error", body = ErrorBody),
+    ),
+    tag = "ai_usage"
+)]
+#[tracing::instrument(
+    skip(service, user),
+    fields(actor = %user.acting_entity())
+)]
+pub async fn get_agent_spend_handler<T: AgentSpendService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<T>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(agent_id): Path<String>,
+    Query(query): Query<AgentSpendQuery>,
+) -> Response {
+    // A malformed id names no agent.
+    let Ok(agent) = MacroUserIdStr::try_from(agent_id) else {
+        return error_response(UsageError::NotFound, "failed to query agent spend");
+    };
+
+    match service
+        .agent_spend(&user.authorization.user.macro_user_id, &agent, query.bucket)
+        .await
+    {
+        Ok(spend) => Json(AgentSpendResponse::from(spend)).into_response(),
+        Err(error) => error_response(error, "failed to query agent spend"),
     }
 }
 

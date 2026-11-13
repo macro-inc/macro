@@ -995,6 +995,31 @@ pub async fn build(
 
     tracing::info!("initialized ai cost service");
 
+    // The agent dashboards' spend pane, behind `enable-agent-dashboards` for
+    // the caller: off for everyone without a PostHog key.
+    let agent_spend_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                std::time::Duration::from_secs(3),
+                config.environment,
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let agent_spend_repo = ai_usage::outbound::PgAgentSpendRepo::new(db.clone());
+    let agent_spend_service = Arc::new(ai_usage::domain::spend::AgentSpendServiceImpl::new(
+        agent_spend_repo.clone(),
+        agent_spend_repo,
+        ai_usage::outbound::FlaggedAgentDashboards(agent_spend_flags),
+    ));
+
     // Generator that materializes projections by running their prompt through
     // the shared AI toolset, attributed to the requesting user.
     let projection_generator =
@@ -1165,6 +1190,7 @@ pub async fn build(
         document_tool_context,
         memory_service,
         usage_service,
+        agent_spend_service,
         ai_projections_service,
         properties_tool_context,
         email_tool_context: email_tool_context.clone(),

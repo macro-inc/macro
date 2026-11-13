@@ -1337,6 +1337,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "feature_flags",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env_var",

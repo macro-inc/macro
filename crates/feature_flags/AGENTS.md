@@ -27,7 +27,7 @@ for authenticated Macro users or explicit global service contexts; one load retu
   `authentication_service` (`enable-outlook`), `document_storage_service`
   (calls, Canvas artifacts), `hosted_runtimes` (`ComputerRollout`,
   `enable-macro-computers`; failures and missing flags disable new surfaces),
-  and the `ai_tools`, `agent_harness`,
+  and the `ai_tools`, `ai_usage` (`enable-agent-dashboards`), `agent_harness`,
   `agent_inmem`, `call`, and `scheduled_action` crates. Each composition root
   wires the PostHog adapter with its config's `environment`.
 

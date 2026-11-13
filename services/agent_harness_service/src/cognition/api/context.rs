@@ -96,6 +96,16 @@ pub type DcsMemoryService =
 pub type DcsUsageService =
     ai_usage::domain::service::UsageServiceImpl<ai_usage::outbound::PgUsageRepo>;
 
+/// An agent account's AI spend, read from Postgres behind the agent
+/// dashboards flag.
+pub type DcsAgentSpendService = ai_usage::domain::spend::AgentSpendServiceImpl<
+    ai_usage::outbound::PgAgentSpendRepo,
+    ai_usage::outbound::PgAgentSpendRepo,
+    ai_usage::outbound::FlaggedAgentDashboards<
+        feature_flags::outbound::posthog::PostHogFeatureFlags,
+    >,
+>;
+
 /// The AI projections service wired to the Postgres projection repo, the SQS
 /// materialization queue, and the connection-gateway update notifier.
 pub type DcsAiProjectionService =
@@ -171,6 +181,7 @@ pub struct ApiContext {
     pub document_tool_context: ToolDocumentToolContext,
     pub memory_service: Arc<DcsMemoryService>,
     pub usage_service: Arc<DcsUsageService>,
+    pub agent_spend_service: Arc<DcsAgentSpendService>,
     pub ai_projections_service: Arc<DcsAiProjectionService>,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,

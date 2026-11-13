@@ -5,6 +5,7 @@ pub mod financial;
 pub mod financial_service;
 pub mod ports;
 pub mod service;
+pub mod spend;
 pub mod tracking;
 
 pub use counting::{AiUsageEnforcement, NON_BILLABLE_AI_FEATURES, is_billable_feature};

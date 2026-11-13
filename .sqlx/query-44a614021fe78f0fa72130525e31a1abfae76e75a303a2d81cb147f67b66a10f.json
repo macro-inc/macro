@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM \"User\" agent\n                JOIN team_user member ON member.user_id = agent.id\n                JOIN team_user manager\n                    ON manager.team_id = member.team_id\n                   AND manager.user_id = $1\n                WHERE agent.id = $2\n                  AND agent.\"isAgent\"\n                  AND manager.team_role IN ('owner', 'admin')\n            ) AS \"manages!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "manages!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "44a614021fe78f0fa72130525e31a1abfae76e75a303a2d81cb147f67b66a10f"
+}
