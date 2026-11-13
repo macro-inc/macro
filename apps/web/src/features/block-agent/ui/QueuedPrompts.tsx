@@ -6,13 +6,16 @@
  * the bottom, immediately above the composer, so Up from the input lands on
  * "the one about to be sent" and further Up presses walk toward the newest.
  *
- * Rows start as one-line previews rendered through the static Lexical
- * surface, so mentions and links read as they do in the transcript rather
- * than as serialized markup. Opening a prompt reveals its scrollable
- * Lexical editor; only one row is expanded at a time.
- * Edits debounce and autosave through `onEdit`, with a flush on blur; there
- * are no save/cancel affordances. Non-prompt entries (compact) are
- * read-only text but keep their remove affordance, which is always visible.
+ * Each row shows its prompt exactly once. Closed, that is a one-line preview
+ * rendered through the static Lexical surface, so mentions and links read as
+ * they do in the transcript rather than as serialized markup. Opening a row
+ * swaps the preview for the editor in the same place; only one row is open
+ * at a time. Enter saves the edit through `onEdit`, Escape restores the last
+ * saved text, and both close the row and hand focus back to the composer
+ * (`onNavigateBelow`). Focus moving to another control outside the row saves
+ * and closes it too.
+ * Non-prompt entries (compact) are read-only text but keep their remove
+ * affordance, which is always visible.
  * While a turn is in flight, each row offers Steer: that message jumps the
  * queue and the current turn is cancelled so it runs next. A row whose
  * steer the server refused stays queued and says it was not sent.
@@ -23,10 +26,11 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import CaretUpIcon from '@icon/system/regular/caret-up.svg?component-solid';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
-import { Button, Surface } from '@ui';
+import { Button, Surface, Tooltip } from '@ui';
+import { COMMAND_PRIORITY_NORMAL, KEY_ESCAPE_COMMAND } from 'lexical';
 import {
   createEffect,
   createMemo,
@@ -58,7 +62,7 @@ export interface QueuedPromptsProps {
   items: QueuedPromptItem[];
   /** Keep queued text visible without allowing changes. */
   disabled?: boolean;
-  /** Autosave a queued prompt's replacement text. The rows debounce. */
+  /** Save a queued prompt's replacement text (Enter, or focus leaving it). */
   onEdit: (actionId: string, prompt: string) => void;
   /** Remove a queued action before it dispatches. */
   onRemove: (actionId: string) => void;
@@ -68,18 +72,18 @@ export interface QueuedPromptsProps {
    * ends, and the composer's flush control sends the oldest entry.
    */
   onSteer?: (actionId: string) => void;
-  /** Down past the bottom (next-to-send) row — focus returns to the composer. */
+  /**
+   * Focus returns to the composer: after Enter or Escape in a row, and on
+   * Down past the bottom (next-to-send) row.
+   */
   onNavigateBelow?: () => void;
   /**
-   * Ref-style: receives a function that focuses the bottom row (the next
-   * prompt to dispatch) — the composer's Up-at-start target — and
-   * `undefined` again on unmount.
+   * Ref-style: receives a function that opens the bottom row (the next
+   * prompt to dispatch) for editing — the composer's Up-at-start target —
+   * and `undefined` again on unmount.
    */
   registerFocusFromBelow?: (focus: (() => void) | undefined) => void;
 }
-
-/** How long typing pauses before the row autosaves. */
-const AUTOSAVE_DEBOUNCE_MS = 400;
 
 export function QueuedPrompts(props: QueuedPromptsProps) {
   const [expandedId, setExpandedId] = createSignal<string>();
@@ -142,6 +146,7 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
                   }}
                   onMoveUp={() => moveFocus(id, -1)}
                   onMoveDown={() => moveFocus(id, 1)}
+                  onLeave={props.onNavigateBelow}
                   onEdit={(prompt) => props.onEdit(id, prompt)}
                   onRemove={() => props.onRemove(id)}
                   onSteer={
@@ -166,6 +171,8 @@ type QueuedRowProps = {
   registerFocus: (focus: (() => void) | undefined) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  /** Where focus goes when the row closes (the composer). */
+  onLeave?: () => void;
   onEdit: (prompt: string) => void;
   onRemove: () => void;
   /** Interrupt the current turn and send this row next. */
@@ -175,24 +182,32 @@ type QueuedRowProps = {
 function QueuedRow(props: QueuedRowProps) {
   const editorId = createUniqueId();
   const [draft, setDraft] = createSignal<string>();
-  let toggle: HTMLButtonElement | undefined;
+  let row: HTMLDivElement | undefined;
+  let preview: HTMLButtonElement | undefined;
   let focusBody: (() => void) | undefined;
+  const isPrompt = () => props.item.kind === 'prompt';
   const previewMarkdown = () =>
-    props.item.kind === 'prompt'
+    isPrompt()
       ? (draft() ?? stripAgentContext(props.item.prompt ?? '')).trim()
       : '';
   const previewLabel = () =>
-    props.item.kind === 'prompt'
-      ? 'Attached files'
-      : 'Compact the conversation';
+    isPrompt() ? 'Attached files' : 'Compact the conversation';
   const open = () => {
     props.onExpandedChange(true);
     focusBody?.();
   };
+  // Focus moves first, so the editor's focus-out save runs while it is
+  // still shown, and the row's focus-out closes it; the explicit close
+  // covers focus that did not move. Without a composer to land on, the
+  // closed preview takes focus so the keyboard never loses its place.
   const close = () => {
-    // Moving focus flushes the editor's pending autosave before hiding it.
-    toggle?.focus();
-    props.onExpandedChange(false);
+    if (props.onLeave) {
+      props.onLeave();
+      props.onExpandedChange(false);
+    } else {
+      props.onExpandedChange(false);
+      preview?.focus();
+    }
   };
 
   onMount(() => {
@@ -203,50 +218,103 @@ function QueuedRow(props: QueuedRowProps) {
   return (
     <Surface class="h-auto shrink-0 rounded-lg" depth={1} solid>
       <div
+        ref={row}
+        class="flex gap-2 px-3 py-1"
+        classList={{
+          'items-center': !props.expanded,
+          'items-start': props.expanded,
+        }}
+        // Focus moving to another control (the composer, another row)
+        // closes the row; the editor's own focus-out has saved by then. A
+        // touch keyboard has no Escape, so this is how a tapped row closes.
+        // The editor's own floating menus (links) are portaled outside the
+        // row and keep it open.
+        onFocusOut={(event) => {
+          const next = event.relatedTarget;
+          if (
+            props.expanded &&
+            next instanceof Element &&
+            !row?.contains(next) &&
+            !next.closest('.menu-surface')
+          )
+            props.onExpandedChange(false);
+        }}
+        // Escape inside the editor or one of its menus is theirs (the
+        // editor's own Escape command decides); this only serves focus the
+        // row holds elsewhere: a compact row, a viewer's body, the buttons.
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !event.defaultPrevented) {
-            event.preventDefault();
-            event.stopPropagation();
-            close();
-          }
+          if (event.key !== 'Escape' || event.defaultPrevented) return;
+          const target = event.target;
+          if (
+            target instanceof Element &&
+            target.closest('[data-lexical-editor], .menu-surface')
+          )
+            return;
+          event.preventDefault();
+          event.stopPropagation();
+          close();
         }}
       >
-        <div class="flex items-center gap-2 px-3 py-1">
-          <button
-            ref={toggle}
-            type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-xs py-1 text-left text-sm text-ink outline-none focus-visible:ring-1 focus-visible:ring-accent"
-            aria-expanded={props.expanded}
-            aria-controls={editorId}
-            title={
-              props.expanded
-                ? 'Collapse queued message'
-                : 'Expand queued message'
-            }
-            onClick={() => (props.expanded ? close() : open())}
+        {/* One slot, one text: the preview and the editor take turns in it. */}
+        <div class="min-w-0 flex-1">
+          <Tooltip
+            label={isPrompt() ? 'Edit queued message' : 'Open queued action'}
+            as="div"
+            class="min-w-0"
+            disabled={props.expanded}
           >
-            <CaretUpIcon
-              class="size-3 shrink-0 text-ink-muted transition-transform"
-              classList={{ 'rotate-180': props.expanded }}
-            />
-            <Show
-              when={previewMarkdown()}
-              fallback={<span class="truncate">{previewLabel()}</span>}
+            <button
+              ref={preview}
+              type="button"
+              class="flex w-full min-w-0 items-center rounded-xs py-1 text-left text-sm text-ink outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              aria-expanded={props.expanded}
+              aria-controls={editorId}
+              hidden={props.expanded}
+              onClick={open}
             >
-              {(markdown) => (
-                // Inert so chips and links never take the click that opens
-                // the row.
-                <div class="min-w-0 flex-1 truncate">
-                  <StaticMarkdown
-                    markdown={markdown()}
-                    theme={singleLineMarkdownTheme}
-                    singleLine
-                    inert
-                  />
-                </div>
-              )}
+              <Show
+                when={previewMarkdown()}
+                fallback={<span class="truncate">{previewLabel()}</span>}
+              >
+                {(markdown) => (
+                  // Inert so chips and links never take the click that opens
+                  // the row.
+                  <div class="min-w-0 flex-1 truncate">
+                    <StaticMarkdown
+                      markdown={markdown()}
+                      theme={singleLineMarkdownTheme}
+                      singleLine
+                      inert
+                    />
+                  </div>
+                )}
+              </Show>
+            </button>
+          </Tooltip>
+          <div
+            id={editorId}
+            class="max-h-[min(32vh,16rem)] overflow-y-auto overscroll-contain py-1"
+            hidden={!props.expanded}
+          >
+            <Show
+              when={isPrompt()}
+              fallback={
+                <CompactBody
+                  {...props}
+                  registerFocus={(focus) => (focusBody = focus)}
+                />
+              }
+            >
+              <PromptBody
+                {...props}
+                registerFocus={(focus) => (focusBody = focus)}
+                onDraftChange={setDraft}
+                onClose={close}
+              />
             </Show>
-          </button>
+          </div>
+        </div>
+        <div class="flex shrink-0 items-center gap-2 py-1">
           <Show
             when={props.item.sendFailed}
             fallback={
@@ -291,73 +359,63 @@ function QueuedRow(props: QueuedRowProps) {
             <XIcon class="size-3.5" />
           </Button>
         </div>
-        <div
-          id={editorId}
-          class="max-h-[min(32vh,16rem)] overflow-y-auto overscroll-contain border-t border-edge-muted px-3 py-2"
-          hidden={!props.expanded}
-        >
-          <Show
-            when={props.item.kind === 'prompt'}
-            fallback={
-              <CompactBody
-                {...props}
-                registerFocus={(focus) => (focusBody = focus)}
-              />
-            }
-          >
-            <PromptBody
-              {...props}
-              registerFocus={(focus) => (focusBody = focus)}
-              onDraftChange={setDraft}
-              onCollapse={close}
-            />
-          </Show>
-        </div>
       </div>
     </Surface>
   );
 }
 
 /**
- * The editable body of an expanded prompt row: the same Lexical markdown
- * surface as the composer's input, minus its send machinery. Edits debounce
- * into `onEdit` and flush when focus leaves the row.
+ * The editable body of an open prompt row: the same Lexical markdown
+ * surface as the composer's input, minus its send machinery. Enter saves and
+ * closes, Escape restores the saved text and closes, and focus leaving the
+ * editor saves whatever is there.
  */
 function PromptBody(
   props: QueuedRowProps & {
     onDraftChange: (text: string) => void;
-    onCollapse: () => void;
+    onClose: () => void;
   }
 ) {
   // The last text this row and the server agree on: what was mounted,
-  // applied from a server snapshot, or handed to `onEdit`. Both the autosave
-  // and the anti-clobber check compare against it.
+  // applied from a server snapshot, or handed to `onEdit`. Save, restore and
+  // the anti-clobber check all compare against it.
   let synced = stripAgentContext(props.item.prompt ?? '');
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  // The editor's own serialization of `synced`, taken as the row opens. It
+  // can differ from `synced` in markup alone, so a save compares against it
+  // to tell a real edit from an untouched round trip. After the editor is
+  // set from outside (a restore, a server snapshot) it is unknown until the
+  // editor reports the applied text through `onChange`: that report comes
+  // during `setMarkdown` outside a Lexical update and later inside one (an
+  // Escape command), so it is cleared before the set, never after.
+  let baseline: string | undefined;
 
-  const flush = () => {
-    if (saveTimer !== undefined) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-    }
+  const save = () => {
     if (props.disabled) return;
     const text = editor.controls.getMarkdown();
+    // Restored text not applied yet, so nothing has been typed since.
+    if (baseline === undefined) return;
     // An emptied row is not an edit to send — the server refuses empty
-    // prompts and "delete the text" has the remove affordance for it.
-    if (text === synced || text.trim().length === 0) return;
+    // prompts and "delete the text" has the remove affordance for it — so
+    // the saved text comes back.
+    if (text.trim().length === 0) {
+      restore();
+      return;
+    }
+    if (text === baseline || text === synced) return;
     synced = text;
+    baseline = text;
     // Keep the private prefix on the wire when saving the visible text.
     const raw = props.item.prompt ?? '';
     const visible = stripAgentContext(raw);
     props.onEdit(raw.slice(0, raw.length - visible.length) + text);
   };
 
-  const scheduleSave = (markdown: string) => {
-    if (props.disabled) return;
-    props.onDraftChange(markdown);
-    if (markdown === synced) return;
-    if (saveTimer !== undefined) clearTimeout(saveTimer);
-    saveTimer = setTimeout(flush, AUTOSAVE_DEBOUNCE_MS);
+  const restore = () => {
+    if (editor.controls.getMarkdown() !== synced) {
+      baseline = undefined;
+      editor.controls.setMarkdown(synced);
+    }
+    props.onDraftChange(synced);
   };
 
   // The composer's features, so a queued prompt edits the way it was written.
@@ -369,51 +427,86 @@ function PromptBody(
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .onChange(scheduleSave)
-    .onEscape(() => {
-      flush();
-      props.onCollapse();
+    .onChange((markdown) => {
+      if (baseline === undefined) baseline = markdown;
+      props.onDraftChange(markdown);
+    })
+    .onEnter((event) => {
+      // Enter that confirms an IME composition is not a save.
+      if (event.isComposing || event.keyCode === 229) return false;
+      // On a virtual keyboard Enter is a newline, as in the composer; the
+      // edit saves when focus leaves the row.
+      if (isTouchDevice()) return false;
+      save();
+      props.onClose();
       return true;
     })
+    // Below the priority of the editor's own menus (mentions, emoji, the
+    // link popup), so an open menu takes the Escape and the row only closes
+    // when none of them did. The builder's `onEscape` would run first.
+    .use((lexical) =>
+      lexical.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        (event) => {
+          event?.preventDefault();
+          restore();
+          props.onClose();
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
+      )
+    )
     .onFocusLeave({
       onStart: (event) => {
         event.preventDefault();
-        flush();
+        save();
         props.onMoveUp();
       },
       onEnd: (event) => {
         event.preventDefault();
-        flush();
+        save();
         props.onMoveDown();
       },
     });
 
+  // A viewer's read-only editor refuses focus; the body takes it instead so
+  // Escape still closes the row.
+  let body: HTMLDivElement | undefined;
   onMount(() => {
-    props.registerFocus(() => editor.controls.focus());
-    onCleanup(() => {
-      if (saveTimer !== undefined) clearTimeout(saveTimer);
+    props.registerFocus(() => {
+      baseline = editor.controls.getMarkdown();
+      editor.controls.focus();
+      const root = editor.lexical.getRootElement();
+      if (!root?.contains(document.activeElement)) body?.focus();
     });
   });
 
   // A server snapshot may carry someone else's edit. Apply it only while
-  // this row is
-  // untouched — never over a focused editor or unsaved local changes, which
-  // are about to become the server's text anyway.
+  // this row is untouched — never over a focused editor or unsaved local
+  // changes, which are about to become the server's text anyway.
   createEffect(() => {
     const server = stripAgentContext(props.item.prompt ?? '');
     if (server === synced) return;
     const root = editor.lexical.getRootElement();
     const focused = root?.contains(document.activeElement) ?? false;
-    const dirty =
-      saveTimer !== undefined || editor.controls.getMarkdown() !== synced;
+    const dirty = editor.controls.getMarkdown() !== synced;
     if (focused || dirty) return;
+    baseline = undefined;
     editor.controls.setMarkdown(server);
+    // Outside a Lexical update the set has applied by now; a snapshot that
+    // only differs in markup reports no change, so read it here.
+    if (baseline === undefined) baseline = editor.controls.getMarkdown();
     props.onDraftChange(server);
     synced = server;
   });
 
   return (
-    <div class="text-sm text-ink" onFocusOut={flush}>
+    <div
+      ref={body}
+      tabindex="-1"
+      class="text-sm text-ink outline-none"
+      onFocusOut={save}
+    >
       <MarkdownShell
         config={editor}
         initialValue={stripAgentContext(props.item.prompt ?? '')}

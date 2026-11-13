@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_draft SET state = $2, result = $3, finished_at = now()\n            WHERE session_id IN (\n                SELECT session_id FROM scheduled_action_draft\n                WHERE state = 'drafting' AND created_at < $1\n                ORDER BY created_at\n                LIMIT $4\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING session_id, owner_id, bot_id, progress, traceparent\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "progress",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "516c4c6b4c61679956f54bf9667110c77ea03e5e00c86b1d42ba178c98fb16e0"
+}

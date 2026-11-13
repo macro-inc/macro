@@ -77,6 +77,50 @@ each run.
   times drafting on a local stack against the live model, phase by phase,
   and checks the drafts (see its README); rerun it when changing the brief
   or the wait.
+- `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
+  background drafts, the same drafter without the waiting request. `POST
+  /scheduled-actions/draft-jobs` validates the request and waits only for
+  the session's prompt to be admitted (the blocking route's 400/402/503,
+  plus 409 past `MAX_DRAFTING` drafting at once), then answers 202 with the
+  job. The body carries a client-made `clientId`; a start sent again with
+  it (the client resends when its connection drops) answers with the live
+  job that start began and creates no session (`client_id` and a unique
+  index per owner on the row). `DraftJobStore::begin_job` checks the
+  repeat, counts and inserts in one transaction under a per-owner advisory
+  lock, so starts sent together never pass the limit, and a repeat answers
+  before the limit; it counts jobs drafting that started within
+  `INTERRUPTED_AFTER`, through the owner's jobs index. `GET` lists
+  drafting and unopened finished ones, `GET .../{id}` reads one (its
+  `Draft` when ready), `DELETE .../{id}` cancels or discards one (404 when
+  not the caller's). The job id is its hidden session's. Its
+  state, request (kind and words), progress, result, `finished_at` and the
+  starting `traceparent` live on its `scheduled_action_draft` row
+  (`DraftJobStore`, `state` NULL for a blocking draft, which keeps its old
+  lifecycle). It runs on the receiving replica's `TaskTracker` under the
+  shutdown token: shutdown fails it as interrupted. The start's own body,
+  from the insert to admission, runs on the tracker too, so a dropped
+  request can't leave a row without its drafter. The drafter is cut off at
+  `JOB_LIMIT` (`DRAFT_TIMEOUT` + 60 s) and fails its job as timed out; its
+  result write is tried three times. `INTERRUPTED_AFTER` is 60 s past
+  `JOB_LIMIT`. A cancel from any replica marks the row `cancelled`; the
+  drafter sees it on its next row read (`HandedBack::cancelled`) and
+  deletes the session and the row, and its last update to the owner is
+  `removed`, as is that of a job whose admission was refused. A
+  finished job's session is only stopped; it is deleted with its row, on
+  discard or after `FINISHED_RETENTION` (7 days). `DraftJobs::sweep` fails
+  rows still drafting past `INTERRUPTED_AFTER` (their drafter died) and
+  deletes abandoned cancels and expired rows; `RoutineDrafts::sweep` skips
+  job rows. The drafter reports milestones through `DraftProgress`
+  (`drafts/progress.rs`; blocking drafts pass `Unreported`); a `watch`
+  writer in the job's task writes each to the row and sends the owner a
+  `routine_draft_update` message (`RoutineDraftUpdates`) without blocking
+  the drafter, coalescing bursts. Progress carries counts, the trigger and
+  step titles, never code or the words. Spans: `routine.draft.start`
+  (`routine.draft.repeated` on a start sent again; the job's
+  `routine.draft` span is its child), `routine.draft.cancel`,
+  `routine.draft.jobs.sweep`, `routine.draft.interrupt`; no owner id
+  (it holds an email). Replicas still on code without job rows sweep them
+  as stale blocking drafts after `STALE_DRAFT`.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
   themselves belong to generations (`crates/suggestion_generation`: an

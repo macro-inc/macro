@@ -13,6 +13,7 @@ import {
   formatComputerDate,
   isProvisioning,
 } from '../core/computer-display';
+import { useSetupElapsed } from '../primitives/setup-elapsed';
 import {
   ComputerActionsMenu,
   type ComputerMenuItem,
@@ -52,9 +53,12 @@ function ComputerSubtitle(props: {
   claude: ComputerClaudeState;
 }) {
   const status = () => computerStatusLabel(props.computer);
+  const elapsed = useSetupElapsed(() => props.computer);
   const state = () => {
     if (isProvisioning(props.computer))
-      return [status().label, status().detail].filter(Boolean).join(' · ');
+      return [status().label, status().detail, elapsed()]
+        .filter(Boolean)
+        .join(' · ');
     if (status().tone !== 'success') return status().label;
     return claudeText(props.claude);
   };

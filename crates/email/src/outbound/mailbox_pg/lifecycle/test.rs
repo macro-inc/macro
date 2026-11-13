@@ -452,6 +452,62 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
     assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM email_mailbox_lifecycle_outbox WHERE link_id = $1 AND payload->>'kind' = 'delete_mailbox'",link).fetch_one(&db).await.unwrap(),Some(0));
 }
 
+async fn sync_work_generations(db: &PgPool, link: Uuid) -> (Vec<i64>, Vec<i64>) {
+    let streams = sqlx::query_scalar!(
+        "SELECT generation FROM email_sync_streams WHERE link_id = $1 ORDER BY generation",
+        link
+    )
+    .fetch_all(db)
+    .await
+    .unwrap();
+    let messages = sqlx::query_scalar!(
+        "SELECT generation FROM email_message_reconciliation WHERE link_id = $1 ORDER BY generation",
+        link
+    )
+    .fetch_all(db)
+    .await
+    .unwrap();
+    (streams, messages)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generation_bumps_delete_superseded_sync_work(db: PgPool) {
+    let (repo, link, _) = shared(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES ($1,1,'queued',false)",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = InboxLifecycleService::new(repo.clone(), Effects);
+
+    service.remove(&actor("leaving"), link).await.unwrap();
+    assert_eq!(
+        sync_work_generations(&db, link).await,
+        (vec![2], vec![2]),
+        "rebinding carries the work into the new generation and drops the old copy"
+    );
+    assert!(
+        repo.claim_stream(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    service.remove(&actor("remaining"), link).await.unwrap();
+    let row = sqlx::query!(
+        "SELECT is_sync_active,sync_generation FROM email_links WHERE id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!row.is_sync_active);
+    assert_eq!(row.sync_generation, 3);
+    assert_eq!(sync_work_generations(&db, link).await, (vec![], vec![]));
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn no_replacement_preserves_the_inbox_and_notifies_remaining_viewers_to_reconnect(
     db: PgPool,
