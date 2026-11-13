@@ -40,7 +40,7 @@ const products = [
   { name: 'Macro Skills', href: '/skills', icon: SkillsIcon },
   { name: 'Macro Snippets', href: '/snippets', icon: SnippetsIcon },
   { name: 'Macro GitHub', href: '/github', icon: GitHubIcon },
-  { name: 'Macro Tags', href: '/product/tagging', icon: TagsIcon },
+  { name: 'Macro Tags', href: '/docs/product/tagging', icon: TagsIcon },
 ];
 const productNames = new RegExp(
   `(${products.map((product) => product.name).join('|')})`,

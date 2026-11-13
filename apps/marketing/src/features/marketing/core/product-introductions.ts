@@ -30,7 +30,7 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       'Macro Mail brings those pieces together. Your emails are connected to your team’s conversations, tasks, and customer records. Share a thread in chat, turn a request into a task, or ask an agent to draft a reply using the context already in your workspace.',
     ],
     Tasks: [
-      'The main problem with traditional task manager is that they quickly get out of date because they’re not properly linked “to the work” e.g. github or the real world, and because it’s too much friction to update them manually',
+      'The problem with traditional task managers is that they quickly get out of date because they’re not properly linked “to the work” e.g. github or the real world, and because it’s too much friction to update them manually',
       'Macro Tasks are auto-created where you already work: in your team chat, from an email, or in the background via ambient agents. No need to go to ever create or organize tasks manually. They’re also built natively for human-agent teams: you can assign tasks to agents and they’ll write the code, or complete the creative, or to a human.',
     ],
     Chat: [

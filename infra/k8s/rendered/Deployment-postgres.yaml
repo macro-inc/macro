@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgres
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: postgres
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: postgres
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: KUBE_POSTGRES_PASSWORD
+                  name: macro-env
+          envFrom: []
+          image: localhost:32550/macro/postgres:build.wfyiri3ilp70cd10ahfji7lpgnhhki6h
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /nix/store/61phnr46y7ivxh4r1b44s8y61459kr64-postgresql-and-plugins-18.4/bin/pg_ctl
+                  - -D
+                  - /var/lib/postgresql/18/docker
+                  - -m
+                  - fast
+                  - -w
+                  - stop
+          name: postgres
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+                - /nix/store/61phnr46y7ivxh4r1b44s8y61459kr64-postgresql-and-plugins-18.4/bin/pg_isready
+                - -h
+                - 127.0.0.1
+                - -d
+                - postgres
+                - -U
+                - user
+            failureThreshold: 3
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /var/lib/postgresql
+              name: vol-data
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - mkdir -p /var/lib/postgresql/18/docker; chown -R 1000:1000 /var/lib/postgresql
+          image: localhost:32550/macro/volume-permissions:build.x4bn243bk1zkmjzg3qqrbgknr2q6p8wg
+          name: permissions
+          securityContext:
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /var/lib/postgresql
+              name: vol-data
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-data
+          persistentVolumeClaim:
+            claimName: db

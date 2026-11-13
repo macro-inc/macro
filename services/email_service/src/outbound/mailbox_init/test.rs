@@ -472,6 +472,68 @@ async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reconnect_deletes_the_superseded_generations_sync_work(db: PgPool) {
+    let owner = actor(&db, "superseded@example.com").await;
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(owner.0)),
+    )
+    .initialize(attempt(&db, owner.clone()).await)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES ($1,$2,1,'mail_folder','inbox')",
+        Uuid::now_v7(),
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES ($1,1,'queued',true)",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(grant(owner.0)))
+        .initialize(attempt(&db, owner.clone()).await)
+        .await
+        .unwrap();
+
+    let streams = sqlx::query!(
+        "SELECT generation,kind FROM email_sync_streams WHERE link_id = $1 ORDER BY kind",
+        link
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        streams
+            .iter()
+            .map(|s| (s.generation, s.kind.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (2, "contacts_catalog"),
+            (2, "contacts_profile"),
+            (2, "folder_catalog")
+        ],
+        "the new generation re-enumerates folders from its own catalog"
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM email_message_reconciliation WHERE link_id = $1",
+            link
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn concurrent_gmail_and_outlook_connections_share_one_remaining_free_slot(db: PgPool) {
     let owner = actor(&db, "concurrent-limit@example.com").await;
     sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider) VALUES($1,$2,$3,'first@gmail.example','GMAIL')",Uuid::new_v4(),owner.1.as_ref(),owner.0.to_string()).execute(&db).await.unwrap();
