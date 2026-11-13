@@ -38,6 +38,7 @@ export function MessageActions(props: {
           variant="ghost"
           size="icon-sm"
           class="size-6 p-0"
+          aria-label={t('emailThread.reply')}
           onClick={onChangeReplyType('reply')}
           tooltip={{
             content: t('emailThread.reply'),
@@ -52,6 +53,7 @@ export function MessageActions(props: {
           variant="ghost"
           size="icon-sm"
           class="size-6 p-0"
+          aria-label={t('emailThread.replyAll')}
           onClick={onChangeReplyType('reply-all')}
           tooltip={{
             content: t('emailThread.replyAll'),
@@ -66,6 +68,7 @@ export function MessageActions(props: {
           variant="ghost"
           size="icon-sm"
           class="size-6 p-0"
+          aria-label={t('emailThread.forward')}
           onClick={onChangeReplyType('forward')}
           tooltip={{
             content: t('emailThread.forward'),

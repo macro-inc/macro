@@ -785,8 +785,9 @@ then Reply all drop to icon-only pills until it fits on one line; check at 320,
 375, 390 and 430px.
 Reply all, in the message header and on touch, shows only when it reaches
 someone Reply doesn't: a To or Cc recipient other than the sender and the
-viewer's own inboxes and aliases. A reply to the viewer's own message already
-goes to everyone, so it has no Reply all.
+inbox the reply sends from (with its aliases). A reply to a message that inbox
+sent already goes to everyone, so it has no Reply all; a message from another
+of the viewer's inboxes counts as someone else's, as it does in the composer.
 Replies appear inline on desktop and in a full-screen composer on touch devices,
 including tablets. Reply, Reply all, and Forward use the same grouped header
 actions as new email: attach, schedule, and send. The schedule clock matches

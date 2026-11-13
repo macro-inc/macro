@@ -1,4 +1,8 @@
-import type { SenderInbox } from '@app/features/email-compose/core/email-sender';
+import {
+  defaultReplyInbox,
+  inboxAddresses,
+  type SenderInbox,
+} from '@app/features/email-compose/core/email-sender';
 import { canReplyAll } from '@app/features/email-compose/core/recipient-conversion';
 import type { ReplyType } from '@app/features/email-compose/core/reply-type';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
@@ -7,20 +11,20 @@ import type { Setter } from 'solid-js';
 import type { EmailThreadState } from './email-thread-state';
 
 /**
- * Whether to offer Reply All beside Reply. The viewer is every inbox they
- * hold and its send-as aliases, so a shared-thread recipient replying from
- * their own inbox is excluded too.
+ * Whether to offer Reply All beside Reply. The viewer is the inbox the reply
+ * sends from, as the composer judges it, so a message from another of the
+ * viewer's inboxes still counts as someone else's.
  */
 export function offersReplyAll(
   message: EmailMessage,
   viewerEmail: string | undefined,
-  inboxes: readonly SenderInbox[]
+  inboxes: readonly SenderInbox[],
+  primaryInboxId: string | undefined
 ) {
-  const ownAddresses = inboxes.flatMap((inbox) => [
-    inbox.email_address,
-    ...(inbox.sendAs ?? []).map((alias) => alias.email_address),
-  ]);
-  if (viewerEmail) ownAddresses.push(viewerEmail);
+  const ownAddresses = inboxAddresses(
+    defaultReplyInbox(inboxes, message, primaryInboxId)
+  );
+  if (ownAddresses.length === 0 && viewerEmail) ownAddresses.push(viewerEmail);
   return canReplyAll(message, ownAddresses);
 }
 

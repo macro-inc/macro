@@ -89,7 +89,8 @@ export function BottomReplyButtons(props: {
     offersReplyAll(
       props.lastMessage,
       currentUserEmail(),
-      viewContext.compose.accounts.inboxes()
+      viewContext.compose.accounts.inboxes(),
+      viewContext.compose.accounts.primaryId()
     );
 
   const showForward = () => ctx.permissions().isOwner;

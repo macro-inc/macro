@@ -99,7 +99,8 @@ export function MessageContainer(props: MessageContainerProps) {
     const showReplyAll = offersReplyAll(
       props.message,
       threadContext.viewerEmail(),
-      compose.accounts.inboxes()
+      compose.accounts.inboxes(),
+      compose.accounts.primaryId()
     );
     if (!showReplyAll) hidden.push('reply-all');
     if (!context.permissions().isOwner) hidden.push('forward');
