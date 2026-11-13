@@ -9,8 +9,11 @@ const editor = vi.hoisted(() => ({
   escape: undefined as ((event: KeyboardEvent) => boolean) | undefined,
   markdown: 'Queued request',
   focus: vi.fn(),
+  // Like the real editor outside a Lexical update: the set applies at once
+  // and reports the change before returning.
   setMarkdown: vi.fn((markdown: string) => {
     editor.markdown = markdown;
+    editor.change?.(markdown);
   }),
 }));
 const touch = vi.hoisted(() => ({ value: false }));
@@ -329,8 +332,7 @@ describe('queued prompt keys', () => {
       'Queued request'
     );
     expect(screen.getByRole('textbox')).toBe(textbox);
-    // The editor applies the restored text, then the user types anew.
-    editor.change?.('Queued request');
+    // One change after the restore is a real edit.
     editor.markdown = 'New request';
     editor.change?.(editor.markdown);
     expect(editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(

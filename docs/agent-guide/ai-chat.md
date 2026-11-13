@@ -2270,7 +2270,7 @@ must stay hidden; subsequent live messages must still appear.
   closes it too, while the editor's own link menu keeps it open; on a touch
   keyboard Enter is a newline and tapping the composer is how a tapped row
   closes. Escape with a mention
-  or emoji menu open closes that menu only. Opening and closing an untouched row
+  or emoji menu or the link popup open closes that menu only. Opening and closing an untouched row
   never sends an edit, and emptying a row brings its saved text back rather than
   saving nothing. Each row shows a `Queued` label (with `by {user}` when someone else
   queued it — several users can stack prompts in one session's queue), an

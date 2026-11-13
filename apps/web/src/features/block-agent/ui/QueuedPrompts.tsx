@@ -384,8 +384,9 @@ function PromptBody(
   // can differ from `synced` in markup alone, so a save compares against it
   // to tell a real edit from an untouched round trip. After the editor is
   // set from outside (a restore, a server snapshot) it is unknown until the
-  // editor reports the applied text through `onChange`, since a read right
-  // after `setMarkdown` can still be stale.
+  // editor reports the applied text through `onChange`: that report comes
+  // during `setMarkdown` outside a Lexical update and later inside one (an
+  // Escape command), so it is cleared before the set, never after.
   let baseline: string | undefined;
 
   const save = () => {
@@ -411,8 +412,8 @@ function PromptBody(
 
   const restore = () => {
     if (editor.controls.getMarkdown() !== synced) {
-      editor.controls.setMarkdown(synced);
       baseline = undefined;
+      editor.controls.setMarkdown(synced);
     }
     props.onDraftChange(synced);
   };
@@ -490,10 +491,13 @@ function PromptBody(
     const focused = root?.contains(document.activeElement) ?? false;
     const dirty = editor.controls.getMarkdown() !== synced;
     if (focused || dirty) return;
+    baseline = undefined;
     editor.controls.setMarkdown(server);
+    // Outside a Lexical update the set has applied by now; a snapshot that
+    // only differs in markup reports no change, so read it here.
+    if (baseline === undefined) baseline = editor.controls.getMarkdown();
     props.onDraftChange(server);
     synced = server;
-    baseline = undefined;
   });
 
   return (
