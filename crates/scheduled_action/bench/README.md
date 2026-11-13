@@ -23,10 +23,11 @@ It runs on a local stack against the live model, one draft at a time.
 
 **Time.** The `draft` arm is timed from the request to the answer; the `bare`
 arm from the message to the routine existing (its turn's end is kept too).
-Only drafts that came back with a routine or a step are timed; the share under
-15 s is out of every request, and `compare` counts a draft with no routine as
-slower than its pair's, so a build can't look faster by failing fast or by
-timing out on its slowest drafts.
+Only drafts that came back with an answer are timed: a routine or a step, or
+in the `bare` arm the question a case wants asked, timed to its turn's end.
+The share under 15 s is out of every request, and `compare` counts a draft
+with no answer as slower than its pair's, so a build can't look faster by
+failing fast or by timing out on its slowest drafts.
 Each draft is sent with its own `traceparent` and its trace is read back from
 Tempo to split the time:
 
@@ -47,9 +48,10 @@ draft on a busy machine can be told apart.
 
 - *Mechanical checks* on the draft: the trigger (days, time and the person's
   time zone, or the event), the items it uses by id or by a knob naming them,
-  none of their look-alikes, the step kind, nothing created that it doesn't
-  use, and leaving out a name with no match or two matches, without guessing
-  it: no channel made for it, no knob or code string naming it. In the `bare`
+  none of their look-alikes (by id, knob or name), the step kind, nothing
+  created that it doesn't use, and leaving out a name with no match or two
+  matches, without guessing it: no channel made for it, no knob or code
+  string naming it. In the `bare`
   arm asking the person instead is right for those two cases, if the question
   names the item (`asking` in `cases.ts`).
 - *Run check*: the drafted routine is saved, fired once with a made-up trigger
@@ -57,10 +59,10 @@ draft on a busy machine can be told apart.
   now) and its effect is read from the stack's database, in the owner's
   workspace only: the message it posted in a channel they're in (a mentioned
   document or task read with its name, as the person sees it), the task it
-  made for them, its own notifications, what its run returned. A run whose
-  condition wasn't met did nothing. A fired event the trigger doesn't match
-  is never admitted, so the check stops after 90 s with none; any other run
-  gets four minutes.
+  made for them with its body, its own notifications, what its run
+  returned; mail it sent isn't read. A run whose condition wasn't met did
+  nothing. A fired event the trigger doesn't match is never admitted, so the
+  check stops after 90 s with none; any other run gets four minutes.
 - *Judge*: a model that sees only the request and the routine, with a glossary
   of the ids in it, grades it 1 to 5 (`RUBRIC` in `judge.ts`); 4 or 5 is a
   draft the person would keep.
@@ -70,9 +72,9 @@ and run check.
 
 A draft the eval itself couldn't finish (a dropped connection, a harness
 restarting) is tried once more after ten seconds. A second failure is recorded
-as an error: it fails quality, is left out of the timing, and the summary
-counts it under `errors`. The judge is a second opinion: `calibrate` measures how often it
-agrees with grades given by hand.
+as an error: it fails quality, is left out of the timing and of `compare`'s
+time, and the summary counts it under `errors`. The judge is a second
+opinion: `calibrate` measures how often it agrees with grades given by hand.
 
 ## Run it
 
@@ -110,9 +112,11 @@ more. And `TEMPO_URL` (default
 is more than a few days old: requests read "this week" and "due today".
 
 Drafts on one stack never overlap, whoever starts them: each takes a lock in
-`~/.cache/routines-eval/locks/` for the draft, its run check and putting the
-workspace back. Before and after each draft every routine is deleted, and the
-databases, documents, tasks and messages nobody seeded are removed.
+`~/.cache/routines-eval/locks/` for the draft, its run check, the judge (its
+model call goes through the stack's harness) and putting the workspace back.
+Before and after each draft every routine is deleted, the databases,
+documents, tasks, channels and messages nobody seeded are removed, and
+seeded tasks' statuses are put back.
 
 ### Comparing two builds
 
@@ -135,8 +139,8 @@ against the first:
 
 - **time**: the median of B's time over A's across pairs of the same case and
   round, with a 95% bootstrap interval; a win or loss only when the interval
-  leaves 1. A side that got no routine counts as the slower; pairs where
-  neither did are left out.
+  leaves 1. A side with no answer counts as the slower; pairs where neither
+  answered, or the eval itself failed on either side, are left out.
 - **quality**: the share passing every check may not fall by more than
   `QUALITY_MARGIN` (`report.ts`), what main against main moves by at this size;
   a bigger fall is a loss whatever the time.
