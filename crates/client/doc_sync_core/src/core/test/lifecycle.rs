@@ -582,6 +582,38 @@ fn s7_063_host_hidden_flushes_pending_edit_immediately() {
     assert!(h.core.wal.append_due.is_none());
 }
 #[test]
+fn page_hide_issues_the_durable_append_of_a_pending_edit_in_the_same_output() {
+    let mut h = Harness::running(TransportKind::None, Persistence::Durable);
+    h.edit();
+    h.send(SyncInput::Host(HostSignal::PageHide));
+    assert!(h.out.io.iter().any(|effect| matches!(
+        effect,
+        IoEffect::Storage {
+            op: StorageOp::WalAppend { .. },
+            ..
+        }
+    )));
+    assert!(h.core.wal.append_due.is_none());
+}
+/// Characterises the coalesce window: without Hidden, PageHide or Stop, a local edit has
+/// no WAL append until the 25 ms deadline (exposure to an abrupt kill only).
+#[test]
+fn a_pending_edit_has_no_append_before_the_coalesce_deadline() {
+    let mut h = Harness::running(TransportKind::None, Persistence::Durable);
+    h.edit();
+    h.at(24, SyncInput::Tick);
+    assert!(h.core.wal.entries.is_empty());
+    assert!(!h.out.io.iter().any(|effect| matches!(
+        effect,
+        IoEffect::Storage {
+            op: StorageOp::WalAppend { .. },
+            ..
+        }
+    )));
+    h.at(25, SyncInput::Tick);
+    assert_eq!(h.core.wal.entries.len(), 1);
+}
+#[test]
 fn routed_sessions_do_not_schedule_physical_heartbeats() {
     let mut h = Harness::running(TransportKind::Routed, Persistence::Memory);
     h.core.connection.establish(ConnId(1), now(0));
