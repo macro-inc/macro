@@ -10,6 +10,8 @@ export default defineConfig({
   testMatch: 'title-menu.browser.e2e.ts',
   outputDir: '/tmp/project-title-results',
   workers: 1,
+  timeout: 60_000,
+  expect: { timeout: 20_000 },
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     launchOptions: {

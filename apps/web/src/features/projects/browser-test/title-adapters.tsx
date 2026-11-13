@@ -21,3 +21,17 @@ export const makeCopyLinkAction = () => ({
   executeByBlock: unavailable,
 });
 export const makeCopyEntityIdAction = () => ({ executeById: unavailable });
+
+// ShareTrigger stays real; its session, request badge, and telemetry hosts are external.
+export const useIsAuthenticated = () => () => true;
+export const useUserId = () => () => 'owner';
+export const useAnalytics = () => ({ track: () => {} });
+export const useShareRequestTrigger = (props: { open: () => void }) => ({
+  ref: () => {},
+  count: () => 0,
+  open: props.open,
+});
+export const ShareRequestIcon = (props: {
+  children: import('solid-js').JSX.Element;
+}) => props.children;
+export const useCopyLink = () => () => {};

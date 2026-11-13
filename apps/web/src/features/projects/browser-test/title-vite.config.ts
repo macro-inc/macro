@@ -30,6 +30,17 @@ export default defineConfig({
       resolveId(source, importer) {
         if (importer?.endsWith('/SplitFileMenu.tsx') && services.has(source))
           return adapter;
+        if (
+          importer?.endsWith('/ShareButton.tsx') &&
+          new Set([
+            '@core/auth',
+            '@core/context/user',
+            '@core/util/useCopyLink',
+            '@app/lib/analytics/analytics-context',
+            '@app/features/access-requests/share-request-trigger',
+          ]).has(source)
+        )
+          return adapter;
       },
     },
     solidPlugin(),
@@ -46,7 +57,7 @@ export default defineConfig({
       'loro-crdt': 'loro-crdt/base64',
     },
   },
-  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  optimizeDeps: { entries: [`${directory}/title.html`] },
   server: {
     host: '127.0.0.1',
     strictPort: true,
