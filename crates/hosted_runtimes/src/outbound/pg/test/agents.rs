@@ -1,5 +1,7 @@
 use super::*;
 use crate::domain::agent::ComputerAgents;
+use crate::outbound::pg::PgComputerAgents;
+use harnesses::domain::ports::ComputerTeamAgents;
 
 async fn insert_agent(pool: &PgPool) -> MacroUserIdStr<'static> {
     let macro_user_id = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0022);
@@ -44,6 +46,15 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
     );
     // A purchase still confirming is not a computer yet.
     assert!(!repo.has_live_computer(TEAM, &agent).await.unwrap());
+    // The harness listings read the same link, many computers at once.
+    let people_computer = ComputerId::new_from_uuid(Uuid::from_u128(2));
+    assert_eq!(
+        PgComputerAgents::new(pool.clone())
+            .team_agents_of(&[id, people_computer])
+            .await
+            .unwrap(),
+        std::collections::HashMap::from([(id, agent.clone())])
+    );
 
     repo.convert_reservation(reservation.id, active(1), now())
         .await
@@ -52,6 +63,13 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
 
     // Bought: the computer carries it.
     assert_eq!(repo.agent_of(id).await.unwrap(), Some(agent.clone()));
+    assert_eq!(
+        PgComputerAgents::new(pool.clone())
+            .team_agents_of(&[id, people_computer])
+            .await
+            .unwrap(),
+        std::collections::HashMap::from([(id, agent.clone())])
+    );
     assert_eq!(
         repo.computer_for_agent(TEAM, &agent).await.unwrap(),
         Some(id)

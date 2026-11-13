@@ -478,12 +478,14 @@ pub trait ComputerTeamAgents: Send + Sync + 'static {
     /// Lookup failure.
     type Err: Into<anyhow::Error> + Send;
 
-    /// The agent teammate the computer runs, or `None` for a computer
-    /// bought for people.
-    fn team_agent_of(
+    /// The agent teammate each of `computers` runs, in one lookup; a
+    /// computer bought for people has no entry.
+    fn team_agents_of(
         &self,
-        computer: ComputerId,
-    ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>, Self::Err>> + Send;
+        computers: &[ComputerId],
+    ) -> impl Future<
+        Output = Result<std::collections::HashMap<ComputerId, MacroUserIdStr<'static>>, Self::Err>,
+    > + Send;
 }
 
 /// Whether a harness is an agent teammate's computer. An agent teammate is

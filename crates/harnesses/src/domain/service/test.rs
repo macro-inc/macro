@@ -369,11 +369,15 @@ struct FakeTeamAgents;
 impl ComputerTeamAgents for FakeTeamAgents {
     type Err = anyhow::Error;
 
-    async fn team_agent_of(
+    async fn team_agents_of(
         &self,
-        computer: ComputerId,
-    ) -> Result<Option<MacroUserIdStr<'static>>, Self::Err> {
-        Ok((computer == AGENT_COMPUTER_ID).then(|| caller(TEAM_AGENT_ID)))
+        computers: &[ComputerId],
+    ) -> Result<std::collections::HashMap<ComputerId, MacroUserIdStr<'static>>, Self::Err> {
+        Ok(computers
+            .iter()
+            .filter(|computer| **computer == AGENT_COMPUTER_ID)
+            .map(|computer| (*computer, caller(TEAM_AGENT_ID)))
+            .collect())
     }
 }
 

@@ -74,28 +74,45 @@ where
     R: HarnessRepo,
     TeamAgents: ComputerTeamAgents,
 {
-    /// Mark each agent teammate's computer with its agent, so clients keep
-    /// it out of everything that starts agents on a runtime.
-    async fn with_team_agents(&self, mut harness: Harness) -> Result<Harness, HarnessError> {
+    /// Mark each agent teammate's computer with its agent, with one lookup
+    /// for the whole list, so clients keep it out of everything that starts
+    /// agents on a runtime.
+    async fn with_team_agents(
+        &self,
+        mut harnesses: Vec<Harness>,
+    ) -> Result<Vec<Harness>, HarnessError> {
+        let computers: Vec<ComputerId> = harnesses
+            .iter()
+            .filter_map(|harness| harness.computer_id)
+            .collect();
+        if computers.is_empty() {
+            return Ok(harnesses);
+        }
+
+        let mut agents = self
+            .team_agents
+            .team_agents_of(&computers)
+            .await
+            .map_err(Into::into)?;
+        for harness in &mut harnesses {
+            harness.team_agent_user_id = harness
+                .computer_id
+                .and_then(|computer_id| agents.remove(&computer_id));
+        }
+        Ok(harnesses)
+    }
+
+    /// [`Self::with_team_agents`] for one harness.
+    async fn with_team_agent(&self, mut harness: Harness) -> Result<Harness, HarnessError> {
         if let Some(computer_id) = harness.computer_id {
             harness.team_agent_user_id = self
                 .team_agents
-                .team_agent_of(computer_id)
+                .team_agents_of(&[computer_id])
                 .await
-                .map_err(Into::into)?;
+                .map_err(Into::into)?
+                .remove(&computer_id);
         }
         Ok(harness)
-    }
-
-    async fn all_with_team_agents(
-        &self,
-        harnesses: Vec<Harness>,
-    ) -> Result<Vec<Harness>, HarnessError> {
-        let mut marked = Vec::with_capacity(harnesses.len());
-        for harness in harnesses {
-            marked.push(self.with_team_agents(harness).await?);
-        }
-        Ok(marked)
     }
 
     async fn ensure_may_manage(
@@ -351,7 +368,7 @@ where
             .list_usable_harnesses(caller)
             .await
             .map_err(Into::into)?;
-        self.all_with_team_agents(harnesses).await
+        self.with_team_agents(harnesses).await
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
@@ -364,7 +381,7 @@ where
             .list_directory_harnesses(caller)
             .await
             .map_err(Into::into)?;
-        self.all_with_team_agents(harnesses).await
+        self.with_team_agents(harnesses).await
     }
 
     #[tracing::instrument(skip(self, req), fields(caller = %caller, team_id = %req.team_id, enabled = req.enabled), err)]
@@ -454,7 +471,7 @@ where
             allow_permission_bypass: req.allow_permission_bypass,
         };
         if changes == HarnessChanges::default() {
-            return self.with_team_agents(harness).await;
+            return self.with_team_agent(harness).await;
         }
         let mut updated = self
             .repo
@@ -463,7 +480,7 @@ where
             .map_err(Into::into)?
             .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
         updated.access = access;
-        self.with_team_agents(updated).await
+        self.with_team_agent(updated).await
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
@@ -748,8 +765,9 @@ where
         };
         Ok(self
             .team_agents
-            .team_agent_of(computer_id)
+            .team_agents_of(&[computer_id])
             .await
-            .map_err(Into::into)?)
+            .map_err(Into::into)?
+            .remove(&computer_id))
     }
 }

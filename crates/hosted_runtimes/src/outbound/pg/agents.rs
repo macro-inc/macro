@@ -1,6 +1,8 @@
 //! Which agent teammate each computer runs: `agent_user_id` on the computer,
 //! or on its reservation while the purchase is confirming.
 
+use std::collections::HashMap;
+
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -59,11 +61,39 @@ impl ComputerAgents for PgComputerRepo {
 impl harnesses::domain::ports::ComputerTeamAgents for PgComputerAgents {
     type Err = PgComputerError;
 
-    async fn team_agent_of(
+    #[tracing::instrument(skip_all, fields(computers = computers.len()), err)]
+    async fn team_agents_of(
         &self,
-        computer: ComputerId,
-    ) -> Result<Option<MacroUserIdStr<'static>>, PgComputerError> {
-        self.agent_of(computer).await
+        computers: &[ComputerId],
+    ) -> Result<HashMap<ComputerId, MacroUserIdStr<'static>>, PgComputerError> {
+        let ids: Vec<Uuid> = computers
+            .iter()
+            .map(|computer| computer.as_uuid())
+            .collect();
+        // A purchase still confirming counts, as in `agent_of`: its id is
+        // the future computer's.
+        let rows = sqlx::query!(
+            r#"
+            SELECT id AS "id!", agent_user_id AS "agent_user_id!"
+            FROM hosted_runtime
+            WHERE id = ANY($1) AND agent_user_id IS NOT NULL
+            UNION ALL
+            SELECT id AS "id!", agent_user_id AS "agent_user_id!"
+            FROM computer_reservation
+            WHERE id = ANY($1) AND agent_user_id IS NOT NULL
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                let agent = MacroUserIdStr::try_from(row.agent_user_id).map_err(|_| {
+                    PgComputerError::Corrupt("agent_user_id is not a Macro user id".to_owned())
+                })?;
+                Ok((ComputerId::new_from_uuid(row.id), agent))
+            })
+            .collect()
     }
 }
 
