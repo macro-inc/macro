@@ -296,7 +296,9 @@ pub fn decide_personal_invoice(
     customer_subscriptions: &[SubscriptionFacts],
     prices: &SeatPrices,
 ) -> Result<PersonalDecision, UnknownPrice> {
-    if subscription.team_id.is_some() {
+    if subscription.team_id.is_some() || (invoice.paid && is_terminal(subscription.status)) {
+        // A payment that arrives after the subscription ended grants
+        // nothing back.
         return Ok(PersonalDecision::Ignore);
     }
     if !invoice.paid {
@@ -376,7 +378,16 @@ pub fn decide_team_subscription(
     })
 }
 
-/// Decides a team subscription's invoice outcome; `None` when personal.
+/// Whether the subscription ended for good.
+fn is_terminal(status: SubscriptionStatus) -> bool {
+    matches!(
+        status,
+        SubscriptionStatus::Canceled | SubscriptionStatus::IncompleteExpired
+    )
+}
+
+/// Decides a team subscription's invoice outcome; `None` when personal or
+/// paid after the subscription ended.
 pub fn decide_team_invoice(
     event_id: &EventId,
     event_at: DateTime<Utc>,
@@ -384,6 +395,9 @@ pub fn decide_team_invoice(
     subscription: &SubscriptionFacts,
 ) -> Option<TeamUpdate> {
     let team_id = subscription.team_id?;
+    if invoice.paid && is_terminal(subscription.status) {
+        return None;
+    }
     Some(TeamUpdate {
         team_id,
         subscription_id: subscription.id.clone(),

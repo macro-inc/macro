@@ -36,7 +36,7 @@ impl PgStripeIdentity {
     }
 
     /// Whether the account exists.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     pub async fn user_exists(&self, user: &MacroUserIdStr<'_>) -> anyhow::Result<bool> {
         Ok(sqlx::query_scalar!(
             r#"SELECT EXISTS (SELECT 1 FROM "User" WHERE id = $1) AS "exists!""#,
@@ -47,7 +47,7 @@ impl PgStripeIdentity {
     }
 
     /// Records that the account has used its trial.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     pub async fn mark_has_trialed(&self, user: &MacroUserIdStr<'_>) -> anyhow::Result<()> {
         sqlx::query!(
             r#"

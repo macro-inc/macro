@@ -86,7 +86,7 @@ fn a_new_trial_grants_premium_and_records_the_trial() {
         &event_id(),
         event_at(),
         &created,
-        &[created.subscription.clone()],
+        std::slice::from_ref(&created.subscription),
         &prices(),
     )
     .unwrap();
@@ -171,7 +171,7 @@ fn canceling_one_subscription_keeps_access_while_another_is_live() {
         &event_id(),
         event_at(),
         &canceled,
-        &[canceled.subscription.clone()],
+        std::slice::from_ref(&canceled.subscription),
         &prices(),
     )
     .unwrap() else {
@@ -194,7 +194,7 @@ fn an_unknown_price_grants_nothing_and_fails() {
             &event_id(),
             event_at(),
             &unknown,
-            &[unknown.subscription.clone()],
+            std::slice::from_ref(&unknown.subscription),
             &prices()
         ),
         Err(UnknownPrice {
@@ -344,7 +344,7 @@ fn a_failed_payment_revokes_unless_another_personal_subscription_is_live() {
         event_at(),
         &failed,
         &person,
-        &[person.clone()],
+        std::slice::from_ref(&person),
         &prices(),
     )
     .unwrap() else {
@@ -495,4 +495,43 @@ fn only_complete_item_lists_yield_policy_periods() {
         .unwrap()
         .remove("current_period_end");
     assert!(subscription_periods(&event_id(), event_at(), &facts(no_period), None).is_empty());
+}
+
+#[test]
+fn a_payment_after_the_subscription_ended_grants_nothing_back() {
+    let person = facts(subscription(
+        "sub_Person",
+        "canceled",
+        1_700_000_000,
+        "price_premium",
+    ));
+    assert_eq!(
+        decide_personal_invoice(
+            &event_id(),
+            event_at(),
+            &invoice(true, "subscription_cycle"),
+            &person,
+            &[],
+            &prices(),
+        )
+        .unwrap(),
+        PersonalDecision::Ignore
+    );
+
+    let mut team = subscription(
+        "sub_Team",
+        "incomplete_expired",
+        1_800_000_000,
+        "price_premium",
+    );
+    team["metadata"]["team_id"] = json!(TEAM);
+    assert_eq!(
+        decide_team_invoice(
+            &event_id(),
+            event_at(),
+            &invoice(true, "subscription_cycle"),
+            &facts(team),
+        ),
+        None
+    );
 }

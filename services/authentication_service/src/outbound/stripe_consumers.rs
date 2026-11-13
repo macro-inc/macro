@@ -390,6 +390,20 @@ where
             }
         }
 
+        // A team that moved to another subscription ignores the old one's
+        // lapse, so a late cancel or failed invoice cannot revoke seats the
+        // new subscription pays for.
+        let bound = self
+            .teams
+            .team_subscription_id(&update.team_id)
+            .await
+            .map_err(retry)?;
+        let replaced = bound.as_ref() != Some(&update.subscription_id);
+        if replaced && bound.is_some() && !update.paying {
+            tracing::info!("team is on another subscription; ignoring this one's lapse");
+            return Ok(());
+        }
+
         // The usage policy checks the team's subscription binding as it was
         // before this event, so it runs before the binding is patched. Its
         // failure must not hold back the team's access: the base work still
@@ -428,6 +442,15 @@ where
             .await
             .map_err(retry)?;
 
+        // Before the patch, a replacement subscription's periods were
+        // checked against the old binding and left unverified; verify them
+        // now that the team is bound to it.
+        let policy = match (policy, update.owner.as_ref()) {
+            (Ok(()), Some(owner)) if replaced => {
+                self.sync_periods(owner, None, update.verified).await
+            }
+            (policy, _) => policy,
+        };
         policy.inspect_err(|error| {
             tracing::warn!(error = %error, "usage policy sync failed; base team work is done");
         })
