@@ -13,6 +13,8 @@ use crate::domain::ports::{IndexStore, IngestMetrics, ObjectStore};
 use crate::domain::service::GitaiService;
 
 mod credentials;
+/// The read API routes.
+pub mod read;
 mod worker;
 
 #[cfg(test)]
