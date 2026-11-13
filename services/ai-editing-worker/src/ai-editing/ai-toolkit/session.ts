@@ -1,6 +1,6 @@
 import { registerCodeHighlighting } from '@lexical/code';
-import { type InferType, validateSchema } from '@loro-mirror/core';
 import { $convertFromMarkdownString } from '@lexical/markdown';
+import { type InferType, validateSchema } from '@loro-mirror/core';
 import {
   MARKDOWN_LORO_SCHEMA,
   type MarkdownLoroSchemaType,

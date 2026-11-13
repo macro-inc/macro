@@ -7,7 +7,6 @@ import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import * as native from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { mountLocalSessionView } from '../local-session-view';
-import { createViewCommand } from './commands';
 import { createBuiltinRegistry } from './node-views/builtins';
 import { registerMacroElementViews } from './node-views/macro';
 import { selectionMessage } from './session-port';
