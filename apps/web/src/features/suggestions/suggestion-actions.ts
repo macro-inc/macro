@@ -47,7 +47,7 @@ function targetContent(target: SuggestionTarget): SplitContent | undefined {
 
 type RoutineSuggestionActions = Pick<
   SuggestionActions,
-  'routineText' | 'reviewRoutine' | 'turnOnRoutine'
+  'reviewRoutine' | 'turnOnRoutine'
 >;
 
 /** A card's actions over the app's splits, composer and routine suggestions. */

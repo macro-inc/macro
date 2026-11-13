@@ -45,10 +45,8 @@ import {
   discoverItems,
   type SuggestionContext,
   type SuggestionItem,
-  type SuggestionSentencePart,
   stackLooks,
   suggestionItem,
-  suggestionSentenceRuns,
   suggestionsFor,
   templateItem,
 } from './core/suggestions';
@@ -394,17 +392,9 @@ function useDiscoverItems(list: ReturnType<typeof useSuggestionList>) {
   });
 }
 
-/** How the For you page's card words a routine suggestion. */
-export type RoutineCardText = {
-  title: string;
-  sentence: SuggestionSentencePart[];
-  /** What starts it, e.g. "Fridays at 9:00 AM". */
-  when: string;
-};
-
 /**
- * The routine suggestions the For you page shows: each one's wording, opening
- * it for review, and saving it as a routine. Enabling one twice saves one routine.
+ * The routine suggestions the For you page shows: opening one for review,
+ * and saving it as a routine. Their wording comes with the feed. Enabling one twice saves one routine.
  */
 export function useForYouRoutineSuggestions() {
   const list = useSuggestionList(
@@ -415,16 +405,6 @@ export function useForYouRoutineSuggestions() {
     list.items()?.find((item) => item.id === suggestionId);
 
   return {
-    text(suggestionId: string): RoutineCardText | undefined {
-      const item = find(suggestionId);
-      if (!item) return undefined;
-
-      return {
-        title: item.title,
-        sentence: suggestionSentenceRuns(item),
-        when: item.chain.trigger,
-      };
-    },
     review(suggestionId: string) {
       const item = find(suggestionId);
       if (item) list.actions.customize(item);

@@ -58,7 +58,8 @@ only, behind `enable-suggestions`.
 - The server decides and the page shows: each suggestion's `status`, the
   feed's order (what waits or runs, then what is done), the tab `counts`,
   `isNew`, what a finished one left (`result`, absent until its run
-  settled), and a reply's `waitingSince`, `from` and draft `preview`. Don't
+  settled), a reply's `waitingSince`, `from` and draft `preview`, and a
+  routine suggestion's `routine` sentence and when-line. Don't
   derive any of these here. Home asks for its rows with `?limit=5`
   (`queries/top-suggestions.ts`).
 - A dismissal is sent at once; the suggestion stays as a row for the visit,

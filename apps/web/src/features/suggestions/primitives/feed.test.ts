@@ -65,7 +65,6 @@ function host(suggestions: Suggestion[]) {
     openComposer: vi.fn(async () => {}),
     openItem: vi.fn(),
     openDraft: vi.fn(),
-    routineText: () => undefined,
     reviewRoutine: vi.fn(),
     turnOnRoutine: vi.fn(async () => {}),
   } satisfies SuggestionActions;

@@ -19,6 +19,14 @@ export type SuggestionCategory =
 
 export type EntityAction = 'reply' | 'review' | 'follow_up';
 
+/** How a routine suggestion's drafted routine reads on its card. */
+export type RoutineText = {
+  /** What it does, with the values AI picked marked. */
+  sentence: { text: string; picked: boolean }[];
+  /** When it runs, e.g. "Fridays at 9:00 AM". */
+  when: string;
+};
+
 export type SuggestionKind =
   | { kind: 'prompt'; runMode: 'composer'; prompt: string }
   | {
@@ -42,7 +50,12 @@ export type SuggestionKind =
       /** A reply suggestion's: when that message came. */
       waitingSince?: string;
     }
-  | { kind: 'routine'; routineSuggestionId: string };
+  | {
+      kind: 'routine';
+      routineSuggestionId: string;
+      /** How its drafted routine reads; absent once the routine is gone. */
+      routine?: RoutineText;
+    };
 
 /**
  * Where a suggestion's card is, as the server says:

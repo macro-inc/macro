@@ -66,6 +66,17 @@ function toKind(suggestion: WireSuggestion): SuggestionKind | undefined {
       .with({ kind: 'routine' }, (routine) => ({
         kind: 'routine',
         routineSuggestionId: routine.routineSuggestionId,
+        ...(routine.routine
+          ? {
+              routine: {
+                sentence: routine.routine.sentence.map((part) => ({
+                  text: part.text,
+                  picked: part.picked,
+                })),
+                when: routine.routine.when,
+              },
+            }
+          : {}),
       }))
       // A kind or action a newer server knows and this build doesn't.
       .otherwise(() => undefined)

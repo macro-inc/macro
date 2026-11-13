@@ -48,7 +48,7 @@ function FeedSkeleton() {
 /** The For you page: every suggestion as a card, filtered by where it stands. */
 export function ForYouView(props: {
   feed: SuggestionsFeed;
-  actions: Pick<SuggestionActions, 'routineText' | 'openItem'>;
+  actions: Pick<SuggestionActions, 'openItem'>;
   parts: SuggestionItemParts;
   refresh: Refresh;
   focusedId?: string;
@@ -118,11 +118,6 @@ export function ForYouView(props: {
           failed={entry.failed}
           changed={entry.changed}
           parts={props.parts}
-          routine={
-            entry.suggestion.kind === 'routine'
-              ? props.actions.routineText(entry.suggestion.routineSuggestionId)
-              : undefined
-          }
           onAccept={() => props.feed.accept(entry.suggestion)}
           onOpen={() => props.feed.open(entry.suggestion)}
           onOpenInChat={() => props.feed.openInChat(entry.suggestion)}

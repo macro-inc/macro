@@ -8,11 +8,9 @@ import WarningIcon from '@icon/system/regular/warning.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Badge, Button, Card, Item, Spinner } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import type { SuggestionItemParts } from '../context/suggestions-source';
 import type {
-  RoutineCardText,
-  SuggestionItemParts,
-} from '../context/suggestions-source';
-import type {
+  RoutineText,
   Suggestion,
   SuggestionStatus,
   SuggestionTarget,
@@ -28,7 +26,6 @@ export type SuggestionCardProps = {
   failed: boolean;
   /** It was rewritten since the card showed it; the action took nothing up. */
   changed: boolean;
-  routine?: RoutineCardText;
   parts: SuggestionItemParts;
   onAccept(): void;
   onOpen(): void;
@@ -133,7 +130,7 @@ const UNDER_TITLE = 'pl-12.5';
 const PICKED_MARK_MAX = 32;
 
 /** A routine's sentence, with the short values AI picked in violet. */
-function RoutineSentence(props: { text: RoutineCardText }) {
+function RoutineSentence(props: { text: RoutineText }) {
   return (
     <For each={props.text.sentence}>
       {(part) => (
@@ -160,8 +157,8 @@ function RoutineSentence(props: { text: RoutineCardText }) {
 function SuggestionSentence(props: SuggestionCardProps) {
   const sentence = () =>
     props.suggestion.kind === 'routine' &&
-    props.routine?.sentence.some((part) => part.text.trim())
-      ? props.routine
+    props.suggestion.routine?.sentence.some((part) => part.text.trim())
+      ? props.suggestion.routine
       : undefined;
 
   return (
@@ -223,7 +220,7 @@ function SuggestionFacts(props: SuggestionCardProps) {
           )}
         </Match>
         <Match
-          when={props.suggestion.kind === 'routine' && props.routine}
+          when={props.suggestion.kind === 'routine' && props.suggestion.routine}
           keyed
         >
           {(text) => (

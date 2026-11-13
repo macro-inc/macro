@@ -9,7 +9,6 @@ export function useSuggestions() {
   const layout = useSplitLayout();
   const routines = useForYouRoutineSuggestions();
   const actions = createSuggestionActions(layout, {
-    routineText: routines.text,
     reviewRoutine: routines.review,
     turnOnRoutine: routines.turnOn,
   });

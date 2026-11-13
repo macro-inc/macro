@@ -26,7 +26,6 @@ function host() {
   const actions = createSuggestionActions(
     { openWithSplit },
     {
-      routineText: () => undefined,
       reviewRoutine: vi.fn(),
       turnOnRoutine: vi.fn(async () => {}),
     }

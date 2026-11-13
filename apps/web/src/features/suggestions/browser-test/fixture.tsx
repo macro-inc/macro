@@ -176,22 +176,6 @@ function Fixture() {
     openItem: (target) =>
       record(`open ${target.entityType} ${target.entityId}`),
     openDraft: (draft) => record(`draft ${draft.partId}`),
-    routineText: () => ({
-      title: 'Weekly vendor digest',
-      sentence: [
-        { text: 'Every ', picked: false },
-        { text: 'Friday', picked: true },
-        { text: ' at ', picked: false },
-        { text: '9:00 AM', picked: true },
-        {
-          text: ', list the deliveries vendors confirmed this week and post it to ',
-          picked: false,
-        },
-        { text: '#ops', picked: true },
-        { text: '.', picked: false },
-      ],
-      when: 'Fridays at 9:00 AM',
-    }),
     reviewRoutine: (id) => record(`review ${id}`),
     turnOnRoutine: async (id) => {
       record(`turn-on ${id}`);

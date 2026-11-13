@@ -45,15 +45,6 @@ export type GenerationSource = {
   regenerate(): Promise<void>;
 };
 
-/** A routine suggestion's drafted routine, as its card words it. */
-export type RoutineCardText = {
-  title: string;
-  /** The routine's sentence, with the values AI picked marked. */
-  sentence: { text: string; picked: boolean }[];
-  /** When it runs, e.g. "Fridays at 9:00 AM". */
-  when: string;
-};
-
 /** What the app does when a card's action is pressed. */
 export type SuggestionActions = {
   /** Open the agent composer with the prompt typed in, unsent. */
@@ -62,8 +53,6 @@ export type SuggestionActions = {
   openItem(target: SuggestionTarget): void;
   /** Open a reply draft a session wrote. */
   openDraft(draft: SuggestionTarget): void;
-  /** A routine suggestion's wording; undefined while it loads or once it is gone. */
-  routineText(routineSuggestionId: string): RoutineCardText | undefined;
   /** Open a routine suggestion's drafted routine for review before saving it. */
   reviewRoutine(routineSuggestionId: string): void;
   /** Save a routine suggestion's drafted routine as a routine, switched on. */
