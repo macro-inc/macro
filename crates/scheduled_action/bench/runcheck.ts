@@ -271,7 +271,7 @@ export async function runCheck(
     }
     ms = performance.now() - started;
     if (runs.length) await Bun.sleep(SETTLE_MS);
-    effects = await read(db, context, t0, firedMessage);
+    effects = await read(db, context, t0, firedMessage, (id) => sdk(at, owner).tasks.byId(id).content());
     effects.runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
   } finally {
     // Deleted first, so putting the task back doesn't fire it again.
@@ -324,9 +324,16 @@ export async function withMentionNames(db: SQL, texts: string[]): Promise<string
 /**
  * What changed in the owner's workspace since `since`, from the stack's
  * database: messages in channels they're in and tasks they own, so others
- * using the stack can't make a run look as if it reported something.
+ * using the stack can't make a run look as if it reported something. A
+ * task's body is read with `body`, as the owner.
  */
-async function read(db: SQL, context: Context, since: Date, fired?: string): Promise<Effects> {
+async function read(
+  db: SQL,
+  context: Context,
+  since: Date,
+  fired: string | undefined,
+  body: (task: string) => Promise<string>,
+): Promise<Effects> {
   const names = new Map(Object.entries(context.ids).map(([name, id]) => [id, name]));
   const messages = (await db`
     select m.id, m.sender_id, m.content, m.parent_entity_id as channel, c.name as channel_name
@@ -338,7 +345,7 @@ async function read(db: SQL, context: Context, since: Date, fired?: string): Pro
     order by m.created_at`) as { id: string; sender_id: string; content: string; channel: string; channel_name: string | null }[];
   const tasks = (await db`
     select d.id, d.name from "Document" d join document_sub_type t on t.document_id = d.id
-    where d."createdAt" >= ${since} and d."deletedAt" is null and d.owner = ${userId(OWNER)}
+    where t.sub_type = 'task' and d."createdAt" >= ${since} and d."deletedAt" is null and d.owner = ${userId(OWNER)}
     order by d."createdAt"`) as { id: string; name: string }[];
   const notifications = (await db`
     select n.metadata from user_notification u join notification n on n.id = u.notification_id
@@ -352,7 +359,10 @@ async function read(db: SQL, context: Context, since: Date, fired?: string): Pro
       from: personOf(message.sender_id),
       text: texts[index],
     })),
-    tasks: tasks.map((task) => ({ id: task.id, name: task.name, text: '' })),
+    // A body that can't be read is checked as empty, as before bodies were read.
+    tasks: await Promise.all(
+      tasks.map(async (task) => ({ id: task.id, name: task.name, text: await body(task.id).catch(() => '') })),
+    ),
     notifications: notifications.map((row) => JSON.stringify(row.metadata)),
   };
 }

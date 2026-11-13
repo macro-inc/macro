@@ -86,7 +86,7 @@ export type Effects = {
   runs: { isSuccess: boolean; result: unknown; reply?: string }[];
   /** Messages posted in the owner's channels, the fired message left out. */
   messages: { channel: string; from: string; text: string }[];
-  /** Tasks created, by name and text. */
+  /** Tasks the owner owns that were created since, by name and body. */
   tasks: { id: string; name: string; text: string }[];
   /** The owner's new notifications, as text. */
   notifications: string[];
