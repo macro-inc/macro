@@ -18,6 +18,7 @@ mod infra;
 mod lambda;
 mod macro_services;
 mod process;
+mod provider_catalog;
 mod stack;
 mod tls;
 mod user;
