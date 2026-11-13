@@ -115,6 +115,10 @@ describe('normalizeGithubMarkdown', () => {
     expect(markdown).toContain('- [ ] Fix comments');
   });
 
+  it('decodes entities in HTML code, which becomes a code span', () => {
+    expect(normalizeGithubMarkdown('<code>&lt;div&gt;</code>')).toBe('`<div>`');
+  });
+
   it('leaves fenced code and code spans as written', () => {
     const markdown = normalizeGithubMarkdown(
       '`<br>` and <b>bold</b>\n\n```html\n<div><!-- kept --></div>\n```'

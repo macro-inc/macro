@@ -139,7 +139,7 @@ function pairedTag(
   return current;
 }
 
-function convertHtml(prose: string): string {
+function convertHtml(prose: string, saved: string[]): string {
   let text = prose
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<img(\s[^>]*)?\/?>/gi, (_tag, attributes: string | undefined) =>
@@ -165,9 +165,13 @@ function convertHtml(prose: string): string {
   text = pairedTag(text, 'strong|b', (content) => delimit('**', content));
   text = pairedTag(text, 'em|i', (content) => delimit('*', content));
   text = pairedTag(text, 'del|s|strike', (content) => delimit('~~', content));
-  text = pairedTag(text, 'code|kbd|samp|tt', (content) =>
-    delimit('`', content.replace(/`/g, "'"))
-  );
+  text = pairedTag(text, 'code|kbd|samp|tt', (content) => {
+    // A code span shows entities literally, so decode them first; protect
+    // it from the rewriting below, as a written code span is.
+    const span = delimit('`', decodeAttribute(content).replace(/`/g, "'"));
+    saved.push(span);
+    return PLACEHOLDER(saved.length - 1);
+  });
   text = pairedTag(text, 'ins', (content) => `<u>${content}</u>`);
 
   return (
@@ -240,7 +244,7 @@ function protectCodeSpans(prose: string, saved: string[]): string {
 }
 
 function convertProse(prose: string, saved: string[]): string {
-  return convertLines(convertHtml(protectCodeSpans(prose, saved)));
+  return convertLines(convertHtml(protectCodeSpans(prose, saved), saved));
 }
 
 /**
