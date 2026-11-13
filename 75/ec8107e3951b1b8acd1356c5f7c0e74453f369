@@ -1,0 +1,28 @@
+crates/webhook/src/domain/ingestion.rs
+  s_800cdee5095ae4::t_32dfa9507b5286 51
+crates/channels/src/inbound/teammate_dms_consumer.rs
+  s_800cdee5095ae4::t_32dfa9507b5286 110
+docs/guides/add-kafka-event.md
+  s_800cdee5095ae4::t_32dfa9507b5286 205-207,212-213
+  s_800cdee5095ae4::t_16076ccf7843d3 113
+crates/agent_trigger/src/domain/broker_events.rs
+  s_800cdee5095ae4::t_1156fbbf12a770 411-417,435-441
+crates/event_exposure/src/lib.rs
+  s_800cdee5095ae4::t_32dfa9507b5286 75-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "75ec8107e3951b1b8acd1356c5f7c0e74453f369",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
