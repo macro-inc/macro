@@ -77,6 +77,8 @@ topics! {
     MacroAgentSessionsTopic => "macro.agent_sessions",
     /// Email lifecycle events (links, messages, threads, labels).
     MacroEmailTopic => "macro.email",
+    /// Public email events for the inbox owner's webhooks and event streams.
+    MacroEmailNotificationsTopic => "macro.email_notifications",
     /// Webhook configuration lifecycle events (created / updated / deleted / validated).
     MacroWebhooksTopic => "macro.webhooks",
     /// Entity mention events (created / deleted) across channels and docs.

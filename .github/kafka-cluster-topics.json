@@ -12,6 +12,7 @@
   "macro.databases",
   "macro.documents",
   "macro.email",
+  "macro.email_notifications",
   "macro.example",
   "macro.forms",
   "macro.github_pull_requests",
