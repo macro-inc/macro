@@ -4,7 +4,6 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
-  ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
@@ -13,6 +12,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { ToolButton } from '@components/app/tool-button';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { Permissions } from '@core/component/SharePermissions';

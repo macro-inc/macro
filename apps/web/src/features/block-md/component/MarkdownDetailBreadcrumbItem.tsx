@@ -14,6 +14,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
 import { Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -43,7 +44,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
   const panel = useSplitPanelOrThrow();
   const { displayName } = useMarkdownName();
   const { permissions, state } = useMarkdownDocument();
-  const { fileOperations, menuTools } = useMarkdownDocumentTools();
+  const { fileOperations, actions } = useMarkdownDocumentTools();
   const blockName = () => markdownDocumentBlockName(props.kind);
   const userId = useUserId();
   const appearance = useDocumentAppearance(
@@ -138,7 +139,13 @@ export function MarkdownDetailBreadcrumbItem(props: {
               itemType="document"
               name={documentName()}
               ops={fileOperations}
-              tools={menuTools}
+              tools={[
+                // Drive and CRM details also open on phones, which offer
+                // neither version history nor wide mode.
+                ...(isMobile() ? [] : [actions.history, actions.wideMode]),
+                actions.askMacro,
+                actions.codeActions,
+              ]}
               entityKind={blockName()}
               entity={headerEntity()}
               permissions={menuPermissions()}
