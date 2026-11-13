@@ -172,6 +172,16 @@ export const macroConnect = defineFlag({
   env: 'ENABLE_MACRO_CONNECT',
 });
 
+/**
+ * Agent dashboards: agent accounts' wakes and traces, and the dashboard
+ * panes over them. The backend reads the same PostHog key.
+ */
+export const enableAgentDashboards = defineFlag({
+  key: 'enable-agent-dashboards',
+  env: 'ENABLE_AGENT_DASHBOARDS',
+  default: onInDev,
+});
+
 /** HTML artifact nodes on Canvas, including running their scripts in a sandbox. */
 export const enableCanvasArtifacts = defineFlag({
   key: 'enable-canvas-artifacts',

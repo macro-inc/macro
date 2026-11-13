@@ -3757,6 +3757,434 @@
         }
       }
     },
+    "/agents/{agent_user_id}/wakes": {
+      "get": {
+        "tags": ["agent-wakes"],
+        "summary": "A page of an agent account's wakes, newest first. Readable by the agent and\nthe owners and admins of its teams.",
+        "operationId": "list_agent_wakes",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "User id of the agent account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only wakes in this status; `running` is every wake with no `end` record yet.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AgentWakeStatusFilter"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 100; 25 when left out.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "`nextCursor` from the page before.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentWakesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["agent-wakes"],
+        "summary": "Record one of the caller's own wakes: a muppet `WakeRecord` (version 1),\nunchanged. Only the agent account itself may. The latest record per wake id\nis kept; repeating a record, or sending one of an earlier phase than the one\nstored, changes nothing.",
+        "operationId": "record_agent_wake",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "User id of the agent account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WakeRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Recorded, or older than the record already stored"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_user_id}/wakes/{wake_id}": {
+      "get": {
+        "tags": ["agent-wakes"],
+        "summary": "One of an agent account's wakes.",
+        "operationId": "get_agent_wake",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "User id of the agent account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "wake_id",
+            "in": "path",
+            "description": "The wake's id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentWake"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_user_id}/wakes/{wake_id}/trace": {
+      "get": {
+        "tags": ["agent-wakes"],
+        "summary": "The trace of one of an agent account's wakes, whole. Not found when none was\nuploaded or it has expired.",
+        "operationId": "get_agent_wake_trace",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "User id of the agent account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "wake_id",
+            "in": "path",
+            "description": "The wake's id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WakeTrace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-wakes"],
+        "summary": "Replace the trace of one of the caller's own recorded wakes: its model\nsession's turns and tool calls, redacted by the agent. Only the agent\naccount itself may. At most 10 MiB; kept 30 days after its last upload.",
+        "operationId": "put_agent_wake_trace",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "User id of the agent account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "wake_id",
+            "in": "path",
+            "description": "The wake's id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WakeTrace"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Stored"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/coding-agents": {
       "get": {
         "tags": ["coding-agents"],
@@ -5201,6 +5629,50 @@
           "truncationNotice": {
             "type": ["string", "null"],
             "description": "Says what was left out, when truncated."
+          }
+        }
+      },
+      "AgentWake": {
+        "type": "object",
+        "description": "One wake: its latest record.",
+        "required": ["record", "receivedAt"],
+        "properties": {
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When that record arrived."
+          },
+          "record": {
+            "$ref": "#/components/schemas/WakeRecord",
+            "description": "The latest record: `start`, `session`, or `end`."
+          },
+          "traceUpdatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the wake's trace was last uploaded, if it was."
+          }
+        }
+      },
+      "AgentWakeStatusFilter": {
+        "type": "string",
+        "description": "A wake's status, for filtering.",
+        "enum": ["running", "ok", "failed", "timeout", "cancelled"]
+      },
+      "AgentWakesPage": {
+        "type": "object",
+        "description": "A page of wakes, newest first.",
+        "required": ["wakes"],
+        "properties": {
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Pass as `cursor` for the next page; absent on the last."
+          },
+          "wakes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentWake"
+            },
+            "description": "The wakes."
           }
         }
       },
@@ -8728,6 +9200,557 @@
                 "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
               }
             ]
+          }
+        }
+      },
+      "WakeEffect": {
+        "type": "object",
+        "description": "Something a wake did that its system saw for itself.",
+        "required": ["kind"],
+        "properties": {
+          "id": {
+            "type": ["string", "null"],
+            "description": "Which one."
+          },
+          "kind": {
+            "type": "string",
+            "description": "What kind of effect, e.g. `pr_opened`."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "A link to it."
+          }
+        }
+      },
+      "WakeEndStatus": {
+        "type": "string",
+        "description": "How a wake ended, apart from what came of it.",
+        "enum": ["ok", "failed", "timeout", "cancelled"]
+      },
+      "WakeFailure": {
+        "type": "object",
+        "description": "What went wrong.",
+        "required": ["type", "message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "What happened."
+          },
+          "type": {
+            "type": "string",
+            "description": "A low-cardinality name, e.g. `timeout`."
+          }
+        }
+      },
+      "WakeOutcome": {
+        "type": "object",
+        "description": "What came of a wake, and how that is known.",
+        "required": ["name", "source", "check"],
+        "properties": {
+          "check": {
+            "$ref": "#/components/schemas/WakeOutcomeCheck",
+            "description": "How the report held up."
+          },
+          "name": {
+            "type": "string",
+            "description": "One of the system's declared outcomes, or `unclassified`."
+          },
+          "observed": {
+            "type": ["string", "null"],
+            "description": "What the effects alone imply."
+          },
+          "reported": {
+            "type": ["string", "null"],
+            "description": "What the agent reported."
+          },
+          "source": {
+            "$ref": "#/components/schemas/WakeOutcomeSource",
+            "description": "Where `name` came from."
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "The agent's one line on what it did."
+          }
+        }
+      },
+      "WakeOutcomeCheck": {
+        "type": "string",
+        "description": "How the agent's report held up against the effects.",
+        "enum": ["confirmed", "unverifiable", "contradicted", "not_reported"]
+      },
+      "WakeOutcomeSource": {
+        "type": "string",
+        "description": "Where an outcome's name came from.",
+        "enum": ["reported", "observed", "none"]
+      },
+      "WakeParent": {
+        "type": "object",
+        "description": "The wake, and its system, that started this one.",
+        "properties": {
+          "system": {
+            "type": ["string", "null"],
+            "description": "The parent wake's system."
+          },
+          "wake": {
+            "type": ["string", "null"],
+            "description": "The parent wake's id."
+          }
+        }
+      },
+      "WakePhase": {
+        "type": "string",
+        "description": "The phase of a record: how far the wake had got when it was written.",
+        "enum": ["start", "session", "end"]
+      },
+      "WakeRecord": {
+        "type": "object",
+        "description": "One wake record, version 1, as a muppet system sends it.",
+        "required": [
+          "v",
+          "phase",
+          "system",
+          "wake",
+          "trace",
+          "trigger",
+          "startedAt"
+        ],
+        "properties": {
+          "durationMs": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "How long it ran."
+          },
+          "effects": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/WakeEffect"
+            },
+            "description": "What the system saw it do."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "description": "When it ended, ISO 8601 in UTC. This and the fields below come with\nthe `end` record only."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WakeFailure",
+                "description": "What went wrong, when it did."
+              }
+            ]
+          },
+          "operation": {
+            "type": ["string", "null"],
+            "description": "`invoke_workflow` when no model was woken."
+          },
+          "outcome": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WakeOutcome",
+                "description": "What came of it."
+              }
+            ]
+          },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WakeParent",
+                "description": "What started it."
+              }
+            ]
+          },
+          "phase": {
+            "$ref": "#/components/schemas/WakePhase",
+            "description": "`start`, `session`, or `end`."
+          },
+          "session": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WakeSession",
+                "description": "The model session it ran as."
+              }
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "ISO 8601 in UTC, to the millisecond."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WakeEndStatus",
+                "description": "How it ended."
+              }
+            ]
+          },
+          "system": {
+            "type": "string",
+            "description": "The system that woke its agent, e.g. `pr-factory`."
+          },
+          "terminal": {
+            "type": ["string", "null"],
+            "description": "The Herdr terminal it ran in."
+          },
+          "trace": {
+            "$ref": "#/components/schemas/WakeTraceIds",
+            "description": "Where the wake sits in a trace."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/WakeTrigger",
+            "description": "What woke it."
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WakeUsage",
+                "description": "What it used."
+              }
+            ]
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The format version; always 1.",
+            "minimum": 0
+          },
+          "wake": {
+            "type": "string",
+            "description": "This wake's id, unique within the agent."
+          }
+        }
+      },
+      "WakeSession": {
+        "type": "object",
+        "description": "The model session a wake ran as.",
+        "required": ["agent"],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "description": "What ran it, e.g. `claude` or `codex`."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "description": "Claude Code's session id, Codex's conversation id."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "The model."
+          },
+          "provider": {
+            "type": ["string", "null"],
+            "description": "Who serves the model, e.g. `anthropic`."
+          }
+        }
+      },
+      "WakeTrace": {
+        "type": "object",
+        "description": "A wake's model session from end to end.",
+        "required": [
+          "v",
+          "source",
+          "sessionId",
+          "startedAt",
+          "endedAt",
+          "live",
+          "spans"
+        ],
+        "properties": {
+          "costUsd": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "What the session cost, when known."
+          },
+          "endedAt": {
+            "type": "string",
+            "description": "The transcript's last instant."
+          },
+          "live": {
+            "type": "boolean",
+            "description": "Whether the session was still being written when this was uploaded."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "The model."
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "The model session's id."
+          },
+          "source": {
+            "$ref": "#/components/schemas/WakeTraceSource",
+            "description": "Which program wrote the transcript."
+          },
+          "spans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WakeTraceSpan"
+            },
+            "description": "The timeline."
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "The transcript's first instant."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "The title Claude Code gave the session."
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The format version; always 1.",
+            "minimum": 0
+          }
+        }
+      },
+      "WakeTraceIds": {
+        "type": "object",
+        "description": "Where the wake sits in an OpenTelemetry trace, as lower-case hex.",
+        "required": ["traceId", "spanId"],
+        "properties": {
+          "parentSpanId": {
+            "type": ["string", "null"],
+            "description": "The span of what started it, if anything."
+          },
+          "spanId": {
+            "type": "string",
+            "description": "16 hex characters."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "32 hex characters."
+          }
+        }
+      },
+      "WakeTraceSource": {
+        "type": "string",
+        "description": "Which program wrote the transcript the trace was parsed from.",
+        "enum": ["claude", "codex"]
+      },
+      "WakeTraceSpan": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The prompt, or anything said to the session after it.",
+            "required": ["at", "text", "kind"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "description": "When it was said."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "text": {
+                "type": "string",
+                "description": "What was said."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One model response.",
+            "required": [
+              "index",
+              "at",
+              "end",
+              "text",
+              "thinking",
+              "tokens",
+              "kind"
+            ],
+            "properties": {
+              "at": {
+                "type": "string",
+                "description": "When it began."
+              },
+              "end": {
+                "type": "string",
+                "description": "When it ended."
+              },
+              "index": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Its place among the turns, from 0.",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["turn"]
+              },
+              "model": {
+                "type": ["string", "null"],
+                "description": "The model that answered."
+              },
+              "text": {
+                "type": "string",
+                "description": "What it said."
+              },
+              "thinking": {
+                "type": "string",
+                "description": "What it thought."
+              },
+              "tokens": {
+                "$ref": "#/components/schemas/WakeTraceTokens",
+                "description": "What it used."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One tool call.",
+            "required": ["id", "turn", "at", "name", "input", "error", "kind"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "description": "When it was called."
+              },
+              "end": {
+                "type": ["string", "null"],
+                "description": "When it returned; absent while it runs."
+              },
+              "error": {
+                "type": "boolean",
+                "description": "Whether it failed."
+              },
+              "id": {
+                "type": "string",
+                "description": "The tool call's id."
+              },
+              "input": {
+                "type": "object",
+                "description": "Its input, as the model gave it."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["tool"]
+              },
+              "name": {
+                "type": "string",
+                "description": "The tool."
+              },
+              "result": {
+                "type": ["string", "null"],
+                "description": "Its result as text; absent while it runs."
+              },
+              "turn": {
+                "type": "integer",
+                "format": "int32",
+                "description": "The index of the turn that called it.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "One step on a trace's timeline. Instants are ISO 8601."
+      },
+      "WakeTraceTokens": {
+        "type": "object",
+        "description": "Tokens one model turn used.",
+        "required": ["input", "output", "cacheRead", "cacheWrite"],
+        "properties": {
+          "cacheRead": {
+            "type": "number",
+            "format": "double",
+            "description": "Input tokens read from the cache."
+          },
+          "cacheWrite": {
+            "type": "number",
+            "format": "double",
+            "description": "Input tokens written to the cache."
+          },
+          "input": {
+            "type": "number",
+            "format": "double",
+            "description": "Input tokens."
+          },
+          "output": {
+            "type": "number",
+            "format": "double",
+            "description": "Output tokens."
+          }
+        }
+      },
+      "WakeTrigger": {
+        "type": "object",
+        "description": "What woke the agent.",
+        "required": ["kind", "source", "ids"],
+        "properties": {
+          "ids": {
+            "type": "object",
+            "description": "The ids of what it is about, by what they identify, e.g. `pr`.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WakeTriggerKind",
+            "description": "What kind of thing woke it."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "What within the source, when it has a name."
+          },
+          "source": {
+            "type": "string",
+            "description": "The event source that fired, as the behavior names it."
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "One line a person reads."
+          }
+        }
+      },
+      "WakeTriggerKind": {
+        "type": "string",
+        "description": "What kind of thing woke the agent.",
+        "enum": ["schedule", "message", "event", "job", "manual"]
+      },
+      "WakeUsage": {
+        "type": "object",
+        "description": "What the wake used.",
+        "properties": {
+          "costUsd": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Cost in US dollars, when known."
+          },
+          "inputTokens": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Input tokens."
+          },
+          "outputTokens": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Output tokens."
+          },
+          "turns": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Model turns."
           }
         }
       },

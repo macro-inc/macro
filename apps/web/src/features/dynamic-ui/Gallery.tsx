@@ -37,6 +37,20 @@ const SAMPLE_ENTITIES = [
   { id: CH_MACRO, type: 'channel' as const },
 ];
 
+// The agent account whose wakes the wakes and trace widgets read, and one of
+// its wakes. The app drops a URL's query on load, so set them in this
+// browser: localStorage['dynamic-ui-gallery-wakes'] = '{"agent":"<user id>","wake":"<wake id>"}'.
+function galleryWakes(): { agent: string; wake: string } {
+  const fallback = { agent: 'macro|agent@example.com', wake: 'wake-1' };
+  try {
+    const saved = localStorage.getItem('dynamic-ui-gallery-wakes');
+    return saved ? { ...fallback, ...JSON.parse(saved) } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+const { agent: AGENT_ID, wake: WAKE_ID } = galleryWakes();
+
 // --- individual widget catalog: ONE section per widget ----------------------
 const CATALOG: Array<{ label: string; widget: Widget }> = [
   {
@@ -77,6 +91,19 @@ const CATALOG: Array<{ label: string; widget: Widget }> = [
           future: true,
         },
       ],
+    },
+  },
+  {
+    label: 'wakes',
+    widget: { type: 'wakes', title: 'Wakes', agentId: AGENT_ID },
+  },
+  {
+    label: 'trace',
+    widget: {
+      type: 'trace',
+      title: 'Trace',
+      agentId: AGENT_ID,
+      wakeId: WAKE_ID,
     },
   },
   {
