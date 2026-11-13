@@ -25,6 +25,9 @@ const tokenCount = /tokens$|token_?count$/i;
 /** An env-style variable name whose value is a secret: a segment ending in one of these, e.g. `STRIPE_KEY`, `GITHUB_TOKEN`, `DB_PASSWORD`. */
 const secretVariable =
 	/(?:^|_)[A-Z0-9]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|PASS|CREDENTIALS?|AUTH|DSN|COOKIE)(?:_|$)/;
+/** A secret-looking key: `secretKey`, or one shaped like a secret variable in any case (`STRIPE_KEY`, `dsn`). */
+const isSecretKey = (key: string): boolean =>
+	secretKey.test(key) || secretVariable.test(key.toUpperCase());
 /** A process's exit code is a number under `code` too, and isn't a secret. */
 const exitCode = /^(exit_?)?code$/i;
 /** Under `code`, a string with spaces or lines in it is program text, not a one-time code. */
@@ -45,7 +48,7 @@ export const redactor = (secrets: readonly string[]): Redactor => {
 			"[secret]",
 		);
 		result = result.replace(
-			/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{16,}|GOCSPX-[A-Za-z0-9_-]{16,}|xox[abpr]-[A-Za-z0-9-]{16,}|AKIA[A-Z0-9]{16})\b/g,
+			/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{16,}|[sr]k_(?:live|test)_[A-Za-z0-9]{16,}|GOCSPX-[A-Za-z0-9_-]{16,}|xox[abpr]-[A-Za-z0-9-]{16,}|AKIA[A-Z0-9]{16})\b/g,
 			"[secret]",
 		);
 		result = result.replace(
@@ -73,9 +76,7 @@ export const redactor = (secrets: readonly string[]): Redactor => {
 		result = result.replace(
 			/("([\w-]+)"\s*:\s*)"(?:[^"\\]|\\.)*"/g,
 			(match, head: string, key: string) =>
-				secretKey.test(key) && !exitCode.test(key)
-					? `${head}"[secret]"`
-					: match,
+				isSecretKey(key) && !exitCode.test(key) ? `${head}"[secret]"` : match,
 		);
 		result = result.replace(
 			/([?&#])([\w-]+)=([^&#\s"'<>]+)/g,
@@ -99,10 +100,10 @@ export const redactor = (secrets: readonly string[]): Redactor => {
 			Object.entries(input).map(([key, entry]) => [
 				key,
 				(typeof entry === "string" &&
-					secretKey.test(key) &&
+					isSecretKey(key) &&
 					!(exitCode.test(key) && sourceCode.test(entry))) ||
 				(typeof entry === "number" &&
-					secretKey.test(key) &&
+					isSecretKey(key) &&
 					!exitCode.test(key) &&
 					!tokenCount.test(key))
 					? "[secret]"

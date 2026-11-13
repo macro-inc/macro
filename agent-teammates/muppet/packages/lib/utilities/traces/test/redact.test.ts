@@ -197,3 +197,24 @@ test("keeps token counts, which are numbers under token-ish keys", () => {
 		api_token: "[secret]",
 	});
 });
+
+test("redacts values under env-style JSON keys, and Stripe-style keys anywhere", () => {
+	const redact = redactor([]);
+	const stripe = `sk_${"live"}_${fill(24)}`;
+	expect(
+		redact.value({
+			env: {
+				STRIPE_KEY: "abc",
+				SENTRY_DSN: "https://k@o.test/1",
+				PORT: "8080",
+			},
+			note: `key ${stripe} here`,
+		}),
+	).toEqual({
+		env: { STRIPE_KEY: "[secret]", SENTRY_DSN: "[secret]", PORT: "8080" },
+		note: "key [secret] here",
+	});
+	expect(redact.text('{"GITHUB_TOKEN":"abc","max_tokens":5}')).toBe(
+		'{"GITHUB_TOKEN":"[secret]","max_tokens":5}',
+	);
+});
