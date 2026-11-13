@@ -39,7 +39,8 @@ export class GitaiStorage extends pulumi.ComponentResource {
     const stateful = { parent: this, protect: stack === 'prod' };
 
     // Commits, usage, notes and raw batches: kept, versioned, moved to
-    // Infrequent Access after 90 days.
+    // Infrequent Access after 90 days. Overwritten versions (a note
+    // re-uploaded, a retried batch) expire 30 days after they are replaced.
     const eventsKey = this.bucketKey('events', taskRole, tags, stateful);
     this.eventsBucket = this.privateBucket(
       'events',
@@ -52,6 +53,12 @@ export class GitaiStorage extends pulumi.ComponentResource {
             status: 'Enabled',
             filter: {},
             transitions: [{ days: 90, storageClass: 'STANDARD_IA' }],
+          },
+          {
+            id: 'expire-noncurrent-versions-after-30-days',
+            status: 'Enabled',
+            filter: {},
+            noncurrentVersionExpiration: { noncurrentDays: 30 },
           },
         ],
       },
@@ -128,7 +135,7 @@ export class GitaiStorage extends pulumi.ComponentResource {
             },
             {
               Effect: 'Allow',
-              Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+              Action: ['s3:GetObject', 's3:PutObject'],
               Resource: [
                 pulumi.interpolate`${this.eventsBucket.arn}/*`,
                 pulumi.interpolate`${this.sessionsBucket.arn}/*`,
