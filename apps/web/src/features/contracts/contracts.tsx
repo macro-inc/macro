@@ -1,11 +1,12 @@
+import { useQueryAccount } from '@app/lib/queries/auth/use-query-account';
 import { SplitPanel } from '@components/app/split-panel';
-import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { openExternalUrl } from '@core/util/url';
 import { Show } from 'solid-js';
 import { createBrowserContracts } from './browser-contracts';
+import { PerSignIn } from './components/per-sign-in';
 import {
   type ContractsContext,
   ContractsProvider,
@@ -46,15 +47,16 @@ function AccountContracts(props: { userId: string }) {
 
 /** The Contracts module, wired to the app. */
 export function Contracts() {
-  const userId = useUserId();
+  // Undefined while a new login is being confirmed: the app keeps showing the
+  // previous identity then, and its contracts must not stay open under it.
+  const account = useQueryAccount();
 
   return (
     <SplitPanel.Root>
       <SplitPanel.Body>
-        {/* Keyed: another account gets its own store, never this one's. */}
-        <Show when={userId()} keyed>
-          {(id) => <AccountContracts userId={id} />}
-        </Show>
+        <PerSignIn signIn={account()}>
+          {(userId) => <AccountContracts userId={userId} />}
+        </PerSignIn>
       </SplitPanel.Body>
     </SplitPanel.Root>
   );

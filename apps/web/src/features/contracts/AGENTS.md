@@ -13,7 +13,9 @@ lifecycle in `core/` against localStorage (packets) and IndexedDB (PDF bytes)
 and implements the two contracts in `context/`: `ContractsContext` for the
 workspace and `SigningContext` for a signing link. Each signed-in account has
 its own snapshot key and document store (`browser-contracts.ts`); a signing
-link finds the account that issued it by its token. The signing engine will
+link finds the account that issued it by its token. The workspace mounts once
+per confirmed sign-in (`PerSignIn` over `useQueryAccount`): it closes while a
+new login is being confirmed, and a closed store refuses late writes. The signing engine will
 replace that adapter behind the same contracts; nothing above `queries/`
 knows where packets are stored. No email is sent: a sender copies a signing
 link from the packet drawer.

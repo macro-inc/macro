@@ -40,8 +40,84 @@ async function signEverything(signer: Page, title?: string) {
   ).toBeVisible();
 }
 
+/** The signing link of one recipient of a seeded packet. */
+async function seededToken(page: Page, title: string, recipientId: string) {
+  await page.goto(`${FIXTURE}/workspace.html?seed=demo&now=${NOW}`, {
+    waitUntil: 'networkidle',
+  });
+  return page.evaluate(
+    ([packetTitle, id]) => {
+      const stored =
+        localStorage.getItem('macro:contracts:local:v1:fixture-viewer') ?? '{}';
+      const packets: {
+        title: string;
+        recipients: {
+          id: string;
+          signedAt?: string;
+          disclosureAcceptedAt?: string;
+          access?: { token: string };
+        }[];
+      }[] = JSON.parse(stored).packets ?? [];
+      return packets
+        .find((packet) => packet.title === packetTitle)
+        ?.recipients.find((recipient) => recipient.id === id);
+    },
+    [title, recipientId]
+  );
+}
+
 test.describe('contracts', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('nothing is signed when the browser cannot store the signer’s consent', async ({
+    page,
+  }) => {
+    const before = await seededToken(page, 'Northwind Order Form Q4', 'n1');
+    await page.goto(
+      `${FIXTURE}/signing.html?token=${before?.access?.token}&now=${NOW}`,
+      { waitUntil: 'networkidle' }
+    );
+    await page.getByRole('button', { name: 'Next field' }).click();
+    await page.getByRole('button', { name: 'Sign here' }).first().click();
+    await page.getByRole('button', { name: 'Adopt and sign' }).click();
+    await page.getByRole('button', { name: 'Next field' }).click();
+    await page.getByRole('textbox', { name: 'Text Input' }).fill('Ops Lead');
+    await expect(page.getByText('All fields done')).toBeVisible();
+
+    // The browser's storage fills up before the signer finishes.
+    await page.evaluate(() => {
+      Storage.prototype.setItem = () => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      };
+    });
+    await page.getByRole('button', { name: 'Finish' }).click();
+
+    await expect(
+      page.getByText('That didn’t go through. Try again.')
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'You’re done' })
+    ).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Finish' })).toBeEnabled();
+
+    const after = await page.evaluate(() => {
+      const stored =
+        localStorage.getItem('macro:contracts:local:v1:fixture-viewer') ?? '{}';
+      const packets: {
+        title: string;
+        recipients: {
+          id: string;
+          signedAt?: string;
+          disclosureAcceptedAt?: string;
+        }[];
+      }[] = JSON.parse(stored).packets ?? [];
+      return packets
+        .find((packet) => packet.title === 'Northwind Order Form Q4')
+        ?.recipients.find((recipient) => recipient.id === 'n1');
+    });
+    expect(after?.signedAt).toBeUndefined();
+    expect(after?.disclosureAcceptedAt).toBeUndefined();
+  });
 
   test('a packet goes from documents to a completed certificate', async ({
     page,
@@ -178,20 +254,8 @@ test.describe('signing on a phone', () => {
   test('the signer adopts a signature in a sheet and finishes', async ({
     page,
   }) => {
-    await page.goto(`${FIXTURE}/workspace.html?seed=demo&now=${NOW}`, {
-      waitUntil: 'networkidle',
-    });
-    const token = await page.evaluate(() => {
-      const stored =
-        localStorage.getItem('macro:contracts:local:v1:fixture-viewer') ?? '{}';
-      const packets: {
-        title: string;
-        recipients: { id: string; access?: { token: string } }[];
-      }[] = JSON.parse(stored).packets ?? [];
-      return packets
-        .find((packet) => packet.title === 'Northwind Order Form Q4')
-        ?.recipients.find((recipient) => recipient.id === 'n1')?.access?.token;
-    });
+    const token = (await seededToken(page, 'Northwind Order Form Q4', 'n1'))
+      ?.access?.token;
 
     await page.goto(`${FIXTURE}/signing.html?token=${token}&now=${NOW}`, {
       waitUntil: 'networkidle',

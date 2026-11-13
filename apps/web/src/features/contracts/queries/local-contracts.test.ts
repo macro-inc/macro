@@ -127,6 +127,21 @@ describe('createLocalContracts', () => {
     expect(other.packets()).toEqual([]);
   });
 
+  it('refuses a write once its store has closed', async () => {
+    const browser = fakeBrowser();
+    const contracts = createRoot((dispose) => {
+      const opened = browser.open().context(VIEWER);
+      // The account signs out: the workspace and its store go away.
+      dispose();
+      return opened;
+    });
+
+    const late = await contracts.createDraft(ACME_DRAFT);
+
+    expect(late._unsafeUnwrapErr()).toEqual({ kind: 'storage_failed' });
+    expect(browser.items.size).toBe(0);
+  });
+
   it('keeps a packet in place when it changes', async () => {
     const contracts = open(fakeBrowser()).context(VIEWER);
     const first = (
@@ -309,6 +324,31 @@ describe('signing', () => {
     );
     // A used link no longer opens the packet.
     expect(signing.session()).toEqual({ t: 'unavailable' });
+  });
+
+  it('records no signature when consent cannot be stored', async () => {
+    const browser = fakeBrowser();
+    const workspace = open(browser).context(VIEWER);
+    const sent = await sendAcme(workspace);
+    const token = findRecipient(sent, SARAH)?.access?.token ?? '';
+    const signing = open(browser).signing(() => token);
+
+    // The page chains the two steps exactly like this on Finish.
+    browser.setFull(true);
+    const finished = await signing.acceptDisclosure().andThen(() =>
+      signing.sign({
+        ...TYPED_SIGNATURE,
+        values: { 'sarah-title': 'VP, Operations' },
+      })
+    );
+    browser.setFull(false);
+
+    expect(finished._unsafeUnwrapErr()).toEqual({ kind: 'storage_failed' });
+    const stored = open(browser).context(VIEWER).packets()[0];
+    expect(findRecipient(stored, SARAH)?.disclosureAcceptedAt).toBeUndefined();
+    expect(findRecipient(stored, SARAH)?.signedAt).toBeUndefined();
+    // The link still works, so the signer can try again.
+    expect(signing.session().t).toBe('ready');
   });
 
   it('finds the account that issued a link, and none for an unknown one', async () => {

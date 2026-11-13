@@ -199,6 +199,8 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
   const [loadFailed, setLoadFailed] = createSignal(initial.t === 'unreadable');
   const [now, setNow] = createSignal(deps.clock());
   const pdfs = new Map<string, Promise<PdfDocument>>();
+  // Set when the owner is disposed, as it is when the account signs out.
+  let closed = false;
 
   const lifecycle = (): LifecycleContext => ({
     now: deps.clock(),
@@ -226,6 +228,9 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
   function mutate<T>(change: Change<T>): ResultAsync<T, ContractsError> {
     const work = deps.exclusive(
       async (): Promise<Result<T, ContractsError>> => {
+        // A write still waiting when its store closed belongs to a session
+        // that has ended; it is dropped rather than applied behind it.
+        if (closed) return err(storageFailed());
         const stored = refresh();
         if (stored.t === 'unreadable') return err(storageFailed());
 
@@ -330,6 +335,7 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
   }, CLOCK_INTERVAL_MS);
   const unsubscribe = deps.changes.subscribe(refresh);
   onCleanup(() => {
+    closed = true;
     clearInterval(clock);
     unsubscribe();
   });
