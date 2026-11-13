@@ -7880,6 +7880,7 @@ dependencies = [
  "cached",
  "clap",
  "database_env_vars",
+ "entity_access_db_utils",
  "futures",
  "harness_id",
  "macro_authorization",
