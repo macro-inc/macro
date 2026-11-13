@@ -1,0 +1,32 @@
+crates/properties/src/domain/events/test.rs
+  s_6c441025453223::t_00d7d0e981a965 567
+crates/bots/src/domain/events/test.rs
+  s_6c441025453223::t_00d7d0e981a965 275
+crates/properties/src/domain/test.rs
+  s_6c441025453223::t_c1eb2f2b2b3369 4418
+  s_6c441025453223::t_959451e00e47fb 4419-4422,4617-4621
+crates/bots/src/domain/events.rs
+  s_6c441025453223::t_00d7d0e981a965 130-131
+crates/properties/src/domain/events/definitions.rs
+  s_6c441025453223::t_00d7d0e981a965 173-175
+docs/guides/add-kafka-event.md
+  s_6c441025453223::t_c25bc9f9536388 209-210
+crates/event_exposure/AGENTS.md
+  s_6c441025453223::t_c25bc9f9536388 49-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ee991a9e809fb01d321274cbfa5b5256bc6b4b8c",
+  "prompts": {},
+  "sessions": {
+    "s_6c441025453223": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6e3cf052-1aab-4a10-a528-0b9992b29113",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
