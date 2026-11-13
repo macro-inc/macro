@@ -1,0 +1,35 @@
+crates/agent_session/src/domain/pull_request_backlinks/test.rs
+  s_0b592ddedab601::t_c73e8870d985c3 144-148,155-182
+  s_0b592ddedab601::t_813b706f3b1dc2 183-184
+CLAUDE.md
+  s_0b592ddedab601::t_e62fc01aecbcb4 109-111
+services/agent_harness_service/src/pull_request_descriptions.rs
+  s_0b592ddedab601::t_d31a60f2082175 15,56,98,127-132,154-159
+  s_0b592ddedab601::t_e62fc01aecbcb4 133-145,160-173
+crates/agent_session/src/domain/pull_request_backlinks.rs
+  s_0b592ddedab601::t_ba5862de67dfb3 75-79,146-149,153,163-192
+  s_0b592ddedab601::t_4a767989100926 193
+.github/workflows/pr-privacy-check.yml
+  s_0b592ddedab601::t_e62fc01aecbcb4 55-67,81-92
+.agents/skills/git/SKILL.md
+  s_0b592ddedab601::t_e62fc01aecbcb4 66-70,82
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/pr_privacy_check.sh
+  s_0b592ddedab601::t_f2662fb477d6da 27-39,59,61,63-64
+  s_0b592ddedab601::t_8ed03e143db9c0 53-58,60,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "973c2cee417bc569400ddc116098bcc6baaa22d3",
+  "prompts": {},
+  "sessions": {
+    "s_0b592ddedab601": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fbdc6575-0049-4bbd-8041-706c9e8602a1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
