@@ -1,0 +1,19 @@
+crates/webhook/AGENTS.md
+  s_695cafe799631b::t_df945b0f0f05ea 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "015b779ac9866accbda0b1cf11028d590e4e6bc3",
+  "prompts": {},
+  "sessions": {
+    "s_695cafe799631b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bc62c68-1b4e-4243-bba7-d22f0052d31c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
