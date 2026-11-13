@@ -19,6 +19,7 @@ const control = vi.hoisted(() => ({
   afterProjection: vi.fn(),
   report: vi.fn(),
   status: vi.fn(),
+  overlays: vi.fn(),
 }));
 vi.mock('@app/observability/flow', () => ({
   useFlow: () => ({
@@ -129,7 +130,8 @@ vi.mock('@core/component/LexicalMarkdown/context/editor-namespace', () => ({
   allocateEditorNamespace: () => 'readiness-test',
 }));
 vi.mock('@core/component/LexicalMarkdown/context/FloatingMenuContext', () => ({
-  FloatingMenuGroup: () => null,
+  FloatingMenuGroup: (props: { children?: import('solid-js').JSX.Element }) =>
+    props.children,
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/decorator-host/fast-cached-views',
@@ -518,24 +520,29 @@ vi.mock(
 vi.mock(
   '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays',
   () => ({
-    installNativeMarkdownOverlays: () => ({
-      dispose() {},
-      bindView() {},
-      host: {},
-      events: {},
-    }),
+    installNativeMarkdownOverlays: (_view: unknown, options: unknown) => {
+      control.overlays(options);
+      return { dispose() {}, bindView() {}, host: {}, events: {} };
+    },
   })
 );
 vi.mock(
   '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners',
   () => ({
-    createNativeListenerScope: () => ({
-      add() {},
-      dispose() {},
-      fail(error: unknown): never {
-        throw error;
-      },
-    }),
+    createNativeListenerScope: () => {
+      const disposers: Array<() => void> = [];
+      return {
+        add(dispose: () => void) {
+          disposers.push(dispose);
+        },
+        dispose() {
+          for (const dispose of disposers.splice(0).reverse()) dispose();
+        },
+        fail(error: unknown): never {
+          throw error;
+        },
+      };
+    },
   })
 );
 vi.mock(
@@ -546,6 +553,32 @@ vi.mock(
       bindView() {},
       host: {},
       events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/plugins/code/native-accessory',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@core/component/LexicalMarkdown/plugins/code/native-accessory')
+    >()),
+    createNativeCodeAccessories: () => ({ dispose() {} }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer',
+  () => ({ NodeAccessoryLayer: () => null })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight',
+  () => ({ NativeLocationHighlight: () => null })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/editing/overlay-hosts/native-creation',
+  () => ({
+    createNativeCreationComposerController: () => ({
+      dispose() {},
+      requestCreation: () => false,
     }),
   })
 );
