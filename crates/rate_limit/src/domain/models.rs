@@ -128,3 +128,28 @@ impl RateLimitConfig {
         Self::new(5, Duration::from_secs(3600))
     }
 }
+
+/// Outcome of asking for a concurrency lease.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConcurrencyLease {
+    /// The holder has a lease (newly acquired or renewed).
+    Held,
+    /// The key already has `max_holders` live leases held by others.
+    Exceeded {
+        /// Live leases on the key.
+        current: u64,
+        /// The configured maximum.
+        max_holders: u64,
+    },
+}
+
+/// Configuration for a concurrency limit: at most `max_holders` live leases
+/// per key, each lapsing `lease` after its last renewal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConcurrencyLimitConfig {
+    /// Maximum live leases per key.
+    pub max_holders: u64,
+    /// How long a lease lives without renewal. A holder that dies stops
+    /// counting once its lease lapses.
+    pub lease: Duration,
+}

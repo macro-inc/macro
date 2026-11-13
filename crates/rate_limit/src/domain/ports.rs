@@ -4,7 +4,10 @@ use std::future::Future;
 
 use rootcause::Report;
 
-use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitOk, RateLimitResult};
+use crate::domain::models::{
+    ConcurrencyLease, ConcurrencyLimitConfig, RateLimitConfig, RateLimitKey, RateLimitOk,
+    RateLimitResult,
+};
 
 /// Port for rate limiting operations.
 pub trait RateLimitPort: Send + Sync + 'static {
@@ -44,5 +47,33 @@ pub trait RateLimitService: Send + Sync + 'static {
     fn rollback_ticket(
         &self,
         ticket: RateLimitOk,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for limiting how many holders may hold a key at once, such as open
+/// streams per credential.
+///
+/// Unlike [`RateLimitPort`], which counts actions in a window, each holder
+/// holds a lease that it renews while it lives and releases when it ends; a
+/// holder that dies without releasing stops counting when its lease lapses.
+pub trait ConcurrencyLimitPort: Send + Sync + 'static {
+    /// Acquire or renew `holder`'s lease on `key`.
+    ///
+    /// Idempotent: a holder that already has a live lease renews it and is
+    /// never refused. A new holder is refused when `max_holders` other live
+    /// leases exist.
+    fn acquire(
+        &self,
+        key: &RateLimitKey,
+        holder: &str,
+        config: ConcurrencyLimitConfig,
+    ) -> impl Future<Output = Result<ConcurrencyLease, Report>> + Send;
+
+    /// Release `holder`'s lease on `key`. Releasing a lapsed or unknown lease
+    /// is not an error.
+    fn release(
+        &self,
+        key: &RateLimitKey,
+        holder: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }

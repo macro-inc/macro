@@ -3,7 +3,9 @@
 ## What it is
 
 Part of shared infrastructure. Generic rate limiting: a hashed-key
-sliding-window counter, checked and rolled back atomically via Redis.
+sliding-window counter, checked and rolled back atomically via Redis, and a
+concurrency limit (at most N live leases per key) for long-lived holders such
+as open event streams.
 
 ## Start here
 
@@ -11,6 +13,8 @@ sliding-window counter, checked and rolled back atomically via Redis.
   `RateLimitService` (ticket-returning `check_rate_limit` +
   `rollback_ticket`) — read these before the implementation.
 - `src/outbound/redis.rs`: the Redis-backed adapter.
+- `src/outbound/redis_concurrency.rs`: `ConcurrencyLimitPort` over a sorted
+  set of holders scored by lease expiry (Redis server clock).
 - `src/domain/models.rs`: `RateLimitKey`/`RateLimitKeyBuilder` — callers
   build the key from whatever data should be rate-limited; the crate never
   interprets it.
@@ -33,6 +37,9 @@ sliding-window counter, checked and rolled back atomically via Redis.
 - Rate-limit a new action: build a `RateLimitKey` with
   `RateLimitKeyBuilder` → call `check_rate_limit` before the action →
   `rollback_ticket` if the action then fails.
+- Cap concurrent holders: `ConcurrencyLimitPort::acquire` at start and on
+  every renewal (well inside the lease) → `release` at the end. A holder that
+  dies stops counting when its lease lapses.
 
 ## Checks
 
