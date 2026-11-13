@@ -549,6 +549,19 @@ pub struct HostAllocation {
     pub disk_gib: u32,
 }
 
+impl HostAllocation {
+    /// Whether a computer of `units` fits on the host while awake.
+    pub fn runs(&self, units: u32) -> bool {
+        units <= self.host.awake_capacity_units
+    }
+
+    /// Whether the host can sell a computer of `units`: it runs it and has
+    /// that much sold capacity left, as `ComputerRepo::reserve` decides.
+    pub fn sells(&self, units: u32) -> bool {
+        self.runs(units) && self.sold_units + units <= self.host.sold_capacity_units
+    }
+}
+
 /// What a host reports when it registers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostRegistration {

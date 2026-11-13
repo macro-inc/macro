@@ -282,7 +282,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('routine_run_finished', () => () => (
       <ClockIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with('agent_sign_in_expiry', () => () => (
+    .with('agent_sign_in_expiry', 'computer_setup', () => () => (
       <HardDrivesIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
