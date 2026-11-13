@@ -357,3 +357,32 @@ fn an_item_over_the_write_size_is_too_large() {
     .expect("parses");
     assert_eq!(only_skip_reason(&too_large), Some(SkipReason::TooLarge));
 }
+
+// Folder depth: every ancestor becomes a folder, so depth is capped.
+
+#[test]
+fn a_folder_deeper_than_the_cap_skips_the_item() {
+    let export = |depth: usize| {
+        format!(
+            r#"{{"folders":[{{"id":"f1","name":"{}"}}],"items":[{{"id":"item1","type":2,"name":"Note","notes":"a note","folderId":"f1"}}]}}"#,
+            vec!["a"; depth].join("/")
+        )
+    };
+
+    let at_cap = parse(
+        export(password_import::FolderPath::MAX_DEPTH).as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+    assert_eq!(at_cap.folders.len(), password_import::FolderPath::MAX_DEPTH);
+
+    let too_deep = parse(
+        export(10_000).as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+    assert_eq!(only_skip_reason(&too_deep), Some(SkipReason::TooLarge));
+    assert!(too_deep.folders.is_empty());
+}

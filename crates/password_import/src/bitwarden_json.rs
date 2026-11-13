@@ -212,7 +212,7 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
         match serde_json::from_str::<Item>(raw.get()) {
             Ok(item) => add_item(&mut parts, item, index, &folders),
             Err(_) => parts.skip(
-                Some(SourceKey::of_malformed(raw, index)),
+                Some(SourceKey::of_malformed(raw, &[], index)),
                 None,
                 SkipReason::Malformed,
             ),
@@ -223,7 +223,7 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
 }
 
 fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<String, String>) {
-    let key = SourceKey::from_source_id_or_index(item.id.as_deref(), index);
+    let key = SourceKey::from_scoped_id_or_index(&[], item.id.as_deref(), index);
     let name = item.name.as_deref();
 
     if item.deleted_date.is_some() {
