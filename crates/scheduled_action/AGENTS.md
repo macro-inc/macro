@@ -106,8 +106,9 @@ each run.
   drafter sees it on its next row read (`HandedBack::cancelled`) and
   deletes the session and the row, and its last update to the owner is
   `removed`, as is that of a job whose admission was refused. A
-  finished job's session is only stopped; it is deleted with its row, on
-  discard or after `FINISHED_RETENTION` (7 days). `DraftJobs::sweep` fails
+  finished job's session is only stopped (deleted at once if it won't
+  stop); it is deleted with its row, on discard or after
+  `FINISHED_RETENTION` (7 days). `DraftJobs::sweep` fails
   rows still drafting past `INTERRUPTED_AFTER` (their drafter died) and
   deletes abandoned cancels and expired rows; `RoutineDrafts::sweep` skips
   job rows. The drafter reports milestones through `DraftProgress`

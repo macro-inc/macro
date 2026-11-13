@@ -528,6 +528,28 @@ async fn a_ready_draft_is_readable_until_its_owner_discards_it() {
     assert!(replica.jobs.discard(owner(), job.id).await.is_err());
 }
 
+/// A finished draft whose session won't stop deletes the session, so it
+/// works on no further, and is still ready.
+#[tokio::test(start_paused = true)]
+async fn a_finished_draft_whose_session_wont_stop_deletes_it() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = checks_and_runs(&rows, json!([code_step("Make a task", "good")]));
+    Arc::get_mut(&mut sessions).unwrap().unstoppable = true;
+    let replica = Replica::new(&rows, &sessions);
+
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    replica.settled().await;
+
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert!(sessions.cancelled.lock().unwrap().is_empty());
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    let ready = replica.jobs.job(owner(), job.id).await.unwrap();
+    assert!(
+        matches!(ready.state, DraftJobState::Ready { .. }),
+        "{ready:?}"
+    );
+}
+
 /// A start whose request is dropped once its row is written, before it
 /// hears so, still drafts its job: the row never waits for a drafter that
 /// will never come.
