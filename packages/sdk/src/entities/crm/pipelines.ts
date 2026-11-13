@@ -7,7 +7,7 @@ import type { MacroClient } from '../../utils/client';
 import type { Company } from './company';
 import type { Contact } from './contact';
 import { CrmPipeline } from './pipeline';
-import { PipelineEntry } from './pipeline-entry';
+import { PipelineEntry, type PipelineField } from './pipeline-entry';
 
 /** CRM pipelines in the caller's team. */
 export class PipelineNamespace {
@@ -26,6 +26,27 @@ export class PipelineNamespace {
   async list(): Promise<CrmPipeline[]> {
     return unwrap(await this.client.storage.listCrmPipelines()).map((p) =>
       CrmPipeline.from(this.client, p),
+    );
+  }
+
+  /**
+   * List accessible pipelines with each one's fields in column order and its
+   * version, in one call. A select field lists its options, so Stage lists the
+   * pipeline's stages from first to last; a tracked pipeline's first field
+   * names its company or contact. Use it instead of reading each pipeline's
+   * table or running a `find` per pipeline just to learn its fields.
+   *
+   * @readonly
+   */
+  async listWithFields(): Promise<
+    { pipeline: CrmPipeline; fields: PipelineField[]; version: number }[]
+  > {
+    return unwrap(await this.client.storage.listCrmPipelineDetails()).map(
+      ({ fields, version, ...record }) => ({
+        pipeline: CrmPipeline.from(this.client, record),
+        fields,
+        version,
+      }),
     );
   }
 

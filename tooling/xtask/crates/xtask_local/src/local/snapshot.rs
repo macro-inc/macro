@@ -102,9 +102,11 @@ pub struct Plan {
 impl Plan {
     /// Hash the init-defining inputs. Must be called after `prepare` (the
     /// generated kickstart is one of the inputs). The kickstart's redirect
-    /// URLs are left out: they are the only part that depends on the
-    /// instance's ports, and [`fusionauth::apply_redirect_urls`] rewrites them
-    /// after every start.
+    /// URLs and Google authorization endpoint are left out: they are the only
+    /// parts that depend on the instance's ports, and
+    /// [`fusionauth::apply_redirect_urls`] and
+    /// [`fusionauth::apply_google_authorization_endpoint`] rewrite them after
+    /// every start.
     pub fn compute(instance: &Instance) -> Result<Plan> {
         let mut h = Sha256::new();
         h.update(FORMAT.to_le_bytes());
@@ -141,14 +143,14 @@ impl Plan {
             &repo_root().join("infra/stacks/opensearch/helpers"),
             &["node_modules"],
         )?;
-        // The generated FusionAuth kickstart, minus its port-bearing redirect URLs.
+        // The generated FusionAuth kickstart, minus its port-bearing URLs.
         let kickstart = gen_compose::kickstart_dir(instance).join("kickstart.json");
         let raw = std::fs::read(&kickstart)
             .with_context(|| format!("reading snapshot input {}", kickstart.display()))?;
         let doc = serde_json::from_slice(&raw)
             .with_context(|| format!("parsing {}", kickstart.display()))?;
         h.update(b"kickstart.json");
-        h.update(serde_json::to_vec(&kickstart::without_redirect_urls(doc))?);
+        h.update(serde_json::to_vec(&kickstart::without_instance_urls(doc))?);
 
         let key = hex(&h.finalize());
         let dir = root_dir()?.join(&key);

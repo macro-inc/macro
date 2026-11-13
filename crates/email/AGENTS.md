@@ -199,6 +199,13 @@ tools — hexagonal, heavily feature-gated.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
 - Spam and Trash seed candidates from indexed provider labels/folder state plus pending positive moves, then recheck canonical mailbox facts before pagination. Order by the latest matching message date; metadata touches and unrelated replies must not move folder rows. Only Trash relaxes the default trash exclusion.
+- A thread read by id (`emailThread`, `soupUpdates` hydration, mutation replies)
+  renders as All Mail shows it, else as its Spam or Trash row
+  (`thread_previews_by_id` in `domain/service/previews.rs`); All Mail alone
+  misses every spam-only or trash-only thread. Read the folders one thread at a
+  time, at most `MAX_FOLDER_LOOKUPS` per read: the folder scan reaches only that
+  thread's messages through an equality on its id, and an `OR` of ids reads the
+  inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
 
@@ -341,6 +348,14 @@ tools — hexagonal, heavily feature-gated.
   makes), and the discover span sums it as `outlook.provider_item_count`. It
   counts what the folder holds at the provider, imported or not, so an import
   is checked against it.
+- `email_sync_streams.reader_revision` is the folder reader revision a mail
+  folder stream's current delta round started at, written by `commit_page` on
+  the round's first page and copied by `rebind_work`. `domain/mailbox/reimport.rs`
+  restarts streams whose round started at an older revision (or none), Inbox
+  and Sent first, through the Outlook resync's reset limited to those folders;
+  a new query that copies or resets streams keeps the column consistent.
+  `PgMailboxSync::with_imports_paused` makes `claim_message` take only live
+  rows (`is_import IN (false,$2)` keeps both values named for the claim index).
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.
@@ -349,6 +364,9 @@ tools — hexagonal, heavily feature-gated.
   `pending`, since claims skip `confirming` ones while those still block later
   commands, as reconnect (`email_service` `mailbox_init.rs`) and `rebind_work` in
   `outbound/mailbox_pg/lifecycle.rs` do; thread operations omit older generations.
+  The same bumps delete older generations' `email_sync_streams` and
+  `email_message_reconciliation` rows: claims never take them, and left in place
+  they stay due and every lease claim reads past them.
 
 ## Related
 
