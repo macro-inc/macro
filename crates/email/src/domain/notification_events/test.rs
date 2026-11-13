@@ -124,6 +124,55 @@ fn public_event_keeps_the_envelope_key_and_subject() {
     );
 }
 
+#[test]
+fn public_event_keeps_correlation_routine_and_verb() {
+    let link_id = Uuid::now_v7();
+    let source = thread_read(link_id, Uuid::now_v7());
+    let mut envelope = source.event().clone();
+    envelope.agent_correlation_id = Some(Uuid::now_v7());
+    envelope.routine_id = Some(Uuid::now_v7());
+    envelope.agent_verb = Some("archived".to_string());
+    let source = EmailMacroEvent::with_event(link_id.to_string(), envelope.clone());
+
+    let public = EmailNotificationMacroEvent::from_email_event(&source).expect("public event");
+
+    assert_eq!(
+        public.event().agent_correlation_id,
+        envelope.agent_correlation_id
+    );
+    assert_eq!(public.event().routine_id, envelope.routine_id);
+    assert_eq!(public.event().agent_verb, envelope.agent_verb);
+}
+
+/// Acknowledges `macro.email` and fails every `macro.email_notifications` send.
+struct PublicTopicDown;
+
+impl MacroEventBroker for PublicTopicDown {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        let public = event.event().topic() == MacroEmailNotificationsTopic::TOPIC_STR;
+        Ok(tokio::spawn(async move {
+            if public {
+                Err(EventBrokerError::Publish("unknown topic".to_string()))
+            } else {
+                Ok(())
+            }
+        }))
+    }
+}
+
+#[tokio::test]
+async fn send_email_event_fails_when_the_public_copy_is_not_acknowledged() {
+    let result = PublicTopicDown
+        .send_email_event(&thread_read(Uuid::now_v7(), Uuid::now_v7()))
+        .expect("sent")
+        .await;
+
+    assert!(matches!(result, Err(EventBrokerError::Publish(_))));
+}
+
 #[tokio::test]
 async fn send_email_event_publishes_public_events_to_both_topics() {
     let broker = RecordingBroker::default();

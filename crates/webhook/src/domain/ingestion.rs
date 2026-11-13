@@ -460,8 +460,8 @@ pub(crate) fn normalized_message_event(
 
 /// Normalize an owner-only email event without changing its broker envelope.
 ///
-/// Backfill and reindex signals are internal. Received mail in spam or trash
-/// is also skipped; none of these events reach webhook subscribers.
+/// Internal email signals never reach this topic; the producer applies
+/// `EmailNotificationEvent::from_topic_event`.
 pub(crate) fn normalized_email_event(
     event: &Event<EmailNotificationEvent>,
 ) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
