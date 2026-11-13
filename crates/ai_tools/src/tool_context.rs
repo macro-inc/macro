@@ -2161,6 +2161,11 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// User-scoped code execution behind chat's `ExecuteCode`; `None` on hosts
+    /// that do not run chat's toolset, whose code tools then report
+    /// [`agent_code_mode::domain::UnconfiguredCodeMode`]'s "not configured".
+    #[from_ref(skip)]
+    pub user_code_mode: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>>,
     /// The web search vendor behind `WebSearch` and `WebFetch`.
     #[from_ref(skip)]
     pub web_search_provider: Arc<dyn web_search::domain::ports::SearchProvider>,
@@ -2209,6 +2214,22 @@ impl FromRef<ToolServiceContext> for AnthropicToolContext {
         tools.recorder = context.recorder.clone();
         tools.usage_context = context.usage_context.clone();
         tools
+    }
+}
+
+/// Chat's code mode runs as the requesting user, its writes attributed to the
+/// Macro bot like chat's direct tools.
+impl FromRef<ToolServiceContext> for agent_code_mode::inbound::toolset::UserCodeModeToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        Self {
+            service: context.user_code_mode.clone().unwrap_or_else(|| {
+                Arc::new(agent_code_mode::domain::UnconfiguredCodeMode)
+                    as Arc<dyn agent_code_mode::domain::UserCodeMode>
+            }),
+            cognition: context.cognition_tool_context.service.clone(),
+            caller: ai_toolset::ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID),
+            session: None,
+        }
     }
 }
 

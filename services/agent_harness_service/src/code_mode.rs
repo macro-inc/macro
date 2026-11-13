@@ -63,12 +63,13 @@ impl ExecutionCredentials for RunCredentials {
     }
 }
 
-/// Credentials for public MCP runs: the signed-in user, with no session, and
-/// the agent the run's posts are attributed to: an agent caller (a self-hosted
-/// agent's call through egress) as itself, any other caller as the Macro bot,
-/// labelled with the MCP client's name - the same attribution the direct MCP
-/// tools give. The MCP client asks the user before each tool call, so there is
-/// no owner gate.
+/// Credentials for user-scoped runs from the public MCP and the in-app chat:
+/// the signed-in user, with no session, and the agent the run's posts are
+/// attributed to: an agent caller (a self-hosted agent's call through egress)
+/// as itself, any other caller as the Macro bot, labelled with the MCP client's
+/// name - the same attribution the direct tools give. Neither has an owner
+/// gate: the MCP client asks the user before each tool call, and a chat turn
+/// is the user's own prompt, like the direct chat tools it replaces.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,

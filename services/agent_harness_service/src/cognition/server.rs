@@ -104,6 +104,7 @@ pub async fn build(
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
     mcp_http: mcp_client::outbound::guarded_http::McpHttp,
+    user_code_mode: Arc<dyn agent_code_mode::domain::UserCodeMode>,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -966,15 +967,17 @@ pub async fn build(
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        user_code_mode: Some(user_code_mode),
         web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
-    let all_tools_toolset = all_tools.toolset.clone();
+    // Chat, structured completions and projections run in code mode.
+    let chat_tools = ai_tools::tools_for_chat_code_mode();
+    let all_tools_toolset = chat_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
-        Arc::new(all_tools.prompt.to_string());
+        Arc::new(chat_tools.prompt.to_string());
 
     // Build memory service
     let memory_service = Arc::new(ai_tools::memory::build_memory_service(
@@ -1000,7 +1003,7 @@ pub async fn build(
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::tools_for(ai_tools::AiHost::Chat),
+            ai_tools::tools_for_chat_code_mode(),
         );
     // Notifier that pushes finished materializations to the target's connected
     // clients through the connection gateway.

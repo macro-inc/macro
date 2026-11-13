@@ -782,6 +782,7 @@ pub async fn build_tool_service_context_from_env(
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,
+        user_code_mode: None,
         web_search_provider: build_web_search_provider_from_env(),
         admission,
         recorder,

@@ -15,6 +15,12 @@ execution, display) that don't belong to a single domain.
 - `ReadAgentSession` is eager across chat, agent sessions, and MCP, and is also
   in the base toolset every host and memory research share; keep its
   registration covered by the host tests.
+- `tools_for_chat_code_mode` (`src/lib.rs`) is the in-app chat's only toolset,
+  also used by structured completions and projections: user-scoped
+  `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` (run through
+  `ToolServiceContext::user_code_mode`), the composer-confirmed user tools and
+  `DisplayResults`, and no SDK-covered tools, Anthropic sandbox tools or
+  `SelfKnowledge`. Names it leaves out are not callable.
 - `src/search.rs` / `src/search_tools.rs`: cross-entity search tools.
 - `src/deferred.rs`: tools whose result arrives after the turn (long-running
   work).

@@ -272,14 +272,43 @@ pub const EAGER_TOOLS: &[&str] = &[
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
-    tools_for_inner(host, false)
+    tools_for_inner(host, ToolsMode::Direct)
 }
 
 /// Direct tools retained when an agent can use the full Macro SDK through code.
 /// Filtering happens before discovery and prompt construction, so lazy loading
 /// cannot reintroduce the hidden SDK methods as direct tools.
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
-    tools_for_inner(AiHost::AgentSession, true)
+    tools_for_inner(AiHost::AgentSession, ToolsMode::Code)
+}
+
+/// The in-app chat in code mode: [`tools_for_agent_code_mode`]'s filtering on
+/// the chat toolset, plus user-scoped `ExecuteCode`, `DescribeCodeTools` and
+/// `ReadCodeDocs` (`UserCodeModeToolContext` from the chat's context). Chat
+/// keeps its composer-confirmed `SendEmail` and `CreateCalendarEvent`, and
+/// drops the Anthropic sandbox tools and `SelfKnowledge`, whose page is the
+/// `AboutMacro` symbol.
+pub fn tools_for_chat_code_mode() -> ToolSetWithPrompt {
+    tools_for_inner(AiHost::Chat, ToolsMode::Code)
+}
+
+/// The code tools chat's code mode sends with every request.
+pub const CHAT_CODE_MODE_TOOLS: [&str; 3] = ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"];
+
+/// Direct tools chat's code mode drops though no SDK method covers them:
+/// Anthropic's sandbox, which runs no Macro SDK, and the about-page that
+/// `ReadCodeDocs` serves as `AboutMacro`.
+pub const CHAT_CODE_MODE_DROPPED_TOOLS: [&str; 3] = [
+    "BashCodeExecution",
+    "TextEditorCodeExecution",
+    "SelfKnowledge",
+];
+
+/// Whether a host's tools run directly or beside `ExecuteCode`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolsMode {
+    Direct,
+    Code,
 }
 
 /// Existing agent-session tools exposed through the code-mode capability policy.
@@ -287,7 +316,7 @@ pub fn code_mode_tools() -> Arc<AiToolSet> {
     tools_for(AiHost::AgentSession).toolset
 }
 
-fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
+fn tools_for_inner(host: AiHost, mode: ToolsMode) -> ToolSetWithPrompt {
     let toolset = base_toolset()
         .add_subtoolset::<memory::ToolMemoryContext>(::memory::inbound::toolset::memory_toolset())
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
@@ -352,45 +381,74 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     let mut toolset = toolset;
-    if code_mode_direct {
-        // Review submission still needs these user-tool implementations internally,
-        // but advertising their blocking agent calls would reintroduce elicitation.
-        toolset.tools.retain(|name, _| {
-            !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
-                && !agent_code_mode::domain::covered_by_code_sdk(
-                    name,
-                    toolset.user_tools.contains_key(name),
-                )
-        });
+    match (host, mode) {
+        (AiHost::AgentSession, ToolsMode::Code) => {
+            // Review submission still needs these user-tool implementations internally,
+            // but advertising their blocking agent calls would reintroduce elicitation.
+            toolset.tools.retain(|name, _| {
+                !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
+                    && !agent_code_mode::domain::covered_by_code_sdk(
+                        name,
+                        toolset.user_tools.contains_key(name),
+                    )
+            });
+        }
+        // Chat's composer still confirms its user tools, so they stay.
+        (AiHost::Chat, ToolsMode::Code) => {
+            toolset.tools.retain(|name, _| {
+                !CHAT_CODE_MODE_DROPPED_TOOLS.contains(&name.as_str())
+                    && !agent_code_mode::domain::covered_by_code_sdk(
+                        name,
+                        toolset.user_tools.contains_key(name),
+                    )
+            });
+            toolset = toolset
+                .add_subtoolset::<agent_code_mode::inbound::toolset::UserCodeModeToolContext>(
+                    agent_code_mode::inbound::toolset::user_toolset(),
+                );
+        }
+        (AiHost::ChannelBot | AiHost::Mcp, ToolsMode::Code) | (_, ToolsMode::Direct) => {}
     }
     // External MCP clients have no `LoadTools`, so they get every schema.
-    let deferred = match host {
-        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => {
+    let deferred = match (host, mode) {
+        (AiHost::Chat, ToolsMode::Code) => {
+            let eager: Vec<&str> = EAGER_TOOLS
+                .iter()
+                .copied()
+                .chain(CHAT_CODE_MODE_TOOLS)
+                .collect();
+            deferred_tools(&toolset, &eager)
+        }
+        (AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot, _) => {
             deferred_tools(&toolset, EAGER_TOOLS)
         }
-        AiHost::Mcp => Arc::from([]),
+        (AiHost::Mcp, _) => Arc::from([]),
     };
     use agent_code_mode::domain::{GuideHost, inline_guides};
     // Code mode starts agent sessions through the SDK, whose guidance says
     // how; direct hosts keep the dispatch tools' own guidance.
-    let (tools_prompt, guides): (String, &str) = match host {
-        AiHost::Chat => (
+    let (tools_prompt, guides): (String, &str) = match (host, mode) {
+        (AiHost::Chat, ToolsMode::Code) => (
+            prompt::CODE_MODE_CHAT_TOOL_USE_PROMPT.to_string(),
+            inline_guides(GuideHost::Code),
+        ),
+        (AiHost::Chat, ToolsMode::Direct) => (
             prompt::TOOL_USE_PROMPT
                 .compose(&prompt::coding_agents::PROMPT)
                 .to_string(),
             inline_guides(GuideHost::Direct),
         ),
-        AiHost::AgentSession if code_mode_direct => (
+        (AiHost::AgentSession, ToolsMode::Code) => (
             prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
             inline_guides(GuideHost::Code),
         ),
-        AiHost::AgentSession => (
+        (AiHost::AgentSession, ToolsMode::Direct) => (
             prompt::SESSION_TOOL_USE_PROMPT
                 .compose(&prompt::coding_agents::PROMPT)
                 .to_string(),
             inline_guides(GuideHost::Direct),
         ),
-        AiHost::ChannelBot | AiHost::Mcp => (
+        (AiHost::ChannelBot | AiHost::Mcp, _) => (
             prompt::DIRECT_TOOL_USE_PROMPT
                 .compose(&prompt::coding_agents::PROMPT)
                 .to_string(),
@@ -404,7 +462,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     let deferred_section = prompt::deferred_tools::render(&catalog).unwrap_or_default();
     let prompt = format!("{tools_prompt}{guides}{deferred_section}");
     // Only code-mode sessions route SDK entities per turn.
-    let routed_prompt = if code_mode_direct {
+    let routed_prompt = if (host, mode) == (AiHost::AgentSession, ToolsMode::Code) {
         format!("{tools_prompt}{deferred_section}")
     } else {
         prompt.clone()
@@ -424,7 +482,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
-        .merge(&agent_code_mode::inbound::toolset::toolset())
+        .merge(&frontend_compat::CodeModeSchemas)
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<
             ToolChatService,

@@ -192,7 +192,10 @@ type ToolParserMap = {
     call: types.EditWordDocument;
     response: types.WordDocumentResponse;
   };
-  ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
+  ExecuteCode: {
+    call: types.ExecuteCodeCall;
+    response: types.ExecuteCodeReceipt;
+  };
   ExportPipelineCsv: {
     call: types.ExportPipelineCsv;
     response: types.ExportPipelineCsvResponse;
@@ -754,8 +757,8 @@ const toolParserMap = {
     response: schemas.WordDocumentResponse,
   },
   ExecuteCode: {
-    call: schemas.ExecuteCode,
-    response: schemas.ExecutionReceipt,
+    call: schemas.ExecuteCodeCall,
+    response: schemas.ExecuteCodeReceipt,
   },
   ExportPipelineCsv: {
     call: schemas.ExportPipelineCsv,
@@ -1370,7 +1373,10 @@ type ToolDataMap = {
     call: types.EditWordDocument;
     response: types.WordDocumentResponse;
   };
-  ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
+  ExecuteCode: {
+    call: types.ExecuteCodeCall;
+    response: types.ExecuteCodeReceipt;
+  };
   ExportPipelineCsv: {
     call: types.ExportPipelineCsv;
     response: types.ExportPipelineCsvResponse;

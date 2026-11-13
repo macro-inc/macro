@@ -38,7 +38,8 @@ AI system prompts: one module per prompt section, each exporting a
   documents, search) in its SDK namespace's `@agent` TSDoc block, never here:
   `ai_tools` inlines it from the generated catalog, and routed turns load it
   per entity. Only cross-cutting rules live in this crate. `code_mode.rs` is
-  only the general code-mode section.
+  only the general code-mode section (`PROMPT`, and `CHAT_PROMPT` for the
+  in-app chat, which presents with `DisplayResults`).
 
 ## Tool contracts
 

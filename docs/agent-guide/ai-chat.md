@@ -1,5 +1,19 @@
 # AI Chat (Agents)
 
+## Chat in code mode
+
+The standalone and doc-scoped chat (and AI projections) answer with
+`ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` instead of the direct
+Macro tools. People never see code: an execution reads as **Working in your
+workspace** / **Worked in your workspace**, and the SDK lookups render nothing.
+Email and calendar drafts still end in the composer card. Tools outside that
+set are not callable by name.
+
+Verify: ask "how many tasks do I have?" and confirm a **Worked in your
+workspace** row and an answer with no code or tool names in it, then ask "what
+is Macro?" and confirm it answers from `AboutMacro` rather than calling
+`SelfKnowledge`.
+
 ## Recently shared in an agent session
 
 With agent session activity enabled, the first side panel section lists items
