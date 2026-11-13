@@ -4,6 +4,7 @@
 use super::*;
 
 mod call_session;
+mod entity_audiences;
 mod telemetry;
 use crate::domain::models::{
     AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
@@ -77,6 +78,7 @@ struct MockRepo {
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
     call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
+    grant_audience_lookups: Arc<Mutex<Vec<(Vec<Uuid>, EntityType)>>>,
 }
 
 impl MockRepo {
@@ -138,6 +140,7 @@ impl MockRepo {
             call_channel: Arc::new(Mutex::new(None)),
             call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
+            grant_audience_lookups: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -665,6 +668,24 @@ impl AccessRepository for MockRepo {
             EntityType::Form => Ok(self.form_users.lock().await.clone()),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
+    }
+
+    async fn get_entity_grant_audiences(
+        &self,
+        entity_ids: &[Uuid],
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityAudience>, AccessError> {
+        self.grant_audience_lookups
+            .lock()
+            .await
+            .push((entity_ids.to_vec(), entity_type));
+        let Some(first) = entity_ids.first() else {
+            return Ok(Vec::new());
+        };
+        Ok(vec![EntityAudience {
+            entity_ids: entity_ids.iter().map(Uuid::to_string).collect(),
+            users: self.get_entity_users(first, entity_type).await?,
+        }])
     }
 
     async fn get_direct_entity_users(

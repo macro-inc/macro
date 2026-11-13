@@ -6,11 +6,12 @@ use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
         ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+        EntityAudience, EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        ViewAccessLevel,
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
-        EntityAccessService, ScheduledActionGrants,
+        EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
@@ -913,5 +914,75 @@ impl<R: AccessRepository> AccessiblePipelines for EntityAccessServiceImpl<R> {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         self.repo.list_pipeline_access(user_id).await
+    }
+}
+
+impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
+    #[tracing::instrument(
+        err(level = Level::DEBUG),
+        skip(self, entity_ids),
+        fields(entity_count = entity_ids.len())
+    )]
+    async fn get_entity_audiences(
+        &self,
+        entity_type: EntityType,
+        entity_ids: &[&str],
+    ) -> Result<Vec<EntityAudience>, AccessError> {
+        // These kinds' users are exactly their `entity_access` grants, so one
+        // grouped lookup serves any number of them. Other kinds, and a single
+        // entity, whose lookup is cached, resolve one entity at a time.
+        let users_are_grants = matches!(
+            entity_type,
+            EntityType::Document
+                | EntityType::Chat
+                | EntityType::Project
+                | EntityType::AgentSession
+                | EntityType::Initiative
+                | EntityType::CrmPipeline
+                | EntityType::Database
+                | EntityType::ExternalChat
+                | EntityType::Form
+        );
+        if !users_are_grants || entity_ids.len() < 2 {
+            let mut audiences = Vec::with_capacity(entity_ids.len());
+            for entity_id in entity_ids {
+                let users = self.get_users_by_entity(entity_id, entity_type).await?;
+                audiences.push(EntityAudience {
+                    entity_ids: vec![entity_id.to_string()],
+                    users,
+                });
+            }
+            return Ok(audiences);
+        }
+
+        // The repository answers with canonical ids; map them back to the
+        // spelling each caller used.
+        let mut spellings: HashMap<String, &str> = HashMap::with_capacity(entity_ids.len());
+        let mut ids = Vec::with_capacity(entity_ids.len());
+        for entity_id in entity_ids {
+            let id = Uuid::parse_str(entity_id).map_err(|_| {
+                AccessError::BadRequest("invalid entity_id for get_entity_audiences")
+            })?;
+            if let std::collections::hash_map::Entry::Vacant(entry) =
+                spellings.entry(id.to_string())
+            {
+                entry.insert(entity_id);
+                ids.push(id);
+            }
+        }
+
+        let mut audiences = self
+            .repo
+            .get_entity_grant_audiences(&ids, entity_type)
+            .await?;
+        for entity_id in audiences
+            .iter_mut()
+            .flat_map(|audience| &mut audience.entity_ids)
+        {
+            if let Some(spelling) = spellings.get(entity_id.as_str()) {
+                *entity_id = (*spelling).to_string();
+            }
+        }
+        Ok(audiences)
     }
 }
