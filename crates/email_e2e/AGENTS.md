@@ -62,6 +62,11 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   test binary, so keep shared helpers in the harness, not in `tests/`.
 - Name the test for the behaviour, and say in its doc comment what goes wrong
   when it fails.
+- A scenario for a bug that is not fixed yet asserts the right behaviour and
+  is marked `#[ignore = "known bug: <class id>"]`. The suite skips it; `just
+  email-e2e-known-bugs` (a non-gating CI step) runs only those and reports
+  which still fail and which now pass. Remove the attribute with the fix.
+- Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
 
 ## Start here
 
@@ -83,6 +88,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   an ElasticMQ, `EMAIL_E2E_KAFKA_BROKERS` at a Kafka broker, and Postgres and Redis from `DATABASE_URL`/`REDIS_URI` or
   `EMAIL_E2E_DATABASE_URL`/`EMAIL_E2E_REDIS_URL`.
 - A new or changed scenario: `just email-e2e --stress-count 20 <name>` passes.
+- CI: the `Email end-to-end` workflow (`xtask_workflows`' `email_e2e.rs`)
+  runs the suite on pushes to `main` that change backend code and, within
+  `PR CI`, on pull requests that touch email, the emulators or the schema.
 
 ## Gotchas
 

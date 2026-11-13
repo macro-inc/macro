@@ -21,7 +21,8 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, observability_image, runners, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, email_e2e, observability_image, runners, sdk_check, steps,
+    test_macrod_update,
 };
 
 #[cfg(test)]
@@ -113,6 +114,12 @@ const CALLS: &[Call] = &[
         name: "SDK",
         file: "sdk-check.yml",
         paths: Some(sdk_check::PATHS),
+    },
+    Call {
+        id: "email-e2e",
+        name: "Email end-to-end",
+        file: "email_e2e.yml",
+        paths: Some(email_e2e::PATHS),
     },
     Call {
         id: "observability-image",

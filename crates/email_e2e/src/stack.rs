@@ -21,6 +21,7 @@ use uuid::Uuid;
 pub use self::calendar_reads::CalendarSignal;
 use self::calendar_reads::CalendarReads;
 use crate::aws::{Aws, StoredObject};
+use crate::inbox::{Mail, Provider};
 use crate::infra::postgres::Database;
 use crate::infra::redis::RedisDatabase;
 use crate::infra::sqs::Queues;
@@ -213,6 +214,44 @@ impl Stack {
     /// Creates the Macro user `<name>@example.com`.
     pub async fn user(&self, name: &str) -> Result<User, Report> {
         User::create(self, &format!("{name}@example.com")).await
+    }
+
+    /// Puts mail in a mailbox at the provider before anyone links it,
+    /// creating the mailbox when the provider does not have it: what a first
+    /// backfill or import finds. For a linked inbox use [`Inbox::deliver`].
+    pub fn seed_mailbox(
+        &self,
+        provider: Provider,
+        address: &str,
+        mail: &[Mail],
+    ) -> Result<(), Report> {
+        match provider {
+            Provider::Gmail => {
+                let known = self.gmail.mailboxes();
+                if !known.iter().any(|mailbox| mailbox.email == address) {
+                    self.gmail.add_mailbox(&gmail_emulator::SeedMailbox {
+                        email: address.to_owned(),
+                        ..Default::default()
+                    })?;
+                }
+                for mail in mail {
+                    self.gmail.deliver(address, &mail.for_gmail())?;
+                }
+            }
+            Provider::Outlook => {
+                let known = self.outlook.mailboxes();
+                if !known.iter().any(|mailbox| mailbox.email == address) {
+                    self.outlook.add_mailbox(&outlook_emulator::SeedMailbox {
+                        email: address.to_owned(),
+                        ..Default::default()
+                    })?;
+                }
+                for mail in mail {
+                    self.outlook.deliver(address, &mail.for_outlook())?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// The scenario's database, for fixtures and for what the API cannot
