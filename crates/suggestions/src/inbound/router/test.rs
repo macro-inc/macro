@@ -186,6 +186,14 @@ impl SuggestionApi for FakeSuggestions {
         })
     }
 
+    async fn viewed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+    ) -> Result<(), SuggestionError> {
+        self.reach(user, caller)
+    }
+
     async fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -223,7 +231,7 @@ impl SuggestionApi for FakeSuggestions {
         unreachable!()
     }
 
-    async fn kept(&self, _: Uuid, _: Uuid) -> Result<u32, SuggestionError> {
+    async fn feed_changes(&self, _: Uuid, _: Uuid) -> Result<u32, SuggestionError> {
         unreachable!()
     }
 
@@ -317,9 +325,11 @@ async fn the_persons_own_agent_reaches_their_feed_and_suggestions_as_an_agent() 
     let invocation = Uuid::now_v7();
     let accept = format!("/suggestions/{suggestion}/accept");
     let dismiss = format!("/suggestions/{suggestion}/dismiss");
+    let viewed = "/suggestions/viewed".to_owned();
     let cases = [
         // The person in the app.
         ("POST", &accept, SESSION_JWT, false, None),
+        ("POST", &viewed, SESSION_JWT, false, None),
         // Their chat agent's program: a code-mode credential.
         (
             "GET",
@@ -354,6 +364,7 @@ async fn the_persons_own_agent_reaches_their_feed_and_suggestions_as_an_agent() 
         callers,
         [
             SuggestionCaller::User,
+            SuggestionCaller::User,
             agent,
             agent,
             agent,
@@ -375,6 +386,7 @@ async fn a_refused_generation_session_gets_a_403() {
         ("POST", format!("/suggestions/{suggestion}/accept")),
         ("POST", format!("/suggestions/{suggestion}/dismiss")),
         ("POST", format!("/suggestions/{suggestion}/restore")),
+        ("POST", "/suggestions/viewed".to_owned()),
     ] {
         let status = send(&service, method, &uri, AGENT_JWT, true, Some(generation)).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{method} {uri}");

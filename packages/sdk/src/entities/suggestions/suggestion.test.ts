@@ -23,6 +23,7 @@ const REPLY_SUGGESTION: SuggestionRecord = {
   createdAt: '2026-11-09T00:00:00Z',
   updatedAt: '2026-11-09T00:00:00Z',
   stateChangedAt: '2026-11-09T00:00:00Z',
+  isNew: false,
 };
 
 describe('Suggestion drafts', () => {

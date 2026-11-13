@@ -50,12 +50,20 @@ scheduler's spec.
   person, so it passes. The router labels the caller (`SuggestionCaller`, span
   field `suggestions.caller`): only the person's own session with no program's
   marks (no code-mode invocation, no code-execution header) is `user`; any
-  other credential is `agent`. An agent whose signed invocation names an open
-  generation session, of either kind, gets 403 (`Generating`), since hidden
-  sessions only manage the feed through their own tools. The harness refuses
+  other credential is `agent`. An agent whose signed invocation names a
+  generation session not yet deleted (open, or ended and being cleaned up), of
+  either kind, gets 403 (`Generating`), since hidden sessions only manage the
+  feed through their own tools. The harness refuses
   to start without validating requests' attribution. An agent accepting a
   background prompt suggestion only takes it on (the person runs it from the app);
   any other suggestion becomes done either way.
+- New since the last visit: the app sends `POST /suggestions/viewed` once the
+  feed is on screen, which stores the time in `suggestion_feed_view` (one row
+  per person; a time never goes back). The feed marks an open suggestion
+  `isNew` when it is proposed and became proposed after that time (every
+  proposed one before the first visit): one added or brought back is new, one
+  rewritten keeps its mark. Only the feed sets `isNew`; anywhere else it is
+  false. Generation sessions are refused, as for the feed.
 - A generation session ends by having each suggestion it wrote checked against its
   cited items: its last programs call `macro.ai.structuredCompletion` (tool
   free) on the model `SuggestionService::with_checker_model` names, which sees only
@@ -104,11 +112,14 @@ scheduler's spec.
 ## Scope
 
 - Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
-  `suggestion_routine`, `suggestion_target`, `suggestion_run`, and its `suggestion_change` rows.
+  `suggestion_routine`, `suggestion_target`, `suggestion_run`,
+  `suggestion_feed_view`, and its `suggestion_change` rows.
 - Also: the vocabulary every generation's tools share (`GenerationTrigger`,
   `SessionKind`, `GenerationSession`) and the `GenerationSessions` and
   `SuggestionAudience` ports, which `crates/suggestion_generation` implements;
-  the suggestions session's brief (`domain/prompt.md`).
+  the suggestions session's brief (`domain/prompt.md`, with a line per trigger:
+  only onboarding's asks for speed), and `SuggestionApi::feed_changes`, what
+  a suggestions session changed in the feed.
 - Not here: generation runs and their sessions → `crates/suggestion_generation`;
   routine suggestions → `crates/scheduled_action`.
 

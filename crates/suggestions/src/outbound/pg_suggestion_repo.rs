@@ -313,6 +313,7 @@ impl PgSuggestionRepo {
                     updated_at: row.updated_at,
                     state_changed_at: row.state_changed_at,
                     status: SuggestionStatus::of(state, run.as_ref()),
+                    is_new: false,
                     result,
                     run,
                     kind,
@@ -538,6 +539,35 @@ impl SuggestionRepo for PgSuggestionRepo {
         done_since: DateTime<Utc>,
     ) -> Result<Vec<Suggestion>, Self::Err> {
         self.load(user, Read::Shown { done_since }).await
+    }
+
+    async fn feed_viewed_at(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<Option<DateTime<Utc>>, Self::Err> {
+        Ok(sqlx::query_scalar!(
+            "SELECT viewed_at FROM suggestion_feed_view WHERE user_id = $1",
+            user.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
+    async fn feed_viewed(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        at: DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"INSERT INTO suggestion_feed_view (user_id, viewed_at) VALUES ($1, $2)
+               ON CONFLICT (user_id) DO UPDATE
+               SET viewed_at = GREATEST(suggestion_feed_view.viewed_at, EXCLUDED.viewed_at)"#,
+            user.as_ref(),
+            at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     async fn for_review(

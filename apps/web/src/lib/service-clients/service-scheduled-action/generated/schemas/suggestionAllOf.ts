@@ -31,6 +31,9 @@ this suggestion instead of adding one. */
    * @minimum 0
    */
   importance: number;
+  /** Proposed since the person last opened their feed. Only the feed sets
+it; false everywhere else. */
+  isNew: boolean;
   /** What acting on it produced. */
   produced: Target[];
   result?: SuggestionAllOfResult;

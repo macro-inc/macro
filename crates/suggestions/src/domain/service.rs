@@ -326,12 +326,12 @@ where
         let Some(session) = session else {
             return Ok(());
         };
-        let generation = self
+        let generating = self
             .generation_sessions
-            .open_session(session)
+            .undeleted(session)
             .await
             .map_err(SuggestionError::Internal)?;
-        if generation.is_some() {
+        if generating {
             return Err(SuggestionError::Generating);
         }
         Ok(())
@@ -548,6 +548,7 @@ where
         suggestions.done = tracing::field::Empty,
         suggestions.hidden = tracing::field::Empty,
         suggestions.unchecked = tracing::field::Empty,
+        suggestions.new = tracing::field::Empty,
     ), err)]
     async fn feed(
         &self,
@@ -564,14 +565,17 @@ where
         let done_since = Utc::now() - DONE_WITHIN;
         // Each suggestion comes with its latest run as stored: no session is
         // asked how a run is going.
-        let shown: Vec<Suggestion> = self
-            .repo
-            .shown(user, done_since)
-            .await
-            .map_err(SuggestionError::internal)?;
+        let (shown, viewed_at) = futures::try_join!(
+            self.repo.shown(user, done_since),
+            self.repo.feed_viewed_at(user),
+        )
+        .map_err(SuggestionError::internal)?;
         let (mut open, mut done): (Vec<Suggestion>, Vec<Suggestion>) = shown
             .into_iter()
             .partition(|suggestion| suggestion.state.is_open());
+        for suggestion in &mut open {
+            suggestion.is_new = suggestion.proposed_since(viewed_at);
+        }
         open.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
@@ -581,10 +585,16 @@ where
         let open = self.viewable_all(user, open).await;
         let done = self.viewable_all(user, done).await;
         let span = tracing::Span::current();
+        let new = open
+            .shown
+            .iter()
+            .filter(|suggestion| suggestion.is_new)
+            .count();
         span.record("suggestions.open", open.shown.len());
         span.record("suggestions.done", done.shown.len());
         span.record("suggestions.hidden", open.hidden + done.hidden);
         span.record("suggestions.unchecked", open.unchecked + done.unchecked);
+        span.record("suggestions.new", new);
         let counts = FeedCounts::of(open.shown.iter().chain(&done.shown));
         // A limited read is a glance at the best open ones: no done list.
         let (suggestions, done) = match limit {
@@ -598,6 +608,22 @@ where
         })
     }
 
+    #[tracing::instrument(name = "suggestions.viewed", skip_all, fields(
+        suggestions.caller = tracing::field::Empty,
+    ), err)]
+    async fn viewed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+    ) -> Result<(), SuggestionError> {
+        self.require_flag(user).await?;
+        self.admit(caller).await?;
+        self.repo
+            .feed_viewed(user, Utc::now())
+            .await
+            .map_err(SuggestionError::internal)
+    }
+
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String {
         prompt::brief(
             trigger,
@@ -608,7 +634,7 @@ where
         )
     }
 
-    async fn kept(&self, generation: Uuid, session: Uuid) -> Result<u32, SuggestionError> {
+    async fn feed_changes(&self, generation: Uuid, session: Uuid) -> Result<u32, SuggestionError> {
         self.repo
             .kept_by(generation, session)
             .await
@@ -1242,6 +1268,7 @@ where
     #[tracing::instrument(name = "suggestions.attach_draft", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         suggestion.id = %id,
         email.draft.id = %request.email_draft_id,
         suggestion.outcome = tracing::field::Empty,

@@ -163,6 +163,7 @@ fn suggestion(status: SuggestionStatus) -> Suggestion {
         updated_at: now,
         state_changed_at: now,
         status,
+        is_new: false,
         run: None,
         result: None,
         kind: SuggestionKind::Entity {

@@ -72,6 +72,10 @@ where
         )
         .route("/suggestions/review", get(review_suggestions::<S, Auth>))
         .route(
+            "/suggestions/viewed",
+            post(record_suggestions_viewed::<S, Auth>),
+        )
+        .route(
             "/suggestions/{id}",
             axum::routing::patch(rewrite_suggestion::<S, Auth>),
         )
@@ -238,6 +242,38 @@ where
             )
             .await?,
     ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/viewed",
+    tag = "suggestions",
+    operation_id = "record_suggestions_viewed",
+    responses(
+        (status = 204, description = "Recorded: suggestions proposed until now are no longer new in the feed"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not record a visit"),
+        (status = 404, body = String, description = "Suggestions are off for the caller"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller opened their feed: what it showed as new no longer is. The app
+/// sends it once the feed is on screen.
+pub async fn record_suggestions_viewed<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .viewed(&user.authorization.macro_user_id, caller)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
