@@ -145,6 +145,33 @@ async fn a_stalled_sweep_holds_up_no_other() {
     assert_eq!(runs.load(Ordering::SeqCst), 3);
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_slow_sweep_is_followed_by_a_full_interval() {
+    let lifecycle = ServiceLifecycle::default();
+    let interval = Duration::from_secs(60);
+    let slow = interval * 5 / 2;
+    let started = tokio::time::Instant::now();
+    let starts = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&starts);
+    spawn_sweep(&lifecycle, interval, move || {
+        let mut starts = recorded.lock().unwrap();
+        starts.push(started.elapsed());
+        // Only the first sweep runs past its next two ticks.
+        let length = if starts.len() == 1 {
+            slow
+        } else {
+            Duration::ZERO
+        };
+        tokio::time::sleep(length)
+    });
+    tokio::time::sleep(interval * 4).await;
+    // The missed ticks make one late sweep, not a burst of them.
+    assert_eq!(
+        *starts.lock().unwrap(),
+        [Duration::ZERO, slow, slow + interval]
+    );
+}
+
 fn docs_router() -> Router {
     mount_router(Router::new().route(
         "/health",

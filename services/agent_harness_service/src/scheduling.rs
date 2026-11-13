@@ -676,7 +676,8 @@ fn start_event_tasks<C, F>(
 }
 
 /// Run `sweep` at once and then every `interval` on a worker of its own
-/// until workers stop; a sweep under way finishes first.
+/// until workers stop; a sweep under way finishes first. One that overran
+/// its ticks is followed by one late sweep, then a full interval.
 fn spawn_sweep<S, F>(lifecycle: &ServiceLifecycle, interval: Duration, mut sweep: S)
 where
     S: FnMut() -> F + Send + 'static,
@@ -685,6 +686,7 @@ where
     let stop = lifecycle.stop_workers.clone();
     lifecycle.workers.spawn(async move {
         let mut every = tokio::time::interval(interval);
+        every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tokio::select! {
                 biased;
