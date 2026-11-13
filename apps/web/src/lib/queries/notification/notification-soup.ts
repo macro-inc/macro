@@ -41,7 +41,9 @@ function notificationEntityTypeToSoupTag(
         'scheduled_action',
         'initiative',
         'external_chat',
-        'harness'
+        'harness',
+        // Dashboards send no notifications.
+        'dashboard'
       ),
       () => null
     )
