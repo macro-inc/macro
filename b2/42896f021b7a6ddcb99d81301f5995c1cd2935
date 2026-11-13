@@ -1,0 +1,26 @@
+apps/web/src/features/dynamic-ui/widgets/panes/agent-scope.tsx
+  s_395ce1e1803595::t_6c043c4d2ce22b 1-28
+apps/web/src/features/agent-dashboards/views/shared/dashboard-body.tsx
+  s_395ce1e1803595::t_17007c5ed137ce 36-41
+apps/web/src/features/agent-dashboards/views/shared/dashboard-panes.tsx
+  s_395ce1e1803595::t_17007c5ed137ce 5,52-57,61-69
+apps/web/src/features/agent-dashboards/views/shared/dashboard-body.test.tsx
+  s_395ce1e1803595::t_6a8165b94cc546 6-7,11-14,18,60-74
+  s_395ce1e1803595::t_f4184994834af0 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b242896f021b7a6ddcb99d81301f5995c1cd2935",
+  "prompts": {},
+  "sessions": {
+    "s_395ce1e1803595": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd67b15d-a0f0-45c2-9a11-632923825196",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
