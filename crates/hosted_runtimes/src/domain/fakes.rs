@@ -23,7 +23,7 @@ use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
 };
 use crate::domain::service::Clock;
-use crate::domain::size::{ComputerResources, ComputerSize};
+use crate::domain::size::ComputerResources;
 
 #[cfg(test)]
 mod test;
@@ -86,11 +86,13 @@ impl FakeError {
     }
 }
 
-/// One host with `sold_units` of sold capacity; every computer awake fits.
+/// One host with `sold_units` of sold capacity and `awake_units` of awake
+/// capacity (`sold_units` when unset, so every computer awake fits).
 #[derive(Default)]
 pub struct FakeRepo {
     pub calls: AtomicUsize,
     pub sold_units: u32,
+    pub awake_units: Option<u32>,
     pub reserve_calls: Mutex<usize>,
     pub reservations: Mutex<HashMap<ComputerId, Reservation>>,
     pub purchase_keys: Mutex<HashMap<PurchaseKey, ComputerId>>,
@@ -124,6 +126,10 @@ impl FakeRepo {
         } else {
             computer.into()
         }
+    }
+
+    fn awake_units(&self) -> u32 {
+        self.awake_units.unwrap_or(self.sold_units)
     }
 
     fn live_units(&self) -> u32 {
@@ -219,7 +225,8 @@ impl ComputerRepo for FakeRepo {
                 return Ok(Reserved::Pending(pending.clone()));
             }
         }
-        if self.live_units() + reservation.resources.units() > self.sold_units {
+        let units = reservation.resources.units();
+        if units > self.awake_units() || self.live_units() + units > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
         let held = Reservation {
@@ -717,7 +724,7 @@ impl ComputerRepo for FakeRepo {
             host: Host {
                 id: HOST,
                 name: "fake".to_owned(),
-                awake_capacity_units: self.sold_units,
+                awake_capacity_units: self.awake_units(),
                 sold_capacity_units: self.sold_units,
             },
             sold_units: held.iter().map(|resources| resources.units()).sum(),
@@ -728,20 +735,6 @@ impl ComputerRepo for FakeRepo {
                 .sum(),
             disk_gib: held.iter().map(|resources| resources.disk_gib.get()).sum(),
         }])
-    }
-
-    async fn sold_out_sizes(
-        &self,
-        catalog: &[crate::domain::size::CatalogEntry],
-        _now: DateTime<Utc>,
-    ) -> Result<Vec<ComputerSize>, FakeError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        let sold = self.live_units();
-        Ok(catalog
-            .iter()
-            .filter(|entry| entry.resources.units() > self.sold_units.saturating_sub(sold))
-            .map(|entry| entry.size)
-            .collect())
     }
 }
 
