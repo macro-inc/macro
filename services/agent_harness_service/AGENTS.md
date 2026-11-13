@@ -263,6 +263,10 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 
 ## Configuration and lifecycle
 
+MCP DNS-rebinding checks accept hosts from both typed `McpPublicUrl` and
+`McpServiceUrl`; transport host overrides must work without weakening bearer
+authentication or permitting unrelated hosts.
+
 Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
 is `incus` or `docker`. Omit the selector and fleet settings when no fleet is attached;
 `disabled`, blank and unknown selections are invalid. PostHog

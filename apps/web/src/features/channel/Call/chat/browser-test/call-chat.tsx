@@ -15,20 +15,25 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { ErrorBoundary } from 'solid-js';
 import { render } from 'solid-js/web';
 import { CallProvider } from '../../CallContext';
+import { CallDiscussionContent } from '../../discussion/CallDiscussionContent';
 import CallChat from '../CallChat';
 
-// A signed-in viewer, without a session: nothing here reaches a real account.
-queryClient.setQueryData(authKeys.userInfo.queryKey, {
-  authenticated: true,
-  id: 'macro|me@example.com',
-  permissions: [],
-} as unknown as UserInfoData);
+const params = new URLSearchParams(window.location.search);
+const access = params.get('access');
+const direct = params.get('surface') === 'direct';
+if (access === 'member') {
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    authenticated: true,
+    id: 'macro|me@example.com',
+    permissions: [],
+  } as unknown as UserInfoData);
+}
 
 const CALL_ID = '00000000-0000-7000-8000-0000000ca110';
 
 /**
  * A call's own chat as a meeting page mounts it: under the providers every
- * page gets (`routes/Root.tsx`), without `AppProviders`.
+ * page gets (`routes/Root.tsx`). No app-only providers are mounted here.
  */
 function Fixture() {
   useHotKeyRoot();
@@ -64,16 +69,36 @@ function MeetingPanel() {
         class="mx-auto flex min-h-0 w-full max-w-[372px] flex-1 flex-col bg-surface-2"
         data-testid="call-chat"
       >
-        <ErrorBoundary
-          fallback={(error) => <p role="alert">{String(error)}</p>}
-        >
-          <CallChat
-            callId={CALL_ID}
-            open
-            focusOnOpen={false}
-            onClose={() => {}}
+        {direct ? (
+          <ErrorBoundary
+            fallback={(error) => <p role="alert">{String(error)}</p>}
+          >
+            <CallChat
+              callId={CALL_ID}
+              access={{ kind: 'member' }}
+              open
+              focusOnOpen={false}
+              onClose={() => {}}
+            />
+          </ErrorBoundary>
+        ) : (
+          <CallDiscussionContent
+            discussion={() => ({ kind: 'call_chat', call_id: CALL_ID })}
+            panel={{ open: true, focusOnOpen: false, onClose: () => {} }}
+            onViewChannel={() => {}}
+            access={
+              access === 'guest'
+                ? {
+                    kind: 'guest',
+                    session: {
+                      token: 'fixture-guest-token',
+                      participantId: 'guest-1',
+                    },
+                  }
+                : { kind: 'member' }
+            }
           />
-        </ErrorBoundary>
+        )}
       </div>
     </main>
   );

@@ -63,6 +63,12 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
+Question glyphs share one letterform, following Phosphor's proportions: a wide,
+flat bowl with a short left terminal and stem, set slightly low. As in Phosphor,
+`question` is circled: the mark at 57% inside the `info` ring, leaving about 2
+units above the mark. `question-fill` cuts the same mark out of
+a 9.4-unit disc like the other circle fills, and `question-mark` draws it alone
+at full size.
 Urgent priority uses `priority-urgent-fill`, a filled rounded square with rounded
 exclamation-stem and dot cutouts. Its dedicated `priority-urgent` token maps to
 the theme's orange rather than warning or accent.
