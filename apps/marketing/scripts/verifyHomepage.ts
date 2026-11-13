@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { chromium, expect } from '@playwright/test';
+import { chromium, expect, type Page } from '@playwright/test';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
@@ -201,11 +201,7 @@ export async function verifyHomepage(
           .getByRole('link', { name: 'Learn about email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
-        await page.goBack();
-        await page.locator('.homepage-hero-cta').click();
-        await expect(page).toHaveURL(
-          `${origin}${viewport.width < 640 ? '/mobile-signup' : '/app/signup'}`
-        );
+        await verifySignupNavigation(page, origin, viewport.width < 640);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
@@ -222,5 +218,41 @@ export async function verifyHomepage(
   } finally {
     await browser?.close();
     server.stop(true);
+  }
+}
+
+async function verifySignupNavigation(
+  page: Page,
+  origin: string,
+  phone: boolean
+): Promise<void> {
+  // App signup belongs to a separate application. A URL change alone
+  // can pass while the website router renders an empty shell.
+  await page.route(`${origin}/app/signup`, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<h1>Signup application</h1>',
+    })
+  );
+  const signupUrl = `${origin}${phone ? '/mobile-signup' : '/app/signup'}`;
+  for (const selector of [
+    '.homepage-hero-cta',
+    '.site-header-actions .site-nav-start',
+  ]) {
+    await page.goBack();
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() === signupUrl &&
+          response.request().isNavigationRequest()
+      ),
+      page.locator(selector).click(),
+    ]);
+    expect(response.ok()).toBe(true);
+    await expect(page).toHaveURL(signupUrl);
+    if (!phone)
+      await expect(
+        page.getByRole('heading', { name: 'Signup application' })
+      ).toBeVisible();
   }
 }

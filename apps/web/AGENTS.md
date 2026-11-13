@@ -2,6 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
+- `bun run test` keeps a module cache in `.cache/vitest-modules` that keeps resolved import paths across a rename: delete that directory when tests fail with `Cannot find module` naming a file's old path.
 - `bun run check`: check generated entity catalogs, cache contracts, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
@@ -220,6 +221,8 @@ LexicalMarkdown core browser suite (see its README).
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
+
+Give browser fixtures the app's viewport metadata and assert the CSS viewport width when verifying phone layouts; mobile device emulation can otherwise retain a desktop layout viewport.
 
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
@@ -673,6 +676,13 @@ The backend-free desktop/phone/tablet regression is
 `bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
 
 ## Development Patterns
+
+CRM pipeline schema adapters supply `currencyColumnId`, `fixedOptions` and
+`defaultValue` to the shared database editor. Pass the complete row to cell
+formatting and group monetary calculations by currency; CSV keeps amounts and
+currency codes in separate columns. See the [outcome/currency design](../../docs/design/crm-outcome-currency.md).
+Keep locale-aware money input separate from strict first-entry inference, and
+exclude non-nullable fields from bulk clearing.
 
 Route database row rename and delete through `renameDatabase` and
 `trashDatabase`; use the row grant for rename, delete, and sharing permissions.

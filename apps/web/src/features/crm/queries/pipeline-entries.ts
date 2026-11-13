@@ -54,6 +54,10 @@ function entryColumn(column: GraphqlCell['column']): DatabaseViewColumn {
       color: option.color,
     })),
     writable: column.writable,
+    currencyColumnId: column.currencyColumnId ?? undefined,
+    fixedOptions: column.systemDefault != null,
+    nullable: column.systemDefault == null ? undefined : false,
+    defaultValue: column.systemDefault ?? undefined,
     specificEntityType: column.specificEntityType,
   };
 }
