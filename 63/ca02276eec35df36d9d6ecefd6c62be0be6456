@@ -1,0 +1,21 @@
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_f8637ee5891fc4::t_4864470fcf2210 4068,4088,4113,4137,4163-4168,4191,4213-4218,4240,4260,4290,4308-4313,4335,4359,4385-4390,4413,4435-4440,4462,4482
+packages/sdk/generated/agent-fold/index.ts
+  s_f8637ee5891fc4::t_b7846b4e213012 2875,2877,2882,2888,2898,2906,2913,2920,2922,2935,2937,2942,2948,2958,2966,2973,2980,2982
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "63ca02276eec35df36d9d6ecefd6c62be0be6456",
+  "prompts": {},
+  "sessions": {
+    "s_f8637ee5891fc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f6871d74-299c-48cf-b7e6-17f827d232b1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
