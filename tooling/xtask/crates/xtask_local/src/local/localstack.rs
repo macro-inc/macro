@@ -296,7 +296,8 @@ async fn create_tables(ddb: &aws_sdk_dynamodb::Client) -> Result<()> {
             .map(|_| ()),
         "table gitai-service-index",
     )?;
-    ddb.update_time_to_live()
+    let ttl = ddb
+        .update_time_to_live()
         .table_name(resources::GITAI_TABLE)
         .time_to_live_specification(
             ddb_types::TimeToLiveSpecification::builder()
@@ -306,17 +307,13 @@ async fn create_tables(ddb: &aws_sdk_dynamodb::Client) -> Result<()> {
                 .context("gitai TTL")?,
         )
         .send()
-        .await
-        .map(|_| ())
-        .or_else(|error| {
-            // Enabling TTL twice is rejected; a re-provision keeps it on.
-            if format!("{error:?}").contains("TimeToLive is already enabled") {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        })
-        .context("enabling TTL on gitai-service-index")?;
+        .await;
+    match ttl {
+        Ok(_) => {}
+        // Enabling TTL twice is rejected; a re-provision keeps it on.
+        Err(error) if format!("{error:?}").contains("TimeToLive is already enabled") => {}
+        Err(error) => return Err(error).context("enabling TTL on gitai-service-index"),
+    }
 
     Ok(())
 }
