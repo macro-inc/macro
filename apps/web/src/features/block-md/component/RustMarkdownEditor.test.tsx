@@ -1101,3 +1101,27 @@ it.each([
     await waitFor(() => expect(mounted.close).toHaveBeenCalledOnce());
   }
 );
+
+it('passes the Source Prism code tokenizer into the native session (code highlighting on)', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() => expect(control.create).toHaveBeenCalledOnce());
+  const options = control.create.mock.calls[0][0];
+  expect(typeof options.codeTokens?.provider).toBe('function');
+  expect(options.codeTokens?.profile).toBe('@lexical/code-prism@0.45.0');
+  // The provider answers the language check as Source's isCodeLanguageLoaded does.
+  expect(
+    JSON.parse(
+      options.codeTokens.provider(
+        'loaded',
+        'javascript',
+        '',
+        options.codeTokens.profile
+      )
+    )
+  ).toEqual({ kind: 'loaded', loaded: true });
+  rendered.unmount();
+});

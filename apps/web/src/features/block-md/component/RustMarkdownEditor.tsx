@@ -361,9 +361,17 @@ export default function RustMarkdownEditor(props: {
       flow
         .task('session.init', async () => {
           flow.span.setAttr('document.id', documentId());
-          const module = await flow.task('wasm.init', (span) =>
-            loadDocumentSession(span)
-          );
+          // Source bundles Prism with the editor; load it alongside the WASM.
+          const [module, codeTokens] = await Promise.all([
+            flow.task('wasm.init', (span) => loadDocumentSession(span)),
+            flow.task(
+              'code-tokens.load',
+              () =>
+                import(
+                  '@core/component/LexicalMarkdown/plugins/code/native-code-tokens'
+                )
+            ),
+          ]);
           const element = root;
           if (abort.signal.aborted || !element) return;
           const authorization = createEditorAuthorization(
@@ -374,6 +382,10 @@ export default function RustMarkdownEditor(props: {
             const mounted = await createRustEditorSession({
               module,
               root: element,
+              codeTokens: {
+                provider: codeTokens.createNativeCodeTokenProvider(),
+                profile: codeTokens.NATIVE_CODE_TOKEN_PROFILE,
+              },
               latestPublished: [formatting.observer, checklist.observer],
               registry: registerMacroDecoratorViews(
                 registerMacroElementViews(createBuiltinRegistry(), {
