@@ -340,7 +340,7 @@ fn reference_url(web_link: Option<&str>) -> String {
 /// a contact, so it is left out, as an address header without an address is
 /// for Gmail.
 fn contact(recipient: wire::Recipient) -> Option<ContactInfo> {
-    let wire::Address { address, name } = recipient.email_address;
+    let wire::Address { address, name } = recipient.email_address?;
     Some(ContactInfo {
         email: address.filter(|address| !address.trim().is_empty())?,
         name,

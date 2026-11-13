@@ -868,9 +868,10 @@ async fn a_sender_or_recipient_without_an_address_is_left_out() {
             "from":{"emailAddress":{"name":"Sender without an address"}},
             "toRecipients":[
                 {"emailAddress":{"name":"Undisclosed recipients"}},
-                {"emailAddress":{"address":"me@example.com","name":"Me"}}
+                {"emailAddress":{"address":"me@example.com","name":"Me"}},
+                {"emailAddress":{"address":null,"name":"Null"}}
             ],
-            "ccRecipients":[{"emailAddress":{}}],
+            "ccRecipients":[{"emailAddress":{}}, {"emailAddress":null}, {}],
             "bccRecipients":[{"emailAddress":{"address":"  ","name":"Blank"}}]
         })))
         .mount(&server)

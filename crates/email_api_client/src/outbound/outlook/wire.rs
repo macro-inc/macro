@@ -33,7 +33,7 @@ pub(super) struct Change {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Recipient {
-    pub email_address: Address,
+    pub email_address: Option<Address>,
 }
 
 #[derive(Deserialize, Serialize)]
