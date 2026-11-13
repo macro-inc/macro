@@ -132,8 +132,11 @@ pub trait AgentSpendRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<SpendPoint>>> + Send;
 }
 
-/// Decides who manages an agent account.
+/// Decides which accounts are agents and who manages them.
 pub trait AgentManagers: Send + Sync + 'static {
+    /// True when `user` is an agent account. False for unknown accounts.
+    fn is_agent(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<bool>> + Send;
+
     /// True when `agent` is an agent account and `actor` is an owner or admin
     /// of a team it belongs to. False for unknown and non-agent accounts.
     fn manages_agent(
@@ -204,7 +207,12 @@ where
             return Err(UsageError::NotFound);
         }
 
-        let readable = actor == agent || self.managers.manages_agent(actor, agent).await?;
+        // Only an agent account has a spend read, even for itself.
+        let readable = if actor == agent {
+            self.managers.is_agent(agent).await?
+        } else {
+            self.managers.manages_agent(actor, agent).await?
+        };
         if !readable {
             return Err(UsageError::NotFound);
         }

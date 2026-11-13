@@ -184,11 +184,11 @@ async fn teammates_strangers_and_other_teams_get_not_found(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_person_is_readable_only_by_themselves(pool: PgPool) {
+async fn a_person_is_not_an_agent_so_nobody_reads_their_spend(pool: PgPool) {
     seed_people(&pool).await;
     let service = everyone_flagged(&pool);
 
-    for actor in [OWNER, ADMIN] {
+    for actor in [OWNER, ADMIN, TEAMMATE] {
         assert!(
             matches!(
                 read(&service, actor, TEAMMATE).await,
@@ -197,7 +197,6 @@ async fn a_person_is_readable_only_by_themselves(pool: PgPool) {
             "{actor}"
         );
     }
-    assert_eq!(read(&service, TEAMMATE, TEAMMATE).await.unwrap(), 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

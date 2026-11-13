@@ -70,6 +70,17 @@ impl AgentSpendRepo for PgAgentSpendRepo {
 }
 
 impl AgentManagers for PgAgentSpendRepo {
+    async fn is_agent(&self, user: &MacroUserIdStr<'_>) -> Result<bool> {
+        let is_agent = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM "User" WHERE id = $1 AND "isAgent") AS "is_agent!""#,
+            user.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(is_agent)
+    }
+
     async fn manages_agent(
         &self,
         actor: &MacroUserIdStr<'_>,

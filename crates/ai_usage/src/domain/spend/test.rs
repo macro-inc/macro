@@ -90,6 +90,10 @@ impl AgentSpendRepo for Spend {
 struct Managers;
 
 impl AgentManagers for Managers {
+    async fn is_agent(&self, user: &MacroUserIdStr<'_>) -> Result<bool> {
+        Ok(user.as_ref() == "macro|agent@example.com")
+    }
+
     async fn manages_agent(
         &self,
         actor: &MacroUserIdStr<'_>,
@@ -155,6 +159,18 @@ async fn the_flag_off_hides_even_the_agent_itself() {
     let service = service(false);
     let agent = user("macro|agent@example.com");
     let result = service.agent_spend(&agent, &agent, SpendBucket::Day).await;
+
+    assert!(matches!(result, Err(UsageError::NotFound)));
+    assert!(service.repo.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_person_reading_their_own_spend_is_not_found() {
+    let service = service(true);
+    let person = user("macro|admin@example.com");
+    let result = service
+        .agent_spend(&person, &person, SpendBucket::Day)
+        .await;
 
     assert!(matches!(result, Err(UsageError::NotFound)));
     assert!(service.repo.0.lock().unwrap().is_empty());

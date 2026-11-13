@@ -70,8 +70,8 @@ flexible admin query API and an agent account's spend for its dashboard.
   generation) gets no stamp and must carry the session in its request.
 - Agent spend is readable by the agent itself and by owners and admins of a
   team it belongs to, only with `enable-agent-dashboards` on for the caller;
-  everyone else, and a person who is not an agent account (unless reading
-  themselves), gets 404, never 403. It counts rows its own API key paid for:
+  everyone else, and any account that is not an agent, even read by
+  itself, gets 404, never 403. It counts rows its own API key paid for:
   they are real spend, only kept out of quota counting. Buckets without
   priced usage are omitted.
 - Per-user sums over `ai_usage` read every row in their range: keep them
