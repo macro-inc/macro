@@ -74,6 +74,14 @@ pub trait Repository: Send + Sync {
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error>;
     /// Search metadata visible to the actor within the team.
     async fn list(&self, actor: &Actor, team: TeamId, search: &str) -> Result<Vec<Record>, Error>;
+    /// Metadata visible to the actor whose name equals one of `names`, ignoring
+    /// case and surrounding spaces; at most 500 records.
+    async fn matching(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        names: &[String],
+    ) -> Result<Vec<Record>, Error>;
     /// Load an item and its authorization facts without resolving secret values.
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error>;
     /// Commit metadata with its observed version guard. A live record's folder is

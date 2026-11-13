@@ -37,7 +37,7 @@ fn tested_inventory_matches_every_registered_public_method_including_head() {
         .map(|(method, path, _)| (method.to_owned(), path))
         .collect();
     assert_eq!(registered, tested);
-    assert_eq!(tested.len(), 32);
+    assert_eq!(tested.len(), 33);
 }
 
 #[tokio::test]

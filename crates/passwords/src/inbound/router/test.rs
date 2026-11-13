@@ -117,6 +117,11 @@ fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
         ("POST", format!("/teams/{team}/items"), create),
         (
             "POST",
+            format!("/teams/{team}/items/match"),
+            serde_json::json!({"names":["Synthetic"]}),
+        ),
+        (
+            "POST",
             format!("/teams/{team}/imports/{}/items", Uuid::from_u128(4)),
             serde_json::json!({"format":"bitwarden_json","target":{"kind":"root"},"private":false,"folders":[],"items":[]}),
         ),

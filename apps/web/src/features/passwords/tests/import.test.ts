@@ -12,6 +12,7 @@ import {
   checkFolders,
   duplicateKeys,
   foldersFor,
+  MATCH_NAMES,
   MAX_FOLDER_DEPTH,
   MAX_TEAM_FOLDERS,
   planBatches,
@@ -157,6 +158,7 @@ describe('limits', () => {
     expect(MAX_TEAM_FOLDERS).toBe(LIMITS.maxTeamFolders);
     expect(MAX_FOLDER_DEPTH).toBe(LIMITS.maxFolderDepth);
     expect(BATCH_ITEMS).toBe(LIMITS.maxImportBatchItems);
+    expect(MATCH_NAMES).toBe(LIMITS.maxImportMatchNames);
     // A budget under the body limit leaves room for the folder tree and JSON.
     expect(BATCH_BYTES).toBeLessThan(LIMITS.maxImportBatchBytes);
   });

@@ -13,6 +13,7 @@ import type { PasswordGrant as GrantDto } from '@service-storage/generated/schem
 import type { PasswordImportBatch } from '@service-storage/generated/schemas/passwordImportBatch';
 import type { PasswordImportBatchResult } from '@service-storage/generated/schemas/passwordImportBatchResult';
 import type { PasswordItemMetadata } from '@service-storage/generated/schemas/passwordItemMetadata';
+import type { PasswordMatchNames } from '@service-storage/generated/schemas/passwordMatchNames';
 import type { PasswordMoveFolderBody } from '@service-storage/generated/schemas/passwordMoveFolderBody';
 import type { PasswordPatchItem } from '@service-storage/generated/schemas/passwordPatchItem';
 import type { PasswordRevealBody } from '@service-storage/generated/schemas/passwordRevealBody';
@@ -217,14 +218,13 @@ export function createPasswordSource(
       if (!isCurrent()) throw new PasswordScopeChangedError();
       return items.map(metadata);
     },
-    async search(text) {
-      if (!isCurrent()) return err('failed' as const);
-      const items = await fetchWithToken<PasswordItemMetadata[]>(
-        `${root}/items?search=${encodeURIComponent(text)}`,
-        { signal: scope.signal, retry: { maxTries: 1 } }
-      );
-      if (items.isErr() || !isCurrent()) return err('failed' as const);
-      return ok(items.value.map(metadata));
+    async matchNames(names) {
+      // Spanned by the caller's `passwords.import.duplicates`; names never reach attributes.
+      return (
+        await request<PasswordItemMetadata[]>('/items/match', 'POST', {
+          names,
+        } satisfies PasswordMatchNames)
+      ).map((items) => items.map(metadata));
     },
     async folders() {
       if (!isCurrent()) throw new PasswordScopeChangedError();

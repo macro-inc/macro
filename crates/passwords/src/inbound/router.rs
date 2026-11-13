@@ -48,6 +48,10 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
                 password_import::vault::MAX_IMPORT_BATCH_BYTES,
             )),
         )
+        .route(
+            "/teams/{team}/items/match",
+            post(super::import::match_names::<A>),
+        )
         .route("/teams", get(teams::<A>))
         .route("/teams/{team}/items", get(list::<A>).post(create::<A>))
         .route(

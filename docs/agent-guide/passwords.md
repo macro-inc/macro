@@ -84,9 +84,10 @@ passkeys, previous passwords, unusual verification codes), and how many items
 look like ones the vault has (same kind, name ignoring case, website host).
 Skip items I already have is on by default; when it would leave nothing to
 import, the preview says so (turn it off to import copies) and offers Done. When the vault list is at its
-500-item cap, each distinct name is searched (up to 100 names, metadata
-only); otherwise the preview says duplicates were checked against the first
-500. Import into shows the full destination and a Change menu: a new folder
+500-item cap, the export's distinct names are matched in the vault with
+`POST …/items/match` (names in the body, never a URL; 500 per request,
+metadata only); if a request fails or an answer is capped, the preview says
+duplicates were checked against the first 500. Import into shows the full destination and a Change menu: a new folder
 "Imported from <source> <date>" (default; numbered " (2)", " (3)"… when a root
 folder already has that name, except when continuing an import, which reuses
 its folder), an existing folder, or the root; source folders nest under it. Keep imported
@@ -97,9 +98,16 @@ Import sends batches of at most 25 items and 3.5 MiB, one at a time, to
 `POST /passwords/teams/{team}/imports/{importId}/items`; items the vault
 answers busy are resent after a backoff. The result counts imported, already
 present, skipped and failed items and offers Open folder. The import id is
-kept in sessionStorage under a hash of the viewer and the file's name and size
-(ids only), so importing the same file again in the tab continues the import
-and counts landed items as already present. Spans: `passwords.import.parse`,
+kept in sessionStorage under a hash of the viewer and the file's contents
+(hashed in the worker), with the destination, privacy and the ids of items it
+created (ids only). Importing the same file again in the tab continues the
+import with the same destination and privacy (locked in the preview), resends
+its own items rather than skipping them as duplicates (finishing a
+verification code an earlier run could not set up), and counts them as
+already present. A batch request is resent only after no answer, a busy vault
+or a server error; items answered busy, unavailable or folder missing go into
+a later round. A file over the parser's 50 MB limit is refused before it is
+read. Spans: `passwords.import.parse`,
 `passwords.import.duplicates`, and `passwords.import` around the batches, with
 counts, format and import id only.
 

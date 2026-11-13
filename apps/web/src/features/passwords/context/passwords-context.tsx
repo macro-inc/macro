@@ -30,8 +30,11 @@ export type PasswordFailure = 'forbidden' | 'folderMissing' | 'failed';
 export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {
   list(): Promise<PasswordItem[]>;
-  /** Metadata search (names and websites, never values), capped like `list`. */
-  search(text: string): PasswordResult<PasswordItem[]>;
+  /**
+   * Items named like one of `names` (ignoring case and surrounding spaces),
+   * metadata only, at most 500; the names go in a request body, never a URL.
+   */
+  matchNames(names: string[]): PasswordResult<PasswordItem[]>;
   folders(): Promise<PasswordFolder[]>;
   save(
     id: string | undefined,

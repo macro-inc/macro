@@ -77894,6 +77894,108 @@ export const passwordsCreateResponse = zod
   );
 
 /**
+ * @summary Visible items named like the given names, for an import's duplicate check;
+names travel in the body so they stay out of URLs and access logs.
+ */
+export const passwordsMatchParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsMatchHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsMatchBody = zod
+  .object({
+    names: zod
+      .array(zod.string())
+      .describe(
+        'Names compared ignoring case and surrounding spaces; at most 500\n(`password_import::vault::MAX_IMPORT_MATCH_NAMES`).'
+      ),
+  })
+  .describe(
+    'Item names to look for before an import, in the body so they stay out of\nURLs and access logs.'
+  );
+
+export const passwordsMatchResponseShareCountMin = 0;
+
+export const passwordsMatchResponseItem = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsMatchResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+export const passwordsMatchResponse = zod.array(passwordsMatchResponseItem);
+
+/**
  * @summary Read authorized item metadata only.
  */
 export const passwordsDetailParams = zod.object({

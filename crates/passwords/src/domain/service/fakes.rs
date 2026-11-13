@@ -367,6 +367,30 @@ impl Repository for FakeRepository {
             .cloned()
             .collect())
     }
+    async fn matching(
+        &self,
+        _: &Actor,
+        team: TeamId,
+        names: &[String],
+    ) -> Result<Vec<Record>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let wanted: HashSet<String> = names
+            .iter()
+            .map(|name| name.trim().to_lowercase())
+            .collect();
+        Ok(self
+            .records
+            .lock()
+            .expect("fixture lock")
+            .values()
+            .filter(|record| {
+                record.metadata.team_id == team
+                    && !record.deleting
+                    && wanted.contains(&record.metadata.name.trim().to_lowercase())
+            })
+            .cloned()
+            .collect())
+    }
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let record = self

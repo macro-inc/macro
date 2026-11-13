@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT metadata,user_id,grants,deleting,revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND deleted_at IS NULL AND NOT deleting AND EXISTS(SELECT 1 FROM team_user membership JOIN \"User\" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$3 AND NOT profile.\"isAgent\") AND (user_id=$3 OR grants @> $4 OR grants @> $5 OR EXISTS(SELECT 1 FROM team_user WHERE team_id=$1 AND user_id=$3 AND team_role IN ('owner','admin'))) AND lower(btrim(metadata->>'name')) IN (SELECT lower(btrim(name)) FROM unnest($2::text[]) AS name) ORDER BY id DESC LIMIT 500",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "grants",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleting",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "totp_key_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "9ce3e33711777093f5dfdb555b55407fb8872e8eda97a29ff6c5e5ca6cc8e980"
+}

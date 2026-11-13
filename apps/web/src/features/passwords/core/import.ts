@@ -3,8 +3,8 @@ import { folderPath, type PasswordFolder, type PasswordItem } from './types';
 
 /** The vault list returns at most this many items. */
 export const VAULT_LIST_CAP = 500;
-/** Names searched one by one when the loaded list is capped. */
-export const MAX_DUPLICATE_SEARCHES = 100;
+/** Most names one duplicate-match request carries (and items it returns). */
+export const MATCH_NAMES = 500;
 
 /**
  * Vault folder limits: per team, and depth from the root. These and the batch

@@ -15597,6 +15597,18 @@ export type PasswordItemMetadata = PasswordItemFields & {
 export type PasswordLoginUrl = string;
 
 /**
+ * Item names to look for before an import, in the body so they stay out of
+ * URLs and access logs.
+ */
+export type PasswordMatchNames = {
+    /**
+     * Names compared ignoring case and surrounding spaces; at most 500
+     * (`password_import::vault::MAX_IMPORT_MATCH_NAMES`).
+     */
+    names: Array<string>;
+};
+
+/**
  * New containing folder for an existing folder.
  */
 export type PasswordMoveFolderBody = {
@@ -33850,6 +33862,36 @@ export type PasswordsCreateResponses = {
 };
 
 export type PasswordsCreateResponse = PasswordsCreateResponses[keyof PasswordsCreateResponses];
+
+export type PasswordsMatchData = {
+    body: PasswordMatchNames;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/match';
+};
+
+export type PasswordsMatchErrors = {
+    400: PasswordFailure;
+    403: PasswordFailure;
+    404: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsMatchError = PasswordsMatchErrors[keyof PasswordsMatchErrors];
+
+export type PasswordsMatchResponses = {
+    200: Array<PasswordItemMetadata>;
+};
+
+export type PasswordsMatchResponse = PasswordsMatchResponses[keyof PasswordsMatchResponses];
 
 export type PasswordsRemoveData = {
     body?: never;

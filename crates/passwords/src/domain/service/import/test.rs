@@ -418,3 +418,37 @@ async fn items_recheck_membership_once_after_the_batch_admission() {
     // One for the batch, then one per item under its lease.
     assert_eq!(repository.team_lookups.load(Ordering::SeqCst), 1 + 3);
 }
+
+#[tokio::test]
+async fn match_names_finds_visible_items_by_name_and_bounds_the_request() {
+    let (service, _, _, actor, team) = fixture();
+    service
+        .import_batch(&actor, team, Uuid::now_v7(), batch())
+        .await
+        .unwrap();
+    let found = service
+        .match_names(
+            &actor,
+            team,
+            vec!["  SYNTHETIC-NAME-SENTINEL ".into(), "absent".into()],
+        )
+        .await
+        .unwrap();
+    assert_eq!(found.len(), 1);
+    assert!(matches!(
+        service
+            .match_names(
+                &actor,
+                team,
+                vec!["x".into(); vault::MAX_IMPORT_MATCH_NAMES + 1]
+            )
+            .await,
+        Err(Error::Invalid)
+    ));
+    assert!(matches!(
+        service
+            .match_names(&actor, team, vec!["x".repeat(vault::MAX_NAME_BYTES + 1)])
+            .await,
+        Err(Error::Invalid)
+    ));
+}

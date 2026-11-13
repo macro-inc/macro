@@ -27,7 +27,7 @@ import {
   foldersFor,
   type ImportTally,
   type ImportTarget,
-  MAX_DUPLICATE_SEARCHES,
+  MATCH_NAMES,
   planBatches,
   uniqueRootFolderName,
   VAULT_LIST_CAP,
@@ -284,29 +284,32 @@ export function createPasswordImport(props: {
 
   /**
    * Vault metadata to match duplicates against. The list stops at 500 items;
-   * past that, each distinct name is searched (metadata only), up to a bound.
+   * past that, the export's distinct names are matched in the vault (metadata
+   * only), in requests of at most `MATCH_NAMES` names sent in the body.
    */
   async function knownItems(items: ParsedImportItem[]) {
     const loaded = props.items();
     if (loaded.length < VAULT_LIST_CAP)
       return { items: loaded, partial: false };
     const names = candidateNames(items);
-    if (names.length > MAX_DUPLICATE_SEARCHES)
-      return { items: loaded, partial: true };
     const found = new Map(loaded.map((item) => [item.id, item]));
     let partial = false;
     await Telemetry.span('passwords.import.duplicates', async (span) => {
-      span.setAttr('passwords.import.searches', names.length);
-      for (const name of names) {
-        const result = await span.run(() => source.search(name));
+      span.setAttr('passwords.import.names', names.length);
+      let requests = 0;
+      for (let start = 0; start < names.length; start += MATCH_NAMES) {
+        const chunk = names.slice(start, start + MATCH_NAMES);
+        requests++;
+        const result = await span.run(() => source.matchNames(chunk));
         if (result.isErr()) {
           partial = true;
           continue;
         }
         // A capped answer may leave out a match.
-        if (result.value.length >= VAULT_LIST_CAP) partial = true;
+        if (result.value.length >= MATCH_NAMES) partial = true;
         for (const item of result.value) found.set(item.id, item);
       }
+      span.setAttr('passwords.import.requests', requests);
       span.setAttr('passwords.import.partial', partial);
     });
     return { items: [...found.values()], partial };

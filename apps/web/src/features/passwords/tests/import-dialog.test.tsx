@@ -348,7 +348,9 @@ it('finishes a verification code an earlier run of the same file could not set u
         <ImportDialog
           items={vaultItems}
           folders={() => []}
-          refresh={async () => setVaultItems(await source.list())}
+          refresh={async () => {
+            setVaultItems(await source.list());
+          }}
           onOpenFolder={() => {}}
           onClose={() => {}}
         />
@@ -399,4 +401,32 @@ it('keeps the destination and privacy of the import it continues', async () => {
     (screen.getByRole('button', { name: 'Change' }) as HTMLButtonElement)
       .disabled
   ).toBe(true);
+});
+
+it('matches names in the vault, in a request body, when its list is capped', async () => {
+  const matchRequests: string[][] = [];
+  // The duplicate is in the vault but not among the 500 items the list loaded.
+  const source = createFakePasswordSource(
+    [
+      {
+        item: EXISTING,
+        values: { username: '', password: '', notes: '', fields: [] },
+      },
+    ],
+    { matchRequests }
+  );
+  const loaded = Array.from({ length: 500 }, (_, index) => ({
+    ...EXISTING,
+    id: `019a0000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+    name: `Filler ${index}`,
+  }));
+  mount(source, PARSED, undefined, { items: loaded });
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await screen.findByText('1 item looks like one you already have.');
+  expect(matchRequests).toEqual([
+    ['Fixture Mail', 'Fixture Wiki', 'Fixture note'],
+  ]);
+  expect(screen.queryByText(/first 500/)).toBeNull();
 });

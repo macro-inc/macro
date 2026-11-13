@@ -28,6 +28,8 @@ export type FakeImportScript = {
   /** Items answered `folder_missing` this many times, as if their folder were deleted mid-batch. */
   folderMissing?: Map<string, number>;
   failRequests?: number;
+  /** Names of each duplicate-match request, in order. */
+  matchRequests?: string[][];
   /** How the failed requests fail; retryable unless set. */
   failWith?: ImportRequestFailure;
   requests?: ImportBatchBody[];
@@ -47,10 +49,11 @@ export function createFakePasswordSource(
     async list() {
       return [...items];
     },
-    async search(text) {
-      const query = text.toLocaleLowerCase();
+    async matchNames(names) {
+      script.matchRequests?.push([...names]);
+      const wanted = new Set(names.map((name) => name.trim().toLowerCase()));
       return ok(
-        items.filter((item) => item.name.toLocaleLowerCase().includes(query))
+        items.filter((item) => wanted.has(item.name.trim().toLowerCase()))
       );
     },
     async folders() {

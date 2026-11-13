@@ -2218,6 +2218,7 @@ export * from './passwordItemKind';
 export * from './passwordItemMetadata';
 export * from './passwordItemMetadataAllOf';
 export * from './passwordLoginUrl';
+export * from './passwordMatchNames';
 export * from './passwordMoveFolderBody';
 export * from './passwordMoveFolderBodyParentId';
 export * from './passwordPatchItem';

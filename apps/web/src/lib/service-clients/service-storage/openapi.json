@@ -24238,6 +24238,98 @@
         }
       }
     },
+    "/passwords/teams/{team}/items/match": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Visible items named like the given names, for an import's duplicate check;\nnames travel in the body so they stay out of URLs and access logs.",
+        "operationId": "passwords_match",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordMatchNames"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordItemMetadata"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/passwords/teams/{team}/items/{item}": {
       "get": {
         "tags": ["passwords"],
@@ -53213,6 +53305,21 @@
       "PasswordLoginUrl": {
         "type": "string",
         "description": "A public HTTP(S) login URL; credentials and userinfo are rejected before indexing."
+      },
+      "PasswordMatchNames": {
+        "type": "object",
+        "description": "Item names to look for before an import, in the body so they stay out of\nURLs and access logs.",
+        "required": ["names"],
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names compared ignoring case and surrounding spaces; at most 500\n(`password_import::vault::MAX_IMPORT_MATCH_NAMES`)."
+          }
+        },
+        "additionalProperties": false
       },
       "PasswordMoveFolderBody": {
         "type": "object",

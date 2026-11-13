@@ -214,3 +214,14 @@ pub struct ImportCounts {
     /// Source folders in this batch.
     pub folders: u8,
 }
+
+/// Item names to look for before an import, in the body so they stay out of
+/// URLs and access logs.
+#[derive(Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as = PasswordMatchNames)]
+pub struct MatchNames {
+    /// Names compared ignoring case and surrounding spaces; at most 500
+    /// (`password_import::vault::MAX_IMPORT_MATCH_NAMES`).
+    pub names: Vec<String>,
+}

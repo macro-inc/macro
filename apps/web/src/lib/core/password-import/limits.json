@@ -5,5 +5,6 @@
   "maxFolderDepth": 8,
   "maxImportBatchItems": 25,
   "maxImportBatchFolders": 200,
-  "maxImportBatchBytes": 4194304
+  "maxImportBatchBytes": 4194304,
+  "maxImportMatchNames": 500
 }

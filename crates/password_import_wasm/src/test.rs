@@ -121,6 +121,7 @@ fn web_limits_file_matches_the_vault_limits() {
         "maxImportBatchItems": vault::MAX_IMPORT_BATCH_ITEMS,
         "maxImportBatchFolders": vault::MAX_IMPORT_BATCH_FOLDERS,
         "maxImportBatchBytes": vault::MAX_IMPORT_BATCH_BYTES,
+        "maxImportMatchNames": vault::MAX_IMPORT_MATCH_NAMES,
     });
     let web: Value = serde_json::from_str(include_str!(
         "../../../apps/web/src/lib/core/password-import/limits.json"
@@ -132,4 +133,16 @@ fn web_limits_file_matches_the_vault_limits() {
         "apps/web/src/lib/core/password-import/limits.json should be:\n{}",
         serde_json::to_string_pretty(&expected).expect("serializes")
     );
+}
+
+/// `apps/web`'s `wire-sample.json` is this adapter's output for the synthetic
+/// Bitwarden fixture; a web test checks its shape against `types.ts`. On a
+/// mismatch, replace the file with this test's actual value.
+#[test]
+fn web_wire_sample_is_the_adapter_output() {
+    let web: Value = serde_json::from_str(include_str!(
+        "../../../apps/web/src/lib/core/password-import/wire-sample.json"
+    ))
+    .expect("wire-sample.json is JSON");
+    assert_eq!(web, wire(BITWARDEN_JSON));
 }

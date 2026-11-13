@@ -130,8 +130,15 @@ Include referenced source folders and ancestors in parent-first order in every b
 and opaque source keys derive stable item, folder and target ids. Retries use the
 ordinary create recovery path; existing folders retain their current name and
 parent, and an existing TOTP enrollment is never replaced by an import.
-Per-item failures use fixed codes (`busy` for lease contention); a failed TOTP
-setup returns the created item id so retrying can finish enrollment.
+Per-item failures use fixed codes (`busy` for lease contention, `folder_missing`
+when a folder was deleted after the batch ensured it); a failed TOTP setup
+returns the created item id so retrying can finish enrollment. Items recheck
+membership once, after their lease (`admit_member`); the batch checked it first.
+`POST /teams/{team}/items/match` takes up to 500 names in the body (never a
+URL) and returns visible metadata with an equal name, for the client's
+duplicate check. Both routes answer a malformed JSON body with the fixed
+`invalid_request` failure, never serde's message. Limits (item, folders, batch,
+match) are `password_import::vault` constants; don't write them out here.
 `password_import_activity` records one counts-and-format entry per completed
 batch attempt, including empty and fully failed batches; team purge removes it.
 Audit failure preserves per-item results and records `audit_failed` on the batch

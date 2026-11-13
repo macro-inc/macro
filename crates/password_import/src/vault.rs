@@ -32,6 +32,8 @@ pub const MAX_IMPORT_BATCH_ITEMS: usize = 25;
 pub const MAX_IMPORT_BATCH_FOLDERS: usize = 200;
 /// Largest import batch request body.
 pub const MAX_IMPORT_BATCH_BYTES: usize = 4 * 1024 * 1024;
+/// Most names one duplicate-match request may carry, and most items it returns.
+pub const MAX_IMPORT_MATCH_NAMES: usize = 500;
 
 /// The vault's login URL rule: at most [`MAX_URL_BYTES`], http(s), a host,
 /// and no credentials.

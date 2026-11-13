@@ -18,6 +18,35 @@ fn derive_v7(import_id: Uuid, namespace: &str, key: &str) -> Uuid {
 }
 
 impl PasswordService {
+    /// Visible items named like the given names, for an import's duplicate check.
+    #[tracing::instrument(skip_all, err, name = "passwords.import.match", fields(
+        team_id = %team.0, names = names.len() as i64, matched = tracing::field::Empty
+    ))]
+    pub async fn match_names(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        names: Vec<String>,
+    ) -> Result<Vec<ItemView>, Error> {
+        self.membership(actor, team).await?;
+        if names.len() > vault::MAX_IMPORT_MATCH_NAMES
+            || names.iter().any(|name| name.len() > vault::MAX_NAME_BYTES)
+        {
+            return Err(Error::Invalid);
+        }
+        let admin = self.repository.is_team_admin(&actor.user_id, team).await?;
+        let items: Vec<ItemView> = self
+            .repository
+            .matching(actor, team, &names)
+            .await?
+            .into_iter()
+            .filter(|record| admin || Self::permission(actor, team, record, false))
+            .map(|record| Self::view(record, actor, admin))
+            .collect();
+        tracing::Span::current().record("matched", items.len() as i64);
+        Ok(items)
+    }
+
     /// Import a bounded batch, retaining independent item failures for selective retries.
     #[tracing::instrument(skip_all, err, name = "passwords.import.batch", fields(
         team_id = %team.0, import_id = %import_id,
