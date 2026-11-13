@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: kafka
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: kafka
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: kafka
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: kafka
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: CLUSTER_ID
+              value: TWFjcm9Mb2NhbEthZmthMQ
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://kafka:29092
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: CONTROLLER
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: 1@kafka:29093
+            - name: KAFKA_HEAP_OPTS
+              value: -Xms256m -Xmx512m
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: PLAINTEXT
+            - name: KAFKA_LISTENERS
+              value: PLAINTEXT://:29092,CONTROLLER://:29093
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+            - name: KAFKA_LOG_DIRS
+              value: /var/lib/kafka/data
+            - name: KAFKA_NODE_ID
+              value: "1"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_PROCESS_ROLES
+              value: broker,controller
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+          envFrom: []
+          image: localhost:32550/macro/kafka:build.c2apci7xmyd590qvlc37c490jibm4asi
+          imagePullPolicy: IfNotPresent
+          name: kafka
+          ports:
+            - containerPort: 29092
+              protocol: TCP
+            - containerPort: 29093
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            periodSeconds: 1
+            tcpSocket:
+              port: 29092
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /var/lib/kafka/data
+              name: vol-data
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - chown -R 1000:1000 /var/lib/kafka/data
+          image: localhost:32550/macro/volume-permissions:build.x4bn243bk1zkmjzg3qqrbgknr2q6p8wg
+          name: permissions
+          securityContext:
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /var/lib/kafka/data
+              name: vol-data
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-data
+          persistentVolumeClaim:
+            claimName: kafka-data

@@ -136,8 +136,8 @@ pub struct ThreadNotificationContext {
     /// Sender of the thread parent message.
     pub parent_sender_id: Option<MacroUserIdStr<'static>>,
     /// People connected to the call, when the thread belongs to a live call.
-    /// They read it in the call, so its notifications are dropped for them.
-    /// They stay followers, and later replies reach them once they leave.
+    /// The thread is the call's chat, so they hear about its messages like
+    /// followers do, even before they post in it.
     pub connected_call_participants: Vec<MacroUserIdStr<'static>>,
 }
 
@@ -700,12 +700,28 @@ where
             .map(|user_id| user_id.as_ref().to_string())
             .into_iter()
             .chain(user_mentions.iter().cloned())
+            .collect::<Vec<_>>();
+        // Someone in a call can be outside its channel (a guest); only members
+        // may hear about channel messages.
+        let channel_members: HashSet<&str> = participants
+            .iter()
+            .filter(|participant| participant.left_at.is_none())
+            .map(|participant| participant.user_id.as_str())
+            .collect();
+        let thread_audience = thread_context
+            .participants
+            .iter()
+            .map(|user_id| user_id.as_ref())
             .chain(
                 thread_context
                     .connected_call_participants
                     .iter()
-                    .map(|user_id| user_id.as_ref().to_string()),
+                    .map(|user_id| user_id.as_ref())
+                    .filter(|user_id| channel_members.contains(user_id)),
             )
+            .map(str::to_owned)
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect::<Vec<_>>();
         let recipients_without_sender = recipients_excluding(
             participants
@@ -729,6 +745,7 @@ where
             user_mentions,
             document_mentions,
             thread_context,
+            thread_audience,
             excluded_user_ids,
             recipients_without_sender,
             recipients_without_sender_and_mentions,
@@ -796,12 +813,7 @@ where
             },
             recipient_ids: recipients_excluding(
                 context.user_mentions.iter().map(String::as_str),
-                context
-                    .sender
-                    .as_user()
-                    .map(|user_id| user_id.as_ref())
-                    .into_iter()
-                    .chain(context.connected_in_thread()),
+                context.sender.as_user().map(|user_id| user_id.as_ref()),
             )
             .collect(),
         })
@@ -826,17 +838,8 @@ where
         // the channel anyway.
         let recipient_ids = match message.thread_id {
             Some(_) => recipients_excluding(
-                context
-                    .thread_context
-                    .participants
-                    .iter()
-                    .map(|participant| participant.as_ref()),
-                context
-                    .sender
-                    .as_user()
-                    .map(|user_id| user_id.as_ref())
-                    .into_iter()
-                    .chain(context.connected_in_thread()),
+                context.thread_audience.iter().map(String::as_str),
+                context.sender.as_user().map(|user_id| user_id.as_ref()),
             )
             .collect(),
             None => context.recipients_without_sender.clone(),
@@ -872,7 +875,7 @@ where
         has_attachments: bool,
         context: &PostedMessageNotificationContext,
     ) {
-        if context.thread_context.participants.is_empty() {
+        if context.thread_audience.is_empty() {
             tracing::warn!(thread_id = %thread_id, "thread participants is empty, but message has thread id");
             return;
         }
@@ -888,11 +891,7 @@ where
             metadata: context.metadata.clone(),
             sender_profile_picture_url: context.sender_profile_picture_url.clone(),
             recipient_ids: recipients_excluding(
-                context
-                    .thread_context
-                    .participants
-                    .iter()
-                    .map(|participant| participant.as_ref()),
+                context.thread_audience.iter().map(String::as_str),
                 context.excluded_user_ids.iter().map(String::as_str),
             )
             .collect(),
@@ -1052,20 +1051,13 @@ struct PostedMessageNotificationContext {
     user_mentions: Vec<String>,
     document_mentions: Vec<ChannelDocumentMention>,
     thread_context: ThreadNotificationContext,
+    /// Who hears about a thread's messages: its followers and, for a live
+    /// call's thread, the channel members connected to the call.
+    thread_audience: Vec<String>,
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
     is_first_top_level_message: bool,
-}
-
-impl PostedMessageNotificationContext {
-    /// Who the thread's call is showing this message to already.
-    fn connected_in_thread(&self) -> impl Iterator<Item = &str> {
-        self.thread_context
-            .connected_call_participants
-            .iter()
-            .map(|user_id| user_id.as_ref())
-    }
 }
 
 /// Whether a participant principal id refers to a bot (e.g. `bot|<uuid>`).

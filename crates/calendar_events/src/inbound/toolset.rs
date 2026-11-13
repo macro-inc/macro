@@ -32,14 +32,14 @@ use uuid::Uuid;
 use crate::domain::{
     copies::{CopyChange, check_copy},
     labels::{CalendarLabels, EventRole},
-    meeting_links::{CreateEventWithMacroCallError, EventWithMacroCall, MeetingLinkError},
+    meeting_links::{EventWithMacroCall, MacroCallEventError, MeetingLinkError},
     models::{
         CalendarAttendeeInput, CalendarEvent, EventReminderOverride, EventReminders, EventTime,
         OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
     },
     ports::{
-        CalendarMutationError, CalendarMutationService, CalendarOccurrenceService,
-        MeetingLinkProvider,
+        CalendarMacroCallService, CalendarMutationError, CalendarMutationService,
+        CalendarOccurrenceService, MeetingLinkProvider,
     },
 };
 
@@ -121,7 +121,7 @@ where
 
 fn shared_calendar_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + CalendarMacroCallService,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -142,7 +142,7 @@ where
 /// deletions, and copies of shared events execute in the agent loop.
 pub fn calendar_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + CalendarMacroCallService,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -161,7 +161,7 @@ where
 /// here the plain tool already creates directly.
 pub fn mcp_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + CalendarMacroCallService,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -394,8 +394,8 @@ pub struct ToolCalendarEvent {
     pub organizer_email: Option<String>,
     /// Conference join URL, when a conference is attached.
     pub conference_url: Option<String>,
-    /// Join URL of the Macro call created with the event, when
-    /// CreateCalendarEvent was asked for one.
+    /// Join URL of the event's Macro call, when CreateCalendarEvent or
+    /// UpdateCalendarEvent was asked for one.
     pub macro_call_url: Option<String>,
     /// Whether the user's calendar prohibits modifying this event.
     pub is_read_only: bool,
@@ -697,12 +697,12 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
 /// Map a failure creating an event with a Macro call to an agent-readable
 /// tool error. Calendar failures read exactly like a plain create; meeting
 /// failures say that nothing reached the calendar.
-fn macro_call_create_tool_error(error: CreateEventWithMacroCallError) -> ToolCallError {
+fn macro_call_create_tool_error(error: MacroCallEventError) -> ToolCallError {
     match error {
-        CreateEventWithMacroCallError::Calendar(error) => {
+        MacroCallEventError::Calendar(error) => {
             mutation_tool_error("create the calendar event", error)
         }
-        CreateEventWithMacroCallError::MeetingLink(error) => {
+        MacroCallEventError::MeetingLink(error) => {
             let description = match &error {
                 MeetingLinkError::InvalidInput(message) => {
                     format!("The Macro call could not be created: {message}")
@@ -720,6 +720,38 @@ fn macro_call_create_tool_error(error: CreateEventWithMacroCallError) -> ToolCal
             };
             ToolCallError {
                 description: format!("Failed to create the calendar event: {description}"),
+                internal_error: error.into(),
+            }
+        }
+    }
+}
+
+/// Map a failure switching an event to a Macro call to an agent-readable
+/// tool error. Calendar failures read exactly like a plain update; meeting
+/// failures say that the event was left as it was.
+fn macro_call_update_tool_error(error: MacroCallEventError) -> ToolCallError {
+    match error {
+        MacroCallEventError::Calendar(error) => {
+            mutation_tool_error("update the calendar event", error)
+        }
+        MacroCallEventError::MeetingLink(error) => {
+            let description = match &error {
+                MeetingLinkError::InvalidInput(message) => {
+                    format!("The Macro call could not be created: {message}")
+                }
+                MeetingLinkError::Unavailable => {
+                    "Macro calls cannot be created from here. Retry without `addMacroCall`, or \
+                     use `conference` for video conferencing."
+                        .to_string()
+                }
+                MeetingLinkError::Failed(_) => {
+                    "The Macro call could not be created right now. The event was not changed; \
+                     try again shortly."
+                        .to_string()
+                }
+            };
+            ToolCallError {
+                description: format!("Failed to update the calendar event: {description}"),
                 internal_error: error.into(),
             }
         }

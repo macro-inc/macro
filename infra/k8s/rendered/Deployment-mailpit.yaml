@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mailpit
+    app.kubernetes.io/name: mailpit
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: mailpit
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: mailpit
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: mailpit
+        app.kubernetes.io/name: mailpit
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom: []
+          image: localhost:32550/macro/mailpit:build.y99vfhw3xxq3z28wks7a02ns2vwdr6s3
+          imagePullPolicy: IfNotPresent
+          name: mailpit
+          ports:
+            - containerPort: 1025
+              protocol: TCP
+            - containerPort: 8025
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            periodSeconds: 1
+            tcpSocket:
+              port: 8025
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /data
+              name: vol-data
+      enableServiceLinks: false
+      initContainers: []
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-data
+          persistentVolumeClaim:
+            claimName: mailpit-data

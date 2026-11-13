@@ -284,6 +284,8 @@ Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
 follows stored option order; Priority puts urgent tasks first. Missing values
 stay last. Property-sort ties use newest update, then descending task ID.
 Text search retains its existing ordering and flat list results; clear search to sort.
+While searching, the desktop header hides Sort (leaving Group in its island) and
+the mobile drawer omits its Sort section.
 Boards group the loaded search results as before, without complete counts or grouped-search requests.
 
 **Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
@@ -398,7 +400,8 @@ Deadline tints and the Today marker refresh at local midnight and when a tab
 becomes visible or focused again.
 The tint only appears when the actual end is inside the calendar range.
 Bar text stays inside the visible portion of its bar as you scroll, zoom, or
-open the item drawer, and truncates in narrow segments.
+open the item drawer. A bar too short for its name shows the name beside it,
+to its right, in muted text, until zooming in makes room.
 The full-width date header stays visible during vertical scrolling; the pointer's
 date label stays in that header, and the vertical scrollbar begins below it.
 Timeline-edge fades stay within the date header, beneath its floating buttons.
@@ -546,7 +549,8 @@ start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
 A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**,
-**Status**, **Priority**, or the active due-date sort label. The drop does not choose a pointer insertion slot:
+**Status**, **Priority**, or the active due-date sort label; during a text search it
+shows **Move here**. The drop does not choose a pointer insertion slot:
 its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
@@ -1202,7 +1206,8 @@ its target again.
 ## Bulk delete
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
-then confirm **Delete**. With GraphQL Soup enabled, selected rows disappear while
+then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms
+and Escape cancels. With GraphQL Soup enabled, selected rows disappear while
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
 reports how many items were deleted and keeps only failed items in the dialog for
