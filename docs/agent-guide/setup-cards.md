@@ -80,8 +80,8 @@ sidebars start with a suggestions card while the scheduler has suggestions for
 that area; it never shows on touch devices. The card shows up to three
 different routine icons overlapping (each routine's other area besides the
 sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
-you**, the suggestions' names, and a caret, inside a border that fades from
-violet through blue. Clicking it opens **Routines for <area>**: a two-column
+you**, the suggestions' names, and a caret, framed like the Email sidebar's
+**Accounts** card. Clicking it opens **Routines for <area>**: a two-column
 grid of cards, with **For you** and **Templates** tabs (each with a count)
 when the area has both AI's picks and Macro's templates. Each card has the
 area icon, **For you** (violet), **Draft** or **Template** badges, the name,
