@@ -5,7 +5,7 @@ import {
   LIVE_REFRESH_MS,
   LOST_AFTER_MS,
   LOST_REFRESH_MS,
-  traceHeardAt,
+  heardTrace,
   traceIsLive,
   traceRefreshMs,
   wakeDuration,
@@ -114,7 +114,7 @@ describe('a trace waterfall', () => {
       ],
     };
     const now = Date.parse(trace.endedAt);
-    const heard = { trace, heardAt: traceHeardAt(trace, null) };
+    const heard = heardTrace(trace, null);
     const { rows, total } = waterfall(heard, now);
     expect(total).toBe(10_000);
     expect(rows.map((row) => [row.label, row.offset, row.duration])).toEqual([
@@ -163,18 +163,25 @@ describe('a live trace in a long silent step', () => {
       ...wake({ phase: 'session' }),
       traceUpdatedAt: new Date(now - 60_000).toISOString(),
     };
-    const heard = { trace, heardAt: traceHeardAt(trace, row) };
+    const heard = heardTrace(trace, row);
     expect(wakeState(row, now)).toBe('running');
     expect(traceIsLive(heard, now)).toBe(true);
     expect(waterfall(heard, now).rows[0]?.running).toBe(true);
     expect(traceRefreshMs(heard, now)).toBe(LIVE_REFRESH_MS);
     // Without the row, the trace's own last moment is all there is.
-    expect(
-      traceIsLive({ trace, heardAt: traceHeardAt(trace, null) }, now)
-    ).toBe(false);
+    expect(traceIsLive(heardTrace(trace, null), now)).toBe(false);
     // Once the wake goes lost, so does the trace.
     const lost = now + LOST_AFTER_MS + 1;
     expect(wakeState(row, lost)).toBe('lost');
     expect(traceIsLive(heard, lost)).toBe(false);
+    // A wake that ended before its final trace arrived stops looking live at
+    // once, but the trace is still re-read in case that trace comes.
+    const ended = heardTrace(trace, {
+      ...row,
+      record: { ...row.record, phase: 'end', status: 'ok' },
+    });
+    expect(traceIsLive(ended, now)).toBe(false);
+    expect(waterfall(ended, now).rows[0]?.running).toBe(false);
+    expect(traceRefreshMs(ended, now)).toBe(LOST_REFRESH_MS);
   });
 });

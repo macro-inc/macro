@@ -38,27 +38,35 @@ export function wakeState(wake: AgentWake, now: number): WakeState {
 }
 
 /**
- * A wake's trace with when Macro last heard from the wake (`lastHeard`), or,
- * when the wake's row couldn't be read, the trace's own last timestamp.
+ * A wake's trace with what its row says: when Macro last heard from the wake
+ * (`lastHeard`) and whether it has ended. When the row couldn't be read, the
+ * trace's own last timestamp, and not ended.
  */
-export type HeardTrace = { trace: WakeTrace; heardAt: number };
+export type HeardTrace = { trace: WakeTrace; heardAt: number; ended: boolean };
 
-/**
- * When Macro last heard from a wake whose trace this is: its row's
- * `lastHeard`, else the newest moment in the trace.
- */
-export function traceHeardAt(trace: WakeTrace, wake: AgentWake | null): number {
-  return wake ? lastHeard(wake) : Date.parse(trace.endedAt);
+export function heardTrace(
+  trace: WakeTrace,
+  wake: AgentWake | null
+): HeardTrace {
+  if (!wake) return { trace, heardAt: Date.parse(trace.endedAt), ended: false };
+  return {
+    trace,
+    heardAt: lastHeard(wake),
+    ended: wake.record.phase === 'end',
+  };
 }
 
 /**
- * Whether a trace is still being added to: uploaded live, by a wake heard
- * from within `LOST_AFTER_MS`, the rule a wake's row uses for `running`. A
- * live heartbeat keeps a long silent step live; a wake that died mid-upload
- * stops looking live.
+ * Whether a trace is still being added to: uploaded live, by a wake that has
+ * not ended and was heard from within `LOST_AFTER_MS`, the rule a wake's row
+ * uses for `running`. A live heartbeat keeps a long silent step live; a wake
+ * that died mid-upload, or ended before its final trace arrived, stops
+ * looking live.
  */
 export function traceIsLive(heard: HeardTrace, now: number): boolean {
-  return heard.trace.live && now - heard.heardAt <= LOST_AFTER_MS;
+  return (
+    heard.trace.live && !heard.ended && now - heard.heardAt <= LOST_AFTER_MS
+  );
 }
 
 /** While a wake runs, its row is re-read this often to show it ending. */
