@@ -498,7 +498,8 @@ export function registerEvents(view: EditorView): {
           event.ctrlKey !== event.metaKey &&
           !event.altKey &&
           !event.shiftKey) ||
-        (event.key === 'Enter' && plain))
+        (event.key === 'Enter' && plain) ||
+        (routed === 0 && [...event.key].length === 1))
     ) {
       // Source clones the previous range on keydown. A real selectionchange
       // admits browser movement, including movement that arrives before Enter.
