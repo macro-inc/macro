@@ -1,0 +1,22 @@
+packages/sdk/package.json
+  s_1656893481611a::t_43bbe23d22bddb 3
+packages/sdk/README.md
+  s_1656893481611a::t_e698249321f029 846-847,850-867,869-903,908-917,1056-1061
+  s_1656893481611a::t_b09d52ddf74d27 868
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e36bdd0ae4329956b6917243af0ceff265088810",
+  "prompts": {},
+  "sessions": {
+    "s_1656893481611a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b222a84f-15df-400c-9f06-1a0c64e2aa0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
