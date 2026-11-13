@@ -644,7 +644,7 @@ export function FormatTools(props: {
         disabled={buttonIsDisabled()}
         tabIndex={-1}
       >
-        <Dynamic component={props.icon ?? ThreeDots} />
+        <Dynamic component={props.icon ?? ThreeDots} class="size-4" />
       </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
         <Dropdown.Content
@@ -691,7 +691,7 @@ export function FormatTools(props: {
         disabled={buttonIsDisabled()}
         tabIndex={-1}
       >
-        <Dynamic component={props.icon ?? ThreeDots} />
+        <Dynamic component={props.icon ?? ThreeDots} class="size-4" />
       </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
         <Dropdown.Content
