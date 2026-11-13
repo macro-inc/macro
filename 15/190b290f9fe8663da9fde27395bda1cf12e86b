@@ -1,0 +1,41 @@
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_b0da33e00deeb2::t_87b765f1ab5d23 3-4,209-210
+  s_b0da33e00deeb2::t_43b73aecc41e5a 42-45,136-159
+crates/event_stream/Cargo.toml
+  s_b0da33e00deeb2::t_43b73aecc41e5a 23-25,27-28,52-58
+Cargo.lock
+  s_b0da33e00deeb2::t_fb5d48b65a2119 8138,8140,8145,8147,8149,8159-8160
+crates/event_stream/src/topics.rs
+  s_b0da33e00deeb2::t_b4e62bad9a65dd 16,19-20,22-24,27-28,31-32,45-52,64-71
+crates/event_stream/src/domain/catalog.rs
+  s_b0da33e00deeb2::t_6917e7d1bcef61 13,16-17,20-22,24-25,140,222-282
+  s_b0da33e00deeb2::t_5a85294e0890a0 141-155
+crates/event_stream/src/domain/invalidations.rs
+  s_b0da33e00deeb2::t_43b73aecc41e5a 72-80,103-110
+crates/event_stream/src/domain/catalog/test.rs
+  s_b0da33e00deeb2::t_a186101c6b333a 68-315
+crates/event_stream/src/domain/catalog/exposure_samples.json
+  s_b0da33e00deeb2::t_ea49155908ca1e 164-174
+  s_b0da33e00deeb2::t_eb07747ff647a2 1-163,175-1130,1134-1224
+  s_b0da33e00deeb2::t_488bec60ae0208 1131-1133
+crates/event_stream/AGENTS.md
+  s_b0da33e00deeb2::t_79581a3a0f3286 26-27,52-57
+.github/workspace-dep-closures.json
+  s_b0da33e00deeb2::t_55696ef1d95af6 4110-4111,4115,4117,4126-4127,4133,4135,4153,4188,4200,4204,4216,7539-7540,7544-7545,7553-7554,7560,7562,7578,7610,7622,7626,7637,16365-16366,16370-16371,16379-16380,16386,16388,16404,16436,16448,16452,16463
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "15190b290f9fe8663da9fde27395bda1cf12e86b",
+  "prompts": {},
+  "sessions": {
+    "s_b0da33e00deeb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70fd566d-6642-47ee-813b-5061c81e1901",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
