@@ -63,12 +63,139 @@ fn install_session_plugins(
     track_root: bool,
     mint: IdMint,
 ) -> EditorBuilder {
+    let builder = match mint {
+        // Source nodeIdPlugin's node transform: nodes get their ids inside the update that
+        // dirtied them; the after_commit half below keeps the index and reports failures.
+        #[cfg(feature = "application")]
+        IdMint::Nanoid { length } => builder
+            .extension_state(TransformIds { id_state, length })
+            .transform_each(transform_id, TransformScope::Types(SOURCE_ID_TYPES)),
+        IdMint::Session => builder,
+    };
     register_editor_commands(builder.extension_state(NodeIdIndex::default())).plugin(NodeIds {
         peer,
         id_state,
         track_root,
         mint,
     })
+}
+
+/// Source SupportedNodeTypes (lexical-core node-list.ts:75-133, 57 classes), the classes the app passes to
+/// nodeIdPlugin (LexicalWrapperContext.tsx:126-134); the transform runs on these types only.
+#[cfg(feature = "application")]
+pub(crate) const SOURCE_ID_TYPES: &[&str] = &[
+    "paragraph",
+    "text",
+    "code",
+    "custom-code",
+    "database-query",
+    "heading",
+    "link",
+    "autolink",
+    "list",
+    "task-list",
+    "listitem",
+    "quote",
+    "linebreak",
+    "document-mention",
+    "document-card",
+    "paste",
+    "user-mention",
+    "contact-mention",
+    "date-mention",
+    "pr-mention",
+    "booking-link-mention",
+    "agent-session-mention",
+    "reply-target",
+    "group-mention",
+    "inline-search",
+    "unlinked-text",
+    "code-highlight",
+    "tab",
+    "image",
+    "video",
+    "table",
+    "tablecell",
+    "tablerow",
+    "completion",
+    "mark",
+    "comment-mark",
+    "search-match",
+    "equation",
+    "snapshot",
+    "horizontalrule",
+    "diff",
+    "diff-insert",
+    "diff-delete",
+    "diff-text",
+    "html-render",
+    "classed-block",
+    "watermark",
+    "theme-mention",
+    "tag-mention",
+    "connect-app",
+    "account-manager-request",
+    "unknown-mention",
+    "await",
+    "magic-chip",
+    "agent-activity",
+    "agent-context",
+    "system-notification",
+];
+
+/// The application id mint the in-update transform uses.
+#[cfg(feature = "application")]
+#[derive(Clone, Copy)]
+struct TransformIds {
+    id_state: &'static StateKey<Option<String>>,
+    length: usize,
+}
+
+/// Source's `idToNodeKeyMap` entries recorded by this update's transforms; the index (updated by
+/// after_commit) holds the entries as of update start, including nodes this update destroys.
+#[cfg(feature = "application")]
+#[derive(Default)]
+struct UpdateIds(std::collections::HashMap<String, NodeKey>);
+
+/// Source nodeIdPlugin's transform (nodeIdPlugin.ts:120-131): `$assertId`, then `$regenId` when
+/// the id already belongs to another node; the node transformed first keeps it. An exhausted
+/// mint leaves the node as it is and lets the update commit; after_commit reports it.
+#[cfg(feature = "application")]
+fn transform_id(tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
+    let TransformIds { id_state, length } = *tx.extension::<TransformIds>()?;
+    // Source's map at update start: the index minus stale entries an earlier subtree removal
+    // left (Source's destroyed listener drops those); a node this update destroys still counts.
+    // The same predicate decides keeping a stored id and accepting a fresh draw.
+    let owned_elsewhere = |tx: &Transaction<'_>, id: &str| -> Result<bool, Error> {
+        let indexed = tx
+            .extension::<NodeIdIndex>()?
+            .ids
+            .get(id)
+            .copied()
+            .filter(|owner| {
+                *owner != key
+                    && (tx.is_attached(*owner) || tx.committed_state().view().is_attached(*owner))
+            });
+        let recorded = tx
+            .update_local::<UpdateIds>()
+            .and_then(|ids| ids.0.get(id).copied());
+        Ok(indexed.is_some() || recorded.is_some_and(|owner| owner != key))
+    };
+    let stored = tx.get_state(key, id_state)?.unwrap_or_default();
+    let id = if !stored.is_empty() && !owned_elsewhere(tx, &stored)? {
+        stored.clone()
+    } else {
+        match try_mint_nanoid(tx, length, &owned_elsewhere)? {
+            Some(id) => id,
+            // Exhausted: leave the node as it is; after_commit reports it once.
+            None => return Ok(()),
+        }
+    };
+    if id != stored {
+        tx.set_state(key, id_state, Some(id.clone()))?;
+    }
+    tx.update_local_mut::<UpdateIds>()?.0.insert(id, key);
+    Ok(())
 }
 
 /// How a node without a usable id receives one.
@@ -89,16 +216,28 @@ const NANOID_ATTEMPTS: usize = 16;
 /// incoming node of the same commit; fail after a bounded number of draws.
 #[cfg(feature = "application")]
 fn mint_nanoid(tx: &Transaction<'_>, length: usize, reserved: &[String]) -> Result<String, Error> {
+    try_mint_nanoid(tx, length, &|tx, candidate| {
+        Ok(tx.extension::<NodeIdIndex>()?.ids.contains_key(candidate)
+            || reserved.iter().any(|id| id == candidate))
+    })?
+    .ok_or(Error::Invariant("node id generation exhausted"))
+}
+
+/// Bounded Source nanoid draws: `None` when every draw was taken; any other error propagates.
+#[cfg(feature = "application")]
+fn try_mint_nanoid(
+    tx: &Transaction<'_>,
+    length: usize,
+    taken: &dyn Fn(&Transaction<'_>, &str) -> Result<bool, Error>,
+) -> Result<Option<String>, Error> {
     for _ in 0..NANOID_ATTEMPTS {
         let candidate = macro_document_model::nanoid(tx, length)
             .map_err(|error| Error::invariant(error.to_string()))?;
-        if !tx.extension::<NodeIdIndex>()?.ids.contains_key(&candidate)
-            && !reserved.contains(&candidate)
-        {
-            return Ok(candidate);
+        if !taken(tx, &candidate)? {
+            return Ok(Some(candidate));
         }
     }
-    Err(Error::Invariant("node id generation exhausted"))
+    Ok(None)
 }
 
 pub(super) static ID: StateKey<Option<String>> = StateKey::new("id", |value| {
