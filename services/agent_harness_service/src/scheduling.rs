@@ -861,9 +861,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::new(SuggestionRunSessions {
                 sessions: Arc::clone(&sessions),
                 creations: ActivityCreations {
-                    activity: activity::outbound::pg_activity_repo::PgActivityRepo::new(
-                        db.clone(),
-                    ),
+                    activity: activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
                     executions: agent_code_mode::outbound::postgres::PgExecutionStore::new(
                         db.clone(),
                     ),
