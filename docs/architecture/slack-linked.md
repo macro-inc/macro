@@ -285,9 +285,9 @@ the cursor, another 1,000 messages per call, and returns
 | `thread_ts` ≠ `ts` | a thread reply: `thread_root` = the root message (see below) |
 | `subtype: message_changed` | revision (edited) |
 | `subtype: message_deleted` / `tombstone` | permanent tombstone |
-| `reaction_added` / `reaction_removed` | `external_chat_reaction` (Unicode emoji, or `:name:` for custom) |
+| `reaction_added` / `reaction_removed` | `external_chat_reaction` (Unicode emoji from `slack_client::emoji`, skin tones dropped, or `:name:` for custom) |
 | `files[]` | attachments: `url_private_download` fetched with the session, `files.info` first when `file_access: check_file_info` |
-| `channel_join`, `channel_leave`, `channel_topic`, `channel_name`, `channel_archive`, shared/unshared | system lines (`kind = system`) |
+| `channel_join`/`leave`, `channel_topic`/`purpose`, `channel_name`, pins (and the `group_*` forms) | system lines (`kind = system`, `rich` a `SystemLine`); other housekeeping (archive, huddles, reminders) stays text |
 | bot messages (`bot_id`) | a person named after the bot |
 | `channel_marked` / `im_marked` / `group_marked` / `mpim_marked` | the owner's `external_chat_read_state` |
 | `thread_marked` | the owner's thread read position |
@@ -296,8 +296,10 @@ the cursor, another 1,000 messages per call, and returns
 Sending maps back: the composer sends mrkdwn with mentions written `<@U…>`
 (each listed in `mentions`), replies in a
 thread as `thread_ts` (optionally `reply_broadcast`), edits as `chat.update`,
-deletes as `chat.delete`, reactions as `reactions.add/remove`, files with
-`files.getUploadURLExternal` + upload + `files.completeUploadExternal`.
+deletes as `chat.delete`, reactions as `reactions.add/remove` with the
+emoji's Slack name (an emoji Slack has no name for fails as
+`unsupported_emoji`), files with `files.getUploadURLExternal` + upload +
+`files.completeUploadExternal` + `files.share`.
 
 ## Sync loop
 
@@ -402,9 +404,11 @@ file id as the locator); the observing account's replica downloads them
 (`files.info`, then the authenticated download) into
 `external_chat_media_blob`, hashing what arrived, for DSS's import. A file
 sent from Macro is uploaded with `files.getUploadURLExternal` + the upload +
-`files.completeUploadExternal`; `files.info`'s `shares` names the share
-message's `ts`, so the send is stored under it with the staged upload as its
-attachment, and Slack's echo converges on the same message.
+`files.completeUploadExternal` without a channel, then posted with the web
+client's `files.share`, which answers the share message's `ts` (completing
+into a channel shares asynchronously, so its `ts` isn't known yet). The send
+is stored under that `ts` with the staged upload as its attachment, and
+Slack's echo converges on the same message.
 
 A message whose `text` is empty (Slack's newer clients send only blocks) is
 stored as its `rich_text` blocks rendered to mrkdwn

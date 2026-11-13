@@ -20,6 +20,8 @@ real-time websocket. An outbound adapter library: no DB, no Macro entities.
 - `src/realtime.rs` (+ `realtime/events.rs`): `connect_realtime`, reconnect
   loop, typed `SlackEvent`s; unknown frames stay raw JSON.
 - `src/error.rs`: `SlackError` / `SlackErrorCode` with `is_session_ended()`.
+- `src/emoji.rs`: Slack reaction names ↔ the Unicode emoji Macro stores, from
+  the generated `data/emoji-shortcodes.json` (regenerate per `data/README.md`).
 
 ## Scope
 
