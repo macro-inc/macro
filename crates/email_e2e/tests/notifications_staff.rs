@@ -101,19 +101,19 @@ async fn staff_get_a_push_only_for_signal_mail(provider: Provider) -> Result<(),
     take_new_mail(&stack).await?;
 
     deliver_bulk(&stack, &inbox, "Shop <deals@example.net>", "Weekend sale")?;
-    inbox.wait_for_preview("all", "Weekend sale").await?;
+    // Bulk mail is still announced in the app, without the push.
+    let (bulk, others) = wait_for_notification(&stack, "Weekend sale").await?;
+    assert!(!has_push(&bulk), "bulk mail does not push: {bulk}");
+    assert!(others.is_empty(), "{others:?}");
+
     inbox.deliver(&Mail::new(
         "Grace <grace@example.com>",
         "Personal note",
         "Hi Ada.",
     ))?;
-    inbox.wait_for_preview("inbox", "Personal note").await?;
-
     let (personal, others) = wait_for_notification(&stack, "Personal note").await?;
     assert!(has_push(&personal), "signal mail pushes: {personal}");
-    // Bulk mail is still announced in the app, without the push.
-    assert_eq!(others.len(), 1, "{others:?}");
-    assert!(others.iter().all(|other| !has_push(other)), "{others:?}");
+    assert!(others.is_empty(), "{others:?}");
 
     stack.finish().await
 }

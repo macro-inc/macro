@@ -81,6 +81,9 @@ pub(crate) struct Aws {
     tracker: TaskTracker,
 }
 
+/// How long a forwarded request may take before the endpoint gives up.
+const FORWARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 impl Aws {
     /// Starts the endpoint in front of the SQS server at `sqs_url`.
     pub(crate) async fn start(sqs_url: &str) -> Result<Self, Report> {
@@ -88,6 +91,8 @@ impl Aws {
         let refused_sends = RefusedSends::default();
         let endpoint = Endpoint {
             http: reqwest::Client::builder()
+                // Longer than the longest wait a queue poll asks for.
+                .timeout(FORWARD_TIMEOUT)
                 .build()
                 .context("could not build the AWS endpoint's HTTP client")?,
             sqs_url: sqs_url.trim_end_matches('/').to_owned(),

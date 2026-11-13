@@ -59,6 +59,8 @@ async fn composer_send_reaches_the_other_mailbox(provider: Provider) -> Result<(
     assert_eq!(replayed["message"]["id"], sent["message"]["id"]);
     deliver_marker(&from, &to).await?;
     assert_eq!(to.previews("inbox").await?.len(), 2);
+    // A second copy would join the first one's thread: count messages too.
+    assert_eq!(to.provider_messages()?.len(), 2);
 
     stack.finish().await
 }
@@ -167,6 +169,8 @@ async fn undo_restores_the_draft_as_written(provider: Provider) -> Result<(), Re
     stack.run_scheduled_sweep().await?;
     deliver_marker(&from, &to).await?;
     assert_eq!(to.previews("inbox").await?.len(), 1);
+    // A second copy would join the first one's thread: count messages too.
+    assert_eq!(to.provider_messages()?.len(), 1);
     assert_eq!(from.previews("drafts").await?.len(), 1);
 
     stack.finish().await
@@ -217,6 +221,8 @@ async fn sweep_delivers_a_send_whose_queue_message_was_lost(
     stack.run_scheduled_sweep().await?;
     deliver_marker(&from, &to).await?;
     assert_eq!(to.previews("inbox").await?.len(), 2);
+    // A second copy would join the first one's thread: count messages too.
+    assert_eq!(to.provider_messages()?.len(), 2);
 
     stack.finish().await
 }
@@ -299,6 +305,8 @@ async fn refused_send_fails_and_can_be_taken_back(
     stack.run_scheduled_sweep().await?;
     deliver_marker(&from, &to).await?;
     assert_eq!(to.previews("inbox").await?.len(), 1);
+    // A second copy would join the first one's thread: count messages too.
+    assert_eq!(to.provider_messages()?.len(), 1);
     let still = from.send_attempt_state(attempt_id).await?;
     assert_eq!(still["status"], "FAILED", "{still}");
 

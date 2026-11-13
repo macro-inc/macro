@@ -196,6 +196,8 @@ impl Stack {
             self.worker_env
                 .insert(queue.override_env.to_owned(), queue.url.clone());
         }
+        // What the scenario set stays on top, as it was at the first start.
+        self.worker_env.extend(options.env.iter().cloned());
 
         let mut attempt = 0;
         loop {
@@ -300,11 +302,16 @@ impl Stack {
                     tls.stop().await;
                 }
                 Err(error) => {
-                    return Err(error.attach(format!(
+                    let report = error.attach(format!(
                         "the end of {}:\n{}",
                         api.log_path().display(),
                         api.log_tail()
-                    )));
+                    ));
+                    api.stop().await;
+                    tls.stop().await;
+                    macro_services.stop().await;
+                    aws.stop().await;
+                    return Err(report);
                 }
             }
         };

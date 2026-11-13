@@ -26,6 +26,8 @@ use tokio_util::task::TaskTracker;
 const AUTHENTICATION: &str = "authentication";
 /// Where both emulators serve their authentication service stand-in.
 const EMULATOR_AUTHENTICATION_PATH: &str = "/_emulator/authentication-service";
+/// How long a request passed on to an emulator may take.
+const FORWARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 /// The largest request body the stand-ins read.
 const BODY_LIMIT: usize = 32 * 1024 * 1024;
 
@@ -87,6 +89,7 @@ impl MacroServices {
         let failures = Failures::default();
         let routes = Routes {
             http: reqwest::Client::builder()
+                .timeout(FORWARD_TIMEOUT)
                 .build()
                 .context("could not build the stand-in's HTTP client")?,
             gmail_authentication: format!("{gmail_url}{EMULATOR_AUTHENTICATION_PATH}"),
