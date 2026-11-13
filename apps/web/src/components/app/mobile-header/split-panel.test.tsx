@@ -5,7 +5,13 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps, Show, useContext } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  type ParentProps,
+  Show,
+  useContext,
+} from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   SplitHeaderLeft,
@@ -48,7 +54,8 @@ vi.mock('@app/features/next-soup/soup-view/soup-view-context', () => ({
 vi.mock('@app/features/next-soup/utils', () => ({
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
-vi.mock('@app/lib/split-router', () => ({
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useOptionalSplitRouter: () => ({
     entry: () => ({
       location: {
@@ -95,7 +102,8 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
 }));
 vi.mock('@entity', () => ({ isEntityDragEvent: () => false }));
 vi.mock('@app/components/view-shell', () => ({ ViewBreadcrumbs: {} }));
-vi.mock('@ui', () => {
+vi.mock('@ui', async () => {
+  const { cn } = await import('../../ui/utils/classname');
   const Container = (props: ParentProps) => <div>{props.children}</div>;
   return {
     Panel: Object.assign(Container, {
@@ -103,9 +111,23 @@ vi.mock('@ui', () => {
       Toolbar: Container,
       Body: Container,
     }),
-    Button: Container,
+    Button: (props: {
+      children?: JSX.Element;
+      disabled?: boolean;
+      'aria-label'?: string;
+      onClick?: () => void;
+    }) => (
+      <button
+        type="button"
+        disabled={props.disabled}
+        aria-label={props['aria-label']}
+        onClick={props.onClick}
+      >
+        {props.children}
+      </button>
+    ),
     Layer: Container,
-    cn: () => '',
+    cn,
   };
 });
 vi.mock('../split-layout/layout', () => ({
@@ -144,6 +166,9 @@ it('mounts header contributions when chrome appears and follows its replacement 
     id: 'mail',
   });
   let mountedViews = 0;
+  const replace = vi.fn();
+  const goBack = vi.fn();
+  const [canGoBack, setCanGoBack] = createSignal(false);
   let panel: SplitPanelContextType | undefined;
   const split: SplitState = {
     id,
@@ -209,7 +234,7 @@ it('mounts header contributions when chrome appears and follows its replacement 
     content,
     unregisterContentChangeListener: () => {},
     registerContentChangeListener: () => {},
-    replace: () => {},
+    replace,
     adoptContentId: () => {},
     removeFromHistory: () => {},
     toggleSpotlight: () => {},
@@ -218,13 +243,14 @@ it('mounts header contributions when chrome appears and follows its replacement 
     isSpotLight: () => false,
     isPopover: () => false,
     displayName: () => 'Mail',
-    canGoBack: () => false,
+    // The shell receives both ordinary history and direct-link availability.
+    canGoBack,
     isActive: () => true,
     isFirst: () => true,
     goForward: () => {},
     isLast: () => true,
     activate: () => {},
-    goBack: () => {},
+    goBack,
     goBackTo: () => false,
     close: () => {},
     reset: () => {},
@@ -271,6 +297,51 @@ it('mounts header contributions when chrome appears and follows its replacement 
     within(projectChrome).getByRole('button', { name: 'Project details' })
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Unread' })).toBeNull();
+  setContent({
+    type: 'component',
+    id: 'tasks',
+    entryMetadata: {
+      route: {
+        matches: [
+          { id: 'view-tasks', params: {} },
+          {
+            id: 'tasks-project',
+            params: {
+              projectId: '00000000-0000-4000-8000-000000000001',
+              section: 'overview',
+            },
+          },
+        ],
+      },
+    },
+  });
+  const back = within(projectChrome).getByRole('button', { name: /go back/i });
+  expect(back.hasAttribute('disabled')).toBe(false);
+  expect(
+    back.closest('[data-header-island]')?.classList.contains('hidden')
+  ).toBe(false);
+  fireEvent.click(back);
+  expect(replace).toHaveBeenCalledWith({
+    mergeHistory: true,
+    next: expect.objectContaining({
+      entryMetadata: expect.objectContaining({
+        route: expect.objectContaining({
+          matches: expect.arrayContaining([
+            expect.objectContaining({ id: 'tasks-projects' }),
+          ]),
+        }),
+      }),
+    }),
+  });
+  setCanGoBack(true);
+  fireEvent.click(back);
+  expect(goBack).toHaveBeenCalledOnce();
+  expect(replace).toHaveBeenCalledOnce();
+  expect(
+    back.closest('[data-header-island]')?.classList.contains('hidden')
+  ).toBe(false);
+  setCanGoBack(false);
+  setContent({ type: 'component', id: 'mail' });
   fireEvent.click(toggleProject);
   expect(projectChrome.isConnected).toBe(false);
   expect(panel?.layoutRefs.headerLeft).toBeUndefined();

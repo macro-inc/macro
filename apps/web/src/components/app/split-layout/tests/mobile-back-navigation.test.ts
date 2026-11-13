@@ -8,8 +8,8 @@ const PROJECT = '00000000-0000-4000-8000-000000000001';
 
 function projectContent(section: string, projectId = PROJECT): SplitContent {
   return {
-    type: 'initiative',
-    id: projectId,
+    type: 'component',
+    id: 'tasks',
     entryMetadata: {
       route: {
         matches: [
@@ -33,6 +33,7 @@ function setup(
   let front: SplitId | undefined = FRONT;
   const routeBack = vi.fn();
   const stackBack = vi.fn();
+  const replace = vi.fn();
   const back = createMobileBackNavigation({
     phone: () => options.phone ?? true,
     getSplit: () => ({
@@ -43,6 +44,7 @@ function setup(
           : options.previous,
       canGoBack: () => options.rawBack ?? true,
       goBack: routeBack,
+      replace,
     }),
     stack: {
       front: () => front,
@@ -57,6 +59,7 @@ function setup(
   return {
     back,
     routeBack,
+    replace,
     stackBack,
     setFront: (id: SplitId) => {
       front = id;
@@ -107,6 +110,40 @@ describe('native phone project Back', () => {
     }
   );
 
+  it.each([
+    ['overview', 'tasks-projects', false],
+    ['overview', 'tasks-projects', true],
+    ['tasks', 'tasks-project', false],
+    ['tasks', 'tasks-project', true],
+  ] as const)(
+    'provides a Back destination for a direct %s link (pane behind: %s)',
+    (section, routeId, stackBack) => {
+      const test = setup({
+        current: projectContent(section),
+        previous: null,
+        rawBack: false,
+        stackBack,
+      });
+      expect(test.back.canGoBack()).toBe(true);
+      expect(test.back.canGoBackInPane()).toBe(true);
+      test.back.goBack();
+      expect(test.replace).toHaveBeenCalledWith({
+        mergeHistory: true,
+        next: expect.objectContaining({
+          entryMetadata: expect.objectContaining({
+            route: expect.objectContaining({
+              matches: expect.arrayContaining([
+                expect.objectContaining({ id: routeId }),
+              ]),
+            }),
+          }),
+        }),
+      });
+      expect(test.routeBack).not.toHaveBeenCalled();
+      expect(test.stackBack).not.toHaveBeenCalled();
+    }
+  );
+
   it('uses the same back operation for the caret and hardware Back', () => {
     const test = setup();
     test.back.goBack(FRONT);
@@ -115,18 +152,22 @@ describe('native phone project Back', () => {
     expect(test.stackBack).not.toHaveBeenCalled();
   });
 
+  it('preserves unrelated route history instead of closing the pane or applying a fallback', () => {
+    const test = setup({
+      current: projectContent('overview'),
+      previous: { type: 'component', id: 'home' },
+      rawBack: true,
+      stackBack: true,
+    });
+    test.back.goBack();
+    expect(test.routeBack).toHaveBeenCalledOnce();
+    expect(test.replace).not.toHaveBeenCalled();
+    expect(test.stackBack).not.toHaveBeenCalled();
+  });
+
   it.each([
     { phone: false },
-    { rawBack: false },
-    { previous: null },
-    {
-      previous: projectContent(
-        'overview',
-        '00000000-0000-4000-8000-000000000002'
-      ),
-    },
-    { previous: projectContent('tasks') },
-    { current: projectContent('overview') },
+    { current: { type: 'component', id: 'home' } satisfies SplitContent },
     { current: { type: 'initiative', id: PROJECT } satisfies SplitContent },
     {
       current: {
@@ -166,7 +207,11 @@ describe('native phone project Back', () => {
   });
 
   it('retains root availability when no route or pane can go back', () => {
-    const test = setup({ previous: null, stackBack: false });
+    const test = setup({
+      current: { type: 'component', id: 'home' },
+      previous: null,
+      stackBack: false,
+    });
     expect(test.back.canGoBack()).toBe(false);
   });
 });
