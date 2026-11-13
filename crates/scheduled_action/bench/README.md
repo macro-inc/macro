@@ -157,7 +157,9 @@ against the first:
 
 Main at b23b613b5d, on a stack on main's schema, 2 rounds of the 20 cases
 under each of two copies of the same harness build (80 drafts per arm),
-measured on 2026-11-12 and 13:
+measured on 2026-11-12 and 13. The stack had PostHog's placeholder key, so
+every flag load failed: turns routed no skills or SDK areas (`auto-skills`
+off) and carried every area's guidance.
 
 | Arm | median | p90 | worst | under 15 s | every check | mechanical | run | judge (keep) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
