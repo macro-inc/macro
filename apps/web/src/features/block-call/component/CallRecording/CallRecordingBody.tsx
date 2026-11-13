@@ -223,7 +223,7 @@ export function CallRecordingBody(props: {
                               class="mt-6"
                               onClick={callAgain}
                             >
-                              <PhoneCallIcon />
+                              <PhoneCallIcon class="size-5 shrink-0" />
                               {t('calls.detailJoinCall')}
                             </Button>
                           </Show>

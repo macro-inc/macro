@@ -480,6 +480,14 @@ show their latest message in that folder, and folder membership is checked befor
 pagination. These views load server pages; full-text search and offline predicate
 filtering are not available for them yet.
 
+Opening a row loads the thread by id. A thread whose every message is in Spam or
+Trash renders as its folder row does, while All Mail lists and previews still leave
+it out, so it opens whether it is read or unread. Mark read and unread, Not spam,
+Restore, Report spam and Delete then return the thread's new state instead of a
+"not found" error that rolls the action back. Check an unread and a read row in each
+folder: the thread opens, the row turns read and stays in its folder, and it never
+appears in All Mail.
+
 Spam and Trash order threads by their latest message in that folder. Reading a thread or receiving a newer message outside the folder does not change that folder cursor. Pending provider moves affect folder membership immediately.
 
 Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
@@ -770,7 +778,8 @@ card uses a 2% ink wash, brighter than that hover and lighter than a hovered
 settings row. Desktop selection does not add an accent-colored ring; keyboard
 focus has a neutral outline.
 On touch, the floating Reply, Forward, previous/next email, and done controls
-use the mobile dock's chrome fill and icon color in both themes.
+sit on the mobile dock's own surface (`MobileDockIsland`) in both themes. An
+unavailable previous/next control dims its arrow while its island stays opaque.
 Replies appear inline on desktop and in a full-screen composer on touch devices,
 including tablets. Reply, Reply all, and Forward use the same grouped header
 actions as new email: attach, schedule, and send. The schedule clock matches
@@ -1221,7 +1230,12 @@ its attachments. Logout should warn about queued sends even after their original
 local working copies have been retired; it must not claim to cancel server sends.
 Approved local sends survive sign-out, are hidden from other accounts, and resume
 only when the same account signs back in. The status panel also lists failed,
-unconfirmed, and scheduled server attempts from other devices, with pagination. Cancelling one must
+unconfirmed, and scheduled server attempts from other devices, with pagination. A
+visible tab reads them every 10 seconds while a send is in motion (queued in this
+browser, accepted and due, or sending) and once a minute otherwise; a hidden tab
+does not read and catches up when shown. So a send from another device can take
+up to a minute to appear in an idle tab; a send from another tab of the same
+browser reads at once. Cancelling one must
 preserve this device's unsynced edits. A malformed or newer-version journal record
 shows a recovery warning, retains its recognizable draft locks, and does not stop
 unrelated valid sends. Reconnecting an expired email account requires **Check

@@ -11,12 +11,12 @@ use crate::domain::claude_sign_in::{self, ClaudeSignInNotices, ClaudeSignInPass,
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{
-    Backoff, Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind, backoff,
+    Backoff, Effect, EffectWorker, Event, Failure, HostId, MACROD_GRACE, Phase, TimerKind, backoff,
 };
 use crate::domain::models::{Computer, ComputerRecord};
 use crate::domain::ports::{
     ComputerRepo, DefaultAgent, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses,
-    InstanceStatus, PendingEffect,
+    InstanceStatus, PendingEffect, SetupNotice, SetupNotices,
 };
 use crate::domain::service::{Clock, ComputerError};
 
@@ -53,10 +53,11 @@ fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> Compu
 }
 
 /// Drives one host's computers. V1 runs one fleet (one host) per control plane.
-pub struct ComputerOperator<Repo, Machines, Registry, Time> {
+pub struct ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier> {
     repo: Repo,
     fleet: Machines,
     harnesses: Registry,
+    notices: SetupNotifier,
     clock: Time,
     deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
@@ -69,12 +70,14 @@ struct HostReadiness {
     failures: u8,
 }
 
-impl<Repo, Machines, Registry, Time> ComputerOperator<Repo, Machines, Registry, Time>
+impl<Repo, Machines, Registry, Time, SetupNotifier>
+    ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
     Repo: ComputerRepo,
     Machines: Fleet,
     Registry: Harnesses,
     Time: Clock,
+    SetupNotifier: SetupNotices,
 {
     /// Build the operator; unavailable host discovery is retried by its passes.
     #[tracing::instrument(skip_all, err)]
@@ -82,6 +85,7 @@ where
         repo: Repo,
         fleet: Machines,
         harnesses: Registry,
+        notices: SetupNotifier,
         clock: Time,
         deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
     ) -> Result<Self, ComputerError> {
@@ -89,6 +93,7 @@ where
             repo,
             fleet,
             harnesses,
+            notices,
             clock,
             deployment,
             host: tokio::sync::Mutex::new(HostReadiness::default()),
@@ -136,8 +141,15 @@ where
                 let retry_seconds = delay.num_seconds();
                 readiness.failures = readiness.failures.saturating_add(1);
                 readiness.retry_at = Some(self.clock.now() + delay);
-                tracing::error!(error = ?error, healthy = false, retry_seconds,
-                    "computer host unavailable; retrying registration");
+                if error.is_storage_unavailable() {
+                    tracing::warn!(
+                        retry_seconds,
+                        "computer storage unavailable; retrying host registration"
+                    );
+                } else {
+                    tracing::error!(error = ?error, healthy = false, retry_seconds,
+                        "computer host unavailable; retrying registration");
+                }
                 Err(error)
             }
         }
@@ -151,7 +163,8 @@ where
     /// Stop leasing on shutdown, drain the active effect, then return unfinished leases.
     /// Every effect in the batch shares a deadline measured before leasing, so
     /// queued effects and slow composite fleet calls cannot outlive their lease.
-    #[tracing::instrument(skip_all, err)]
+    // Not `err`: the pass reports failures, and skips unavailable storage quietly.
+    #[tracing::instrument(skip_all)]
     pub async fn run_fleet_effects_until(
         &self,
         shutdown: impl Future<Output = ()> + Send,
@@ -256,11 +269,18 @@ where
         .and_then(std::convert::identity);
         match result {
             Ok(follow_up) => {
+                if let Some(Event::EffectFailed { reason, .. }) = &follow_up {
+                    super::telemetry::effect_failed(phase);
+                    tracing::error!(reason = %reason, "computer effect failed permanently; not retrying");
+                }
                 self.repo
                     .finish_effect(pending.id, follow_up, self.clock.now())
                     .await
                     .map_err(internal)?;
             }
+            // Not the effect's failure: its lease is returned and it runs
+            // again on a later pass, without spending an attempt.
+            Err(error) if error.is_storage_unavailable() => return Err(error),
             Err(error) if pending.attempts + 1 < MAX_EFFECT_ATTEMPTS => {
                 super::telemetry::effect_failed(phase);
                 tracing::warn!(error = ?error, "computer effect failed; retrying");
@@ -279,7 +299,8 @@ where
                 self.repo
                     .finish_effect(
                         pending.id,
-                        Some(Event::EffectFailed {
+                        effect_failure(&pending.effect).map(|failure| Event::EffectFailed {
+                            failure,
                             reason: error.to_string(),
                         }),
                         self.clock.now(),
@@ -353,12 +374,17 @@ where
                     } else {
                         Event::InstanceStopped
                     }),
+                    Failure::Create,
                 )
             }
-            Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
+            Effect::Start { .. } => {
+                fleet_completion(self.fleet.start(computer_id).await, None, Failure::Power)
+            }
             // Crash recovery must not reboot a guest whose start succeeded
             // before the previous worker lost its completion write.
-            Effect::Restart { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
+            Effect::Restart { .. } => {
+                fleet_completion(self.fleet.start(computer_id).await, None, Failure::Power)
+            }
             Effect::RestartMacrod { .. } => {
                 let computer = self.computer(computer_id).await?;
                 if computer.state.macrod_connected
@@ -367,11 +393,16 @@ where
                 {
                     return Ok(None);
                 }
-                fleet_completion(self.fleet.restart_macrod(computer_id).await, None)
+                fleet_completion(
+                    self.fleet.restart_macrod(computer_id).await,
+                    None,
+                    Failure::Power,
+                )
             }
             Effect::Stop { .. } => fleet_completion(
                 self.fleet.stop(computer_id).await,
                 Some(Event::InstanceStopped),
+                Failure::Power,
             ),
             Effect::Destroy { .. } => {
                 self.fleet.destroy(computer_id).await.map_err(internal)?;
@@ -385,6 +416,21 @@ where
             Effect::PageOperator { reason } => {
                 // Alerting keys on this event; see the crate's AGENTS.md.
                 tracing::error!(computer_id = %computer_id, reason = %reason, "computer needs an operator");
+                Ok(None)
+            }
+            Effect::NotifySetup { outcome } => {
+                let computer = self.computer(computer_id).await?;
+                self.notices
+                    .send(SetupNotice {
+                        computer_id,
+                        team_id: computer.team_id,
+                        harness_id: computer.harness_id,
+                        computer_name: computer.name.as_str().to_owned(),
+                        buyer: computer.created_by,
+                        outcome: outcome.clone(),
+                    })
+                    .await
+                    .map_err(internal)?;
                 Ok(None)
             }
             Effect::RemoveBillingItem { .. } | Effect::ScheduleTimer { .. } => {
@@ -448,7 +494,8 @@ where
     /// awake computer is a crash; a missing stopped or failed guest is recreated.
     /// Only owned orphans older than the grace period are removed. Each pass
     /// also gauges the fleet's allocation (`computer.capacity.*`).
-    #[tracing::instrument(skip(self), err)]
+    // Not `err`: the pass reports failures, and skips unavailable storage quietly.
+    #[tracing::instrument(skip(self))]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
         let host = self.host_id().await?;
         self.repo
@@ -709,6 +756,7 @@ where
 fn fleet_completion(
     result: Result<(), impl FleetError>,
     completion: Option<Event>,
+    failure: Failure,
 ) -> Result<Option<Event>, ComputerError> {
     match result {
         Ok(()) => Ok(completion),
@@ -716,7 +764,30 @@ fn fleet_completion(
             tracing::warn!("computer instance lost; reprovisioning");
             Ok(Some(Event::InstanceLost))
         }
+        // Retrying a request the fleet refused only delays the failure.
+        Err(error) if error.is_permanent() => Ok(Some(Event::EffectFailed {
+            failure,
+            reason: error.to_string(),
+        })),
         Err(error) => Err(internal(error)),
+    }
+}
+
+/// What the team is told when `effect` fails for good. A setup notice that
+/// cannot be sent fails nothing: the computer itself is fine.
+fn effect_failure(effect: &Effect) -> Option<Failure> {
+    match effect {
+        Effect::Create { .. } => Some(Failure::Create),
+        Effect::Start { .. }
+        | Effect::Stop { .. }
+        | Effect::Restart { .. }
+        | Effect::RestartMacrod { .. }
+        | Effect::Destroy { .. }
+        | Effect::RevokeHarness
+        | Effect::PageOperator { .. }
+        | Effect::RemoveBillingItem { .. }
+        | Effect::ScheduleTimer { .. } => Some(Failure::Power),
+        Effect::NotifySetup { .. } => None,
     }
 }
 
@@ -737,7 +808,8 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         Effect::RemoveBillingItem { .. }
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
-        | Effect::PageOperator { .. } => None,
+        | Effect::PageOperator { .. }
+        | Effect::NotifySetup { .. } => None,
     }
 }
 
