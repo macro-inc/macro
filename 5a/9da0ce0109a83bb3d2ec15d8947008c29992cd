@@ -1,0 +1,23 @@
+agent-teammates/muppet/packages/lib/utilities/telemetry/FORMAT.md
+  s_82939d9d17c700::t_efbc909308303d 166-169,176-178
+agent-teammates/muppet/packages/lib/utilities/telemetry/test/wakes.test.ts
+  s_82939d9d17c700::t_634b75590605fa 25-28,188,217,230,273,303,305-306,308-309,338,340,366-429
+agent-teammates/muppet/packages/lib/utilities/telemetry/wakes.ts
+  s_82939d9d17c700::t_9be8434b409413 94-95,102,104-105,113-121,170-204,222-228,232,249,255-256,262-266,274,279-286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5a9da0ce0109a83bb3d2ec15d8947008c29992cd",
+  "prompts": {},
+  "sessions": {
+    "s_82939d9d17c700": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bebbfa1f-b141-4a2c-ae6c-41735d9a70be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
