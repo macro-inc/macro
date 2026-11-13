@@ -887,8 +887,8 @@ To buy one as a team admin:
    restore. Showing the row loads the offers, so the dialog opens with the
    sizes already there.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
-   step header, **Buy computer → Configure agent → Bring your AI → Ready**
-   (**Buy → Agent → Your AI → Ready** on phones, so it stays on one line;
+   step header, **Buy computer → Configure agent → Bring your AI → Create agent**
+   (**Buy → Agent → Your AI → Create** on phones, so it stays on one line;
    done steps carry a check, the current one is in ink), that stays open from
    Buy to Try it. The Buy computer step has the size radios (**Standard**,
    **Large**, **XL**) with price per interval, a sold-out size disabled and
@@ -933,7 +933,8 @@ purchase), and a stuck one says why (waiting for capacity, or
 `POST .../retry`; a server `failureReason`, once the API sends one, is shown
 before that copy). No control in the flow is disabled without a line beside it
 saying why (**Continue**: name the agent / choose which Claude; **Buy**: sizes
-loading; **Complete sign-in**: paste the code; **Try it**: setup finishing). The row in Machines shows the same live line, `Setting up ·
+loading; **Complete sign-in**: paste the code; **Try it** and **Create an
+agent on this computer**: setup finishing). The row in Machines shows the same live line, `Setting up ·
 Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
 carries on; the row's **Finish setup** reopens the same dialog where it left
 off. **Let's set up an agent on it** names the agent Macro
@@ -962,12 +963,23 @@ can create one under **Agents**. Agents created later on a computer also
 default to bypassing permission prompts. Releasing a computer, or its disk
 being destroyed, deletes every agent on it.
 
-**Ready** follows by itself once the computer is connected and Claude is set;
-the computer status is refreshed first. **Try it** opens a new Agents
-conversation in Code with that agent selected (`openAgentsPage` with
-`composerAgentId`). Closing at any step keeps its place; the row's **Finish
-setup** reopens it. Bought from **Where it runs**, the editor selects the new
-computer when the modal closes.
+**Create agent**, the last step ("<agent> is ready"), follows by itself once
+the computer is connected and Claude is set; the computer status is refreshed
+first. It offers **Done**, **Create an agent on this computer** and **Try it**:
+
+- **Try it** opens a new Agents conversation in Code with the configured agent
+  selected (`openAgentsPage` with `composerAgentId`; the Agents view hands the
+  composer an agent request keyed by the page request, so every Try it
+  selects it again). The agent is created server-side when the computer first
+  comes up, so the setup steps refetch a cached agents list that lacks it; the
+  composer's roster reads the same list and selects the agent once it is there.
+- **Create an agent on this computer** opens **Settings → Agents** on the
+  **New agent** form with this computer chosen under **Where it runs**
+  (`requestCreateAgent(harnessId)` in `agentSettingsState.ts`). Bought from an
+  agent's **Where it runs**, it reads **Use for this agent** and only closes:
+  the editor selects the new computer when the modal closes.
+
+Closing at any step keeps its place; the row's **Finish setup** reopens it.
 
 **Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
 **Open claude.ai** is a plain new-tab link (the desktop app hands it to the

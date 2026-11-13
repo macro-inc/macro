@@ -1,4 +1,5 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { requestCreateAgent } from '@app/features/settings/agentSettingsState';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
@@ -28,10 +29,11 @@ import {
   For,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 import { ChoiceRow } from '../../primitives';
 import { SetupProgressList } from '../components/setup-progress-list';
 import {
@@ -70,7 +72,7 @@ const STEP_ORDER: readonly SetupStepId[] = [
   'ready',
 ];
 
-/** Phones get Buy › Agent › Your AI › Ready, so the bar stays on one line. */
+/** Phones get Buy › Agent › Your AI › Create, so the bar stays on one line. */
 function stepLabel(step: SetupStepId): string {
   return match([step, isMobile()] as const)
     .with(['computer', true], () => t('computers.stepBuyShort'))
@@ -79,12 +81,13 @@ function stepLabel(step: SetupStepId): string {
     .with(['agent', false], () => t('computers.stepConfigureAgent'))
     .with(['claude', true], () => t('computers.stepBringAiShort'))
     .with(['claude', false], () => t('computers.stepBringAi'))
-    .with(['ready', P.boolean], () => t('computers.stepReady'))
+    .with(['ready', true], () => t('computers.stepCreateAgentShort'))
+    .with(['ready', false], () => t('computers.stepCreateAgent'))
     .exhaustive();
 }
 
 /**
- * Buy computer → Configure agent → Bring your AI → Ready: done steps carry a
+ * Buy computer → Configure agent → Bring your AI → Create agent: done steps carry a
  * check, the current one is in ink, and a step the choice skips is struck.
  */
 export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
@@ -167,6 +170,11 @@ export function ComputerSetupSteps(props: {
   onChoice: (choice: ClaudeMode) => void;
   onStep: (step: SetupStepId) => void;
   onClose: () => void;
+  /**
+   * Opened from an agent's Where it runs: closing selects this computer for
+   * that agent, so the last step offers that instead of a new agent.
+   */
+  selectsForAgent?: boolean;
 }) {
   const nameId = createUniqueId();
   const agents = useAgentsQuery();
@@ -189,6 +197,23 @@ export function ComputerSetupSteps(props: {
   const agentName = () =>
     props.name ?? agent()?.bot.name ?? defaultAgentName(props.firstName);
   const done = () => !!props.computer.setupCompletedAt;
+
+  // The computer's agent is created server-side once it first comes up, so
+  // a list cached before then lacks it; refetch once per agent id. The
+  // composer's roster reads the same list, so Try it can select it.
+  createEffect(
+    on(
+      () => props.computer.defaultAgentId,
+      (agentId) => {
+        if (
+          agentId &&
+          agents.isSuccess &&
+          !agents.data.some((item) => item.bot.id === agentId)
+        )
+          fireAndForget(invalidateAgents(), 'computer-setup');
+      }
+    )
+  );
 
   const rename = async (current: AgentWithHarnessId) => {
     const trimmed = agentName().trim();
@@ -263,6 +288,16 @@ export function ComputerSetupSteps(props: {
     props.onClose();
     if (isMobile()) settings.closeSettings();
     openAgentsPage(layout, 'new', botId ? { composerAgentId: botId } : {});
+  };
+
+  // The create form, with this computer chosen under Where it runs. The tab
+  // switches first, so the Agents page there takes the request.
+  const createAgentHere = () => {
+    const id = harnessId();
+    props.onClose();
+    if (props.selectsForAgent || !id) return;
+    settings.openSettings('Agents');
+    requestCreateAgent(id);
   };
 
   const retrySetup = async () => {
@@ -436,9 +471,15 @@ export function ComputerSetupSteps(props: {
             </ActionDialogShell.Title>
             <ActionDialogShell.Description>
               {done()
-                ? t('computers.setupDoneBody', {
-                    computer: props.computer.name,
-                  })
+                ? t(
+                    props.selectsForAgent
+                      ? 'computers.setupDoneBodyForAgent'
+                      : 'computers.setupDoneBody',
+                    {
+                      agent: agentName(),
+                      computer: props.computer.name,
+                    }
+                  )
                 : t('computers.almostReadyBody', {
                     computer: props.computer.name,
                   })}
@@ -450,9 +491,20 @@ export function ComputerSetupSteps(props: {
             </p>
           </Show>
         </ActionDialogShell.Body>
-        <ActionDialogShell.Footer>
+        {/* Three actions do not fit one phone row: stack them, Try it on top. */}
+        <ActionDialogShell.Footer class="touch:flex-col-reverse touch:items-stretch">
           <Button type="button" variant="ghost" onClick={props.onClose}>
             {t('computers.done')}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!done()}
+            onClick={createAgentHere}
+          >
+            {props.selectsForAgent
+              ? t('computers.useForThisAgent')
+              : t('computers.createAgentHere')}
           </Button>
           <Button
             type="button"
