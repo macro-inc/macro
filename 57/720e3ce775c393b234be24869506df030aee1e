@@ -1,0 +1,14 @@
+packages/sdk/src/events/subscribe.ts
+  h_659b58cf3b37bf 132-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "57720e3ce775c393b234be24869506df030aee1e",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
