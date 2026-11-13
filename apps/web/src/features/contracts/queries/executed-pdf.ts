@@ -71,6 +71,9 @@ async function drawMark(
   box: Rect
 ) {
   if (mark.kind === 'typed') {
+    // Its own drawing state: the caller's font, color and baseline are as
+    // they were once the mark is drawn.
+    context.save();
     const family = signatureFontFamily(mark.style);
     let size = box.height * MARK_HEIGHT_SCALE;
     context.font = `${size}px ${family}`;
@@ -83,6 +86,7 @@ async function drawMark(
     context.fillStyle = SIGNATURE_INK;
     context.textBaseline = 'middle';
     context.fillText(mark.text, box.x, box.y + box.height / 2);
+    context.restore();
     return;
   }
 
@@ -164,13 +168,25 @@ async function documentPage(
   );
   for (const field of fields) await drawField(canvas, context, field);
 
-  return {
+  return encoded(canvas, size);
+}
+
+/** A canvas as a PDF page, giving its bitmap back once it is encoded. */
+async function encoded(
+  canvas: HTMLCanvasElement,
+  size: { width: number; height: number }
+): Promise<PdfPage> {
+  const page: PdfPage = {
     width: size.width,
     height: size.height,
     jpeg: await toJpeg(canvas),
     pixelWidth: canvas.width,
     pixelHeight: canvas.height,
   };
+  // A long packet is drawn one page at a time; only the JPEGs are kept.
+  canvas.width = 0;
+  canvas.height = 0;
+  return page;
 }
 
 /**
@@ -214,6 +230,19 @@ class CertificatePages {
   private font(size: number, options: { bold?: boolean; mono?: boolean } = {}) {
     const weight = options.bold ? 600 : 400;
     this.context.font = `${weight} ${size}px ${options.mono ? MONO : SANS}`;
+  }
+
+  /** One line no wider than `width`, ending in an ellipsis if it was cut. */
+  private fit(text: string, width: number): string {
+    if (this.context.measureText(text).width <= width) return text;
+    let cut = text.length;
+    while (
+      cut > 1 &&
+      this.context.measureText(`${text.slice(0, cut)}…`).width > width
+    ) {
+      cut--;
+    }
+    return `${text.slice(0, cut).trimEnd()}…`;
   }
 
   /** Break text into lines no wider than `width`, splitting long words. */
@@ -371,17 +400,28 @@ class CertificatePages {
         this.context.roundRect(x, top, width, height, 7.5);
         this.context.stroke();
 
+        // The name keeps clear of the signature beside it.
+        const markWidth = signer.signature ? 110 : 0;
+        const nameWidth = width - padding * 2 - markWidth - (markWidth ? 8 : 0);
         this.font(10.5, { bold: true });
         this.context.fillStyle = INK;
-        this.context.fillText(signer.name, x + padding, top + 20);
+        this.context.fillText(
+          this.fit(signer.name, nameWidth),
+          x + padding,
+          top + 20
+        );
         this.font(9);
         this.context.fillStyle = MUTED;
-        this.context.fillText(signer.position, x + padding, top + 33);
+        this.context.fillText(
+          this.fit(signer.position, nameWidth),
+          x + padding,
+          top + 33
+        );
         if (signer.signature) {
           await drawMark(this.context, signer.signature, {
-            x: x + width - padding - 110,
+            x: x + width - padding - markWidth,
             y: top + 9,
-            width: 110,
+            width: markWidth,
             height: 27,
           });
         }
@@ -461,15 +501,7 @@ async function certificatePages(sheet: CertificateSheet): Promise<PdfPage[]> {
   pages.footer(sheet);
 
   const out: PdfPage[] = [];
-  for (const canvas of pages.canvases) {
-    out.push({
-      width: LETTER.width,
-      height: LETTER.height,
-      jpeg: await toJpeg(canvas),
-      pixelWidth: canvas.width,
-      pixelHeight: canvas.height,
-    });
-  }
+  for (const canvas of pages.canvases) out.push(await encoded(canvas, LETTER));
   return out;
 }
 
