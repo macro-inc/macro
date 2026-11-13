@@ -14453,6 +14453,7 @@
     ],
     "session_fleet": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -14725,6 +14726,7 @@
     ],
     "slack_e2e": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15016,6 +15018,7 @@
     ],
     "slack_linked": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15063,6 +15066,7 @@
     ],
     "slack_session_service": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
