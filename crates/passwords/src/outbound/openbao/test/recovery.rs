@@ -15,8 +15,8 @@ use zeroize::Zeroizing;
 #[derive(Default)]
 struct InterruptedLookup {
     accepted_writes: AtomicUsize,
-    fail_next_login: AtomicBool,
-    interrupted_logins: AtomicUsize,
+    fail_next_request: AtomicBool,
+    interrupted_requests: AtomicUsize,
 }
 
 struct RecoveryProxy {
@@ -94,11 +94,10 @@ async fn forward(
             break end + 4;
         }
     };
-    let (length, login, write, mut forwarded) = {
+    let (length, write, mut forwarded) = {
         let headers = std::str::from_utf8(&request[..header_end]).expect("HTTP headers");
         let mut lines = headers.split("\r\n");
         let first = lines.next().expect("request line");
-        let login = first.starts_with("POST /v1/auth/macro/login ");
         let write = first.starts_with("POST /v1/passwords/data/");
         let mut length = 0;
         let mut forwarded = Zeroizing::new(Vec::new());
@@ -116,7 +115,7 @@ async fn forward(
             }
         }
         forwarded.extend_from_slice(b"Connection: close\r\n\r\n");
-        (length, login, write, forwarded)
+        (length, write, forwarded)
     };
     assert!(length <= 256 * 1024, "bounded fixture body");
     while request.len() < header_end + length {
@@ -124,8 +123,10 @@ async fn forward(
         assert!(count > 0, "complete fixture request body");
         request.extend_from_slice(&buffer[..count]);
     }
-    if login && state.fail_next_login.swap(false, Ordering::SeqCst) {
-        state.interrupted_logins.fetch_add(1, Ordering::SeqCst);
+    // The team token is cached, so the post-write lookup is the next request,
+    // not a new login.
+    if state.fail_next_request.swap(false, Ordering::SeqCst) {
+        state.interrupted_requests.fetch_add(1, Ordering::SeqCst);
         client
             .write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
             .await?;
@@ -142,7 +143,7 @@ async fn forward(
     let accepted = response.starts_with(b"HTTP/1.1 200 ") || response.starts_with(b"HTTP/1.1 204 ");
     if write && accepted {
         state.accepted_writes.fetch_add(1, Ordering::SeqCst);
-        state.fail_next_login.store(true, Ordering::SeqCst);
+        state.fail_next_request.store(true, Ordering::SeqCst);
     }
     client.write_all(&response).await
 }
@@ -251,7 +252,10 @@ async fn accepted_create_survives_postwrite_lookup_interruption_and_same_operati
         Err(Error::Unavailable)
     ));
     assert_eq!(proxy.observed.accepted_writes.load(Ordering::SeqCst), 1);
-    assert_eq!(proxy.observed.interrupted_logins.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        proxy.observed.interrupted_requests.load(Ordering::SeqCst),
+        1
+    );
     assert!(matches!(
         repository.get(team, item).await,
         Err(Error::NotFound)
@@ -346,7 +350,10 @@ async fn accepted_create_survives_postwrite_lookup_interruption_and_same_operati
     assert!(values.notes.0 == command().values.notes.0);
     assert!(values.fields.is_empty());
     assert_eq!(proxy.observed.accepted_writes.load(Ordering::SeqCst), 1);
-    assert_eq!(proxy.observed.interrupted_logins.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        proxy.observed.interrupted_requests.load(Ordering::SeqCst),
+        1
+    );
 }
 
 // Fence the operation primary-key lookup before checking the retained scope.

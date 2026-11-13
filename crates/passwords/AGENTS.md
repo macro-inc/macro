@@ -66,6 +66,11 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   response bodies in Debug, Display, error sources or tracing.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
+- Value calls reuse a team's service token (`outbound/openbao/token_cache.rs`): one
+  login per team per lease, single-flight, LRU-bounded, refreshed 15 s before the
+  lease ends. A rejected cached token is dropped and the call retried once after a
+  fresh login. `passwords.openbao.authenticate` spans mark real logins only;
+  lifecycle (namespace purge) logins are never cached.
 
 Run both ignored Rust provider tests against a disposable local OpenBao with
 `PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private

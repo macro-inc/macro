@@ -5,10 +5,13 @@ use chrono::Utc;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use opentelemetry::trace::TraceContextExt;
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, time::Duration};
+use std::{future::Future, sync::Arc, time::Duration};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use openbao_client::{Cause, OpenBaoClient, Session};
+
+mod token_cache;
+use token_cache::TokenCache;
 
 #[derive(Serialize, Deserialize)]
 struct StoredSecret {
@@ -22,11 +25,41 @@ enum NamespaceAccess {
     Lifecycle,
 }
 
-/// Namespace-isolated OpenBao KV v2 and TOTP adapter with short-lived team JWT login.
+/// Namespace-isolated OpenBao KV v2 and TOTP adapter. Each team's short-lived
+/// JWT-login token is reused until shortly before its lease ends.
 pub struct OpenBaoProvider {
     issuer: String,
     signing_key: Arc<EncodingKey>,
     api: OpenBaoClient,
+    tokens: TokenCache,
+}
+
+/// A provider call's failure: a typed provider cause, which may be a rejected
+/// token, or an already-mapped domain failure.
+enum CallError {
+    Provider(openbao_client::Error),
+    Domain(Error),
+}
+
+impl From<openbao_client::Error> for CallError {
+    fn from(error: openbao_client::Error) -> Self {
+        Self::Provider(error)
+    }
+}
+
+impl From<Error> for CallError {
+    fn from(error: Error) -> Self {
+        Self::Domain(error)
+    }
+}
+
+impl From<CallError> for Error {
+    fn from(error: CallError) -> Self {
+        match error {
+            CallError::Provider(error) => provider_error(error),
+            CallError::Domain(error) => error,
+        }
+    }
 }
 
 impl OpenBaoProvider {
@@ -40,13 +73,44 @@ impl OpenBaoProvider {
             issuer,
             signing_key,
             api,
+            tokens: TokenCache::new(token_cache::CAPACITY),
         })
     }
 
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.authenticate")]
-    async fn client(&self, team: TeamId) -> Result<Session, Error> {
+    async fn login(&self, team: TeamId) -> Result<Session, Error> {
         self.authenticated_client(team, NamespaceAccess::Values)
             .await
+    }
+
+    /// Runs `call` with the team's token. A cached token the provider rejects
+    /// is dropped and the call runs once more with a fresh login.
+    async fn with_session<Output, Call, Pending>(
+        &self,
+        team: TeamId,
+        call: Call,
+    ) -> Result<Output, Error>
+    where
+        Call: Fn(Session) -> Pending,
+        Pending: Future<Output = Result<Output, CallError>>,
+    {
+        let lease = self.tokens.session(team, || self.login(team)).await?;
+        tracing::Span::current().set_attribute("cache_hit", lease.cache_hit);
+        let error = match call(lease.session.clone()).await {
+            Err(CallError::Provider(error)) if error.cause() == Cause::Authentication => error,
+            outcome => return outcome.map_err(Error::from),
+        };
+        self.tokens.invalidate(team, &lease).await;
+        if !lease.cache_hit {
+            return Err(provider_error(error));
+        }
+        let retry = self.tokens.session(team, || self.login(team)).await?;
+        let outcome = call(retry.session.clone()).await;
+        if matches!(&outcome, Err(CallError::Provider(error)) if error.cause() == Cause::Authentication)
+        {
+            self.tokens.invalidate(team, &retry).await;
+        }
+        outcome.map_err(Error::from)
     }
 
     async fn authenticated_client(
@@ -161,46 +225,51 @@ impl SecretProvider for OpenBaoProvider {
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.current_version",fields(team_id=%team.0,item_id=%item.0))]
     async fn current_version(&self, team: TeamId, item: ItemId) -> Result<Option<i32>, Error> {
-        let session = self.client(team).await?;
-        match self
-            .api
-            .metadata(&session, &item.0.to_string(), Some(&audit_id()))
-            .await
-        {
-            Ok(metadata) => Ok(Some(
-                i32::try_from(metadata.current_version).map_err(|_| Error::Unavailable)?,
-            )),
-            Err(error) if error.cause() == Cause::NotFound => Ok(None),
-            Err(error) => Err(provider_error(error)),
-        }
+        let path = item.0.to_string();
+        let path = path.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
+        self.with_session(team, |session| async move {
+            match self.api.metadata(&session, path, Some(audit_id)).await {
+                Ok(metadata) => Ok(Some(
+                    i32::try_from(metadata.current_version).map_err(|_| Error::Unavailable)?,
+                )),
+                Err(error) if error.cause() == Cause::NotFound => Ok(None),
+                Err(error) => Err(error.into()),
+            }
+        })
+        .await
     }
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.status",fields(team_id=%team.0,item_id=%item.0))]
     async fn status(&self, team: TeamId, item: ItemId) -> Result<Option<(i32, uuid::Uuid)>, Error> {
-        let session = self.client(team).await?;
         let path = item.0.to_string();
+        let path = path.as_str();
         let audit_id = audit_id();
-        let metadata = match self.api.metadata(&session, &path, Some(&audit_id)).await {
-            Ok(metadata) => metadata,
-            Err(error) if error.cause() == Cause::NotFound => return Ok(None),
-            Err(error) => return Err(provider_error(error)),
-        };
-        // Pin the operation ID to the observed fence: an independent provider
-        // writer must not pair a newer operation with the previous version.
-        let stored: StoredSecret = self
-            .api
-            .read(
-                &session,
-                &path,
-                Some(metadata.current_version),
-                Some(&audit_id),
-            )
-            .await
-            .map_err(provider_error)?;
-        Ok(Some((
-            i32::try_from(metadata.current_version).map_err(|_| Error::Unavailable)?,
-            stored.operation_id,
-        )))
+        let audit_id = audit_id.as_str();
+        self.with_session(team, |session| async move {
+            let metadata = match self.api.metadata(&session, path, Some(audit_id)).await {
+                Ok(metadata) => metadata,
+                Err(error) if error.cause() == Cause::NotFound => return Ok(None),
+                Err(error) => return Err(error.into()),
+            };
+            // Pin the operation ID to the observed fence: an independent provider
+            // writer must not pair a newer operation with the previous version.
+            let stored: StoredSecret = self
+                .api
+                .read(
+                    &session,
+                    path,
+                    Some(metadata.current_version),
+                    Some(audit_id),
+                )
+                .await?;
+            Ok(Some((
+                i32::try_from(metadata.current_version).map_err(|_| Error::Unavailable)?,
+                stored.operation_id,
+            )))
+        })
+        .await
     }
 
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.write")]
@@ -212,39 +281,42 @@ impl SecretProvider for OpenBaoProvider {
         operation: uuid::Uuid,
         values: &SecretValues,
     ) -> Result<i32, Error> {
-        let session = self.client(team).await?;
         let cas = u64::try_from(expected_version).map_err(|_| Error::Invalid)?;
+        let path = item.0.to_string();
+        let path = path.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
+        let stored = StoredSecret {
+            operation_id: operation,
+            values: values.clone(),
+        };
+        let stored = &stored;
         let version = self
-            .api
-            .write(
-                &session,
-                &item.0.to_string(),
-                cas,
-                &StoredSecret {
-                    operation_id: operation,
-                    values: values.clone(),
-                },
-                Some(&audit_id()),
-            )
-            .await
-            .map_err(provider_error)?;
+            .with_session(team, |session| async move {
+                Ok(self
+                    .api
+                    .write(&session, path, cas, stored, Some(audit_id))
+                    .await?)
+            })
+            .await?;
         i32::try_from(version).map_err(|_| Error::Unavailable)
     }
 
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.read")]
     async fn read(&self, team: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error> {
-        let session = self.client(team).await?;
         let version = u64::try_from(version).map_err(|_| Error::Invalid)?;
+        let path = item.0.to_string();
+        let path = path.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
         let stored: StoredSecret = self
-            .api
-            .read(
-                &session,
-                &item.0.to_string(),
-                Some(version),
-                Some(&audit_id()),
-            )
-            .await
-            .map_err(provider_error)?;
+            .with_session(team, |session| async move {
+                Ok(self
+                    .api
+                    .read(&session, path, Some(version), Some(audit_id))
+                    .await?)
+            })
+            .await?;
         Ok(stored.values)
     }
 
@@ -263,81 +335,89 @@ impl SecretProvider for OpenBaoProvider {
         struct UsernameValue {
             username: SecretString,
         }
-        let session = self.client(team).await?;
         let version = u64::try_from(version).map_err(|_| Error::Invalid)?;
+        let path = item.0.to_string();
+        let path = path.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
         let stored: StoredUsername = self
-            .api
-            .read(
-                &session,
-                &item.0.to_string(),
-                Some(version),
-                Some(&audit_id()),
-            )
-            .await
-            .map_err(provider_error)?;
+            .with_session(team, |session| async move {
+                Ok(self
+                    .api
+                    .read(&session, path, Some(version), Some(audit_id))
+                    .await?)
+            })
+            .await?;
         Ok(stored.values.username)
     }
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.delete",fields(team_id=%team.0,item_id=%item.0))]
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
-        let session = self.client(team).await?;
         let path = item.0.to_string();
+        let path = path.as_str();
         let audit_id = audit_id();
-        // Advance CAS before erasing, preserving metadata so delayed pre-delete
-        // writes cannot recreate credentials. Retry only a confirmed CAS race.
-        for _ in 0..3 {
-            let metadata = match self.api.metadata(&session, &path, Some(&audit_id)).await {
-                Ok(metadata) => Some(metadata),
-                Err(error) if error.cause() == Cause::NotFound => None,
-                Err(error) => return Err(provider_error(error)),
-            };
-            let tombstone = StoredSecret {
-                operation_id: uuid::Uuid::now_v7(),
-                values: SecretValues {
-                    username: SecretString(String::new()),
-                    password: SecretString(String::new()),
-                    notes: SecretString(String::new()),
-                    fields: vec![],
-                },
-            };
-            let cas = metadata
-                .as_ref()
-                .map(|metadata| metadata.current_version)
-                .unwrap_or(0);
-            match self
-                .api
-                .write(&session, &path, cas, &tombstone, Some(&audit_id))
-                .await
-            {
-                Ok(version) => {
-                    let mut versions = Vec::new();
-                    if let Some(metadata) = metadata {
-                        for version in metadata.versions.keys() {
-                            versions.push(version.parse::<u64>().map_err(|_| Error::Unavailable)?);
+        let audit_id = audit_id.as_str();
+        self.with_session(team, |session| async move {
+            // Advance CAS before erasing, preserving metadata so delayed pre-delete
+            // writes cannot recreate credentials. Retry only a confirmed CAS race.
+            for _ in 0..3 {
+                let metadata = match self.api.metadata(&session, path, Some(audit_id)).await {
+                    Ok(metadata) => Some(metadata),
+                    Err(error) if error.cause() == Cause::NotFound => None,
+                    Err(error) => return Err(error.into()),
+                };
+                let tombstone = StoredSecret {
+                    operation_id: uuid::Uuid::now_v7(),
+                    values: SecretValues {
+                        username: SecretString(String::new()),
+                        password: SecretString(String::new()),
+                        notes: SecretString(String::new()),
+                        fields: vec![],
+                    },
+                };
+                let cas = metadata
+                    .as_ref()
+                    .map(|metadata| metadata.current_version)
+                    .unwrap_or(0);
+                match self
+                    .api
+                    .write(&session, path, cas, &tombstone, Some(audit_id))
+                    .await
+                {
+                    Ok(version) => {
+                        let mut versions = Vec::new();
+                        if let Some(metadata) = metadata {
+                            for version in metadata.versions.keys() {
+                                versions
+                                    .push(version.parse::<u64>().map_err(|_| Error::Unavailable)?);
+                            }
                         }
+                        versions.push(version);
+                        return Ok(self
+                            .api
+                            .destroy_versions(&session, path, versions, Some(audit_id))
+                            .await?);
                     }
-                    versions.push(version);
-                    return self
-                        .api
-                        .destroy_versions(&session, &path, versions, Some(&audit_id))
-                        .await
-                        .map_err(provider_error);
+                    Err(error) if error.cause() == Cause::CasMismatch => continue,
+                    Err(error) => return Err(error.into()),
                 }
-                Err(error) if error.cause() == Cause::CasMismatch => continue,
-                Err(error) => return Err(provider_error(error)),
             }
-        }
-        Err(Error::Conflict)
+            Err(Error::Conflict.into())
+        })
+        .await
     }
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.history",fields(team_id=%team.0,item_id=%item.0))]
     async fn history(&self, team: TeamId, item: ItemId) -> Result<Vec<Version>, Error> {
-        let session = self.client(team).await?;
+        let path = item.0.to_string();
+        let path = path.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
         let metadata = self
-            .api
-            .metadata(&session, &item.0.to_string(), Some(&audit_id()))
-            .await
-            .map_err(provider_error)?;
+            .with_session(team, |session| async move {
+                Ok(self.api.metadata(&session, path, Some(audit_id)).await?)
+            })
+            .await?;
         let mut versions = Vec::new();
         for (version, metadata) in metadata.versions {
             if metadata.destroyed || !metadata.deletion_time.is_empty() {
@@ -359,35 +439,44 @@ impl SecretProvider for OpenBaoProvider {
         key_id: TotpKeyId,
         key: &SecretString,
     ) -> Result<(), Error> {
-        let session = self.client(team).await?;
-        self.api
-            .write_totp(
-                &session,
-                &key_id.0.to_string(),
-                &openbao_client::SecretString::new(key.0.clone()),
-                Some(&audit_id()),
-            )
-            .await
-            .map_err(provider_error)
+        let name = key_id.0.to_string();
+        let name = name.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
+        let key = openbao_client::SecretString::new(key.0.clone());
+        let key = &key;
+        self.with_session(team, |session| async move {
+            Ok(self
+                .api
+                .write_totp(&session, name, key, Some(audit_id))
+                .await?)
+        })
+        .await
     }
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.delete_totp",fields(team_id=%team.0,key_id=%key_id.0))]
     async fn delete_totp(&self, team: TeamId, key_id: TotpKeyId) -> Result<(), Error> {
-        let session = self.client(team).await?;
-        self.api
-            .delete_totp(&session, &key_id.0.to_string(), Some(&audit_id()))
-            .await
-            .map_err(provider_error)
+        let name = key_id.0.to_string();
+        let name = name.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
+        self.with_session(team, |session| async move {
+            Ok(self.api.delete_totp(&session, name, Some(audit_id)).await?)
+        })
+        .await
     }
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.totp",fields(team_id=%team.0,key_id=%key_id.0))]
     async fn totp(&self, team: TeamId, key_id: TotpKeyId) -> Result<TotpCode, Error> {
-        let session = self.client(team).await?;
+        let name = key_id.0.to_string();
+        let name = name.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
         let code = self
-            .api
-            .totp(&session, &key_id.0.to_string(), Some(&audit_id()))
-            .await
-            .map_err(provider_error)?;
+            .with_session(team, |session| async move {
+                Ok(self.api.totp(&session, name, Some(audit_id)).await?)
+            })
+            .await?;
         Ok(TotpCode {
             code: SecretString(code.expose().into()),
             period: 30,
