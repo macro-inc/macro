@@ -892,7 +892,8 @@ To buy one as a team admin:
    done steps carry a check, the current one is in ink), that stays open from
    Buy to Try it. The Buy computer step has the size radios (**Standard**,
    **Large**, **XL**) with price per interval, a sold-out size disabled and
-   marked **Sold out**; **Name**, prefilled "<first name>'s Agent Box" (**Agent
+   marked **Sold out**, a size too large for every host left out (none left
+   says "No computer sizes are available right now."); **Name**, prefilled "<first name>'s Agent Box" (**Agent
    Box** without a first name); the price breakdown; and under **Buy** the
    heads-up "Next you'll name your agent and sign in to Claude (Pro or Max) —
    have claude.ai handy." While the sizes load, three shimmering size cards
