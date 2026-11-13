@@ -525,12 +525,14 @@ function getAssetsPath(mode: string, command: string): string {
 function defineEnv(mode: string, command: string) {
   // `vite build` compiles DEV from NODE_ENV, not MODE. Local-backend static
   // bundles already set VITE_LOCAL_BACKEND_ORIGIN (stack up);
-  // keep DEV so those artifacts match `just run_local` (vite serve). Hosted
+  // development builds keep DEV to match `just run_local` (vite serve).
+  // Explicit ALL-plus-proxy production builds retain DEV=false. Hosted
   // `just build-dev` does not set the origin, so DEV stays false.
   const keepDev = keepImportMetaDev({
     command,
     mode,
     localBackendOrigin: process.env.VITE_LOCAL_BACKEND_ORIGIN,
+    localServers: process.env.VITE_LOCAL_SERVERS,
   });
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),

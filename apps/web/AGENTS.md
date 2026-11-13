@@ -32,7 +32,7 @@
 - `bun run test`: run tests 
 - Keep generated Gradle/Tauri output directories out of Vite file watching to avoid exhausting host watchers.
 - Keep installs, dependency-cache cleanup, and additional Vite/Vitest instances out of a worktree with a live preview; use a disposable copy with independent node_modules and caches.
-- Keep performance builds in production mode with `DEV=false`; select local static transport explicitly with both `VITE_LOCAL_SERVERS=ALL` and `VITE_LOCAL_BACKEND_ORIGIN`, rather than enabling development code.
+- Build performance bundles with `MODE=production` and `DEV=false`; select local static transport with both `VITE_LOCAL_SERVERS=ALL` and `VITE_LOCAL_BACKEND_ORIGIN`, and retain rejection controls for partial-service and non-build proxy configurations.
 - Pin the disposable checkout path in build and validation wrappers before launching tools so a working-directory mistake cannot target the live preview.
 - Build missing document-session WASM from source in the isolated checkout with `just -f apps/web/justfile build-document-session-wasm` before treating web checks as blocked; preserve the task's Cargo job limit and keep the artifact stable while tests read it.
 - Keep native document sessions in `wasm/` without compatibility/foreign-node features; use the explicit `build-document-session-compat-wasm` output in `wasm-compat/` for the compatibility host, and never mix their glue or declarations.
