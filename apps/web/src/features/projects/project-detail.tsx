@@ -116,10 +116,14 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const navigate = useNavigate();
   const section = (section: ProjectSection) => {
     if (props.onSectionChange) return props.onSectionChange(section);
-    return navigate({
-      route: projectDetailRoute,
-      params: { projectId: props.route.id, section },
-    });
+    // Router navigation pushes history and records the navigation interaction.
+    fireAndForget(
+      navigate({
+        route: projectDetailRoute,
+        params: { projectId: props.route.id, section },
+      }),
+      'project-detail'
+    );
   };
   const createTask = (options?: TaskCreateOptions) => {
     const projectId = props.route.id;

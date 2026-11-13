@@ -1193,9 +1193,16 @@ when URL parameters are absent. Use
 its Project set to this project (change or clear it like any property), and the
 create request carries it, so there is no separate assignment step. The new row
 appears once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. Desktop section tabs stay unchanged. On phones, tap the project title
-island to open the standard file-actions drawer. The drawer contains actions
-only; the existing Overview/Tasks tabs remain outside it on phones.
+disabled. Desktop and tablet section tabs stay unchanged. On phone Overview,
+the header shows Back, the truncating project title, a Tasks island with the
+project's completion ring, then Details. Share stays in the title drawer and
+appears before Details in the phone Tasks header. Tap Tasks to push the project's
+Tasks view; the header caret and hardware/browser Back return to Overview.
+Phones have no Overview/Tasks tabs. The title island opens the standard
+actions-only drawer, without a View group. Check both sections at 390px with
+a long project name: all controls stay visible, the title truncates, and the
+ring uses the same completed/total counts as the project list. Also check
+Back, Forward, Share, Details, and opening a title action from either section.
 
 Choose `Add existing tasks` from Add task on desktop, or from the floating Task
 control's stacked menu on phones. Search, select several, and confirm `Add N tasks`.

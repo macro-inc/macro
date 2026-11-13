@@ -763,6 +763,25 @@ describe('agent session sharing', () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
+  it('keeps sharing available when a compact header omits the copy shortcut', () => {
+    mocks.inBlock = false;
+    const onClick = vi.fn();
+    render(() => (
+      <ShareTrigger
+        onClick={onClick}
+        id="initiative-1"
+        blockType="initiative"
+        showCopyLink={false}
+      />
+    ));
+
+    expect(
+      screen.queryByRole('button', { name: 'Copy Share Link' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
   it('uses a host view contextual link when provided', () => {
     mocks.inBlock = false;
     const copyContextLink = vi.fn();

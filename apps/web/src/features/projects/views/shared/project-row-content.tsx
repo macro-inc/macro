@@ -3,12 +3,11 @@ import {
   type TaskGridColumnId,
   taskGridTemplate,
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
-import { t } from '@app/lib/i18n';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Entity, MultiSelectCheckbox } from '@entity';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
-import { ProgressRing, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
+import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectRowProps } from '../../components/project-row';
 import type { ProjectRow as ProjectRowData } from '../../context/projects-context';
 import { canEditProject } from '../../core/project';
@@ -25,21 +24,6 @@ export const PROJECT_GRID_COLUMNS = [
 export const GRID_STYLE = taskGridTemplate(PROJECT_GRID_COLUMNS);
 
 export function ProjectRowName(props: { row: ProjectRowData }) {
-  const progressLabel = () => {
-    const total = props.row.project.taskCount ?? 0;
-    const completed = props.row.project.completedTaskCount ?? 0;
-    if (total === 0) return t('common.progressNoTasks');
-    if (completed >= total) return t('common.progressAllDone');
-    return t('common.progressTasksDone', { completed, count: total });
-  };
-  const hasProgress = () =>
-    props.row.project.taskCount !== undefined &&
-    props.row.project.completedTaskCount !== undefined;
-  const progressFraction = () => {
-    const total = props.row.project.taskCount ?? 0;
-    return total > 0 ? (props.row.project.completedTaskCount ?? 0) / total : 0;
-  };
-
   return (
     <span class="flex min-w-0 items-center gap-1 mobile:gap-1.5">
       <EntityIcon
@@ -51,25 +35,7 @@ export function ProjectRowName(props: { row: ProjectRowData }) {
       />
       <span class="flex min-w-0 items-center gap-1">
         <span class="min-w-0 truncate">{props.row.project.name}</span>
-        <Show when={hasProgress()}>
-          <Tooltip.Root>
-            <Tooltip.Trigger
-              as="span"
-              role="progressbar"
-              aria-label={progressLabel()}
-              aria-valuemin={0}
-              aria-valuemax={props.row.project.taskCount ?? 0}
-              aria-valuenow={props.row.project.completedTaskCount ?? 0}
-              tabIndex={0}
-              class="flex size-[22px] shrink-0 items-center justify-center [&_svg]:size-3.5"
-            >
-              <ProgressRing fraction={progressFraction()} />
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content>{progressLabel()}</Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-        </Show>
+        <ProjectProgress project={props.row.project} />
       </span>
     </span>
   );
