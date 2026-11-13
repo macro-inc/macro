@@ -3,10 +3,39 @@ use std::time::Duration;
 use macro_env::Environment;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
-use super::{
-    ProbeOutcome, connection_wait, primary_limits, readonly_limits, replica_session_budget,
-    replica_sessions_at_full_overlap,
-};
+use super::{ProbeOutcome, connection_wait, primary_limits, readonly_limits};
+
+/// A rolling deployment starts a full replacement set before the old tasks
+/// stop, so twice the autoscaling maximum can hold connections at once.
+const ROLLING_DEPLOYMENT_OVERLAP: u32 = 2;
+
+/// The most tasks autoscaling runs: `maxCapacity` in
+/// `infra/stacks/cloud-storage-service/cloud-storage-service.ts`.
+fn autoscaling_max_tasks(environment: Environment) -> u32 {
+    match environment {
+        Environment::Production => 7,
+        Environment::Develop => 3,
+        Environment::Local => 1,
+    }
+}
+
+/// The most read replica sessions this service may hold, across every task
+/// and through a rolling deployment. The arithmetic and the replica's other
+/// clients are in `docs/development/infrastructure.md`.
+fn replica_session_budget(environment: Environment) -> u32 {
+    match environment {
+        Environment::Production => 350,
+        Environment::Develop => 120,
+        Environment::Local => 50,
+    }
+}
+
+/// The most read replica sessions the service can hold in `environment`.
+fn replica_sessions_at_full_overlap(environment: Environment) -> u32 {
+    readonly_limits(environment).max_connections
+        * autoscaling_max_tasks(environment)
+        * ROLLING_DEPLOYMENT_OVERLAP
+}
 
 #[test]
 fn production_readers_stay_inside_the_replica_budget_through_a_rolling_deployment() {

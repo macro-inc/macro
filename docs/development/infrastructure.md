@@ -210,7 +210,8 @@ build/deployment failure gates remain attempt-scoped.
   before the cap. Reads past a task's cap queue in the task for up to 10 s and
   then fail; they do not move to the primary. Dev's worst case is 120 for
   document storage. The limits, and a test that checks them against the task
-  maximum, are in `services/document_storage_service/src/db_pools.rs`: change
+  maximum, are in `services/document_storage_service/src/db_pools.rs` and its
+  `test.rs`: change
   them together with `maxCapacity` in `infra/stacks/cloud-storage-service`.
   A new replica client adds a row here.
 - A changed pool cap applies to new tasks only. During the deployment that

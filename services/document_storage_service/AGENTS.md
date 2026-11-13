@@ -119,7 +119,7 @@ threads, pins, recents, notifications, folders, activity.
   production 5–25 (7 tasks hold 175, 14 hold 350), dev 2–20 (3 hold 60, 6
   hold 120). A test fails when a limit, the task maximum, or the budget stops
   fitting; `maxCapacity` in `infra/stacks/cloud-storage-service` is mirrored
-  there. The budget and the replica's other clients are in the
+  in `src/db_pools/test.rs`. The budget and the replica's other clients are in the
   [infrastructure guide](../../docs/development/infrastructure.md).
 - A read waits up to 10 s for a replica connection, then fails; it is never
   retried on the primary. The primary pool waits 30 s. The only fallback is at

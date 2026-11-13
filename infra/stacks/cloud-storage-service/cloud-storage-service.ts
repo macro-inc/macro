@@ -459,7 +459,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       `${BASE_NAME}-service-scalable-target-${stack}`,
       {
         // The service's read replica pool cap is budgeted against this maximum:
-        // change autoscaling_max_tasks in its src/db_pools.rs with it.
+        // change autoscaling_max_tasks in its src/db_pools/test.rs with it.
         maxCapacity: stack === 'prod' ? 7 : 3,
         minCapacity: stack === 'prod' ? 3 : 1,
         resourceId: pulumi.interpolate`service/${this.cloudStorageClusterName}/${this.service.service.name}`,

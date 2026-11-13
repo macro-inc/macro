@@ -11,10 +11,6 @@ use opentelemetry::{
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
-/// A rolling deployment starts a full replacement set before the old tasks
-/// stop, so twice the autoscaling maximum can hold connections at once.
-const ROLLING_DEPLOYMENT_OVERLAP: u32 = 2;
-
 const PROBE_INTERVAL: Duration = Duration::from_secs(1);
 
 const POOL_NAME: &str = "db.client.connection.pool.name";
@@ -55,8 +51,8 @@ pub(crate) fn primary_limits(environment: Environment) -> PoolLimits {
 }
 
 /// Per task, against the read replica. The replica is shared, so the cap is
-/// what keeps this service inside [`replica_session_budget`] however many
-/// tasks run: reads past the cap queue in the task instead of adding sessions
+/// what keeps this service inside its replica session budget however many
+/// tasks run (checked in `db_pools/test.rs`): reads past the cap queue in the task instead of adding sessions
 /// to a replica that is already slow.
 ///
 /// A queued read fails after ten seconds, before the web app gives up on a
@@ -75,34 +71,6 @@ pub(crate) fn readonly_limits(environment: Environment) -> PoolLimits {
         max_connections,
         acquire_timeout: Duration::from_secs(10),
     }
-}
-
-/// The most tasks autoscaling runs: `maxCapacity` in
-/// `infra/stacks/cloud-storage-service/cloud-storage-service.ts`.
-pub(crate) fn autoscaling_max_tasks(environment: Environment) -> u32 {
-    match environment {
-        Environment::Production => 7,
-        Environment::Develop => 3,
-        Environment::Local => 1,
-    }
-}
-
-/// The most read replica sessions this service may hold, across every task
-/// and through a rolling deployment. The arithmetic and the replica's other
-/// clients are in `docs/development/infrastructure.md`.
-pub(crate) fn replica_session_budget(environment: Environment) -> u32 {
-    match environment {
-        Environment::Production => 350,
-        Environment::Develop => 120,
-        Environment::Local => 50,
-    }
-}
-
-/// The most read replica sessions the service can hold in `environment`.
-pub(crate) fn replica_sessions_at_full_overlap(environment: Environment) -> u32 {
-    readonly_limits(environment).max_connections
-        * autoscaling_max_tasks(environment)
-        * ROLLING_DEPLOYMENT_OVERLAP
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
