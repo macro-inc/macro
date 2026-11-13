@@ -11,6 +11,7 @@ import {
   usePurchaseComputerMutation,
 } from '@queries/computers/computers';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { isTeamAgentComputer } from '@queries/harnesses/runnable';
 import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Button, Dialog } from '@ui';
@@ -125,6 +126,16 @@ export function ComputerBuyFlow(props: {
       : false;
   };
   const up = () => computerConnected(computer(), connected());
+  // An agent teammate's computer runs only its agent: nothing to try or
+  // create on it.
+  const teamAgentComputer = () => {
+    const id = computer()?.harnessId;
+    return harnesses.isSuccess
+      ? harnesses.data.some(
+          (harness) => harness.id === id && isTeamAgentComputer(harness)
+        )
+      : false;
+  };
   const visible = () => props.open || reopened();
   const setupStep = (): Exclude<SetupStepId, 'computer'> => {
     const current = step();
@@ -283,6 +294,7 @@ export function ComputerBuyFlow(props: {
                 onStep={setStep}
                 onClose={close}
                 selectsForAgent={props.selectsForAgent}
+                teamAgentComputer={teamAgentComputer()}
                 signInVisited={signInVisited()}
               />
             )}

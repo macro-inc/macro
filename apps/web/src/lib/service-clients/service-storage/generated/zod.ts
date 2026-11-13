@@ -47700,6 +47700,7 @@ export const approveHarnessPairingResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47774,6 +47775,7 @@ export const claimHarnessPairingResponse = zod
           .describe(
             'Teams it is a team machine for: their every member is a user of it.'
           ),
+        team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
       .describe(
@@ -47836,6 +47838,7 @@ export const listHarnessesResponseItem = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47892,6 +47895,7 @@ export const listHarnessDirectoryResponseItem = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47950,6 +47954,7 @@ export const getSelfHarnessResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -48069,6 +48074,7 @@ export const patchHarnessResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(

@@ -396,6 +396,18 @@ team_agents reads an agent computer's roster state with
 releases it with `request_release` when the agent is removed: normal release
 effects, no fleet access or name confirmation, team ownership still checked.
 
+An agent teammate is a member people reach by message, so nothing else runs on
+its computer. `PgComputerAgents` (the `ComputerAgents` reads on their own)
+implements harnesses' `ComputerTeamAgents`: the harness listings and a patch's
+answer carry `team_agent_user_id` on the computer's harness, and
+`HarnessTeamAgents::harness_team_agent` answers for one harness. Saved agents
+(bots create/update/patch) and session opens (`persona_for_owner`, and a
+runtime's external create) refuse such a harness with 409 "This computer
+belongs to an agent teammate. Message them instead." The harness stays in
+`GET /harnesses`, where Bring your AI finds it by `computer_id`; the web app's
+runtime lists read `useRunnableHarnessesQuery` /
+`useRunnableHarnessDirectoryQuery`, which drop it.
+
 ## Typed boundaries
 
 - Use shared `computer_id::ComputerId`, `pairing_id::PairingId` (re-exported by `domain::ids`), `domain::ids::HostId` and `harness_id::HarnessId`; keep team IDs as UUIDs until a shared team identity exists. Convert only at external/storage boundaries.
