@@ -21,7 +21,7 @@ async fn status_for_body_of(len: usize) -> StatusCode {
 }
 
 #[tokio::test]
-async fn worker_routes_accept_bodies_up_to_64_mb() {
+async fn worker_routes_accept_bodies_up_to_32_mb() {
     // Above axum's 2 MB default, so the explicit limit is what admits it.
     assert_eq!(status_for_body_of(8 * 1024 * 1024).await, StatusCode::OK);
     assert_eq!(
@@ -119,6 +119,38 @@ async fn credentials_are_minted_listed_and_revoked_over_http() {
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body, json!({"error": "unauthorized"}));
+}
+
+#[tokio::test]
+async fn upload_credentials_are_checked_before_the_body_is_read() {
+    let (service, objects, _, _) = service();
+    let app = router(Arc::new(service));
+    let (_, credential) = mint(&app).await;
+    let oversized = || Body::from(vec![b'x'; WORKER_BODY_LIMIT_BYTES + 1]);
+
+    // Without a valid key the body is never read, so its size does not matter.
+    for (uri, key) in [
+        ("/worker/metrics/upload", None),
+        ("/worker/logs/upload", Some("not-a-credential")),
+        ("/worker/notes/upload", Some("gitai_unknown")),
+        ("/worker/cas/upload", Some(SHARED_KEY)),
+    ] {
+        let (status, _, _) = call(&app, request("POST", uri, key, oversized())).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{uri}");
+    }
+
+    let (status, _, _) = call(
+        &app,
+        request(
+            "POST",
+            "/worker/metrics/upload",
+            Some(&credential),
+            oversized(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(objects.objects.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

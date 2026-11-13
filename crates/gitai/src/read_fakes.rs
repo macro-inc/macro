@@ -270,9 +270,10 @@ impl ReadHarness {
     /// Uploads events through the ingest use case.
     pub(crate) async fn upload(&self, events: Vec<Value>) {
         let body = serde_json::to_vec(&json!({ "v": 1, "events": events })).unwrap();
+        let identity = self.gitai.authenticate_device(self.key()).await.unwrap();
         let errors = self
             .gitai
-            .ingest_metrics(self.key(), &ClientHeaders::default(), &body)
+            .ingest_metrics(&identity, &ClientHeaders::default(), &body)
             .await
             .unwrap();
         assert!(errors.is_empty(), "{errors:?}");

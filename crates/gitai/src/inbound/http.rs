@@ -20,9 +20,14 @@ mod worker;
 #[cfg(test)]
 mod test;
 
-/// Largest request body a `/worker` route accepts. A batch of 1,000 transcript
-/// events averages about 5 MB and can be far larger; axum's default is 2 MB.
-pub const WORKER_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
+/// Largest request body a `/worker` route accepts. The client sends at most
+/// 1,000 events a request; transcript events average 4.7 KB (about 5 MB a
+/// full batch) and reach 3.6 MB, so 32 MB admits a batch with several of the
+/// largest. A body is held and parsed in memory (several times its size as
+/// JSON) only after its credential checks out; the task has 1 GB. A larger
+/// batch gets 413, which the client retries with backoff and drops after six
+/// attempts. axum's default is 2 MB.
+pub const WORKER_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 
 /// The header both kinds of key arrive in.
 const API_KEY_HEADER: &str = "x-api-key";
@@ -108,6 +113,12 @@ pub(crate) struct ApiError(GitaiError);
 impl From<GitaiError> for ApiError {
     fn from(error: GitaiError) -> Self {
         Self(error)
+    }
+}
+
+impl From<ApiError> for Response {
+    fn from(error: ApiError) -> Self {
+        error.into_response()
     }
 }
 

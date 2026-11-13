@@ -237,34 +237,44 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
         }
     }
 
-    /// Authenticates a client request, runs it, and counts it in
-    /// `gitai.ingest.batches`.
-    async fn client_request<T, Work>(
+    /// Authenticates a client request before its body is read. A refusal is
+    /// counted in `gitai.ingest.batches` as `unauthorized`.
+    pub async fn authenticate_client(
         &self,
         endpoint: Endpoint,
         presented: Option<&str>,
         headers: &ClientHeaders,
-        work: impl FnOnce(DeviceIdentity) -> Work,
-    ) -> Result<T, GitaiError>
-    where
-        Work: Future<Output = Result<T, GitaiError>>,
-    {
-        let result = match self.authenticate_device(presented).await {
-            Ok(identity) => work(identity).await,
-            Err(error) => Err(error),
-        };
+    ) -> Result<DeviceIdentity, GitaiError> {
+        let result = self.authenticate_device(presented).await;
+        if let Err(error) = &result {
+            self.record_batch(endpoint, headers, error_outcome(error));
+        }
+        result
+    }
+
+    /// Runs an authenticated client request and counts it in
+    /// `gitai.ingest.batches`.
+    async fn client_request<T>(
+        &self,
+        endpoint: Endpoint,
+        headers: &ClientHeaders,
+        work: impl Future<Output = Result<T, GitaiError>>,
+    ) -> Result<T, GitaiError> {
+        let result = work.await;
         let outcome = match &result {
             Ok(_) => BatchResult::Ok,
-            Err(GitaiError::Unauthorized) => BatchResult::Unauthorized,
-            Err(GitaiError::BadRequest(_) | GitaiError::NotFound) => BatchResult::Invalid,
-            Err(GitaiError::Internal(_)) => BatchResult::Error,
+            Err(error) => error_outcome(error),
         };
+        self.record_batch(endpoint, headers, outcome);
+        result
+    }
+
+    fn record_batch(&self, endpoint: Endpoint, headers: &ClientHeaders, result: BatchResult) {
         self.metrics.record(Metric::Batch {
             endpoint,
-            result: outcome,
+            result,
             client_version: client_version_label(headers),
         });
-        result
     }
 
     /// `POST /worker/metrics/upload`. Returns the events the client should
@@ -272,16 +282,13 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
     /// client stops retrying them too.
     pub async fn ingest_metrics(
         &self,
-        presented: Option<&str>,
+        identity: &DeviceIdentity,
         headers: &ClientHeaders,
         body: &[u8],
     ) -> Result<Vec<EventError>, GitaiError> {
-        self.client_request(
-            Endpoint::MetricsUpload,
-            presented,
-            headers,
-            |identity| async move { self.ingest_batch(&identity, headers, body).await },
-        )
+        self.client_request(Endpoint::MetricsUpload, headers, async move {
+            self.ingest_batch(identity, headers, body).await
+        })
         .await
     }
 
@@ -599,11 +606,11 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
     /// log event (their messages can carry anything) and not stored.
     pub async fn accept_logs(
         &self,
-        presented: Option<&str>,
+        identity: &DeviceIdentity,
         headers: &ClientHeaders,
         body: &[u8],
     ) -> Result<usize, GitaiError> {
-        self.client_request(Endpoint::LogsUpload, presented, headers, |identity| async move {
+        self.client_request(Endpoint::LogsUpload,headers,async move {
             let upload: LogsUpload = serde_json::from_slice(body)
                 .map_err(|_| GitaiError::BadRequest("body is not a logs batch".to_owned()))?;
             let level_count = |level: &str| {
@@ -632,82 +639,72 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
     /// stored; the rest are counted as failures (the client only logs them).
     pub async fn upload_notes(
         &self,
-        presented: Option<&str>,
+        _identity: &DeviceIdentity,
         headers: &ClientHeaders,
         body: &[u8],
     ) -> Result<NotesUploadOutcome, GitaiError> {
-        self.client_request(
-            Endpoint::NotesUpload,
-            presented,
-            headers,
-            |_identity| async move {
-                let upload: NotesUpload = serde_json::from_slice(body)
-                    .map_err(|_| GitaiError::BadRequest("body is not a notes upload".to_owned()))?;
-                let shas: Vec<String> = upload
-                    .entries
-                    .iter()
-                    .filter_map(|entry| commit_sha(&entry.commit_sha))
-                    .collect();
-                let known = self.index.known_commits(&shas).await.map_err(internal)?;
+        self.client_request(Endpoint::NotesUpload, headers, async move {
+            let upload: NotesUpload = serde_json::from_slice(body)
+                .map_err(|_| GitaiError::BadRequest("body is not a notes upload".to_owned()))?;
+            let shas: Vec<String> = upload
+                .entries
+                .iter()
+                .filter_map(|entry| commit_sha(&entry.commit_sha))
+                .collect();
+            let known = self.index.known_commits(&shas).await.map_err(internal)?;
 
-                let mut hits = RedactionHits::default();
-                let mut stored = 0;
-                for entry in &upload.entries {
-                    let Some(sha) = commit_sha(&entry.commit_sha).filter(|sha| known.contains(sha))
-                    else {
-                        continue;
-                    };
-                    let note = redact_text(&entry.content, &mut hits).into_owned();
-                    self.put(
-                        Bucket::Events,
-                        &layout::note_key(&sha),
-                        note.into_bytes(),
-                        NOTE_TEXT,
-                    )
-                    .await?;
-                    stored += 1;
-                }
-                self.record_redaction(&hits);
-                Ok(NotesUploadOutcome {
-                    success_count: stored,
-                    failure_count: upload.entries.len() - stored,
-                })
-            },
-        )
+            let mut hits = RedactionHits::default();
+            let mut stored = 0;
+            for entry in &upload.entries {
+                let Some(sha) = commit_sha(&entry.commit_sha).filter(|sha| known.contains(sha))
+                else {
+                    continue;
+                };
+                let note = redact_text(&entry.content, &mut hits).into_owned();
+                self.put(
+                    Bucket::Events,
+                    &layout::note_key(&sha),
+                    note.into_bytes(),
+                    NOTE_TEXT,
+                )
+                .await?;
+                stored += 1;
+            }
+            self.record_redaction(&hits);
+            Ok(NotesUploadOutcome {
+                success_count: stored,
+                failure_count: upload.entries.len() - stored,
+            })
+        })
         .await
     }
 
     /// `GET /worker/notes/?commits=a,b`: the stored notes among them.
     pub async fn read_notes(
         &self,
-        presented: Option<&str>,
+        _identity: &DeviceIdentity,
         headers: &ClientHeaders,
         commits: &str,
     ) -> Result<BTreeMap<String, String>, GitaiError> {
-        self.client_request(
-            Endpoint::NotesRead,
-            presented,
-            headers,
-            |_identity| async move {
-                let shas: HashSet<String> = commits
-                    .split(',')
-                    .filter_map(commit_sha)
-                    .take(MAX_NOTES_PER_READ)
-                    .collect();
-                let mut notes = BTreeMap::new();
-                for sha in shas {
-                    let stored = self
-                        .objects
-                        .get(Bucket::Events, &layout::note_key(&sha))
-                        .await
-                        .map_err(internal)?;
-                    if let Some(note) = stored.and_then(|bytes| String::from_utf8(bytes).ok()) {
-                        notes.insert(sha, note);
-                    }
+        self.client_request(Endpoint::NotesRead, headers, async move {
+            let shas: HashSet<String> = commits
+                .split(',')
+                .filter_map(commit_sha)
+                .take(MAX_NOTES_PER_READ)
+                .collect();
+            let mut notes = BTreeMap::new();
+            for sha in shas {
+                let stored = self
+                    .objects
+                    .get(Bucket::Events, &layout::note_key(&sha))
+                    .await
+                    .map_err(internal)?;
+                if let Some(note) = stored.and_then(|bytes| String::from_utf8(bytes).ok()) {
+                    notes.insert(sha, note);
                 }
-                Ok(notes)
-            },
-        )
+            }
+            Ok(notes)
+        })
         .await
     }
 
@@ -716,73 +713,67 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
     /// repository filter: each is acknowledged and discarded.
     pub async fn accept_cas(
         &self,
-        presented: Option<&str>,
+        _identity: &DeviceIdentity,
         headers: &ClientHeaders,
         body: &[u8],
     ) -> Result<Vec<String>, GitaiError> {
-        self.client_request(
-            Endpoint::CasUpload,
-            presented,
-            headers,
-            |_identity| async move {
-                let upload: CasUpload = serde_json::from_slice(body)
-                    .map_err(|_| GitaiError::BadRequest("body is not a CAS upload".to_owned()))?;
-                Ok(upload
-                    .objects
-                    .into_iter()
-                    .map(|object| object.hash)
-                    .collect())
-            },
-        )
+        self.client_request(Endpoint::CasUpload, headers, async move {
+            let upload: CasUpload = serde_json::from_slice(body)
+                .map_err(|_| GitaiError::BadRequest("body is not a CAS upload".to_owned()))?;
+            Ok(upload
+                .objects
+                .into_iter()
+                .map(|object| object.hash)
+                .collect())
+        })
         .await
     }
 
     /// `GET /worker/cas/?hashes=`: nothing is stored, so every hash is missing.
     pub async fn read_cas(
         &self,
-        presented: Option<&str>,
+        _identity: &DeviceIdentity,
         headers: &ClientHeaders,
         hashes: &str,
     ) -> Result<Vec<String>, GitaiError> {
-        self.client_request(
-            Endpoint::CasRead,
-            presented,
-            headers,
-            |_identity| async move {
-                Ok(hashes
-                    .split(',')
-                    .filter(|hash| !hash.is_empty())
-                    .map(str::to_owned)
-                    .collect())
-            },
-        )
+        self.client_request(Endpoint::CasRead, headers, async move {
+            Ok(hashes
+                .split(',')
+                .filter(|hash| !hash.is_empty())
+                .map(str::to_owned)
+                .collect())
+        })
         .await
     }
 
     /// `GET /worker/releases`: every channel offers the pinned release.
     pub async fn releases(
         &self,
-        presented: Option<&str>,
+        _identity: &DeviceIdentity,
         headers: &ClientHeaders,
     ) -> Result<BTreeMap<&'static str, ReleaseChannel>, GitaiError> {
-        self.client_request(
-            Endpoint::Releases,
-            presented,
-            headers,
-            |_identity| async move {
-                Ok(RELEASE_CHANNELS
-                    .into_iter()
-                    .map(|channel| {
-                        let release = ReleaseChannel {
-                            version: format!("v{PINNED_CLIENT_VERSION}"),
-                            checksum: PINNED_SHA256SUMS_CHECKSUM,
-                        };
-                        (channel, release)
-                    })
-                    .collect())
-            },
-        )
+        self.client_request(Endpoint::Releases, headers, async move {
+            Ok(RELEASE_CHANNELS
+                .into_iter()
+                .map(|channel| {
+                    let release = ReleaseChannel {
+                        version: format!("v{PINNED_CLIENT_VERSION}"),
+                        checksum: PINNED_SHA256SUMS_CHECKSUM,
+                    };
+                    (channel, release)
+                })
+                .collect())
+        })
         .await
+    }
+}
+
+/// How a failed client request is counted.
+fn error_outcome(error: &GitaiError) -> BatchResult {
+    match error {
+        GitaiError::Unauthorized => BatchResult::Unauthorized,
+        GitaiError::BadRequest(_) | GitaiError::NotFound => BatchResult::Invalid,
+        GitaiError::Internal(_) => BatchResult::Error,
     }
 }
 

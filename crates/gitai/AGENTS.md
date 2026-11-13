@@ -8,7 +8,7 @@ agents use for attribution. `services/gitai_service` wires it up.
 
 ## Start here
 
-- `src/inbound/http.rs`: the router; `/worker/*` routes sit under the 64 MB
+- `src/inbound/http.rs`: the router; `/worker/*` routes sit under the 32 MB
   body limit. Handlers in `http/worker.rs` and `http/credentials.rs`.
 - `src/domain/service.rs`: the use cases; each authenticates its caller.
 - `src/domain/ingest.rs`: one metrics upload → filter, redaction, records.

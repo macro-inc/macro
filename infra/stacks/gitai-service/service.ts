@@ -164,7 +164,9 @@ export class GitaiService extends pulumi.ComponentResource {
               image: image.image.imageUri,
               stopTimeout: 10,
               cpu: 256,
-              memory: 512,
+              // A 32 MB upload expands several times as JSON while it is
+              // redacted and compressed.
+              memory: 1024,
               environment: [
                 { name: 'ENVIRONMENT', value: stack },
                 { name: 'DD_SERVICE', value: BASE_NAME },

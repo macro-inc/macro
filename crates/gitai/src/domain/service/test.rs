@@ -12,6 +12,10 @@ fn headers() -> ClientHeaders {
     }
 }
 
+async fn device(service: &TestService, credential: &str) -> DeviceIdentity {
+    service.authenticate_device(Some(credential)).await.unwrap()
+}
+
 async fn mint(service: &TestService) -> String {
     service
         .mint_credential(Some(SHARED_KEY), "Dev@Example.com", "laptop-1")
@@ -178,7 +182,7 @@ async fn ingesting_the_mixed_upload_stores_only_the_macro_repository() {
 
     let errors = service
         .ingest_metrics(
-            Some(&credential),
+            &device(&service, &credential).await,
             &headers(),
             &fixture_body("metrics-upload-mixed.json"),
         )
@@ -318,11 +322,11 @@ async fn a_retried_batch_counts_nothing_twice() {
     let body = fixture_body("metrics-upload-mixed.json");
 
     service
-        .ingest_metrics(Some(&credential), &headers(), &body)
+        .ingest_metrics(&device(&service, &credential).await, &headers(), &body)
         .await
         .unwrap();
     service
-        .ingest_metrics(Some(&credential), &headers(), &body)
+        .ingest_metrics(&device(&service, &credential).await, &headers(), &body)
         .await
         .unwrap();
 
@@ -362,7 +366,11 @@ async fn every_recorded_upload_is_accepted() {
         "metrics-upload-retry-after-503.json",
     ] {
         let errors = service
-            .ingest_metrics(Some(&credential), &headers(), &fixture_body(name))
+            .ingest_metrics(
+                &device(&service, &credential).await,
+                &headers(),
+                &fixture_body(name),
+            )
             .await
             .unwrap();
         assert!(errors.is_empty(), "{name}");
@@ -373,7 +381,11 @@ async fn every_recorded_upload_is_accepted() {
         "logs-upload-after-503.json",
     ] {
         let accepted = service
-            .accept_logs(Some(&credential), &headers(), &fixture_body(name))
+            .accept_logs(
+                &device(&service, &credential).await,
+                &headers(),
+                &fixture_body(name),
+            )
             .await
             .unwrap();
         assert!(accepted > 0, "{name}");
@@ -383,15 +395,11 @@ async fn every_recorded_upload_is_accepted() {
 }
 
 #[tokio::test]
-async fn an_unauthorized_upload_stores_nothing() {
+async fn an_unauthorized_client_is_refused_and_counted() {
     let (service, objects, _, metrics) = service();
     for presented in [None, Some(SHARED_KEY), Some("gitai_revoked")] {
         let result = service
-            .ingest_metrics(
-                presented,
-                &headers(),
-                &fixture_body("metrics-upload-mixed.json"),
-            )
+            .authenticate_client(Endpoint::MetricsUpload, presented, &headers())
             .await;
         assert!(matches!(result, Err(GitaiError::Unauthorized)));
     }
@@ -410,7 +418,7 @@ async fn a_body_that_is_not_a_batch_is_invalid() {
     for body in [&b"not json"[..], br#"{"events": 3}"#] {
         assert!(matches!(
             service
-                .ingest_metrics(Some(&credential), &headers(), body)
+                .ingest_metrics(&device(&service, &credential).await, &headers(), body)
                 .await,
             Err(GitaiError::BadRequest(_))
         ));
@@ -429,7 +437,7 @@ async fn a_storage_failure_is_an_internal_error_the_client_retries() {
     *objects.failing.lock().unwrap() = true;
     let result = service
         .ingest_metrics(
-            Some(&credential),
+            &device(&service, &credential).await,
             &headers(),
             &fixture_body("metrics-upload-mixed.json"),
         )
@@ -460,7 +468,7 @@ async fn token_buckets_count_only_their_newest_revision() {
         let body = serde_json::to_vec(&json!({"v": 1, "events": [token_event(seq, input, cost)]}))
             .unwrap();
         service
-            .ingest_metrics(Some(&credential), &headers(), &body)
+            .ingest_metrics(&device(&service, &credential).await, &headers(), &body)
             .await
             .unwrap();
     }
@@ -499,7 +507,7 @@ async fn session_first_and_last_seen_widen_across_batches() {
     ] {
         let body = serde_json::to_vec(&json!({"v": 1, "events": events})).unwrap();
         service
-            .ingest_metrics(Some(&credential), &headers(), &body)
+            .ingest_metrics(&device(&service, &credential).await, &headers(), &body)
             .await
             .unwrap();
     }
@@ -518,7 +526,7 @@ async fn notes_are_stored_only_for_commits_of_the_repository() {
     let credential = mint(&service).await;
     service
         .ingest_metrics(
-            Some(&credential),
+            &device(&service, &credential).await,
             &headers(),
             &fixture_body("metrics-upload-mixed.json"),
         )
@@ -534,7 +542,7 @@ async fn notes_are_stored_only_for_commits_of_the_repository() {
     ]}))
     .unwrap();
     let outcome = service
-        .upload_notes(Some(&credential), &headers(), &body)
+        .upload_notes(&device(&service, &credential).await, &headers(), &body)
         .await
         .unwrap();
     assert_eq!(
@@ -547,7 +555,11 @@ async fn notes_are_stored_only_for_commits_of_the_repository() {
     assert!(!objects.all_text().contains("other repo note"));
 
     let notes = service
-        .read_notes(Some(&credential), &headers(), &format!("{known},{other}"))
+        .read_notes(
+            &device(&service, &credential).await,
+            &headers(),
+            &format!("{known},{other}"),
+        )
         .await
         .unwrap();
     assert_eq!(notes.len(), 1);
@@ -560,7 +572,7 @@ async fn the_recorded_notes_upload_stores_nothing_for_unknown_commits() {
     let credential = mint(&service).await;
     let outcome = service
         .upload_notes(
-            Some(&credential),
+            &device(&service, &credential).await,
             &headers(),
             &fixture_body("notes-upload.json"),
         )
@@ -576,7 +588,7 @@ async fn releases_offer_the_pinned_version_on_every_channel() {
     let (service, _, _, _) = service();
     let credential = mint(&service).await;
     let channels = service
-        .releases(Some(&credential), &headers())
+        .releases(&device(&service, &credential).await, &headers())
         .await
         .unwrap();
     assert_eq!(channels.len(), 4);
@@ -586,7 +598,9 @@ async fn releases_offer_the_pinned_version_on_every_channel() {
             .all(|c| c.version == "v1.7.6" && c.checksum == PINNED_SHA256SUMS_CHECKSUM)
     );
     assert!(matches!(
-        service.releases(None, &headers()).await,
+        service
+            .authenticate_client(Endpoint::Releases, None, &headers())
+            .await,
         Err(GitaiError::Unauthorized)
     ));
 }
@@ -619,7 +633,7 @@ async fn cas_objects_are_acknowledged_and_not_stored() {
         serde_json::to_vec(&json!({"objects": [{"hash": "h1", "content": {"messages": []}}]}))
             .unwrap();
     let hashes = service
-        .accept_cas(Some(&credential), &headers(), &body)
+        .accept_cas(&device(&service, &credential).await, &headers(), &body)
         .await
         .unwrap();
     assert_eq!(hashes, vec!["h1"]);
