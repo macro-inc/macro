@@ -183,6 +183,27 @@ fn people_and_members_show_the_owners_picture_stored_under_any_of_their_jids() {
 }
 
 #[test]
+fn a_member_listed_by_lid_alone_shows_the_picture_under_the_number_they_wrote_from() {
+    let cal_picture = Uuid::from_u128(903);
+    let names = ChatNames::new(
+        HashMap::new(),
+        HashMap::from([(phone("5550003"), cal_picture)]),
+        vec![SeenPerson {
+            person_id: Uuid::from_u128(3),
+            user_id: None,
+            whatsapp_name: Some("Cal".to_owned()),
+            jids: vec![CAL_LID.to_owned(), phone("5550003")],
+        }],
+    );
+
+    let people = names.people(Some(&roster()));
+    let members = names.name_members(roster());
+
+    assert_eq!(members.picture(CAL_LID), Some(cal_picture));
+    assert_eq!(people.get(CAL_LID).picture_file_id, Some(cal_picture));
+}
+
+#[test]
 fn a_direct_chats_picture_is_only_for_the_person_with_its_remote_id() {
     let chat_picture = Uuid::from_u128(902);
     let names = ChatNames::new(

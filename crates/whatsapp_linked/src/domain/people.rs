@@ -102,6 +102,15 @@ impl ChatNames {
         (jids, whatsapp_name, seen)
     }
 
+    /// A roster member's picture: under their roster JIDs, else under any
+    /// JID of the person they were seen as.
+    fn member_picture(&self, jids: &[&str], seen: Option<&SeenPerson>) -> Option<Uuid> {
+        self.picture(jids).or_else(|| {
+            let seen: Vec<&str> = seen?.jids.iter().map(String::as_str).collect();
+            self.picture(&seen)
+        })
+    }
+
     /// Names for the seen people and, through `roster`, everyone in the chat.
     pub fn people(&self, roster: Option<&GroupInfo>) -> People {
         let mut people = People::new(phone_number);
@@ -128,7 +137,7 @@ impl ChatNames {
             let Some(name) = self.name(&jids, whatsapp_name) else {
                 continue;
             };
-            let picture = self.picture(&jids);
+            let picture = self.member_picture(&jids, seen);
             for jid in jids {
                 people.learn(
                     jid,
@@ -148,9 +157,9 @@ impl ChatNames {
     pub fn name_members(&self, mut roster: GroupInfo) -> ChatRoster {
         let mut pictures = HashMap::new();
         for participant in &mut roster.participants {
-            let (jids, whatsapp_name, _) = self.member(&participant.identity);
+            let (jids, whatsapp_name, seen) = self.member(&participant.identity);
             let name = self.name(&jids, whatsapp_name);
-            if let Some(picture) = self.picture(&jids) {
+            if let Some(picture) = self.member_picture(&jids, seen) {
                 pictures.insert(participant.identity.jid.clone(), picture);
             }
             participant.identity.display_name = name;

@@ -256,19 +256,13 @@ async fn drain(effects: &EffectsService, imports: &Imports, whatsapp: &WhatsAppS
             }
         }
     }
-    // Last: pictures are cosmetic, and a group's backlog never delays pushes.
-    loop {
-        match imports.pictures.import_staged().await {
-            Ok(0) => break,
-            Ok(_) => {}
-            Err(error) => {
-                tracing::warn!(
-                    code = error.current_context().code(),
-                    "Storing WhatsApp profile pictures will retry"
-                );
-                break;
-            }
-        }
+    // Last, and one batch: pictures are cosmetic, so a backlog never holds
+    // up pushes or shutdown. Each staging signals, and the sweep takes the rest.
+    if let Err(error) = imports.pictures.import_staged().await {
+        tracing::warn!(
+            code = error.current_context().code(),
+            "Storing WhatsApp profile pictures will retry"
+        );
     }
 }
 
