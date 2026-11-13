@@ -1,0 +1,78 @@
+.github/workspace-dep-closures.json
+  s_fcbfa0c2313f05::t_a1945f20f1ee66 826,1704-1720
+  s_fcbfa0c2313f05::t_8908bd5bad288c 1721
+services/agent_harness_service/src/config.rs
+  s_fcbfa0c2313f05::t_7376e85fdc64e2 286-288
+services/agent_harness_service/src/agent_wakes.rs
+  s_fcbfa0c2313f05::t_404ada3788db03 1-52
+services/agent_harness_service/src/main.rs
+  s_fcbfa0c2313f05::t_5d9a0c8bd77a68 11,1820-1827,2063
+services/agent_harness_service/Cargo.toml
+  s_fcbfa0c2313f05::t_7376e85fdc64e2 40
+services/agent_harness_service/src/api.rs
+  s_fcbfa0c2313f05::t_5d9a0c8bd77a68 81,138,236-241,452
+crates/agent_wakes/src/domain/record.rs
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 13,30,32,49,108,120,133,152,154,225,249,257
+crates/agent_wakes/src/outbound/rollout.rs
+  s_fcbfa0c2313f05::t_404ada3788db03 40-49
+crates/agent_wakes/src/outbound/postgres/test.rs
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 10-11,159-162,185-192,195-206
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 100-101,120,127-128
+crates/agent_wakes/src/domain/service/test.rs
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 172,179-180,203-204
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 10-11,13,219,271-273
+crates/agent_wakes/src/domain/trace.rs
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 12,23,38,62,96,115
+services/agent_harness_service/src/api/swagger.rs
+  s_fcbfa0c2313f05::t_7376e85fdc64e2 144-148,157-161,163,166-168,170,173-175
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 49-57,176-178
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 162,164-165,169,171-172
+.sqlx/query-0a358770e3e6315a01fed58980988d06ab5b87f17028639aa31b6aa5bdfbfffc.json
+  s_bb9c9ff941d3b2::t_73106851a8027b 1-16
+.sqlx/query-28ea90276fa70779e6f04264ba957431da3e282ee78ed570032c6f980dd76dc5.json
+  s_bb9c9ff941d3b2::t_b8308e8e180be6 1-50
+.sqlx/query-8e6d3bbf2604fbfa4a6c543e70fd6c2743d58327fec6992a2321cd810db88843.json
+  s_bb9c9ff941d3b2::t_615be70511ec35 1-34
+.sqlx/query-a09ff0ce77ed46c990cc65e0ee33e14fa16d89de576ee020fdccefb8d288d266.json
+  s_bb9c9ff941d3b2::t_77e0030fcf8209 1-47
+.sqlx/query-a6d612ba1e8323710991a5da486c8ec689571865a92588e24caff5a77d90ad46.json
+  s_bb9c9ff941d3b2::t_ac34e16f43a1f9 1-51
+.sqlx/query-b00d5625f73f268e98883a4e7af30a2253abc0ef75c12e5fd6c61528433f89a7.json
+  s_bb9c9ff941d3b2::t_ebdf9121ffee97 1-29
+Cargo.lock
+  s_fcbfa0c2313f05::t_4554d874117bf2 590
+infra/stacks/agent-harness-service/index.ts
+  s_dfeff50ab3a311::t_522ea46fd66c5a 58-60,73-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8708ec5a7f32955d5402a86824c85c8bbc09e663",
+  "prompts": {},
+  "sessions": {
+    "s_bb9c9ff941d3b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86f3133a-b6b1-496a-85f4-df4edc4be011",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
