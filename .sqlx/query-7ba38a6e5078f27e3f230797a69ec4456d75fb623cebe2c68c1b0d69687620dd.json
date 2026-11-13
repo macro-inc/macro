@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(ta.created_by, t.owner_id) AS \"responsible!\"\n            FROM team_agents ta\n            JOIN team t ON t.id = ta.team_id\n            WHERE ta.user_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "responsible!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7ba38a6e5078f27e3f230797a69ec4456d75fb623cebe2c68c1b0d69687620dd"
+}

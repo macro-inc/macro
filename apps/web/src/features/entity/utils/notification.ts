@@ -391,7 +391,10 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
     .with({ tag: 'routine_run_finished' }, (m) => m.content.routineName)
     .with({ tag: 'agent_sign_in_expiry' }, (m) => m.content.computerName)
-    .with({ tag: 'computer_setup' }, (m) => m.content.computerName)
+    .with(
+      { tag: 'computer_setup' },
+      (m) => m.content.agent?.name ?? m.content.computerName
+    )
     .exhaustive(() => '');
 }
 

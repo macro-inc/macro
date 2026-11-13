@@ -1,19 +1,14 @@
 import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import {
-  CollaborationStatusIndicator,
-  isCollaborationStatusVisible,
-} from '@components/app/CollaborationStatusIndicator';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockAliasedName, useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockDataSignal as blockLoaderDataSignal } from '@core/internal/BlockLoader';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
@@ -36,12 +31,12 @@ import type { MarkdownData } from '../definition';
 import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
+import { MarkdownHeader } from '../views/markdown-header';
+import { MobileMarkdownHeader } from '../views/mobile/markdown-header';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
-import { useMarkdownName } from './MarkdownNameProvider';
 import { ModalsProvider } from './ModalsProvider';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
-import { TopBar } from './TopBar';
 import { useTaskBranchNameHotkey } from './useTaskBranchNameHotkey';
 
 export interface BlockMarkdownProps {
@@ -49,11 +44,6 @@ export interface BlockMarkdownProps {
    * A Loro snapshot to load while waiting for a remote snapshot.
    */
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
-}
-
-function ManagedTopBar() {
-  const { displayName } = useMarkdownName();
-  return <TopBar name={displayName} />;
 }
 
 export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
@@ -155,19 +145,19 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
             </Show>
             <div class="flex flex-col size-full">
               <div class="relative shrink-0">
-                <SplitHeaderRight>
-                  <Show
-                    when={isCollaborationStatusVisible(collaborationStatus())}
-                  >
-                    <HeaderIsland class="-order-1">
-                      <CollaborationStatusIndicator
-                        status={collaborationStatus()}
-                      />
-                    </HeaderIsland>
-                  </Show>
-                </SplitHeaderRight>
                 <Suspense>
-                  <ManagedTopBar />
+                  <Show
+                    when={isTouchDevice()}
+                    fallback={
+                      <MarkdownHeader
+                        collaborationStatus={collaborationStatus}
+                      />
+                    }
+                  >
+                    <MobileMarkdownHeader
+                      collaborationStatus={collaborationStatus}
+                    />
+                  </Show>
                 </Suspense>
                 <Suspense>
                   <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">

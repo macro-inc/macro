@@ -164,7 +164,7 @@ timestamps. At 600px, Updated fades and collapses over
 160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
-Updated remains sortable. Created by is the final column, with a 16px avatar above
+Updated remains sortable except during a main Tasks or project text search. Created by is the final column, with a 16px avatar above
 840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
 keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. The creator header and avatar
@@ -279,13 +279,20 @@ the optimistic tag. Repeat with an existing assignment and with removal.
 
 ## Due dates
 
-Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
-**Due furthest away** sorting alongside Viewed, Updated, and Created. Status
+Tasks lists and boards offer **Title**, **Status**, **Priority**, **Due soonest**,
+and **Due furthest away** sorting alongside Viewed, Updated, and Created. Title
+reads A to Z case-insensitively, punctuation before digits before letters ("1. Intro" before "10. Wrap"); picking it again reverses it, and the list's
+**Task** column header selects and reverses it too. Status
 follows stored option order; Priority puts urgent tasks first. Missing values
-stay last. Property-sort ties use newest update, then descending task ID.
+stay last. Property- and title-sort ties use newest update, then descending task ID.
 Text search retains its existing ordering and flat list results; clear search to sort.
-While searching, the desktop header hides Sort (leaving Group in its island) and
-the mobile drawer omits its Sort section.
+While searching, the desktop header hides Sort (leaving Group in its island), the
+keyboard shortcut sheet and command menu drop **Sort tasks** (S does nothing), and
+the mobile drawer omits its Sort section. The list's column headers stop sorting:
+Due date shows a plain label, and Updated keeps a static descending arrow whatever
+the stored sort is. Clearing search brings back the stored sort and every control
+unchanged. CRM task lists search by rerunning their own query, so their column
+headers keep sorting during a search.
 Boards group the loaded search results as before, without complete counts or grouped-search requests.
 
 **Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
@@ -1259,11 +1266,10 @@ Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
 when opening the picker. Rows stay in place while selecting or deselecting.
 Initially selected outsiders remain visible and removable, including references
-absent from contacts. They stay searchable for re-adding during that editing
-session without contact discovery. Once the editor closes without them, they
-cannot be added again unless they join the team.
+absent from contacts. They stay searchable for re-adding while the record stays
+mounted, even after the picker closes. Unrelated non-team contacts stay excluded.
 
-The same scope applies to task/project creation and editing, bulk Set assignee,
+The same roster scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
 keep their semantics; Created by and custom people fields keep their contact lists.
 Check that a teammate absent from contacts appears and can be selected, that

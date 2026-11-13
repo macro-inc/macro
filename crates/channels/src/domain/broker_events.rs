@@ -156,6 +156,10 @@ pub struct ChannelAccessRequestedMetadata {
     pub request_id: Uuid,
     /// Person asking to join.
     pub requester_id: MacroUserIdStr<'static>,
+    /// The requester's profile name when they asked, if they had one. Absent
+    /// on events from before it was added.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester_name: Option<String>,
 }
 
 /// Events that can be published to [`MacroChannelsTopic`].

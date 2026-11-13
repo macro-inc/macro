@@ -116,14 +116,34 @@ threads, pins, recents, notifications, folders, activity.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
-- Dev's readonly pool keeps 2–20 connections per task, independently of the
-  primary pool's 25–100. Once all tasks use this cap, three dev tasks allow 60
-  sessions, or 120 while a rolling deployment overlaps all three. Old tasks
-  retain their previous cap until they drain during the initial rollout.
-  Production and local pools retain their existing primary/readonly limits.
+- Pool limits live in `src/db_pools.rs`, per task, with the readonly pool set
+  apart from the primary. Dev's readonly pool keeps 2–20 connections: three
+  tasks allow 60 replica sessions, or 120 while a rolling deployment overlaps
+  all three. Production's keeps 10–50, so 7 tasks allow 350 and a deployment
+  700. Both pools wait 30 s for a connection.
+- A read is never retried on the primary. The only fallback is at startup: a
+  task that cannot reach the replica reads the primary for its lifetime and
+  reports no `readonly` pool metrics.
+- Sessions carry the application name `document_storage_service`, so
+  `pg_stat_activity` and database monitoring can attribute them.
+- Each pool reports `db.client.connection.count` (state `idle`/`used`),
+  `db.client.connection.max`, `db.client.connection.used` (a histogram of the
+  in-use count sampled every second, for peaks the once-a-minute gauges miss)
+  and `db.client.connection.wait_time`, tagged
+  `db.client.connection.pool.name` (`primary`/`readonly`). The wait is a
+  once-a-second probe, not a per-query timing: sqlx acquires inside each query.
+  It reports zero while a connection is idle. When none is, it waits like a
+  query: in the queue at the limit, or for a new connection below it. It does
+  not time the health check sqlx runs on an idle connection, so sqlx's
+  slow-acquire warnings can appear while the probe reads zero.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
+- Thread edits (`api/threads/edit_thread.rs`) and saved view definition
+  creates and updates refuse sharing changes from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check. Every agent session scope is refused `/soup/graphql` and
+  its WebSocket (`agent_correlation::scope`).
 
 ## Related
 

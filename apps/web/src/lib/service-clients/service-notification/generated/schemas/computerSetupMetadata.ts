@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ComputerSetupMetadataAgent } from './computerSetupMetadataAgent';
 import type { ComputerSetupMetadataHarnessId } from './computerSetupMetadataHarnessId';
 import type { ComputerSetupOutcome } from './computerSetupOutcome';
 
@@ -12,6 +13,7 @@ import type { ComputerSetupOutcome } from './computerSetupOutcome';
 up. Sent to its buyer, who continues (or retries) from the setup flow.
  */
 export interface ComputerSetupMetadata {
+  agent?: ComputerSetupMetadataAgent;
   /** The computer that was set up. */
   computerId: string;
   /** The computer's name when the notice was sent. */

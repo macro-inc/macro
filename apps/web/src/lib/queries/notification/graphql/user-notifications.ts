@@ -114,6 +114,10 @@ export function createGraphqlNotificationsQuery(
       getNextPageParam: (lastPage) => lastPage.user.soup.nextCursor,
       enabled: options?.().enabled !== false,
       requestPolicy: 'cache-and-network',
+      // App state, not a list on screen: its 500 entities are read again
+      // behind the views the user is looking at, most of all after the cache
+      // engine restarts.
+      context: { backgroundReader: true },
       keepPreviousData: false,
       select: ({ pages }) =>
         selectGraphqlNotifications(pages, queryArgs.done ?? false),

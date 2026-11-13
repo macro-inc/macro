@@ -210,7 +210,9 @@ To release:
    it is the release decision: nothing else approves it. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
-   up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
+   up to 30 minutes; the native checks and either platform's release checks
+   don't count, so a failed or in-flight iOS release never holds this one
+   back), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
    the merge result, so such a bundle could never pass it; the refusal lists
    the native files `main` changed; merge `main`, bump, re-add the label).

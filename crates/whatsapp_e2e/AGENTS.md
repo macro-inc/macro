@@ -43,6 +43,12 @@ database. Nothing talks to WhatsApp or AWS (the KMS is
   list is added, its earlier messages imported from the phone, messages by
   LID and by phone number and from the owner's phone land in it, Macro sends
   to it, and a shared viewer reads but can't send.
+- Pictures (`src/test/pictures.rs`): an added group's and a sender's
+  pictures are staged for the chat owner's account, an unchanged one is
+  kept without a download, a change notification fetches the new one, a
+  hidden one is dropped with its file, and a check cycle that claims while
+  the day's budget is spent asks nothing (its claim prunes a day-old query
+  row, the signal the test waits on).
 
 ## Checks
 

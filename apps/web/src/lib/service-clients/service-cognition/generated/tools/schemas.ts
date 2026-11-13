@@ -96,6 +96,7 @@ export const AddToPipelineResponse = z.object({
         ])
         .optional(),
       fields: z.record(z.any()),
+      currencies: z.record(z.string()).optional(),
     })
   ),
   alreadyPresent: z.array(
@@ -112,6 +113,7 @@ export const AddToPipelineResponse = z.object({
         ])
         .optional(),
       fields: z.record(z.any()),
+      currencies: z.record(z.string()).optional(),
     })
   ),
   version: z.union([z.number().int(), z.null()]).optional(),
@@ -5442,6 +5444,7 @@ export const CreatePipelineResponse = z.object({
         options: z.array(z.string()),
         required: z.boolean(),
         readOnly: z.boolean(),
+        currencyField: z.union([z.string(), z.null()]).optional(),
       })
     ),
     version: z.number().int(),
@@ -8111,6 +8114,7 @@ export const EditPipelineResponse = z.object({
         options: z.array(z.string()),
         required: z.boolean(),
         readOnly: z.boolean(),
+        currencyField: z.union([z.string(), z.null()]).optional(),
       })
     ),
     version: z.number().int(),
@@ -10820,6 +10824,7 @@ export const FindPipelineEntriesResponse = z.object({
             ])
             .optional(),
           fields: z.record(z.any()),
+          currencies: z.record(z.string()).optional(),
         })
       ),
     })
@@ -10835,7 +10840,13 @@ export const FindPipelineEntriesResponse = z.object({
       empty: z.number().int().gte(0),
     })
   ),
-  totals: z.array(z.object({ field: z.string(), sum: z.number() })),
+  totals: z.array(
+    z.object({
+      field: z.string(),
+      currency: z.union([z.string(), z.null()]).optional(),
+      sum: z.number(),
+    })
+  ),
   summary: z.string(),
 });
 
@@ -13487,6 +13498,7 @@ export const ListPipelinesResponse = z.object({
           options: z.array(z.string()),
           required: z.boolean(),
           readOnly: z.boolean(),
+          currencyField: z.union([z.string(), z.null()]).optional(),
         })
       ),
       version: z.number().int(),
@@ -18439,6 +18451,7 @@ export const RemoveFromPipelineResponse = z.object({
         ])
         .optional(),
       fields: z.record(z.any()),
+      currencies: z.record(z.string()).optional(),
     })
   ),
   version: z.union([z.number().int(), z.null()]).optional(),
@@ -20370,7 +20383,13 @@ export const UpdatePipelineEntriesResponse = z.object({
         ])
         .optional(),
       changes: z.array(
-        z.object({ field: z.string(), before: z.any(), after: z.any() })
+        z.object({
+          field: z.string(),
+          before: z.any(),
+          after: z.any(),
+          beforeCurrency: z.union([z.string(), z.null()]).optional(),
+          afterCurrency: z.union([z.string(), z.null()]).optional(),
+        })
       ),
     })
   ),
