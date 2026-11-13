@@ -63,6 +63,16 @@ vi.mock(
   '@core/component/LexicalMarkdown/decorator-host/native-tag-mention-views',
   () => ({ createNativeTagMentionViews: () => ({}) })
 );
+vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
+  // The inline-ai-editing flag (RustMarkdownEditor's AI edit slot). This shell
+  // mounts no PosthogProvider; the slot stays off, as without the flag.
+  useFeatureFlag: () => () => ({
+    enabled: false,
+    payload: undefined,
+    loading: false,
+  }),
+}));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'fixture-user',
   useIsAuthenticated: () => () => true,
