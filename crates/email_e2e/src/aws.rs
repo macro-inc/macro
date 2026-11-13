@@ -215,7 +215,10 @@ async fn answer(State(endpoint): State<Endpoint>, request: Request) -> Response 
                 content_type,
                 bytes,
             };
-            let response = object_headers(&stored, StatusCode::OK);
+            // The answer to a PUT describes the object but carries none of it.
+            let mut response = object_headers(&stored, StatusCode::OK);
+            response.headers_mut().remove(CONTENT_LENGTH);
+            response.headers_mut().remove(CONTENT_TYPE);
             objects.insert(name, stored);
             response
         }

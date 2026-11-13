@@ -411,11 +411,11 @@ impl Stack {
         self.api.log()
     }
 
-    /// Everything `pubsub_workers` has logged since it last started.
+    /// Everything `pubsub_workers` has logged, across restarts and while it
+    /// is stopped.
     pub fn workers_log(&self) -> String {
-        self.workers
-            .as_ref()
-            .map(ServiceProcess::log)
+        std::fs::read(self.log_dir.join(format!("{WORKERS}.log")))
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             .unwrap_or_default()
     }
 
