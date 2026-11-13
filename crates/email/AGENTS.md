@@ -203,8 +203,9 @@ tools — hexagonal, heavily feature-gated.
   renders as All Mail shows it, else as its Spam or Trash row
   (`thread_previews_by_id` in `domain/service/previews.rs`); All Mail alone
   misses every spam-only or trash-only thread. Read the folders one thread at a
-  time: the folder scan reaches only that thread's messages through an equality
-  on its id, and an `OR` of ids reads the inbox's whole folder.
+  time, at most `MAX_FOLDER_LOOKUPS` per read: the folder scan reaches only that
+  thread's messages through an equality on its id, and an `OR` of ids reads the
+  inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
 

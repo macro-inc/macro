@@ -29,6 +29,11 @@ use super::thread::email_thread_ids_from_receipts;
 #[cfg(test)]
 mod test;
 
+/// Threads outside All Mail that one by-id read looks up in Spam and Trash.
+/// Each costs up to two sequential folder reads; a batch past the cap leaves
+/// the rest absent, as every thread outside All Mail was before the fallback.
+const MAX_FOLDER_LOOKUPS: usize = 20;
+
 async fn get_frecency_scores<U: FrecencyQueryService>(
     service: &U,
     include_frecency: bool,
@@ -246,7 +251,14 @@ where
             .filter(|(thread_id, _)| !found.contains(thread_id))
             .collect();
         tracing::Span::current().record("outside_all_mail", outside_all_mail.len());
-        for (thread_id, link_id) in outside_all_mail {
+        if outside_all_mail.len() > MAX_FOLDER_LOOKUPS {
+            tracing::warn!(
+                outside_all_mail = outside_all_mail.len(),
+                looked_up = MAX_FOLDER_LOOKUPS,
+                "too many threads outside All Mail to look up in Spam and Trash"
+            );
+        }
+        for (thread_id, link_id) in outside_all_mail.into_iter().take(MAX_FOLDER_LOOKUPS) {
             for folder in [
                 PreviewViewStandardLabel::Spam,
                 PreviewViewStandardLabel::Trash,
