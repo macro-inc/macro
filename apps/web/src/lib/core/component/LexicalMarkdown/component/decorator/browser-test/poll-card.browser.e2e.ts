@@ -94,12 +94,11 @@ for (const viewport of [
     });
     expect(hit).toBe(true);
 
-    // A form that never arrives says so and offers to load again, instead
-    // of a skeleton that never ends.
+    // Code that never arrives says so and offers a reload, instead of a
+    // skeleton that never ends.
     await page.clock.fastForward(10_000);
     await expect(section.getByText('Couldn’t load this form.')).toBeVisible();
-    await section.getByRole('button', { name: 'Retry' }).click();
-    await expect(loading).toBeVisible();
-    await expect(section.getByRole('alert')).toHaveCount(0);
+    await expect(section.getByRole('button', { name: 'Reload' })).toBeVisible();
+    await expect(loading).toHaveCount(0);
   });
 }
