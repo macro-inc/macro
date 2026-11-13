@@ -271,18 +271,40 @@ else
   note "agents:     git-ai hooks, daemon login start, $SKILL_NAME skill and PR line for Claude Code and Codex"
 fi
 
-# Managed mode cannot set the base URL or the notes backend, and a credential
-# must not exist before both are in place. Until then, print what to set.
-if [ "$MANAGED" -eq 1 ] &&
-  { [ "$PREVIOUS_BASE" != "$BASE_URL" ] ||
-    [ "$(jq -r '.notes_backend.kind // empty' "$CONFIG" 2>/dev/null)" != git_notes ]; }; then
-  say "Settings for the tool that manages $CONFIG"
-  note "Put these keys in config.json (for Home Manager: home.file.\".git-ai/config.json\"); none is secret:"
-  jq -n --arg base "$BASE_URL" --argjson repos "$ALLOWED_REPOSITORIES" --arg git "$GIT_PATH_SETTING" \
-    '{api_base_url: $base, telemetry_oss: "off", disable_auto_updates: true, disable_version_checks: true,
-      notes_backend: {kind: "git_notes"}, allow_repositories: $repos}
-     + (if $git == "" then {} else {git_path: $git} end)' | sed 's/^/    /'
-  die "apply these settings (api_base_url and notes_backend must be in place before a credential exists), then re-run"
+# Managed mode cannot change config.json, and a credential must not exist
+# before every setting this script would make is in place: without the base URL
+# or the notes backend uploads go elsewhere, without the allowlist every repo's
+# transcripts leave the machine, and vendor telemetry stays on. Print the
+# missing keys and stop until the managing tool sets them.
+managed_missing_settings() {
+  jq -r --arg base "$BASE_URL" --arg git "$GIT_PATH_SETTING" '
+    def on: . == true or . == "true";
+    # The client normalises repository URLs (scheme, user, ".git", ":" for SSH).
+    def repo_key: ascii_downcase | sub("^[a-z+]+://"; "") | sub("^[^@/]*@"; "")
+      | sub(":"; "/") | sub("\\.git/?$"; "") | sub("/+$"; "");
+    [ (if .api_base_url == $base then empty else "api_base_url" end),
+      (if .telemetry_oss == "off" then empty else "telemetry_oss" end),
+      (if (.disable_auto_updates | on) then empty else "disable_auto_updates" end),
+      (if (.disable_version_checks | on) then empty else "disable_version_checks" end),
+      (if .notes_backend.kind == "git_notes" then empty else "notes_backend" end),
+      (if any((.allow_repositories // [])[]?; type == "string" and repo_key == "github.com/macro-inc/macro")
+       then empty else "allow_repositories" end),
+      (if $git == "" then empty else "git_path" end)
+    ] | join(" ")' "$CONFIG" 2>/dev/null || echo "config.json (not readable JSON)"
+}
+
+if [ "$MANAGED" -eq 1 ]; then
+  MISSING_SETTINGS="$(managed_missing_settings)"
+  if [ -n "$MISSING_SETTINGS" ]; then
+    say "Settings for the tool that manages $CONFIG"
+    note "Missing or wrong: $MISSING_SETTINGS"
+    note "Put these keys in config.json (for Home Manager: home.file.\".git-ai/config.json\"); none is secret:"
+    jq -n --arg base "$BASE_URL" --argjson repos "$ALLOWED_REPOSITORIES" --arg git "$GIT_PATH_SETTING" \
+      '{api_base_url: $base, telemetry_oss: "off", disable_auto_updates: true, disable_version_checks: true,
+        notes_backend: {kind: "git_notes"}, allow_repositories: $repos}
+       + (if $git == "" then {} else {git_path: $git} end)' | sed 's/^/    /'
+    die "apply these settings (all must be in place before a credential exists), then re-run"
+  fi
 fi
 
 if [ "$MINT" -eq 1 ] && [ "$DRY_RUN" -eq 0 ] && [ -z "$SHARED_KEY" ]; then
@@ -424,8 +446,12 @@ else
   if [ "$ROTATE" -eq 1 ]; then
     response="$(shared_key_request GET /v1/credentials)"
     [ "$(response_status "$response")" = 200 ] || die "listing credentials failed (HTTP $(response_status "$response"))"
-    old_ids="$(response_body "$response" | jq -r --arg email "$EMAIL" --arg hostname "$HOSTNAME_VALUE" --arg keep "$credential_id" \
-      '.credentials[] | select(.email == $email and .hostname == $hostname and .revoked_at == null and .id != $keep) | .id')"
+    # The server stores emails lowercased; compare the same way. tr, not
+    # ${EMAIL,,}: bash 3.2.
+    email_lower="$(printf '%s' "$EMAIL" | tr '[:upper:]' '[:lower:]')"
+    old_ids="$(response_body "$response" | jq -r --arg email "$email_lower" --arg hostname "$HOSTNAME_VALUE" --arg keep "$credential_id" \
+      '.credentials[] | select((.email | ascii_downcase) == $email and .hostname == $hostname and .revoked_at == null and .id != $keep) | .id')"
+    [ -n "$old_ids" ] || warn "no older credential for $email_lower on $HOSTNAME_VALUE to revoke; check the list (README \"Credentials\") if you expected one"
     for old_id in $old_ids; do
       response="$(shared_key_request DELETE "/v1/credentials/$old_id")"
       case "$(response_status "$response")" in
