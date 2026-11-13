@@ -13,6 +13,10 @@ fn public_entity_types_use_entity_wire_names() {
     );
     assert_eq!(PublicEntityType::Bot.as_str(), "bot");
     assert_eq!(PublicEntityType::Webhook.as_str(), "webhook");
+    assert_eq!(
+        PublicEntityType::GithubPullRequest.as_str(),
+        "github_pull_request"
+    );
 }
 
 #[test]
@@ -51,6 +55,11 @@ fn audiences_round_trip_through_their_wire_shape() {
         Audience::GithubInstallation {
             installation_id: "42".to_owned(),
         },
+        Audience::EntityAtLeast {
+            entity_type: EntityType::Form,
+            entity_id: "f".to_owned(),
+            min_level: MinAccessLevel::Edit,
+        },
         Audience::Snapshot {
             user_ids: vec![user],
         },
@@ -62,6 +71,7 @@ fn audiences_round_trip_through_their_wire_shape() {
             {"class": "owner", "rule": {"user_id": "macro|owner@example.com"}},
             {"class": "team", "rule": {"team_id": "00000000-0000-0000-0000-000000000000", "min_role": "admin"}},
             {"class": "github_installation", "rule": {"installation_id": "42"}},
+            {"class": "entity_at_least", "rule": {"entity_type": "form", "entity_id": "f", "min_level": "edit"}},
             {"class": "snapshot", "rule": {"user_ids": ["macro|owner@example.com"]}},
         ],
     });

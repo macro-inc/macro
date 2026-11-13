@@ -72,8 +72,8 @@ pub struct PublicEvent<'a, P: Clone> {
 pub enum Stage {
     /// Delivered to everyone in the audience.
     Stable,
-    /// Not delivered until the event stream's `public-event-stream` flag gate
-    /// exists; then delivered only to flagged users.
+    /// Delivered only to users with the `public-event-stream` feature flag
+    /// (streams: the stream's user; webhooks: the webhook's creator).
     Preview,
 }
 
@@ -167,10 +167,13 @@ pub enum PublicEntityType {
     Bot,
     /// A webhook configuration.
     Webhook,
+    /// A GitHub pull request, by its lowercased `owner/repo#number` key.
+    GithubPullRequest,
 }
 
 const BOT_ENTITY_TYPE: &str = "bot";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
+const GITHUB_PULL_REQUEST_ENTITY_TYPE: &str = "github_pull_request";
 
 impl PublicEntityType {
     /// The wire name, such as `document` or `bot`.
@@ -179,6 +182,7 @@ impl PublicEntityType {
             Self::Entity(entity_type) => entity_type.into(),
             Self::Bot => BOT_ENTITY_TYPE,
             Self::Webhook => WEBHOOK_ENTITY_TYPE,
+            Self::GithubPullRequest => GITHUB_PULL_REQUEST_ENTITY_TYPE,
         }
     }
 }
@@ -210,6 +214,16 @@ pub enum Audience {
         entity_type: EntityType,
         /// Entity identifier.
         entity_id: String,
+    },
+    /// Explicit accessors of an entity whose access is at least `min_level`,
+    /// such as a form's editors for its responses.
+    EntityAtLeast {
+        /// Access entity type.
+        entity_type: EntityType,
+        /// Entity identifier.
+        entity_id: String,
+        /// The lowest access level that receives the event.
+        min_level: MinAccessLevel,
     },
     /// One addressed user, such as the recipient of a private call event.
     /// Webhooks match only that user's personal workspace.
@@ -275,6 +289,19 @@ pub enum MinTeamRole {
     Member,
     /// Admins and owners only.
     Admin,
+}
+
+/// The lowest entity access level an [`Audience::EntityAtLeast`] event
+/// reaches. View is [`Audience::Entity`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MinAccessLevel {
+    /// Commenters, editors and owners.
+    Comment,
+    /// Editors and owners.
+    Edit,
+    /// Owners only.
+    Owner,
 }
 
 /// A topic payload for topics that expose nothing. It has no values, so a
