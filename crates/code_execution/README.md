@@ -112,11 +112,17 @@ disclosure by code that already holds the token. Direct SDK writes do not have p
 Timeout, cancellation, a dropped caller, and harness shutdown kill and reap the
 child before deleting scratch. API writes already accepted by a service may
 complete afterward and must not be blindly retried. SDK operation events carry only an operation name, request identity and status.
-They are bounded diagnostics, not proof of a committed action. Past 128
-operations, or at the first authenticated change sent to a service origin
-with `fetch` around the SDK (no `x-macro-sdk-verb` header), the bootstrap
-sends one `{truncated: true}` progress frame instead, so a reader knows the
-list isn't whole. Console output
+They are bounded diagnostics, not proof of a committed action. The
+bootstrap sends one `{truncated: true}` progress frame, so a reader knows
+the list isn't whole, past 128 operations, at the first authenticated
+change sent to a service origin with `fetch` around the SDK (no
+`x-macro-sdk-verb` header), or once a session program opens a raw
+connection (`Deno.connect`, `connectTls`, `startTls`), a `WebSocket`, or a
+Node module it could send through: one of `SENDING_MODULES` in `deno.rs`
+(the network modules, their internals and `node:module`, each mapped to a
+module that says so and re-exports it) or anything through
+`process.getBuiltinModule`. Like a dry run, this is held inside the
+process: code written to hide a send still can. Console output
 and progress are program-authored and may be incomplete. W3C trace context and
 `x-macro-code-execution: 1` are sent to configured service origins on
 authenticated requests only.
