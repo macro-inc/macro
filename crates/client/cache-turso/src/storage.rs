@@ -55,7 +55,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 12;
+pub const STORAGE_SCHEMA_VERSION: u32 = 13;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -1089,6 +1089,7 @@ impl Storage for TursoStorage {
                     self.fault_after(TestFaultSite::Delete, index)?;
                 }
                 calendar::delete_ranges(&connection, &keys)?;
+                channel_timeline::delete_rows(&connection, &keys)?;
                 people_sql::delete(&connection, &keys)
             })
         })();
@@ -1681,6 +1682,7 @@ impl Storage for TursoStorage {
                 driver::execute(&connection, "DELETE FROM index_documents", Vec::new())?;
                 driver::execute(&connection, "DELETE FROM records", Vec::new())?;
                 calendar::clear(&connection)?;
+                channel_timeline::clear(&connection)?;
                 self.fault_after(TestFaultSite::Clear, 2)?;
                 let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
                 for (index, entry) in entries.iter().enumerate() {
@@ -1809,6 +1811,7 @@ impl PredicateIndexStorage for TursoStorage {
                     )?;
                 }
                 calendar::delete_ranges(&connection, &keys)?;
+                channel_timeline::delete_rows(&connection, &keys)?;
                 people_sql::delete(&connection, &keys)?;
                 write_projection_mutations(&connection, projections)
             })
@@ -3160,6 +3163,7 @@ fn migrate_previous_format(
         driver::execute(connection, "DELETE FROM index_documents", Vec::new())?;
         driver::execute(connection, "DELETE FROM records", Vec::new())?;
         calendar::clear(connection)?;
+        channel_timeline::clear(connection)?;
         driver::execute(
             connection,
             "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
@@ -3180,7 +3184,11 @@ fn initialize(
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
-            for sql in CREATE_SCHEMA.into_iter().chain(calendar::CREATE_SCHEMA) {
+            for sql in CREATE_SCHEMA
+                .into_iter()
+                .chain(calendar::CREATE_SCHEMA)
+                .chain(channel_timeline::CREATE_SCHEMA)
+            {
                 driver::execute(connection, sql, Vec::new())?;
             }
             driver::execute(
@@ -3200,6 +3208,7 @@ fn initialize(
             )?;
             save_search_projection_version(connection)?;
             calendar::save_projection_version(connection)?;
+            channel_timeline::save_projection_version(connection)?;
             page_retention::save_version(connection)?;
             Ok(())
         })
@@ -3286,6 +3295,7 @@ fn initialize(
     for sql in INDEX_FACTS_DELETE
         .into_iter()
         .chain(calendar::VALIDATED_SQL)
+        .chain(channel_timeline::VALIDATED_SQL)
     {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
@@ -3294,6 +3304,7 @@ fn initialize(
     page_retention::compact_legacy_pages(connection)?;
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
+    channel_timeline::ensure_projection_version(connection)?;
     people_sql::open(connection)?;
     Ok(migrated)
 }
@@ -3871,7 +3882,8 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
         "optimistic_uncertain_attributes",
         "optimistic_index_documents",
     )?;
-    calendar::validate_schema(connection)
+    calendar::validate_schema(connection)?;
+    channel_timeline::validate_schema(connection)
 }
 
 const SQLITE_SEQUENCE_TABLE: &str = "sqlite_sequence";
@@ -3921,10 +3933,12 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
     let expected = expected
         .into_iter()
         .chain(calendar::TABLES)
+        .chain(channel_timeline::TABLES)
         .collect::<Vec<_>>();
     let named_indexes = named_indexes
         .into_iter()
         .chain(calendar::NAMED_INDEXES)
+        .chain(channel_timeline::NAMED_INDEXES)
         .collect::<Vec<_>>();
     let support = [SQLITE_SEQUENCE_TABLE, TURSO_AUTOINCREMENT_TABLE];
     let mut seen = vec![false; expected.len()];
@@ -4262,6 +4276,101 @@ fn validate_mutation_index_columns(
         || required_i64(rowid, 5).ok() != Some(0)
     {
         return Err(compatibility());
+    }
+    Ok(())
+}
+
+/// Visits every stored record of one typename in bounded batches.
+fn for_each_record(
+    connection: &Arc<Connection>,
+    typename: &str,
+    mut visit: impl FnMut(&EntityKey<'static>, &Record) -> Result<(), TursoStorageError>,
+) -> Result<(), TursoStorageError> {
+    let mut last_id: Option<String> = None;
+    loop {
+        let (sql, parameters) = match last_id.as_ref() {
+            Some(id) => (
+                SEARCH_REBUILD_RECORDS_AFTER,
+                vec![
+                    text(typename),
+                    text(id),
+                    Value::from_i64(SEARCH_REBUILD_BATCH_SIZE),
+                ],
+            ),
+            None => (
+                SEARCH_REBUILD_RECORDS,
+                vec![text(typename), Value::from_i64(SEARCH_REBUILD_BATCH_SIZE)],
+            ),
+        };
+        let rows = driver::query(connection, sql, parameters)?;
+        if rows.is_empty() {
+            return Ok(());
+        }
+        for row in rows {
+            let key = RecordKey {
+                typename: typename.to_owned(),
+                id: required_text(&row, 0)?,
+            };
+            let record = decode_record(&required_blob(&row, 1)?)
+                .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+            last_id = Some(key.id.clone());
+            visit(&key.into_entity()?, &record)?;
+        }
+    }
+}
+
+/// Validates that `table` has its primary-key index plus exactly the named
+/// secondary indexes, each over the expected columns in order.
+fn validate_named_indexes(
+    connection: &Arc<Connection>,
+    table: &str,
+    expected: &[(&str, &[&str])],
+) -> Result<(), TursoStorageError> {
+    let indexes = driver::query(
+        connection,
+        &format!("PRAGMA index_list('{table}')"),
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    if indexes.len() != expected.len() + 1
+        || !indexes.iter().any(|row| {
+            row.len() == 5
+                && required_i64(row, 2).ok() == Some(1)
+                && required_text(row, 3).ok().as_deref() == Some("pk")
+        })
+    {
+        return Err(compatibility());
+    }
+    for (index, expected_columns) in expected {
+        let Some(row) = indexes
+            .iter()
+            .find(|row| required_text(row, 1).ok().as_deref() == Some(*index))
+        else {
+            return Err(compatibility());
+        };
+        if row.len() != 5
+            || required_i64(row, 2).ok() != Some(0)
+            || required_text(row, 3).ok().as_deref() != Some("c")
+        {
+            return Err(compatibility());
+        }
+        let columns = driver::query(
+            connection,
+            &format!("PRAGMA index_info('{index}')"),
+            Vec::new(),
+        )
+        .map_err(TursoStorageError::initialization)?;
+        if columns.len() != expected_columns.len()
+            || columns.iter().zip(*expected_columns).enumerate().any(
+                |(position, (row, expected))| {
+                    row.len() != 3
+                        || required_i64(row, 0).ok() != i64::try_from(position).ok()
+                        || required_text(row, 2).ok().as_deref() != Some(*expected)
+                },
+            )
+        {
+            return Err(compatibility());
+        }
     }
     Ok(())
 }
@@ -4824,6 +4933,7 @@ struct EncodedRecord {
     value: Vec<u8>,
     search_documents: Vec<SearchDocument>,
     calendar_range: Option<cache_core::calendar::CalendarRangeRow>,
+    channel_timeline: Option<cache_core::channel_timeline::ChannelTimelineRow>,
     contact: Option<Record>,
 }
 
@@ -4838,6 +4948,9 @@ fn prepare_records(
                 value: encode_record(&record),
                 search_documents: project_search_documents(&key, &record),
                 calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
+                channel_timeline: cache_core::channel_timeline::project_channel_timeline(
+                    &key, &record,
+                ),
                 contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
                     fields: record
                         .fields
@@ -4952,6 +5065,7 @@ fn write_derived_rows(
 ) -> Result<(), TursoStorageError> {
     write_search_documents(connection, entries)?;
     calendar::write_ranges(connection, entries)?;
+    channel_timeline::write_rows(connection, entries)?;
     people_sql::write(connection, entries)
 }
 
@@ -5327,6 +5441,7 @@ impl TursoStorage {
 mod alternatives;
 mod bounded_selection;
 mod calendar;
+mod channel_timeline;
 mod conjunction;
 mod contact_search;
 mod integrity;

@@ -23,6 +23,13 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelTimelineCacheArgs,
+  ChannelTimelineCacheResult,
+  ChannelTimelineCommitArgs,
+  ChannelTimelineCommitCacheResult,
+  ChannelTimelineEvictArgs,
+  ChannelTimelineEvictCacheResult,
+  ChannelTimelineStatsCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -117,6 +124,10 @@ export const LIVE_QUERY_CAPACITY = 256;
 const WATCH_COMMAND = 'graphql_cache_watch';
 const CALENDAR_RANGE_COMMAND = 'graphql_cache_calendar_range';
 const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
+const CHANNEL_TIMELINE_COMMAND = 'graphql_cache_channel_timeline';
+const CHANNEL_TIMELINE_COMMIT_COMMAND = 'graphql_cache_channel_timeline_commit';
+const CHANNEL_TIMELINE_EVICT_COMMAND = 'graphql_cache_channel_timeline_evict';
+const CHANNEL_TIMELINE_STATS_COMMAND = 'graphql_cache_channel_timeline_stats';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
@@ -136,6 +147,8 @@ const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   ENTITY_FILTER_COMMAND,
   ENTITY_FILTER_RESUME_COMMAND,
   CALENDAR_RANGE_COMMAND,
+  CHANNEL_TIMELINE_COMMAND,
+  CHANNEL_TIMELINE_STATS_COMMAND,
   PEOPLE_CONTEXT_COMMAND,
   PEOPLE_SEARCH_COMMAND,
   'graphql_cache_inspect_query_variants',
@@ -193,6 +206,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // Native binaries before the calendar range index answer `unsupported`, so
   // the calendar keeps reading from the network until the app updates.
   let calendarUnavailable = false;
+  // Native binaries before the channel timeline index: channels keep reading
+  // over REST until the app updates.
+  let channelTimelineUnavailable = false;
   const isMissingCommand = (error: unknown, command: string): boolean =>
     error instanceof Error && error.message === `Command ${command} not found`;
 
@@ -404,6 +420,27 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
+
+  // One missing channel command means the binary has none of them.
+  async function channelTimelineRequest<Wire, Result>(
+    command:
+      | 'graphql_cache_channel_timeline'
+      | 'graphql_cache_channel_timeline_commit'
+      | 'graphql_cache_channel_timeline_evict'
+      | 'graphql_cache_channel_timeline_stats',
+    args: Record<string, unknown>,
+    map: (result: Wire) => Result
+  ): Promise<Result | { kind: 'unsupported' }> {
+    await ready;
+    if (channelTimelineUnavailable) return { kind: 'unsupported' };
+    try {
+      return map(await request<Wire>(command, args));
+    } catch (error) {
+      if (!isMissingCommand(error, command)) throw error;
+      channelTimelineUnavailable = true;
+      return { kind: 'unsupported' };
+    }
+  }
   fireAndForget(
     (async () => {
       try {
@@ -739,6 +776,61 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         calendarUnavailable = true;
         return { kind: 'unsupported' };
       }
+    },
+
+    async channelTimeline(
+      args: ChannelTimelineCacheArgs
+    ): Promise<ChannelTimelineCacheResult> {
+      return channelTimelineRequest(
+        CHANNEL_TIMELINE_COMMAND,
+        { request: args },
+        (result: ChannelTimelineCacheResult) =>
+          result.kind === 'unsupported'
+            ? result
+            : { ...result, revision: parseCacheRevision(result.revision) }
+      );
+    },
+
+    async channelTimelineCommit(
+      args: ChannelTimelineCommitArgs
+    ): Promise<ChannelTimelineCommitCacheResult> {
+      return channelTimelineRequest(
+        CHANNEL_TIMELINE_COMMIT_COMMAND,
+        { commit: args },
+        (result: WriteResult & { channelSeq: string | null }) => ({
+          kind: 'committed',
+          revision: parseCacheRevision(result.revision),
+          changed: result.changed,
+          channelSeq: result.channelSeq,
+        })
+      );
+    },
+
+    async channelTimelineEvict(
+      args: ChannelTimelineEvictArgs
+    ): Promise<ChannelTimelineEvictCacheResult> {
+      return channelTimelineRequest(
+        CHANNEL_TIMELINE_EVICT_COMMAND,
+        { eviction: args },
+        (result: WriteResult & { channelIds: string[]; hasMore: boolean }) => ({
+          kind: 'evicted',
+          revision: parseCacheRevision(result.revision),
+          changed: result.changed,
+          channelIds: result.channelIds,
+          hasMore: result.hasMore,
+        })
+      );
+    },
+
+    async channelTimelineStats(): Promise<ChannelTimelineStatsCacheResult> {
+      return channelTimelineRequest(
+        CHANNEL_TIMELINE_STATS_COMMAND,
+        {},
+        (result: { channels: number; entries: number }) => ({
+          kind: 'stats',
+          ...result,
+        })
+      );
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

@@ -13,6 +13,10 @@ import type {
   CacheRevisionResult,
   CalendarCommitCacheResult,
   CalendarRangeCacheResult,
+  ChannelTimelineCacheResult,
+  ChannelTimelineCommitCacheResult,
+  ChannelTimelineEvictCacheResult,
+  ChannelTimelineStatsCacheResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheResult,
   HydrationResult,
@@ -149,7 +153,9 @@ function isAuthoritativeWrite(request: CacheRequest): boolean {
     request.kind === 'people-update' ||
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'delete-records' ||
-    request.kind === 'calendar-commit'
+    request.kind === 'calendar-commit' ||
+    request.kind === 'channel-timeline-commit' ||
+    request.kind === 'channel-timeline-evict'
   );
 }
 
@@ -170,20 +176,27 @@ function revisionAdvancementCategory(
       'hydrate',
       'people-update',
       'calendar-commit',
+      'channel-timeline-commit',
       () => 'authoritative-write' as const
     )
     .with('enqueue-optimistic-mutation', () => 'optimistic-enqueue' as const)
     .with('commit-optimistic-write', () => 'optimistic-commit' as const)
     .with('rollback-optimistic-write', () => 'optimistic-rollback' as const)
     .with('invalidate', () => 'external-invalidation' as const)
-    .with('delete-records', () => 'deletion' as const)
+    .with('delete-records', 'channel-timeline-evict', () => 'deletion' as const)
     .with('clear', () => 'clear' as const)
     .otherwise(() => undefined);
 }
 
 function requestPriority(request: CacheRequest): number {
-  if (request.kind === 'hydrate' || request.kind === 'people-update')
+  if (
+    request.kind === 'hydrate' ||
+    request.kind === 'people-update' ||
+    request.kind === 'channel-timeline-evict'
+  )
     return BACKGROUND_HYDRATION_PRIORITY;
+  // A channel page is only read to paint an open channel or thread.
+  if (request.kind === 'channel-timeline') return USER_VISIBLE_READ_PRIORITY;
   if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
@@ -193,6 +206,7 @@ function requestPriority(request: CacheRequest): number {
   if (
     request.kind === 'write' ||
     request.kind === 'calendar-commit' ||
+    request.kind === 'channel-timeline-commit' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
@@ -672,6 +686,47 @@ export class CacheWorkerCore {
           changed: result.changed,
         };
         return committed;
+      })
+      .with({ kind: 'channel-timeline' }, async (request) => {
+        const result: ChannelTimelineCacheResult =
+          await this.requireEngine().channelTimeline(request.request);
+        return result.kind === 'unsupported'
+          ? result
+          : { ...result, revision: parseCacheRevision(result.revision) };
+      })
+      .with({ kind: 'channel-timeline-commit' }, async (request) => {
+        const { channelSeq, ...result } =
+          await this.requireEngine().channelTimelineCommit(request.commit);
+        result.revision = parseCacheRevision(result.revision);
+        this.fanOut(result, true);
+        const committed: ChannelTimelineCommitCacheResult = {
+          kind: 'committed',
+          revision: result.revision,
+          changed: result.changed,
+          channelSeq,
+        };
+        return committed;
+      })
+      .with({ kind: 'channel-timeline-evict' }, async (request) => {
+        const { channelIds, hasMore, ...result } =
+          await this.requireEngine().channelTimelineEvict(request.eviction);
+        result.revision = parseCacheRevision(result.revision);
+        this.fanOut(result, true);
+        const evicted: ChannelTimelineEvictCacheResult = {
+          kind: 'evicted',
+          revision: result.revision,
+          changed: result.changed,
+          channelIds,
+          hasMore,
+        };
+        return evicted;
+      })
+      .with({ kind: 'channel-timeline-stats' }, async () => {
+        const stats: ChannelTimelineStatsCacheResult = {
+          kind: 'stats',
+          ...(await this.requireEngine().channelTimelineStats()),
+        };
+        return stats;
       })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();

@@ -161,44 +161,6 @@ pub(super) fn ensure_projection_version(
     })
 }
 
-fn for_each_record(
-    connection: &Arc<Connection>,
-    typename: &str,
-    mut visit: impl FnMut(&EntityKey<'static>, &Record) -> Result<(), TursoStorageError>,
-) -> Result<(), TursoStorageError> {
-    let mut last_id: Option<String> = None;
-    loop {
-        let (sql, parameters) = match last_id.as_ref() {
-            Some(id) => (
-                SEARCH_REBUILD_RECORDS_AFTER,
-                vec![
-                    text(typename),
-                    text(id),
-                    Value::from_i64(SEARCH_REBUILD_BATCH_SIZE),
-                ],
-            ),
-            None => (
-                SEARCH_REBUILD_RECORDS,
-                vec![text(typename), Value::from_i64(SEARCH_REBUILD_BATCH_SIZE)],
-            ),
-        };
-        let rows = driver::query(connection, sql, parameters)?;
-        if rows.is_empty() {
-            return Ok(());
-        }
-        for row in rows {
-            let key = RecordKey {
-                typename: typename.to_owned(),
-                id: required_text(&row, 0)?,
-            };
-            let record = decode_record(&required_blob(&row, 1)?)
-                .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
-            last_id = Some(key.id.clone());
-            visit(&key.into_entity()?, &record)?;
-        }
-    }
-}
-
 fn row_values(row: &CalendarRangeRow) -> Vec<Value> {
     vec![
         text(row.record_key.as_ref()),
@@ -594,63 +556,21 @@ pub(super) fn validate_schema(connection: &Arc<Connection>) -> Result<(), TursoS
         "calendar_coverage",
         &[(0, "kind"), (1, "start")],
     )?;
-    let indexes = driver::query(
+    validate_named_indexes(
         connection,
-        "PRAGMA index_list('calendar_ranges')",
-        Vec::new(),
-    )
-    .map_err(TursoStorageError::initialization)?;
-    let expected = [
-        (
-            "calendar_ranges_scan_idx",
-            &["kind", "long", "start", "record_key"][..],
-        ),
-        (
-            "calendar_ranges_event_idx",
-            &["event_key", "record_key"][..],
-        ),
-        ("calendar_ranges_link_idx", &["link_id", "record_key"][..]),
-    ];
-    if indexes.len() != expected.len() + 1
-        || !indexes.iter().any(|row| {
-            row.len() == 5
-                && required_i64(row, 2).ok() == Some(1)
-                && required_text(row, 3).ok().as_deref() == Some("pk")
-        })
-    {
-        return Err(compatibility());
-    }
-    for (index, expected_columns) in expected {
-        let Some(row) = indexes
-            .iter()
-            .find(|row| required_text(row, 1).ok().as_deref() == Some(index))
-        else {
-            return Err(compatibility());
-        };
-        if row.len() != 5
-            || required_i64(row, 2).ok() != Some(0)
-            || required_text(row, 3).ok().as_deref() != Some("c")
-        {
-            return Err(compatibility());
-        }
-        let columns = driver::query(
-            connection,
-            &format!("PRAGMA index_info('{index}')"),
-            Vec::new(),
-        )
-        .map_err(TursoStorageError::initialization)?;
-        if columns.len() != expected_columns.len()
-            || columns.iter().zip(expected_columns).enumerate().any(
-                |(position, (row, expected))| {
-                    row.len() != 3
-                        || required_i64(row, 0).ok() != i64::try_from(position).ok()
-                        || required_text(row, 2).ok().as_deref() != Some(*expected)
-                },
-            )
-        {
-            return Err(compatibility());
-        }
-    }
+        "calendar_ranges",
+        &[
+            (
+                "calendar_ranges_scan_idx",
+                &["kind", "long", "start", "record_key"][..],
+            ),
+            (
+                "calendar_ranges_event_idx",
+                &["event_key", "record_key"][..],
+            ),
+            ("calendar_ranges_link_idx", &["link_id", "record_key"][..]),
+        ],
+    )?;
     for table in TABLES {
         validate_table_constraints(connection, table, false)?;
         validate_no_foreign_keys(connection, table)?;

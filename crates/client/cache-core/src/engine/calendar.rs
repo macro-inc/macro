@@ -92,7 +92,18 @@ impl<S: CalendarRangeStorage> Engine<S> {
             .calendar_commit(commit)
             .await
             .map_err(EngineError::Storage)?;
-        let changed = outcome.deleted_keys.into_iter().collect::<BTreeSet<_>>();
+        self.record_deletions(outcome.deleted_keys)
+    }
+}
+
+impl<S: crate::store::Storage> Engine<S> {
+    /// Evicts records a storage commit deleted and reports them as changed so
+    /// dependent operations re-execute.
+    pub(super) fn record_deletions(
+        &mut self,
+        deleted_keys: Vec<EntityKey<'static>>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        let changed = deleted_keys.into_iter().collect::<BTreeSet<_>>();
         for key in &changed {
             self.hot.pop(key);
         }

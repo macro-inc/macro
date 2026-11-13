@@ -20,6 +20,13 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelTimelineCacheArgs,
+  ChannelTimelineCacheResult,
+  ChannelTimelineCommitArgs,
+  ChannelTimelineCommitCacheResult,
+  ChannelTimelineEvictArgs,
+  ChannelTimelineEvictCacheResult,
+  ChannelTimelineStatsCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -170,6 +177,20 @@ export interface CacheHost {
   ): Promise<CalendarRangeCacheResult>;
   /** Atomically applies calendar coverage, deletions, and sync state. */
   calendarCommit(args: CalendarCommitArgs): Promise<CalendarCommitCacheResult>;
+  /** Answers one channel or thread page from the local timeline index. */
+  channelTimeline(
+    args: ChannelTimelineCacheArgs
+  ): Promise<ChannelTimelineCacheResult>;
+  /** Atomically applies channel coverage, deletions, and the change sequence. */
+  channelTimelineCommit(
+    args: ChannelTimelineCommitArgs
+  ): Promise<ChannelTimelineCommitCacheResult>;
+  /** Removes the channels opened longest ago with their cached messages. */
+  channelTimelineEvict(
+    args: ChannelTimelineEvictArgs
+  ): Promise<ChannelTimelineEvictCacheResult>;
+  /** Counts the channels and entries the timeline index holds. */
+  channelTimelineStats(): Promise<ChannelTimelineStatsCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked

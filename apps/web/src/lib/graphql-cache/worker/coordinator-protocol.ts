@@ -25,6 +25,9 @@ import {
   isValidCacheSearchQuery,
   isValidCalendarCommitArgs,
   isValidCalendarRangeArgs,
+  isValidChannelTimelineArgs,
+  isValidChannelTimelineCommitArgs,
+  isValidChannelTimelineEvictArgs,
   isValidNormalizedRecordKey,
   isWorkerMessage,
   MAX_MAIL_THROUGH_ROWS,
@@ -893,6 +896,23 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         hasOnlyKeys(value, ['id', 'kind', 'commit']) &&
         isValidCalendarCommitArgs(value.commit)
       );
+    case 'channel-timeline':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+        isValidChannelTimelineArgs(value.request)
+      );
+    case 'channel-timeline-commit':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'commit']) &&
+        isValidChannelTimelineCommitArgs(value.commit)
+      );
+    case 'channel-timeline-evict':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'eviction']) &&
+        isValidChannelTimelineEvictArgs(value.eviction)
+      );
+    case 'channel-timeline-stats':
+      return hasOnlyKeys(value, ['id', 'kind']);
     case 'inspect-query':
       return (
         hasOnlyKeys(value, [
@@ -1524,7 +1544,7 @@ export function tabIdFromLivenessLockName(
 export const CACHE_STORAGE_VERSION = {
   schemaCompatibilityEpoch: 4,
   formatVersion: 4,
-  storageSchemaVersion: 12,
+  storageSchemaVersion: 13,
 } as const;
 
 /**
