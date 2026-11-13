@@ -5357,6 +5357,7 @@
     ],
     "dashboards": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
