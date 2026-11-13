@@ -14281,6 +14281,7 @@
       "crates/remote_env_var",
       "crates/session_fleet",
       "crates/share_permission_db_utils",
+      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "sha_cleanup_worker": [
@@ -14547,6 +14548,7 @@
       "crates/remote_env_var",
       "crates/session_fleet",
       "crates/share_permission_db_utils",
+      "crates/single_flight",
       "crates/slack_client",
       "crates/slack_e2e",
       "crates/slack_fake_server",
@@ -14662,6 +14664,7 @@
       "crates/s3_key",
       "crates/share_permission_db_utils",
       "crates/single_flight",
+      "crates/slack_client",
       "crates/slack_integration",
       "crates/sqs_client",
       "crates/sqs_worker",
@@ -14777,6 +14780,7 @@
       "crates/s3_key",
       "crates/share_permission_db_utils",
       "crates/single_flight",
+      "crates/slack_client",
       "crates/slack_integration",
       "crates/sqs_client",
       "crates/sqs_worker",
@@ -14830,6 +14834,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/single_flight",
       "crates/slack_client",
       "crates/slack_linked",
       "crates/workspace-hack"
@@ -14880,6 +14885,7 @@
       "crates/remote_env_var",
       "crates/session_fleet",
       "crates/share_permission_db_utils",
+      "crates/single_flight",
       "crates/slack_client",
       "crates/slack_linked",
       "crates/workspace-hack",
