@@ -1904,7 +1904,7 @@ fn test_build_query_project_filter_adds_access_gated_union_branch() {
     assert!(
         sql.contains("pea.entity_id::text = t.project_id")
             && sql.contains("pea.entity_type = 'project'")
-            && sql.contains("pea.source_id = ANY("),
+            && sql.contains("entity_access_source_matches(pea.source_id, "),
         "project branch must gate on entity_access project rows: {sql}"
     );
 }
