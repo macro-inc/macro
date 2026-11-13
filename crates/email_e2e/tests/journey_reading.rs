@@ -319,12 +319,11 @@ async fn read_receipt_records_an_open(provider: Provider) -> Result<(), Report> 
     assert_eq!(token.len(), 43, "{token}");
     let sent = sender.wait_for_preview("sent", "Proposal").await?;
     let sent_thread = sent["id"].as_str().unwrap_or_default().to_owned();
-    assert!(
-        receipts(&sender, &sent_thread)
-            .await?
-            .iter()
-            .all(|receipt| receipt["open_count"] == 0),
-        "an open was recorded before anyone opened the mail"
+    let unopened = receipts(&sender, &sent_thread).await?;
+    assert_eq!(unopened.len(), 1, "{unopened:?}");
+    assert_eq!(
+        unopened[0]["open_count"], 0,
+        "an open was recorded before anyone opened the mail: {unopened:?}"
     );
 
     // The recipient's client loads the image, twice in a row.
@@ -348,13 +347,10 @@ async fn read_receipt_records_an_open(provider: Provider) -> Result<(), Report> 
     );
     assert!(opened[0]["first_opened_at"].is_string(), "{opened:?}");
 
-    // Only the sender reads them.
-    let received_thread = recipient.wait_for_preview("inbox", "Proposal").await?;
+    // Only the sender reads them: the recipient asking for the sent thread's
+    // receipts gets none.
     let theirs = recipient
-        .get(&format!(
-            "/email/threads/{}/read-receipts",
-            received_thread["id"].as_str().unwrap_or_default()
-        ))
+        .get(&format!("/email/threads/{sent_thread}/read-receipts"))
         .await?;
     assert!(
         theirs.status != 200 || !theirs.text.contains("open_count\":1"),

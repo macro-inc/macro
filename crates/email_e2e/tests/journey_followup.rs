@@ -41,7 +41,10 @@ async fn receive(
         ..Mail::new(GRACE, subject, "Hello.")
     })?;
     let preview = inbox.wait_for_preview("inbox", subject).await?;
-    let thread_id = preview["id"].as_str().unwrap_or_default().to_owned();
+    let thread_id = preview["id"]
+        .as_str()
+        .ok_or_else(|| rootcause::report!("a preview without an id: {preview}"))?
+        .to_owned();
     Ok((thread_id, message.id))
 }
 
@@ -110,7 +113,7 @@ async fn remind_me_if_no_reply(provider: Provider) -> Result<(), Report> {
     let inbox = ada.link(provider, ada.email()).await?;
     let (quiet, quiet_message) =
         receive(&inbox, "Contract draft", "contract-1@example.com").await?;
-    let (answered, _) = receive(&inbox, "Team lunch", "lunch-1@example.com").await?;
+    let (answered, answered_message) = receive(&inbox, "Team lunch", "lunch-1@example.com").await?;
 
     let quiet_reminder = remind_if_no_reply(&inbox, &quiet).await?;
     let answered_reminder = remind_if_no_reply(&inbox, &answered).await?;
@@ -122,12 +125,14 @@ async fn remind_me_if_no_reply(provider: Provider) -> Result<(), Report> {
             "the reminded thread stayed in the inbox"
         );
     }
-    inbox
-        .wait_for_provider_message(
-            "the reminded thread out of the provider's inbox",
-            |message| message.id == quiet_message && !message.in_inbox,
-        )
-        .await?;
+    for message_id in [&quiet_message, &answered_message] {
+        inbox
+            .wait_for_provider_message(
+                "the reminded thread out of the provider's inbox",
+                |message| &message.id == message_id && !message.in_inbox,
+            )
+            .await?;
+    }
 
     // Grace answers a moment later. Outlook gives a message's arrival to the
     // second, so an answer within the second the reminder was set reads as

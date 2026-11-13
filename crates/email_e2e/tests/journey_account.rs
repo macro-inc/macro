@@ -179,11 +179,11 @@ async fn resync_brings_back_a_lost_thread(provider: Provider) -> Result<(), Repo
             .iter()
             .any(|preview| preview["id"] == kept.as_str())
     );
-    let thread = inbox
-        .thread(back["id"].as_str().unwrap_or_default())
-        .await?;
-    let messages = thread["messages"].as_array().map_or(0, Vec::len);
-    assert_eq!(messages, 1, "{thread}");
+    for thread_id in [back["id"].as_str().unwrap_or_default(), kept.as_str()] {
+        let thread = inbox.thread(thread_id).await?;
+        let messages = thread["messages"].as_array().map_or(0, Vec::len);
+        assert_eq!(messages, 1, "{thread}");
+    }
 
     stack.finish().await
 }

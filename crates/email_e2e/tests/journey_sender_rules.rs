@@ -239,7 +239,25 @@ async fn block_and_unblock_a_sender(provider: Provider) -> Result<(), Report> {
         !in_provider_inbox(&filtered, provider),
         "the provider put the blocked sender's mail in the inbox: {filtered:?}"
     );
-    // Mail from someone else arrives after it, so Macro has seen both.
+    // Macro files it where the provider did, and mail from someone else
+    // still arrives.
+    eventually(
+        "the blocked sender's mail in Trash or Spam",
+        DEFAULT_TIMEOUT,
+        async || {
+            for view in ["trash", "spam"] {
+                let previews = inbox.previews(view).await?;
+                if previews
+                    .iter()
+                    .any(|preview| preview["name"] == "Second offer")
+                {
+                    return Ok(Some(()));
+                }
+            }
+            Ok(None)
+        },
+    )
+    .await?;
     inbox.deliver(&Mail::new(GRACE, "Compiler notes", "Hello."))?;
     inbox.wait_for_preview("inbox", "Compiler notes").await?;
     let previews = inbox.previews("inbox").await?;
