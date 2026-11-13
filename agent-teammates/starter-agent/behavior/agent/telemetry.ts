@@ -43,8 +43,9 @@ export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 /**
  * The wake routes of Macro's agent harness, as the agent account `me`,
  * authenticated with the key `key` reads (asked on every request, so a
- * rotated key is used). With no key, or a 404 for a record (the routes are
- * off for this account), it throws `WakesUnavailable`.
+ * rotated or newly added key is used). A 404 for a record (the routes are
+ * off for this account) throws `WakesUnavailable`; with no key, the call just
+ * fails.
  */
 export const wakeClient = ({
 	harness,
@@ -65,8 +66,7 @@ export const wakeClient = ({
 		signal: AbortSignal | undefined,
 	): Promise<Response> => {
 		const apiKey = await key();
-		if (apiKey === undefined)
-			throw new WakesUnavailable("the agent has no Macro API key");
+		if (apiKey === undefined) throw new Error("the agent has no Macro API key");
 		return fetch(url, {
 			method,
 			headers: { [apiKeyHeader]: apiKey, "content-type": "application/json" },
@@ -123,9 +123,9 @@ export const claudeTranscript =
 
 /** What woke the agent, from the event that did: a schedule, a message, or anything else. */
 export const trigger = (event: EventContext): Trigger => ({
-	kind: /schedul|heartbeat|later|tick|due/i.test(event.name)
+	kind: /schedul|heartbeat|later|\bticks?\b|\bdue\b/i.test(event.name)
 		? "schedule"
-		: /message|chat|mail|call|repl|dm/i.test(event.name)
+		: /message|chat|mail|\bcalls?\b|repl(y|ies)|\bdms?\b/i.test(event.name)
 			? "message"
 			: "event",
 	source: event.name,

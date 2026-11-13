@@ -81,6 +81,9 @@ const setup = (answer: (url: string, init: RequestInit) => number) => {
 test("records each wake and uploads its redacted trace to the agent's wakes", async () => {
 	const { agent, calls } = setup(() => 204);
 	expect(await agent.wake(wake)).toEqual({ kind: "done", reply: "ok" });
+	// The final trace is sent after the wake ends.
+	for (let turn = 0; turn < 20; turn += 1)
+		await new Promise((resolve) => setTimeout(resolve, 0));
 	const wakes = "https://harness.test/agents/macro%7Cagent%40example.com/wakes";
 	const posts = calls.filter(({ method }) => method === "POST");
 	const puts = calls.filter(({ method }) => method === "PUT");
@@ -114,6 +117,8 @@ test("stops for the run once Macro answers 404, and never fails the wake", async
 test("a wake's trigger follows its event", () => {
 	expect(trigger({ name: "messages", payload: {} }).kind).toBe("message");
 	expect(trigger({ name: "schedules", payload: {} }).kind).toBe("schedule");
+	expect(trigger({ name: "tickets", payload: {} }).kind).toBe("event");
+	expect(trigger({ name: "admin", payload: {} }).kind).toBe("event");
 	expect(trigger({ name: "screen", payload: {} })).toEqual({
 		kind: "event",
 		source: "screen",
