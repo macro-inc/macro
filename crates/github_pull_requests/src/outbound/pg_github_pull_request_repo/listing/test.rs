@@ -1,4 +1,5 @@
 mod notification_state;
+mod review_metadata;
 
 use std::sync::Arc;
 
@@ -696,7 +697,7 @@ async fn list_includes_me_matches_the_typed_participants(pool: PgPool) {
         .await
         .expect("includes_me filter should be applied");
 
-    assert_eq!(entities, vec![involved]);
+    assert_eq!(ids(&entities), vec![involved.id]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -819,7 +820,7 @@ async fn list_includes_me_composes_with_other_filters(pool: PgPool) {
         .await
         .expect("includes_me composed with a source filter should be applied");
 
-    assert_eq!(entities, vec![involved]);
+    assert_eq!(ids(&entities), vec![involved.id]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -842,7 +843,7 @@ async fn list_includes_me_composes_with_the_pull_request_filter(pool: PgPool) {
         )
     };
 
-    assert_eq!(list(false).await.unwrap(), vec![involved]);
+    assert_eq!(ids(&list(false).await.unwrap()), vec![involved.id]);
     assert!(list(true).await.unwrap().is_empty());
 }
 
