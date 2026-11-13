@@ -1,0 +1,112 @@
+apps/web/src/features/agent-dashboards/core/dashboard.ts
+  s_699e95788b47ad::t_24a36afc6bec50 2-24,25-42
+  s_699e95788b47ad::t_e800a08f997aa9 43-47
+apps/web/src/features/agent-dashboards/queries/dashboard-client.ts
+  s_699e95788b47ad::t_43a1978960d18f 3-4,8-9,11-12,24-32,38-55,57-62,64-73,75-82,84-87,89-92
+  s_699e95788b47ad::t_0be09543b65c20 1-2,5-7,10,13-23,33-37,56,63,74,83,88,93
+apps/web/src/features/agent-dashboards/queries/dashboard-client.test.ts
+  s_699e95788b47ad::t_cc2cc1c2d3b508 1-58
+apps/web/src/features/agent-dashboards/queries/keys.ts
+  s_699e95788b47ad::t_0be09543b65c20 1-11
+apps/web/src/features/agent-dashboards/queries/dashboard-source.ts
+  s_699e95788b47ad::t_5bfbcff4b4b3c2 2-4,6-37,39-43,45-48,52-57,59-78
+  s_699e95788b47ad::t_80c4f32c854c47 5
+  s_699e95788b47ad::t_d36baf0662ea16 1,38,44,49-51,58
+apps/web/src/features/agent-dashboards/context/dashboard-source.ts
+  s_699e95788b47ad::t_80c4f32c854c47 1-21
+apps/web/src/features/agent-dashboards/primitives/dashboard-view.ts
+  s_699e95788b47ad::t_bbde6cb72c5efb 1-2,4-18,20-39
+  s_699e95788b47ad::t_8a6d18f62f5bb8 19
+  s_699e95788b47ad::t_80c4f32c854c47 3
+apps/web/src/features/agent-dashboards/tests/fake-dashboard.ts
+  s_699e95788b47ad::t_cc2cc1c2d3b508 1-21
+apps/web/src/features/agent-dashboards/primitives/dashboard-view.test.ts
+  s_699e95788b47ad::t_cc2cc1c2d3b508 1-64
+apps/web/src/features/agent-dashboards/core/dashboard.test.ts
+  s_699e95788b47ad::t_cc2cc1c2d3b508 1-2,4-75
+apps/web/src/features/agent-dashboards/components/dashboard-states.tsx
+  s_699e95788b47ad::t_ef1ef748a18230 1-88
+rules/ast-grep/tsx-feature-core-pure.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 20
+apps/web/src/features/agent-dashboards/views/shared/dashboard-body.tsx
+  s_699e95788b47ad::t_947eadb3516132 1-15,21-34,36-40
+  s_699e95788b47ad::t_429ee4d2afa490 16-20,35
+apps/web/src/features/agent-dashboards/views/dashboard-page.tsx
+  s_699e95788b47ad::t_e800a08f997aa9 1-3,8-15,17-26
+  s_699e95788b47ad::t_e4c8f408344a87 4-7,16
+apps/web/src/features/agent-dashboards/views/shared/dashboard-body.test.tsx
+  s_699e95788b47ad::t_90dbc298fae3d3 47
+  s_699e95788b47ad::t_6c0436bcac5cc4 1-46,48-54
+apps/web/src/features/agent-dashboards/route-views.tsx
+  s_699e95788b47ad::t_578e7ca8bfbc16 1-126
+rules/ast-grep/ts-feature-components-presentational.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 18
+rules/ast-grep/tsx-feature-components-presentational.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 18
+apps/web/src/features/agent-dashboards/components/account-identity.tsx
+  s_699e95788b47ad::t_ef1ef748a18230 1-17
+apps/web/src/features/agent-dashboards/views/shared/dashboard-panes.tsx
+  s_699e95788b47ad::t_6f7fc0f9fa6f91 1-64
+apps/web/src/features/agent-dashboards/views/mobile/dashboard-page.tsx
+  s_699e95788b47ad::t_e4c8f408344a87 3-6,13
+  s_699e95788b47ad::t_e800a08f997aa9 1-2,7-12,14-22
+apps/web/src/routes/app-router-view.tsx
+  s_699e95788b47ad::t_272dfe4653133d 43
+  s_699e95788b47ad::t_fd3f05563036be 53,97
+  s_699e95788b47ad::t_286e4300519e2e 130,381-385
+apps/web/src/lib/i18n/locales/en/agent-dashboards.ts
+  s_699e95788b47ad::t_e15316f6970b80 1-14
+rules/ast-grep/ts-feature-core-pure.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 20
+apps/web/src/lib/i18n/locales/en.ts
+  s_699e95788b47ad::t_e15316f6970b80 3,45
+apps/web/src/features/agent-dashboards/views/shared/agent-tabs.tsx
+  s_699e95788b47ad::t_5adbf0679109db 1-30
+rules/ast-grep/tsx-feature-data-no-ui.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 18-19
+crates/agent_code_mode/src/domain/ui_commands/navigable_routes.json
+  s_699e95788b47ad::t_d21b62f4e10a68 90
+  s_699e95788b47ad::t_7506ca277d70be 91
+apps/web/src/features/agent-dashboards/views/agent-page.tsx
+  s_699e95788b47ad::t_e4c8f408344a87 4,6
+  s_699e95788b47ad::t_5adbf0679109db 1-3,5,7-38
+rules/ast-grep/tsx-no-device-composition.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 27
+rules/ast-grep/ts-feature-layers-use-context.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 28-32
+rules/ast-grep/ts-feature-data-no-ui.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 18-19
+apps/web/src/routes/routes.ts
+  s_699e95788b47ad::t_90dbc298fae3d3 644
+  s_699e95788b47ad::t_272dfe4653133d 627-643,645-649
+apps/web/src/features/agent-dashboards/routes.test.ts
+  s_699e95788b47ad::t_ff0d497731c243 15-18,25
+  s_699e95788b47ad::t_51882f92216197 1-14,19-24,26-33
+apps/web/src/features/agent-dashboards/views/mobile/agent-page.tsx
+  s_699e95788b47ad::t_753c4b5429054a 19
+  s_699e95788b47ad::t_e4c8f408344a87 6
+  s_699e95788b47ad::t_5adbf0679109db 1-5,7-18,20-39
+apps/web/src/routes/lazy-route-views.ts
+  s_699e95788b47ad::t_272dfe4653133d 150-157,208-209
+apps/web/src/features/agent-dashboards/views/shared/page-props.ts
+  s_699e95788b47ad::t_80c4f32c854c47 3
+  s_699e95788b47ad::t_e4c8f408344a87 1-2,4-28
+rules/ast-grep/tsx-feature-layers-use-context.yml
+  s_699e95788b47ad::t_a9a01b439dc2e0 28-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8bfa53f27b0b17f3317bc44e33d43ef4164c2d68",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
