@@ -94,6 +94,7 @@ pub async fn handler(
             // Re-minting keeps the signed routine `propagate` accepted, so a
             // routine run cannot shed it; callers can never supply one.
             routine_id: agent_correlation::context::current_routine(),
+            agent_scope: None,
             agent_id: authorization
                 .authorization
                 .user

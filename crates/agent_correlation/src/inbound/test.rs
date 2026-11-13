@@ -48,6 +48,7 @@ fn token(correlation: Option<Uuid>, agent: Option<Uuid>) -> String {
         agent_correlation_id: correlation,
         agent_session_id: None,
         routine_id: None,
+        agent_scope: None,
     })
     .unwrap()
 }
@@ -130,6 +131,7 @@ fn routine_token(routine: Uuid, correlation: Option<Uuid>, agent: Option<Uuid>) 
         agent_correlation_id: correlation,
         agent_session_id: None,
         routine_id: Some(routine),
+        agent_scope: None,
     })
     .unwrap()
 }
