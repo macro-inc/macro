@@ -101,6 +101,12 @@ export function createEraserState(
       surface = element;
       const down = (event: PointerEvent) => {
         if (!active() || event.button !== 0 || pointer !== undefined) return;
+        // An artifact's Interact and Present stay pressable with the eraser.
+        if (
+          event.target instanceof Element &&
+          event.target.closest('[data-canvas-artifact-controls]')
+        )
+          return;
         event.preventDefault();
         event.stopImmediatePropagation();
         element.focus({ preventScroll: true });

@@ -8,6 +8,10 @@ import {
 } from '@macro-inc/graphics/loro/solid';
 import { GraphicsSurface } from '@macro-inc/graphics/solid';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import {
+  ARTIFACT_CONTROLS_SELECTOR,
+  ArtifactControls,
+} from './artifact-controls';
 import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasDrawingToolbar, CanvasZoomToolbar } from './canvas-toolbars';
@@ -100,8 +104,11 @@ export function CanvasReadOnlyView(props: {
           tool,
           ignoreTarget: (target) =>
             target instanceof Element &&
-            !!target.closest('[data-graphics-item]') &&
-            !!target.closest('button,a,input,select,textarea,[role="button"]'),
+            (!!target.closest(ARTIFACT_CONTROLS_SELECTOR) ||
+              (!!target.closest('[data-graphics-item]') &&
+                !!target.closest(
+                  'button,a,input,select,textarea,[role="button"]'
+                ))),
         }}
         gridColor="transparent"
         renderers={{
@@ -112,11 +119,21 @@ export function CanvasReadOnlyView(props: {
               active={activeArtifact() === p.item.id}
               onEnter={() => setActiveArtifact(p.item.id)}
               onExit={() => setActiveArtifact(undefined)}
-              onPresent={() => setPresenting(p.item.id)}
             />
           ),
         }}
-      />
+      >
+        <Show when={artifactsFlag().enabled && !presenting()}>
+          <ArtifactControls
+            editor={props.editor}
+            editable={false}
+            activeId={activeArtifact()}
+            onInteract={setActiveArtifact}
+            onDone={() => setActiveArtifact(undefined)}
+            onPresent={setPresenting}
+          />
+        </Show>
+      </GraphicsSurface>
       <Show when={props.presence}>
         {(presence) => (
           <GraphicsPresenceOverlay

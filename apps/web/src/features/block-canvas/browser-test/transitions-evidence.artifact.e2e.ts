@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
+import { presentFromInspector } from './artifact-helpers';
 
 /**
  * Captures what every slide transition looks like: a mid-transition frame, a
@@ -41,8 +42,7 @@ async function presentDeck(page: Page) {
   await page.goto('/artifact.html?edit&deck');
   const node = page.locator('[data-canvas-artifact="1"]');
   await node.locator('iframe[data-canvas-artifact-frame]').waitFor();
-  await node.hover();
-  await node.getByRole('button', { name: 'Present' }).click();
+  await presentFromInspector(page, '1');
   await expect(
     page.getByTestId('canvas-artifact-presentation-counter')
   ).toHaveText('1 / 4');

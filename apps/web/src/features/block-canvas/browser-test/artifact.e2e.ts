@@ -1,21 +1,23 @@
 import { expect, type Page, test } from '@playwright/test';
+import { presentFromInspector } from './artifact-helpers';
 
 const frameFor = (page: Page, id: string) =>
   page
     .locator(`[data-canvas-artifact="${id}"]`)
     .locator('iframe[data-canvas-artifact-frame]');
+const controlsFor = (page: Page, id: string) =>
+  page.locator(`[data-canvas-artifact-controls="${id}"]`);
 
 test('runs an artifact, passes input only while interacting', async ({
   page,
 }) => {
   await page.goto('/artifact.html?edit');
-  const node = page.locator('[data-canvas-artifact="First"]');
+  const controls = controlsFor(page, 'First');
   const frame = frameFor(page, 'First');
   await expect(frame).toBeVisible();
   await expect(frame).toHaveCSS('pointer-events', 'none');
 
-  await node.hover();
-  await node.getByRole('button', { name: 'Interact' }).click();
+  await controls.getByRole('button', { name: 'Interact' }).click();
   await expect(frame).toHaveCSS('pointer-events', 'auto');
 
   const target = frame.contentFrame().locator('#target');
@@ -27,33 +29,72 @@ test('runs an artifact, passes input only while interacting', async ({
     await expect(target).toHaveText('clicked', { timeout: 500 });
   }).toPass();
 
-  await node.getByRole('button', { name: 'Done' }).click();
+  await controls.getByRole('button', { name: 'Done' }).click();
   await expect(frame).toHaveCSS('pointer-events', 'none');
 });
 
-test('edits an artifact from the inspector', async ({ page }) => {
+test('shows each slide position above its artifact, at any zoom', async ({
+  page,
+}) => {
+  await page.goto('/artifact.html?edit');
+  await frameFor(page, 'First').waitFor();
+  const first = controlsFor(page, 'First');
+  const second = controlsFor(page, 'Second');
+  await expect(first.locator('[data-canvas-artifact-position]')).toHaveText(
+    '1/2'
+  );
+  await expect(second.locator('[data-canvas-artifact-position]')).toHaveText(
+    '2/2'
+  );
+
+  // The bar sits just above the artifact, flush with its right edge.
+  const node = await page
+    .locator('[data-canvas-artifact="First"]')
+    .boundingBox();
+  const bar = await first.boundingBox();
+  if (!node || !bar) throw new Error('Artifact or its controls are missing');
+  expect(Math.abs(bar.x + bar.width - (node.x + node.width))).toBeLessThan(1);
+  expect(node.y - (bar.y + bar.height)).toBeGreaterThan(0);
+  expect(node.y - (bar.y + bar.height)).toBeLessThan(12);
+
+  // Zooming in keeps the bar's size; zoomed far out, it no longer fits.
+  const zoomTo = async (percent: number) => {
+    await page.getByRole('button', { name: 'Zoom options' }).click();
+    await page.getByText(`Zoom to ${percent}%`).click();
+  };
+  await zoomTo(200);
+  await expect
+    .poll(async () => (await first.boundingBox())?.height)
+    .toBe(bar.height);
+  await zoomTo(25);
+  await expect(first).toBeHidden();
+});
+
+test('the inspector edits the title, without HTML or the shared library', async ({
+  page,
+}) => {
   await page.goto('/artifact.html?edit');
   await frameFor(page, 'First').waitFor();
   await page.mouse.click(200, 150);
 
-  const html = page.getByLabel('Artifact HTML');
-  await expect(html).toBeVisible();
-  await html.fill('<p id="edited">Edited</p>');
-  await html.blur();
-
-  await expect(
-    frameFor(page, 'First').contentFrame().locator('#edited')
-  ).toHaveText('Edited');
+  const title = page.getByLabel('Artifact title');
+  await expect(title).toHaveValue('First');
+  await expect(page.getByLabel('Artifact HTML')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add style' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add component' })).toHaveCount(
+    0
+  );
+  await expect(page.getByRole('region', { name: 'Transition' })).toBeVisible();
 });
 
 test('presents artifacts in order, with keys working from inside a frame', async ({
   page,
 }) => {
   await page.goto('/artifact.html?edit');
-  const node = page.locator('[data-canvas-artifact="First"]');
   await frameFor(page, 'First').waitFor();
-  await node.hover();
-  await node.getByRole('button', { name: 'Present' }).click();
+  await controlsFor(page, 'First')
+    .getByRole('button', { name: 'Present' })
+    .click();
 
   const show = page.locator('[data-canvas-artifact-presentation]');
   const counter = page.getByTestId('canvas-artifact-presentation-counter');
@@ -103,11 +144,15 @@ test('reorders the presentation from the inspector', async ({ page }) => {
   await frameFor(page, 'First').waitFor();
   await page.mouse.click(200, 150);
 
+  const position = controlsFor(page, 'First').locator(
+    '[data-canvas-artifact-position]'
+  );
   await expect(page.getByText('Presented 1 of 2')).toBeVisible();
+  await expect(position).toHaveText('1/2');
   await page.getByRole('button', { name: 'Later' }).click();
   await expect(page.getByText('Presented 2 of 2')).toBeVisible();
+  await expect(position).toHaveText('2/2');
 
-  // The selection overlay covers the node's own controls while it is selected.
   await page
     .getByRole('region', { name: 'Artifact' })
     .getByRole('button', { name: 'Present' })
@@ -124,7 +169,7 @@ test('double-clicking a selected artifact starts interacting', async ({
   const frame = frameFor(page, 'First');
   await frame.waitFor();
   await page.mouse.click(200, 150);
-  await expect(page.getByLabel('Artifact HTML')).toBeVisible();
+  await expect(page.getByLabel('Artifact title')).toBeVisible();
 
   await page.mouse.dblclick(200, 150);
   await expect(frame).toHaveCSS('pointer-events', 'auto');
@@ -154,10 +199,8 @@ const KINDS = [
  * slides a real deck's cards of text. */
 async function presentDeck(page: Page, options: { dense?: boolean } = {}) {
   await page.goto(`/artifact.html?edit&deck${options.dense ? '&dense' : ''}`);
-  const node = page.locator('[data-canvas-artifact="1"]');
   await frameFor(page, '1').waitFor();
-  await node.hover();
-  await node.getByRole('button', { name: 'Present' }).click();
+  await presentFromInspector(page, '1');
   const counter = page.getByTestId('canvas-artifact-presentation-counter');
   await expect(counter).toHaveText('1 / 4');
   return counter;

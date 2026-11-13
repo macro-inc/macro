@@ -30,13 +30,17 @@ for multiple selections, groups, videos, and non-image shapes.
 ## Artifacts
 
 Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
-**Artifact**, which places a node with starter HTML. The Canvas inspector edits its
-title and HTML. The document runs in a sandboxed frame; **Interact** or a
-double-click passes pointer input to it, and **Done** or a click elsewhere returns
-to the canvas. With the flag off, an artifact shows only its title and no script runs.
-The inspector also adds and edits styles and components shared across the canvas;
-HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
-**Present** on a node opens the artifacts full screen in presentation order, which
+**Artifact**, which places a node with starter HTML. A bar above each artifact's
+top-right corner (`[data-canvas-artifact-controls="<id>"]`, always visible, hidden
+when zoomed too far out to fit and while presenting) shows its slide position
+(`1/2`), **Interact** and **Present**. The document runs in a sandboxed frame;
+**Interact** or a double-click passes pointer input to it, and **Done** on the bar,
+Esc or a click elsewhere returns to the canvas. With the flag off, an artifact
+shows only its title, no bar, and no script runs. The Canvas inspector edits the
+title; it does not show HTML or the shared styles and components, which only AI
+edits (HTML uses them with `<macro-style name="…">` and
+`<macro-component name="…">`). **Present** on the bar or in the inspector opens
+the artifacts full screen in presentation order, which
 **Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
 before and after clicking inside the frame. The inspector's **Transition** section sets how
 present mode moves onto the selected artifact: a grid of live thumbnails

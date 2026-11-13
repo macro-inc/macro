@@ -65,6 +65,10 @@ import type {
 import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
 import { useCanvasMediaSource } from '../queries/media';
+import {
+  ARTIFACT_CONTROLS_SELECTOR,
+  ArtifactControls,
+} from './artifact-controls';
 import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasContextMenu } from './canvas-context-menu';
@@ -706,7 +710,6 @@ export function CanvasView(props: {
                       active={state.embeds.active() === itemProps.item.id}
                       onEnter={() => state.embeds.enter(itemProps.item.id)}
                       onExit={exitEmbed}
-                      onPresent={() => setPresenting(itemProps.item.id)}
                     />
                   ),
                   document: (itemProps) => (
@@ -748,12 +751,13 @@ export function CanvasView(props: {
                 input={{
                   ignoreTarget: (target) =>
                     target instanceof Element &&
-                    !!target.closest(
-                      '[data-canvas-document],[data-canvas-artifact]'
-                    ) &&
-                    !!target.closest(
-                      'button,a,input,select,textarea,[role="button"]'
-                    ),
+                    (!!target.closest(ARTIFACT_CONTROLS_SELECTOR) ||
+                      (!!target.closest(
+                        '[data-canvas-document],[data-canvas-artifact]'
+                      ) &&
+                        !!target.closest(
+                          'button,a,input,select,textarea,[role="button"]'
+                        ))),
                   tool: () =>
                     state.tool() === 'text' ||
                     state.tool() === 'eraser' ||
@@ -778,6 +782,16 @@ export function CanvasView(props: {
                 }
               >
                 <EraserTrail points={state.eraser.trail()} />
+                <Show when={artifactsFlag().enabled && !presenting()}>
+                  <ArtifactControls
+                    editor={editor}
+                    editable
+                    activeId={state.embeds.active()}
+                    onInteract={state.embeds.enter}
+                    onDone={exitEmbed}
+                    onPresent={setPresenting}
+                  />
+                </Show>
                 <MediaUploadPreviews
                   previews={props.assets.previews()}
                   camera={state.camera()}

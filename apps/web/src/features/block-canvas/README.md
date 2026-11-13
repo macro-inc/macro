@@ -78,7 +78,8 @@ shows its title and no script runs. The headless render bundle has no flag reade
 so its caller says whether to run artifacts, in the same sandbox.
 
 Each canvas has a library of named styles and components, in root Loro maps beside
-the scene, edited from the inspector. An artifact uses them with
+the scene. Only AI edits it; the inspector shows an artifact's title, its place in
+the presentation and its transition, never its HTML or the library. An artifact uses them with
 `<macro-style name="brand"></macro-style>` and
 `<macro-component name="card">children</macro-component>`, whose children replace
 the component's `<slot>`. They expand when the document is composed, so a library
@@ -88,7 +89,17 @@ downloaded canvas loses its library.
 AI can create and edit artifacts and the library for users with the flag. See
 [Canvas architecture](../../../../../docs/architecture/canvas.md#artifacts).
 
-**Present** on a node opens `views/artifact-presentation.tsx`, full screen where the
+`views/artifact-controls.tsx` draws a bar just above each artifact's top-right
+corner, always visible (no hover): the slide's place in the presentation (`1/5`),
+**Interact** (**Done** while interacting) and **Present**. It is drawn in screen
+space over the scene, so it keeps its size at any zoom; it hides while shapes are
+moved or resized, while presenting, and when the artifact is narrower on screen
+than the bar. A narrow selected artifact lifts the bar above its rotation handle.
+Read-only canvases show the same bar. Canvas pointer handlers ignore presses
+inside it (`ARTIFACT_CONTROLS_SELECTOR`), and the active artifact's bar counts as
+inside the artifact, so **Done** is not taken for a click elsewhere.
+
+**Present** on the bar or in the inspector opens `views/artifact-presentation.tsx`, full screen where the
 browser allows and otherwise covering the window. It steps through artifacts only,
 in `presentOrder`, stopping at each end; new artifacts go last, and the inspector
 reorders them. Arrow keys, Space and Page Up/Down step, and Esc exits. Focus inside
