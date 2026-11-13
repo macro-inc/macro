@@ -41,6 +41,8 @@ releases fail on a Projects (classic) error before adding the label.
 - Adding the label again starts a fresh run. A run still going for the same PR
   is cancelled.
 - Draft PRs run too.
+- Only PRs into `main` run. A stacked PR, based on another branch, gets no
+  `CI gate` and the label does nothing until its base is `main`.
 - Other labels never start or cancel CI.
 - A label added within seconds of a push can reach GitHub before the push
   does. `Start` then fails within seconds and `CI gate` says to add the label
