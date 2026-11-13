@@ -94,6 +94,8 @@ export function SlideStage(props: {
       const done = () => {
         clearTimeout(timer);
         waiters.delete(done);
+        if (!waiters.size && loadWaiters.get(id) === waiters)
+          loadWaiters.delete(id);
         resolve();
       };
       const timer = setTimeout(done, LOAD_WAIT_MS);
@@ -185,6 +187,9 @@ export function SlideStage(props: {
     const startedAt = performance.now();
     let playingAt: number | undefined;
     let stopFrames: (() => FrameStats) | undefined;
+    /** When the animations ended, and the frames they painted; a canvas kind
+     * may hold its last frame after that. */
+    let animated: { at: number; stats: FrameStats } | undefined;
     let animations: Animation[] = [];
     let restore = () => {};
     let done = false;
@@ -205,18 +210,21 @@ export function SlideStage(props: {
       restore();
       resolveWaiters();
 
-      const stats = stopFrames?.();
+      const now = performance.now();
+      const stats = animated?.stats ?? stopFrames?.();
       const span = interaction.span;
       span.setAttr('transition.outcome', outcome);
       span.setAttr(
         'transition.wait_ms',
-        Math.round((playingAt ?? performance.now()) - startedAt)
+        Math.round((playingAt ?? now) - startedAt)
       );
       if (playingAt !== undefined)
         span.setAttr(
           'transition.played_ms',
-          Math.round(performance.now() - playingAt)
+          Math.round((animated?.at ?? now) - playingAt)
         );
+      if (animated)
+        span.setAttr('transition.hold_ms', Math.round(now - animated.at));
       setLastFrames(stats);
       if (stats) {
         span.setAttr('transition.frames', stats.frames);
@@ -247,7 +255,8 @@ export function SlideStage(props: {
       animations = created;
       restore = undo;
       playingAt = performance.now();
-      stopFrames = watchFrames();
+      const stop = watchFrames();
+      stopFrames = stop;
       setHiddenId(undefined);
       fireAndForget(settle(), 'canvas-slide-transition');
 
@@ -257,7 +266,9 @@ export function SlideStage(props: {
           () => 'cancelled' as const
         );
         if (result.isErr()) return finish('cancelled');
+        if (done) return;
 
+        animated = { at: performance.now(), stats: stop() };
         await beforeComplete?.();
         finish('completed');
       }
