@@ -65704,7 +65704,12 @@
       "TeamJoinKind": {
         "type": "string",
         "description": "How a member joined, without who invited them.",
-        "enum": ["invite_accepted", "domain_auto_join", "invite_link", "team_agent"]
+        "enum": [
+          "invite_accepted",
+          "domain_auto_join",
+          "invite_link",
+          "team_agent"
+        ]
       },
       "TeamMemberAvailability": {
         "type": "object",
