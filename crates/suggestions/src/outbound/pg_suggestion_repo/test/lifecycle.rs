@@ -172,6 +172,100 @@ async fn resolving_follows_the_table(pool: PgPool) {
     }
 }
 
+/// A routine suggestion in `state` for a fresh routine suggestion: the
+/// routine suggestion's id and the suggestion's.
+async fn routine_in(f: &Fixture, state: SuggestionState) -> (Uuid, Uuid) {
+    let routine_suggestion = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO routine_suggestion
+             (id, user_id, session_id, surfaces, routine, reason, keep_probability, created_at)
+           VALUES ($1, $2, $3, '{tasks}', '{}'::jsonb, 'You plan on Mondays', 0.4, now())"#,
+        routine_suggestion,
+        OWNER,
+        Uuid::now_v7(),
+    )
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    let mut tx = f.pool.begin().await.unwrap();
+    let room = suggestions_db_utils::add_routine_card(
+        &mut tx,
+        &suggestions_db_utils::NewRoutineSuggestionCard {
+            user: OWNER,
+            suggestion: routine_suggestion,
+            title: "Plan the week",
+            summary: "You plan on Mondays",
+            importance: 40,
+            categories: &[],
+            session: Uuid::now_v7(),
+            generation: f.generation,
+            at: Utc::now(),
+        },
+        NO_LIMITS.open,
+        NO_LIMITS.new_per_generation,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(room, suggestions_db_utils::Room::Fits);
+    let id = sqlx::query_scalar!(
+        "SELECT suggestion_id FROM suggestion_routine WHERE routine_suggestion_id = $1",
+        routine_suggestion,
+    )
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    f.force(id, state).await;
+    (routine_suggestion, id)
+}
+
+/// Routine suggestions close and complete through `suggestions_db_utils`,
+/// which writes for `crates/scheduled_action`; its guards allow exactly the
+/// table's sources too.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn routine_suggestion_moves_follow_the_table(pool: PgPool) {
+    let f = fixture(pool).await;
+    for event in [
+        LifecycleEvent::Dismiss,
+        LifecycleEvent::Retire,
+        LifecycleEvent::Complete,
+    ] {
+        for from in SuggestionState::iter() {
+            let (routine_suggestion, id) = routine_in(&f, from).await;
+            let mut conn = f.pool.acquire().await.unwrap();
+            let moved = match event {
+                LifecycleEvent::Complete => suggestions_db_utils::complete_routine_card(
+                    &mut conn,
+                    OWNER,
+                    routine_suggestion,
+                    Uuid::now_v7(),
+                    Utc::now(),
+                )
+                .await
+                .unwrap(),
+                _ => {
+                    let to = if event == LifecycleEvent::Dismiss {
+                        SuggestionState::Dismissed
+                    } else {
+                        SuggestionState::Retired
+                    };
+                    suggestions_db_utils::close_routine_card(
+                        &mut conn,
+                        routine_suggestion,
+                        to.as_ref(),
+                        None,
+                        Utc::now(),
+                    )
+                    .await
+                    .unwrap()
+                }
+            };
+            assert_eq!(moved, transition(from, event).is_some(), "{event:?} from {from:?}");
+            assert_eq!(f.state(id).await, after(from, event), "{event:?} from {from:?}");
+        }
+    }
+}
+
 /// Only a suggestion dismissed at or after the window's start comes back, and
 /// only from the states the table allows.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
