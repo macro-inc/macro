@@ -6729,6 +6729,18 @@
       "crates/models_pagination",
       "crates/workspace-hack"
     ],
+    "email_e2e": [
+      "crates/email_e2e",
+      "crates/gmail_emulator",
+      "crates/macro_aws_config",
+      "crates/macro_db_migrator",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_event_topics",
+      "crates/outlook_emulator",
+      "crates/workspace-hack"
+    ],
     "email_focus_worker": [
       "crates/activity",
       "crates/agent",
