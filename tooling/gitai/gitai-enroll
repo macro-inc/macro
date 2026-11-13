@@ -277,20 +277,23 @@ fi
 # transcripts leave the machine, and vendor telemetry stays on. Print the
 # missing keys and stop until the managing tool sets them.
 managed_missing_settings() {
-  jq -r --arg base "$BASE_URL" --arg git "$GIT_PATH_SETTING" '
+  # -s: an empty file is no settings, not "nothing missing".
+  jq -rs --arg base "$BASE_URL" --arg git "$GIT_PATH_SETTING" '
     def on: . == true or . == "true";
     # The client normalises repository URLs (scheme, user, ".git", ":" for SSH).
     def repo_key: ascii_downcase | sub("^[a-z+]+://"; "") | sub("^[^@/]*@"; "")
       | sub(":"; "/") | sub("\\.git/?$"; "") | sub("/+$"; "");
+    if length == 1 and (.[0] | type) == "object" then .[0] else error("not a JSON object") end
+    |
     [ (if .api_base_url == $base then empty else "api_base_url" end),
       (if .telemetry_oss == "off" then empty else "telemetry_oss" end),
       (if (.disable_auto_updates | on) then empty else "disable_auto_updates" end),
       (if (.disable_version_checks | on) then empty else "disable_version_checks" end),
       (if .notes_backend.kind == "git_notes" then empty else "notes_backend" end),
-      (if any((.allow_repositories // [])[]?; type == "string" and repo_key == "github.com/macro-inc/macro")
+      (if (.allow_repositories | type) == "array" and any(.allow_repositories[]; type == "string" and repo_key == "github.com/macro-inc/macro")
        then empty else "allow_repositories" end),
       (if $git == "" then empty else "git_path" end)
-    ] | join(" ")' "$CONFIG" 2>/dev/null || echo "config.json (not readable JSON)"
+    ] | join(" ")' "$CONFIG" 2>/dev/null || echo "config.json (not a JSON object with these keys)"
 }
 
 if [ "$MANAGED" -eq 1 ]; then
@@ -450,7 +453,7 @@ else
     # ${EMAIL,,}: bash 3.2.
     email_lower="$(printf '%s' "$EMAIL" | tr '[:upper:]' '[:lower:]')"
     old_ids="$(response_body "$response" | jq -r --arg email "$email_lower" --arg hostname "$HOSTNAME_VALUE" --arg keep "$credential_id" \
-      '.credentials[] | select((.email | ascii_downcase) == $email and .hostname == $hostname and .revoked_at == null and .id != $keep) | .id')"
+      '.credentials[] | select((.email // "" | ascii_downcase) == $email and .hostname == $hostname and .revoked_at == null and .id != $keep) | .id')"
     [ -n "$old_ids" ] || warn "no older credential for $email_lower on $HOSTNAME_VALUE to revoke; check the list (README \"Credentials\") if you expected one"
     for old_id in $old_ids; do
       response="$(shared_key_request DELETE "/v1/credentials/$old_id")"
