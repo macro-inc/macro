@@ -757,6 +757,7 @@ async fn run_server() -> anyhow::Result<()> {
             computer_service.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
         ),
+        agent_credentials::rollout::PgAgentCreators::new(db.clone()),
         feature_flags.clone(),
         crate::outbound::agent_addresses::AgentAddresses,
     ));

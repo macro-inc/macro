@@ -294,6 +294,10 @@ refreshes the list. The list keeps those rows until that refresh, so a row read
 that arrives while a change made on this device is queued (an optimistic
 mutation or its settlement) orders like any other record read instead.
 The desktop host ignores the field.
+Rereads of mounted queries are `user-visible` reads, ahead of ordinary ones. A
+query that feeds app state rather than a view sets `backgroundReader` in its
+operation context and is reread at ordinary rank, behind the views on screen;
+the notification feed (500 entities with their notifications) does.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request
 started on arrival usually finishes before the next is seen: the queue would

@@ -2323,6 +2323,53 @@ describe('normalizedCacheExchange', () => {
     ]);
   });
 
+  it('rereads a background reader at ordinary rank, behind mounted views', async () => {
+    const background = (
+      key: number,
+      requestPolicy: 'cache-first' | 'cache-and-network'
+    ) => {
+      const op = makeOp(key, requestPolicy);
+      return makeOperation('query', op, {
+        ...op.context,
+        backgroundReader: true,
+      });
+    };
+    host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
+    const { ops, client } = harness(host);
+    ops.next(background(11, 'cache-first'));
+    await tick();
+    vi.mocked(client.reexecuteOperation).mockImplementation((reissued) => {
+      ops.next(reissued);
+    });
+    host.pushAffected([11]);
+    await tick();
+    expect(host.reads).toHaveLength(2);
+    expect(host.reads[1]?.priority).toBeUndefined();
+
+    // A revalidation by key carries no context of its own.
+    ops.next(makeOp(11, 'cache-first'));
+    await tick();
+    host.pushAffected([11]);
+    await tick();
+    expect(host.reads).toHaveLength(4);
+    expect(host.reads[3]?.priority).toBeUndefined();
+  });
+
+  it('rereads a background reader at ordinary rank while its request is in flight', async () => {
+    host.scriptRead({ kind: 'hit', data: { status: 'In Review' } });
+    const { ops } = controlledQueryHarness(host);
+    const op = makeOp(13, 'cache-and-network');
+    ops.next(
+      makeOperation('query', op, { ...op.context, backgroundReader: true })
+    );
+    await tick();
+
+    host.scriptRead({ kind: 'hit', data: { status: 'Completed' } });
+    host.pushAffected([13]);
+    await tick();
+    expect(host.reads.at(-1)?.priority).toBeUndefined();
+  });
+
   it('emits an affected cache result while an authoritative query remains in flight', async () => {
     host.scriptRead({ kind: 'hit', data: { status: 'In Review' } });
     const { ops, results, forwarded, client } = controlledQueryHarness(host);

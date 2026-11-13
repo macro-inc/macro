@@ -4268,6 +4268,14 @@ type GraphqlCrmPipelineColumn {
 	"""
 	id: ID!
 	"""
+	The row column that holds this amount's denomination, if monetary.
+	"""
+	currencyColumnId: ID
+	"""
+	Default for a CRM system select; its options and name are fixed.
+	"""
+	systemDefault: String
+	"""
 	The property definition the column binds.
 	"""
 	propertyDefinitionId: ID!

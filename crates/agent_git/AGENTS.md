@@ -81,6 +81,10 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
   fsck checks are enabled through process config. Missing repos and bad tokens
   share the same 401 response.
 - git runs with a cleared environment so `APP_SECRETS_JSON` never reaches it.
+- `enable-agent-teammates` off for the repo agent's creator (the
+  `creators` adapter, `agent_credentials::rollout`) makes the repo look absent
+  to every credential. Never evaluate it for the agent's own account: PostHog
+  targeting never matches it.
 
 - `POST /internal/repos/ensure` is internal-only recovery: supply the original
   persona token and seed. It inserts a missing row, validates team and token,

@@ -164,13 +164,17 @@ impl IncusImage {
 impl IncusFleet {
     /// Validate fleet configuration and build the Incus client.
     pub fn new(config: IncusFleetConfig) -> Result<Self, IncusFleetError> {
+        let client = IncusClient::new(config.endpoint.clone())?;
+        Self::with_client(config, client)
+    }
+
+    fn with_client(config: IncusFleetConfig, client: IncusClient) -> Result<Self, IncusFleetError> {
         if config.shutdown_grace.is_zero() {
             return Err(IncusError::MalformedResponse(
                 "Incus shutdown grace must be positive".to_owned(),
             )
             .into());
         }
-        let client = IncusClient::new(config.endpoint.clone())?;
         let images = config.images.clone().try_map(IncusImage::new)?;
         Ok(Self {
             client,
@@ -338,21 +342,16 @@ impl Fleet for IncusFleet {
                         disk_gib: computer.resources.disk_gib.get(),
                     })?;
                 let volume = volume_name(computer.id)?;
-                // A volume left by a lost guest is kept: the new guest enrolls
-                // again for its newer generation and leaves the rest alone.
-                match self
-                    .client
+                // A volume left by a lost guest or an earlier failed attempt is
+                // kept: the new guest enrolls again for its newer generation and
+                // leaves the rest alone.
+                self.client
                     .create_block_volume(
                         &self.config.storage_pool,
                         &volume,
                         &format!("{data_gib}GiB"),
                     )
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(error) if volume_exists(&error) => {}
-                    Err(error) => return Err(error.into()),
-                }
+                    .await?;
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
                 let image = self.images.for_enrollment(&enrollment);
@@ -575,13 +574,6 @@ pub fn instance_name(computer_id: ComputerId) -> InstanceName {
 /// The computer's data volume.
 fn volume_name(computer_id: ComputerId) -> Result<StorageVolumeName, InvalidName> {
     StorageVolumeName::try_new(&format!("{}-data", instance_name(computer_id)))
-}
-
-/// Whether creating a volume failed because one by that name exists:
-/// Incus answers 409 Conflict ("Volume by that name already exists",
-/// `storagePoolVolumesPost` in incusd 7.0).
-fn volume_exists(error: &IncusError) -> bool {
-    matches!(error, IncusError::Rejected { status: 409, .. })
 }
 
 /// The image an existing instance's root disk was built from.

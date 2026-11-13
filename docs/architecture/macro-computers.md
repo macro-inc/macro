@@ -318,7 +318,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   mounts it at `/home` and keeps `/var/lib/macrod` there. Docker: named
   volumes `macro-computer-<id>-home` (`/home`) and `-macrod`
   (`/var/lib/macrod`). Create and destroy are idempotent and leave no volume
-  behind a destroyed computer.
+  behind a destroyed computer: a retried Create reuses the volume an earlier
+  attempt made (Incus reports it as `VolumeCreation::AlreadyExists`, not an error).
 - **Images**: images are versioned aliases (`macro-box/<version>` on Incus,
   `macro-box:<tag>` on Docker); `COMPUTERS_IMAGE` names the one new computers
   get, `COMPUTERS_AGENT_IMAGE` the agent-mode build of the same guest
