@@ -134,6 +134,27 @@ impl TopicEvent for ActivityTopicEvent {
 
     // Older consumers skip the new session event during rolling deployment.
     const SCHEMA_VERSION: u8 = 2;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Recorded { .. } => Exposure::pending(
+                PendingPhase::PersonalFamilies,
+                "Recipient(recipient_id), parsing the untyped recipient_id; project row ids, actor, entity and action",
+            ),
+            Self::SessionRecorded { .. } | Self::Invalidated => Exposure::internal_by_design(
+                "session-viewer rows and global invalidations are app cache signals",
+            ),
+        })
+    }
 }
 
 /// Publishable realtime activity event, keyed by its recipient.

@@ -376,6 +376,85 @@ impl TopicEvent for AgentTriggerTopicEvent {
     type Topic = MacroAgentSessionsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, Exposure, ExposureError, PublicEntityType, PublicEvent, Stage,
+        };
+        use macro_user_id::user_id::MacroUserIdStr;
+        use messages::domain::models::MessageParent;
+        use std::borrow::Cow;
+
+        // Whoever may currently read the conversation's parent: every
+        // message trigger carries parent content.
+        fn parent(parent: &MessageParent) -> Audience {
+            Audience::Entity {
+                entity_type: parent.access_entity_type(),
+                entity_id: parent.entity_id(),
+            }
+        }
+
+        fn unrecognized_shape() -> ExposureError {
+            ExposureError::InvalidEntityId {
+                entity_type: "bot",
+                entity_id: "unrecognized agent-trigger event shape".to_owned(),
+            }
+        }
+
+        // The entity, and the ordering key, is the bot: a subscriber consumes
+        // a bot's whole trigger stream in order. The bot is not an entity
+        // anyone holds access to, so the audience is whose access gates it.
+        let (bot_id, audience) = match self {
+            Self::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
+                (assigned.bot_id, parent(&assigned.parent))
+            }
+            Self::New(
+                new @ (NewAgentSessionEvent::TopLevelMentioned(_)
+                | NewAgentSessionEvent::Mentioned(_)),
+            ) => match new.mention() {
+                Some(mention) => (mention.bot_id, parent(&mention.message.parent)),
+                None => return Err(unrecognized_shape()),
+            },
+            // The one person who asked from the composer: nothing was posted,
+            // so nobody else's access is in question. Their runtime, or their
+            // team's, serves it.
+            Self::New(NewAgentSessionEvent::Requested(requested)) => {
+                let owner = MacroUserIdStr::try_from(requested.owner.clone()).map_err(|_| {
+                    ExposureError::InvalidEntityId {
+                        entity_type: "user",
+                        entity_id: requested.owner.clone(),
+                    }
+                })?;
+                (requested.bot_id, Audience::Owner { user_id: owner })
+            }
+            Self::New(NewAgentSessionEvent::ConversationMessage(_)) => {
+                return Ok(Exposure::internal_by_design(
+                    "agent conversation messages reach the agent runtime without webhook or SSE delivery",
+                ));
+            }
+            Self::Existing(
+                existing @ (ExistingAgentSessionEvent::Channel(_)
+                | ExistingAgentSessionEvent::Thread(_)),
+            ) => match existing.session_message() {
+                Some(message) => (message.bot_id, parent(&message.message.parent)),
+                None => return Err(unrecognized_shape()),
+            },
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name: AgentTriggerEventName::from(self).into(),
+            entity: EntityRef::new(PublicEntityType::Bot, bot_id.to_string()),
+            audience,
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// What the trigger decided for one bot, before the wire shape is chosen.

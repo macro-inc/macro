@@ -91,6 +91,24 @@ impl TopicEvent for BotTopicEvent {
     type Topic = MacroBotsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_) | Self::Updated(_) | Self::Deleted(_) => Exposure::pending(
+                PendingPhase::TeamFamilies,
+                "bot family: Team or Owner from BotOwner with a thin projection",
+            ),
+        })
+    }
 }
 
 /// Publishable lifecycle event for [`MacroBotsTopic`], keyed by bot id.

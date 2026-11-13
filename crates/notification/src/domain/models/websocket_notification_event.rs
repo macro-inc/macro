@@ -125,6 +125,29 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
     type Topic = MacroNotificationsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::WebSocketDeliveryRequested(_) => Exposure::pending(
+                PendingPhase::PersonalFamilies,
+                "notification.created to each row owner; one event carries rows for many owners, so delivery must split it into one Recipient event per row",
+            ),
+            Self::NotificationStatusUpdatedForUsers { .. }
+            | Self::NotificationStatusesUpdatedForUser { .. } => Exposure::pending(
+                PendingPhase::PersonalFamilies,
+                "notification.updated to Recipient(user) per addressed user",
+            ),
+        })
+    }
 }
 
 /// Publishable realtime notification event carrying notification metadata of type `T`.

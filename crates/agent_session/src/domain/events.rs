@@ -432,6 +432,63 @@ impl TopicEvent for AgentSessionLifecycleEvent {
     type Topic = MacroAgentSessionLifecycleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let name: &'static str = AgentSessionLifecycleEventName::from(self).into();
+        let session_id = self.session_id().to_string();
+        let audience = match self {
+            // A deleted session's grants go with its row. Its owner keeps
+            // ownership, and the channel or document it was opened from still
+            // knows its audience: deliver to the union of the two.
+            Self::Deleted(deleted) => {
+                let owner = Audience::Owner {
+                    user_id: deleted.identity.owner_id.clone(),
+                };
+                match &deleted.identity.origin {
+                    Some(origin) => Audience::Any(vec![
+                        owner,
+                        Audience::Entity {
+                            entity_type: origin.parent.access_entity_type(),
+                            entity_id: origin.parent.entity_id(),
+                        },
+                    ]),
+                    None => owner,
+                }
+            }
+            Self::Opened(_)
+            | Self::TurnStarted(_)
+            | Self::TurnEnded(_)
+            | Self::CommandRejected(_)
+            | Self::Settled(_)
+            | Self::WaitingForInput(_)
+            | Self::InputReceived(_)
+            | Self::Mentioned(_)
+            | Self::Stopped(_)
+            | Self::Renamed(_) => Audience::Entity {
+                entity_type: EntityType::AgentSession,
+                entity_id: session_id.clone(),
+            },
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::AgentSession, session_id),
+            audience,
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroAgentSessionLifecycleTopic`].

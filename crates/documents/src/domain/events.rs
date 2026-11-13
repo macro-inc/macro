@@ -285,6 +285,63 @@ impl TopicEvent for DocumentTopicEvent {
     type Topic = MacroDocumentsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, ExposureError, PendingPhase, PublicEvent,
+            Stage,
+        };
+        use std::borrow::Cow;
+
+        let (name, document_id) = match self {
+            Self::Created(metadata) => ("document.created", &metadata.document_id),
+            Self::Updated(metadata) if metadata.appearance_change.is_some() => {
+                return Ok(Exposure::pending(
+                    PendingPhase::EntityFamilies,
+                    "document.appearance_changed: Entity(Document) with a thin projection",
+                ));
+            }
+            Self::Updated(metadata) => ("document.updated", &metadata.document_id),
+            Self::Deleted(metadata) => ("document.deleted", &metadata.document_id),
+            Self::Copied(metadata) => ("document.copied", &metadata.document_id),
+            Self::Interaction(metadata) => ("document.interaction", &metadata.document_id),
+            Self::ContentUploaded(_) | Self::SyncContentUpdated(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::EntityFamilies,
+                    "one coalesced document.content_changed: Entity(Document), version id and editors",
+                ));
+            }
+            Self::Purged(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::ProducerChange,
+                    "carries only the document id and its grants are gone when consumed; needs Owner plus an audience snapshot",
+                ));
+            }
+        };
+        if uuid::Uuid::parse_str(document_id).is_err() {
+            return Err(ExposureError::InvalidEntityId {
+                entity_type: "document",
+                entity_id: document_id.clone(),
+            });
+        }
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Document, document_id.clone()),
+            audience: Audience::Entity {
+                entity_type: EntityType::Document,
+                entity_id: document_id.clone(),
+            },
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroDocumentsTopic`], keyed by document id.

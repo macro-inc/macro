@@ -15,6 +15,24 @@ pub enum GithubPullRequestTopicEvent {
 impl TopicEvent for GithubPullRequestTopicEvent {
     type Topic = MacroGithubPullRequestsTopic;
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Updated(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "Any(Entity(ForeignEntity, id)) per foreign_entity_ids, with a thin projection",
+            ),
+        })
+    }
 }
 /// An event keyed by PR so updates retain per-PR ordering.
 #[derive(Debug, Clone)]

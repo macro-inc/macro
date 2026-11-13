@@ -86,6 +86,23 @@ impl TopicEvent for SoupTopicEvent {
     type Topic = MacroSoupRealtimeTopic;
 
     const SCHEMA_VERSION: u8 = 2;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::Exposure;
+
+        Ok(match self {
+            Self::Updated(_) | Self::Deleted(_) => Exposure::internal_by_design(
+                "per-user Soup cache patch protocol derived from public events",
+            ),
+        })
+    }
 }
 
 /// Publishable realtime Soup event keyed by recipient user ID.

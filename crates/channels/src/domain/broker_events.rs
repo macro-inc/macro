@@ -190,6 +190,43 @@ impl TopicEvent for ChannelTopicEvent {
     type Topic = MacroChannelsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let (name, channel_id) = match self {
+            Self::Created(metadata) => ("channel.created", metadata.channel_id),
+            Self::Updated(metadata) => ("channel.updated", metadata.channel_id),
+            Self::PictureChanged(metadata) => ("channel.picture_changed", metadata.channel_id),
+            Self::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
+            Self::ParticipantAdded(metadata) => ("channel.participant_added", metadata.channel_id),
+            Self::ParticipantRemoved(metadata) => {
+                ("channel.participant_removed", metadata.channel_id)
+            }
+            Self::AccessRequested(metadata) => ("channel.access_requested", metadata.channel_id),
+        };
+        let channel_id = channel_id.to_string();
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Channel, channel_id.clone()),
+            audience: Audience::Entity {
+                entity_type: EntityType::Channel,
+                entity_id: channel_id,
+            },
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroChannelsTopic`], keyed by channel id.

@@ -156,6 +156,34 @@ impl TopicEvent for CallTopicEvent {
     type Topic = MacroCallsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Started(_)
+            | Self::RecordArchived(_)
+            | Self::RecordSummarized(_)
+            | Self::RecordingReady(_) => Exposure::internal_by_design(
+                "call lifecycle facts are projected to macro.call_notifications, the public call family",
+            ),
+            Self::RecordUpdated(_) | Self::RecordImported(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "call record family: Entity(Call) with a thin projection",
+            ),
+            Self::RecordDeleted(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "Entity(Channel) from channel_id when present, else internal: the deleted call has no grants left",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroCallsTopic`], keyed by the call's bare id.

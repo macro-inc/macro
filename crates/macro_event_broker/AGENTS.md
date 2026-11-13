@@ -27,7 +27,8 @@ Macro's event topics.
 
 ## Boundaries
 
-- Depends on: `macro_event_topics`, `agent_correlation`, `kafka_util` (optional, feature
+- Depends on: `macro_event_topics`, `event_exposure` (re-exported as
+  `exposure`), `agent_correlation`, `kafka_util` (optional, feature
   `outbound`).
 - Used by: crates and services that publish or consume Macro events
   (`agent_session`, `agent_trigger`, `activity`, `bots`, `calendar_events`,
@@ -43,6 +44,8 @@ Macro's event topics.
   `agent_correlation::context` (omitted from the wire when absent). Build
   events inside the request's task, or `agent_correlation::context::capture`
   the work you spawn; otherwise a routine's own writes can re-trigger it.
+- `TopicEvent::exposure()` is required with no default: every variant declares
+  whether it leaves Macro (`docs/guides/add-kafka-event.md`, section 8).
 - `NoopMacroEventBroker` exists for tests/local configs without Kafka — don't
   reach for a hand-rolled in-memory broker instead.
 - Default feature is `outbound`; building without it (e.g. `schema`-only

@@ -184,6 +184,34 @@ impl TopicEvent for ChatTopicEvent {
     type Topic = MacroChatsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_)
+            | Self::Updated(_)
+            | Self::Deleted(_)
+            | Self::Restored(_)
+            | Self::Copied(_)
+            | Self::MessageSent(_)
+            | Self::MessageDeleted(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "chat family: Entity(Chat) with a thin projection",
+            ),
+            Self::PermanentlyDeleted(_) => Exposure::pending(
+                PendingPhase::ProducerChange,
+                "carries no owner, only an optional actor and project id; the producer must add the owner or an audience snapshot",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroChatsTopic`], keyed by the chat's bare id.

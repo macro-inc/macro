@@ -247,6 +247,42 @@ impl TopicEvent for TeamTopicEvent {
     type Topic = MacroTeamsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_)
+            | Self::Updated(_)
+            | Self::MemberJoined(_)
+            | Self::MemberRoleChanged(_) => Exposure::pending(
+                PendingPhase::TeamFamilies,
+                "team family: Team(team_id) with a thin projection",
+            ),
+            Self::MemberRemoved(_) => Exposure::pending(
+                PendingPhase::TeamFamilies,
+                "Any(Team(team_id), Snapshot(member_id)) so the removed member sees the removal",
+            ),
+            Self::Deleted(_) => Exposure::pending(
+                PendingPhase::TeamFamilies,
+                "Snapshot(member_user_ids); project team_id only",
+            ),
+            Self::InviteCreated(_)
+            | Self::InviteRejected(_)
+            | Self::InviteRevoked(_)
+            | Self::AutoJoinDomainToggled(_) => Exposure::pending(
+                PendingPhase::TeamFamilies,
+                "Team(team_id, min_role admin); only admins receive the invitee email or domain",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroTeamsTopic`], keyed by the team's bare UUID.

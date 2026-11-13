@@ -527,6 +527,46 @@ impl TopicEvent for EmailTopicEvent {
     type Topic = MacroEmailTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::MessageReceived(_)
+            | Self::MessageSent(_)
+            | Self::MessageDeleted(_)
+            | Self::MessageSendQueued(_)
+            | Self::MessageSendCancelled(_)
+            | Self::ThreadArchived(_)
+            | Self::ThreadTrashed(_)
+            | Self::ThreadRead(_)
+            | Self::ThreadStarred(_)
+            | Self::ThreadSpamChanged(_)
+            | Self::ThreadProjectChanged(_)
+            | Self::ThreadLabelsUpdated(_) => Exposure::pending(
+                PendingPhase::PersonalFamilies,
+                "mailbox family: Owner(owner), never team-scope bots; thin projection without subject or addresses",
+            ),
+            Self::LinkConnected(_) | Self::LinkDisconnected(_) | Self::LinkReauthRequired(_) => {
+                Exposure::pending(
+                    PendingPhase::PersonalFamilies,
+                    "mailbox link family: Owner(owner); project link id, provider and reason, never the email address",
+                )
+            }
+            Self::MessageDraftSynced(_)
+            | Self::ThreadBackfilled(_)
+            | Self::ThreadsReindexRequested(_) => {
+                Exposure::internal_by_design("email sync and indexing commands, not facts")
+            }
+        })
+    }
 }
 
 /// Publishable event for [`MacroEmailTopic`], keyed by link (inbox) id.

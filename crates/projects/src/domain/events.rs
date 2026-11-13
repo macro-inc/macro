@@ -140,6 +140,32 @@ impl TopicEvent for ProjectTopicEvent {
     type Topic = MacroProjectsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_)
+            | Self::Updated(_)
+            | Self::Deleted(_)
+            | Self::Restored(_)
+            | Self::Uploaded(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "project family: Entity(Project) with a thin projection that drops child id lists",
+            ),
+            Self::PermanentlyDeleted(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "owner may be a user, team or bot, so the rule is Owner, Team or the bot owner, not Owner alone; drop child id lists",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroProjectsTopic`], keyed by the root project id.

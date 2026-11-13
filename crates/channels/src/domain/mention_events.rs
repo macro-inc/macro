@@ -69,6 +69,24 @@ impl TopicEvent for MentionTopicEvent {
     type Topic = MacroMentionsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_) | Self::Deleted(_) | Self::MessageSent(_) => Exposure::pending(
+                PendingPhase::PersonalFamilies,
+                "mentions: Entity(source), or internal because message.mentioned covers them; source and mentioned kinds are untyped strings the producer must type first",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroMentionsTopic`], keyed by the mentioned

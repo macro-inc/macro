@@ -147,6 +147,37 @@ impl TopicEvent for FormTopicEvent {
     type Topic = MacroFormsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_)
+            | Self::Renamed(_)
+            | Self::Trashed(_)
+            | Self::Restored(_)
+            | Self::SharingChanged(_)
+            | Self::AppearanceChanged { .. } => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "form family: Entity(Form) with a thin projection",
+            ),
+            Self::ResponseSubmitted(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "Entity(Form) at Edit level; needs an access-level floor the Audience vocabulary does not have yet",
+            ),
+            Self::Purged(_) => Exposure::pending(
+                PendingPhase::ProducerChange,
+                "carries only the form id and its grants are gone when consumed; needs Owner plus an audience snapshot",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroFormsTopic`], keyed by form id.

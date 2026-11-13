@@ -15,6 +15,9 @@ use serde::{Deserialize, Serialize};
 
 use super::models::{WebhookFilters, WebhookStatus};
 
+/// Prefix every webhook id carries.
+const WEBHOOK_ID_PREFIX: &str = "wh_";
+
 /// Metadata for [`WebhookTopicEvent::Created`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebhookCreatedMetadata {
@@ -124,6 +127,59 @@ impl TopicEvent for WebhookTopicEvent {
     type Topic = MacroWebhooksTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, Exposure, ExposureError, PublicEntityType, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let (name, webhook_id, workspace_id) = match self {
+            Self::Created(metadata) => (
+                "webhook.created",
+                &metadata.webhook_id,
+                &metadata.workspace_id,
+            ),
+            Self::Updated(metadata) => (
+                "webhook.updated",
+                &metadata.webhook_id,
+                &metadata.workspace_id,
+            ),
+            Self::Deleted(metadata) => (
+                "webhook.deleted",
+                &metadata.webhook_id,
+                &metadata.workspace_id,
+            ),
+            Self::Validated(metadata) => (
+                "webhook.validated",
+                &metadata.webhook_id,
+                &metadata.workspace_id,
+            ),
+        };
+        if !webhook_id.starts_with(WEBHOOK_ID_PREFIX) {
+            return Err(ExposureError::InvalidEntityId {
+                entity_type: PublicEntityType::Webhook.as_str(),
+                entity_id: webhook_id.clone(),
+            });
+        }
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(PublicEntityType::Webhook, webhook_id.clone()),
+            // Only the owning workspace, never entity accessors.
+            audience: Audience::Workspace {
+                workspace_id: workspace_id.clone(),
+            },
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// Publishable lifecycle event for [`MacroWebhooksTopic`], keyed by webhook id.
@@ -208,3 +264,23 @@ pub enum WebhookEvent {
     /// User profile events from the `macro.users` topic.
     User(user_events::UserTopicEvent),
 }
+
+/// Each [`WebhookEvent`] member's public payload derives `utoipa::ToSchema`,
+/// so it can be generated into the SDK. A delivered topic whose payload loses
+/// its schema fails to compile here. `webhook.*` and `agent_trigger.*` are
+/// delivered but not part of the SDK union.
+#[cfg(feature = "inbound")]
+const _: () = {
+    const fn has_schema<T: utoipa::ToSchema>() {}
+    has_schema::<<documents::domain::events::DocumentTopicEvent as TopicEvent>::PublicPayload>();
+    has_schema::<<channels::domain::broker_events::ChannelTopicEvent as TopicEvent>::PublicPayload>(
+    );
+    has_schema::<
+        <call::domain::notification_events::CallNotificationEvent as TopicEvent>::PublicPayload,
+    >();
+    has_schema::<<messages::outbound::broker::MessageTopicEvent as TopicEvent>::PublicPayload>();
+    has_schema::<
+        <agent_session::domain::events::AgentSessionLifecycleEvent as TopicEvent>::PublicPayload,
+    >();
+    has_schema::<<user_events::UserTopicEvent as TopicEvent>::PublicPayload>();
+};

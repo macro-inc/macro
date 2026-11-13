@@ -219,6 +219,36 @@ impl TopicEvent for PropertyTopicEvent {
     type Topic = MacroPropertiesTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::EntityPropertyUpdated(_)
+            | Self::EntityPropertyDeleted(_)
+            | Self::EntityPropertiesCleared(_) => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "entity property family: Entity(entity_type, entity_id) of the entity carrying the property; value and previous value",
+            ),
+            Self::Created(_) | Self::Deleted(_) => Exposure::pending(
+                PendingPhase::TeamFamilies,
+                "property definitions: Team or Owner from PropertyOwner; its Database variant needs Entity(Database) and its System variant has no audience",
+            ),
+            Self::OptionCreated(_) | Self::OptionUpdated(_) | Self::OptionDeleted(_) => {
+                Exposure::pending(
+                    PendingPhase::TeamFamilies,
+                    "property options carry only property_definition_id, not the PropertyOwner; the producer must add the owner before a Team or Owner rule can be declared",
+                )
+            }
+        })
+    }
 }
 
 /// Publishable event for [`MacroPropertiesTopic`].

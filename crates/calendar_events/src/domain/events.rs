@@ -62,6 +62,24 @@ impl TopicEvent for CalendarTopicEvent {
     type Topic = MacroCalendarTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_) | Self::Updated(_) | Self::Deleted(_) => Exposure::pending(
+                PendingPhase::PersonalFamilies,
+                "calendar family: Owner(owner_id), parsing the untyped owner_id; event id only",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroCalendarTopic`], keyed by the event entity id.

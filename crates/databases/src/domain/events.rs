@@ -170,6 +170,34 @@ impl TopicEvent for DatabaseTopicEvent {
     type Topic = MacroDatabasesTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Created(_)
+            | Self::Renamed(_)
+            | Self::Trashed(_)
+            | Self::Restored(_)
+            | Self::TablesChanged(_)
+            | Self::SharingChanged(_)
+            | Self::AppearanceChanged { .. } => Exposure::pending(
+                PendingPhase::EntityFamilies,
+                "database family: Entity(Database) with a thin projection",
+            ),
+            Self::Purged(_) => Exposure::pending(
+                PendingPhase::ProducerChange,
+                "carries only the database id and its grants are gone when consumed; needs Owner plus an audience snapshot",
+            ),
+        })
+    }
 }
 
 /// Publishable event for [`MacroDatabasesTopic`], keyed by database id.

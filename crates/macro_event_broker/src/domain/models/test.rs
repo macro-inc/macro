@@ -28,10 +28,8 @@ impl TopicEvent for ExampleTopicEvent {
 
     fn exposure(
         &self,
-    ) -> Result<
-        crate::exposure::Exposure<'_, Self::PublicPayload>,
-        crate::exposure::ExposureError,
-    > {
+    ) -> Result<crate::exposure::Exposure<'_, Self::PublicPayload>, crate::exposure::ExposureError>
+    {
         Ok(crate::exposure::Exposure::internal_by_design(
             "broker test fixture",
         ))
@@ -147,10 +145,8 @@ impl TopicEvent for DocumentsTopicEvent {
 
     fn exposure(
         &self,
-    ) -> Result<
-        crate::exposure::Exposure<'_, Self::PublicPayload>,
-        crate::exposure::ExposureError,
-    > {
+    ) -> Result<crate::exposure::Exposure<'_, Self::PublicPayload>, crate::exposure::ExposureError>
+    {
         Ok(crate::exposure::Exposure::internal_by_design(
             "broker test fixture",
         ))

@@ -17,6 +17,24 @@ pub enum GithubWebhookTopicEvent {
 impl TopicEvent for GithubWebhookTopicEvent {
     type Topic = MacroGithubWebhooksTopic;
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Exposure, PendingPhase};
+
+        Ok(match self {
+            Self::Received(_) => Exposure::pending(
+                PendingPhase::TeamFamilies,
+                "GithubInstallation(installation_id), resolved to its owners at fan-out; project event, action and repository, never the raw payload",
+            ),
+        })
+    }
 }
 
 /// A delivery keyed by installation, so one installation's deliveries keep
