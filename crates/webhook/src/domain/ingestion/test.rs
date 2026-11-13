@@ -717,6 +717,7 @@ fn channel_event_cases() -> Vec<EventCase> {
                 ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
                     channel_id,
                     actor: sender(owner),
+                    participant_user_ids: Vec::new(),
                 }),
                 3,
             )),

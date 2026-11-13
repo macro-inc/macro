@@ -700,6 +700,7 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
             ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
                 channel_id: CHANNEL_ID,
                 actor: sender.clone(),
+                participant_user_ids: Vec::new(),
             }),
             ChannelEventDescription {
                 action: ChannelIndexAction::RemoveChannel {
@@ -1689,6 +1690,7 @@ fn channel_envelope_decodes_round_trip() {
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: CHANNEL_ID,
         actor: channel_sender(),
+        participant_user_ids: Vec::new(),
     });
     let message = encoded_message(
         MacroChannelsTopic::TOPIC_STR,
@@ -2069,6 +2071,7 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: CHANNEL_ID,
         actor: channel_sender(),
+        participant_user_ids: Vec::new(),
     });
     let message = encoded_message(
         MacroChannelsTopic::TOPIC_STR,

@@ -530,6 +530,7 @@ where
         self.events.dispatch(ChannelEvent::ChannelDeleted {
             channel_id,
             actor: Sender::new_from_user(actor),
+            participant_user_ids: participant_ids(&participants),
         });
         Ok(())
     }

@@ -106,11 +106,70 @@ fn decode_round_trips() {
 }
 
 #[test]
+fn deleted_event_wire_shape_carries_participant_routing() {
+    let event = Event::with_event_id(
+        Uuid::nil(),
+        ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+            channel_id: Uuid::nil(),
+            actor: user("macro|owner@example.com"),
+            participant_user_ids: vec![
+                user_id("macro|owner@example.com"),
+                user_id("macro|member@example.com"),
+            ],
+        }),
+    );
+
+    let value = serde_json::to_value(&event).expect("serializable");
+    assert_eq!(
+        value,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000000",
+            "schema_version": 1,
+            "event_type": "channel.deleted",
+            "metadata": {
+                "channel_id": "00000000-0000-0000-0000-000000000000",
+                "actor": "macro|owner@example.com",
+                "participant_user_ids": [
+                    "macro|owner@example.com",
+                    "macro|member@example.com",
+                ],
+            },
+        })
+    );
+}
+
+#[test]
+fn deleted_event_published_before_participant_routing_decodes_empty() {
+    let channel_id = Uuid::nil();
+    let payload = json!({
+        "event_id": "00000000-0000-0000-0000-000000000000",
+        "schema_version": 1,
+        "event_type": "channel.deleted",
+        "metadata": {
+            "channel_id": channel_id,
+            "actor": "macro|owner@example.com",
+        },
+    });
+
+    let decoded = ChannelMacroEvent::decode(
+        &channel_id.to_string(),
+        &serde_json::to_vec(&payload).expect("serializable"),
+    )
+    .expect("old payload decodes");
+
+    let ChannelTopicEvent::Deleted(metadata) = &decoded.event().event else {
+        panic!("expected channel.deleted");
+    };
+    assert!(metadata.participant_user_ids.is_empty());
+}
+
+#[test]
 fn events_are_keyed_by_channel_id() {
     let channel_id = Uuid::new_v4();
     let event = ChannelMacroEvent::deleted(ChannelDeletedMetadata {
         channel_id,
         actor: user("macro|owner@example.com"),
+        participant_user_ids: Vec::new(),
     });
     assert_eq!(event.key(), channel_id.to_string());
 }

@@ -1149,10 +1149,15 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             previous_name: previous_name.clone(),
             channel_name: channel_name.clone(),
         })],
-        ChannelEvent::ChannelDeleted { channel_id, actor } => {
+        ChannelEvent::ChannelDeleted {
+            channel_id,
+            actor,
+            participant_user_ids,
+        } => {
             vec![ChannelMacroEvent::deleted(ChannelDeletedMetadata {
                 channel_id: *channel_id,
                 actor: actor.clone(),
+                participant_user_ids: participant_user_ids.clone(),
             })]
         }
         // Message facts travel on `macro.messages` with their parent.

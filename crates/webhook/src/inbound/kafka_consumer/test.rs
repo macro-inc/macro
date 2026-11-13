@@ -115,6 +115,7 @@ fn decodes_channel_events() {
         channel_id: Uuid::nil(),
         actor: ChannelSender::try_from("macro|owner@example.com".to_string())
             .expect("valid channel sender"),
+        participant_user_ids: Vec::new(),
     }));
     let payload = serde_json::to_vec(&event).expect("serializable");
 
