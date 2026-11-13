@@ -320,7 +320,7 @@ test.describe('contracts', () => {
     await expect(
       dialog.getByText('Data Processing Addendum', { exact: true })
     ).toBeVisible();
-    await expect(page.getByText('Meeting notes.md is not a PDF')).toBeVisible();
+    await expect(page.getByText('Meeting notes is not a PDF')).toBeVisible();
     await expect(dialog.getByText('Meeting notes')).toHaveCount(0);
   });
 
@@ -370,6 +370,10 @@ test.describe('contracts', () => {
     // Closed packets are not offered: only open ones can be folded in.
     await expect(dialog.getByText('Contoso Renewal 2027')).toHaveCount(0);
     await dialog.getByText('Northwind Order Form Q4').click();
+    // That packet is out for signature: merging ends its signing.
+    await expect(
+      dialog.getByText('Its signing links stop working', { exact: false })
+    ).toBeVisible();
     await dialog.getByRole('button', { name: 'Merge', exact: true }).click();
 
     await expect(page.getByText('Packets merged')).toBeVisible();
@@ -379,6 +383,10 @@ test.describe('contracts', () => {
     ).toHaveCount(0);
     await expect(
       drawer.getByText('merged “Northwind Order Form Q4” into this packet')
+    ).toBeVisible();
+    // What the merged-in packet had been through stays readable.
+    await expect(
+      drawer.getByText('History of “Northwind Order Form Q4”, merged in')
     ).toBeVisible();
   });
 });

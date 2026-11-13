@@ -91,7 +91,10 @@ export function NewPacketDialog(props: {
     databaseId: props.databaseId,
     newId: () => crypto.randomUUID(),
   });
-  const [importing, setImporting] = createSignal(false);
+  // Imports can overlap (several files, a picker and an upload at once);
+  // the dialog is importing while any of them is still running.
+  const [imports, setImports] = createSignal(0);
+  const importing = () => imports() > 0;
   const [creating, setCreating] = createSignal(false);
   const [attempted, setAttempted] = createSignal(false);
   let fileInput!: HTMLInputElement;
@@ -122,17 +125,17 @@ export function NewPacketDialog(props: {
 
   async function addFiles(files: FileList | null) {
     if (!files) return;
-    setImporting(true);
+    setImports((count) => count + 1);
     for (const file of Array.from(files)) await addFile(file, 'upload');
-    setImporting(false);
+    setImports((count) => count - 1);
     fileInput.value = '';
   }
 
   /** A document chosen from where the sender already keeps it. */
   async function addFromSource(file: File) {
-    setImporting(true);
+    setImports((count) => count + 1);
     await addFile(file, 'drive');
-    setImporting(false);
+    setImports((count) => count - 1);
   }
 
   /** A document taken out of the packet is not kept in storage. */
@@ -236,15 +239,17 @@ export function NewPacketDialog(props: {
                         <Dynamic
                           component={source()}
                           disabled={importing()}
-                          onFile={(file: File) =>
-                            fireAndForget(
-                              addFromSource(file),
-                              'contracts.import-document'
-                            )
-                          }
-                          onUnavailable={(name: string) =>
+                          onFile={addFromSource}
+                          onRejected={(
+                            name: string,
+                            reason: 'not_pdf' | 'unavailable'
+                          ) =>
                             toast.failure(
-                              t('contracts.documentUnreadableNamed', { name })
+                              reason === 'not_pdf'
+                                ? t('contracts.onlyPdfNamed', { name })
+                                : t('contracts.documentUnreadableNamed', {
+                                    name,
+                                  })
                             )
                           }
                         />

@@ -1,52 +1,43 @@
 import { t } from '@app/lib/i18n';
-import { fetchBinaryDocumentData } from '@app/lib/queries/storage/binary-document';
 import { fireAndForget } from '@core/util/fireAndForget';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
-import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { Button, Dialog } from '@ui';
-import { ResultAsync } from 'neverthrow';
 import { createSignal, Show, Suspense } from 'solid-js';
 import type { DocumentSource } from './context/contracts-context';
+import { fetchDrivePdf } from './queries/drive-file';
 
 type Chosen = { id: string; name: string };
 
-/** A Drive document's bytes as a file named after it. */
-function fetchDriveFile(document: Chosen): ResultAsync<File, undefined> {
-  const load = async (): Promise<File> => {
-    const data = await fetchBinaryDocumentData(document.id);
-    if (data.isErr()) throw new Error('The document has no file to fetch');
-    const bytes = await fetchBinary(data.value.blobUrl, 'arraybuffer');
-    if (bytes.isErr()) throw new Error('The document could not be fetched');
-
-    const { documentName, fileType } = data.value.documentMetadata;
-    const name = fileType ? `${documentName}.${fileType}` : documentName;
-    return new File([bytes.value], name);
-  };
-  return ResultAsync.fromPromise(load(), () => undefined);
-}
-
 /**
  * Choose documents from Macro Drive for a packet. The picker lists the
- * viewer's documents; each chosen one is fetched and handed over as a file,
- * and the packet's own import decides whether it is a PDF it can use.
+ * viewer's documents; each chosen PDF is fetched and handed over as a file,
+ * in the order chosen, and anything else is refused by name.
  */
 export const DriveDocumentSource: DocumentSource = (props) => {
   const [open, setOpen] = createSignal(false);
   const [chosen, setChosen] = createSignal<Chosen[]>([]);
   const [adding, setAdding] = createSignal(false);
 
+  /** Close the picker. It stays open while chosen documents are added. */
   function close() {
+    if (adding()) return;
     setOpen(false);
     setChosen([]);
   }
 
   async function add() {
     setAdding(true);
-    for (const document of chosen()) {
-      const file = await fetchDriveFile(document);
-      if (file.isOk()) props.onFile(file.value);
-      else props.onUnavailable(document.name);
+    // Fetched together, handed over one at a time: the packet lists them in
+    // the order they were chosen, and the picker closes only once the packet
+    // has taken every one.
+    const documents = chosen();
+    const files = await Promise.all(
+      documents.map((document) => fetchDrivePdf(document.id))
+    );
+    for (const [index, file] of files.entries()) {
+      if (file.isOk()) await props.onFile(file.value);
+      else props.onRejected(documents[index].name, file.error);
     }
     setAdding(false);
     close();
@@ -107,11 +98,15 @@ export const DriveDocumentSource: DocumentSource = (props) => {
                     [...ids].map((id) => ({ id, name: known.get(id) ?? '' }))
                   );
                 }}
+                // Escape in the search field closes the picker, as it does
+                // anywhere else in the dialog.
+                onClose={close}
+                onCancel={close}
               />
             </div>
           </Suspense>
           <div class="flex justify-end gap-2">
-            <Button variant="ghost" onClick={close}>
+            <Button variant="ghost" disabled={adding()} onClick={close}>
               {t('contracts.cancel')}
             </Button>
             <Button

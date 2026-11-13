@@ -141,12 +141,13 @@ export type ContractsContext = {
 /**
  * A host's control for choosing documents the sender already keeps
  * somewhere, such as Drive. It renders its own button and picker, hands
- * each chosen document over as a file, and names one it could not fetch.
+ * each chosen document over as a file and waits until the packet has taken
+ * it, and names one it could not hand over with the reason.
  */
 export type DocumentSource = Component<{
   disabled: boolean;
-  onFile: (file: File) => void;
-  onUnavailable: (name: string) => void;
+  onFile: (file: File) => Promise<void>;
+  onRejected: (name: string, reason: 'not_pdf' | 'unavailable') => void;
 }>;
 
 /** The packets and documents themselves, without the host's capabilities. */

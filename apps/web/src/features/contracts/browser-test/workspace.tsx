@@ -27,8 +27,8 @@ if (!root) throw new Error('Missing fixture root');
 const FixtureDocumentSource: DocumentSource = (props) => {
   async function choose() {
     const bytes = await (await fetch(dpaUrl)).arrayBuffer();
-    props.onFile(new File([bytes], 'Data Processing Addendum.pdf'));
-    props.onFile(new File(['# Notes'], 'Meeting notes.md'));
+    await props.onFile(new File([bytes], 'Data Processing Addendum.pdf'));
+    props.onRejected('Meeting notes', 'not_pdf');
   }
   return (
     <Button
