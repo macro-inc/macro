@@ -46,3 +46,15 @@ export function channelCacheHost(): CacheHost | undefined {
   }
   return host;
 }
+
+/**
+ * How TanStack treats a channel read while the browser is offline. With a
+ * cache host the read runs anyway, because the device answers it without the
+ * network; the default mode would pause it and leave the view loading.
+ */
+export function channelReadNetworkMode(
+  parent: { type: string },
+  host: CacheHost | undefined = channelCacheHost()
+): 'offlineFirst' | 'online' {
+  return parent.type === 'channel' && host ? 'offlineFirst' : 'online';
+}

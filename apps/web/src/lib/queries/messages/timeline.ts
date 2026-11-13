@@ -24,6 +24,7 @@ import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
 import { messageKeys } from './keys';
+import { channelReadNetworkMode } from './local/flag';
 import {
   loadLocalChannelTimelinePage,
   resolveLocalChannelMessage,
@@ -340,6 +341,7 @@ export function messageTimelineQueryOptions(
             previous_cursor: firstPage.previous_cursor,
           }
         : null,
+    networkMode: channelReadNetworkMode(parent),
     staleTime: Infinity,
     retry: (failureCount: number, error: Error) => {
       if (loadAroundMessageId && isMissingMessageError(error)) {
