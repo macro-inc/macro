@@ -17,6 +17,13 @@ use teams::domain::owned_entity_cleanup::{
 };
 use uuid::Uuid;
 
+/// Internal service endpoints and the shared credential used for team cleanup.
+pub struct TeamOwnedEntityCleanupConfig {
+    pub internal_key: String,
+    pub harness_url: String,
+    pub scheduled_action_url: String,
+}
+
 /// [`OwnedEntityCleanup`] over the bot roster and the entity registry.
 #[derive(Clone)]
 pub struct TeamOwnedEntityCleanupAdapter<B, R> {
@@ -28,22 +35,22 @@ pub struct TeamOwnedEntityCleanupAdapter<B, R> {
     internal_key: String,
     harness_url: String,
     scheduled_action_url: String,
+    computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
 }
 
 impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
     /// Construct a bounded HTTP client. Redirects must not turn a failed
     /// internal DELETE into an unrelated successful response.
     ///
-    /// `internal_key` is the fleet-wide internal service key that the agent
-    /// harness and scheduled-action services validate.
+    /// The config's internal key is the fleet-wide service key validated by the
+    /// agent harness and scheduled-action services.
     pub fn new(
         vault_metadata: Arc<dyn passwords::domain::ports::Repository>,
         bots: B,
         registry: R,
         documents: Arc<DocumentStorageServiceClient>,
-        internal_key: String,
-        harness_url: String,
-        scheduled_action_url: String,
+        config: TeamOwnedEntityCleanupConfig,
+        computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
     ) -> Result<Self, Report> {
         Ok(Self {
             vault_metadata,
@@ -54,9 +61,10 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
                 .timeout(Duration::from_secs(300))
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?,
-            internal_key,
-            harness_url,
-            scheduled_action_url,
+            internal_key: config.internal_key,
+            harness_url: config.harness_url,
+            scheduled_action_url: config.scheduled_action_url,
+            computers,
         })
     }
 
@@ -194,6 +202,13 @@ where
                 .map_err(Report::into_dynamic)?,
         }
         Ok(())
+    }
+    #[tracing::instrument(skip(self), err)]
+    async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.computers
+            .release_team(team_id)
+            .await
+            .map_err(ReportAsError::from)
     }
 }
 

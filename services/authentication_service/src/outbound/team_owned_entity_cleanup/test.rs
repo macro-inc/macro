@@ -4,6 +4,16 @@ use reqwest::StatusCode;
 
 use super::*;
 
+/// A team with no computers to release.
+struct NoComputers;
+
+#[async_trait::async_trait]
+impl crate::domain::computer_billing::TeamComputers for NoComputers {
+    async fn release_team(&self, _team_id: Uuid) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+}
+
 fn record(owner: Owner) -> EntityRecord {
     EntityRecord {
         id: Uuid::from_u128(0xc4a7),
@@ -90,9 +100,12 @@ async fn empty_team_skips_disabled_vault_rpc_but_existing_state_requires_acknowl
             "internal-key".into(),
             server.uri(),
         )),
-        "internal-key".into(),
-        server.uri(),
-        server.uri(),
+        TeamOwnedEntityCleanupConfig {
+            internal_key: "internal-key".into(),
+            harness_url: server.uri(),
+            scheduled_action_url: server.uri(),
+        },
+        Arc::new(NoComputers),
     )
     .unwrap();
     adapter.prepare_team_deletion(team).await.unwrap();
@@ -143,9 +156,12 @@ async fn empty_deletion_proof_keeps_first_create_lease_admission_closed_until_de
             "internal-key".into(),
             server.uri(),
         )),
-        "internal-key".into(),
-        server.uri(),
-        server.uri(),
+        TeamOwnedEntityCleanupConfig {
+            internal_key: "internal-key".into(),
+            harness_url: server.uri(),
+            scheduled_action_url: server.uri(),
+        },
+        Arc::new(NoComputers),
     )
     .unwrap();
     let team = TeamId(Uuid::now_v7());

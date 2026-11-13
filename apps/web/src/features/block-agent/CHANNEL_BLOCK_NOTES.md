@@ -212,7 +212,9 @@ and each `*InTargetCaches` helper applies the change to all three cache families
   the initial offset seeds the latest range even when data arrives asynchronously.
 - **Following**: core end anchoring handles measured streaming growth and
   `followOnAppend` follows new keys only near the end (50px). No one-second agent
-  settle loop or independent growth observer is needed.
+  settle loop or independent growth observer is needed. With `holdOnDisclosure`
+  (the agent transcript), pressing an `[aria-expanded]` control in a row stops
+  following until the reader scrolls back to the end or navigates.
 - **Mobile**: numeric `insets` participate in measurements and navigation; viewport
   and floating-inset changes preserve the pin only when previously near the end.
   Short lists bottom-align within these insets.

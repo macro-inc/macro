@@ -1,7 +1,21 @@
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import type { Query, QueryClient } from '@tanstack/solid-query';
+import { contactEmails } from '../core/contact';
 import { crmKeys } from './keys';
+
+/** Whether two snapshots agree on the fields a contact edit owns. */
+export function sameContactIdentity(
+  a: CrmContactResponse | undefined,
+  b: CrmContactResponse
+): boolean {
+  if (!a) return false;
+  return (
+    a.email === b.email &&
+    a.companyId === b.companyId &&
+    contactEmails(a).join('\n') === contactEmails(b).join('\n')
+  );
+}
 
 /** Only detail records and address lookups affected by this committed edit. */
 export function contactEditDetailsFilter(
@@ -17,7 +31,14 @@ export function contactEditDetailsFilter(
     current?.companyId,
     after.companyId,
   ]);
-  const emails = new Set([before.email, current?.email, after.email]);
+  const emails = new Set<string | null | undefined>([
+    before.email,
+    current?.email,
+    after.email,
+    ...contactEmails(before),
+    ...(current ? contactEmails(current) : []),
+    ...contactEmails(after),
+  ]);
   for (const query of client
     .getQueryCache()
     .findAll({ queryKey: crmKeys.company._def })) {
@@ -58,17 +79,23 @@ export async function updateContactEditDetails(
   // updatedAt is a transaction-start timestamp, not a commit version. Only
   // patch a snapshot whose editable fields still match the caller or response;
   // conflicting fields require an authoritative refresh instead.
-  const sameFields = (record: CrmContactResponse) =>
-    current?.email === record.email && current?.companyId === record.companyId;
-  if (current && !sameFields(before) && !sameFields(after)) return false;
+  if (
+    current &&
+    !sameContactIdentity(current, before) &&
+    !sameContactIdentity(current, after)
+  )
+    return false;
   // Email/company edits do not own names or visibility. In particular, the
   // archive endpoint returns no timestamp, so a newer archive can share the
   // old detail timestamp while this response is still in flight.
   const patch = (record: CrmContactResponse) => ({
     ...record,
     email: after.email,
+    emails: after.emails,
     personalEmail: after.personalEmail,
     companyId: after.companyId,
+    companyDomain: after.companyDomain,
+    companyDomainEmails: after.companyDomainEmails,
     updatedAt: after.updatedAt,
   });
   const confirmed = patch(current ?? before);
@@ -89,15 +116,20 @@ export async function updateContactEditDetails(
       return { ...company, contacts };
     }
   );
-  client.setQueriesData<CrmContactResponse | null>(
-    { queryKey: crmKeys.contactByEmail._def, predicate },
-    (contact) =>
-      contact?.id === after.id
-        ? contact.email === after.email
-          ? patch(contact)
-          : null
-        : contact
-  );
+  // A lookup is keyed by the address it resolved. It keeps naming this contact
+  // only while the contact still holds that address.
+  const held = new Set(contactEmails(after));
+  for (const query of client
+    .getQueryCache()
+    .findAll({ queryKey: crmKeys.contactByEmail._def, predicate })) {
+    const contact = query.state.data as CrmContactResponse | null | undefined;
+    if (contact?.id !== after.id) continue;
+    const address = query.queryKey[3];
+    client.setQueryData(
+      query.queryKey,
+      typeof address === 'string' && held.has(address) ? patch(contact) : null
+    );
+  }
   await client.invalidateQueries({ predicate, refetchType: 'none' });
   return isCurrent();
 }

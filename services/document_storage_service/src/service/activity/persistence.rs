@@ -70,9 +70,7 @@ impl ActivityRepo for PgChannelActivityRepo {
             );
         }
         let mut tx = self.pool.begin().await?;
-        self.activity
-            .insert_activities_in(&mut tx, activities)
-            .await?;
+        activity::outbound::pg_activity_repo::insert_activities(&mut *tx, activities).await?;
 
         let rows =
             channel_change_db_utils::append_activities_in(&mut tx, &channel_ids, &activity_ids)

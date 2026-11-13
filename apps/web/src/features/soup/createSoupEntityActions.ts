@@ -34,6 +34,7 @@ import {
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import { openProjectEntityAction } from '@app/features/projects/project-entity-actions';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -47,7 +48,11 @@ import {
   openInNewTab,
 } from '@components/app/tab-layout/open-in-new-tab';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableProjects,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -59,6 +64,9 @@ import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
+import { supportsEntityAppearance } from '../entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
+import { useAppearanceEditAccess } from '../entity-appearance/queries/access';
 
 export type SoupEntityActionItem = {
   id: string;
@@ -112,6 +120,7 @@ export function createSoupEntityActions(
   options: {
     /** A list that completes its own rows, such as Home's work feed. */
     markDoneDelegate?: () => MarkDoneDelegate | undefined;
+    selectedEntities?: () => readonly EntityData[];
   } = {}
 ): {
   buildActionGroups: BuildActionGroups;
@@ -119,7 +128,14 @@ export function createSoupEntityActions(
 } {
   const analytics = useAnalytics();
   const projectsFlag = useFeatureFlag(enableProjects);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const userId = useUserId();
+  const changeIcon = useChangeEntityIcon();
+  const selectedEntity = () => {
+    const entities = options.selectedEntities?.();
+    return entities?.length === 1 ? entities[0] : undefined;
+  };
+  const canEditIcon = useAppearanceEditAccess(selectedEntity, userId);
   const isTeamAdmin = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
@@ -191,6 +207,18 @@ export function createSoupEntityActions(
   ) => {
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
+
+    // Projects act through the Projects view's dialogs. Rows carry no access
+    // level, so rename and delete wait for ownership, which allows both.
+    const projectIds =
+      projectsFlag().enabled &&
+      canExecuteAll((entity) => entity.type === 'initiative')
+        ? entities.map((entity) => entity.id)
+        : [];
+    const ownsProjects =
+      projectIds.length > 0 &&
+      entities.every((entity) => entity.ownerId === userId());
+    const singleProject = projectIds.length === 1 ? entities[0] : undefined;
 
     const handle =
       (
@@ -345,6 +373,34 @@ export function createSoupEntityActions(
         label: t('entityActions.rename'),
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
+      });
+    } else if (singleProject && ownsProjects) {
+      middleItems.push({
+        id: 'rename',
+        label: t('entityActions.rename'),
+        onClick: () => {
+          openProjectEntityAction({
+            kind: 'rename',
+            id: singleProject.id,
+            name: singleProject.name,
+          });
+        },
+      });
+    }
+    const entity = entities.length === 1 ? entities[0] : undefined;
+    if (
+      appearanceFlag().enabled &&
+      entity &&
+      supportsEntityAppearance(entity) &&
+      (entity.ownerId === userId() ||
+        (selectedEntity()?.id === entity.id && canEditIcon()))
+    ) {
+      middleItems.push({
+        id: 'change-icon',
+        label: t('appearance.title'),
+        onClick: () => {
+          changeIcon(entity);
+        },
       });
     }
 
@@ -564,6 +620,14 @@ export function createSoupEntityActions(
         label: t('entityActions.share'),
         onClick: handle(shareAction.executeWithSoup),
       });
+    } else if (singleProject) {
+      middleItems.push({
+        id: 'share',
+        label: t('entityActions.share'),
+        onClick: () => {
+          openProjectEntityAction({ kind: 'share', id: singleProject.id });
+        },
+      });
     }
 
     // Sender group: Sender → Signal, Sender → Noise, Block Sender
@@ -617,6 +681,20 @@ export function createSoupEntityActions(
           ? TOKENS.email.trash
           : TOKENS.entity.action.delete,
         onClick: handle(deleteAction.executeWithSoup),
+        destructive: true,
+      });
+    } else if (ownsProjects) {
+      deleteItems.push({
+        id: 'delete',
+        label: t('entityActions.delete'),
+        onClick: () => {
+          // Like the other delete path, drop the selection once rows are
+          // gone so later bulk actions don't target deleted projects.
+          openProjectEntityAction(
+            { kind: 'delete', ids: projectIds },
+            { onDeleted: () => soup.selection.clear() }
+          );
+        },
         destructive: true,
       });
     }

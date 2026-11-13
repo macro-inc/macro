@@ -40,22 +40,16 @@ impl PgActivityRepo {
     }
 }
 
-impl PgActivityRepo {
-    /// Insert a batch inside the caller's transaction, retaining the same
-    /// deterministic-id conflict handling as ordinary activity ingestion.
-    pub async fn insert_activities_in(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        activities: &[Activity],
-    ) -> Result<(), sqlx::Error> {
-        insert_activities(tx.as_mut(), activities).await
-    }
-}
-
-async fn insert_activities<'e>(
-    executor: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
+/// Insert activities through a pool or an existing transaction.
+///
+/// The caller owns commit and rollback when passing a transaction connection.
+pub async fn insert_activities<'e, E>(
+    executor: E,
     activities: &[Activity],
-) -> Result<(), sqlx::Error> {
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     if activities.is_empty() {
         return Ok(());
     }
@@ -86,14 +80,14 @@ async fn insert_activities<'e>(
 
     sqlx::query!(
         r#"
-            INSERT INTO activity_events
-                (id, actor_id, subject_id, action, action_payload,
-                 entity_type, entity_id, occurred_at, agent_correlation_id, agent_verb)
-            SELECT * FROM UNNEST(
-                $1::uuid[], $2::text[], $3::text[], $4::text[], $5::jsonb[],
-                $6::text[], $7::text[], $8::timestamptz[], $9::uuid[], $10::text[])
-            ON CONFLICT (id) DO NOTHING
-            "#,
+        INSERT INTO activity_events
+            (id, actor_id, subject_id, action, action_payload,
+             entity_type, entity_id, occurred_at, agent_correlation_id, agent_verb)
+        SELECT * FROM UNNEST(
+            $1::uuid[], $2::text[], $3::text[], $4::text[], $5::jsonb[],
+            $6::text[], $7::text[], $8::timestamptz[], $9::uuid[], $10::text[])
+        ON CONFLICT (id) DO NOTHING
+        "#,
         &ids,
         &actor_ids,
         &subject_ids,
@@ -104,6 +98,38 @@ async fn insert_activities<'e>(
         &occurred_ats,
         correlations.as_slice() as &[Option<Uuid>],
         verbs.as_slice() as &[Option<String>],
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// Remove entity history through a pool or the owning domain's transaction.
+pub async fn purge_entities<'e, E>(
+    executor: E,
+    entities: &[(EntityType, String)],
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    if entities.is_empty() {
+        return Ok(());
+    }
+
+    let entity_types: Vec<String> = entities
+        .iter()
+        .map(|(entity_type, _)| entity_type.as_ref().to_owned())
+        .collect();
+    let entity_ids: Vec<String> = entities.iter().map(|(_, id)| id.clone()).collect();
+
+    sqlx::query!(
+        r#"
+            DELETE FROM activity_events
+            WHERE (entity_type, entity_id) IN
+                (SELECT * FROM UNNEST($1::text[], $2::text[]))
+            "#,
+        &entity_types,
+        &entity_ids,
     )
     .execute(executor)
     .await?;
@@ -122,28 +148,7 @@ impl ActivityRepo for PgActivityRepo {
     }
 
     async fn purge_entities(&self, entities: &[(EntityType, String)]) -> Result<(), Self::Err> {
-        if entities.is_empty() {
-            return Ok(());
-        }
-
-        let entity_types: Vec<String> = entities
-            .iter()
-            .map(|(entity_type, _)| entity_type.as_ref().to_owned())
-            .collect();
-        let entity_ids: Vec<String> = entities.iter().map(|(_, id)| id.clone()).collect();
-
-        sqlx::query!(
-            r#"
-            DELETE FROM activity_events
-            WHERE (entity_type, entity_id) IN
-                (SELECT * FROM UNNEST($1::text[], $2::text[]))
-            "#,
-            &entity_types,
-            &entity_ids,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        purge_entities(&self.pool, entities).await
     }
 }
 
@@ -239,6 +244,7 @@ impl ActivityReads for PgActivityRepo {
                            subject_id, entity_type, entity_id, occurred_at
                     FROM activity_events
                     WHERE subject_id = $1
+                    AND action <> 'appearance_changed'
                     ORDER BY occurred_at DESC, id DESC
                     LIMIT $2
                     "#,
@@ -256,6 +262,7 @@ impl ActivityReads for PgActivityRepo {
                            subject_id, entity_type, entity_id, occurred_at
                     FROM activity_events
                     WHERE subject_id = $1 AND (occurred_at, id) < ($2, $3)
+                    AND action <> 'appearance_changed'
                     ORDER BY occurred_at DESC, id DESC
                     LIMIT $4
                     "#,
@@ -362,6 +369,7 @@ impl ActivityReads for PgActivityRepo {
                    count(*)::bigint AS "n!"
             FROM activity_events
             WHERE subject_id = $2
+              AND action <> 'appearance_changed'
               AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
                                - INTERVAL '26 hours'
               AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
@@ -383,6 +391,7 @@ impl ActivityReads for PgActivityRepo {
             SELECT entity_type, entity_id, count(*)::bigint AS "n!"
             FROM activity_events
             WHERE subject_id = $2
+              AND action <> 'appearance_changed'
               AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
                                - INTERVAL '26 hours'
               AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
@@ -455,6 +464,7 @@ impl ActivityReads for PgActivityRepo {
                    subject_id, entity_type, entity_id, occurred_at
             FROM activity_events
             WHERE subject_id = $1
+              AND action <> 'appearance_changed'
               AND occurred_at >= $2
               AND occurred_at < $3
             ORDER BY occurred_at DESC, id DESC

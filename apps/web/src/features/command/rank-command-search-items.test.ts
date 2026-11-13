@@ -1,6 +1,9 @@
 import type { EntityItem } from '@core/context/quickAccess';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rankCommandSearchItems } from './rank-command-search-items';
+import {
+  rankCommandSearchItems,
+  sameRankInput,
+} from './rank-command-search-items';
 import type { CommandMenuItem } from './useCommandItems';
 
 const NOW = Date.parse('2026-09-26T12:00:00Z');
@@ -614,5 +617,41 @@ describe('command menu search ranking', () => {
     expect(order.indexOf('weak-teammate')).toBeGreaterThan(
       order.indexOf('exact-note')
     );
+  });
+});
+
+describe('sameRankInput', () => {
+  it('treats new objects holding the same rows in the same order as unchanged', () => {
+    expect(
+      sameRankInput(
+        [channel('a', 'Alpha'), channel('b', 'Beta')],
+        [channel('a', 'Alpha'), channel('b', 'Beta')]
+      )
+    ).toBe(true);
+  });
+
+  it('sees a reorder, a removed row, a renamed row and a newer view', () => {
+    const previous = [channel('a', 'Alpha'), channel('b', 'Beta')];
+
+    expect(
+      sameRankInput(previous, [channel('b', 'Beta'), channel('a', 'Alpha')])
+    ).toBe(false);
+    expect(sameRankInput(previous, [channel('a', 'Alpha')])).toBe(false);
+    expect(
+      sameRankInput(previous, [channel('a', 'Alpha'), channel('b', 'Gamma')])
+    ).toBe(false);
+    expect(
+      sameRankInput(previous, [
+        channel('a', 'Alpha'),
+        channel('b', 'Beta', NOW + DAY),
+      ])
+    ).toBe(false);
+  });
+
+  it('keeps a command only when it is the same object', () => {
+    const open = command('open', 'Open', NOW);
+
+    expect(sameRankInput([open], [open])).toBe(true);
+    expect(sameRankInput([open], [command('open', 'Open', NOW)])).toBe(false);
   });
 });

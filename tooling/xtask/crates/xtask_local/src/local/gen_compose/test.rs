@@ -129,6 +129,65 @@ fn every_local_harness_publishes_the_api_port_used_by_the_sdk() {
     }
 }
 
+#[test]
+fn docker_computers_share_the_enrollment_dir_with_the_daemon() {
+    let instance = Instance::derive(Some("computers-compose-docker"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Docker, &instance);
+    let mut services = IndexMap::new();
+    services.insert(EGRESS_SERVICE.to_string(), Some(dct::Service::default()));
+    add_computers(&mut services, &computers).unwrap();
+
+    let dir = computers.enrollment_dir().display().to_string();
+    let harness = services[EGRESS_SERVICE].as_ref().unwrap();
+    assert_eq!(
+        harness.volumes,
+        vec![dct::Volumes::Simple(format!("{dir}:{dir}"))]
+    );
+    assert_eq!(services.len(), 1);
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
+#[test]
+fn incus_computers_need_no_relay_sidecars() {
+    let instance = Instance::derive(Some("computers-compose-incus"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
+    let mut services = IndexMap::new();
+    services.insert(EGRESS_SERVICE.to_string(), Some(dct::Service::default()));
+    add_computers(&mut services, &computers).unwrap();
+
+    assert_eq!(services.len(), 1);
+    assert!(!services.contains_key("computers_incus_uplink"));
+    assert!(!services.contains_key("computers_incus_relay"));
+    assert!(
+        services[EGRESS_SERVICE]
+            .as_ref()
+            .unwrap()
+            .volumes
+            .is_empty()
+    );
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
+#[test]
+fn disabled_control_plane_is_explicit_only_in_the_harness() {
+    let instance = Instance::derive(Some("computers-off"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Off, &instance);
+    let mut services = IndexMap::from([(
+        EGRESS_SERVICE.to_owned(),
+        Some(dct::Service {
+            environment: kv(&[("PORT", "8080")]),
+            ..Default::default()
+        }),
+    )]);
+    add_computers(&mut services, &computers).unwrap();
+    let value = serde_yaml::to_value(&services).unwrap();
+    assert_eq!(
+        value[EGRESS_SERVICE]["environment"]["COMPUTERS_FLEET"],
+        "disabled"
+    );
+    assert_eq!(value[EGRESS_SERVICE]["environment"]["PORT"], "8080");
+}
+
 /// External is what lets an existing instance keep its networks: a Compose-managed
 /// network whose config changed would be recreated, stopping what's attached.
 #[test]
@@ -193,5 +252,65 @@ fn sync_service_inputs_cover_its_closure_only() {
         !inputs
             .iter()
             .any(|path| path.starts_with("docs") || path.starts_with("apps"))
+    );
+}
+
+#[test]
+fn compose_worker_telemetry_uses_generated_policy_over_inherited_shell() {
+    const KEY: &str = "SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT";
+    const CASE: &str = "XTASK_TEST_SYNC_OTEL_COMPOSE_CASE";
+    let Some(case) = std::env::var_os(CASE) else {
+        // Set the ambient environment on a child process, never the test runner.
+        for case in ["off", "on"] {
+            let status = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "local::gen_compose::test::compose_worker_telemetry_uses_generated_policy_over_inherited_shell",
+                ])
+                .env(KEY, "http://inherited.invalid:4318")
+                .env(CASE, case)
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        return;
+    };
+    assert_eq!(
+        std::env::var_os(KEY).as_deref(),
+        Some(std::ffi::OsStr::new("http://inherited.invalid:4318"))
+    );
+    let expected = match case.to_str().unwrap() {
+        "off" => "",
+        "on" => "http://otel-collector:4318",
+        _ => panic!("unknown isolated Compose control"),
+    };
+    let dir = std::env::temp_dir().join(format!("xtask-sync-otel-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    let env_file = dir.join("generated.env");
+    std::fs::write(&env_file, format!("{KEY}={expected}\n")).unwrap();
+    let fixture = dir.join("compose.yml");
+    // Config-only interpolation control: no service is started, pulled or built.
+    std::fs::write(
+        &fixture,
+        "services:\n  probe:\n    image: busybox\n    environment:\n      OTEL_EXPORTER_OTLP_ENDPOINT: '${SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT:-}'\n",
+    )
+    .unwrap();
+    let instance = Instance::derive(Some("sync-otel-config-test"), None).unwrap();
+    let mut cmd = docker_compose(&instance, &[fixture], &env_file);
+    assert!(
+        cmd.get_envs()
+            .any(|(key, value)| key == KEY && value.is_none())
+    );
+    let output = cmd.args(["config", "--format", "json"]).output().unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let config: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        config["services"]["probe"]["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"],
+        expected
     );
 }

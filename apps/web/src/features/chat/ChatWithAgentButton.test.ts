@@ -151,6 +151,30 @@ describe('Ask Agent without the agent composer', () => {
       expect(seed.initialInput).toContain('"channelType":"public"');
   });
 
+  it('attaches a pull request by its Macro id and URL', async () => {
+    await openChatWithAgent({
+      type: 'pr',
+      id: 'pr-entity-id',
+      url: 'https://github.com/macro-inc/macro/pull/42',
+    });
+    const input: string =
+      mocks.startPendingSession.mock.calls[0][0].initialInput;
+    expect(input).toBe(
+      '<m-pr-mention>{"id":"pr-entity-id","url":"https://github.com/macro-inc/macro/pull/42","label":""}</m-pr-mention> '
+    );
+    const editor = createHeadlessEditor({ nodes: SupportedNodeTypes });
+    editor.update(() => $convertFromMarkdownString(input, ALL_TRANSFORMERS), {
+      discrete: true,
+    });
+    editor.getEditorState().read(() => {
+      const serialized = $convertToMarkdownString(ALL_TRANSFORMERS);
+      expect(serialized).toContain('"id":"pr-entity-id"');
+      expect(serialized).toContain(
+        '"url":"https://github.com/macro-inc/macro/pull/42"'
+      );
+    });
+  });
+
   it('hands a submitted query to the agent as the first prompt', async () => {
     await openChatWithMessage('Find my latest invoices');
     expect(mocks.startPendingSession).toHaveBeenCalledWith({

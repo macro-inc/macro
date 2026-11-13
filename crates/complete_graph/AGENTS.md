@@ -140,8 +140,8 @@ Saved-view definitions live under authenticated `GraphqlUser`; mutations use the
 
 Channel message reads flatten `graphql_channel` onto `GraphqlUser`. They use the
 primary-backed REST message service in `ChannelGraphqlContext`, with separate
-`GraphqlChannelMessage` identity and composed parity tests in `schema/test/channel.rs`.
-`schema/test/channel/changes.rs` covers change replay, reset boundaries and reading
+`GraphqlChannelMessage` identity and composed parity tests in `schema/test/channel_messages.rs`.
+`schema/test/channel_messages/changes.rs` covers change replay, reset boundaries and reading
 the sequence before each page.
 `schema/test/channel/writes.rs` covers the four message mutations: replayed sends
 and deletes, the returned root's thread summary, and the personal-session gate.

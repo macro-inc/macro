@@ -25,7 +25,9 @@ key issuance, and account merge/link flows.
   allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
   status banner API (`crates/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
-  eligibility and subscription checkout.
+  eligibility and subscription checkout, and Macro computer purchase and
+  billing (the `hosted_runtimes` team and internal routers, mounted with a
+  `ComputerService` built here).
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language
@@ -41,6 +43,11 @@ key issuance, and account merge/link flows.
   `authentication-service` → verify with
   `authentication_service_doppler_config`.
 
+## Computer billing identifiers
+
+- Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computer prices are not configured; any partial group fails startup and Doppler validation independently of physical fleet attachment. Validate configured price syntax in both startup and the Doppler binary.
+- Store computer and seat prices as `stripe::PriceId` and reject malformed configured IDs during configuration loading with `config::configured_price_id` (async-stripe's parse accepts any string), including when no fleet is attached. `Config::computer_prices` returns a validation result.
+
 ## Checks
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).
@@ -48,6 +55,63 @@ key issuance, and account merge/link flows.
   `cargo test -p authentication_service --lib config::test` (the lib's
   test-only queries need a live `DATABASE_URL`) and
   `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+
+## Macro computers billing
+
+Team computer purchase and offers use the shared fail-closed
+`enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
+it from the existing PostHog provider. Existing management keeps its authorization
+policy. Every computer HTTP use case also requires a fresh
+host heartbeat through `PgComputerRepo` and returns typed 503 before reads or
+effects when detached. The five-minute freshness policy belongs to hosted runtimes;
+authentication has no fleet selector or startup availability latch. Pure catalog
+access, webhook reconciliation and billing workers remain independent of attachment.
+
+- `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the
+  `hosted_runtimes` `Billing` port on the team subscription. Each computer
+  bills ONE item at a price of its own, copied from
+  `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` (chosen by
+  the subscription's interval) and tagged with `computer_id` metadata; the
+  purchase's Stripe idempotency key is `computer-add:{reservation id}`.
+  Prices are `ComputerPrices` (`src/domain/computer_billing.rs`), not seat
+  plans. Replay durable item-change receipts before applying changes;
+  `settle_computer_add` ends an unknown outcome for good (fencing a charge
+  never sent); `charge_status` reads a key's receipt. Removing an item already
+  gone, or from a deleted team, succeeds.
+- With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
+- Every team subscription webhook re-reads the complete subscription (all item
+  pages) and only reports a `SubscriptionObserved` (status, items with their
+  `computer_id`, period end, read time) to `ComputerBillingObserver`
+  (`ComputerService::observe_subscription`), which decides per computer by
+  computer id, never by price or count. A failed read or observer call fails
+  the webhook (after the subscription work), so Stripe redelivers it.
+- Computer billing work (effects and purchase confirmation) runs on its own
+  `TaskTracker` (`computer_billing`), drained at shutdown.
+- Team deletion releases the team's computers first through
+  `TeamOwnedEntityCleanupAdapter::release_computers`, backed by
+  `hosted_runtimes`' `TeamComputerRelease` (needs only the repository).
+- `COMPUTER_RETENTION_DAYS` and `COMPUTER_PAST_DUE_GRACE_DAYS` default to 14
+  and 7 (`Config::computer_billing_policy`, zero refused); agent_harness_service
+  reads the same keys with the same defaults.
+
+## Subscription billing status
+
+`GET /user/stripe/subscription_status` includes nullable `billing` details for
+personal subscribers and team owners/admins. Allocation and access policy live in
+`service/subscription_status/billing_facts.rs`; the Stripe adapter supplies actual
+recurring prices, quantities, upcoming invoice amounts and owning-domain facts.
+Computer billing facts retain canonical `ComputerId` and `ComputerName` until
+the response renderer emits their UUID and string wire values.
+Match provider items to recorded computer IDs or price IDs and label them from
+the stored catalog entry and resources. Never infer an existing computer size
+from the current price table.
+Every member seat is a human seat row. Comped computers appear as
+zero rows, and unmatched or ambiguous provider quantities remain `other` rather
+than invented per-account charges. Unsupported interval/price shapes have no
+breakdown. Amounts preserve Stripe wire currency units, including its currency
+exceptions; clients must use provider currency scaling. The recurring subtotal
+excludes invoice adjustments; `nextInvoice.amount` is the actual provider amount
+due and its date is absent when the provider supplies no payment/due date.
 
 ## Profile pictures
 
@@ -165,7 +229,10 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `outlook: false` and `/link/outlook` answers 404 for a new connection when
   either is off; reconnecting an inbox reads neither. A failed flag load
   closes new connections and logs one warning. Without `POSTHOG_API_KEY`
-  (local, tests) the switch alone decides. Each decision is the
+  (tests), or with a blank one, the switch alone decides. A local stack that
+  runs the Outlook emulator blanks the key for this service
+  (`xtask_local`'s `microsoft_emulator.rs`): its placeholder key cannot load
+  flags. Each decision is the
   `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
@@ -222,10 +289,18 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.
 
+Computer billing accepts either all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values or none.
+Validate syntax and reject partial groups at startup and in the Doppler check.
+Keep configured and recorded prices when no fleet is attached; cleanup and
+subscription reconciliation still use them. Prices have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).
+
 ## Team vault cleanup
 
-- Supply the Passwords metadata port to the existing owned-entity cleanup adapter:
-  authoritative empty teams skip vault RPC; retained data requires acknowledged DSS
+- Supply the Passwords metadata and team-computer release ports to the existing
+  owned-entity cleanup adapter; group internal HTTP endpoints and the fleet-wide
+  key in `TeamOwnedEntityCleanupConfig`. Authoritative empty teams skip vault RPC;
+  retained data requires acknowledged DSS
   namespace purge before `clear_team` lists or purges ordinary entities. Recheck
   emptiness under the existing team lease and retain its guard in `ClearedTeam`
   through team deletion; drop it before DSS RPC if data appeared.

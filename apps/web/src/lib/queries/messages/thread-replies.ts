@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { messageKeys } from './keys';
+import { channelReadNetworkMode } from './local/flag';
 import { loadLocalChannelThread } from './local/source';
 import { normalizeMessageThreadSenders } from './message-sender';
 import { useMessageSubscription } from './subscription';
@@ -46,6 +47,7 @@ export function threadRepliesQueryOptions(
   return {
     queryKey: messageKeys.threadReplies(parent, messageId).queryKey,
     queryFn: () => fetchMessageThread(parent, messageId),
+    networkMode: channelReadNetworkMode(parent),
     staleTime: Infinity,
   };
 }

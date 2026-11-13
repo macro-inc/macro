@@ -133,13 +133,21 @@ export function DatabaseTextEditor(props: DatabaseTextEditorProps) {
   );
 }
 
+/**
+ * A text value on one line. One-line markdown keeps only the first line, so
+ * a multi-line value shows its lines joined by spaces, as plain text would.
+ */
 export function DatabaseTextValue(props: { value: string }) {
   return (
     <span
       class="[&_.markdown]:inline [&_p]:inline [&_p]:m-0 [&_p]:leading-normal"
       onPointerDown={stopLinkPointerDown}
     >
-      <StaticMarkdown markdown={props.value} singleLine target="internal" />
+      <StaticMarkdown
+        markdown={props.value.replace(/\s*\n\s*/g, ' ')}
+        singleLine
+        target="internal"
+      />
     </span>
   );
 }

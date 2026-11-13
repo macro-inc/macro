@@ -90,6 +90,15 @@ impl MessageRepository for Repo {
             .collect())
     }
 
+    async fn account_display_names(
+        &self,
+        _: &[String],
+    ) -> Result<HashMap<String, String>, MessageError> {
+        Ok(HashMap::from([(
+            "macro|author@example.com".into(),
+            "Author Example".into(),
+        )]))
+    }
     async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
         Ok(self.call_thread.clone())
     }
@@ -179,6 +188,12 @@ impl MessageRepository for Repo {
             message.deleted_at.get_or_insert_with(Utc::now);
             message.content.clear();
         }
+        if let Some(message) = message.as_mut()
+            && self.deletes.lock().unwrap().contains(&message.id)
+        {
+            message.deleted_at.get_or_insert_with(Utc::now);
+            message.content.clear();
+        }
         Ok(message)
     }
     async fn get_by_client_message_id(
@@ -243,6 +258,12 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<(Message, Option<i64>), MessageError> {
+        if command
+            .canonical_root_id
+            .is_some_and(|root| self.torn_down(root))
+        {
+            return Err(MessageError::NotFound);
+        }
         if command.input.id == Some(self.message.id)
             || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
         {
@@ -850,6 +871,24 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
             .await,
         Err(MessageError::Invalid(_))
     ));
+    for sender in [
+        "participant:00000000-0000-0000-0000-000000000001",
+        "guest|00000000-0000-0000-0000-000000000001",
+    ] {
+        assert!(matches!(
+            service
+                .validate_references(
+                    &access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    vec![SimpleMention {
+                        entity_type: "user".into(),
+                        entity_id: sender.into(),
+                    }],
+                    &[],
+                )
+                .await,
+            Err(MessageError::Invalid("invalid mentioned user"))
+        ));
+    }
 }
 
 fn post_input() -> PostMessage {
@@ -1457,6 +1496,12 @@ impl MessageRepository for StrictRepo {
         self.inner.load_channel_message_changes(id, ids).await
     }
 
+    async fn account_display_names(
+        &self,
+        ids: &[String],
+    ) -> Result<HashMap<String, String>, MessageError> {
+        self.inner.account_display_names(ids).await
+    }
     async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
         self.inner.call_thread_facts(id).await
     }
