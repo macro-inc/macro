@@ -1,0 +1,227 @@
+apps/web/src/features/dynamic-ui/render.tsx
+  s_fcbfa0c2313f05::t_033d678177f740 20-21,40-41,56-57
+apps/web/src/features/dynamic-ui/widgets/wakes/Notice.tsx
+  s_fcbfa0c2313f05::t_401f9e9444bdb7 1-10
+apps/web/src/features/dynamic-ui/widgets/wakes/Gate.tsx
+  s_fcbfa0c2313f05::t_fbea93f017533b 1
+  s_fcbfa0c2313f05::t_401f9e9444bdb7 2-21
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_fcbfa0c2313f05::t_3245e6040cf892 175-184
+apps/web/src/lib/queries/agent-wakes/wakes.ts
+  s_fcbfa0c2313f05::t_e7ab1e4b492d5e 1-5,7-12,16,18,20-28,30-31,35,37-44,69
+apps/web/src/features/dynamic-ui/widgets/wakes/format.ts
+  s_fcbfa0c2313f05::t_78fbbfb035d063 21-22
+  s_fcbfa0c2313f05::t_537883b35d1739 34
+  s_fcbfa0c2313f05::t_c0b8fe8bf00aff 1-20,23-33,35-96,99-103
+apps/web/src/lib/service-clients/service-agent-harness/agent-wakes.ts
+  s_fcbfa0c2313f05::t_e9a8378cff3fb0 1-18,19-33,34-63
+apps/web/src/features/dynamic-ui/widgets/wakes/TraceWaterfall.tsx
+  s_fcbfa0c2313f05::t_78fbbfb035d063 81,118-120,155-156,171-174
+  s_fcbfa0c2313f05::t_fbea93f017533b 1-80,82-117,121-154,157-170,175-180
+apps/web/src/vite-env.d.ts
+  s_fcbfa0c2313f05::t_33dc805fe05d72 26
+apps/web/src/features/dynamic-ui/widgets/Trace.tsx
+  s_fcbfa0c2313f05::t_033d678177f740 1
+  s_fcbfa0c2313f05::t_8cbf7ae04cd3c6 2-10,13-17,18-21,32,54,57-60
+apps/web/src/lib/queries/agent-wakes/keys.ts
+  s_fcbfa0c2313f05::t_e7ab1e4b492d5e 1-7
+apps/web/src/features/dynamic-ui/widgets/Wakes.tsx
+  s_fcbfa0c2313f05::t_78fbbfb035d063 5,59-62,147-152,157-159
+  s_fcbfa0c2313f05::t_8cbf7ae04cd3c6 1-4,6-47,48-58,63-119,125-146,153-156,160-178
+apps/web/src/features/dynamic-ui/widgets/wakes/format.test.ts
+  s_fcbfa0c2313f05::t_6c1dd10d6bb69a 1-81,83-84
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_fcbfa0c2313f05::t_f4e20f8136c15b 40,53,96-101,108
+  s_fcbfa0c2313f05::t_78fbbfb035d063 102-106
+  s_fcbfa0c2313f05::t_a168c224fcf5fe 107
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_fcbfa0c2313f05::t_9714f8670fa282 21-22,62,87-88,4365-4749
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentWake.ts
+  s_8703f73ae8e37d::t_575daadaa2c8a6 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentWakeStatusFilter.ts
+  s_8703f73ae8e37d::t_eb67b5641e1dcf 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentWakeTraceUpdatedAt.ts
+  s_8703f73ae8e37d::t_9a8ba5013e92d4 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentWakesPage.ts
+  s_8703f73ae8e37d::t_206bce3e626831 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentWakesPageNextCursor.ts
+  s_8703f73ae8e37d::t_3e707b5dbf7b12 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_fcbfa0c2313f05::t_ffa8ce8d708d10 114-118,312,510-569
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/listAgentWakesParams.ts
+  s_8703f73ae8e37d::t_a632e264663e2e 1-13,14-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeEffect.ts
+  s_8703f73ae8e37d::t_f8bbea17994558 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeEffectId.ts
+  s_8703f73ae8e37d::t_264c02f03c9556 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeEffectUrl.ts
+  s_8703f73ae8e37d::t_02092b02df08fa 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeEndStatus.ts
+  s_8703f73ae8e37d::t_2b7ba10b565038 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeFailure.ts
+  s_8703f73ae8e37d::t_ab8f47676f315f 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeOutcome.ts
+  s_8703f73ae8e37d::t_32139ad72bcb35 1-29
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeOutcomeCheck.ts
+  s_8703f73ae8e37d::t_dd76cbd36a3287 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeOutcomeObserved.ts
+  s_8703f73ae8e37d::t_0115e97d7d0687 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeOutcomeReported.ts
+  s_8703f73ae8e37d::t_b4f9488f4ddc28 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeOutcomeSource.ts
+  s_8703f73ae8e37d::t_6cafa8033a1063 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeOutcomeSummary.ts
+  s_8703f73ae8e37d::t_772f434c0acd01 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeParent.ts
+  s_8703f73ae8e37d::t_5874600146b9b7 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeParentSystem.ts
+  s_8703f73ae8e37d::t_d90713c9c7d8c1 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeParentWake.ts
+  s_8703f73ae8e37d::t_77b32dfd2157da 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakePhase.ts
+  s_8703f73ae8e37d::t_47813efac3d049 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecord.ts
+  s_8703f73ae8e37d::t_f76d68306632e4 1-61
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordDurationMs.ts
+  s_8703f73ae8e37d::t_63a9d7845aa08a 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordEffects.ts
+  s_8703f73ae8e37d::t_34f20d67be74d3 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordEndedAt.ts
+  s_8703f73ae8e37d::t_16c014634532ac 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordError.ts
+  s_8703f73ae8e37d::t_e70dc467858355 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordOperation.ts
+  s_8703f73ae8e37d::t_dbb696c6fb7704 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordOutcome.ts
+  s_8703f73ae8e37d::t_aca455ae6d13a2 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordParent.ts
+  s_8703f73ae8e37d::t_865713b3a47553 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordSession.ts
+  s_8703f73ae8e37d::t_bfdec9114bcbce 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordStatus.ts
+  s_8703f73ae8e37d::t_529317aafcfc81 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordTerminal.ts
+  s_8703f73ae8e37d::t_d9c06e479a97b0 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeRecordUsage.ts
+  s_8703f73ae8e37d::t_b69854022c3839 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeSession.ts
+  s_8703f73ae8e37d::t_f8bb0eae38e2a8 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeSessionId.ts
+  s_8703f73ae8e37d::t_f8105cefbe35e9 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeSessionModel.ts
+  s_8703f73ae8e37d::t_5597078017fa9b 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeSessionProvider.ts
+  s_8703f73ae8e37d::t_5e560a04aa13ce 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTrace.ts
+  s_8703f73ae8e37d::t_29c203e61759b4 1-40
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceCostUsd.ts
+  s_8703f73ae8e37d::t_f5751c83ea1331 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceIds.ts
+  s_8703f73ae8e37d::t_ba4988b455c547 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceIdsParentSpanId.ts
+  s_8703f73ae8e37d::t_4848006a7a07be 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceModel.ts
+  s_8703f73ae8e37d::t_338ec15be99338 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSource.ts
+  s_8703f73ae8e37d::t_d83d926f548ddd 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpan.ts
+  s_8703f73ae8e37d::t_0d5e75f9dac275 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOf.ts
+  s_8703f73ae8e37d::t_2ba08ab94e81c2 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfKind.ts
+  s_8703f73ae8e37d::t_6f1da59a4442b5 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfSix.ts
+  s_8703f73ae8e37d::t_925bcfd71f6906 1-36
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfSixEnd.ts
+  s_8703f73ae8e37d::t_b29365daa83a8b 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfSixInput.ts
+  s_8703f73ae8e37d::t_dfdc26efe008dc 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfSixKind.ts
+  s_8703f73ae8e37d::t_de8fe59cbb3139 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfSixResult.ts
+  s_8703f73ae8e37d::t_0dde09316635e4 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfThree.ts
+  s_8703f73ae8e37d::t_092fc41d124cdc 1-33
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfThreeKind.ts
+  s_8703f73ae8e37d::t_4d6c95507e16c7 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceSpanOneOfThreeModel.ts
+  s_8703f73ae8e37d::t_444a294f75ab02 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceTitle.ts
+  s_8703f73ae8e37d::t_9b14e497bf53d5 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTraceTokens.ts
+  s_8703f73ae8e37d::t_bf8cf3d81a9734 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTrigger.ts
+  s_8703f73ae8e37d::t_74d12331bbee0c 1-26
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTriggerIds.ts
+  s_8703f73ae8e37d::t_eb7aaa03133919 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTriggerKind.ts
+  s_8703f73ae8e37d::t_08258e500862f1 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTriggerName.ts
+  s_8703f73ae8e37d::t_6fe248e0cf8aea 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeTriggerSummary.ts
+  s_8703f73ae8e37d::t_d6949b57397ce7 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeUsage.ts
+  s_8703f73ae8e37d::t_059fe60286e72e 1-24
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeUsageCostUsd.ts
+  s_8703f73ae8e37d::t_32e5b440c1bfa0 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeUsageInputTokens.ts
+  s_8703f73ae8e37d::t_0a58a20b6c245d 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeUsageOutputTokens.ts
+  s_8703f73ae8e37d::t_fa5d269f18d3c0 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/wakeUsageTurns.ts
+  s_8703f73ae8e37d::t_3baca3af39f45a 1-11
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_fcbfa0c2313f05::t_da777d86c865e4 3760,3762-3764,3767,3769,3774-3781,3784-3793,3796-3799,3811,3817-3824,3826-3834,3837-3844,3846-3854,3857,3859-3861,3864,3866,3877,3884-3887,3890,3892,3897-3905,3908-3915,3918-3925,3928-3935,3937-3945,3950-3954,3957,3959-3968,3981,3986-3994,3997-4004,4006-4014,4019-4031,4034-4043,4050,4056-4063,4065-4073,4075-4083,4086-4110,4115,4122-4125,4128,4130,4136-4143,4145-4153,4155-4183,4187-4202,4204-4205,4207-4243,4245-4246,4248-4249,4251-4282,4284-4285,4287-4288,4290-4291,4293-4303,4306-4313,4315-4328,4330,4332-4340,4343-4361,4363-4374,4376-4391,4394,4396-4426,4430-4439,4443-4647,5635-5678,7939-8624,8626-8639,8641,8643-8644,8646-8657,8661,8663-8664,8666,8668-8680,8682,8684,8686-8687,8692,8694,8696,8698,8700-8708,8712,8714-8715,8717-8722,8726,8730,8735,8741-8742,8744-8746,8750,8756-8757,8761,8766,8768-8777,8779,8781,8783-8784,8786,8788,8790-8792,8794-8803,8805-8814,8816-8820,8826-8827,8833,8835-8836,8838,8840-8841,8845,8847-8848,8850-8855,8857-8862,8864-8880,8882-8883,8885,8887,8889-8891,8893-8897,8900,8902,8904-8906,8908-8909,8911,8913-8914,8916-8926,8930-8931,8933-8937,8939-8940,8942-8944,8950-8951,8953-8957,8960,8962,8964,8970-8971,8973-8977,8979-8983,8989-8990,8992-9000,9003,9005,9007,9012-9018,9020-9022,9024,9027-9033,9035-9037,9039,9042-9048,9050-9052,9054-9057,9059,9062-9085,9087-9089,9091,9094-9100,9102,9105-9111,9113-9115,9117,9120,9122,9124-9125,9127-9132,9134,9136-9145,9147-9149,9151-9153,9157-9161,9164-9169,9171-9180,9182-9191,9193-9202,9206,9208-9209,9211,9213,9215-9217,9220-9221,9225-9228,9230-9237,9239-9252,9254-9272,9274,9276-9286,9288,9290-9296,9300-9305,9307-9316,9318-9323,9326,9328,9330-9332,9334,9340-9341,9345-9349,9355-9356,9360-9386,9388,9390,9396-9397,9400-9436,9440,9442-9443,9445,9447-9459,9463,9465-9474,9476-9479,9481-9483,9485-9487,9489,9491,9493-9501,9504,9506-9520,9522,9524,9526-9527,9529,9531,9533-9535,9537-9539,9541,9543,9545-9546,9548-9549,9552-9553,9555-9557,9559,9561,9563,9565,9571-9580,9582,9584,9586,9588,9590-9594,9596,9598,9600-9602,9604,9606,9608,9610-9614,9620-9621,9623-9625,9627-9635,9637,9639-9643,9645-9647,9649-9659,9664,9666-9674,9676-9679,9681-9689,9691,9693,9695-9696,9698-9706,9708-9716,9718,9720-9722,9726,9728-9729,9731,9733,9735-9738,9740-9743,9745-9748,9750-9753
+packages/sdk/src/entities/users/user.ts
+  s_fcbfa0c2313f05::t_7516cc2f23a91e 9
+  s_fcbfa0c2313f05::t_7d0c8e9714653c 4,117-159
+  s_fcbfa0c2313f05::t_9ad165e019b677 160
+packages/sdk/src/utils/verbs.ts
+  s_fcbfa0c2313f05::t_9ee789cafb8679 57,64,67,71
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_fcbfa0c2313f05::t_cec36c518f0572 812-848,3218-3623,5378-5390,5391-5544
+  s_fcbfa0c2313f05::t_d85bbac1d5717e 5545
+packages/sdk/generated/agent-harness/index.ts
+  s_fcbfa0c2313f05::t_cec36c518f0572 4
+packages/sdk/specs/agent-harness.json
+  s_fcbfa0c2313f05::t_cec36c518f0572 3760,3762-3764,3767,3769,3774-3781,3784-3793,3796-3799,3811,3817-3824,3826-3834,3837-3844,3846-3854,3857,3859-3861,3864,3866,3877,3884-3887,3890,3892,3897-3905,3908-3915,3918-3925,3928-3935,3937-3945,3950-3954,3957,3959-3968,3981,3986-3994,3997-4004,4006-4014,4019-4031,4034-4043,4050,4056-4063,4065-4073,4075-4083,4086-4110,4115,4122-4125,4128,4130,4136-4143,4145-4153,4155-4183,4187-4202,4204-4205,4207-4243,4245-4246,4248-4249,4251-4282,4284-4285,4287-4288,4290-4291,4293-4303,4306-4313,4315-4328,4330,4332-4340,4343-4361,4363-4374,4376-4391,4394,4396-4426,4430-4439,4443-4647,5635-5678,7939-8624,8626-8639,8641,8643-8644,8646-8657,8661,8663-8664,8666,8668-8680,8682,8684,8686-8687,8692,8694,8696,8698,8700-8708,8712,8714-8715,8717-8722,8726,8730,8735,8741-8742,8744-8746,8750,8756-8757,8761,8766,8768-8777,8779,8781,8783-8784,8786,8788,8790-8792,8794-8803,8805-8814,8816-8820,8826-8827,8833,8835-8836,8838,8840-8841,8845,8847-8848,8850-8855,8857-8862,8864-8880,8882-8883,8885,8887,8889-8891,8893-8897,8900,8902,8904-8906,8908-8909,8911,8913-8914,8916-8926,8930-8931,8933-8937,8939-8940,8942-8944,8950-8951,8953-8957,8960,8962,8964,8970-8971,8973-8977,8979-8983,8989-8990,8992-9000,9003,9005,9007,9012-9018,9020-9022,9024,9027-9033,9035-9037,9039,9042-9048,9050-9052,9054-9057,9059,9062-9085,9087-9089,9091,9094-9100,9102,9105-9111,9113-9115,9117,9120,9122,9124-9125,9127-9132,9134,9136-9145,9147-9149,9151-9153,9157-9161,9164-9169,9171-9180,9182-9191,9193-9202,9206,9208-9209,9211,9213,9215-9217,9220-9221,9225-9228,9230-9237,9239-9252,9254-9272,9274,9276-9286,9288,9290-9296,9300-9305,9307-9316,9318-9323,9326,9328,9330-9332,9334,9340-9341,9345-9349,9355-9356,9360-9386,9388,9390,9396-9397,9400-9436,9440,9442-9443,9445,9447-9459,9463,9465-9474,9476-9479,9481-9483,9485-9487,9489,9491,9493-9501,9504,9506-9520,9522,9524,9526-9527,9529,9531,9533-9535,9537-9539,9541,9543,9545-9546,9548-9549,9552-9553,9555-9557,9559,9561,9563,9565,9571-9580,9582,9584,9586,9588,9590-9594,9596,9598,9600-9602,9604,9606,9608,9610-9614,9620-9621,9623-9625,9627-9635,9637,9639-9643,9645-9647,9649-9659,9664,9666-9674,9676-9679,9681-9689,9691,9693,9695-9696,9698-9706,9708-9716,9718,9720-9722,9726,9728-9729,9731,9733,9735-9738,9740-9743,9745-9748,9750-9753
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_fcbfa0c2313f05::t_cec36c518f0572 5,781-835
+  s_fcbfa0c2313f05::t_2addff2d22aba0 836
+packages/sdk/src/macro.ts
+  s_fcbfa0c2313f05::t_7516cc2f23a91e 588-594
+packages/sdk/src/entities/users/wake.ts
+  s_fcbfa0c2313f05::t_7516cc2f23a91e 1-17,18-106
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_fcbfa0c2313f05::t_cba8e1b73403f8 103
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_fcbfa0c2313f05::t_abaeeaf640540a 66-67,809
+agent-teammates/muppet/packages/lib/utilities/telemetry/wakes.ts
+  s_fcbfa0c2313f05::t_71923e67bd90fe 12,14,26
+agent-teammates/muppet/packages/lib/utilities/telemetry/FORMAT.md
+  s_fcbfa0c2313f05::t_877a222c43c267 141-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "648db1d6c86f1d3b5158edc3191235d0349ad9b2",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

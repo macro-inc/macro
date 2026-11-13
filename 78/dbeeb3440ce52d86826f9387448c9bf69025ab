@@ -1,0 +1,172 @@
+agent-teammates/muppet/packages/lib/utilities/telemetry/test/wakes.test.ts
+  s_4ad987aad95396::t_fe82297c944f3c 216
+  s_4ad987aad95396::t_adf0eaf7e05623 12-15
+  s_4ad987aad95396::t_836057dbb7dbed 1-11,16-215,217-240
+agent-teammates/muppet/AGENTS.md
+  s_4ad987aad95396::t_faa8a7580d1d82 37,46-47
+agent-teammates/muppet/packages/lib/utilities/telemetry/FORMAT.md
+  s_4ad987aad95396::t_faa8a7580d1d82 5-6,136-140,159-231
+  s_4ad987aad95396::t_2b6cebabc0494d 232
+agent-teammates/muppet/packages/lib/utilities/telemetry/index.ts
+  s_4ad987aad95396::t_a2b50bc39ee195 5-7,68
+agent-teammates/muppet/packages/lib/utilities/telemetry/wakes.ts
+  s_4ad987aad95396::t_fbbeff9fcb75d2 37-43,121-122,124
+  s_4ad987aad95396::t_822ceecd5ef5ea 1-11,13,15-25,27-36,44-120,123,125-165
+crates/agent_wakes/src/domain/service.rs
+  s_fcbfa0c2313f05::t_6842f342b13f8d 1-313,327-330,337-349
+  s_fcbfa0c2313f05::t_b7255352dd7b19 314-326,331-336
+crates/macro_db_client/migrations/20261113040504_agent_wakes.down.sql
+  s_fcbfa0c2313f05::t_100d66eeb7e850 1
+crates/agent_wakes/Cargo.toml
+  s_fcbfa0c2313f05::t_c872f9746f4683 1-38
+crates/agent_wakes/src/domain/record.rs
+  s_fcbfa0c2313f05::t_d9a8f67238790e 1-12,14-29,31,33-48,50-107,109-119,121-132,134-151,153,155-211,212-225,227-233,235-242,265
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 13,30,32,49,108,120,133,152,154,226,234
+  s_fcbfa0c2313f05::t_b7255352dd7b19 243-264
+crates/agent_wakes/src/outbound/postgres/test.rs
+  s_fcbfa0c2313f05::t_c872f9746f4683 1-5,7-9,12-92,95-104,106-111,114-121,136-156,161-182,191-192,205-213,214-229,231-266,268-271,272-277,279-282,285-308
+  s_fcbfa0c2313f05::t_67279e577a30f5 6
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 157-160,183-190,193-204
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 105,112-113
+  s_fcbfa0c2313f05::t_85e49886624752 10-11
+  s_fcbfa0c2313f05::t_34db16af9f1b80 93-94,122-135
+crates/agent_wakes/src/domain/models.rs
+  s_fcbfa0c2313f05::t_be5c2122531d9e 130-131
+  s_fcbfa0c2313f05::t_9120d97aa0ddcb 1-75,76-129,132
+crates/agent_wakes/src/outbound/postgres.rs
+  s_fcbfa0c2313f05::t_b80cc38b0c543e 173
+  s_fcbfa0c2313f05::t_678090eba74a2f 1-15,16-172,174-189,193-214,215,217-221,222-240,241,243-246,247-313
+crates/macro_db_client/migrations/20261113040504_agent_wakes.up.sql
+  s_fcbfa0c2313f05::t_100d66eeb7e850 1-8,11-32
+crates/agent_wakes/src/inbound/axum_router/test.rs
+  s_fcbfa0c2313f05::t_67279e577a30f5 2
+  s_fcbfa0c2313f05::t_afe22892e2e152 1,3-40
+crates/agent_wakes/src/domain/service/test.rs
+  s_fcbfa0c2313f05::t_67279e577a30f5 421-425
+  s_fcbfa0c2313f05::t_24a31648dd47bb 1-9,12,14-171,173-178,181-188,196-201,212,214-220,222-272,276-348,353,361-417,420,426-436,438
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 172,179-180
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 13,221,273-275
+  s_fcbfa0c2313f05::t_85e49886624752 10-11,354-360
+  s_fcbfa0c2313f05::t_34db16af9f1b80 189-195,202-211,213,349-352,418-419,437
+Cargo.toml
+  s_fcbfa0c2313f05::t_340b5d21c8df76 14
+Cargo.lock
+  s_fcbfa0c2313f05::t_61b59e51c919ab 1062-1087
+  s_fcbfa0c2313f05::t_4554d874117bf2 590
+crates/agent_wakes/src/domain/mod.rs
+  s_9b1603f4fd6889::t_95d266e64050a6 1-7
+crates/agent_wakes/src/domain/ports.rs
+  s_980b62f215d95a::t_1dcc93b327fa3d 1-95
+crates/agent_wakes/src/domain/trace.rs
+  s_8fef20280f30a1::t_93a5e9a38302d5 1-11,13-22,24-37,39-61,63-95,97-114,116
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 12,23,38,62,96,115
+crates/agent_wakes/src/inbound/axum_router.rs
+  s_4ad987aad95396::t_06d96e9a92f193 1-152,153-313,314-426
+crates/agent_wakes/src/inbound/mod.rs
+  s_4ad987aad95396::t_e36612b35386cb 1-3
+crates/agent_wakes/src/lib.rs
+  s_9b1603f4fd6889::t_e50e0d2ea2f006 1-18
+crates/agent_wakes/src/outbound/mod.rs
+  s_9b1603f4fd6889::t_447062ee763d46 1-2,4-7
+crates/agent_wakes/src/outbound/rollout.rs
+  s_9b1603f4fd6889::t_cc4ad14f529f41 1-39
+  s_fcbfa0c2313f05::t_404ada3788db03 40-49
+crates/agent_wakes/src/outbound/s3.rs
+  s_9b1603f4fd6889::t_14862fad3b73e3 1-115
+.github/workspace-dep-closures.json
+  s_fcbfa0c2313f05::t_a1945f20f1ee66 826,1704-1720
+  s_fcbfa0c2313f05::t_8908bd5bad288c 1721
+services/agent_harness_service/src/config.rs
+  s_fcbfa0c2313f05::t_7376e85fdc64e2 286-288
+services/agent_harness_service/src/agent_wakes.rs
+  s_fcbfa0c2313f05::t_404ada3788db03 1-52
+services/agent_harness_service/src/main.rs
+  s_fcbfa0c2313f05::t_5d9a0c8bd77a68 11,1821-1828,2068
+services/agent_harness_service/Cargo.toml
+  s_fcbfa0c2313f05::t_7376e85fdc64e2 40
+services/agent_harness_service/src/api.rs
+  s_fcbfa0c2313f05::t_5d9a0c8bd77a68 81,138,236-241,452
+services/agent_harness_service/src/api/swagger.rs
+  s_fcbfa0c2313f05::t_7376e85fdc64e2 144-148,157-161,163,166,167,169,172-174
+  s_fcbfa0c2313f05::t_aca36471a7b5dd 49,53-57,175-177
+  s_fcbfa0c2313f05::t_17ebf7a267dd7c 162,164-165,168,170-171
+  s_fcbfa0c2313f05::t_85e49886624752 50-52
+.sqlx/query-0a358770e3e6315a01fed58980988d06ab5b87f17028639aa31b6aa5bdfbfffc.json
+  s_bb9c9ff941d3b2::t_73106851a8027b 1-16
+.sqlx/query-ad514d90ace942000e9da9cc1be1c86062e66ed21dd9119835abb6ca514e4ed5.json
+  s_bb9c9ff941d3b2::t_b8308e8e180be6 1-2,4-36,37-47,49
+.sqlx/query-8e6d3bbf2604fbfa4a6c543e70fd6c2743d58327fec6992a2321cd810db88843.json
+  s_bb9c9ff941d3b2::t_615be70511ec35 1-34
+.sqlx/query-a09ff0ce77ed46c990cc65e0ee33e14fa16d89de576ee020fdccefb8d288d266.json
+  s_bb9c9ff941d3b2::t_77e0030fcf8209 1-47
+.sqlx/query-d426c1ea0e05b83a17d1c14e76685da7368473f185229f556328dcbe93aef819.json
+  s_bb9c9ff941d3b2::t_ac34e16f43a1f9 1-2,4-37,38-48,50
+.sqlx/query-b00d5625f73f268e98883a4e7af30a2253abc0ef75c12e5fd6c61528433f89a7.json
+  s_bb9c9ff941d3b2::t_ebdf9121ffee97 1-29
+infra/stacks/agent-harness-service/index.ts
+  s_dfeff50ab3a311::t_522ea46fd66c5a 58-60,73-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "78dbeeb3440ce52d86826f9387448c9bf69025ab",
+  "prompts": {},
+  "sessions": {
+    "s_4ad987aad95396": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c198cfe7-a5f2-49d6-aa73-895a27ba7c33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8fef20280f30a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f220b936-83db-4f2e-a822-ea582f14076f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_980b62f215d95a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6992f92c-4314-4db2-a047-ca528a74294b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9b1603f4fd6889": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512eab67-c98d-4202-9de7-c6977f772667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_bb9c9ff941d3b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86f3133a-b6b1-496a-85f4-df4edc4be011",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
