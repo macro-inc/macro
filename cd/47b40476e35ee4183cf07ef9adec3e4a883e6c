@@ -1,0 +1,33 @@
+.sqlx/query-b1cb4318a01e27f5d08e270abb43979593018d629cf06eb602c868dc5876ffd3.json
+  s_422464c85346e5::t_be1657846eb19b 3,22
+crates/macro_db_client/migrations/20261113131944_webhook_filters_live_gin_index.down.sql
+  s_8703f73ae8e37d::t_b69fcf4a148631 1-2
+crates/macro_db_client/migrations/20261113131944_webhook_filters_live_gin_index.up.sql
+  s_8703f73ae8e37d::t_959c61af4270b4 1-8
+crates/webhook/src/outbound/pg_repository.rs
+  s_8703f73ae8e37d::t_865c2988eb539b 193-199,202,204-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cd47b40476e35ee4183cf07ef9adec3e4a883e6c",
+  "prompts": {},
+  "sessions": {
+    "s_422464c85346e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae48edd-7ffa-4908-b6b8-ce91c4bf54e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
