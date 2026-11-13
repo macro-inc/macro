@@ -1,6 +1,11 @@
 //! Calendar sync: what is on a provider's calendar reaches the Macro
 //! calendar, on first import and as it changes.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test support: the scenario's own rows and reads are not checked against the query cache"
+)]
+
 use email_e2e::chrono::{DateTime, Duration, Utc};
 use email_e2e::gmail_emulator::{Fault, FaultError, NewEvent, RequestRecord, Route, SeedMailbox};
 use email_e2e::{DEFAULT_TIMEOUT, Report, Stack, StackOptions, User, events, eventually};

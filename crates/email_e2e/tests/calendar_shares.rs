@@ -1,5 +1,10 @@
 //! Calendar events shared into channels, and booking links.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test support: the scenario's own rows and reads are not checked against the query cache"
+)]
+
 use email_e2e::chrono::{DateTime, Duration, Utc};
 use email_e2e::gmail_emulator::{SeedCalendar, SeedMailbox};
 use email_e2e::{Calendar, DEFAULT_TIMEOUT, Report, Stack, StackOptions, User, events, eventually};

@@ -1,6 +1,11 @@
 //! Team calendars: what teammates see of each other's out-of-office time,
 //! and when their open clients are told it changed.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test support: the scenario's own rows and reads are not checked against the query cache"
+)]
+
 use email_e2e::chrono::Duration;
 use email_e2e::gmail_emulator::NewEvent;
 use email_e2e::{
