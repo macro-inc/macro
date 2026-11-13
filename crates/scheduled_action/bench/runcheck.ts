@@ -184,6 +184,18 @@ export async function withReplies(db: SQL, runs: Effects['runs']) {
 const RUN_TIMEOUT_MS = 240_000;
 /** What a run writes can land just after its record. */
 const SETTLE_MS = 5_000;
+/**
+ * An event the trigger matches is admitted within seconds (a few on a loaded
+ * machine); one not admitted by now never will be, so the wait stops.
+ */
+const ADMIT_MS = 90_000;
+
+/** Whether an event was admitted to run `routine` since `since`: its trigger matched. */
+async function admitted(db: SQL, routine: string, since: Date) {
+  const rows = await db`
+    select 1 from scheduled_action_event_run where action_id = ${routine}::uuid and admitted_at >= ${since} limit 1`;
+  return rows.length > 0;
+}
 
 export type RunOutcome = {
   says: string;
@@ -244,8 +256,14 @@ export async function runCheck(
       for (;;) {
         runs = await runsSince(at, owner, routine.id, t0);
         if (runs.length) break;
-        if (performance.now() - started > RUN_TIMEOUT_MS) {
+        const waited = performance.now() - started;
+        if (waited > RUN_TIMEOUT_MS) {
           timedOut = true;
+          break;
+        }
+        if (fire.type !== 'execute' && waited > ADMIT_MS && !(await admitted(db, routine.id, t0))) {
+          timedOut = true;
+          error = `no event matched its trigger in ${ADMIT_MS / 1000} s`;
           break;
         }
         await Bun.sleep(2000);
