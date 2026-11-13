@@ -20857,7 +20857,7 @@ export const CodeToolsDescription = z.object({
 
 export const ExecuteCode = z
   .object({
-    execution_id: z.string(),
+    execution_id: z.union([z.string(), z.null()]).optional(),
     acting_as: z.any().superRefine((x, ctx) => {
       const schemas = [z.literal('requester'), z.literal('owner')];
       const errors = schemas.reduce<z.ZodError[]>(

@@ -216,7 +216,7 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
         );
         assert!(!prompt.contains(name), "{name}");
     }
-    assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
+    assert!(!tools.toolset.tools.contains_key("ListAgentUpdates"));
     assert!(prompt.contains("macro.agents.coding()"));
     assert!(prompt.contains("macro.agentSessions.createManaged"));
     assert!(
@@ -861,6 +861,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ReadCanvas",
         "EditCanvas",
         "ApplyCanvasEdits",
+        "ListAgentUpdates",
         "ReadSpreadsheet",
         "CalculateSpreadsheet",
         "EditSpreadsheet",
@@ -873,11 +874,9 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
-    // The SDK cannot show the model a render or render the answer cards for
-    // agent updates.
+    // The SDK cannot show the model a render.
     for name in [
         "RenderCanvas",
-        "ListAgentUpdates",
         "SearchTools",
         "LoadTools",
         "BashCodeExecution",
