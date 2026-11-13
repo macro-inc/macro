@@ -71,10 +71,7 @@ function Fixture() {
                     <DatabaseTextEditor {...editor} />
                   )}
                   renderTextValue={(value) => (
-                    <DatabaseTextValue
-                      value={value}
-                      fit={display.fit}
-                    />
+                    <DatabaseTextValue value={value} fit={display.fit} />
                   )}
                   renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
                   renderMentionValue={(_, entityType) => (

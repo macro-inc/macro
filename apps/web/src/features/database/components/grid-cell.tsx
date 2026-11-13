@@ -718,6 +718,21 @@ type MentionPreview = {
   originalValue: DatabaseCellValue;
 };
 
+/** A text cell's height, weight and ink in its layout. */
+function textCellClassList(
+  look: CellLook,
+  cell: { editable: boolean; placeholder: boolean; string: boolean }
+): Record<string, boolean> {
+  return {
+    'min-h-9': !look.property,
+    'min-h-8 font-normal': look.property,
+    'text-ink': look.ink,
+    'text-ink-muted': !cell.editable && !look.ink,
+    'text-ink-placeholder': cell.placeholder && !look.ink,
+    'font-medium': cell.string && !look.property,
+  };
+}
+
 /** A scalar or entity value that edits inline; entity values show their mention. */
 function TextCell(props: {
   column: DatabaseViewColumn;
@@ -758,16 +773,11 @@ function TextCell(props: {
       type="button"
       data-cell-display
       class="flex w-full min-w-0 items-center rounded px-2.5 py-1.5 text-left text-[13px] leading-5 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
-      classList={{
-        'min-h-9': !props.look.property,
-        'min-h-8 font-normal': props.look.property,
-        'text-ink': props.look.ink,
-        'text-ink-muted': !props.editable && !props.look.ink,
-        'text-ink-placeholder':
-          value() === null && !props.mentionPreview && !props.look.ink,
-        'font-medium':
-          props.column.dataType === 'STRING' && !props.look.property,
-      }}
+      classList={textCellClassList(props.look, {
+        editable: props.editable,
+        placeholder: value() === null && !props.mentionPreview,
+        string: props.column.dataType === 'STRING',
+      })}
       aria-label={
         props.hasResolvedMentionLabel
           ? undefined
