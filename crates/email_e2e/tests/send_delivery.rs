@@ -27,27 +27,6 @@ const LENGTH_REQUIRED: u16 = 411;
 const HELD_ANSWER_MS: u64 = 30_000;
 /// The most characters of a subject Exchange keeps.
 const OUTLOOK_SUBJECT_LIMIT: usize = 255;
-/// What the scheduled-send sweep (`email_scheduled_handler`) selects: due,
-/// unsent, not failed, not leased, and either still a draft, already claimed
-/// once, or admitted as a send attempt. The harness does not run that lambda
-/// yet; until it does this is a copy of its first query, and the scenario
-/// enqueues what it finds as the lambda would.
-const SWEEP: &str = r"
-    SELECT esm.link_id, esm.message_id
-    FROM email_scheduled_messages esm
-    JOIN email_messages em ON em.id = esm.message_id
-    WHERE esm.send_time < now()
-      AND esm.sent = FALSE
-      AND em.is_sent = FALSE
-      AND esm.delivery_status <> 'failed'
-      AND (CASE WHEN esm.processing THEN
-               COALESCE(esm.delivery_lease_expires_at, esm.updated_at + make_interval(secs => 300)) <= now()
-           ELSE esm.delivery_lease_expires_at IS NULL OR esm.delivery_lease_expires_at <= now() END)
-      AND (em.is_draft OR esm.delivery_claim_id IS NOT NULL OR EXISTS (
-               SELECT 1 FROM email_send_attempts a
-               WHERE a.link_id = esm.link_id AND a.message_id = esm.message_id AND NOT a.cancelled))
-";
-
 /// Whether an Outlook folder, by display or well-known name, is Sent Items.
 fn in_sent_items(folder: &str) -> bool {
     folder.eq_ignore_ascii_case("Sent Items") || folder.eq_ignore_ascii_case("sentitems")
@@ -106,45 +85,22 @@ async fn received(inbox: &Inbox, from: &str, subject: &str, body: &str) -> Resul
     first_message(inbox, &preview).await
 }
 
-/// Enqueues what the scheduled-send sweep would, and answers how many
-/// messages that was.
-async fn sweep(stack: &Stack) -> Result<usize, Report> {
-    let due: Vec<(Uuid, Uuid)> = sqlx::query_as(SWEEP).fetch_all(stack.db()).await?;
-    for (link_id, message_id) in &due {
-        stack
-            .send_to_queue(
-                SCHEDULED_QUEUE,
-                &json!({ "link_id": link_id, "message_id": message_id }),
-            )
-            .await?;
-    }
-    Ok(due.len())
-}
-
-/// Stops the workers, sends, and takes the send's message off the queue: the
-/// state a send is left in when the API committed it and the queue write was
-/// lost.
+/// Sends a saved draft while the queue refuses the send's message: the state
+/// a send is left in when the API committed it and the queue write was lost.
+/// The API may answer the send with an error; the draft names the message.
 async fn send_and_lose_the_queue_message(
-    stack: &mut Stack,
+    stack: &Stack,
     from: &Inbox,
     message: &Value,
 ) -> Result<Value, Report> {
-    stack.stop_workers().await;
-    let sent = from.send(message).await?;
-    let message_id = text(&sent, "db_id")?.to_owned();
-    eventually(
-        "the send's queue message to become visible",
-        DEFAULT_TIMEOUT,
-        async || {
-            let taken = stack.take_queue_messages(SCHEDULED_QUEUE).await?;
-            Ok(taken
-                .iter()
-                .any(|queued| queued["message_id"] == message_id.as_str())
-                .then_some(()))
-        },
-    )
-    .await?;
-    Ok(sent)
+    let draft = from.save_draft(message).await?;
+    let mut send = message.clone();
+    send["db_id"] = draft["db_id"].clone();
+    send["draft_generation"] = draft["draft_generation"].clone();
+    stack.refuse_queue_sends(SCHEDULED_QUEUE, 1)?;
+    from.post("/email/messages", Some(&json!({ "message": send })))
+        .await?;
+    Ok(draft)
 }
 
 /// A reply sent from Macro joins the conversation on both sides: the
@@ -696,14 +652,14 @@ async fn reply_keeps_the_composers_subject(provider: Provider) -> Result<(), Rep
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "known bug: send-stranded-when-enqueue-fails"]
 async fn gmail_send_survives_a_lost_queue_message() -> Result<(), Report> {
-    let mut stack = Stack::start().await?;
+    let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let grace = stack.user("grace").await?;
     let from = ada.link_gmail().await?;
     let to = grace.link_gmail().await?;
 
     let sent = send_and_lose_the_queue_message(
-        &mut stack,
+        &stack,
         &from,
         &json!({
             "subject": "Contract",
@@ -712,14 +668,13 @@ async fn gmail_send_survives_a_lost_queue_message() -> Result<(), Report> {
         }),
     )
     .await?;
-    stack.start_workers()?;
 
     // The sweep runs every minute in production; here, until the mail is out.
     eventually(
         "the sweep to bring the stranded send out",
         DEFAULT_TIMEOUT,
         async || {
-            sweep(&stack).await?;
+            stack.run_scheduled_sweep().await?;
             Ok(provider_copies(&to, "Contract")?.into_iter().next())
         },
     )
@@ -731,7 +686,17 @@ async fn gmail_send_survives_a_lost_queue_message() -> Result<(), Report> {
     .await?;
     let delivered = provider_copies(&to, "Contract")?;
     assert_eq!(delivered.len(), 1, "{delivered:?}");
-    assert_eq!(sweep(&stack).await?, 0, "a sent message is still swept");
+    stack.run_scheduled_sweep().await?;
+    eventually("the queue to be worked off", DEFAULT_TIMEOUT, async || {
+        Ok((stack.queue_depth(SCHEDULED_QUEUE).await? == 0).then_some(()))
+    })
+    .await?;
+    let delivered = provider_copies(&to, "Contract")?;
+    assert_eq!(
+        delivered.len(),
+        1,
+        "a sent message was swept again: {delivered:?}"
+    );
 
     stack.finish().await
 }
@@ -741,14 +706,14 @@ async fn gmail_send_survives_a_lost_queue_message() -> Result<(), Report> {
 /// it is delivered once. When this fails the message never leaves.
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_send_survives_a_lost_queue_message() -> Result<(), Report> {
-    let mut stack = Stack::start().await?;
+    let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let grace = stack.user("grace").await?;
     let from = ada.link_outlook().await?;
     let to = grace.link_outlook().await?;
 
     let sent = send_and_lose_the_queue_message(
-        &mut stack,
+        &stack,
         &from,
         &json!({
             "subject": "Contract",
@@ -758,7 +723,6 @@ async fn outlook_send_survives_a_lost_queue_message() -> Result<(), Report> {
         }),
     )
     .await?;
-    stack.start_workers()?;
 
     wait_for_wire(&stack, &to, "Contract").await?;
     wait_until_sent(&from, &sent).await?;

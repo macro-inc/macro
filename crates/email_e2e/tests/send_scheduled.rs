@@ -88,8 +88,8 @@ async fn generation(inbox: &Inbox, thread_id: &str, message_id: &str) -> Result<
     }
 }
 
-/// What the scheduled-send sweep does for one message whose time has come:
-/// asks the workers to deliver it.
+/// The queue message that asks the workers to deliver one message: what a
+/// send leaves on the queue for its time, and what the sweep enqueues.
 async fn sweep(stack: &Stack, inbox: &Inbox, message_id: &str) -> Result<(), Report> {
     stack
         .send_to_queue(
@@ -100,7 +100,8 @@ async fn sweep(stack: &Stack, inbox: &Inbox, message_id: &str) -> Result<(), Rep
 }
 
 /// Lets the message's send time pass, which only the clock does in
-/// production, and runs the sweep for it.
+/// production, runs the real sweep, and delivers the message's own queue
+/// message, which a send leaves with a delay the scenario does not wait out.
 async fn come_due(stack: &Stack, inbox: &Inbox, message_id: &str) -> Result<(), Report> {
     let id = Uuid::parse_str(message_id).context("the message id is not a UUID")?;
     let moved = sqlx::query(
@@ -115,6 +116,7 @@ async fn come_due(stack: &Stack, inbox: &Inbox, message_id: &str) -> Result<(), 
     if moved.rows_affected() != 1 {
         bail!("the message {message_id} has no schedule to bring forward");
     }
+    stack.run_scheduled_sweep().await?;
     sweep(stack, inbox, message_id).await
 }
 
@@ -186,6 +188,7 @@ async fn scheduled_message_waits_for_its_time(provider: Provider) -> Result<(), 
     );
 
     // A sweep that runs early changes nothing: the time has not come.
+    stack.run_scheduled_sweep().await?;
     sweep(&stack, &from, &id).await?;
     flush(&stack, &from, &to, "Marker before the launch").await?;
     assert!(
