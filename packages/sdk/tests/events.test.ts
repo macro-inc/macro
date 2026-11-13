@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { EventStreamRevokedError, Macro } from '../src/macro';
 import { MacroError } from '../src/utils';
 
@@ -6,6 +6,7 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  setSystemTime();
 });
 
 const created = {
@@ -214,7 +215,7 @@ describe('MacroEvents', () => {
     expect(requests).toHaveLength(1);
   });
 
-  test('listen() gives up after 3 revoked closes in a row with no event', async () => {
+  test('listen() gives up after 3 short-lived revoked closes in a row with no event', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input) => {
       requests.push(input instanceof Request ? input : new Request(input));
@@ -236,6 +237,38 @@ describe('MacroEvents', () => {
     expect(error).toBeInstanceOf(EventStreamRevokedError);
     expect((error as EventStreamRevokedError).reason).toBe('credential');
     expect(requests).toHaveLength(3);
+  }, 10_000);
+
+  test('listen() keeps reconnecting a quiet stream whose token expires normally', async () => {
+    const requests: Request[] = [];
+    const fourth = Promise.withResolvers<void>();
+    let now = Date.now();
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      if (requests.length === 4) fourth.resolve();
+      // Each connection stays up for 3 minutes before the token expires.
+      now += 180_000;
+      setSystemTime(new Date(now));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      auth: { type: 'user', token: () => 'hourly-token' },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const errors: unknown[] = [];
+    const stop = await macro.events.listen({
+      onError: (error) => errors.push(error),
+    });
+    await fourth.promise;
+    stop();
+
+    expect(errors).toEqual([]);
+    expect(requests.length).toBeGreaterThanOrEqual(4);
   }, 10_000);
 
   test('listen() stops and reports a revoked fixed credential', async () => {

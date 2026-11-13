@@ -303,8 +303,10 @@ export class MacroEvents {
    * when it no longer validates. With a token function (`token: () => ...`)
    * the listener reconnects with a freshly resolved token. It stops and
    * reports {@link EventStreamRevokedError} to `onError` with a fixed token,
-   * when its bot was deleted, or after 3 revoked closes in a row with no event
-   * between them (the refreshed tokens are not accepted either).
+   * when its bot was deleted, or after 3 revoked closes in a row that each
+   * came within 2 minutes of connecting with no event between them (the
+   * refreshed tokens are not accepted either). Ordinary expiries of a working
+   * token, on a quiet stream too, never count.
    *
    * Filters default to the event names currently registered with {@link on}.
    * The stream uses those filters for its lifetime; later `.on` / unsubscribe

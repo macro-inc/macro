@@ -23,11 +23,18 @@ const DEDUPE_WINDOW = 4_096;
 const READ_AHEAD = 256;
 
 /**
- * Revoked closes in a row, with no event delivered between them, after which
- * a refreshable listener gives up: its token source keeps handing out tokens
- * the server rejects within a minute.
+ * Short-lived revoked closes in a row, with no event delivered between them,
+ * after which a refreshable listener gives up: its token source keeps handing
+ * out tokens the server rejects within a minute or two.
  */
 const MAX_REVOKED_RECONNECTS = 3;
+
+/**
+ * A connection open at least this long before it was revoked outlived two of
+ * the server's 60 s credential re-checks: its token worked, and the revoke is
+ * an ordinary expiry, not a refresh that hands out rejected tokens.
+ */
+const LONG_LIVED_MS = 120_000;
 
 /** First reconnect delay; doubles per failed attempt up to the cap. */
 const BASE_BACKOFF_MS = 500;
@@ -283,9 +290,12 @@ export class EventStream<T> implements AsyncIterable<T> {
     const signal = this.controller.signal;
     const retry = { attempt: 0, idle: 0, revoked: 0 };
     while (!signal.aborted) {
-      const { end, delivered } = yield* this.connection(signal);
+      const { end, delivered, lastedMs } = yield* this.connection(signal);
       if (signal.aborted) break;
-      if (delivered) {
+      // A connection that delivered, or stayed up past two credential
+      // re-checks, was healthy: back off from scratch, and only short-lived
+      // revoked closes count toward giving up.
+      if (delivered || lastedMs >= LONG_LIVED_MS) {
         retry.attempt = 0;
         retry.revoked = 0;
       }
@@ -344,7 +354,12 @@ export class EventStream<T> implements AsyncIterable<T> {
   /** Read one connection to its end, yielding its new events. */
   private async *connection(
     signal: AbortSignal,
-  ): AsyncGenerator<T, { end: ConnectionEnd; delivered: boolean }, undefined> {
+  ): AsyncGenerator<
+    T,
+    { end: ConnectionEnd; delivered: boolean; lastedMs: number },
+    undefined
+  > {
+    const opened = Date.now();
     const queue = new FrameQueue();
     const connection = new AbortController();
     const stopConnection = () => connection.abort();
@@ -357,6 +372,7 @@ export class EventStream<T> implements AsyncIterable<T> {
     );
     let delivered = false;
     let end: ConnectionEnd | undefined;
+    let closed = opened;
     try {
       for (
         let frame = await queue.next(signal);
@@ -371,6 +387,7 @@ export class EventStream<T> implements AsyncIterable<T> {
         const mapped = this.accept(frame);
         if (mapped !== undefined) yield mapped;
       }
+      closed = Date.now();
     } finally {
       signal.removeEventListener('abort', stopConnection);
       connection.abort();
@@ -380,6 +397,7 @@ export class EventStream<T> implements AsyncIterable<T> {
     return {
       end: end ?? queue.ended ?? { kind: 'reconnect', immediate: false },
       delivered,
+      lastedMs: closed - opened,
     };
   }
 

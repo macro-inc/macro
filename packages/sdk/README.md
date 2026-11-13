@@ -888,7 +888,8 @@ for await (const event of stream) {
   resolves again on every reconnect. It stops and reports
   `EventStreamRevokedError` (with its `reason`) to `listen({ onError })`
   (logged otherwise) with a fixed token, when its bot was deleted, or after 3
-  revoked closes in a row with no event between them.
+  revoked closes in a row that each came within 2 minutes of connecting, with
+  no event between them (its refreshed tokens are rejected too).
 - `macro.events.catalog()` lists the events your credential can receive, with
   their entity types, who receives them and their stage.
 
