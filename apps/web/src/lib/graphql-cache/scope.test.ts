@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { quarantineCacheScope, rotateCacheScope } from './scope';
+import {
+  cacheScopeStartsEmpty,
+  getOrCreateCacheScope,
+  quarantineCacheScope,
+  rotateCacheScope,
+} from './scope';
 
 const STORAGE_KEY = 'graphql-cache:scope';
 
@@ -106,5 +111,25 @@ describe('serialized cache scope replacement', () => {
     await expect(first).resolves.toBe('quarantine:scope-1');
     await expect(second).resolves.toBe('quarantine:scope-1');
     expect(localStorage.getItem(STORAGE_KEY)).toBe('quarantine:scope-1');
+  });
+});
+
+describe('a scope this page created', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('starts empty, unlike one an earlier page saved', () => {
+    localStorage.setItem(STORAGE_KEY, 'saved-scope');
+    expect(getOrCreateCacheScope()).toBe('saved-scope');
+    expect(cacheScopeStartsEmpty('saved-scope')).toBe(false);
+
+    localStorage.clear();
+    const created = getOrCreateCacheScope();
+    expect(created).not.toBe('saved-scope');
+    expect(cacheScopeStartsEmpty(created)).toBe(true);
+    // Read again on the same page, it is still the one this page created.
+    expect(getOrCreateCacheScope()).toBe(created);
+    expect(cacheScopeStartsEmpty(created)).toBe(true);
   });
 });

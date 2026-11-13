@@ -273,8 +273,8 @@ function resumed({ operation, parent }: HeldOperation): Operation {
  * the network reads of queries marked {@link FOLLOWS_LIVE_UPDATES} while
  * `gate` waits, and sends them, in order, when it opens. A read the cache
  * reports as a miss ({@link LiveUpdatesGate.missed}) goes at once instead,
- * and is read again once the subscriptions are live. Without a cache
- * (`cached: false`) every such read is a miss.
+ * and is read again once the subscriptions are live. Without a cache, or
+ * with one that starts empty (`cached: false`), every such read is a miss.
  */
 export function liveUpdatesGateExchange(
   gate: LiveUpdatesGate,

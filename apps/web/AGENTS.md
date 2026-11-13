@@ -840,7 +840,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   a pong after the subscribe frames (at most `LIVE_UPDATES_HOLD_MS`), so nothing
   published in between is lost, but only behind a cached result: a read the
   normalized cache reports as a miss (`onCacheMiss`), and every one on the
-  uncached client, goes at once and is read again once live, after its answer
+  uncached client or on a cache whose scope this page created
+  (`cacheScopeStartsEmpty`; its misses would come only once it opens), goes at
+  once and is read again once live, after its answer
   (`graphql_soup.live_updates.reread`). A `cache-first` read sets neither and
   is read again when the subscriptions go live, unless a held read of the same
   operation key went out then; every read is read again if the hold gave up.

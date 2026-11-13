@@ -44,7 +44,10 @@ import {
   isOwnerLockUnavailableError,
 } from '@graphql-cache/protocol';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
-import { getOrCreateCacheScope } from '@graphql-cache/scope';
+import {
+  cacheScopeStartsEmpty,
+  getOrCreateCacheScope,
+} from '@graphql-cache/scope';
 import { TauriWebSocketWrapper } from '@macro-inc/collaboration/websocket/platform/tauri-websocket';
 import { Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
@@ -922,8 +925,12 @@ export function getGraphqlSoupClient(): Client {
             externalWriteTypes: resolveCrmExternalWriteTypes,
           }),
           // After the cache, so cached results still show at once; it reports
-          // misses to the gate so their reads are not held.
-          liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates),
+          // misses to the gate so their reads are not held. A cache this page
+          // created has nothing to show, and its first reads resolve only once
+          // it opens, so nothing waits for it.
+          liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates, {
+            cached: !cacheScopeStartsEmpty(scope),
+          }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           traceParentExchange,
