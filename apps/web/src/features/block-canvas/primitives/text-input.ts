@@ -3,6 +3,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { screenToWorld, textTargetAt } from '@macro-inc/graphics';
+import { ARTIFACT_CONTROLS_SELECTOR } from '../constants';
 import type { CanvasState } from './create-canvas-state';
 /** Canvas text gestures stay separate from geometric drawing and pointer capture. */
 export function attachTextInput(root: HTMLElement, state: CanvasState) {
@@ -54,7 +55,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
     if (
       !(target instanceof Element) ||
       target.closest(
-        '[data-canvas-document], [data-canvas-artifact], [data-canvas-artifact-controls], [data-canvas-text-editor], [aria-label="Text style"]'
+        `[data-canvas-document], [data-canvas-artifact], ${ARTIFACT_CONTROLS_SELECTOR}, [data-canvas-text-editor], [aria-label="Text style"]`
       )
     )
       return;
@@ -137,7 +138,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
     if (
       !(event.target instanceof Element) ||
       event.target.closest(
-        '[data-canvas-document], [data-canvas-artifact], [data-canvas-artifact-controls], [data-canvas-text-editor], [data-graphics-connector-end]'
+        `[data-canvas-document], [data-canvas-artifact], ${ARTIFACT_CONTROLS_SELECTOR}, [data-canvas-text-editor], [data-graphics-connector-end]`
       ) ||
       !event.target.closest('[aria-label="Graphics canvas"]')
     )

@@ -7,6 +7,7 @@ import {
   selectedShapeIds,
 } from '@macro-inc/graphics';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
+import { ARTIFACT_CONTROLS_SELECTOR } from '../constants';
 import { eraseCommand, eraserHits } from '../core/eraser';
 
 export function createEraserState(
@@ -104,7 +105,7 @@ export function createEraserState(
         // An artifact's Interact and Present stay pressable with the eraser.
         if (
           event.target instanceof Element &&
-          event.target.closest('[data-canvas-artifact-controls]')
+          event.target.closest(ARTIFACT_CONTROLS_SELECTOR)
         )
           return;
         event.preventDefault();

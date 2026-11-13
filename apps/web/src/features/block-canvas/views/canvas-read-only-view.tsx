@@ -8,10 +8,8 @@ import {
 } from '@macro-inc/graphics/loro/solid';
 import { GraphicsSurface } from '@macro-inc/graphics/solid';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
-import {
-  ARTIFACT_CONTROLS_SELECTOR,
-  ArtifactControls,
-} from './artifact-controls';
+import { ARTIFACT_CONTROLS_SELECTOR } from '../constants';
+import { ArtifactControls } from './artifact-controls';
 import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasDrawingToolbar, CanvasZoomToolbar } from './canvas-toolbars';

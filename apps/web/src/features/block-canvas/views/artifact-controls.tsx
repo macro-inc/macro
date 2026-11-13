@@ -11,13 +11,13 @@ import {
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 
-/** Canvas pointer handlers leave presses inside the bar to its buttons. */
-export const ARTIFACT_CONTROLS_SELECTOR = '[data-canvas-artifact-controls]';
-
 // Screen pixels between the bar and the artifact's top edge.
 const GAP = 8;
-// The rotation handle is a 6px circle 16px above a selected shape's top edge.
-const ROTATION_HANDLE_CLEARANCE = 28;
+// A selected shape's rotation handle: a circle this far above its top edge.
+const ROTATION_HANDLE_OFFSET = 16;
+const ROTATION_HANDLE_RADIUS = 6;
+const ROTATION_HANDLE_CLEARANCE =
+  ROTATION_HANDLE_OFFSET + ROTATION_HANDLE_RADIUS + GAP;
 
 const sameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, index) => id === b[index]);
@@ -108,7 +108,7 @@ function ArtifactControlBar(props: {
     if (!box || !props.clearRotationHandle) return GAP;
 
     const barLeft = box.x + box.width - width();
-    const handleRight = box.x + box.width / 2 + 6;
+    const handleRight = box.x + box.width / 2 + ROTATION_HANDLE_RADIUS;
     return barLeft < handleRight ? ROTATION_HANDLE_CLEARANCE : GAP;
   };
 
@@ -130,7 +130,6 @@ function ArtifactControlBar(props: {
         >
           <span
             data-canvas-artifact-position
-            aria-label={`Slide ${props.position} of ${props.count}`}
             class="px-1.5 text-xs text-ink-muted tabular-nums whitespace-nowrap"
           >
             {props.position}/{props.count}

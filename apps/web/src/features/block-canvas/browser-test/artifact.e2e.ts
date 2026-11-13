@@ -70,7 +70,7 @@ test('shows each slide position above its artifact, at any zoom', async ({
   await expect(first).toBeHidden();
 });
 
-test('the inspector edits the title, without HTML or the shared library', async ({
+test('the inspector shows the title, without HTML or the shared library', async ({
   page,
 }) => {
   await page.goto('/artifact.html?edit');

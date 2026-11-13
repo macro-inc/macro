@@ -50,6 +50,7 @@ import { MediaUploadPreviews } from '../components/media-upload-previews';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
+import { ARTIFACT_CONTROLS_SELECTOR } from '../constants';
 import { setDocumentDisplayCommand } from '../core/document-display';
 import {
   selectionLayoutCommand,
@@ -65,10 +66,7 @@ import type {
 import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
 import { useCanvasMediaSource } from '../queries/media';
-import {
-  ARTIFACT_CONTROLS_SELECTOR,
-  ArtifactControls,
-} from './artifact-controls';
+import { ArtifactControls } from './artifact-controls';
 import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasContextMenu } from './canvas-context-menu';
