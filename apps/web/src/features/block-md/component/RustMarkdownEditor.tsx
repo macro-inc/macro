@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageCommentsProvider';
@@ -89,6 +90,7 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_SVG_PREVIEW,
   enableGitBlame,
+  enableInlineAiEditing,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
@@ -145,6 +147,7 @@ export default function RustMarkdownEditor(props: {
 }) {
   const namespace = allocateEditorNamespace('block-md-main');
   const flow = useFlow();
+  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const userId = useUserId();
   const authenticated = useIsAuthenticated();
   const { commentId } = useUrlParams(URL_PARAMS);
@@ -197,6 +200,12 @@ export default function RustMarkdownEditor(props: {
     canEdit: canInteractWithMedia,
     alive: () => !abort.signal.aborted,
     snippetLink: { documentId },
+    aiEdit: {
+      documentId,
+      view: () => runtime()?.view,
+      enabled: () => inlineAiEditing().enabled && canEdit(),
+      parentSpan: flow.span,
+    },
     comment: {
       // Source: <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>; the
       // draft capability exists only while the native provider is mounted.

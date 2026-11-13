@@ -28,7 +28,14 @@ export type AiOpRefusalCause = (typeof REFUSAL_CAUSES)[number];
 type Outcome =
   | { readonly kind: 'handled'; readonly handled: boolean }
   | { readonly kind: 'retired'; readonly reason: RetiredReason };
-type RetiredReason = 'unmounted' | 'closed' | 'closing';
+type RetiredReason = 'unmounted' | 'rebound' | 'closed' | 'closing';
+
+/** The editor an AI edit was started on, at the mirror generation it was
+ *  captured at. Every entry is admitted against it; it is never retargeted. */
+export type AiEditOrigin = {
+  readonly view: EditorView;
+  readonly generation: number;
+};
 
 /** A plain JSON object (not an array or a scalar). */
 function isJsonObject(value: JsonValue): value is JsonObject {
@@ -66,38 +73,42 @@ function originState(view: EditorView): OriginState {
  * and the ops after it still apply, as in the app's Source editor, whose
  * onError reports to telemetry instead of throwing; the refusal is reported
  * with its typed cause and no content, and the edit still succeeds.
- * `view` is the editor the popup captured; it is never retargeted.
+ * `origin` is the editor and generation the popup captured; it is never
+ * retargeted.
  *
- * Owned retirement (the captured view unmounted before an entry, or the
- * session closed) drops the edit silently, as Source loses it on its detached
- * editor, with a typed span event. Losing Edit access is a named intentional
+ * Owned retirement (the captured view unmounted or rebound to another
+ * generation before an entry, or the session closed) drops the edit silently,
+ * as Source loses it on its detached editor, with a typed span event. A
+ * rebound origin is a named difference: Source's editor would take the rest
+ * against the newly loaded state. Losing Edit access is a named intentional
  * security difference: the prefix stays and the client reports failure. Every
  * other outcome throws.
  */
 export function applyAiOpsNative(
-  view: EditorView,
+  origin: AiEditOrigin,
   ops: readonly DocumentOp[],
   span: Span
 ): void {
   // Not reentrant for the SAME origin: nested work in its drain cannot start a
   // second edit there. Other editors keep their own state and executor guard.
-  const state = originState(view);
+  const state = originState(origin.view);
   if (state.applying)
     throw new Error('A native AI edit is already applying here');
   state.applying = true;
   try {
-    run(view, ops, span, state);
+    run(origin, ops, span, state);
   } finally {
     state.applying = false;
   }
 }
 
 function run(
-  view: EditorView,
+  origin: AiEditOrigin,
   ops: readonly DocumentOp[],
   span: Span,
   state: OriginState
 ): void {
+  const view = origin.view;
   let refused = 0;
   const retired = (reason: RetiredReason) => {
     record(() =>
@@ -110,6 +121,8 @@ function run(
   const settle = (name: string, payload: () => JsonValue): Outcome => {
     // Owned retirement is decided before entry, never inferred from a failure.
     if (!view.isMounted) return { kind: 'retired', reason: 'unmounted' };
+    if (view.mirror.keyGeneration !== origin.generation)
+      return { kind: 'retired', reason: 'rebound' };
     const settlement: InputSettlement =
       dispatchApplicationCommandNowIfSessionEdit(view, name, payload);
     return match(settlement)

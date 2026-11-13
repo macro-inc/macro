@@ -157,3 +157,61 @@ for (const lock of [
     await expect(page.locator('#body')).toHaveText('Select this phrase');
   });
 }
+
+// Source MarkdownPopupToolbar (MarkdownPopup.tsx:621-760): AI edit first,
+// one divider, then FormatTools; the AI prompt replaces the whole toolbar at
+// its measured width; Escape returns to the toolbar.
+test('body popup AI edit slot comes first and swaps to its prompt at the toolbar width', async ({
+  page,
+}, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/?body&ai');
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  const body = page.locator('#body');
+  await body.focus();
+  await body.evaluate((root) => {
+    const text = document
+      .createTreeWalker(root, NodeFilter.SHOW_TEXT)
+      .nextNode();
+    if (!text) throw new Error('Missing actual native text');
+    root.ownerDocument.getSelection()?.setBaseAndExtent(text, 0, text, 18);
+  });
+  const toolbar = page.getByRole('toolbar', { name: 'Document selection' });
+  await expect(toolbar).toBeVisible();
+  await info.attach('body-popup-ai-toolbar', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  const order = await toolbar
+    .locator('button, [role=separator]')
+    .evaluateAll((nodes) =>
+      nodes.map((node) =>
+        node.getAttribute('role') === 'separator'
+          ? '|'
+          : node.getAttribute('aria-label') || node.textContent?.trim()
+      )
+    );
+  await info.attach('body-popup-ai-order', {
+    body: JSON.stringify(order),
+    contentType: 'application/json',
+  });
+  expect(order).toEqual(['AI edit', '|', 'Bold', 'Italic', '', '|', 'Body']);
+  const width = (await toolbar.boundingBox())?.width;
+  await toolbar.getByRole('button', { name: 'AI edit', exact: true }).click();
+  const prompt = page.getByRole('textbox', { name: 'Describe changes' });
+  await expect(prompt).toBeFocused();
+  await expect(prompt).toHaveAttribute('data-captured', 'Select this phrase');
+  await expect(toolbar.getByRole('button')).toHaveCount(0);
+  expect((await toolbar.boundingBox())?.width).toBe(width);
+  await info.attach('body-popup-ai-prompt', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  await page.keyboard.press('Escape');
+  await expect(prompt).toHaveCount(0);
+  await expect(
+    toolbar.getByRole('button', { name: 'AI edit', exact: true })
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});

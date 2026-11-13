@@ -25,7 +25,7 @@ import {
   registerMutationListener,
 } from '../../plugins/shared/utils';
 
-type PaddingValue =
+export type PaddingValue =
   | number
   | [number, number]
   | [number, number, number, number];

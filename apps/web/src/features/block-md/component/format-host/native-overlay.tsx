@@ -1,7 +1,8 @@
 import { HostedFloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { toast } from '@core/component/Toast/Toast';
-import { Telemetry } from '@macro-inc/observability';
+import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
   type Component,
@@ -10,6 +11,7 @@ import {
   Show,
 } from 'solid-js';
 import { CommentButton } from '../CommentButton';
+import { createNativeAiEditSlot } from './native-ai-edit-slot';
 import { NativeBodyFormatPopup } from './native-body-popup';
 import { createNativeDocumentFormattingObserver } from './native-observer';
 import { NativeSnippetLinkControl } from './native-snippet';
@@ -25,6 +27,15 @@ export function createNativeBodyFormattingOverlay(options: {
     readonly canComment: Accessor<boolean>;
     /** Source CREATE_DRAFT_COMMENT_COMMAND result. */
     readonly insert: () => boolean;
+  };
+  /** Source AI edit selection action. */
+  aiEdit?: {
+    readonly documentId: Accessor<string>;
+    readonly view: Accessor<EditorView | undefined>;
+    /** The inline-ai-editing flag and canEdit. */
+    readonly enabled: Accessor<boolean>;
+    /** Source flow.span, the parent of each edit's span. */
+    readonly parentSpan: Span;
   };
 }) {
   const comment = options.comment;
@@ -45,6 +56,13 @@ export function createNativeBodyFormattingOverlay(options: {
   };
   return createRoot((disposeRoot) => {
     const formatting = createNativeDocumentFormattingObserver(options);
+    const aiEdit = options.aiEdit;
+    const ai =
+      aiEdit &&
+      createNativeAiEditSlot({
+        ...aiEdit,
+        enabled: () => options.alive() && aiEdit.enabled(),
+      });
     let disposed = false;
     const dispose = () => {
       if (disposed) return;
@@ -88,6 +106,8 @@ export function createNativeBodyFormattingOverlay(options: {
                 host={controller().host}
                 popup={controller().bodyPopup}
                 commentAction={commentAction}
+                slots={ai ? [ai.slot] : []}
+                onToolbarClosed={ai?.popupClosed}
                 snippetLinkAction={
                   formatting.snippetLink()
                     ? {
@@ -107,6 +127,7 @@ export function createNativeBodyFormattingOverlay(options: {
               />
             )}
           </Show>
+          {ai?.Highlight()}
         </FloatingMenuGroup>
       </ErrorBoundary>
     );

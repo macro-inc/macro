@@ -20,6 +20,8 @@ import {
   untrack,
 } from 'solid-js';
 import { FormatTools } from '../FormatTools';
+import type { BodyPopupSlot } from './body-popup-slots';
+import { NativeBodyToolbar } from './native-body-toolbar';
 import type { BodyFormattingPopupHost, DocumentFormattingHost } from './types';
 
 /** Desktop body popup: the actual MarkdownPopup FormatTools subtree and positioning shell. */
@@ -30,6 +32,10 @@ export function NativeBodyFormatPopup(props: {
     readonly canComment: Accessor<boolean>;
     readonly render: (close: () => void) => JSX.Element;
   };
+  /** Source selection actions (AI edit, Task) and prompt-owning slots (Link). */
+  slots?: readonly BodyPopupSlot[];
+  /** The toolbar went away (Source PopupToolbar onCleanup). */
+  onToolbarClosed?: () => void;
   /** Source Copy link to snippet: last, without a divider, never closing. */
   snippetLinkAction?: {
     readonly available: Accessor<boolean>;
@@ -97,8 +103,15 @@ export function NativeBodyFormatPopup(props: {
   const snippetLinkControls = () =>
     props.host.root() !== null &&
     (props.snippetLinkAction?.available() ?? false);
+  // Source shows its selection actions independently of formatting authority.
+  const slotControls = () =>
+    props.host.root() !== null &&
+    (props.slots ?? []).some((slot) => slot.button && slot.available());
   const controls = () =>
-    props.host.interactable() || commentControls() || snippetLinkControls();
+    props.host.interactable() ||
+    commentControls() ||
+    snippetLinkControls() ||
+    slotControls();
   const position = createMemo(() => {
     const rect = rectangle();
     const scope = portalRect();
@@ -136,25 +149,36 @@ export function NativeBodyFormatPopup(props: {
               useBlockBoundary
               ref={setMenu}
             >
-              <Toolbar aria-label="Document selection">
-                <Show when={props.host.interactable()}>
-                  <FormatTools
-                    withinPopup
-                    formattingHost={props.host}
-                    showLinkButton={false}
-                  />
-                  {/* Source MarkdownPopup: FormatTools then a divider before later actions. */}
-                  <Show when={commentControls() || snippetLinkControls()}>
-                    <Toolbar.Divider />
-                  </Show>
-                </Show>
-                <Show when={commentControls()}>
-                  {props.commentAction?.render(() => setVisible(false))}
-                </Show>
-                <Show when={snippetLinkControls()}>
-                  {props.snippetLinkAction?.render()}
-                </Show>
-              </Toolbar>
+              <NativeBodyToolbar
+                slots={props.slots ?? []}
+                interactable={props.host.interactable}
+                formatTools={() => (
+                  <>
+                    <FormatTools
+                      withinPopup
+                      formattingHost={props.host}
+                      showLinkButton={false}
+                    />
+                    {/* Source MarkdownPopup: FormatTools then a divider before later actions. */}
+                    <Show when={commentControls() || snippetLinkControls()}>
+                      <Toolbar.Divider />
+                    </Show>
+                  </>
+                )}
+                trailing={() => (
+                  <>
+                    <Show when={commentControls()}>
+                      {props.commentAction?.render(() => setVisible(false))}
+                    </Show>
+                    <Show when={snippetLinkControls()}>
+                      {props.snippetLinkAction?.render()}
+                    </Show>
+                  </>
+                )}
+                hide={() => setVisible(false)}
+                focusEditor={() => props.host.focus()}
+                onClosed={props.onToolbarClosed}
+              />
             </PopupPositioner>
           </ScopedPortal>
         )}

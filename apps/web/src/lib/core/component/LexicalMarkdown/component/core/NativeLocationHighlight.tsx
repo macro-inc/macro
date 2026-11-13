@@ -4,13 +4,18 @@ import { Portal } from 'solid-js/web';
 import { MarkdownStackingContext } from '../../constants';
 import type { PersistentLocation } from '../../plugins/location/locationPlugin';
 import { nativeLocationRange } from '../../plugins/location/native';
-import { createRectsFromDOMRange, HighlightRects } from './Highlights';
+import {
+  createRectsFromDOMRange,
+  HighlightRects,
+  type PaddingValue,
+} from './Highlights';
 
 /** Source HighlightLayer plus LocationHighlight over a native view. */
 export function NativeLocationHighlight(props: {
   view: EditorView;
   location?: PersistentLocation;
   class?: string;
+  padding?: PaddingValue;
 }) {
   const [layer, setLayer] = createSignal<HTMLDivElement>();
   const [layout, setLayout] = createSignal(undefined, { equals: false });
@@ -48,6 +53,7 @@ export function NativeLocationHighlight(props: {
                 rects={rects()}
                 mountRef={mount()}
                 class={props.class}
+                padding={props.padding}
               />
             )}
           </Show>

@@ -17,6 +17,7 @@ import * as native from '../../../../../lib/core/document-session/wasm/document_
 import { MarkdownDocumentProvider } from '../../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../../context/markdown-document-state';
 import { FormatTools } from '../../FormatTools';
+import { promptSlot } from '../body-popup-slots';
 import { NativeBodyFormatPopup } from '../native-body-popup';
 import { createNativeDocumentFormattingObserver } from '../native-observer';
 import '@app/index.css';
@@ -42,6 +43,36 @@ function NativeFormattingFixture() {
   const [selectionFacts, setSelectionFacts] = createSignal('');
   const floating = new URLSearchParams(location.search).has('floating');
   const bodyPopup = new URLSearchParams(location.search).has('body');
+  // Source's AI edit selection action, as a fixture slot with Source's
+  // prompt markup (MarkdownPopup.tsx:743-760).
+  const aiSlots = new URLSearchParams(location.search).has('ai')
+    ? [
+        promptSlot<string>({
+          id: 'ai',
+          available: () => true,
+          button: (control) => (
+            <button type="button" onClick={() => control.open()}>
+              AI edit
+            </button>
+          ),
+          capture: () => document.getSelection()?.toString() ?? '',
+          prompt: (control) => (
+            <textarea
+              aria-label="Describe changes"
+              placeholder="Describe changes"
+              data-captured={control.value}
+              ref={(textarea) => requestAnimationFrame(() => textarea.focus())}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                event.stopPropagation();
+                control.dismiss();
+              }}
+            />
+          ),
+        }),
+      ]
+    : [];
   let body: HTMLDivElement | undefined;
   let runtime: ReturnType<typeof mountLocalSessionView> | undefined;
   let closed = false;
@@ -284,6 +315,7 @@ function NativeFormattingFixture() {
                   <NativeBodyFormatPopup
                     host={controller().host}
                     popup={controller().bodyPopup}
+                    slots={aiSlots}
                   />
                 )}
               </Show>

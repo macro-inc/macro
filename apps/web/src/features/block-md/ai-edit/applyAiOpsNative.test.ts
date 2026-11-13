@@ -12,12 +12,13 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import {
   createBuiltinRegistry,
+  type EditorView,
   mountLocalSessionView,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
 import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
-import { applyAiOpsNative } from './applyAiOpsNative';
+import { type AiEditOrigin, applyAiOpsNative } from './applyAiOpsNative';
 
 // The native AI-edit host against Source's app behaviour
 // (applyAiOps.source-controls.test.ts, live-20261113): one selection clear,
@@ -47,6 +48,13 @@ afterAll(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+/** The origin a caller captures: the view at its current generation. */
+function originOf(view: EditorView): AiEditOrigin {
+  const generation = view.mirror.keyGeneration;
+  if (generation === null) throw new Error('Native view has no generation');
+  return { view, generation };
+}
 
 function mount() {
   const root = document.createElement('div');
@@ -144,7 +152,7 @@ test('applies every op in the caller task and succeeds', async () => {
   const { span, setAttr } = recordedSpan();
   try {
     applyAiOpsNative(
-      runtime.view,
+      originOf(runtime.view),
       [
         setText('alphaId1', 'Omega'),
         { kind: 'appendText', node: 'secondId', text: ' (AI)' },
@@ -165,11 +173,11 @@ test('clears the selection first, even with no ops', async () => {
   const input = vi.spyOn(runtime.executor.session, 'input');
   const { span } = recordedSpan();
   try {
-    applyAiOpsNative(runtime.view, [], span);
+    applyAiOpsNative(originOf(runtime.view), [], span);
     expect(input).toHaveBeenCalledTimes(1);
     input.mockClear();
     applyAiOpsNative(
-      runtime.view,
+      originOf(runtime.view),
       [setText('alphaId1', 'One'), setText('secondId', 'Two')],
       span
     );
@@ -186,7 +194,7 @@ test('skips a refused op, applies the ops after it and reports it without conten
   const { span, event, setAttr } = recordedSpan();
   try {
     applyAiOpsNative(
-      runtime.view,
+      originOf(runtime.view),
       [
         setText('alphaId1', 'Omega'),
         missedReplace,
@@ -229,7 +237,11 @@ test('a view retired before entry drops the edit silently', async () => {
   const input = vi.spyOn(runtime.executor.session, 'input');
   try {
     expect(() =>
-      applyAiOpsNative(runtime.view, [setText('alphaId1', 'Omega')], span)
+      applyAiOpsNative(
+        originOf(runtime.view),
+        [setText('alphaId1', 'Omega')],
+        span
+      )
     ).not.toThrow();
     expect(input).not.toHaveBeenCalled();
     expect(report).not.toHaveBeenCalled();
@@ -256,7 +268,7 @@ test('a close started from a listener during op k settles op k and drops the res
   try {
     expect(() =>
       applyAiOpsNative(
-        runtime.view,
+        originOf(runtime.view),
         [setText('alphaId1', 'Omega'), setText('secondId', 'never')],
         span
       )
@@ -284,7 +296,11 @@ test('a helper failure on a mounted view keeps its own error', async () => {
     // a real failure, not a retired origin.
     runtime.executor.run(() => {
       try {
-        applyAiOpsNative(runtime.view, [setText('alphaId1', 'Omega')], span);
+        applyAiOpsNative(
+          originOf(runtime.view),
+          [setText('alphaId1', 'Omega')],
+          span
+        );
       } catch (error) {
         caught = error;
       }
@@ -307,13 +323,48 @@ test('another view still applies after one retires', async () => {
   const { span } = recordedSpan();
   try {
     const closing = retired.close();
-    applyAiOpsNative(retired.view, [setText('alphaId1', 'gone')], span);
+    applyAiOpsNative(
+      originOf(retired.view),
+      [setText('alphaId1', 'gone')],
+      span
+    );
     await closing;
-    applyAiOpsNative(live.view, [setText('alphaId1', 'Omega')], span);
+    applyAiOpsNative(originOf(live.view), [setText('alphaId1', 'Omega')], span);
     expect(paragraphs(live)[0]).toBe('Omega');
   } finally {
     retired.root.remove();
     await close(live);
+  }
+});
+
+test('a later chunk after the origin rebinds is dropped, never retargeted (named difference)', async () => {
+  const runtime = mount();
+  const { span, event } = recordedSpan();
+  try {
+    // The submit captures the origin once; the service streams chunks to it.
+    const origin = originOf(runtime.view);
+    applyAiOpsNative(origin, [setText('alphaId1', 'First chunk')], span);
+    expect(paragraphs(runtime)[0]).toBe('First chunk');
+    // Synthetic stand-in for a mirror re-initialize, the only path that
+    // replaces the key generation (a reset or resync rebinds the view).
+    vi.spyOn(runtime.view.mirror, 'keyGeneration', 'get').mockReturnValue(
+      origin.generation + 1
+    );
+    expect(runtime.view.mirror.keyGeneration).not.toBe(origin.generation);
+    applyAiOpsNative(origin, [setText('alphaId1', 'Second chunk')], span);
+    expect(paragraphs(runtime)).toEqual(['First chunk', 'Second line']);
+    expect(
+      event.mock.calls.filter(
+        ([name]) => name === 'ai_edit.dropped_retired_origin'
+      )
+    ).toEqual([
+      [
+        'ai_edit.dropped_retired_origin',
+        { 'ai_edit.retired_reason': 'rebound', 'ai_edit.op_count': 1 },
+      ],
+    ]);
+  } finally {
+    await close(runtime);
   }
 });
 
@@ -339,7 +390,7 @@ test('lost Edit access mid-edit keeps the prefix and fails (named security diffe
   try {
     expect(() =>
       applyAiOpsNative(
-        runtime.view,
+        originOf(runtime.view),
         [setText('alphaId1', 'Omega'), setText('secondId', 'never')],
         span
       )
@@ -363,17 +414,25 @@ test('the same origin cannot start a second edit while one applies; another can'
   const stop = runtime.view.onCommit(() => {
     if (nested !== undefined || paragraphs(runtime)[0] !== 'Omega') return;
     try {
-      applyAiOpsNative(runtime.view, [setText('secondId', 'nested')], span);
+      applyAiOpsNative(
+        originOf(runtime.view),
+        [setText('secondId', 'nested')],
+        span
+      );
       nested = 'applied';
     } catch (error) {
       nested = error;
     }
-    applyAiOpsNative(other.view, [setText('alphaId1', 'other')], span);
+    applyAiOpsNative(
+      originOf(other.view),
+      [setText('alphaId1', 'other')],
+      span
+    );
     otherApplied = paragraphs(other)[0] === 'other';
   });
   try {
     applyAiOpsNative(
-      runtime.view,
+      originOf(runtime.view),
       [setText('alphaId1', 'Omega'), setText('secondId', 'Final')],
       span
     );
@@ -406,7 +465,7 @@ test('a nested refusal carrying another token is not this op’s refusal', async
   });
   try {
     applyAiOpsNative(
-      runtime.view,
+      originOf(runtime.view),
       [setText('alphaId1', 'Omega'), setText('secondId', 'Final')],
       span
     );
@@ -433,10 +492,18 @@ test('two AI edits group for undo by the 400 ms window, like Source', async () =
     try {
       const before = paragraphs(runtime);
       time += 1_000;
-      applyAiOpsNative(runtime.view, [setText('alphaId1', 'Omega')], span);
+      applyAiOpsNative(
+        originOf(runtime.view),
+        [setText('alphaId1', 'Omega')],
+        span
+      );
       const afterFirst = paragraphs(runtime);
       time += gap;
-      applyAiOpsNative(runtime.view, [setText('secondId', 'Final')], span);
+      applyAiOpsNative(
+        originOf(runtime.view),
+        [setText('secondId', 'Final')],
+        span
+      );
       time += 10_000;
       undo(runtime);
       const undone = paragraphs(runtime);
