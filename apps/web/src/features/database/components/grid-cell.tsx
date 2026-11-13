@@ -923,8 +923,6 @@ function InlineEditor(props: {
   // they did before the cell opened.
   const editorClass = () =>
     `${props.look.property ? 'min-h-8' : 'min-h-9'} w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] leading-5 text-ink outline-none`;
-  const editorMedium = () =>
-    props.column.dataType === 'STRING' && !props.look.property;
   const focus = () => {
     if (textFocus) {
       textFocus();
@@ -1041,7 +1039,10 @@ function InlineEditor(props: {
               }}
               onKeyDown={onKeyDown}
               class={editorClass()}
-              classList={{ 'font-medium': editorMedium() }}
+              classList={{
+                'font-medium':
+                  props.column.dataType === 'STRING' && !props.look.property,
+              }}
             />
           }
         >
@@ -1052,7 +1053,9 @@ function InlineEditor(props: {
                 return props.draft;
               },
               get class() {
-                return `${editorClass()}${editorMedium() ? ' font-medium' : ''}`;
+                // Only a text column opens this editor, so a grid keeps its medium
+                // weight even if the column's type changes while it is open.
+                return `${editorClass()}${props.look.property ? '' : ' font-medium'}`;
               },
               autoFocus: true,
               selectAll: props.selectAll,
