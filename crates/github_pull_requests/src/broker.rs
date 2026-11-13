@@ -15,16 +15,14 @@ pub enum GithubPullRequestTopicEvent {
     #[serde(rename = "github_pull_request.updated")]
     Updated(GithubPullRequestUpdated),
 }
-/// Public payload of `github_pull_request.updated`: which pull request and
-/// which of its Macro records changed. Read them for the new state.
+/// Public payload of `github_pull_request.updated`: which pull request
+/// changed. Its Macro records belong to different owners, so their ids stay
+/// out; read the pull request by key for the new state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct PublicGithubPullRequestUpdated {
     /// The pull request's lowercased `owner/repo/pull/number` key.
     pub github_key: String,
-    /// The foreign entities recording this pull request that the write
-    /// touched.
-    pub foreign_entity_ids: Vec<uuid::Uuid>,
 }
 
 /// The public projection of [`GithubPullRequestTopicEvent`], delivered under
@@ -79,10 +77,7 @@ impl TopicEvent for GithubPullRequestTopicEvent {
                     ),
                     stage: Stage::Preview,
                     payload: Cow::Owned(GithubPullRequestPublicEvent::Updated(
-                        PublicGithubPullRequestUpdated {
-                            github_key,
-                            foreign_entity_ids: update.foreign_entity_ids.clone(),
-                        },
+                        PublicGithubPullRequestUpdated { github_key },
                     )),
                 }))
             }

@@ -37,13 +37,7 @@ fn an_update_reaches_everyone_who_can_see_a_linked_record() {
         serde_json::to_value(public.payload.as_ref()).unwrap(),
         json!({
             "event_type": "github_pull_request.updated",
-            "metadata": {
-                "github_key": "macro-inc/repo/pull/7",
-                "foreign_entity_ids": [
-                    "00000000-0000-0000-0000-000000000001",
-                    "00000000-0000-0000-0000-000000000002",
-                ],
-            },
+            "metadata": {"github_key": "macro-inc/repo/pull/7"},
         })
     );
 }
