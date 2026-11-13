@@ -1083,7 +1083,6 @@ export function EmailList(props: EmailListProps) {
           >
             <Show when={isExcludedEmailFolder(state.tab)}>
               <Button
-                size="sm"
                 disabled={restoreFolder.isPending}
                 onClick={() =>
                   fireAndForget(
