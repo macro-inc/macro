@@ -1,0 +1,21 @@
+apps/web/src/features/channel/Input/browser-test/routine-paste.browser.e2e.ts
+  s_40002bd3b63a7c::t_389b0d49ad77da 60-61
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentMention.tsx
+  s_40002bd3b63a7c::t_389b0d49ad77da 641-642,645
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c6f20dc4a9dbb5ef796dbf83ba6c1fad17bea4c7",
+  "prompts": {},
+  "sessions": {
+    "s_40002bd3b63a7c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de40e00c-9b42-4ec1-ac0a-a928cb29cc53",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
