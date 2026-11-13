@@ -23,7 +23,7 @@ impl MediaService {
     /// Import one batch; one failing file never blocks the others. Returns how
     /// many were imported.
     #[tracing::instrument(
-        name = "whatsapp.linked.import_media",
+        name = "external_chat.import_media",
         skip_all,
         err,
         fields(due, imported)
@@ -64,7 +64,7 @@ impl MediaService {
     /// file that fails stays queued and is retried later. Returns how many
     /// were deleted.
     #[tracing::instrument(
-        name = "whatsapp.linked.delete_files",
+        name = "external_chat.delete_files",
         skip_all,
         err,
         fields(due, deleted)
