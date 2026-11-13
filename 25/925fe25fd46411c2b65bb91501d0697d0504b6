@@ -1,0 +1,124 @@
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_af025ca1b7a738::t_b92248bff6238f 2964-2982,2993-3002,4844-4900
+  s_af025ca1b7a738::t_a31041f0f4d63b 4901
+apps/web/src/lib/queries/agent-session/keys.ts
+  s_af025ca1b7a738::t_1aea9ba357ef27 52-59
+packages/sdk/src/entities/agent-sessions/agent-session.ts
+  s_af025ca1b7a738::t_7afe56da1c72d2 70-79,622-650
+  s_af025ca1b7a738::t_55a49b86797eb6 651
+apps/web/src/lib/service-clients/service-agent-harness/client.ts
+  s_af025ca1b7a738::t_1aea9ba357ef27 39-40,60,409-427,430-431
+  s_af025ca1b7a738::t_68b22abc966c0a 428-429,432
+packages/sdk/src/utils/verbs.ts
+  s_af025ca1b7a738::t_b92248bff6238f 57,71
+apps/web/src/lib/i18n/locales/en/agent-thread-replies.ts
+  s_af025ca1b7a738::t_e5798a1bb0fd74 1-10
+crates/agent_session/src/domain/service/test.rs
+  s_af025ca1b7a738::t_2f4e6e32d41414 805-806
+services/agent_harness_service/src/main.rs
+  s_af025ca1b7a738::t_370a4d20389ab0 2017-2026,2151
+apps/web/src/features/channel/Message/tests/agent-session-link.test.tsx
+  s_af025ca1b7a738::t_36621aeb160271 1-78,82-125,129-132
+  s_af025ca1b7a738::t_1098a86bdf352a 79-81,126-128
+crates/agent_session/src/inbound/axum_router/thread_replies.rs
+  s_af025ca1b7a738::t_febbfa64338228 1-130
+apps/web/src/lib/queries/agent-session/thread-replies.ts
+  s_af025ca1b7a738::t_1aea9ba357ef27 1-69
+crates/agent_harness/src/outbound/cursor/manager/test.rs
+  s_af025ca1b7a738::t_2f4e6e32d41414 145
+crates/agent_session/src/domain/thread_replies/test.rs
+  s_af025ca1b7a738::t_7d66c74028d89a 1-77,82-85
+  s_af025ca1b7a738::t_d02a7602742857 78-81
+packages/sdk/generated/agent-harness/index.ts
+  s_af025ca1b7a738::t_b92248bff6238f 4
+apps/web/src/features/channel/Message/AgentSessionLink.tsx
+  s_af025ca1b7a738::t_e5798a1bb0fd74 1,93-95,106-107,114,123-127,129-133
+  s_af025ca1b7a738::t_1a705ec719124f 3,5-10,24-25,46-72,74,77-92,96-105,108-113,115-122,128,134-139,141,143
+crates/agent_session/src/domain/service.rs
+  s_af025ca1b7a738::t_2f4e6e32d41414 2295-2296
+crates/agent_session/src/testing.rs
+  s_af025ca1b7a738::t_2f4e6e32d41414 368
+crates/agent_session/src/domain/mod.rs
+  s_af025ca1b7a738::t_915d011c55e165 35
+crates/agent_harness/src/outbound/routing/test.rs
+  s_af025ca1b7a738::t_2f4e6e32d41414 207
+crates/agent_session/src/inbound/axum_router.rs
+  s_af025ca1b7a738::t_febbfa64338228 81-83
+  s_af025ca1b7a738::t_915d011c55e165 451-452
+  s_af025ca1b7a738::t_d02a7602742857 450
+crates/agent_trigger/src/domain/service/test.rs
+  s_af025ca1b7a738::t_2f4e6e32d41414 634
+services/agent_harness_service/src/api.rs
+  s_af025ca1b7a738::t_370a4d20389ab0 92,151,295-300,470
+apps/web/src/lib/i18n/locales/en.ts
+  s_af025ca1b7a738::t_e5798a1bb0fd74 5,51
+docs/agent-guide/channels.md
+  s_af025ca1b7a738::t_71fda961875ce2 394-405
+packages/sdk/specs/agent-harness.json
+  s_af025ca1b7a738::t_b92248bff6238f 3409-3568,8594-8612,8624-8634
+crates/agent_session/src/outbound/postgres.rs
+  s_af025ca1b7a738::t_915d011c55e165 20
+  s_af025ca1b7a738::t_a92da3a6399df3 856-859
+  s_af025ca1b7a738::t_2f4e6e32d41414 835
+crates/agent_session/src/domain/ports.rs
+  s_af025ca1b7a738::t_a92da3a6399df3 544-546
+  s_af025ca1b7a738::t_2f4e6e32d41414 551
+packages/sdk/src/macro.ts
+  s_af025ca1b7a738::t_b92248bff6238f 363
+services/agent_harness_service/src/api/swagger.rs
+  s_af025ca1b7a738::t_370a4d20389ab0 38-40,125-126,201-202
+crates/agent_session/src/domain/thread_replies.rs
+  s_af025ca1b7a738::t_ac901c0f96bab5 1-109
+crates/macro_db_client/migrations/20261113164947_agent_session_thread_reply_pause.sql
+  s_af025ca1b7a738::t_96bcd7679b1940 1-7
+crates/agent_session/src/outbound/postgres/thread_replies.rs
+  s_af025ca1b7a738::t_3e4a26cb176a24 1-64
+crates/agent_trigger/src/domain/service.rs
+  s_af025ca1b7a738::t_2f4e6e32d41414 583
+crates/agent_trigger/AGENTS.md
+  s_af025ca1b7a738::t_71fda961875ce2 62-64
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_af025ca1b7a738::t_b92248bff6238f 5,711-724,731
+  s_af025ca1b7a738::t_7b2dadf37d7394 725-730,732
+crates/agent_session/src/domain/error.rs
+  s_af025ca1b7a738::t_915d011c55e165 89-92
+crates/agent_session/src/outbound/postgres/test.rs
+  s_af025ca1b7a738::t_7c5c9051c49280 1073-1132
+  s_af025ca1b7a738::t_2f4e6e32d41414 454,1020,1041,1067,2846
+crates/agent_session/AGENTS.md
+  s_af025ca1b7a738::t_71fda961875ce2 125-132
+.sqlx/query-366c6d3463a9da9e5dfdc129d318e44933bed56bd78879b0fed71c6f54a3cbe2.json
+  s_af025ca1b7a738::t_500d740ea937c0 3,213
+.sqlx/query-5100d020e0d5e31024df5aee060f3b04696fa221b60dae5f3dc80f80905705ec.json
+  s_af025ca1b7a738::t_36d0cdd183e2ac 1-28
+.sqlx/query-5e3227729d0c3c9577c38557bb7d1593fcf1573d78de4ce340a06c7b049d3f18.json
+  s_af025ca1b7a738::t_274e3c4fe96341 1-14
+.sqlx/query-d2ebfb85a4e7934810b80504fd6cc5ced7ea76d9995185e2a496b2655edb3734.json
+  s_af025ca1b7a738::t_4981fb9d4d71a9 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_af025ca1b7a738::t_63ee3cdb93a05a 79,81,3963-4112
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_af025ca1b7a738::t_e6042a4eb5d0e0 454,456
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/sessionThreadRepliesResponse.ts
+  s_af025ca1b7a738::t_632ac1741fabab 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/setSessionThreadRepliesRequest.ts
+  s_af025ca1b7a738::t_185456025fa37f 1-14
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_af025ca1b7a738::t_4365f69de1afc1 3409-3568,8594-8612,8624-8634
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "25925fe25fd46411c2b65bb91501d0697d0504b6",
+  "prompts": {},
+  "sessions": {
+    "s_af025ca1b7a738": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66cd9ed7-5701-4e3e-a0cd-565b3e7feb58",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
