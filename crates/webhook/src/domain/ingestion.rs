@@ -48,7 +48,7 @@ pub enum WebhookEventIngestionError {
         entity_id: String,
     },
     /// A private event, such as a call invitation, has no explicit recipient.
-    #[error("private call notification has no recipient")]
+    #[error("private event has no recipient")]
     MissingCallRecipient,
     /// The broker envelope could not be represented by the queue contract.
     #[error("failed to serialize broker envelope: {0}")]

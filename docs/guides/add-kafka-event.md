@@ -110,7 +110,7 @@ rg -l 'declare_topics!' crates services | xargs rg -l '<XMacroEvent>'
 
 | Consumer | What to add | Silent-drop behavior if you don't |
 | --- | --- | --- |
-| Webhook ingestion and SSE, `crates/webhook/src/domain/ingestion.rs` + `ingestion/stream.rs`, topic list in `crates/webhook/src/topics.rs` | A normalization arm and audience, a case in `ingestion/test.rs`, a row in the README event table | An agent-trigger shape with no arm is rejected as `InvalidEntityId` ("unrecognized agent-trigger event shape") and committed; the error is logged in DSS, not by the producer, so the producer looks healthy while nothing reaches the daemon |
+| Webhook ingestion and SSE, `crates/webhook/src/domain/ingestion.rs` + `ingestion/stream.rs`, topic list in `crates/webhook/src/topics.rs` | Nothing per event: the variant's `exposure()` (section 8) decides; a new `Audience` class needs a mapping in both files; a README event-list row for public events | Internal variants are skipped by design; an audience class with no mapping fails the event as `UnsupportedAudience`, logged in DSS |
 | Realtime Soup, `crates/soup_realtime/src/inbound/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
 | Activity, `services/document_storage_service/src/service/activity.rs` and the owning domain's activity mapping | Map the variant to an activity row | No activity entry |
 | Search, `services/search_processing_service/src/inbound/kafka_consumer.rs` | Index or delete | Stale search results |
@@ -202,13 +202,15 @@ whether it leaves Macro, to whom, and in what shape. The vocabulary is in
 - **Public** returns `PublicEvent { name, entity, audience, stage, payload }`.
   `name` equals the variant's serde tag. `audience` is whose current access
   decides delivery (`Audience::Entity` for an entity's explicit accessors,
-  `Recipient`, `Owner`, `Team`, `ContactsOf`, `Snapshot` when grants are gone,
-  `Any` for a union); it reads only the payload. Routing fields such as a
+  `Recipient`, `Owner`, `Team`, `TeamsOf`, `ContactsOf`, `Workspace`,
+  `GithubInstallation`, `Snapshot` when grants are gone, `Any` for a union); it
+  reads only the payload. Routing fields such as a
   recipient go on the audience and are stripped from the payload.
 - The payload is an explicit projection, not the whole metadata by default: a
   new family ships thin (ids, actor, what changed). It derives
   `utoipa::ToSchema` under the crate's `schema` or `inbound` feature and has a
-  JSON-literal test. Start new families at `Stage::Preview`.
+  JSON-literal test. Start new families at `Stage::Preview`, which is not
+  delivered until the event stream's flag gate exists.
 - A topic is delivered only when `crates/webhook/src/topics.rs` subscribes to
   it; otherwise list it in `INTERNAL_TOPICS` there. A new topic fails
   `every_topic_is_delivered_or_listed_internal` until it is in one of the two.

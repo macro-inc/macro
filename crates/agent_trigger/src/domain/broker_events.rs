@@ -401,13 +401,6 @@ impl TopicEvent for AgentTriggerTopicEvent {
             }
         }
 
-        fn unrecognized_shape() -> ExposureError {
-            ExposureError::InvalidEntityId {
-                entity_type: "bot",
-                entity_id: "unrecognized agent-trigger event shape".to_owned(),
-            }
-        }
-
         // The entity, and the ordering key, is the bot: a subscriber consumes
         // a bot's whole trigger stream in order. The bot is not an entity
         // anyone holds access to, so the audience is whose access gates it.
@@ -415,13 +408,13 @@ impl TopicEvent for AgentTriggerTopicEvent {
             Self::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
                 (assigned.bot_id, parent(&assigned.parent))
             }
-            Self::New(
-                new @ (NewAgentSessionEvent::TopLevelMentioned(_)
-                | NewAgentSessionEvent::Mentioned(_)),
-            ) => match new.mention() {
-                Some(mention) => (mention.bot_id, parent(&mention.message.parent)),
-                None => return Err(unrecognized_shape()),
-            },
+            Self::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => (
+                mentioned.bot_id,
+                parent(&MessageParent::Channel(mentioned.message.channel_id)),
+            ),
+            Self::New(NewAgentSessionEvent::Mentioned(mentioned)) => {
+                (mentioned.bot_id, parent(&mentioned.message.parent))
+            }
             // The one person who asked from the composer: nothing was posted,
             // so nobody else's access is in question. Their runtime, or their
             // team's, serves it.
@@ -439,13 +432,13 @@ impl TopicEvent for AgentTriggerTopicEvent {
                     "agent conversation messages reach the agent runtime without webhook or SSE delivery",
                 ));
             }
-            Self::Existing(
-                existing @ (ExistingAgentSessionEvent::Channel(_)
-                | ExistingAgentSessionEvent::Thread(_)),
-            ) => match existing.session_message() {
-                Some(message) => (message.bot_id, parent(&message.message.parent)),
-                None => return Err(unrecognized_shape()),
-            },
+            Self::Existing(ExistingAgentSessionEvent::Channel(metadata)) => (
+                metadata.bot_id,
+                parent(&MessageParent::Channel(metadata.message.channel_id)),
+            ),
+            Self::Existing(ExistingAgentSessionEvent::Thread(metadata)) => {
+                (metadata.bot_id, parent(&metadata.message.parent))
+            }
         };
         Ok(Exposure::Public(PublicEvent {
             name: AgentTriggerEventName::from(self).into(),

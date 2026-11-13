@@ -72,7 +72,8 @@ pub struct PublicEvent<'a, P: Clone> {
 pub enum Stage {
     /// Delivered to everyone in the audience.
     Stable,
-    /// Delivered only behind the `public-event-stream` feature flag.
+    /// Not delivered until the event stream's `public-event-stream` flag gate
+    /// exists; then delivered only to flagged users.
     Preview,
 }
 

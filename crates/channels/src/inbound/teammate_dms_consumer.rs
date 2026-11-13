@@ -107,7 +107,7 @@ impl TopicEvent for TeamsTopicForDms {
         use macro_event_broker::exposure::Exposure;
 
         Ok(match self {
-            Self::Payload(_) => Exposure::internal_by_design(
+            Self::MemberJoined(_) | Self::Other(_) => Exposure::internal_by_design(
                 "consumer-side decoding of macro.teams; TeamTopicEvent declares the topic exposure",
             ),
         })
