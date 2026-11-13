@@ -1,0 +1,80 @@
+crates/agent_wakes/AGENTS.md
+  s_fcbfa0c2313f05::t_c97e2309ae5a59 1-46
+services/agent_harness_service/AGENTS.md
+  s_fcbfa0c2313f05::t_c97e2309ae5a59 19-20,212
+crates/agent_wakes/CLAUDE.md
+  s_fcbfa0c2313f05::t_b77af69e57bab4 1
+crates/agent_wakes/src/outbound/postgres.rs
+  s_fcbfa0c2313f05::t_0772d0fe705e9c 216,242
+  s_9adf6dfdfe2ddd::t_91fca88c303564 190-192
+crates/macro_db_client/migrations/20261113040504_agent_wakes.up.sql
+  s_fcbfa0c2313f05::t_0772d0fe705e9c 9-10
+crates/agent_wakes/src/outbound/postgres/test.rs
+  s_39eee246ac6b4a::t_cb58ad1e4f231d 230,267,278,283-284
+.sqlx/query-ad514d90ace942000e9da9cc1be1c86062e66ed21dd9119835abb6ca514e4ed5.json
+  s_fcbfa0c2313f05::t_55e36a5ff5d35c 3,48
+.sqlx/query-d426c1ea0e05b83a17d1c14e76685da7368473f185229f556328dcbe93aef819.json
+  s_fcbfa0c2313f05::t_c4e0a1ca1868a0 3,49
+packages/sdk/generated/agent-fold/index.ts
+  s_39eee246ac6b4a::t_862828455004fc 2880,2882,2891,2897,2903,2911,2918,2925,2948,2952,2963,2965,2974,2980,2986,2994,3001,3008,3031,3035
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_39eee246ac6b4a::t_71ee0646f5015c 102
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_39eee246ac6b4a::t_bb4eb38a5d8bd1 814
+apps/web/src/features/dynamic-ui/widgets/wakes/format.test.ts
+  s_fcbfa0c2313f05::t_c7f4c3cdac45fc 82
+apps/web/src/features/dynamic-ui/widgets/Wakes.tsx
+  s_fcbfa0c2313f05::t_a196eb64d84efe 120-124
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_fcbfa0c2313f05::t_c6d868872f4b40 41-52
+apps/web/src/features/dynamic-ui/widgets/wakes/format.ts
+  s_fcbfa0c2313f05::t_c7f4c3cdac45fc 97-98
+crates/agent_wakes/src/outbound/clock.rs
+  s_9adf6dfdfe2ddd::t_94b29fe3cb0fd6 1-15
+crates/agent_wakes/src/outbound/mod.rs
+  s_9adf6dfdfe2ddd::t_4015af52d4251a 3,8
+apps/web/src/features/dynamic-ui/widgets/Trace.tsx
+  s_08916afcb93734::t_76c48c9d6d54f7 11-12,22-31,33-53,55-56
+apps/web/src/lib/queries/agent-wakes/wakes.ts
+  s_08916afcb93734::t_3d000f5535c171 6,13-15,17,19,29,32-34,36,45-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "869fa2734d5afe1d3e7cbdcd33da9c0048d0a78e",
+  "prompts": {},
+  "sessions": {
+    "s_08916afcb93734": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a64826-9394-4543-9ccd-aaab16928c0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9adf6dfdfe2ddd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c35b1b8-462f-45fe-960d-31815e6c0d47",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
