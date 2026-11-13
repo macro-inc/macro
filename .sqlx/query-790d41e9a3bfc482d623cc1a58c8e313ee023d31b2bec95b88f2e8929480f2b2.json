@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH bucket AS (\n                SELECT LEAST(\n                    $2::float8,\n                    COALESCE(push_tokens, $2::float8)\n                        + EXTRACT(EPOCH FROM now() - COALESCE(push_tokens_refilled_at, now()))::float8\n                            * $2::float8 / 60\n                ) AS tokens\n                FROM agent_repos\n                WHERE agent_user_id = $1\n                FOR UPDATE\n            )\n            UPDATE agent_repos\n            SET push_tokens = bucket.tokens - 1, push_tokens_refilled_at = now()\n            FROM bucket\n            WHERE agent_user_id = $1 AND bucket.tokens >= 1\n            RETURNING true AS \"taken!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "taken!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "790d41e9a3bfc482d623cc1a58c8e313ee023d31b2bec95b88f2e8929480f2b2"
+}

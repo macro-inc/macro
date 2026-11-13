@@ -1,11 +1,17 @@
-import { FeatureConstellation } from '../../setup/components/FeatureOverview';
+import { createUniqueId } from 'solid-js';
+import { ContextScene } from '../../setup/components/WelcomeSteps';
+import { WorkspaceTexture } from '../../setup/components/WorkspaceTexture';
 import './homepage-feature-links.css';
 
-/** Compact feature links above the homepage introduction. */
+/** The production welcome constellation shared by desktop and mobile. */
 export function HomepageFeatureLinks() {
+  const textureId = createUniqueId();
   return (
-    <section class="homepage-feature-links" aria-label="Explore Macro features">
-      <FeatureConstellation expanded linked />
-    </section>
+    <div class="homepage-feature-links">
+      <div class="homepage-constellation-wash" aria-hidden="true">
+        <WorkspaceTexture accent="#c3aaa1" filterId={textureId} />
+      </div>
+      <ContextScene />
+    </div>
   );
 }

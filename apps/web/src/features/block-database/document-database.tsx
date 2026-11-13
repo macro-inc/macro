@@ -23,6 +23,7 @@ import { allRecordsView } from '../database/core/views';
 import { databaseEntityMessage } from '../database/core/write-failure';
 import { createDatabaseUndo } from '../database/primitives/undo-controller';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
+import { DatabaseGridSkeleton } from './component/DatabaseCardSkeleton';
 import { DatabaseGrid } from './component/DatabaseGrid';
 import { renameDatabase } from './queries/rename-database';
 import { toViewColumn } from './queries/table-rows';
@@ -175,11 +176,8 @@ export function DocumentDatabase(props: {
         <Show
           when={detail.isSuccess}
           fallback={
-            <div class="px-3 py-5 text-sm text-ink-muted">
-              <Show
-                when={detail.isError}
-                fallback={<span role="status">Loading database…</span>}
-              >
+            <Show when={detail.isError} fallback={<DatabaseGridSkeleton />}>
+              <div class="px-3 py-5 text-sm text-ink-muted">
                 <p role="alert">
                   This database is unavailable. It may have been deleted or you
                   may not have access.
@@ -193,8 +191,8 @@ export function DocumentDatabase(props: {
                 >
                   Retry
                 </Button>
-              </Show>
-            </div>
+              </div>
+            </Show>
           }
         >
           <Show

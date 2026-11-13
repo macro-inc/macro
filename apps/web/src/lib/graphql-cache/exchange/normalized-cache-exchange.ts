@@ -72,6 +72,7 @@ import {
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
 import type { CacheHost } from '../host/types';
 import {
+  type CacheReadPriority,
   type CacheRevision,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
@@ -160,7 +161,17 @@ declare module '@urql/core' {
     persistResult?: false;
     /** Types that can change this query's membership, even in an empty response. */
     externalCacheWriteTypes?: readonly string[];
+    /**
+     * The query feeds app state rather than a list on screen, so its cache
+     * rereads rank as ordinary reads, behind those of mounted views.
+     */
+    backgroundReader?: true;
   }
+}
+
+/** A mounted query is reread ahead of ordinary reads, unless no view shows it. */
+function rereadPriority(operation: Operation): CacheReadPriority | undefined {
+  return operation.context.backgroundReader ? undefined : 'user-visible';
 }
 
 export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
@@ -478,6 +489,13 @@ export interface NormalizedCacheExchangeOptions {
   ) => boolean | Promise<boolean>;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
+  /**
+   * True for a subscription whose payloads no reader takes from the cache,
+   * such as a signal that only tells queries to refetch. Its results are
+   * delivered without a cache write: every write advances the revision, and
+   * open lists and broadly registered live queries then read again.
+   */
+  isUncachedSubscription?: (operation: Operation) => boolean;
 }
 
 export function normalizedCacheExchange(
@@ -723,7 +741,7 @@ export function normalizedCacheExchange(
           query: queryText(operation),
           operationName: operationName(operation),
           variables: operation.variables as Record<string, unknown> | undefined,
-          priority: 'user-visible',
+          priority: rereadPriority(operation),
           entityResolvers,
         })
         .then((read) => {
@@ -762,7 +780,7 @@ export function normalizedCacheExchange(
           query: queryText(operation),
           operationName: operationName(operation),
           variables: operation.variables as Record<string, unknown> | undefined,
-          priority: 'user-visible',
+          priority: rereadPriority(operation),
           entityResolvers,
         });
       } catch (error) {
@@ -1070,7 +1088,7 @@ export function normalizedCacheExchange(
             entityResolvers,
             priority:
               op.context[AFFECTED_READ_CONTEXT_KEY] === true
-                ? 'user-visible'
+                ? rereadPriority(op)
                 : undefined,
           });
           // Admit the cache read first, but never wait for the worker's queue
@@ -1479,7 +1497,11 @@ export function normalizedCacheExchange(
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
             : result;
-        if (op.kind === 'subscription' && result.data != null) {
+        if (
+          op.kind === 'subscription' &&
+          result.data != null &&
+          options.isUncachedSubscription?.(op) !== true
+        ) {
           // Serialize effects across every emission for this operation, as
           // well as within buffered payloads, so a slower earlier write cannot
           // overtake a later delete. Subscribers still receive each original
@@ -1629,16 +1651,23 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
-          // A contextless same-key revalidation shares the mounted reader's scope.
+          // A contextless same-key revalidation shares the mounted reader's
+          // scope and its reread rank.
+          const mounted = activeOps.get(op.key)?.context;
           const types =
             op.context.externalCacheWriteTypes ??
-            activeOps.get(op.key)?.context.externalCacheWriteTypes;
+            mounted?.externalCacheWriteTypes;
+          const backgroundReader =
+            op.context.backgroundReader ?? mounted?.backgroundReader;
           const operation =
-            types === undefined
+            types === undefined && backgroundReader === undefined
               ? op
               : makeOperation('query', op, {
                   ...op.context,
-                  externalCacheWriteTypes: types,
+                  ...(types === undefined
+                    ? {}
+                    : { externalCacheWriteTypes: types }),
+                  ...(backgroundReader ? { backgroundReader } : {}),
                 });
           if (!isHydrateOnly(operation))
             activeOps.set(operation.key, operation);

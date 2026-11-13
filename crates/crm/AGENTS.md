@@ -9,6 +9,12 @@ tools/HTTP/GraphQL surfaces over them.
 ## Start here
 
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
+- `src/domain/pipeline_commercial.rs`: protected Outcome and amount/currency
+  identities, insert defaults and write validation, for pipelines that track a
+  record; `apply_ops` runs it before stage-requirement validation. A generic
+  pipeline, or one from a writer older than the migration, has no such fields.
+  See the [outcome/currency design](../../docs/design/crm-outcome-currency.md)
+  for migration assumptions.
 - `src/domain/pipelines/requirements.rs`: stage-entry rules keyed by column and
   option IDs. `apply_ops` validates every pipeline write under the pipeline write
   guard; agent/CSV workflows use the same service. Deletions cascade rules.
@@ -86,6 +92,14 @@ tools/HTTP/GraphQL surfaces over them.
   teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+- An archived call links to the companies whose domain a participant's address
+  is at, and separately to every visible contact of the team holding the
+  address as any of its addresses, with or without a company, together with
+  that contact's company (`src/outbound/call_link.rs`). A contact under a
+  hidden company links neither, and a team's own members never match its CRM. Calendar events and
+  bookings have no link by attendee address: they reach a record only through
+  a Companies or Contacts property someone set, a reference, or the call held
+  for them.
 
 - Manual companies require a name and accept an optional domain; explicit
   contact creation accepts any valid email, including personal providers.
@@ -160,10 +174,12 @@ tools/HTTP/GraphQL surfaces over them.
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
   `crm_contact_emails` (sync, teardown, email scope, thread access, call
-  linking); read `crm_contacts.email` only to display the primary. Two
-  paths still match the primary only: contact search and listing, and the
-  activity scope, where joining every contact of a team to its addresses costs
-  a probe per contact and needs its own plan. Company-domain population still
+  linking, the activity scope); read `crm_contacts.email` only to display the
+  primary. Contact search and listing still match the primary only.
+  The table has no team column, so a read by address starts from the address
+  index and a read by team probes it once per contact: keep both behind their
+  `OFFSET 0` fences, or the planner joins against every team's addresses.
+  Company-domain population still
   upserts on company and primary, but first looks for a contact that holds the
   address as a further one and refreshes it instead: under the domain's
   company, or anywhere in the team when nobody is filed under the domain with
@@ -174,6 +190,9 @@ tools/HTTP/GraphQL surfaces over them.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
+- The pipeline `edit` route refuses `sharing` from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

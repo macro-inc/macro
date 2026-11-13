@@ -589,7 +589,7 @@ export default function CrmPipelineScene(
                   <Sidebar class="size-4" />
                 </Button>
               </Show>
-              <h1 class="text-sm font-semibold flex-1">{collectionName()}</h1>
+              <h1 class="text-sm font-medium flex-1">{collectionName()}</h1>
               <Show when={tab() === 'pipeline'}>
                 <Button
                   variant="plain"

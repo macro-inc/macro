@@ -429,6 +429,13 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Outlook logged none before November 2026;
   `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
   visible Outlook calendar once so caches that missed a change refetch it.
+- Every calendar failure writer stores its `CalendarSyncFailure` in
+  `calendars.last_sync_error_kind` beside `last_sync_error`, and each round that
+  clears the error clears it; a failure stored without one reads as permanent.
+  `CalendarSyncHealthReader` (`src/outbound/pg/sync_health.rs`) combines it with
+  the account status, whose meaning differs by provider: Google's `error` is a
+  permanent account failure and `pending` a retry, while Outlook's `error` only
+  echoes one calendar's failure. Booking availability reads it.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens
   survive. Any other state is catching up and marks it `syncing`: a first import,
@@ -440,6 +447,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `event_type`. Filtering on the payload's `eventType` alone makes Postgres
   unpack every source on every primary calendar in the tenant (about 1.8 s per
   call in production before October 2026).
+- `claim_outlook_calendar` runs its maintenance on every poll, so each statement
+  must cost index probes when nothing needs it. Work of unclaimable accounts and
+  deleted calendars stays due, so find candidates per claimable account through
+  `calendar_outlook_work_account_due`, never by walking the global due order.
+  Find replaced generations and expired windows as ranges of
+  `calendar_outlook_work_account_generation`. An `ON CONFLICT DO UPDATE ... WHERE`
+  locks every conflicting row even when the `WHERE` is false: pre-filter rows
+  it would not change, or concurrent claims serialize on those locks.
 
 ## Related
 

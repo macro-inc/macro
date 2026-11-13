@@ -41,6 +41,13 @@ pub enum StreamAudience {
         /// Access entity type of `entity_id`.
         entity_type: EntityType,
     },
+    /// The subscriber themself, in whatever scope they stream. A requester's
+    /// own request reaches the team-scoped stream of a team-shared runtime,
+    /// and no other member of that team.
+    Person {
+        /// The one user who may see the event.
+        user_id: String,
+    },
     /// The intended recipient of a private notification.
     User {
         /// Intended recipient.
@@ -183,6 +190,7 @@ where
         audience: &StreamAudience,
     ) -> Result<bool, rootcause::Report> {
         match audience {
+            StreamAudience::Person { user_id } => Ok(self.subscriber.as_ref() == user_id.as_str()),
             StreamAudience::User { user_id } => Ok(
                 self.scope == WebhookScope::User && self.subscriber.as_ref() == user_id.as_str()
             ),
@@ -270,6 +278,7 @@ where
             };
             if !self.filters.iter().any(|filter| {
                 filter.accepts(&candidate.event.event_name, &candidate.event.entity_id)
+                    || filter.accepts("*", &candidate.event.entity_id)
             }) {
                 continue;
             }

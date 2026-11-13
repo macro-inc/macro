@@ -13,6 +13,8 @@ import {
   formatComputerDate,
   isProvisioning,
 } from '../core/computer-display';
+import { setupFailureReason } from '../core/setup-progress';
+import { useSetupElapsed } from '../primitives/setup-elapsed';
 import {
   ComputerActionsMenu,
   type ComputerMenuItem,
@@ -31,6 +33,7 @@ export type ComputerClaudeState =
 export type ComputerPrimaryAction = {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
 };
 
 function claudeText(claude: ComputerClaudeState): string | undefined {
@@ -52,9 +55,17 @@ function ComputerSubtitle(props: {
   claude: ComputerClaudeState;
 }) {
   const status = () => computerStatusLabel(props.computer);
+  const elapsed = useSetupElapsed(() => props.computer);
   const state = () => {
     if (isProvisioning(props.computer))
-      return [status().label, status().detail].filter(Boolean).join(' · ');
+      return [status().label, status().detail, elapsed()]
+        .filter(Boolean)
+        .join(' · ');
+    // A failed setup says why, in the server's words when it sends them.
+    if (props.computer.status === 'failed') {
+      const reason = setupFailureReason(props.computer);
+      return reason ? t('computers.failedBecause', { reason }) : status().label;
+    }
     if (status().tone !== 'success') return status().label;
     return claudeText(props.claude);
   };
@@ -117,6 +128,7 @@ export function ComputerRow(props: {
       meta={
         <ComputerSubtitle computer={props.computer} claude={props.claude} />
       }
+      inlineActions={!props.primary}
       actions={
         <>
           <Show when={props.primary}>
@@ -125,6 +137,7 @@ export function ComputerRow(props: {
                 type="button"
                 variant="secondary"
                 size="sm"
+                disabled={primary().disabled}
                 onClick={primary().onClick}
               >
                 {primary().label}

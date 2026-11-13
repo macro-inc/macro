@@ -140,7 +140,7 @@ export function WelcomeStep(props: {
         <h1
           tabindex="-1"
           data-welcome-heading
-          class="font-[Roboto_Slab_Variable] font-[315] text-[clamp(24px,8vw,36px)] leading-[1.12] tracking-tight sm:text-5xl md:text-[60px]"
+          class="font-[Roboto_Slab_Variable] font-[315] text-[clamp(24px,8.4vw,36px)] leading-[1.12] tracking-tight sm:text-5xl md:text-[60px]"
         >
           {props.title ?? (
             <>
@@ -154,7 +154,7 @@ export function WelcomeStep(props: {
         </h1>
         <p
           data-welcome-copy
-          class="mx-auto max-w-[288px] text-balance text-[13px] leading-[1.8] text-ink-muted sm:max-w-[384px] md:max-w-[480px] md:text-[clamp(14px,1.4vw,17.5px)]"
+          class="mx-auto max-w-[336px] text-balance text-[13px] leading-[1.8] text-ink-muted sm:max-w-[384px] md:max-w-[480px] md:text-[clamp(14px,1.4vw,17.5px)]"
         >
           {props.description ?? (
             <>

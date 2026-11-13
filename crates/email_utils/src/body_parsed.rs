@@ -57,6 +57,22 @@ pub fn html_to_plaintext(html: &str) -> Option<String> {
     parse_html_to_text(html, config)
 }
 
+/// Convert an HTML fragment to the words a reader sees: like
+/// [`html_to_plaintext`], with no emphasis marks for bold or italic text and,
+/// as in [`compute_body_parsed_linkless`], no square brackets. Suitable for
+/// previewing a message in a line of UI.
+pub fn html_to_undecorated_text(html: &str) -> Option<String> {
+    let config = html2text::config::plain_no_decorate()
+        .no_table_borders()
+        .link_footnotes(false)
+        .no_link_wrapping();
+
+    parse_html_to_text(html, config).map(|mut text| {
+        text.retain(|c| c != '[' && c != ']');
+        text
+    })
+}
+
 fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<String> {
     // html2text panics on some malformed-but-real email HTML (e.g. a table
     // rowspan overhanging past the last row, or rowspan="0"). A panic here

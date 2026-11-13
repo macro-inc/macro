@@ -1,5 +1,6 @@
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
@@ -120,15 +121,18 @@ export default function DocxBlock(props: { share?: string }) {
         </SplitHeaderRight>
         <SplitHeaderRight>
           <div class="order-[999] flex items-center">
-            <ChatWithAgentButton
-              label="Ask Macro"
-              entity={{
-                type: 'document',
-                id: documentId,
-                name: name(),
-                fileType: 'docx',
-              }}
-            />
+            <HeaderActionGroup label="Document actions">
+              <ChatWithAgentButton
+                grouped
+                label="Ask Macro"
+                entity={{
+                  type: 'document',
+                  id: documentId,
+                  name: name(),
+                  fileType: 'docx',
+                }}
+              />
+            </HeaderActionGroup>
           </div>
         </SplitHeaderRight>
         <ResponsivePermissionsBadge />

@@ -2,15 +2,14 @@
 .macro-text-hero-copy { display: flex; flex-direction: column; align-items: center; text-align: center; }
 .macro-text-hero-copy h2 { width: min(640px, 100%); color: #a8a8a8; font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif; margin: 24px 0 0; letter-spacing: normal; text-wrap: balance; }
 .macro-text-hero-copy .homepage-hero-cta { margin-top: 40px; gap: 12px; min-width: 172px; height: 52px; }
-.macro-homepage .macro-home-hero { min-height: 0; padding: 0 32px 32px; }
-.macro-home-hero .macro-text-hero h1 { font-size: clamp(44px, 4vw, 60px); line-height: 1.1; }
+.macro-homepage .macro-home-hero { min-height: 0; padding: 112px 24px 0; }
+.macro-home-hero .macro-text-hero h1 { font-size: clamp(44px, 4vw, 53px); line-height: 1.1; }
 @media (max-width: 699px) {
   .macro-home-hero .macro-text-hero h1 { font-size: clamp(34px, 8vw, 40px); line-height: 1.12; }
   .macro-text-hero-copy h2 { width: min(288px, 100%); margin-top: 16px; font-size: 13px; line-height: 1.8; }
   .macro-text-hero-copy .homepage-hero-cta { min-width: 144px; height: 48px; margin-top: 32px; }
 }
-/* Mobile keeps the deployed landing page dimensions, including its CTA. */
-@media (max-width: 699px) {
-  .macro-homepage .onboarding-flow[data-landing] { font-size: 15px; font-weight: 400; }
-  .macro-homepage .onboarding-flow .homepage-hero-cta { width: 144px; height: 48px; padding: 10px 18px; font-size: 15px; }
+
+@media (max-width: 389px) {
+  .macro-home-hero .macro-text-hero h1 { font-size: clamp(26px, calc(10vw - 5.5px), 32px); }
 }
