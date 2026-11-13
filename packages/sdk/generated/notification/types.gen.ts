@@ -746,7 +746,7 @@ export type ExternalChatMessageMetadata = {
 /**
  * The messaging service an external chat lives in.
  */
-export type ExternalChatProvider = 'whatsapp';
+export type ExternalChatProvider = 'whatsapp' | 'slack';
 
 /**
  * The strongly typed response for listing user notifications.

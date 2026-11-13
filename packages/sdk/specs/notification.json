@@ -2139,7 +2139,7 @@
       "ExternalChatProvider": {
         "type": "string",
         "description": "The messaging service an external chat lives in.",
-        "enum": ["whatsapp"]
+        "enum": ["whatsapp", "slack"]
       },
       "GetAllUserNotificationsResponse": {
         "type": "object",
