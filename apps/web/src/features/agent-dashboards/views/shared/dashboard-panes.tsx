@@ -2,6 +2,7 @@ import { View as ViewLayout } from '@app/features/dynamic-ui/core/Layout';
 import { titledWidgets } from '@app/features/dynamic-ui/core/view-title';
 import { Render } from '@app/features/dynamic-ui/render';
 import type { View, Widget } from '@app/features/dynamic-ui/view';
+import { AgentScope } from '@app/features/dynamic-ui/widgets/panes/agent-scope';
 import { t } from '@app/lib/i18n';
 import { TraceFlow } from '@app/observability/flow';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -48,17 +49,23 @@ function Pane(props: { widget: Widget; index: number }) {
   );
 }
 
-/** A dashboard's view, read-only, with each widget fetching as the viewer. */
-export function DashboardPanes(props: { view: View }) {
+/**
+ * A dashboard's view, read-only, with each widget fetching as the viewer.
+ * The dashboard's owner is the agent its agent panes show when they name
+ * none.
+ */
+export function DashboardPanes(props: { view: View; ownerId: string }) {
   const shown = createMemo(() => titledWidgets(props.view));
 
   return (
-    <StaticMarkdownContext theme={aiChatTheme}>
-      <ViewLayout title={shown().title}>
-        <For each={shown().widgets}>
-          {(widget, index) => <Pane widget={widget} index={index()} />}
-        </For>
-      </ViewLayout>
-    </StaticMarkdownContext>
+    <AgentScope agentId={props.ownerId}>
+      <StaticMarkdownContext theme={aiChatTheme}>
+        <ViewLayout title={shown().title}>
+          <For each={shown().widgets}>
+            {(widget, index) => <Pane widget={widget} index={index()} />}
+          </For>
+        </ViewLayout>
+      </StaticMarkdownContext>
+    </AgentScope>
   );
 }

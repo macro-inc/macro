@@ -33,7 +33,12 @@ export function DashboardBody(props: {
         <DashboardError onRetry={props.onRetry} />
       </Match>
       <Match when={ready()}>
-        {(dashboard) => <DashboardPanes view={dashboard().view} />}
+        {(dashboard) => (
+          <DashboardPanes
+            view={dashboard().view}
+            ownerId={dashboard().ownerId}
+          />
+        )}
       </Match>
     </Switch>
   );

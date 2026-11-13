@@ -3,14 +3,21 @@ import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 
 // The real widgets fetch their own data; stand in for them, with one that
-// fails to render, to check the dashboard keeps its other panes.
+// fails to render, to check the dashboard keeps its other panes. Each stand-in
+// reports the agent an agent pane naming none would show.
 vi.mock('@app/features/dynamic-ui/render', () => ({
   Render: (props: { node: { type: string; id?: string } }) => {
     if (props.node.id === 'broken') throw new Error('bad pane');
-    return <p>{`${props.node.type}:${props.node.id ?? '-'}`}</p>;
+    const agentId = useScopedAgentId(() => undefined);
+    return (
+      <p
+        data-agent={agentId()}
+      >{`${props.node.type}:${props.node.id ?? '-'}`}</p>
+    );
   },
 }));
 
+import { useScopedAgentId } from '@app/features/dynamic-ui/widgets/panes/agent-scope';
 import type { DashboardView } from '../../primitives/dashboard-view';
 import { dashboard } from '../../tests/fake-dashboard';
 import { DashboardBody } from './dashboard-body';
@@ -51,4 +58,20 @@ it('retries a failed load, then shows the dashboard', () => {
 
   expect(onRetry).toHaveBeenCalledOnce();
   expect(view.getByText('md:intro')).toBeTruthy();
+});
+
+it("gives every pane the dashboard's owner as its agent", () => {
+  const view = render(() => (
+    <DashboardBody
+      view={() => ({
+        t: 'ready',
+        dashboard: dashboard({ ownerId: 'macro|ops-agent@example.com' }),
+      })}
+      onRetry={() => undefined}
+    />
+  ));
+
+  expect(
+    view.getAllByRole('paragraph').map((pane) => pane.dataset.agent)
+  ).toEqual(['macro|ops-agent@example.com', 'macro|ops-agent@example.com']);
 });
