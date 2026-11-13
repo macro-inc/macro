@@ -12,6 +12,7 @@
 //! adopt them later.
 use lexical_model::*;
 
+mod nodes;
 mod text;
 
 /// Source `Scope` (`nth` is 1-based; 0 or a fraction matches nothing, as in Source).
@@ -22,13 +23,62 @@ pub(crate) enum Scope {
     All,
 }
 
+/// Source `Format`, a text format a `formatNode` sets or clears.
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WireFormat {
+    Bold,
+    Italic,
+    Underline,
+    Strike,
+    Code,
+}
+
+impl From<WireFormat> for TextFormatType {
+    fn from(format: WireFormat) -> Self {
+        match format {
+            WireFormat::Bold => Self::Bold,
+            WireFormat::Italic => Self::Italic,
+            WireFormat::Underline => Self::Underline,
+            WireFormat::Strike => Self::Strikethrough,
+            WireFormat::Code => Self::Code,
+        }
+    }
+}
+
+/// Source `Position` as sent. Source `place` tests the keys in this order and
+/// takes any other object as `prependToRoot`.
+#[derive(Clone, Debug, serde::Deserialize)]
+struct WirePosition {
+    after: Option<String>,
+    before: Option<String>,
+    #[serde(rename = "appendToRoot")]
+    append_to_root: Option<serde_json::Value>,
+}
+
+/// Where a moved or inserted node goes.
+#[derive(Clone, Debug)]
+pub(crate) enum Position {
+    After(String),
+    Before(String),
+    AppendToRoot,
+    PrependToRoot,
+}
+
+impl From<WirePosition> for Position {
+    fn from(at: WirePosition) -> Self {
+        match (at.after, at.before, at.append_to_root) {
+            (Some(after), _, _) => Self::After(after),
+            (None, Some(before), _) => Self::Before(before),
+            (None, None, Some(_)) => Self::AppendToRoot,
+            (None, None, None) => Self::PrependToRoot,
+        }
+    }
+}
+
 /// The wire shape of the `DocumentOp`s this applier implements.
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-#[expect(
-    clippy::enum_variant_names,
-    reason = "variants mirror Source DocumentOp kinds; block ops arrive in later phases"
-)]
 enum WireOp {
     InsertText {
         node: String,
@@ -58,24 +108,39 @@ enum WireOp {
         to: String,
         scope: Scope,
     },
+    RemoveNode {
+        node: String,
+    },
+    MoveNode {
+        node: String,
+        at: WirePosition,
+    },
+    FormatNode {
+        node: String,
+        format: WireFormat,
+        on: bool,
+    },
+    ClearNodeFormat {
+        node: String,
+    },
 }
 
 /// Kinds `WireOp` decodes; any other Source kind is refused as unsupported.
-const SUPPORTED_KINDS: [&str; 6] = [
+const SUPPORTED_KINDS: [&str; 10] = [
     "insertText",
     "removeText",
     "setText",
     "appendText",
     "prependText",
     "replaceText",
+    "removeNode",
+    "moveNode",
+    "formatNode",
+    "clearNodeFormat",
 ];
 
 /// A validated op: offsets and lengths are safe integers (UTF-16 units).
 #[derive(Clone, Debug)]
-#[expect(
-    clippy::enum_variant_names,
-    reason = "variants mirror Source DocumentOp kinds; block ops arrive in later phases"
-)]
 pub(crate) enum AiOp {
     InsertText {
         node: String,
@@ -104,6 +169,21 @@ pub(crate) enum AiOp {
         find: String,
         to: String,
         scope: Scope,
+    },
+    RemoveNode {
+        node: String,
+    },
+    MoveNode {
+        node: String,
+        at: Position,
+    },
+    FormatNode {
+        node: String,
+        format: TextFormatType,
+        on: bool,
+    },
+    ClearNodeFormat {
+        node: String,
     },
 }
 
@@ -221,6 +301,17 @@ fn validate(op: WireOp) -> Result<AiOp, AiOpRefusal> {
             to,
             scope,
         },
+        WireOp::RemoveNode { node } => AiOp::RemoveNode { node },
+        WireOp::MoveNode { node, at } => AiOp::MoveNode {
+            node,
+            at: at.into(),
+        },
+        WireOp::FormatNode { node, format, on } => AiOp::FormatNode {
+            node,
+            format: format.into(),
+            on,
+        },
+        WireOp::ClearNodeFormat { node } => AiOp::ClearNodeFormat { node },
     })
 }
 
@@ -389,6 +480,10 @@ pub(crate) fn plan(tx: &Transaction<'_>, op: &AiOp) -> OpResult<Vec<text::Write>
             to,
             scope,
         } => text::replace_text(tx, node, find, to, *scope),
+        AiOp::RemoveNode { node } => nodes::remove_node(tx, node),
+        AiOp::MoveNode { node, at } => nodes::move_node(tx, node, at),
+        AiOp::FormatNode { node, format, on } => nodes::format_node(tx, node, *format, *on),
+        AiOp::ClearNodeFormat { node } => nodes::clear_node_format(tx, node),
     }
 }
 

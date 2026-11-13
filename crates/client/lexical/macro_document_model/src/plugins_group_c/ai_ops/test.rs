@@ -872,3 +872,100 @@ fn selected_block_ids_match_source_for_table_selections() {
     eprintln!("selection corpus outcomes:\n{}", rows.join("\n"));
     assert!(failed == 0, "{failed} cases differ:\n{}", rows.join("\n"));
 }
+
+/// B1a corners the Source corpus does not reach; each is refused before any
+/// write, where Source's Lexical calls throw inside its transaction.
+#[test]
+fn node_ops_refuse_the_root_and_moves_beside_themselves() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let entry = corpus
+        .iter()
+        .find(|entry| entry.name == "moveNode the last block to the front")
+        .expect("three-paragraph seed");
+    let root = entry.loaded["root"]["$"]["id"].as_str().expect("root id");
+    for (op, cause) in [
+        // The root is not addressable by id, as for the text ops; Source's
+        // Lexical refuses to remove, move or place beside it.
+        (
+            serde_json::json!({"kind":"removeNode","node":root}),
+            "unknownNode",
+        ),
+        (
+            serde_json::json!({"kind":"moveNode","node":root,"at":{"appendToRoot":true}}),
+            "unknownNode",
+        ),
+        // A target inside the moved block (its own text climbs to the block).
+        (
+            serde_json::json!({"kind":"moveNode","node":"s0000005","at":{"after":"s0000004"}}),
+            "wrongTarget",
+        ),
+        (
+            serde_json::json!({"kind":"moveNode","node":"s0000005","at":{"before":"s0000005"}}),
+            "wrongTarget",
+        ),
+        (
+            serde_json::json!({"kind":"moveNode","node":"s0000005","at":{"after":root}}),
+            "unknownNode",
+        ),
+        (
+            serde_json::json!({"kind":"moveNode","node":"s0000005","at":{"after":"missing1"}}),
+            "unknownNode",
+        ),
+    ] {
+        let mut native = block_editor();
+        load(&mut native, &entry.loaded);
+        let before = export(&native);
+        let (handled, commit) = native.dispatch(&op_command(&op, 7)).expect("dispatch");
+        assert_eq!(handled, Handled::No, "{op}");
+        assert_eq!(export(&native), before, "{op}");
+        assert_eq!(
+            refusals(&commit),
+            vec![serde_json::json!({"cause": cause, "invocation": 7})],
+            "{op}"
+        );
+    }
+}
+
+#[test]
+fn a_move_position_takes_source_key_order() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let entry = corpus
+        .iter()
+        .find(|entry| entry.name == "moveNode the last block to the front")
+        .expect("three-paragraph seed");
+    let order = |native: &Editor| -> Vec<String> {
+        let view = native.state().view();
+        view.children(NodeKey::ROOT)
+            .map(|key| {
+                crate::node_ids::get_id(view, key)
+                    .expect("id")
+                    .map(|id| id.to_string())
+                    .unwrap_or_default()
+            })
+            .collect()
+    };
+    for (at, expected) in [
+        // `after` wins over `before`, `before` over `appendToRoot`.
+        (
+            serde_json::json!({"after":"s0000001","before":"s0000003"}),
+            ["s0000001", "s0000005", "s0000003"],
+        ),
+        (
+            serde_json::json!({"before":"s0000003","appendToRoot":true}),
+            ["s0000001", "s0000005", "s0000003"],
+        ),
+        // Any other object prepends, as Source `place` does.
+        (serde_json::json!({}), ["s0000005", "s0000001", "s0000003"]),
+        (
+            serde_json::json!({"prependToRoot":true}),
+            ["s0000005", "s0000001", "s0000003"],
+        ),
+    ] {
+        let mut native = block_editor();
+        load(&mut native, &entry.loaded);
+        let op = serde_json::json!({"kind":"moveNode","node":"s0000005","at":at});
+        let (handled, _) = native.dispatch(&op_command(&op, 7)).expect("dispatch");
+        assert_eq!(handled, Handled::Yes, "{op}");
+        assert_eq!(order(&native), expected, "{op}");
+    }
+}

@@ -1,6 +1,6 @@
-//! Source Doc text-content ops. Offsets and lengths are UTF-16 code units,
-//! already validated as safe integers; past-the-end offsets clamp like
-//! `String.prototype.slice`.
+//! Source Doc text-content ops, and the write plan every AI op executes.
+//! Offsets and lengths are UTF-16 code units, already validated as safe
+//! integers; past-the-end offsets clamp like `String.prototype.slice`.
 //!
 //! Each op is planned against a read-only transaction and returns its writes,
 //! so a refusal is decided before the handler touches selection, tags or nodes.
@@ -24,6 +24,19 @@ pub(crate) enum Write {
     Remove { key: NodeKey },
     /// Remove every child of `block`.
     Clear { block: NodeKey },
+    /// Remove a node (with Lexical's empty-parent cleanup), then place it.
+    Move { key: NodeKey, to: Place },
+    /// Replace a text node's format.
+    SetFormat { key: NodeKey, format: TextFormat },
+}
+
+/// Where [`Write::Move`] places a node, resolved after its removal.
+#[derive(Debug)]
+pub(crate) enum Place {
+    After(NodeKey),
+    Before(NodeKey),
+    RootEnd,
+    RootStart,
 }
 
 /// Apply a plan built by one of this module's planners.
@@ -55,6 +68,27 @@ pub(crate) fn execute(tx: &mut Transaction<'_>, writes: Vec<Write>) -> Result<()
             }
             Write::Clear { block } => {
                 tx.clear(block)?;
+            }
+            Write::Move { key, to } => {
+                tx.remove(key, false)?;
+                match to {
+                    Place::After(anchor) => {
+                        tx.insert_after(anchor, key, false)?;
+                    }
+                    Place::Before(anchor) => {
+                        tx.insert_before(anchor, key, false)?;
+                    }
+                    Place::RootEnd => tx.append(NodeKey::ROOT, &[key])?,
+                    Place::RootStart => match tx.view().first_child(NodeKey::ROOT) {
+                        Some(first) => {
+                            tx.insert_before(first, key, false)?;
+                        }
+                        None => tx.append(NodeKey::ROOT, &[key])?,
+                    },
+                }
+            }
+            Write::SetFormat { key, format } => {
+                tx.text(key)?.set_format(format)?;
             }
         }
     }
