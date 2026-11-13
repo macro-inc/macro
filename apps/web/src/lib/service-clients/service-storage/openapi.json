@@ -48446,6 +48446,17 @@
             },
             "description": "Teams it is a team machine for: their every member is a user of it."
           },
+          "team_agent_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The agent teammate whose computer this is, when it is one. People\nreach the agent by message; nothing else may run on its computer.\nSet on the caller-facing listings and on a patch's answer."
+              }
+            ]
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",

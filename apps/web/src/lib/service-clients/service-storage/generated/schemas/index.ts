@@ -1823,6 +1823,7 @@ export * from './harnessResident';
 export * from './harnessResidentOwnerUserId';
 export * from './harnessResidentTeamId';
 export * from './harnessSession';
+export * from './harnessTeamAgentUserId';
 export * from './hashMap';
 export * from './hashMapOneOf';
 export * from './hashMapOneOfAllOf';
