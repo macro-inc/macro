@@ -1,0 +1,20 @@
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build.rs
+  s_c1146e8a8b951b::t_39f220931a5bb5 83-95,100-102,124-208,217
+  s_c1146e8a8b951b::t_716e2357982c0b 209-216,218-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "317bd09d2bae195638793b273e72ec068239ca86",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
