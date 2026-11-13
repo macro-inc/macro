@@ -66,6 +66,7 @@ mockall = { workspace = true }
 
 [dev-dependencies]
 activity = { path = "../activity", default-features = false, features = ["outbound"] }
+agent_correlation = { path = "../agent_correlation" }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 anyhow = { workspace = true }
 http-body-util = { workspace = true }

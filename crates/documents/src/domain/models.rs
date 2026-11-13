@@ -538,8 +538,8 @@ pub struct PropertyInput {
     pub value: SetPropertyValue,
 }
 
-fn default_true() -> bool {
-    true
+fn default_share_with_team() -> bool {
+    agent_correlation::context::may_share()
 }
 
 /// Request body for creating a markdown document whose content is initialized
@@ -614,7 +614,8 @@ pub struct CreateTaskRequest {
     pub property_values: Option<Vec<PropertyInput>>,
     /// Whether to share the task with your team or not
     /// Defaults to true
-    #[serde(default = "default_true")]
+    // An agent session that may not share gets a private task by default.
+    #[serde(default = "default_share_with_team")]
     pub share_with_team: bool,
 }
 

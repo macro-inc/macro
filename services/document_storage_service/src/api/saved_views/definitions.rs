@@ -310,6 +310,9 @@ pub async fn create_handler(
     user: Viewer,
     Json(request): Json<CreateSavedViewDefinitionRequest>,
 ) -> Result<(StatusCode, Json<SavedViewDefinition>), SavedViewDefinitionErr> {
+    // A saved view's team share is its own column, which the grant
+    // writers never see.
+    agent_correlation::context::refuse_sharing(request.shared_team_id.is_some())?;
     let view = service
         .create(
             user.authorization.user.macro_user_id.as_ref(),

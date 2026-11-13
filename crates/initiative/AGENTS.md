@@ -55,9 +55,12 @@ realtime appearance events do not re-ingest history.
 
 ## Gotchas
 
-- `axum_router/update.rs` refuses share permission and member changes from a
-  scoped agent session (`agent_correlation::context::refuse_sharing`, 403):
-  members are granted access. A new sharing field joins that check.
+- `axum_router/update.rs` refuses share permission changes from a scoped
+  agent session (`agent_correlation::context::refuse_sharing`, 403). Member
+  and assignee grants are checked where they are written
+  (`entity_access_db_utils::scoped_grants`): only people who already have
+  access can be added, and nobody can be removed. A new sharing field that
+  isn't a grant joins the route check.
 
 ## Related
 

@@ -122,7 +122,7 @@ threads, pins, recents, notifications, folders, activity.
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
 - Thread edits (`api/threads/edit_thread.rs`) and saved view definition
-  updates refuse sharing changes from a scoped agent session
+  creates and updates refuse sharing changes from a scoped agent session
   (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
   joins that check. Every agent session scope is refused `/soup/graphql` and
   its WebSocket (`agent_correlation::scope`).

@@ -153,7 +153,14 @@ realtime appearance events do not re-ingest history.
   recipes require a typed confirmation before writing.
 - `edit_document.rs` refuses a share permission change from a scoped agent
   session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
-  field joins that check.
+  field that isn't a grant joins that check. Grants are checked where they are
+  written (`entity_access_db_utils::scoped_grants`); creating or moving a
+  document into a folder calls `project_grants::refuse_filing(_in)` in the
+  transaction that writes `projectId`, because the folder's grants are
+  inherited after commit; a document whose id isn't a UUID calls
+  `project_grants::refuse_unregistered_filing` instead, before the write.
+  Under such a scope a task defaults to unshared but
+  keeps its team number (`CreateTaskRequest::share_with_team`).
 
 ## Related
 

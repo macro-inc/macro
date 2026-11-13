@@ -671,8 +671,9 @@ async fn update_returns_200() {
     assert_eq!(service.calls(), vec![ServiceCall::Update]);
 }
 
-/// A scoped session renames an initiative but never changes who it's shared
-/// with: its sharing or its members, who are granted access.
+/// A scoped session renames an initiative but never changes its sharing.
+/// Members reach the service, whose grant writer refuses one who would gain
+/// access (`pg_initiative_repo` tests).
 #[tokio::test]
 async fn a_scoped_session_edits_an_initiative_but_not_its_sharing() {
     use agent_correlation::context::{Attribution, scope_attribution};
@@ -695,7 +696,7 @@ async fn a_scoped_session_edits_an_initiative_but_not_its_sharing() {
         (share.clone(), StatusCode::FORBIDDEN),
         (
             serde_json::json!({ "memberIds": ["macro|member@macro.com"] }),
-            StatusCode::FORBIDDEN,
+            StatusCode::OK,
         ),
         (serde_json::json!({ "name": "Renamed" }), StatusCode::OK),
     ] {
@@ -704,10 +705,7 @@ async fn a_scoped_session_edits_an_initiative_but_not_its_sharing() {
     }
     let response = send(router, edit(share)).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        service.calls(),
-        vec![ServiceCall::Update, ServiceCall::Update]
-    );
+    assert_eq!(service.calls(), vec![ServiceCall::Update; 3]);
 }
 
 #[tokio::test]

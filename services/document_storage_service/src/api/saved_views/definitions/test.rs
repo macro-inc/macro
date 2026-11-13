@@ -368,6 +368,46 @@ async fn a_scoped_session_updates_a_saved_view_but_not_its_sharing() {
     );
 }
 
+/// A scoped session creates a private saved view but not one shared with a
+/// team.
+#[tokio::test]
+async fn a_scoped_session_creates_only_private_saved_views() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = Arc::new(FakeSavedViews::default());
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    for (body, status) in [
+        (
+            json!({ "name": "Shared", "config": { "kind": "email" }, "sharedTeamId": TEAM }),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            json!({ "name": "Private", "config": { "kind": "email" } }),
+            StatusCode::CREATED,
+        ),
+    ] {
+        let (got, _) = scope_attribution(
+            no_send,
+            send(
+                &service,
+                request("POST", "/saved_views/definitions", Some(body.clone())),
+            ),
+        )
+        .await;
+        assert_eq!(got, status, "{body}");
+    }
+    let calls = service.calls();
+    assert_eq!(calls.len(), 1);
+    assert!(
+        matches!(&calls[0], Call::Create { team: None, .. }),
+        "{calls:?}"
+    );
+}
+
 #[tokio::test]
 async fn deletes_only_the_expected_revision() {
     let service = Arc::new(FakeSavedViews::default());

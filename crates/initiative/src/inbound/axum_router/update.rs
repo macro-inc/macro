@@ -43,11 +43,10 @@ where
     Auth: MacroAuthorizationService,
 {
     // A scoped session shares nothing; this route's path can't say whether
-    // its body does. Members are granted access, so they count as sharing.
-    agent_correlation::context::refuse_sharing(
-        request.share_permission.is_some() || request.member_ids.is_some(),
-    )
-    .map_err(|refused| InitiativeError::Forbidden(refused.to_string()))?;
+    // its body does. The link share is a column the grant writers never see;
+    // member changes are checked where their grants are written.
+    agent_correlation::context::refuse_sharing(request.share_permission.is_some())
+        .map_err(|refused| InitiativeError::Forbidden(refused.to_string()))?;
     let detail = state
         .service
         .update(access.entity_access_receipt, request)
