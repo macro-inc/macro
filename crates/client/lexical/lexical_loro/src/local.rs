@@ -173,7 +173,7 @@ impl LoroProjection {
         let prev = prev_state.view();
         let next = next_state.view();
         if origin == LOCAL_ORIGIN {
-            for &key in &self.stored_drift {
+            for &key in self.stored_drift.iter().chain(self.model_drift.keys()) {
                 if next.is_attached(key) {
                     candidates.entry(key).or_insert(Mutation::Updated);
                 }
@@ -492,8 +492,11 @@ impl LoroProjection {
                 // normalization of each drifted field, unless this commit changed it.
                 if self.stored_drift.contains(&key) {
                     let parent = self.index.synced_parent_map(doc, next, key, self.policy)?;
+                    let model_fields = self.model_drift.get(&key);
                     for drift in stored_drift(&map, parent.as_ref(), self.policy)? {
-                        if exports.0.json().get(drift.field) != exports.1.json().get(drift.field) {
+                        if exports.0.json().get(drift.field) != exports.1.json().get(drift.field)
+                            || model_fields.is_some_and(|fields| fields.contains(drift.field))
+                        {
                             continue;
                         }
                         match drift.stored {
@@ -504,6 +507,40 @@ impl LoroProjection {
                             Some(value) => exports.1.json_mut().insert(drift.field.into(), value),
                             None => exports.1.json_mut().remove(drift.field),
                         };
+                    }
+                }
+                // A remote-update default the stored map lacks: Source's whole-state sync writes
+                // the model value here, unless this commit changed that field.
+                if let Some(fields) = self.model_drift.get(&key) {
+                    for field in fields {
+                        if exports.0.json().get(*field) != exports.1.json().get(*field) {
+                            continue;
+                        }
+                        match map.get(field) {
+                            Some(stored) => {
+                                let stored = schema::read_value(&stored)?;
+                                exports.0.json_mut().insert((*field).into(), stored);
+                            }
+                            None => {
+                                exports.0.json_mut().remove(*field);
+                            }
+                        }
+                    }
+                }
+            }
+            // Source writes no fixup for a remote-update default: keep the stored value.
+            if origin == FIXUP_ORIGIN
+                && let Some(fields) = self.model_drift.get(&key)
+            {
+                for field in fields {
+                    match map.get(field) {
+                        Some(stored) => {
+                            let stored = schema::read_value(&stored)?;
+                            exports.1.json_mut().insert((*field).into(), stored);
+                        }
+                        None => {
+                            exports.1.json_mut().remove(*field);
+                        }
                     }
                 }
             }
@@ -594,6 +631,7 @@ impl LoroProjection {
         doc.commit_with(loro::CommitOptions::new().origin(origin).timestamp(now));
         if origin == LOCAL_ORIGIN {
             self.stored_drift.retain(|key| !visited.contains(key));
+            self.model_drift.retain(|key, _| !visited.contains(key));
         }
         drop(recording);
         if let Some(search) = &mut self.search_text {

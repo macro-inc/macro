@@ -295,6 +295,7 @@ impl LoroProjection {
             indexed_vv: doc.oplog_vv(),
             indexed_frontiers: doc.state_frontiers(),
             stored_drift: OrderedSet::default(),
+            model_drift: OrderedMap::default(),
             #[cfg(feature = "test-faults")]
             fail_after_writes: None,
             policy,
@@ -316,20 +317,32 @@ impl LoroProjection {
         state: &EditorState,
     ) -> Result<StoredDriftScan> {
         let keys: Vec<NodeKey> = self.index.nodes.keys().copied().collect();
-        self.note_stored_drift_for(doc, state, keys)
+        // A load runs no editor transform, so attach records no remote-update default.
+        self.scan_stored_drift(doc, state, keys, false)
     }
-    /// Re-check `keys` after Loro changed them (remote import, undo or redo).
+    /// Re-check `keys` after Loro changed them (remote import, undo or redo), including the
+    /// remote-update defaults the import's transforms left in the model.
     pub fn note_stored_drift_for(
         &mut self,
         doc: &LoroDoc,
         state: &EditorState,
         keys: impl IntoIterator<Item = NodeKey>,
     ) -> Result<StoredDriftScan> {
+        self.scan_stored_drift(doc, state, keys, true)
+    }
+    fn scan_stored_drift(
+        &mut self,
+        doc: &LoroDoc,
+        state: &EditorState,
+        keys: impl IntoIterator<Item = NodeKey>,
+        remote: bool,
+    ) -> Result<StoredDriftScan> {
         let view = state.view();
         let mut scan = StoredDriftScan::default();
         for key in keys {
             if !view.is_attached(key) || !self.index.nodes.contains_key(&key) {
                 self.stored_drift.shift_remove(&key);
+                self.model_drift.shift_remove(&key);
                 continue;
             }
             if self
@@ -342,6 +355,9 @@ impl LoroProjection {
             scan.rescanned += 1;
             let map = self.index.map(doc, key)?;
             let parent = self.index.synced_parent_map(doc, view, key, self.policy)?;
+            if remote {
+                self.note_model_drift(view, key, &map, parent.as_ref())?;
+            }
             if crate::local::stored_drift(&map, parent.as_ref(), self.policy)?.is_empty() {
                 self.stored_drift.shift_remove(&key);
             } else {
@@ -350,6 +366,82 @@ impl LoroProjection {
             }
         }
         Ok(scan)
+    }
+    /// Record the remote-update defaults the model holds where the stored map is unset.
+    fn note_model_drift(
+        &mut self,
+        view: StateRef<'_>,
+        key: NodeKey,
+        map: &LoroMap,
+        parent: Option<&LoroMap>,
+    ) -> Result<()> {
+        let defaults = self.policy.remote_update_defaults(view.type_name(key)?);
+        let mut fields = OrderedSet::default();
+        if !defaults.is_empty() {
+            let stored = comparison::stored_own_normalized(map, parent, self.policy)?;
+            let model = comparison::model_own(view, key, self.policy)?;
+            for &(field, default) in defaults {
+                let node_type = view.type_name(key)?;
+                if !self
+                    .policy
+                    .stored_normalized_fields(node_type)
+                    .contains(&field)
+                {
+                    return Err(diverged(format!(
+                        "remote-update default {node_type}.{field} is not a stored-normalized field"
+                    )));
+                }
+                if stored.get(field).is_none()
+                    && model.get(field).and_then(serde_json::Value::as_str) == Some(default)
+                {
+                    fields.insert(field);
+                }
+            }
+        }
+        if fields.is_empty() {
+            self.model_drift.shift_remove(&key);
+        } else {
+            self.model_drift.insert(key, fields);
+        }
+        Ok(())
+    }
+    /// Drop each drifted field from the model's own JSON where the stored node lacks it, so
+    /// strict checks accept exactly the pending model-drift pairs.
+    pub(crate) fn tolerate_model_drift(
+        &self,
+        key: NodeKey,
+        model: &mut SerializedNode,
+        stored: &SerializedNode,
+    ) {
+        if let Some(fields) = self.model_drift.get(&key) {
+            for field in fields {
+                if stored.get(*field).is_none() {
+                    model.remove(*field);
+                }
+            }
+        }
+    }
+    /// `tolerate_model_drift` over aligned model and stored trees.
+    fn tolerate_model_drift_tree(
+        &self,
+        view: StateRef<'_>,
+        key: NodeKey,
+        model: &mut SerializedNode,
+        stored: &SerializedNode,
+    ) {
+        self.tolerate_model_drift(key, model, stored);
+        let children = synced_children(view, key, self.policy);
+        if let (Some(serde_json::Value::Array(models)), Some(serde_json::Value::Array(storeds))) =
+            (model.get_mut("children"), stored.get("children"))
+            && models.len() == children.len()
+            && storeds.len() == children.len()
+        {
+            for ((child, model), stored) in children.iter().zip(models).zip(storeds) {
+                if let (Some(model), Some(stored)) = (model.as_object_mut(), stored.as_object()) {
+                    self.tolerate_model_drift_tree(view, *child, model, stored);
+                }
+            }
+        }
     }
     /// Native node-map container for undo bookkeeping and presence diagnostics.
     pub fn container_of(&self, key: NodeKey) -> Option<&ContainerID> {
@@ -371,9 +463,18 @@ impl LoroProjection {
                     &mut state_json.root,
                 );
             }
-            serde_json::Value::Object(state_json.root)
+            state_json.root
         });
-        let actual = comparison::loro(doc, self.policy).map(|s| serde_json::Value::Object(s.root));
+        let actual = comparison::loro(doc, self.policy).map(|s| s.root);
+        let editor = match (editor, &actual) {
+            (Ok(mut editor), Ok(actual)) if !self.model_drift.is_empty() => {
+                self.tolerate_model_drift_tree(state.view(), NodeKey::ROOT, &mut editor, actual);
+                Ok(editor)
+            }
+            (editor, _) => editor,
+        };
+        let editor = editor.map(serde_json::Value::Object);
+        let actual = actual.map(serde_json::Value::Object);
         match (editor, actual) {
             (Ok(editor), Ok(actual)) if editor == actual => {}
             (editor, actual) => {
@@ -445,6 +546,13 @@ impl LoroProjection {
                     }
                     Ok(json)
                 });
+                let expected = match (expected, &actual) {
+                    (Ok(mut expected), Ok(actual)) => {
+                        self.tolerate_model_drift(key, &mut expected, actual);
+                        Ok(expected)
+                    }
+                    (expected, _) => expected,
+                };
                 if expected.as_ref().ok() != actual.as_ref().ok()
                     || expected.is_err()
                     || actual.is_err()

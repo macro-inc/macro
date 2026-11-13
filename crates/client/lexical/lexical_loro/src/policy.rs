@@ -28,6 +28,12 @@ pub trait SyncPolicy: Send + Sync + 'static {
     /// (computed at export, cleared on import, or never imported). Exhaustive for
     /// `normalize_stored`: it must change no other field.
     fn stored_normalized_fields(&self, node_type: &str) -> &'static [&'static str];
+    /// Own fields an editor transform defaults inside a remote reconcile when the stored value
+    /// is unset, with that default; each field is one of `stored_normalized_fields`. Source never
+    /// writes the default as a fixup: its next local whole-state sync writes it.
+    fn remote_update_defaults(&self, _node_type: &str) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
     /// Source's import normalization of a stored node's own fields, applied to Loro reads
     /// only. `parent` reads the stored parent's own fields for rules that depend on them.
     fn normalize_stored(

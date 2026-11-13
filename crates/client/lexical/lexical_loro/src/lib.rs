@@ -114,6 +114,10 @@ pub struct LoroProjection {
     /// Synced nodes whose stored own fields differ from Source's import normalization; the
     /// next local projection writes the normalized values (Source's Mirror diff).
     stored_drift: OrderedSet<NodeKey>,
+    /// Remotely touched or created nodes whose model holds the policy's remote-update default
+    /// for a field the stored map lacks. No fixup writes it; the next local projection writes the
+    /// model value, and strict checks accept exactly these (node, field) pairs meanwhile.
+    model_drift: OrderedMap<NodeKey, OrderedSet<&'static str>>,
     /// Fail the projection after this many more own-field writes (simulation only).
     #[cfg(feature = "test-faults")]
     fail_after_writes: Option<usize>,

@@ -74,6 +74,15 @@ impl SyncPolicy for MacroSyncPolicy {
             _ => &[],
         }
     }
+    fn remote_update_defaults(&self, node_type: &str) -> &'static [(&'static str, &'static str)] {
+        // Source control source-remote-code-default.source-control.test.ts: the code-prism
+        // transform sets PrismTokenizer.defaultLanguage ('plaintext', CustomCodeNode.ts:82) on a
+        // remote reconcile's unset language; a load (setEditorState) runs no transform.
+        match node_type {
+            "custom-code" => &[("language", "plaintext")],
+            _ => &[],
+        }
+    }
     fn normalize_stored(
         &self,
         node: &mut SerializedNode,

@@ -259,6 +259,7 @@ impl LoroProjection {
                 return Err(diverged(format!("remote type changed at {key}")));
             }
             let mut compare = comparison::loro_own(&map, parent.as_ref(), self.policy)?;
+            self.tolerate_model_drift(key, &mut current, &compare);
             for field in self.policy.ignore_in_remote_compare(&kind, &incoming) {
                 compare.remove(*field);
                 current.remove(*field);

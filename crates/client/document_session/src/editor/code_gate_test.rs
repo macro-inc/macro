@@ -116,15 +116,295 @@ fn a_remote_unset_code_block_gets_no_default_or_fixup_without_a_tokenizer() {
     assert_eq!(fixups, 0);
 }
 
-// Control for the harness: the active path writes the default back as FIXUP. Whether Source does
-// the same for remote updates is qualified in the code-highlighting activation, not here.
+// With a tokenizer the remote reconcile defaults the language locally, as Source's code-prism
+// transform does, and writes no fixup; the next local sync writes it (pinned below).
 #[test]
-fn with_a_tokenizer_the_active_path_writes_the_remote_default_as_fixup() {
+fn with_a_tokenizer_the_remote_default_stays_local_without_a_fixup() {
     let tokens = CodeTokens::new(Arc::new(NoGrammars), "no-grammars");
     let (local, stored, fixups) = receive_unset_remote_code(tokens);
     assert_eq!(local, Some(serde_json::json!("plaintext")));
-    assert_eq!(stored, Some(serde_json::json!("plaintext")));
-    assert!(fixups > 0);
+    assert!(
+        matches!(stored, None | Some(Value::Null)),
+        "stored {stored:?}"
+    );
+    assert_eq!(fixups, 0);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RemoteCodeVariant {
+    MetadataAbsent,
+    MetadataCurrent,
+    /// Current metadata, then one local keystroke in the trailing paragraph.
+    CurrentThenType,
+    /// Current metadata, then the remote edits the same code block's text.
+    CurrentRemoteUpdate,
+    /// The remote update, then one local keystroke in the trailing paragraph.
+    CurrentRemoteUpdateThenType,
+}
+
+struct RemoteCodeRun {
+    local_language: Option<Value>,
+    stored_language: Option<Value>,
+    fixups: usize,
+    /// Ops the local peer wrote to Loro after the first import.
+    local_ops: i32,
+    doc: loro::LoroDoc,
+    local: EditorSurface,
+}
+
+/// The four Source control variants (apps/web source-remote-code-default.source-control.test.ts):
+/// a shared document with root id and an optional current documentMetadata, a no-highlighting
+/// remote that writes a custom-code block with no language, received by a tokenizer-active local.
+fn remote_code_run(variant: RemoteCodeVariant) -> RemoteCodeRun {
+    let local_config = config(CodeTokens::new(Arc::new(NoGrammars), "no-grammars"));
+    let policy = local_config.policy;
+    let doc = lexical_loro::new_doc(7).unwrap();
+    let mut root = serde_json::json!({
+        "type":"root","version":1,"format":"","indent":0,"direction":null,
+        "$":{"id":"root"},
+        "children":[{"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+            "$":{"id":"remote-trailing"},"textFormat":0,"textStyle":"","children":[]}]
+    });
+    if variant != RemoteCodeVariant::MetadataAbsent {
+        root["$"]["documentMetadata"] = serde_json::json!({"version":10});
+    }
+    lexical_loro::mirror::set_state(&doc, &root).unwrap();
+    let mut local = EditorSurface::new(local_config, 7, now()).unwrap();
+    local
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+
+    let remote_doc = lexical_loro::fork_doc(&doc, 60).unwrap();
+    let mut remote = EditorSurface::new(config(CodeTokens::none()), 60, now()).unwrap();
+    remote
+        .init(&remote_doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let remote_write = |remote: &mut EditorSurface, text: &str| {
+        let mut state = remote.state().to_json().unwrap();
+        state.root.insert(
+            "children".into(),
+            serde_json::json!([
+                {"type":"custom-code","previewEnabled":false,"$":{"id":"remote-code"},"children":[
+                    {"type":"text","text":text,"$":{"id":"remote-leaf"}}
+                ]},
+                {"type":"paragraph","$":{"id":"remote-trailing"},"children":[]}
+            ]),
+        );
+        remote
+            .apply(
+                &remote_doc,
+                Input::SetState {
+                    state,
+                    tags: TagSet::default(),
+                },
+                now(),
+                Access::Edit,
+                &mut Vec::new(),
+            )
+            .unwrap();
+    };
+    let receive = |local: &mut EditorSurface| {
+        doc.import(
+            &remote_doc
+                .export(loro::ExportMode::updates(&doc.oplog_vv()))
+                .unwrap(),
+        )
+        .unwrap();
+        local
+            .remote_pending(&doc, now(), Access::Edit, &mut Vec::new(), false)
+            .unwrap();
+    };
+
+    let fixups = Arc::new(AtomicUsize::new(0));
+    let observed = fixups.clone();
+    let _subscription = doc.subscribe_root(Arc::new(move |event| {
+        if event.origin == FIXUP_ORIGIN {
+            observed.fetch_add(1, Ordering::Relaxed);
+        }
+    }));
+    let local_counter = || doc.oplog_vv().get(&7).copied().unwrap_or(0);
+    remote_write(&mut remote, "plain block");
+    let before = local_counter();
+    receive(&mut local);
+    if matches!(
+        variant,
+        RemoteCodeVariant::CurrentRemoteUpdate | RemoteCodeVariant::CurrentRemoteUpdateThenType
+    ) {
+        remote_write(&mut remote, "plain block edited");
+        receive(&mut local);
+    }
+    match variant {
+        RemoteCodeVariant::CurrentThenType | RemoteCodeVariant::CurrentRemoteUpdateThenType => {
+            let trailing = local.state().last_child_or_err(NodeKey::ROOT).unwrap();
+            let point = Point::element(trailing, ChildIndex(0));
+            local
+                .apply(
+                    &doc,
+                    Input::Command {
+                        command: Command::InsertText("x".into()),
+                        selection: ViewSelection::Range {
+                            anchor: point,
+                            focus: point,
+                            resolution_dirty: false,
+                        },
+                    },
+                    now(),
+                    Access::Edit,
+                    &mut Vec::new(),
+                )
+                .unwrap();
+        }
+        RemoteCodeVariant::MetadataAbsent
+        | RemoteCodeVariant::MetadataCurrent
+        | RemoteCodeVariant::CurrentRemoteUpdate => {}
+    }
+    let stored = lexical_loro::reconstruct_state(&doc, policy).unwrap();
+    RemoteCodeRun {
+        local_language: local.state().to_json().unwrap().root["children"][0]
+            .get("language")
+            .cloned(),
+        stored_language: stored.root["children"][0]
+            .get("language")
+            .cloned()
+            .filter(|language| !language.is_null()),
+        fixups: fixups.load(Ordering::Relaxed),
+        local_ops: local_counter() - before,
+        doc: doc.clone(),
+        local,
+    }
+}
+
+// Source control results (source-remote-code-default.source-control.test.ts, quiescence-settled;
+// 4b composes variants 3 and 4): the remote reconcile is an ordinary update, so the code-prism
+// transform defaults the unset language to PrismTokenizer.defaultLanguage ('plaintext',
+// CustomCodeNode.ts:82) locally; that FROM_LORO update is never written to Loro. Source writes no
+// fixup: the stored language becomes 'plaintext' only through the next local whole-state sync.
+// Absent metadata: the stored outcome depends on when the open upgrades metadata (a candidate R003
+// finding awaiting a real-browser first load), so only its local default and the absence of a
+// fixup are pinned.
+#[test]
+fn a_remote_unset_code_language_is_written_only_by_the_next_local_sync_as_in_source() {
+    let plaintext = Some(serde_json::json!("plaintext"));
+    let absent = remote_code_run(RemoteCodeVariant::MetadataAbsent);
+    assert_eq!(
+        (absent.local_language, absent.fixups),
+        (plaintext.clone(), 0)
+    );
+    let mut actual = Vec::new();
+    let mut expected = Vec::new();
+    for (variant, stored, writes) in [
+        (RemoteCodeVariant::MetadataCurrent, None, false),
+        (RemoteCodeVariant::CurrentThenType, plaintext.clone(), true),
+        (RemoteCodeVariant::CurrentRemoteUpdate, None, false),
+        (
+            RemoteCodeVariant::CurrentRemoteUpdateThenType,
+            plaintext.clone(),
+            true,
+        ),
+    ] {
+        let run = remote_code_run(variant);
+        actual.push((
+            variant,
+            run.local_language,
+            run.stored_language,
+            run.fixups,
+            run.local_ops > 0,
+        ));
+        expected.push((variant, plaintext.clone(), stored, 0, writes));
+    }
+    assert_eq!(actual, expected);
+}
+
+// Attach records no remote-update default (a load runs no transform, Source variant 5): the
+// loaded document checks clean, and a model 'plaintext' over a stored-unset language that no
+// remote import produced fails, which it could not if attach had recorded the default.
+#[test]
+fn attach_records_no_remote_default_and_checks_stay_strict() {
+    let doc = lexical_loro::new_doc(7).unwrap();
+    lexical_loro::mirror::set_state(
+        &doc,
+        &serde_json::json!({
+            "type":"root","version":1,"format":"","indent":0,"direction":null,
+            "$":{"id":"root","documentMetadata":{"version":10}},
+            "children":[
+                {"type":"custom-code","version":1,"format":"","indent":0,"direction":null,
+                    "previewEnabled":false,"$":{"id":"stored-code"},"children":[
+                    {"type":"text","version":1,"text":"plain block","detail":0,"format":0,
+                        "mode":"normal","style":"","$":{"id":"stored-leaf"}}
+                ]},
+                {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+                    "$":{"id":"stored-trailing"},"textFormat":0,"textStyle":"","children":[]}
+            ]
+        }),
+    )
+    .unwrap();
+    let mut local = EditorSurface::new(
+        config(CodeTokens::new(Arc::new(NoGrammars), "no-grammars")),
+        7,
+        now(),
+    )
+    .unwrap();
+    local
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let projection = local.projection.as_ref().expect("projection");
+    let unset = |language: Option<&Value>| matches!(language, None | Some(Value::Null));
+    assert!(unset(
+        local.state().to_json().unwrap().root["children"][0].get("language")
+    ));
+    projection
+        .check(&doc, local.state())
+        .expect("the loaded document");
+    // Diverge the model alone, bypassing projection.
+    let mut state = local.state().to_json().unwrap();
+    state.root.get_mut("children").unwrap()[0]["language"] = serde_json::json!("plaintext");
+    local
+        .core
+        .apply(
+            Input::SetState {
+                state,
+                tags: TagSet::default(),
+            },
+            HistoryTime(0),
+        )
+        .unwrap();
+    assert_eq!(
+        local.state().to_json().unwrap().root["children"][0]["language"],
+        "plaintext"
+    );
+    let projection = local.projection.as_ref().expect("projection");
+    assert!(projection.check(&doc, local.state()).is_err());
+}
+
+// The pending default is the only model-vs-stored difference strict checks accept: another
+// field, or the drifted field with any stored value, still fails.
+#[test]
+fn strict_checks_accept_only_the_pending_remote_default() {
+    let run = remote_code_run(RemoteCodeVariant::MetadataCurrent);
+    let projection = run.local.projection.as_ref().expect("projection");
+    projection
+        .check(&run.doc, run.local.state())
+        .expect("the pending default is accepted");
+    let code = run.local.state().first_child_or_err(NodeKey::ROOT).unwrap();
+    let map = run.doc.get_map(
+        projection
+            .container_of(code)
+            .expect("code container")
+            .clone(),
+    );
+    let check = |doc: &loro::LoroDoc| projection.check(doc, run.local.state());
+    map.insert("theme", "dracula").unwrap();
+    run.doc.commit();
+    assert!(check(&run.doc).is_err(), "a stored field the model lacks");
+    map.delete("theme").unwrap();
+    run.doc.commit();
+    check(&run.doc).expect("accepted again once removed");
+    map.insert("language", "rust").unwrap();
+    run.doc.commit();
+    assert!(
+        check(&run.doc).is_err(),
+        "a stored value for the drifted field"
+    );
 }
 
 /// Answers every call (all languages loaded, one plain token per text) except call number
