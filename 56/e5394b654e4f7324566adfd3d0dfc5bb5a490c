@@ -1,0 +1,22 @@
+apps/web/src/features/block-canvas/canvas-next.tsx
+  s_7e06719c6c76a9::t_3215ff27fa9240 120-127
+apps/web/src/features/block-canvas/browser-test/artifact.e2e.ts
+  s_7e06719c6c76a9::t_3215ff27fa9240 332
+  s_7e06719c6c76a9::t_adfcee23c97945 333
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "56e5394b654e4f7324566adfd3d0dfc5bb5a490c",
+  "prompts": {},
+  "sessions": {
+    "s_7e06719c6c76a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2309e37-d92e-45ed-b0e7-0934633357de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
