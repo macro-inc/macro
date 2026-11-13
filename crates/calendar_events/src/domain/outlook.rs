@@ -489,7 +489,7 @@ impl<
         name = "calendar.projection_relay",
         skip_all,
         fields(event_id = %lease.event_id, revision = lease.revision, link_id = %lease.link_id),
-        err
+        err(level = tracing::Level::DEBUG)
     )]
     async fn publish(&self, lease: &CalendarProjectionLease) -> Result<(), Report> {
         let event = super::events::CalendarMacroEvent::for_change(lease.event.clone());

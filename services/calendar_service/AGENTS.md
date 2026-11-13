@@ -57,14 +57,16 @@ gateway `/calendar` prefix.
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - The HTTP API and every background worker share one tokio runtime, on a
-  Fargate task of 0.5 vCPU (prod) or 0.25 vCPU (dev). Each worker round that
-  does work runs in its own root span (`calendar.sync_scheduler`,
-  `google_backfill`, `calendar.outlook_sync`, `calendar.projection_relay`,
-  `calendar.replacement_recovery`), so a `tokio runtime starvation detected`
-  warning can be matched to the rounds running at that moment. Read its
-  `cpu_wait_ms` first: near `delay_ms`, the task had used up its CPU quota and
-  no task held the runtime. Never wrap a forever loop in
-  `#[tracing::instrument]`; that span never closes and hides its children.
+  Fargate task of 0.5 vCPU (prod) or 0.25 vCPU (dev) that the Datadog agent
+  and log router sidecars share. Each worker round that does work runs in its
+  own root span (`calendar.sync_scheduler`, `google_backfill`,
+  `calendar.outlook_sync`, `calendar.projection_relay`,
+  `calendar.replacement_recovery`, `recover_once`), so a
+  `tokio runtime starvation detected` warning can be matched to the rounds
+  running at that moment. Read its `cpu_wait_ms` first: near `delay_ms`, the
+  task's threads could not get a CPU. One constant `delay_ms` per task means
+  its quota ran out, which work anywhere in the task (these rounds included)
+  can cause; moving code to `spawn_blocking` would not help there.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;
