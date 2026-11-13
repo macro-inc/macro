@@ -1,0 +1,23 @@
+apps/web/src/features/dynamic-ui/widgets/agent-panes/agent-panes.test.tsx
+  s_422464c85346e5::t_57bef5ae91ed10 56
+apps/web/src/features/dynamic-ui/widgets/panes/agent-pane.tsx
+  s_422464c85346e5::t_57bef5ae91ed10 4
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_422464c85346e5::t_57bef5ae91ed10 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4989477ea8a943404db01185208899aaedfab9fe",
+  "prompts": {},
+  "sessions": {
+    "s_422464c85346e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae48edd-7ffa-4908-b6b8-ce91c4bf54e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
