@@ -1,0 +1,649 @@
+{
+  "body": {
+    "daemon_id": "34290d3b-c454-4fc7-a240-45cd6cf792c3",
+    "events": [
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 10797,
+          "module_path": "git_ai::daemon"
+        },
+        "id": "6d210304-31d5-4dbd-80e9-63628c4e4d94",
+        "kind": "log",
+        "level": "info",
+        "message": "transcript worker spawned",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:04.756271928+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/untraced_commit_fixup.rs",
+          "interval_ms": 10000,
+          "line": 29,
+          "module_path": "git_ai::daemon::untraced_commit_fixup"
+        },
+        "id": "6b4b36d6-5ddb-475e-bc42-dc04cd0e89fb",
+        "kind": "log",
+        "level": "info",
+        "message": "untraced fixup worker started",
+        "target": "git_ai::daemon::untraced_commit_fixup",
+        "timestamp": "2026-11-13T04:26:04.756405899+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/token_usage_worker.rs",
+          "line": 357,
+          "module_path": "git_ai::daemon::token_usage_worker"
+        },
+        "id": "dd12da66-427a-4d8c-8531-e00a3ac32947",
+        "kind": "log",
+        "level": "info",
+        "message": "token-usage worker started",
+        "target": "git_ai::daemon::token_usage_worker",
+        "timestamp": "2026-11-13T04:26:04.756411978+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/stream_worker.rs",
+          "line": 356,
+          "module_path": "git_ai::daemon::stream_worker"
+        },
+        "id": "df620cc7-41e2-4a48-b46d-3a94d7829b12",
+        "kind": "log",
+        "level": "info",
+        "message": "transcript worker started",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:04.756413200+00:00"
+      },
+      {
+        "fields": {
+          "control": "/home/test/scratch/home/.git-ai/internal/daemon/control.sock",
+          "file": "src/daemon.rs",
+          "interval": 30,
+          "line": 10304,
+          "module_path": "git_ai::daemon",
+          "trace": "/home/test/scratch/home/.git-ai/internal/daemon/trace2.sock"
+        },
+        "id": "8c928198-6cd1-427a-8d44-eb24ee862743",
+        "kind": "log",
+        "level": "info",
+        "message": "socket health check started",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:04.756546910+00:00"
+      },
+      {
+        "fields": {
+          "discovered": 0,
+          "file": "src/daemon/stream_worker.rs",
+          "line": 495,
+          "module_path": "git_ai::daemon::stream_worker"
+        },
+        "id": "f11826a0-94a9-4c09-be14-f284d7867c3b",
+        "kind": "log",
+        "level": "info",
+        "message": "sweep completed",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:04.757674372+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/token_usage_worker.rs",
+          "line": 496,
+          "module_path": "git_ai::daemon::token_usage_worker"
+        },
+        "id": "6713fa7e-6197-4214-a94f-060830217585",
+        "kind": "log",
+        "level": "info",
+        "message": "token-usage sweep started",
+        "target": "git_ai::daemon::token_usage_worker",
+        "timestamp": "2026-11-13T04:26:04.757693761+00:00"
+      },
+      {
+        "fields": {
+          "discovered": 0,
+          "file": "src/daemon/token_usage_worker.rs",
+          "line": 509,
+          "module_path": "git_ai::daemon::token_usage_worker"
+        },
+        "id": "45cb60cf-d3e6-4f61-9ab1-073f8fc7e651",
+        "kind": "log",
+        "level": "info",
+        "message": "token-usage sweep completed",
+        "target": "git_ai::daemon::token_usage_worker",
+        "timestamp": "2026-11-13T04:26:04.757773991+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 7318,
+          "module_path": "git_ai::daemon",
+          "new_head": "9c62********208b",
+          "op": "commit",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "4d6f3bf9-3f6b-4afb-afd7-75e6e95574d6",
+        "kind": "log",
+        "level": "info",
+        "message": "git write op completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:04.978324022+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 3337,
+          "module_path": "git_ai::daemon",
+          "trigger": "post_commit"
+        },
+        "id": "f9245c00-aea0-4173-9719-b6a14f8958c7",
+        "kind": "log",
+        "level": "info",
+        "message": "recovery transcript sweep enqueued",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:04.989635639+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/stream_worker.rs",
+          "line": 437,
+          "module_path": "git_ai::daemon::stream_worker",
+          "trigger": "post_commit"
+        },
+        "id": "69cb1d37-61f6-4601-9cfa-0fd8d8eaf8b2",
+        "kind": "log",
+        "level": "info",
+        "message": "triggered transcript sweep requested",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:04.989660627+00:00"
+      },
+      {
+        "fields": {
+          "discovered": 0,
+          "file": "src/daemon/stream_worker.rs",
+          "line": 495,
+          "module_path": "git_ai::daemon::stream_worker"
+        },
+        "id": "0fd160e6-330a-4ab3-b62d-66cf7dc4c7f8",
+        "kind": "log",
+        "level": "info",
+        "message": "sweep completed",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:04.989737532+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 7318,
+          "module_path": "git_ai::daemon",
+          "new_head": "9c62********208b",
+          "op": "commit",
+          "repo": "/home/test/scratch/repos/other"
+        },
+        "id": "0561aa12-5bac-4ddb-aa8f-7755e3eac6e1",
+        "kind": "log",
+        "level": "info",
+        "message": "git write op completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.001487817+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 3337,
+          "module_path": "git_ai::daemon",
+          "trigger": "post_commit"
+        },
+        "id": "a4762e46-8b90-4d77-9e0e-9f06ee0aae3f",
+        "kind": "log",
+        "level": "info",
+        "message": "recovery transcript sweep enqueued",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.008011952+00:00"
+      },
+      {
+        "fields": {
+          "discovered": 0,
+          "file": "src/daemon/stream_worker.rs",
+          "line": 495,
+          "module_path": "git_ai::daemon::stream_worker"
+        },
+        "id": "fa970bc5-9681-46cd-9b5f-d88cc45e56de",
+        "kind": "log",
+        "level": "info",
+        "message": "sweep completed",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:05.008114086+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/stream_worker.rs",
+          "line": 437,
+          "module_path": "git_ai::daemon::stream_worker",
+          "trigger": "post_commit"
+        },
+        "id": "86636352-b051-4a21-8ed6-ffb9ab25ff4d",
+        "kind": "log",
+        "level": "info",
+        "message": "triggered transcript sweep requested",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:05.008027796+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "file": "src/daemon.rs",
+          "line": 9474,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_receive",
+          "receipt_seq": 1,
+          "retained_bytes": 740
+        },
+        "id": "6dd7aab2-090f-4303-b819-ac03271e02a9",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint received into bounded ingress",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.035875005+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "family": "/home/test/scratch/repos/macro/.git",
+          "file": "src/daemon.rs",
+          "file_count": 1,
+          "line": 4988,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_admission",
+          "receipt_seq": 1,
+          "receipt_to_admission_ms": "0",
+          "retained_bytes": 740,
+          "trace_id": "t_be4e5bad1f64c7"
+        },
+        "id": "723fe8e9-e39b-4234-bd1b-f04aac0bc590",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint prepared for family admission",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.035971230+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "file": "src/daemon.rs",
+          "line": 9474,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_receive",
+          "receipt_seq": 2,
+          "retained_bytes": 1128
+        },
+        "id": "8939c278-e0c2-4d4c-8e96-b660d0f8da1e",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint received into bounded ingress",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.053318409+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "family": "/home/test/scratch/repos/macro/.git",
+          "file": "src/daemon.rs",
+          "file_count": 1,
+          "line": 4988,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_admission",
+          "receipt_seq": 2,
+          "receipt_to_admission_ms": "0",
+          "retained_bytes": 1128,
+          "trace_id": "t_0b9acda081d542"
+        },
+        "id": "e2bc76aa-0049-4bc2-8ae6-481681b2eb72",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint prepared for family admission",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.053374413+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "kind": "Human",
+          "line": 6422,
+          "module_path": "git_ai::daemon",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "ec482cb4-9e5f-48ea-ab1d-7741476cf5ec",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint start",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.113276653+00:00"
+      },
+      {
+        "fields": {
+          "duration_ms": 3,
+          "file": "src/daemon.rs",
+          "kind": "Human",
+          "line": 6481,
+          "module_path": "git_ai::daemon",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "c56a3a49-8098-4f66-827f-25c8b58ba662",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint done",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.117329782+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "duration_ms": 3,
+          "family": "/home/test/scratch/repos/macro/.git",
+          "file": "src/daemon.rs",
+          "line": 6592,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_processing",
+          "receipt_seq": 1,
+          "status": "ok",
+          "trace_id": "t_be4e5bad1f64c7"
+        },
+        "id": "91c45272-bd3e-4762-9467-60bc24ca2b5b",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint processing completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.117392086+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "kind": "AiAgent",
+          "line": 6422,
+          "module_path": "git_ai::daemon",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "e815e036-b298-4cf6-a0db-282dffe17ac2",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint start",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.117405125+00:00"
+      },
+      {
+        "fields": {
+          "duration_ms": 5,
+          "file": "src/daemon.rs",
+          "kind": "AiAgent",
+          "line": 6481,
+          "module_path": "git_ai::daemon",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "5f1626dd-c156-4cba-9591-20a5908cd9cb",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint done",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.123029532+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "duration_ms": 5,
+          "family": "/home/test/scratch/repos/macro/.git",
+          "file": "src/daemon.rs",
+          "line": 6592,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_processing",
+          "receipt_seq": 2,
+          "status": "ok",
+          "trace_id": "t_0b9acda081d542"
+        },
+        "id": "1a48e891-5ff6-4aa3-add2-2ab4fda7d3ed",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint processing completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.123089632+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 7318,
+          "module_path": "git_ai::daemon",
+          "new_head": "9237********1d86",
+          "op": "commit",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "b507fa80-b26d-4791-aba8-45c9ce490d86",
+        "kind": "log",
+        "level": "info",
+        "message": "git write op completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.126957904+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "file": "src/daemon.rs",
+          "line": 9474,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_receive",
+          "receipt_seq": 3,
+          "retained_bytes": 1039
+        },
+        "id": "64c04bdb-693d-441f-880a-852696119184",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint received into bounded ingress",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.245964466+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "family": "/home/test/scratch/repos/macro/.git",
+          "file": "src/daemon.rs",
+          "file_count": 1,
+          "line": 4988,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_admission",
+          "receipt_seq": 3,
+          "receipt_to_admission_ms": "0",
+          "retained_bytes": 1039,
+          "trace_id": "t_cbe9a93df3fbf6"
+        },
+        "id": "b2c08382-7dd1-4406-ab1b-30e29778e322",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint prepared for family admission",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.246017937+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "kind": "AiAgent",
+          "line": 6422,
+          "module_path": "git_ai::daemon",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "cd007e53-cd68-4b18-b0d0-e6757818b39e",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint start",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.246051677+00:00"
+      },
+      {
+        "fields": {
+          "duration_ms": 7,
+          "file": "src/daemon.rs",
+          "kind": "AiAgent",
+          "line": 6481,
+          "module_path": "git_ai::daemon",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "4e843e15-a981-4c3f-9c37-2e4682c50a30",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint done",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.253457576+00:00"
+      },
+      {
+        "fields": {
+          "component": "daemon",
+          "duration_ms": 7,
+          "family": "/home/test/scratch/repos/macro/.git",
+          "file": "src/daemon.rs",
+          "line": 6592,
+          "module_path": "git_ai::daemon",
+          "phase": "checkpoint_processing",
+          "receipt_seq": 3,
+          "status": "ok",
+          "trace_id": "t_cbe9a93df3fbf6"
+        },
+        "id": "95f79205-e7ed-4651-9879-db18d5b62725",
+        "kind": "log",
+        "level": "info",
+        "message": "checkpoint processing completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.253501692+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 7318,
+          "module_path": "git_ai::daemon",
+          "new_head": "3716********01e8",
+          "op": "commit",
+          "repo": "/home/test/scratch/repos/macro"
+        },
+        "id": "e3d3e78c-2274-49d7-af4d-9e90c7e70095",
+        "kind": "log",
+        "level": "info",
+        "message": "git write op completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:05.260096834+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 7318,
+          "module_path": "git_ai::daemon",
+          "new_head": "c0b0********449a",
+          "op": "commit",
+          "repo": "/home/test/scratch/repos/other"
+        },
+        "id": "888c881f-2b0b-4ae9-b47f-e2f8f303d0c2",
+        "kind": "log",
+        "level": "info",
+        "message": "git write op completed",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:07.074760006+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon.rs",
+          "line": 3337,
+          "module_path": "git_ai::daemon",
+          "trigger": "post_commit"
+        },
+        "id": "3c3920af-3760-4d48-85e4-58c972961351",
+        "kind": "log",
+        "level": "info",
+        "message": "recovery transcript sweep enqueued",
+        "target": "git_ai::daemon",
+        "timestamp": "2026-11-13T04:26:07.083180256+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/stream_worker.rs",
+          "line": 437,
+          "module_path": "git_ai::daemon::stream_worker",
+          "trigger": "post_commit"
+        },
+        "id": "faa1a0b6-dae4-400b-8dbc-990762862f7c",
+        "kind": "log",
+        "level": "info",
+        "message": "triggered transcript sweep requested",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:07.083192083+00:00"
+      },
+      {
+        "fields": {
+          "discovered": 2,
+          "file": "src/daemon/stream_worker.rs",
+          "line": 495,
+          "module_path": "git_ai::daemon::stream_worker"
+        },
+        "id": "05621a87-ea93-4d75-988b-d8ab99f70c4c",
+        "kind": "log",
+        "level": "info",
+        "message": "sweep completed",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:07.083585684+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/stream_worker.rs",
+          "index": 0,
+          "line": 505,
+          "module_path": "git_ai::daemon::stream_worker",
+          "path": "/home/test/scratch/home/.claude/projects/-home-test-scratch-r5-repos-other/22222222-2222-4222-8222-222222222222.jsonl",
+          "session_id": "s_a5a876c86efa83",
+          "tool": "claude"
+        },
+        "id": "39169b35-2ec2-4eb0-8943-567262908516",
+        "kind": "log",
+        "level": "info",
+        "message": "sweep item: session",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:07.083611783+00:00"
+      },
+      {
+        "fields": {
+          "file": "src/daemon/stream_worker.rs",
+          "index": 1,
+          "line": 505,
+          "module_path": "git_ai::daemon::stream_worker",
+          "path": "/home/test/scratch/home/.claude/projects/-home-test-scratch-r5-norepo/33333333-3333-4333-8333-333333333333.jsonl",
+          "session_id": "s_9842e5e910339a",
+          "tool": "claude"
+        },
+        "id": "605e85ed-4b1d-449f-a86d-46c29bff4db0",
+        "kind": "log",
+        "level": "info",
+        "message": "sweep item: session",
+        "target": "git_ai::daemon::stream_worker",
+        "timestamp": "2026-11-13T04:26:07.083622239+00:00"
+      }
+    ],
+    "git_ai_version": "1.7.7",
+    "install_id": "00000000-0000-4000-8000-000000000001",
+    "version": 1
+  },
+  "headers": {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0001",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "POST",
+  "path": "/worker/logs/upload",
+  "query": {},
+  "response": {
+    "body": {
+      "accepted": 39,
+      "dropped": 0,
+      "enqueued": true,
+      "errors": []
+    },
+    "headers": {},
+    "status": 200
+  }
+}

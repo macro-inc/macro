@@ -1,0 +1,19 @@
+{
+  "body": null,
+  "headers": {
+    "accept": "*/*",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "GET",
+  "path": "/worker/releases/latest/download/SHA256SUMS",
+  "query": {},
+  "response": {
+    "body": {
+      "error": "downloads disabled in capture server"
+    },
+    "headers": {},
+    "status": 404
+  }
+}

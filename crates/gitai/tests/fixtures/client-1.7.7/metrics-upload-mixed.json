@@ -1,0 +1,926 @@
+{
+  "body": {
+    "events": [
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/someone-else/other",
+          "2": "Test Dev <dev@example.com>",
+          "3": "c0b0ba0222e9126d7b87227a7853db620ddd449a",
+          "4": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "5": "main"
+        },
+        "e": 1,
+        "t": 1794543967,
+        "v": {
+          "0": 0,
+          "1": 0,
+          "10": null,
+          "11": "feat: add greeting helper (not allowed repo)",
+          "12": null,
+          "13": "hello.txt\n  s_a5a876c86efa83::t_e4c829c40f1ad2 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"c0b0ba0222e9126d7b87227a7853db620ddd449a\",\n  \"prompts\": {},\n  \"sessions\": {\n    \"s_a5a876c86efa83\": {\n      \"agent_id\": {\n        \"tool\": \"claude\",\n        \"id\": \"22222222-2222-4222-8222-222222222222\",\n        \"model\": \"unknown\"\n      },\n      \"human_author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}",
+          "14": "[{\"commit_sha\":\"c0b0ba0222e9126d7b87227a7853db620ddd449a\",\"content_hash\":\"0eb5306d41f5df9e8802e23775b55c7444f9a94aca3e0e179249fbfcae7f82da\",\"hunk_kind\":\"addition\",\"start_line\":1,\"end_line\":1,\"file_path\":\"hello.txt\",\"prompt_id\":\"s_a5a876c86efa83::t_e4c829c40f1ad2\",\"session_id\":\"s_a5a876c86efa83\"}]",
+          "15": 1794543965,
+          "16": 1794543965,
+          "17": "54c0d1cfdfbf33c1a87d04e2fb54e4b7c36c0646",
+          "18": null,
+          "2": 1,
+          "3": [
+            "all",
+            "claude::unknown"
+          ],
+          "5": [
+            1,
+            1
+          ],
+          "6": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/someone-else/other",
+          "2": "s_a5a876c86efa83::t_e4c829c40f1ad2",
+          "20": "claude",
+          "21": "unknown",
+          "23": "22222222-2222-4222-8222-222222222222",
+          "24": "s_a5a876c86efa83",
+          "25": "t_e4c829c40f1ad2",
+          "3": "c0b0ba0222e9126d7b87227a7853db620ddd449a",
+          "4": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "5": "main"
+        },
+        "e": 4,
+        "t": 1794543965,
+        "v": {
+          "0": 1794543965,
+          "1": "ai_agent",
+          "10": "{\"candidate_count\":13,\"distance_ns\":0,\"file_path\":\"hello.txt\",\"file_timestamps_ns\":[1794543965103776748],\"selected_event_ts\":1794543965,\"selected_external_session_id\":\"22222222-2222-4222-8222-222222222222\",\"selected_external_tool_use_id\":null,\"selected_metric_row_id\":26,\"selected_model\":\"unknown\",\"selected_repo_url\":\"https://github.com/someone-else/other\",\"selected_session_id\":\"s_a5a876c86efa83\",\"selected_tool\":\"claude\",\"selection_tier\":\"same_repo_url\",\"solver\":\"session_event_mtime\",\"target_repo_url\":\"https://github.com/someone-else/other\",\"unknown_lines\":[1],\"window_ns\":3000000000}",
+          "2": "hello.txt",
+          "3": 1,
+          "4": 0,
+          "5": 1,
+          "6": 0,
+          "8": "attribution_recovery_session_event",
+          "9": "recovered_session_event_mtime"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/someone-else/other",
+          "2": "Test Dev <dev@example.com>",
+          "3": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "4": "initial",
+          "5": "main"
+        },
+        "e": 1,
+        "t": 1794543967,
+        "v": {
+          "0": 1,
+          "1": 0,
+          "10": null,
+          "11": "chore: initial commit",
+          "12": null,
+          "13": "README.md\n  h_118bc64884c4da 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"9c62615ef00353e8002e535fb5d3de446935208b\",\n  \"prompts\": {},\n  \"humans\": {\n    \"h_118bc64884c4da\": {\n      \"author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}",
+          "14": "[{\"commit_sha\":\"9c62615ef00353e8002e535fb5d3de446935208b\",\"content_hash\":\"5a12469fa684927afa5a51ff91ba9e684942d1061199042c239bf86c3faccc21\",\"hunk_kind\":\"addition\",\"start_line\":1,\"end_line\":1,\"file_path\":\"README.md\",\"human_id\":\"h_118bc64884c4da\"}]",
+          "15": 1794543964,
+          "16": 1794543964,
+          "17": "658b2fb176acf4bbafc62e160bf17884f50046a5",
+          "18": null,
+          "2": 1,
+          "3": [
+            "all"
+          ],
+          "5": [
+            0
+          ],
+          "6": [
+            0
+          ]
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "Test Dev <dev@example.com>",
+          "3": "371696fcd23b961e96540531d013a0253bd101e8",
+          "4": "9237c8c1cdf2a07152059eaa8a61592efe1d1d86",
+          "5": "main"
+        },
+        "e": 1,
+        "t": 1794543965,
+        "v": {
+          "0": 0,
+          "1": 0,
+          "10": 1794543965,
+          "11": "feat: add codex line",
+          "12": null,
+          "13": "codex.txt\n  s_f4be7d5430ba3a::t_cbe9a93df3fbf6 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"371696fcd23b961e96540531d013a0253bd101e8\",\n  \"prompts\": {},\n  \"sessions\": {\n    \"s_f4be7d5430ba3a\": {\n      \"agent_id\": {\n        \"tool\": \"codex\",\n        \"id\": \"44444444-4444-4444-8444-444444444444\",\n        \"model\": \"gpt-5.1-codex\"\n      },\n      \"human_author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}",
+          "14": "[{\"commit_sha\":\"371696fcd23b961e96540531d013a0253bd101e8\",\"content_hash\":\"671fdb18be62052e309ea090987cbca3dc84e4f3e5de640acfada6b650c4b6ad\",\"hunk_kind\":\"addition\",\"start_line\":1,\"end_line\":1,\"file_path\":\"codex.txt\",\"prompt_id\":\"s_f4be7d5430ba3a::t_cbe9a93df3fbf6\",\"session_id\":\"s_f4be7d5430ba3a\"}]",
+          "15": 1794543965,
+          "16": 1794543965,
+          "17": "66a805b80c1773f63fc3b360da8867fcb2b59ce1",
+          "18": null,
+          "2": 1,
+          "3": [
+            "all",
+            "codex::gpt-5.1-codex"
+          ],
+          "5": [
+            1,
+            1
+          ],
+          "6": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "Test Dev <dev@example.com>",
+          "20": "codex",
+          "21": "gpt-5.1-codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_cbe9a93df3fbf6",
+          "4": "9237c8c1cdf2a07152059eaa8a61592efe1d1d86",
+          "5": "main"
+        },
+        "e": 4,
+        "t": 1794543965,
+        "v": {
+          "0": 1794543965,
+          "1": "ai_agent",
+          "2": "codex.txt",
+          "3": 1,
+          "4": 0,
+          "5": 1,
+          "6": 0,
+          "7": "call_SYNTHETIC0001",
+          "8": "file_edit"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "21": "gpt-5.1-codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "5": "main"
+        },
+        "e": 2,
+        "t": 1794543965,
+        "v": {}
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "21": "gpt-5.1-codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "31": "embedded:1.7.7"
+        },
+        "e": 9,
+        "t": 1794543965,
+        "v": {
+          "0": 1794543900,
+          "1": 31000,
+          "10": 1794543965,
+          "11": 0,
+          "12": 1,
+          "13": 0,
+          "14": 0,
+          "15": 0,
+          "16": 0,
+          "17": 0,
+          "18": 0,
+          "19": 0,
+          "2": 150,
+          "3": 0,
+          "4": 0,
+          "5": 31150,
+          "6": 0,
+          "7": 40250,
+          "9": 2
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_7ec3cd758c9433"
+        },
+        "e": 5,
+        "t": 1794543972,
+        "v": {
+          "0": {
+            "payload": {
+              "info": {
+                "last_token_usage": {
+                  "cache_write_input_tokens": 0,
+                  "cached_input_tokens": 0,
+                  "input_tokens": 16000,
+                  "output_tokens": 30,
+                  "reasoning_output_tokens": 0,
+                  "total_tokens": 16030
+                },
+                "model_context_window": 272000,
+                "total_token_usage": {
+                  "cache_write_input_tokens": 0,
+                  "cached_input_tokens": 0,
+                  "input_tokens": 31000,
+                  "output_tokens": 150,
+                  "reasoning_output_tokens": 0,
+                  "total_tokens": 31150
+                }
+              },
+              "type": "token_count"
+            },
+            "timestamp": "2026-11-13T04:26:12.207Z",
+            "type": "event_msg"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_2ef9636f2a89b9"
+        },
+        "e": 5,
+        "t": 1794543971,
+        "v": {
+          "0": {
+            "payload": {
+              "content": [
+                {
+                  "text": "Added codex.txt.",
+                  "type": "output_text"
+                }
+              ],
+              "role": "assistant",
+              "type": "message"
+            },
+            "timestamp": "2026-11-13T04:26:11.207Z",
+            "type": "response_item"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_29c60ef95c585d"
+        },
+        "e": 5,
+        "t": 1794543970,
+        "v": {
+          "0": {
+            "payload": {
+              "info": {
+                "last_token_usage": {
+                  "cache_write_input_tokens": 0,
+                  "cached_input_tokens": 0,
+                  "input_tokens": 15000,
+                  "output_tokens": 120,
+                  "reasoning_output_tokens": 0,
+                  "total_tokens": 15120
+                },
+                "model_context_window": 272000,
+                "total_token_usage": {
+                  "cache_write_input_tokens": 0,
+                  "cached_input_tokens": 0,
+                  "input_tokens": 15000,
+                  "output_tokens": 120,
+                  "reasoning_output_tokens": 0,
+                  "total_tokens": 15120
+                }
+              },
+              "type": "token_count"
+            },
+            "timestamp": "2026-11-13T04:26:10.207Z",
+            "type": "event_msg"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_be896a1d964a9f"
+        },
+        "e": 5,
+        "t": 1794543969,
+        "v": {
+          "0": {
+            "payload": {
+              "call_id": "call_SYNTHETIC0001",
+              "output": "Success. token=ghp_FAKE-NOT-A-REAL-TOKEN-9999",
+              "type": "function_call_output"
+            },
+            "timestamp": "2026-11-13T04:26:09.207Z",
+            "type": "response_item"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_0fce268ef4d866"
+        },
+        "e": 5,
+        "t": 1794543968,
+        "v": {
+          "0": {
+            "payload": {
+              "arguments": "{\"patch\": \"*** Begin Patch\\n*** Add File: codex.txt\\n+hello from codex\\n*** End Patch\"}",
+              "call_id": "call_SYNTHETIC0001",
+              "name": "apply_patch",
+              "type": "function_call"
+            },
+            "timestamp": "2026-11-13T04:26:08.207Z",
+            "type": "response_item"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_522c8e5b99aa83"
+        },
+        "e": 5,
+        "t": 1794543967,
+        "v": {
+          "0": {
+            "payload": {
+              "content": [
+                {
+                  "text": "Append a codex line to codex.txt. FAKE secrets for redaction: ghp_FAKE-NOT-A-REAL-TOKEN-5678 card 4242424242424242 AKIA-FAKE-NOT-A-REAL-KEY stripe docs key sk_t********p7dc fake_token=Zq8v********S0gA",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            },
+            "timestamp": "2026-11-13T04:26:07.207Z",
+            "type": "response_item"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_7d565efd515668"
+        },
+        "e": 5,
+        "t": 1794543966,
+        "v": {
+          "0": {
+            "payload": {
+              "approval_policy": "never",
+              "cwd": "/home/test/scratch/repos/macro",
+              "model": "gpt-5.1-codex",
+              "sandbox_policy": {
+                "type": "danger-full-access"
+              },
+              "summary": "auto",
+              "turn_id": "turn-1"
+            },
+            "timestamp": "2026-11-13T04:26:06.207Z",
+            "type": "turn_context"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "codex",
+          "23": "44444444-4444-4444-8444-444444444444",
+          "24": "s_f4be7d5430ba3a",
+          "25": "t_789db67e03d53a"
+        },
+        "e": 5,
+        "t": 1794543965,
+        "v": {
+          "0": {
+            "payload": {
+              "cli_version": "0.150.0",
+              "cwd": "/home/test/scratch/repos/macro",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "model_provider": "openai",
+              "originator": "codex_cli_rs",
+              "session_id": "44444444-4444-4444-8444-444444444444",
+              "source": "cli",
+              "timestamp": "2026-11-13T04:26:05.207Z"
+            },
+            "timestamp": "2026-11-13T04:26:05.207Z",
+            "type": "session_meta"
+          }
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "Test Dev <dev@example.com>",
+          "3": "9237c8c1cdf2a07152059eaa8a61592efe1d1d86",
+          "4": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "5": "main"
+        },
+        "e": 1,
+        "t": 1794543965,
+        "v": {
+          "0": 0,
+          "1": 0,
+          "10": 1794543965,
+          "11": "feat: add greeting helper",
+          "12": "Body line for the fixture.",
+          "13": "hello.txt\n  s_5b121f435f7f3f::t_0b9acda081d542 1\n  s_5b121f435f7f3f::t_ff53df4a0f5f44 2\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"9237c8c1cdf2a07152059eaa8a61592efe1d1d86\",\n  \"prompts\": {},\n  \"sessions\": {\n    \"s_5b121f435f7f3f\": {\n      \"agent_id\": {\n        \"tool\": \"claude\",\n        \"id\": \"11111111-1111-4111-8111-111111111111\",\n        \"model\": \"claude-sonnet-4-5-20250929\"\n      },\n      \"human_author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}",
+          "14": "[{\"commit_sha\":\"9237c8c1cdf2a07152059eaa8a61592efe1d1d86\",\"content_hash\":\"0eb5306d41f5df9e8802e23775b55c7444f9a94aca3e0e179249fbfcae7f82da\",\"hunk_kind\":\"addition\",\"start_line\":1,\"end_line\":1,\"file_path\":\"hello.txt\",\"prompt_id\":\"s_5b121f435f7f3f::t_0b9acda081d542\",\"session_id\":\"s_5b121f435f7f3f\"},{\"commit_sha\":\"9237c8c1cdf2a07152059eaa8a61592efe1d1d86\",\"content_hash\":\"8367821fcfb1ff95fb2e5d4f5c4414ad89315c54b04365c8884c080dcdd8ee0e\",\"hunk_kind\":\"addition\",\"start_line\":2,\"end_line\":2,\"file_path\":\"hello.txt\",\"prompt_id\":\"s_5b121f435f7f3f::t_ff53df4a0f5f44\",\"session_id\":\"s_5b121f435f7f3f\"}]",
+          "15": 1794543965,
+          "16": 1794543965,
+          "17": "395d59b6e221d787f44523d32f9e581af2de787d",
+          "18": null,
+          "2": 2,
+          "3": [
+            "all",
+            "claude::claude-sonnet-4-5-20250929"
+          ],
+          "5": [
+            2,
+            2
+          ],
+          "6": [
+            2,
+            2
+          ]
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "s_5b121f435f7f3f::t_ff53df4a0f5f44",
+          "20": "claude",
+          "21": "claude-sonnet-4-5-20250929",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_ff53df4a0f5f44",
+          "3": "9237c8c1cdf2a07152059eaa8a61592efe1d1d86",
+          "4": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "5": "main"
+        },
+        "e": 4,
+        "t": 1794543965,
+        "v": {
+          "0": 1794543965,
+          "1": "ai_agent",
+          "10": "{\"file_path\":\"hello.txt\",\"recovered_lines\":[2],\"solver\":\"edge_extension\",\"source_author\":\"s_5b121f435f7f3f::t_0b9acda081d542\"}",
+          "2": "hello.txt",
+          "3": 1,
+          "4": 0,
+          "5": 1,
+          "6": 0,
+          "8": "attribution_recovery_edge",
+          "9": "recovered_edge_extension"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "Test Dev <dev@example.com>",
+          "20": "claude",
+          "21": "claude-sonnet-4-5-20250929",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_0b9acda081d542",
+          "4": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "5": "main"
+        },
+        "e": 4,
+        "t": 1794543965,
+        "v": {
+          "0": 1794543965,
+          "1": "ai_agent",
+          "2": "hello.txt",
+          "3": 1,
+          "4": 0,
+          "5": 1,
+          "6": 0,
+          "7": "toolu_01SYNTHETICSYNTHETIC0001",
+          "8": "file_edit"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "21": "claude-sonnet-4-5-20250929",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "5": "main"
+        },
+        "e": 2,
+        "t": 1794543965,
+        "v": {}
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "Test Dev <dev@example.com>",
+          "3": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "4": "initial",
+          "5": "main"
+        },
+        "e": 1,
+        "t": 1794543965,
+        "v": {
+          "0": 0,
+          "1": 0,
+          "10": null,
+          "11": "chore: initial commit",
+          "12": null,
+          "13": "README.md\n  s_5b121f435f7f3f::t_a5b9cee54996a6 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"9c62615ef00353e8002e535fb5d3de446935208b\",\n  \"prompts\": {},\n  \"sessions\": {\n    \"s_5b121f435f7f3f\": {\n      \"agent_id\": {\n        \"tool\": \"claude\",\n        \"id\": \"11111111-1111-4111-8111-111111111111\",\n        \"model\": \"unknown\"\n      },\n      \"human_author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}",
+          "14": "[{\"commit_sha\":\"9c62615ef00353e8002e535fb5d3de446935208b\",\"content_hash\":\"5a12469fa684927afa5a51ff91ba9e684942d1061199042c239bf86c3faccc21\",\"hunk_kind\":\"addition\",\"start_line\":1,\"end_line\":1,\"file_path\":\"README.md\",\"prompt_id\":\"s_5b121f435f7f3f::t_a5b9cee54996a6\",\"session_id\":\"s_5b121f435f7f3f\"}]",
+          "15": 1794543964,
+          "16": 1794543964,
+          "17": "658b2fb176acf4bbafc62e160bf17884f50046a5",
+          "18": null,
+          "2": 1,
+          "3": [
+            "all",
+            "claude::unknown"
+          ],
+          "5": [
+            1,
+            1
+          ],
+          "6": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "s_5b121f435f7f3f::t_a5b9cee54996a6",
+          "20": "claude",
+          "21": "unknown",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_a5b9cee54996a6",
+          "3": "9c62615ef00353e8002e535fb5d3de446935208b",
+          "4": "initial",
+          "5": "main"
+        },
+        "e": 4,
+        "t": 1794543965,
+        "v": {
+          "0": 1794543965,
+          "1": "ai_agent",
+          "10": "{\"candidate_count\":2,\"distance_ns\":37223138,\"file_path\":\"README.md\",\"file_timestamps_ns\":[1794543964962776862],\"selected_event_ts\":1794543965,\"selected_external_session_id\":\"11111111-1111-4111-8111-111111111111\",\"selected_external_tool_use_id\":null,\"selected_metric_row_id\":1,\"selected_model\":\"unknown\",\"selected_repo_url\":\"https://github.com/macro-inc/macro\",\"selected_session_id\":\"s_5b121f435f7f3f\",\"selected_tool\":\"claude\",\"selection_tier\":\"same_repo_url\",\"solver\":\"session_event_mtime\",\"target_repo_url\":\"https://github.com/macro-inc/macro\",\"unknown_lines\":[1],\"window_ns\":3000000000}",
+          "2": "README.md",
+          "3": 1,
+          "4": 0,
+          "5": 1,
+          "6": 0,
+          "8": "attribution_recovery_session_event",
+          "9": "recovered_session_event_mtime"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "21": "claude-sonnet-4-5-20250929",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "31": "embedded:1.7.7"
+        },
+        "e": 9,
+        "t": 1794543965,
+        "v": {
+          "0": 1794543900,
+          "1": 32,
+          "10": 1794543965,
+          "11": 0,
+          "12": 1,
+          "13": 0,
+          "14": 0,
+          "15": 0,
+          "16": 0,
+          "17": 0,
+          "18": 0,
+          "19": 0,
+          "2": 102,
+          "3": 6800,
+          "4": 2400,
+          "5": 9334,
+          "7": 12666,
+          "9": 2
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_a715b877606668"
+        },
+        "e": 5,
+        "t": 1794543970,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "text": "Done.",
+                  "type": "text"
+                }
+              ],
+              "id": "msg_SYNTHETIC0002",
+              "model": "claude-sonnet-4-5-20250929",
+              "role": "assistant",
+              "stop_reason": "end_turn",
+              "stop_sequence": null,
+              "type": "message",
+              "usage": {
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 1200
+                },
+                "cache_creation_input_tokens": 1200,
+                "cache_read_input_tokens": 3400,
+                "input_tokens": 20,
+                "output_tokens": 7,
+                "service_tier": "standard"
+              }
+            },
+            "parentUuid": "df53decd-8eea-48a8-b5d4-2e50d0311d0b",
+            "requestId": "req_SYNTHETIC0002",
+            "sessionId": "11111111-1111-4111-8111-111111111111",
+            "timestamp": "2026-11-13T04:26:10.016Z",
+            "type": "assistant",
+            "userType": "external",
+            "uuid": "d771cd7a-40c6-44b9-abc9-aee3f3cb3b05",
+            "version": "2.1.0"
+          },
+          "1": "d771cd7a-40c6-44b9-abc9-aee3f3cb3b05",
+          "2": "df53decd-8eea-48a8-b5d4-2e50d0311d0b"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_3579f5f06d789c"
+        },
+        "e": 5,
+        "t": 1794543969,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "content": "File written. env had OPENAI_API_KEY=sk-proj-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE",
+                  "tool_use_id": "toolu_01SYNTHETICSYNTHETIC0001",
+                  "type": "tool_result"
+                }
+              ],
+              "role": "user"
+            },
+            "parentUuid": "84708d97-7413-4dc9-8666-1c3840138b8d",
+            "sessionId": "11111111-1111-4111-8111-111111111111",
+            "timestamp": "2026-11-13T04:26:09.016Z",
+            "type": "user",
+            "userType": "external",
+            "uuid": "df53decd-8eea-48a8-b5d4-2e50d0311d0b",
+            "version": "2.1.0"
+          },
+          "1": "df53decd-8eea-48a8-b5d4-2e50d0311d0b",
+          "2": "84708d97-7413-4dc9-8666-1c3840138b8d",
+          "3": "toolu_01SYNTHETICSYNTHETIC0001"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_f05e96858225d0"
+        },
+        "e": 5,
+        "t": 1794543968,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "id": "toolu_01SYNTHETICSYNTHETIC0001",
+                  "input": {
+                    "content": "hello from the agent\n",
+                    "file_path": "/home/test/scratch/repos/macro/hello.txt"
+                  },
+                  "name": "Write",
+                  "type": "tool_use"
+                }
+              ],
+              "id": "msg_SYNTHETIC0001",
+              "model": "claude-sonnet-4-5-20250929",
+              "role": "assistant",
+              "stop_reason": "tool_use",
+              "stop_sequence": null,
+              "type": "message",
+              "usage": {
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 1200
+                },
+                "cache_creation_input_tokens": 1200,
+                "cache_read_input_tokens": 3400,
+                "input_tokens": 12,
+                "output_tokens": 95,
+                "service_tier": "standard"
+              }
+            },
+            "parentUuid": "614e0dec-dea7-4850-bff9-ce6f69079056",
+            "requestId": "req_SYNTHETIC0001",
+            "sessionId": "11111111-1111-4111-8111-111111111111",
+            "timestamp": "2026-11-13T04:26:08.016Z",
+            "type": "assistant",
+            "userType": "external",
+            "uuid": "84708d97-7413-4dc9-8666-1c3840138b8d",
+            "version": "2.1.0"
+          },
+          "1": "84708d97-7413-4dc9-8666-1c3840138b8d",
+          "2": "614e0dec-dea7-4850-bff9-ce6f69079056",
+          "3": "toolu_01SYNTHETICSYNTHETIC0001"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_1a8c07fd426c4a"
+        },
+        "e": 5,
+        "t": 1794543967,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "text": "I will add the greeting helper.",
+                  "type": "text"
+                }
+              ],
+              "id": "msg_SYNTHETIC0001",
+              "model": "claude-sonnet-4-5-20250929",
+              "role": "assistant",
+              "stop_reason": null,
+              "stop_sequence": null,
+              "type": "message",
+              "usage": {
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 1200
+                },
+                "cache_creation_input_tokens": 1200,
+                "cache_read_input_tokens": 3400,
+                "input_tokens": 12,
+                "output_tokens": 40,
+                "service_tier": "standard"
+              }
+            },
+            "parentUuid": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4",
+            "requestId": "req_SYNTHETIC0001",
+            "sessionId": "11111111-1111-4111-8111-111111111111",
+            "timestamp": "2026-11-13T04:26:07.016Z",
+            "type": "assistant",
+            "userType": "external",
+            "uuid": "614e0dec-dea7-4850-bff9-ce6f69079056",
+            "version": "2.1.0"
+          },
+          "1": "614e0dec-dea7-4850-bff9-ce6f69079056",
+          "2": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "11111111-1111-4111-8111-111111111111",
+          "24": "s_5b121f435f7f3f",
+          "25": "t_3a4b96e4fd410b"
+        },
+        "e": 5,
+        "t": 1794543965,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": "Add a greeting helper to hello.txt. FAKE test secrets for redaction checks: github token ghp_FAKE-NOT-A-REAL-TOKEN-1234, card 4242424242424242, aws AKIA-FAKE-NOT-A-REAL-KEY, password=hunter2-fake-pw. High-entropy fakes (the client's redactor is entropy-based, so only these get masked): stripe docs key sk_t********p7dc, fake_token=Zq8v********S0gA",
+              "role": "user"
+            },
+            "parentUuid": null,
+            "sessionId": "11111111-1111-4111-8111-111111111111",
+            "timestamp": "2026-11-13T04:26:05.016Z",
+            "type": "user",
+            "userType": "external",
+            "uuid": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4",
+            "version": "2.1.0"
+          },
+          "1": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4"
+        }
+      }
+    ],
+    "v": 1
+  },
+  "headers": {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0001",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "POST",
+  "path": "/worker/metrics/upload",
+  "query": {},
+  "response": {
+    "body": {
+      "errors": []
+    },
+    "headers": {},
+    "status": 200
+  }
+}

@@ -1,0 +1,297 @@
+{
+  "body": {
+    "events": [
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "21": "claude-sonnet-4-5-20250929",
+          "23": "77777777-7777-4777-8777-777777777777",
+          "24": "s_1b1b33649b60ca",
+          "31": "embedded:1.7.7"
+        },
+        "e": 9,
+        "t": 1794543989,
+        "v": {
+          "0": 1794543900,
+          "1": 32,
+          "10": 1794543989,
+          "11": 0,
+          "12": 1,
+          "13": 0,
+          "14": 0,
+          "15": 0,
+          "16": 0,
+          "17": 0,
+          "18": 0,
+          "19": 0,
+          "2": 102,
+          "3": 6800,
+          "4": 2400,
+          "5": 9334,
+          "7": 12666,
+          "9": 2
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "77777777-7777-4777-8777-777777777777",
+          "24": "s_1b1b33649b60ca",
+          "25": "t_6996d249ec54bc"
+        },
+        "e": 5,
+        "t": 1794543970,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "text": "Done.",
+                  "type": "text"
+                }
+              ],
+              "id": "msg_SWEEPC0002",
+              "model": "claude-sonnet-4-5-20250929",
+              "role": "assistant",
+              "stop_reason": "end_turn",
+              "stop_sequence": null,
+              "type": "message",
+              "usage": {
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 1200
+                },
+                "cache_creation_input_tokens": 1200,
+                "cache_read_input_tokens": 3400,
+                "input_tokens": 20,
+                "output_tokens": 7,
+                "service_tier": "standard"
+              }
+            },
+            "parentUuid": "df53decd-8eea-48a8-b5d4-2e50d0311d0b",
+            "requestId": "req_SWEEPC0002",
+            "sessionId": "77777777-7777-4777-8777-777777777777",
+            "timestamp": "2026-11-13T04:26:10.016Z",
+            "type": "assistant",
+            "userType": "external",
+            "uuid": "d771cd7a-40c6-44b9-abc9-aee3f3cb3b05",
+            "version": "2.1.0"
+          },
+          "1": "d771cd7a-40c6-44b9-abc9-aee3f3cb3b05",
+          "2": "df53decd-8eea-48a8-b5d4-2e50d0311d0b"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "77777777-7777-4777-8777-777777777777",
+          "24": "s_1b1b33649b60ca",
+          "25": "t_fd2271cb09eb5c"
+        },
+        "e": 5,
+        "t": 1794543969,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "content": "File written. env had OPENAI_API_KEY=sk-proj-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE",
+                  "tool_use_id": "toolu_01SYNTHETICSYNTHETIC0001",
+                  "type": "tool_result"
+                }
+              ],
+              "role": "user"
+            },
+            "parentUuid": "84708d97-7413-4dc9-8666-1c3840138b8d",
+            "sessionId": "77777777-7777-4777-8777-777777777777",
+            "timestamp": "2026-11-13T04:26:09.016Z",
+            "type": "user",
+            "userType": "external",
+            "uuid": "df53decd-8eea-48a8-b5d4-2e50d0311d0b",
+            "version": "2.1.0"
+          },
+          "1": "df53decd-8eea-48a8-b5d4-2e50d0311d0b",
+          "2": "84708d97-7413-4dc9-8666-1c3840138b8d",
+          "3": "toolu_01SYNTHETICSYNTHETIC0001"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "77777777-7777-4777-8777-777777777777",
+          "24": "s_1b1b33649b60ca",
+          "25": "t_ceea2050f56d60"
+        },
+        "e": 5,
+        "t": 1794543968,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "id": "toolu_01SYNTHETICSYNTHETIC0001",
+                  "input": {
+                    "content": "hello from the agent\n",
+                    "file_path": "/home/test/scratch/repos/macro/hello.txt"
+                  },
+                  "name": "Write",
+                  "type": "tool_use"
+                }
+              ],
+              "id": "msg_SWEEPC0001",
+              "model": "claude-sonnet-4-5-20250929",
+              "role": "assistant",
+              "stop_reason": "tool_use",
+              "stop_sequence": null,
+              "type": "message",
+              "usage": {
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 1200
+                },
+                "cache_creation_input_tokens": 1200,
+                "cache_read_input_tokens": 3400,
+                "input_tokens": 12,
+                "output_tokens": 95,
+                "service_tier": "standard"
+              }
+            },
+            "parentUuid": "614e0dec-dea7-4850-bff9-ce6f69079056",
+            "requestId": "req_SWEEPC0001",
+            "sessionId": "77777777-7777-4777-8777-777777777777",
+            "timestamp": "2026-11-13T04:26:08.016Z",
+            "type": "assistant",
+            "userType": "external",
+            "uuid": "84708d97-7413-4dc9-8666-1c3840138b8d",
+            "version": "2.1.0"
+          },
+          "1": "84708d97-7413-4dc9-8666-1c3840138b8d",
+          "2": "614e0dec-dea7-4850-bff9-ce6f69079056",
+          "3": "toolu_01SYNTHETICSYNTHETIC0001"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "77777777-7777-4777-8777-777777777777",
+          "24": "s_1b1b33649b60ca",
+          "25": "t_9bf5108eef26eb"
+        },
+        "e": 5,
+        "t": 1794543967,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": [
+                {
+                  "text": "I will add the greeting helper.",
+                  "type": "text"
+                }
+              ],
+              "id": "msg_SWEEPC0001",
+              "model": "claude-sonnet-4-5-20250929",
+              "role": "assistant",
+              "stop_reason": null,
+              "stop_sequence": null,
+              "type": "message",
+              "usage": {
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 1200
+                },
+                "cache_creation_input_tokens": 1200,
+                "cache_read_input_tokens": 3400,
+                "input_tokens": 12,
+                "output_tokens": 40,
+                "service_tier": "standard"
+              }
+            },
+            "parentUuid": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4",
+            "requestId": "req_SWEEPC0001",
+            "sessionId": "77777777-7777-4777-8777-777777777777",
+            "timestamp": "2026-11-13T04:26:07.016Z",
+            "type": "assistant",
+            "userType": "external",
+            "uuid": "614e0dec-dea7-4850-bff9-ce6f69079056",
+            "version": "2.1.0"
+          },
+          "1": "614e0dec-dea7-4850-bff9-ce6f69079056",
+          "2": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4"
+        }
+      },
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "20": "claude",
+          "23": "77777777-7777-4777-8777-777777777777",
+          "24": "s_1b1b33649b60ca",
+          "25": "t_ae932ff7896db8"
+        },
+        "e": 5,
+        "t": 1794543965,
+        "v": {
+          "0": {
+            "cwd": "/home/test/scratch/repos/macro",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "message": {
+              "content": "Add a greeting helper to hello.txt. FAKE test secrets for redaction checks: github token ghp_FAKE-NOT-A-REAL-TOKEN-1234, card 4242424242424242, aws AKIA-FAKE-NOT-A-REAL-KEY, password=hunter2-fake-pw. High-entropy fakes (the client's redactor is entropy-based, so only these get masked): stripe docs key sk_t********p7dc, fake_token=Zq8v********S0gA",
+              "role": "user"
+            },
+            "parentUuid": null,
+            "sessionId": "77777777-7777-4777-8777-777777777777",
+            "timestamp": "2026-11-13T04:26:05.016Z",
+            "type": "user",
+            "userType": "external",
+            "uuid": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4",
+            "version": "2.1.0"
+          },
+          "1": "9362e735-9eb5-4a6d-832a-990d9ad9d4a4"
+        }
+      }
+    ],
+    "v": 1
+  },
+  "headers": {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0001",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "POST",
+  "path": "/worker/metrics/upload",
+  "query": {},
+  "response": {
+    "body": {
+      "errors": []
+    },
+    "headers": {},
+    "status": 200
+  }
+}

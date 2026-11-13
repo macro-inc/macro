@@ -1,0 +1,38 @@
+{
+  "body": null,
+  "headers": {
+    "accept": "*/*",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0002",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "GET",
+  "path": "/worker/releases",
+  "query": {},
+  "response": {
+    "body": {
+      "channels": {
+        "enterprise-latest": {
+          "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+          "version": "v1.7.7"
+        },
+        "enterprise-next": {
+          "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+          "version": "v1.7.7"
+        },
+        "latest": {
+          "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+          "version": "v1.7.7"
+        },
+        "next": {
+          "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+          "version": "v1.7.7"
+        }
+      }
+    },
+    "headers": {},
+    "status": 200
+  }
+}

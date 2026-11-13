@@ -1,0 +1,80 @@
+{
+  "body": {
+    "daemon_id": "571d9c8e-f26b-4a3d-874d-d727301c297e",
+    "events": [
+      {
+        "fields": {
+          "events": 1,
+          "file": "src/daemon/telemetry_worker.rs",
+          "invalid_records": 0,
+          "line": 1191,
+          "max_id": "Some(54)",
+          "min_id": "Some(54)",
+          "module_path": "git_ai::daemon::telemetry_worker"
+        },
+        "id": "5c613224-844e-4946-88ac-2d4fa6b138d1",
+        "kind": "log",
+        "level": "info",
+        "message": "metrics upload batch sending",
+        "target": "git_ai::daemon::telemetry_worker",
+        "timestamp": "2026-11-13T04:14:20.758137700+00:00"
+      },
+      {
+        "fields": {
+          "error": "Generic error: Unexpected status code 503: {\"error\": \"capture server forced 503\"}",
+          "events": 1,
+          "file": "src/daemon/telemetry_worker.rs",
+          "line": 1201,
+          "max_id": "Some(54)",
+          "min_id": "Some(54)",
+          "module_path": "git_ai::daemon::telemetry_worker"
+        },
+        "id": "fa1937d3-b20b-4dfe-a35e-afaa9c071cc5",
+        "kind": "log",
+        "level": "info",
+        "message": "metrics upload batch failed",
+        "target": "git_ai::daemon::telemetry_worker",
+        "timestamp": "2026-11-13T04:14:20.759305612+00:00"
+      },
+      {
+        "fields": {
+          "e": "Generic error: Unexpected status code 503: {\"error\": \"capture server forced 503\"}",
+          "file": "src/daemon/telemetry_worker.rs",
+          "line": 995,
+          "module_path": "git_ai::daemon::telemetry_worker"
+        },
+        "id": "ee5abed3-b673-45dd-83bc-152e67157445",
+        "kind": "log",
+        "level": "warn",
+        "message": "telemetry: failed to upload pending metrics",
+        "target": "git_ai::daemon::telemetry_worker",
+        "timestamp": "2026-11-13T04:14:20.759506633+00:00"
+      }
+    ],
+    "git_ai_version": "1.7.7",
+    "install_id": "00000000-0000-4000-8000-000000000001",
+    "version": 1
+  },
+  "headers": {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0001",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "POST",
+  "path": "/worker/logs/upload",
+  "query": {},
+  "response": {
+    "body": {
+      "accepted": 3,
+      "dropped": 0,
+      "enqueued": true,
+      "errors": []
+    },
+    "headers": {},
+    "status": 200
+  }
+}
