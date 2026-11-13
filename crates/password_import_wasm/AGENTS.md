@@ -19,7 +19,7 @@ web import dialog's worker, so the export file never leaves the device.
 
 ## Boundaries
 
-- Depends on: `password_import` with `serde` (the only crate that enables it).
+- Depends on: `password_import` with `reveal-secrets` (the only crate that enables it).
 - Used by: `apps/web/src/lib/core/password-import/` (`just build-password-import-wasm`).
 
 ## Checks

@@ -9,9 +9,9 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# The only crate that turns on `serde`: it serializes revealed values for the
+# The only crate that turns on `reveal-secrets`: it serializes revealed values for the
 # browser's import worker.
-password_import = { path = "../password_import", features = ["serde"] }
+password_import = { path = "../password_import", features = ["reveal-secrets"] }
 serde = { workspace = true }
 
 # The wasm-bindgen shell in `bindings`, which only exists on wasm32.

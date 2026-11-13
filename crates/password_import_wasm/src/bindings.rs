@@ -23,7 +23,7 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsError> {
 /// Throws only when the result can't be built.
 #[wasm_bindgen]
 pub fn detect(bytes: &[u8]) -> Result<JsValue, JsError> {
-    to_js(&match sniff(bytes) {
+    to_js(&match sniff(bytes, &Limits::default()) {
         Ok(format) => Detected::Detected { format },
         Err(error) => Detected::Failed { error },
     })

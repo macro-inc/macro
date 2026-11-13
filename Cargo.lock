@@ -15206,6 +15206,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "csv",
+ "csv-core",
  "insta",
  "nom 8.0.0",
  "password_import",

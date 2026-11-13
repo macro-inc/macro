@@ -5,8 +5,7 @@ use zip_inflate::ZipWriter;
 use zip_inflate::write::SimpleFileOptions;
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
-/// The vault's value limit.
-pub const VALUE_LIMIT: usize = 65_536;
+const VALUE_LIMIT: usize = password_import::vault::MAX_VALUE_BYTES;
 
 /// A fixture with `@@NOTES_AT_LIMIT@@` / `@@NOTES_OVER_LIMIT@@` expanded.
 pub fn fixture(name: &str) -> Vec<u8> {

@@ -4,21 +4,22 @@ use std::collections::BTreeSet;
 
 use crate::model::{
     Dropped, DroppedPart, FolderPath, ImportedField, ImportedItem, ItemKind, ParsedExport, Secret,
-    SegmentTooLong, SkipReason, Skipped, SourceFormat, SourceKey,
+    SkipReason, Skipped, SourceFolder, SourceFormat, SourceKey, TotpSeed,
 };
-use crate::totp;
-
-const MAX_NAME_BYTES: usize = 200;
-const MAX_LABEL_BYTES: usize = 200;
-const MAX_VALUE_BYTES: usize = 65_536;
-const MAX_FIELDS: usize = 50;
-const MAX_URL_BYTES: usize = 2048;
+use crate::{totp, vault};
 
 const UNTITLED: &str = "Untitled";
 const UNLABELED: &str = "Field";
 const WEBSITE: &str = "Website";
 const ONE_TIME_PASSWORD: &str = "One-time password";
 const TAGS: &str = "Tags";
+const USERNAME: &str = "Username";
+const PASSWORD: &str = "Password";
+const NAME: &str = "Name";
+const PUBLIC_KEY: &str = "Public key";
+const FINGERPRINT: &str = "Fingerprint";
+const NAME_SEPARATOR: &str = " ";
+const ADDRESS_SEPARATOR: &str = ", ";
 
 /// Template field labels, matching the web app's item templates.
 pub(crate) const EXPIRES: &str = "Expires";
@@ -27,11 +28,20 @@ pub(crate) const EMAIL: &str = "Email";
 pub(crate) const PHONE: &str = "Phone";
 pub(crate) const ADDRESS: &str = "Address";
 
+/// Distinct URLs (or one-time passwords) worth keeping: one for the item plus
+/// one field per vault field. One more always makes the item too large, so
+/// later ones aren't compared.
+const MAX_URLS: usize = vault::MAX_FIELDS + 1;
+/// JSON around each field and around the item, beyond the strings themselves.
+const FIELD_JSON_OVERHEAD: usize = 64;
+const ITEM_JSON_OVERHEAD: usize = 512;
+
 /// A URL from the source. Unlabeled ones that don't become the item URL are
 /// kept as `Website`, `Website 2`, ...; labeled ones keep their label.
 struct UrlCandidate {
     label: Option<String>,
-    value: String,
+    value: Secret,
+    concealed: bool,
 }
 
 /// An item as read from the source, before limits.
@@ -45,10 +55,13 @@ pub(crate) struct Draft {
     notes: Secret,
     fields: Vec<ImportedField>,
     one_time_passwords: Vec<Secret>,
-    folder: Result<Option<FolderPath>, SegmentTooLong>,
+    folder: SourceFolder,
     favorite: bool,
     tags: Vec<String>,
     dropped: Vec<(DroppedPart, usize)>,
+    /// Something was over a limit before `finish`: a source list, the URLs
+    /// or the fields. The item is skipped as too large.
+    too_large: bool,
 }
 
 impl Draft {
@@ -63,10 +76,11 @@ impl Draft {
             notes: Secret::default(),
             fields: Vec::new(),
             one_time_passwords: Vec::new(),
-            folder: Ok(None),
+            folder: SourceFolder::None,
             favorite: false,
             tags: Vec::new(),
             dropped: Vec::new(),
+            too_large: false,
         }
     }
 
@@ -86,8 +100,13 @@ impl Draft {
         self.favorite = favorite;
     }
 
-    pub(crate) fn set_folder(&mut self, folder: Result<Option<FolderPath>, SegmentTooLong>) {
+    pub(crate) fn set_folder(&mut self, folder: SourceFolder) {
         self.folder = folder;
+    }
+
+    /// A source list was cut short (see [`crate::bounded::Bounded`]).
+    pub(crate) fn mark_too_large(&mut self) {
+        self.too_large = true;
     }
 
     pub(crate) fn add_tag(&mut self, tag: &str) {
@@ -98,21 +117,30 @@ impl Draft {
     }
 
     pub(crate) fn add_url(&mut self, url: &str) {
-        self.add_labeled_url(None, url);
+        self.add_labeled_url(None, url, false);
     }
 
     /// A URL-ish value with its own label (`Hostname`), kept under that label
-    /// when it isn't the item URL.
-    pub(crate) fn add_labeled_url(&mut self, label: Option<String>, url: &str) {
+    /// when it isn't the item URL; `concealed` when the source hid it.
+    pub(crate) fn add_labeled_url(&mut self, label: Option<String>, url: &str, concealed: bool) {
         let url = url.trim();
-        let already_listed = self.urls.iter().any(|candidate| candidate.value == url);
-
-        if !url.is_empty() && !already_listed {
-            self.urls.push(UrlCandidate {
-                label,
-                value: url.to_owned(),
-            });
+        if url.is_empty()
+            || self
+                .urls
+                .iter()
+                .any(|candidate| candidate.value.expose_secret() == url)
+        {
+            return;
         }
+        if self.urls.len() >= MAX_URLS {
+            return self.mark_too_large();
+        }
+
+        self.urls.push(UrlCandidate {
+            label,
+            value: Secret::new(url.to_owned()),
+            concealed,
+        });
     }
 
     pub(crate) fn has_username(&self) -> bool {
@@ -127,32 +155,48 @@ impl Draft {
         !self.urls.is_empty()
     }
 
-    /// Use `value` as the username, or keep it as a field when one is set.
-    pub(crate) fn username(&mut self, value: Secret, label: &str) {
+    /// Use `value` as the username, or keep it as a `Username` field when one
+    /// is set.
+    pub(crate) fn add_username(&mut self, value: Secret) {
+        self.add_username_labeled(value, USERNAME);
+    }
+
+    /// Use `value` as the username, or keep it as a `label` field when one is set.
+    pub(crate) fn add_username_labeled(&mut self, value: Secret, label: &str) {
         if self.username.is_empty() {
             self.username = value;
         } else {
-            self.field(label, value, false);
+            self.add_field(label, value, false);
         }
     }
 
-    /// Use `value` as the password, or keep it as a concealed field when one is set.
-    pub(crate) fn password(&mut self, value: Secret, label: &str) {
+    /// Use `value` as the password, or keep it as a concealed `Password` field
+    /// when one is set.
+    pub(crate) fn add_password(&mut self, value: Secret) {
+        self.add_password_labeled(value, PASSWORD);
+    }
+
+    /// Use `value` as the password, or keep it as a concealed `label` field
+    /// when one is set.
+    pub(crate) fn add_password_labeled(&mut self, value: Secret, label: &str) {
         if self.password.is_empty() {
             self.password = value;
         } else {
-            self.field(label, value, true);
+            self.add_field(label, value, true);
         }
     }
 
-    pub(crate) fn notes(&mut self, value: Secret) {
+    pub(crate) fn set_notes(&mut self, value: Secret) {
         self.notes = value;
     }
 
     /// A custom field; empty values are left out.
-    pub(crate) fn field(&mut self, label: &str, value: Secret, concealed: bool) {
+    pub(crate) fn add_field(&mut self, label: &str, value: Secret, concealed: bool) {
         if value.expose_secret().trim().is_empty() {
             return;
+        }
+        if self.fields.len() >= vault::MAX_FIELDS {
+            return self.mark_too_large();
         }
 
         self.fields.push(ImportedField {
@@ -162,9 +206,39 @@ impl Draft {
         });
     }
 
-    pub(crate) fn one_time_password(&mut self, value: Secret) {
-        if !value.expose_secret().trim().is_empty() {
-            self.one_time_passwords.push(value);
+    pub(crate) fn add_one_time_password(&mut self, value: Secret) {
+        if value.expose_secret().trim().is_empty() {
+            return;
+        }
+        // All but one become fields, like URLs.
+        if self.one_time_passwords.len() >= MAX_URLS {
+            return self.mark_too_large();
+        }
+        self.one_time_passwords.push(value);
+    }
+
+    /// An identity's name from its parts (first, middle, last), as the username.
+    pub(crate) fn add_full_name<'a>(&mut self, parts: impl IntoIterator<Item = &'a str>) {
+        self.add_username_labeled(Secret::join(parts, NAME_SEPARATOR), NAME);
+    }
+
+    /// An SSH key: the private key as the password (or a `private_label`
+    /// field), the public key as the username, the fingerprint as a field.
+    pub(crate) fn add_ssh_key(
+        &mut self,
+        private_key: Option<Secret>,
+        private_label: &str,
+        public_key: Option<Secret>,
+        fingerprint: Option<Secret>,
+    ) {
+        if let Some(private_key) = private_key {
+            self.add_password_labeled(private_key, private_label);
+        }
+        if let Some(public_key) = public_key {
+            self.add_username_labeled(public_key, PUBLIC_KEY);
+        }
+        if let Some(fingerprint) = fingerprint {
+            self.add_field(FINGERPRINT, fingerprint, false);
         }
     }
 
@@ -174,7 +248,7 @@ impl Draft {
         }
 
         match self.dropped.iter_mut().find(|(part, _)| *part == what) {
-            Some((_, existing)) => *existing += count,
+            Some((_, existing)) => *existing = existing.saturating_add(count),
             None => self.dropped.push((what, count)),
         }
     }
@@ -209,14 +283,16 @@ impl Draft {
 
         let name = match self.name.as_deref().map(str::trim) {
             None | Some("") => UNTITLED.to_owned(),
-            Some(name) if name.len() > MAX_NAME_BYTES => {
+            Some(name) if name.len() > vault::MAX_NAME_BYTES => {
                 return Err(self.skipped(SkipReason::TooLarge));
             }
             Some(name) => name.to_owned(),
         };
 
-        let Ok(folder) = std::mem::replace(&mut self.folder, Ok(None)) else {
-            return Err(self.skipped(SkipReason::TooLarge));
+        let folder = match std::mem::take(&mut self.folder) {
+            SourceFolder::None => None,
+            SourceFolder::Path(path) => Some(path),
+            SourceFolder::TooLong => return Err(self.skipped(SkipReason::TooLarge)),
         };
 
         let url = self.place_urls();
@@ -224,7 +300,7 @@ impl Draft {
 
         if !self.tags.is_empty() {
             let tags = Secret::join(self.tags.iter().map(String::as_str), ", ");
-            self.field(TAGS, tags, false);
+            self.add_field(TAGS, tags, false);
         }
 
         for field in &mut self.fields {
@@ -236,14 +312,32 @@ impl Draft {
             };
         }
 
-        let over_limit = self.username.len() > MAX_VALUE_BYTES
-            || self.password.len() > MAX_VALUE_BYTES
-            || self.notes.len() > MAX_VALUE_BYTES
-            || self.fields.len() > MAX_FIELDS
+        let over_limit = self.too_large
+            || self.username.len() > vault::MAX_VALUE_BYTES
+            || self.password.len() > vault::MAX_VALUE_BYTES
+            || self.notes.len() > vault::MAX_VALUE_BYTES
             || self.fields.iter().any(|field| {
-                field.label.len() > MAX_LABEL_BYTES || field.value.len() > MAX_VALUE_BYTES
+                field.label.len() > vault::MAX_LABEL_BYTES
+                    || field.value.len() > vault::MAX_VALUE_BYTES
             });
         if over_limit {
+            return Err(self.skipped(SkipReason::TooLarge));
+        }
+
+        let item = ImportedItem {
+            source_key: self.source_key.clone(),
+            kind: self.kind,
+            name,
+            url,
+            username: std::mem::take(&mut self.username),
+            password: std::mem::take(&mut self.password),
+            notes: std::mem::take(&mut self.notes),
+            fields: std::mem::take(&mut self.fields),
+            totp,
+            folder,
+            favorite: self.favorite,
+        };
+        if item_json_bytes(&item) > vault::MAX_ITEM_JSON_BYTES {
             return Err(self.skipped(SkipReason::TooLarge));
         }
 
@@ -257,36 +351,23 @@ impl Draft {
             })
             .collect();
 
-        let item = ImportedItem {
-            source_key: self.source_key,
-            kind: self.kind,
-            name,
-            url,
-            username: self.username,
-            password: self.password,
-            notes: self.notes,
-            fields: self.fields,
-            totp,
-            folder,
-            favorite: self.favorite,
-        };
-
         Ok((item, dropped))
     }
 
-    /// The first valid URL becomes the item URL; the rest become fields.
+    /// The first valid URL becomes the item URL; the rest become fields,
+    /// concealed when the source hid them or they carry credentials.
     fn place_urls(&mut self) -> Option<String> {
         let candidates = std::mem::take(&mut self.urls);
         let url_index = candidates
             .iter()
-            .position(|candidate| is_vault_url(&candidate.value));
+            .position(|candidate| vault::is_login_url(candidate.value.expose_secret()));
 
         let mut website_number = if url_index.is_some() { 2 } else { 1 };
         let mut url = None;
 
         for (index, candidate) in candidates.into_iter().enumerate() {
             if Some(index) == url_index {
-                url = Some(candidate.value);
+                url = Some(candidate.value.expose_secret().to_owned());
                 continue;
             }
 
@@ -302,14 +383,16 @@ impl Draft {
                     label
                 }
             };
-            self.field(&label, Secret::new(candidate.value), false);
+            let concealed =
+                candidate.concealed || vault::url_has_credentials(candidate.value.expose_secret());
+            self.add_field(&label, candidate.value, concealed);
         }
 
         url
     }
 
     /// The first default TOTP becomes the code; others stay concealed fields.
-    fn place_one_time_passwords(&mut self) -> Option<crate::TotpSeed> {
+    fn place_one_time_passwords(&mut self) -> Option<TotpSeed> {
         let mut seed = None;
 
         for raw in std::mem::take(&mut self.one_time_passwords) {
@@ -320,7 +403,7 @@ impl Draft {
                 }
             }
 
-            self.field(ONE_TIME_PASSWORD, raw, true);
+            self.add_field(ONE_TIME_PASSWORD, raw, true);
             self.drop_part(DroppedPart::TotpNonDefault, 1);
         }
 
@@ -328,26 +411,44 @@ impl Draft {
     }
 }
 
-fn valid_name(name: Option<&str>) -> Option<String> {
-    let name = name?.trim();
-    let valid = !name.is_empty() && name.len() <= MAX_NAME_BYTES;
-    valid.then(|| name.to_owned())
+/// Join an address's parts (street, city, ...) into one value.
+pub(crate) fn address_text<'a>(parts: impl IntoIterator<Item = &'a str>) -> Secret {
+    Secret::join(parts, ADDRESS_SEPARATOR)
 }
 
-/// The vault's login URL rule: http(s), a host, no credentials.
-fn is_vault_url(value: &str) -> bool {
-    if value.len() > MAX_URL_BYTES {
-        return false;
-    }
+/// An upper bound on the item's size as JSON in a write request.
+fn item_json_bytes(item: &ImportedItem) -> usize {
+    let text = |value: &str| vault::json_string_bytes(value);
+    let fields: usize = item
+        .fields
+        .iter()
+        .map(|field| text(&field.label) + text(field.value.expose_secret()) + FIELD_JSON_OVERHEAD)
+        .sum();
+    let folder: usize = item
+        .folder
+        .iter()
+        .flat_map(FolderPath::segments)
+        .map(|segment| text(segment))
+        .sum();
 
-    let Ok(parsed) = url::Url::parse(value) else {
-        return false;
-    };
+    ITEM_JSON_OVERHEAD
+        + text(&item.name)
+        + item.url.as_deref().map_or(0, text)
+        + text(item.username.expose_secret())
+        + text(item.password.expose_secret())
+        + text(item.notes.expose_secret())
+        + item
+            .totp
+            .as_ref()
+            .map_or(0, |seed| text(seed.expose_secret()))
+        + fields
+        + folder
+}
 
-    matches!(parsed.scheme(), "http" | "https")
-        && parsed.host_str().is_some_and(|host| !host.is_empty())
-        && parsed.username().is_empty()
-        && parsed.password().is_none()
+fn valid_name(name: Option<&str>) -> Option<String> {
+    let name = name?.trim();
+    let valid = !name.is_empty() && name.len() <= vault::MAX_NAME_BYTES;
+    valid.then(|| name.to_owned())
 }
 
 /// Collected results of one file.
@@ -400,3 +501,6 @@ impl Parts {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

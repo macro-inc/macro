@@ -1,11 +1,12 @@
 //! Parse 1Password and Bitwarden exports into items the team vault accepts.
 //!
 //! Pure and total: no I/O, no logging, and every input yields a value or a
-//! typed [`ImportError`], never a panic. Values live only in [`Secret`].
+//! typed [`ImportError`], never a panic. Secret values live only in [`Secret`].
 #![deny(missing_docs)]
 
 mod bitwarden_csv;
 mod bitwarden_json;
+mod bounded;
 mod csv_table;
 mod detect;
 mod draft;
@@ -14,6 +15,7 @@ mod model;
 mod one_password_csv;
 mod one_password_pux;
 mod totp;
+pub mod vault;
 mod zip_archive;
 
 pub use detect::detect;
@@ -42,4 +44,11 @@ pub fn parse(
     };
 
     Ok(parts.into_export(format))
+}
+
+const BYTE_ORDER_MARK: &[u8] = b"\xEF\xBB\xBF";
+
+/// `bytes` without a leading UTF-8 byte order mark, which Windows editors add.
+pub(crate) fn strip_byte_order_mark(bytes: &[u8]) -> &[u8] {
+    bytes.strip_prefix(BYTE_ORDER_MARK).unwrap_or(bytes)
 }

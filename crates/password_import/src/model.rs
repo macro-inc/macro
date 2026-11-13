@@ -3,12 +3,16 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use serde::Deserialize;
+use serde_json::value::RawValue;
 use zeroize::Zeroizing;
+
+use crate::vault;
 
 /// Export formats this crate reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "snake_case"))]
 pub enum SourceFormat {
     /// 1Password `.1pux`: a zip archive holding `export.data`.
     OnePasswordPux,
@@ -29,7 +33,8 @@ pub struct Limits {
     pub max_zip_entries: usize,
     /// Most bytes `export.data` may inflate to; enforced while inflating.
     pub max_decompressed_bytes: u64,
-    /// Most items an export may contain, imported or not.
+    /// Most items an export may contain, imported or not. Bitwarden folders
+    /// and 1Password accounts and vaults count toward it too.
     pub max_items: usize,
 }
 
@@ -46,8 +51,8 @@ impl Default for Limits {
 
 /// Item template, matching the vault's item kinds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "snake_case"))]
 pub enum ItemKind {
     /// Website or application login.
     Login,
@@ -117,7 +122,7 @@ impl<'de> serde::Deserialize<'de> for Secret {
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "reveal-secrets")]
 impl serde::Serialize for Secret {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.0)
@@ -127,8 +132,8 @@ impl serde::Serialize for Secret {
 /// A TOTP seed with default parameters (SHA1, 6 digits, 30 s): uppercase
 /// base32 without spaces or padding.
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(transparent))]
 pub struct TotpSeed(pub(crate) Secret);
 
 impl TotpSeed {
@@ -142,8 +147,8 @@ impl TotpSeed {
 /// `row:<n>` (1-based data row) for CSV. Opaque and never secret, so it is
 /// safe to show in `Debug` and to derive vault ids from.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(transparent))]
 pub struct SourceKey(String);
 
 impl SourceKey {
@@ -159,6 +164,21 @@ impl SourceKey {
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
 
         valid.then(|| Self(id.to_owned()))
+    }
+
+    /// The source id when it is usable, else the `index`th item's key.
+    pub(crate) fn from_source_id_or_index(id: Option<&str>, index: usize) -> Self {
+        id.and_then(Self::from_source_id)
+            .unwrap_or_else(|| Self::from_item_index(index))
+    }
+
+    /// Key for an item whose full shape didn't parse: its id or uuid when
+    /// that much reads, else the `index`th item's key.
+    pub(crate) fn of_malformed(raw: &RawValue, index: usize) -> Self {
+        let id = serde_json::from_str::<ItemId>(raw.get())
+            .ok()
+            .and_then(|item| item.id);
+        Self::from_source_id_or_index(id.as_deref(), index)
     }
 
     /// Key for the `index`th item (0-based) of a source without usable ids.
@@ -177,22 +197,23 @@ impl SourceKey {
     }
 }
 
+/// The id alone of a JSON item: Bitwarden's `id` or 1Password's `uuid`.
+#[derive(Deserialize)]
+struct ItemId {
+    #[serde(alias = "uuid")]
+    id: Option<String>,
+}
+
 /// A folder path, outermost first. Each segment is trimmed, non-empty and at
-/// most 200 bytes, like a vault folder name.
+/// most [`vault::MAX_FOLDER_NAME_BYTES`], like a vault folder name.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(transparent))]
 pub struct FolderPath(Vec<String>);
 
 impl FolderPath {
-    /// The vault's folder name limit.
-    pub const MAX_SEGMENT_BYTES: usize = 200;
-
-    /// Validate segments; blank ones are dropped (`a//b` is `a/b`). `Ok(None)`
-    /// when nothing is left.
-    pub(crate) fn new<'a>(
-        segments: impl IntoIterator<Item = &'a str>,
-    ) -> Result<Option<Self>, SegmentTooLong> {
+    /// Validate segments; blank ones are dropped (`a//b` is `a/b`).
+    pub(crate) fn parse<'a>(segments: impl IntoIterator<Item = &'a str>) -> SourceFolder {
         let mut path = Vec::new();
 
         for segment in segments {
@@ -201,14 +222,18 @@ impl FolderPath {
             if segment.is_empty() {
                 continue;
             }
-            if segment.len() > Self::MAX_SEGMENT_BYTES {
-                return Err(SegmentTooLong);
+            if segment.len() > vault::MAX_FOLDER_NAME_BYTES {
+                return SourceFolder::TooLong;
             }
 
             path.push(segment.to_owned());
         }
 
-        Ok((!path.is_empty()).then_some(Self(path)))
+        if path.is_empty() {
+            SourceFolder::None
+        } else {
+            SourceFolder::Path(Self(path))
+        }
     }
 
     /// Segments, outermost first.
@@ -222,10 +247,18 @@ impl FolderPath {
     }
 }
 
-/// A folder segment over [`FolderPath::MAX_SEGMENT_BYTES`]; the item is
-/// skipped rather than filed elsewhere.
-#[derive(Clone, Copy)]
-pub(crate) struct SegmentTooLong;
+/// An item's folder as the source gave it.
+#[derive(Clone, Default)]
+pub(crate) enum SourceFolder {
+    /// Not in a folder.
+    #[default]
+    None,
+    /// In this folder.
+    Path(FolderPath),
+    /// A segment over the vault's folder name limit; the item is skipped
+    /// rather than filed elsewhere.
+    TooLong,
+}
 
 impl fmt::Debug for FolderPath {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -234,8 +267,8 @@ impl fmt::Debug for FolderPath {
 }
 
 /// A labeled custom field.
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "camelCase"))]
 pub struct ImportedField {
     /// Field label, non-empty and at most 200 bytes.
     pub label: String,
@@ -255,8 +288,8 @@ impl fmt::Debug for ImportedField {
 }
 
 /// One item ready for the vault; every value is already within vault limits.
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "camelCase"))]
 pub struct ImportedItem {
     /// Where the item came from.
     pub source_key: SourceKey,
@@ -300,8 +333,8 @@ impl fmt::Debug for ImportedItem {
 
 /// Why a whole item was not imported.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "snake_case"))]
 pub enum SkipReason {
     /// In the source's trash.
     Trashed,
@@ -322,8 +355,8 @@ pub enum SkipReason {
 }
 
 /// An item that was not imported.
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "camelCase"))]
 pub struct Skipped {
     /// Source key, when the item had a usable one.
     pub source_key: Option<SourceKey>,
@@ -345,8 +378,8 @@ impl fmt::Debug for Skipped {
 
 /// A part of an imported item that was not carried over as-is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "snake_case"))]
 pub enum DroppedPart {
     /// A file attachment.
     Attachment,
@@ -363,8 +396,8 @@ pub enum DroppedPart {
 
 /// Parts of one imported item that were dropped or downgraded.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "camelCase"))]
 pub struct Dropped {
     /// The imported item.
     pub source_key: SourceKey,
@@ -376,8 +409,8 @@ pub struct Dropped {
 
 /// The parsed file.
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "camelCase"))]
 pub struct ParsedExport {
     /// The format that was read.
     pub format: SourceFormat,
@@ -393,8 +426,8 @@ pub struct ParsedExport {
 
 /// Counts for the import preview.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", serde(rename_all = "camelCase"))]
 pub struct Summary {
     /// Imported items per kind.
     pub items_by_kind: BTreeMap<ItemKind, usize>,

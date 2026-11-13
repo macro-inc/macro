@@ -53,16 +53,29 @@ fn entry_exactly_at_the_inflate_limit_is_read() {
 
 #[test]
 fn too_many_entries_are_refused() {
-    let mut entries = vec![("export.data", MINIMAL_EXPORT.to_vec())];
-    let names: Vec<String> = (0..10_000).map(|index| format!("files/{index}")).collect();
-    entries.extend(names.iter().map(|name| (name.as_str(), Vec::new())));
-    let archive = zip(&entries);
+    let limits = Limits {
+        max_zip_entries: 2,
+        ..Limits::default()
+    };
+    let at_limit = zip(&[
+        ("export.data", MINIMAL_EXPORT.to_vec()),
+        ("files/1", Vec::new()),
+    ]);
+    let over_limit = zip(&[
+        ("export.data", MINIMAL_EXPORT.to_vec()),
+        ("files/1", Vec::new()),
+        ("files/2", Vec::new()),
+    ]);
 
+    assert!(parse(&at_limit, SourceFormat::OnePasswordPux, &limits).is_ok());
     assert_eq!(
-        parse(&archive, SourceFormat::OnePasswordPux, &Limits::default()).err(),
+        parse(&over_limit, SourceFormat::OnePasswordPux, &limits).err(),
         Some(ImportError::TooManyEntries)
     );
-    assert_eq!(detect(&archive), Err(ImportError::TooManyEntries));
+    assert_eq!(
+        detect(&over_limit, &limits),
+        Err(ImportError::TooManyEntries)
+    );
 }
 
 #[test]
@@ -101,7 +114,10 @@ fn names_with_dots_inside_are_allowed() {
 fn archive_without_export_data_is_refused() {
     let archive = zip(&[("export.attributes", b"{}".to_vec())]);
 
-    assert_eq!(detect(&archive), Err(ImportError::MissingExportData));
+    assert_eq!(
+        detect(&archive, &Limits::default()),
+        Err(ImportError::MissingExportData)
+    );
 }
 
 #[test]
@@ -164,17 +180,20 @@ fn too_many_items_are_refused_in_every_format() {
 
 #[test]
 fn unknown_inputs_are_typed_errors() {
-    assert_eq!(detect(b""), Err(ImportError::UnknownFormat));
     assert_eq!(
-        detect(b"name,value\nx,y\n"),
+        detect(b"", &Limits::default()),
         Err(ImportError::UnknownFormat)
     );
     assert_eq!(
-        detect(br#"{"accounts": []}"#),
+        detect(b"name,value\nx,y\n", &Limits::default()),
         Err(ImportError::UnknownFormat)
     );
     assert_eq!(
-        detect(b"{\n\"items\": [\n"),
+        detect(br#"{"accounts": []}"#, &Limits::default()),
+        Err(ImportError::UnknownFormat)
+    );
+    assert_eq!(
+        detect(b"{\n\"items\": [\n", &Limits::default()),
         Err(ImportError::InvalidJson { line: 3 })
     );
     assert_eq!(
@@ -205,7 +224,10 @@ const ONE_PASSWORD_7_CARD: &[u8] = b"\"UUID\",\"TITLE\",\"SCOPE\",\"AUTOSUBMIT\"
 #[test]
 fn one_password_7_csv_is_refused_as_an_unsupported_version() {
     for file in [ONE_PASSWORD_7_LOGIN, ONE_PASSWORD_7_CARD] {
-        assert_eq!(detect(file), Err(ImportError::UnsupportedVersion));
+        assert_eq!(
+            detect(file, &Limits::default()),
+            Err(ImportError::UnsupportedVersion)
+        );
         assert_eq!(
             parse(file, SourceFormat::OnePasswordCsv, &Limits::default()).err(),
             Some(ImportError::UnsupportedVersion)

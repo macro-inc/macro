@@ -1,6 +1,8 @@
 //! Bitwarden CSV: `folder,favorite,type,name,notes,fields,reprompt,login_uri,
-//! login_username,login_password,login_totp`; organization exports have
-//! `collections` in place of `folder`.
+//! login_username,login_password,login_totp`. `type` is `login` or `note`;
+//! `fields` is `name: value` lines; `login_uri` is comma-separated.
+//! Organization exports have `collections` in place of `folder`, and every
+//! row of one is skipped as `SharedCollection`.
 use nom::Parser;
 use nom::bytes::complete::{tag, take_until};
 
@@ -19,12 +21,7 @@ pub(crate) const REQUIRED_COLUMNS: [&str; 5] = [
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
     let table = csv_table::read(bytes, limits)?;
-    if REQUIRED_COLUMNS
-        .iter()
-        .any(|name| table.column(name).is_none())
-    {
-        return Err(ImportError::InvalidCsv { row: 1 });
-    }
+    table.require(&REQUIRED_COLUMNS)?;
 
     let folder = table.column("folder");
     let collections = table.column("collections");
@@ -66,14 +63,14 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
         let mut draft = Draft::new(key, kind);
         draft.set_name(item_name.map(str::to_owned));
         draft.set_favorite(row.text(favorite).trim() == "1");
-        draft.set_folder(FolderPath::new(row.text(folder).split('/')));
+        draft.set_folder(FolderPath::parse(row.text(folder).split('/')));
         for uri in row.text(uris).split(',') {
             draft.add_url(uri);
         }
-        draft.username(row.take(username), "Username");
-        draft.password(row.take(password), "Password");
-        draft.one_time_password(row.take(one_time_password));
-        draft.notes(row.take(notes));
+        draft.add_username(row.take(username));
+        draft.add_password(row.take(password));
+        draft.add_one_time_password(row.take(one_time_password));
+        draft.set_notes(row.take(notes));
         add_fields(&mut draft, &row.take(fields));
 
         parts.add(draft);
@@ -90,6 +87,6 @@ fn add_fields(draft: &mut Draft, fields: &Secret) {
             Ok((value, (label, _))) => (label, value),
             Err(_) => ("", line),
         };
-        draft.field(label, Secret::new(value.to_owned()), true);
+        draft.add_field(label, Secret::new(value.to_owned()), true);
     }
 }

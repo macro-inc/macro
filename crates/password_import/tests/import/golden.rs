@@ -29,7 +29,10 @@ fn abbreviate(value: &mut Value) {
 #[test]
 fn one_password_pux() {
     let bytes = super::support::one_password_pux();
-    assert_eq!(detect(&bytes), Ok(SourceFormat::OnePasswordPux));
+    assert_eq!(
+        detect(&bytes, &Limits::default()),
+        Ok(SourceFormat::OnePasswordPux)
+    );
 
     let export = parse(&bytes, SourceFormat::OnePasswordPux, &Limits::default()).expect("parses");
     insta::assert_json_snapshot!(snapshot(&export));
@@ -38,7 +41,10 @@ fn one_password_pux() {
 #[test]
 fn one_password_csv() {
     let bytes = fixture("one_password.csv");
-    assert_eq!(detect(&bytes), Ok(SourceFormat::OnePasswordCsv));
+    assert_eq!(
+        detect(&bytes, &Limits::default()),
+        Ok(SourceFormat::OnePasswordCsv)
+    );
 
     let export = parse(&bytes, SourceFormat::OnePasswordCsv, &Limits::default()).expect("parses");
     insta::assert_json_snapshot!(snapshot(&export));
@@ -47,7 +53,10 @@ fn one_password_csv() {
 #[test]
 fn bitwarden_json() {
     let bytes = fixture("bitwarden.json");
-    assert_eq!(detect(&bytes), Ok(SourceFormat::BitwardenJson));
+    assert_eq!(
+        detect(&bytes, &Limits::default()),
+        Ok(SourceFormat::BitwardenJson)
+    );
 
     let export = parse(&bytes, SourceFormat::BitwardenJson, &Limits::default()).expect("parses");
     insta::assert_json_snapshot!(snapshot(&export));
@@ -56,7 +65,10 @@ fn bitwarden_json() {
 #[test]
 fn bitwarden_csv() {
     let bytes = fixture("bitwarden.csv");
-    assert_eq!(detect(&bytes), Ok(SourceFormat::BitwardenCsv));
+    assert_eq!(
+        detect(&bytes, &Limits::default()),
+        Ok(SourceFormat::BitwardenCsv)
+    );
 
     let export = parse(&bytes, SourceFormat::BitwardenCsv, &Limits::default()).expect("parses");
     insta::assert_json_snapshot!(snapshot(&export));
@@ -65,7 +77,10 @@ fn bitwarden_csv() {
 #[test]
 fn bitwarden_organization_csv_skips_every_row() {
     let bytes = fixture("bitwarden_organization.csv");
-    assert_eq!(detect(&bytes), Ok(SourceFormat::BitwardenCsv));
+    assert_eq!(
+        detect(&bytes, &Limits::default()),
+        Ok(SourceFormat::BitwardenCsv)
+    );
 
     let export = parse(&bytes, SourceFormat::BitwardenCsv, &Limits::default()).expect("parses");
     insta::assert_json_snapshot!(snapshot(&export));
@@ -76,7 +91,7 @@ fn encrypted_bitwarden_json_is_refused() {
     let bytes = fixture("bitwarden_encrypted.json");
 
     assert_eq!(
-        detect(&bytes),
+        detect(&bytes, &Limits::default()),
         Err(password_import::ImportError::EncryptedBitwarden)
     );
     assert_eq!(

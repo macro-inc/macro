@@ -6,7 +6,7 @@ use crate::{Detected, ExportWire, Parsed, parse_format};
 const BITWARDEN_JSON: &[u8] = include_bytes!("../../password_import/tests/fixtures/bitwarden.json");
 
 fn wire(bytes: &[u8]) -> Value {
-    let format = detect(bytes).expect("fixture is detected");
+    let format = detect(bytes, &Limits::default()).expect("fixture is detected");
     let export = parse(bytes, format, &Limits::default()).expect("fixture parses");
     serde_json::to_value(Parsed::Parsed {
         export: ExportWire::new(&export),
@@ -83,7 +83,7 @@ fn summary_counts_are_objects_keyed_by_wire_names() {
 #[test]
 fn failures_are_tagged_codes() {
     let value = serde_json::to_value(Detected::Failed {
-        error: detect(b"not an export").expect_err("unknown"),
+        error: detect(b"not an export", &Limits::default()).expect_err("unknown"),
     })
     .expect("serializes");
     assert_eq!(value["outcome"], "failed");

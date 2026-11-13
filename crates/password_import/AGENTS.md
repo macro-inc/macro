@@ -8,26 +8,27 @@ file never leaves the device.
 
 ## Start here
 
-- `src/lib.rs`: `detect`, `parse`, the public types.
 - `src/draft.rs`: vault limits applied per item; every parser ends here.
+- `src/vault.rs`: the vault's limits as public constants, for `crates/passwords` to share.
 - `src/zip_archive.rs`: the only zip reading; bounds and entry-name rules.
+- Each parser's `//!` doc lists the source format it reads.
 
 ## Scope
 
 - Owns: format detection, parsing, mapping to vault kinds and fields, vault
   limits (so preview counts are honest), zip-bomb and traversal refusal.
 - Not here: writing items, ids, duplicate detection → backend import endpoint
-  in `crates/passwords`; wasm bindings → `crates/password_import_wasm`.
+  in `crates/passwords`; wasm bindings → the web import adapter.
 
 ## Boundaries
 
 - Depends on: nothing Macro-specific. Pure: no I/O, async, logging or tracing.
-- Used by: `password_import_wasm`, the browser adapter (opts into the `serde` feature).
+- Used by: `password_import_wasm`, the browser adapter (opts into `reveal-secrets`).
 
 ## Checks
 
-- `cargo test -p password_import` (golden snapshots via `insta`; review
-  `tests/import/snapshots/` diffs line by line, they are the mapping spec).
+- `cargo test -p password_import` (golden snapshots via `insta`; the explicit
+  rules are in `src/draft/test.rs` and `tests/import/security.rs`).
 - `cargo check -p password_import --target wasm32-unknown-unknown`.
 - Fuzz: from `fuzz/`, `cargo +nightly fuzz run <target> corpus/<target> ../tests/fixtures`;
   targets: `detect`, `one_password_pux`, `one_password_csv`, `bitwarden_json`, `bitwarden_csv`.
@@ -38,48 +39,23 @@ file never leaves the device.
   `zip-inflate` (deflate only). Adding a native-only dependency breaks the browser build.
 - `Debug` on every public type prints only kinds, counts and source keys; names,
   URLs, labels and folders are content too. `tests/import/redaction.rs` enforces it.
-- `Serialize` exists only under the `serde` feature and reveals secrets; only
-  `password_import_wasm` enables it.
-- Over-limit values skip the item (`TooLarge`); never truncate. Limits mirror
-  `passwords::WriteItem::validate`, `LoginUrl` and the TOTP key regex; change both together.
-- Intermediate parser buffers (CSV records, URL parsing) are not zeroized; only
-  values held in `Secret` are.
+- `Serialize` exists only under the `reveal-secrets` feature and reveals
+  secrets; only `password_import_wasm` enables it.
+- Over-limit values skip the item (`TooLarge`); never truncate. The limits are
+  `vault::*`; the vault's own write checks in `crates/passwords` must match them.
+- Hostile input stays bounded by counts, not just bytes: JSON lists are
+  counted before they're kept (`bounded.rs`), per-item lists stop at 256
+  entries, CSV records at 256 cells, URLs per item at 51. Keep new lists behind
+  `Bounded` or `Count`.
+- Not zeroized: intermediate parser buffers (CSV records, URL parsing) and
+  serde_json's scratch buffer, which holds every JSON string with an escape
+  (multi-line SSH keys, most notes) in plain text until it is reused or freed.
+  Only values held in `Secret` are zeroized.
+- 1Password 7 CSV is refused with `UnsupportedVersion`, not read as 1Password 8.
+- CSV source keys are `row:<n>`, the 1-based data row (header excluded).
 - `ParsedExport::folders` holds only folders used by imported items, ancestors
   included; empty source folders are not carried over.
 
-## Format assumptions
-
-From public format docs and open-source importers (format knowledge only):
-
-- `.1pux`: zip with `export.data` JSON `accounts[].vaults[].items[]`; item
-  `uuid`, `categoryUuid` (3-digit codes), `state` (`active`/`archived`),
-  `trashed`, `favIndex`, `overview.{title,url,urls[].url,tags}`,
-  `details.{loginFields[] (designation username/password), notesPlain, password,
-  sections[].fields[] {title,id,value:{<type>: v}}, passwordHistory, passkey,
-  documentAttributes}`. Value types: string, concealed, totp, email (string or
-  `{email_address}`), phone, url, date (unix s), monthYear (`YYYYMM`),
-  creditCardNumber/Type, menu, gender, address object, sshKey object, file,
-  reference. Other `files/` entries are never read.
-- 1Password CSV: 1Password 8 header `Title,Url,Username,Password,OTPAuth,
-  Favorite,Archived,Tags,Notes` (case-insensitive); extra columns become fields;
-  `Tags` is kept whole as written. Any CSV with `title,url,username,password`
-  and none of the columns below is read this way.
-- 1Password 7 CSV (`UUID,TITLE,…,SCOPE,AUTOSUBMIT`, card and identity data in
-  numbered `SECTION n:` columns): `detect` and `parse` refuse it with
-  `UnsupportedVersion` when a `title` column sits beside `uuid`, `scope` or
-  `autosubmit`; the user exports `.1pux` or from 1Password 8 instead.
-- Bitwarden JSON: `encrypted`, `folders[{id,name}]` (`a/b` nests),
-  `items[]` with `type` 1–5, `login.{uris,username,password,totp,fido2Credentials}`,
-  `card`, `identity`, `sshKey`, `fields[{name,value,type 0–3}]`,
-  `organizationId`, `collectionIds`, `deletedDate`, `archivedDate`,
-  `passwordHistory`, `attachments`. `encrypted: true` → `EncryptedBitwarden`.
-- Bitwarden CSV: personal header `folder,favorite,type,name,notes,fields,
-  reprompt,login_uri,login_username,login_password,login_totp`; `type` login or
-  note; `fields` is `name: value` lines (all concealed, the CSV loses hidden-ness);
-  `login_uri` comma-separated. A `collections` column marks an organization
-  export: every row is skipped as `SharedCollection`.
-- CSV source keys are `row:<n>`, the 1-based data row (header excluded).
-
 ## Related
 
-- Rules: `.agents/rules/rust/code.md` · Vault limits: `crates/passwords/src/domain/models.rs`
+- Rules: `.agents/rules/rust/code.md` · Vault writes: `crates/passwords/src/domain/models.rs`

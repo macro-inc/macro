@@ -1,16 +1,54 @@
-//! 1Password `.1pux`: `export.data` is JSON, accounts → vaults → items.
-use std::collections::BTreeMap;
+//! 1Password `.1pux`: a zip whose `export.data` is JSON, accounts → vaults →
+//! items. Items have `uuid`, `categoryUuid` (3-digit codes), `state`
+//! (`active`/`archived`), `trashed`, `favIndex`, `overview.{title, url,
+//! urls[].url, tags}` and `details.{loginFields[] (designation username or
+//! password), notesPlain, password, sections[].fields[] {title, id, value:
+//! {<type>: v}}, passwordHistory, passkey, documentAttributes}`. Other `files/`
+//! entries are never read.
+use std::fmt;
+use std::marker::PhantomData;
 
 use serde::Deserialize;
-use serde::de::IgnoredAny;
+use serde::de::{Deserializer, IgnoredAny, MapAccess, Visitor};
 use serde_json::value::RawValue;
 
+use crate::bounded::{Bounded, Count, Counted};
 use crate::draft::{self, Draft, Parts};
 use crate::error::ImportError;
 use crate::model::{
-    DroppedPart, FolderPath, ItemKind, Limits, Secret, SegmentTooLong, SkipReason, SourceKey,
+    DroppedPart, FolderPath, ItemKind, Limits, Secret, SkipReason, SourceFolder, SourceKey,
 };
 use crate::zip_archive;
+
+/// The export's accounts, vaults and items, counted before anything is kept.
+#[derive(Deserialize)]
+struct Shape {
+    accounts: Option<Count<AccountShape>>,
+}
+
+#[derive(Deserialize)]
+struct AccountShape {
+    #[serde(default)]
+    vaults: Count<VaultShape>,
+}
+
+impl Counted for AccountShape {
+    fn nested(&self) -> usize {
+        self.vaults.total
+    }
+}
+
+#[derive(Deserialize)]
+struct VaultShape {
+    #[serde(default)]
+    items: Count<IgnoredAny>,
+}
+
+impl Counted for VaultShape {
+    fn nested(&self) -> usize {
+        self.items.total
+    }
+}
 
 #[derive(Deserialize)]
 struct Export<'a> {
@@ -26,8 +64,8 @@ struct Account<'a> {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AccountAttributes {
-    #[serde(rename = "accountName")]
     account_name: Option<String>,
     name: Option<String>,
 }
@@ -44,73 +82,197 @@ struct VaultAttributes {
     name: Option<String>,
 }
 
-/// The uuid only, to name an item whose full shape didn't parse.
-#[derive(Deserialize)]
-struct ItemId {
-    uuid: Option<String>,
-}
-
 #[derive(Deserialize)]
 struct Item<'a> {
     uuid: Option<String>,
     #[serde(rename = "favIndex")]
     favorite_index: Option<i64>,
-    state: Option<String>,
+    state: Option<ItemState>,
     trashed: Option<bool>,
     #[serde(rename = "categoryUuid")]
-    category: Option<String>,
+    category: Option<Category>,
     #[serde(borrow)]
     details: Option<Details<'a>>,
     overview: Option<Overview>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ItemState {
+    Active,
+    Archived,
+    Trashed,
+    Deleted,
+    #[serde(other)]
+    Unknown,
+}
+
+/// What a `categoryUuid` becomes in the vault.
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+enum Category {
+    /// Login, Password, Database, Wireless Router, Server, Email Account.
+    #[serde(
+        rename = "001",
+        alias = "005",
+        alias = "102",
+        alias = "109",
+        alias = "110",
+        alias = "111"
+    )]
+    Login,
+    #[serde(rename = "002")]
+    Card,
+    /// Secure Note; Software License, Bank Account, Reward Program and Crypto
+    /// Wallet are notes with fields.
+    #[serde(
+        rename = "003",
+        alias = "100",
+        alias = "101",
+        alias = "107",
+        alias = "115"
+    )]
+    Note,
+    /// Identity, Driver License, Outdoor License, Membership, Passport, Social
+    /// Security Number, Medical Record.
+    #[serde(
+        rename = "004",
+        alias = "103",
+        alias = "104",
+        alias = "105",
+        alias = "106",
+        alias = "108",
+        alias = "113"
+    )]
+    Identity,
+    /// API Credential.
+    #[serde(rename = "112")]
+    Api,
+    /// SSH Key: an `Api` item, but its own `username`/`hostname` ids aren't
+    /// API credential fields.
+    #[serde(rename = "114")]
+    SshKey,
+    /// Document: the file itself is the item.
+    #[serde(rename = "006")]
+    Document,
+    #[serde(other)]
+    Unsupported,
+}
+
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Details<'a> {
-    #[serde(rename = "loginFields")]
-    login_fields: Option<Vec<LoginField>>,
+    #[serde(default)]
+    login_fields: Bounded<LoginField>,
     #[serde(rename = "notesPlain")]
     notes: Option<Secret>,
-    #[serde(borrow)]
-    sections: Option<Vec<Section<'a>>>,
-    #[serde(rename = "passwordHistory")]
+    #[serde(borrow, default)]
+    sections: Bounded<Section<'a>>,
     password_history: Option<Vec<IgnoredAny>>,
-    #[serde(rename = "documentAttributes")]
     document_attributes: Option<IgnoredAny>,
     password: Option<Secret>,
     passkey: Option<IgnoredAny>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct LoginField {
     value: Option<Secret>,
     name: Option<String>,
-    designation: Option<String>,
-    #[serde(rename = "fieldType")]
-    field_type: Option<String>,
+    designation: Option<Designation>,
+    field_type: Option<LoginFieldType>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Designation {
+    Username,
+    Password,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+enum LoginFieldType {
+    #[serde(rename = "P")]
+    Password,
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Deserialize)]
 struct Section<'a> {
     title: Option<String>,
-    #[serde(borrow)]
-    fields: Option<Vec<SectionField<'a>>>,
+    #[serde(borrow, default)]
+    fields: Bounded<SectionField<'a>>,
 }
 
 #[derive(Deserialize)]
 struct SectionField<'a> {
     title: Option<String>,
     id: Option<String>,
-    /// One key naming the value type (`string`, `concealed`, `totp`, ...).
-    #[serde(borrow)]
-    value: Option<BTreeMap<String, &'a RawValue>>,
+    #[serde(borrow, default)]
+    value: TypedValue<'a>,
+}
+
+/// A section value: `{<type>: v}`. One key; any others are ignored unread.
+#[derive(Default)]
+struct TypedValue<'a>(Option<(ValueType, &'a RawValue)>);
+
+impl<'de: 'a, 'a> Deserialize<'de> for TypedValue<'a> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_map(TypedValueVisitor(PhantomData))
+    }
+}
+
+struct TypedValueVisitor<'a>(PhantomData<&'a ()>);
+
+impl<'de: 'a, 'a> Visitor<'de> for TypedValueVisitor<'a> {
+    type Value = TypedValue<'a>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a typed value")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let first = map.next_entry::<ValueType, &'a RawValue>()?;
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        Ok(TypedValue(first))
+    }
+}
+
+/// The value types a section field can hold.
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum ValueType {
+    String,
+    Concealed,
+    Phone,
+    Menu,
+    Gender,
+    CreditCardNumber,
+    CreditCardType,
+    Url,
+    Totp,
+    Email,
+    Date,
+    MonthYear,
+    Address,
+    SshKey,
+    File,
+    /// A link to another item, meaningless outside 1Password.
+    Reference,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Deserialize)]
 struct Overview {
     title: Option<String>,
     url: Option<String>,
-    urls: Option<Vec<OverviewUrl>>,
-    tags: Option<Vec<String>>,
+    #[serde(default)]
+    urls: Bounded<OverviewUrl>,
+    #[serde(default)]
+    tags: Bounded<String>,
 }
 
 #[derive(Deserialize)]
@@ -135,66 +297,35 @@ struct AddressValue {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SshKeyValue {
-    #[serde(rename = "privateKey")]
     private_key: Option<Secret>,
     metadata: Option<SshKeyMetadata>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SshKeyMetadata {
-    #[serde(rename = "publicKey")]
     public_key: Option<Secret>,
     fingerprint: Option<Secret>,
-    #[serde(rename = "keyType")]
     key_type: Option<Secret>,
-}
-
-/// What a category becomes in the vault.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Category {
-    Login,
-    Card,
-    Note,
-    Identity,
-    Api,
-    SshKey,
-    Document,
-    Unsupported,
-}
-
-fn category(uuid: Option<&str>) -> Category {
-    match uuid {
-        // Login, Password, Database, Wireless Router, Server, Email Account.
-        Some("001" | "005" | "102" | "109" | "110" | "111") => Category::Login,
-        Some("002") => Category::Card,
-        // Secure Note; Software License, Bank Account, Reward Program and
-        // Crypto Wallet are notes with fields.
-        Some("003" | "100" | "101" | "107" | "115") => Category::Note,
-        // Identity, Driver License, Outdoor License, Membership, Passport,
-        // Social Security Number, Medical Record.
-        Some("004" | "103" | "104" | "105" | "106" | "108" | "113") => Category::Identity,
-        Some("112") => Category::Api,
-        Some("114") => Category::SshKey,
-        Some("006") => Category::Document,
-        _ => Category::Unsupported,
-    }
 }
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
     let data = zip_archive::read_export_data(bytes, limits)?;
-    let export: Export<'_> =
-        serde_json::from_slice(&data).map_err(|error| ImportError::json(&error))?;
-    let accounts = export.accounts.ok_or(ImportError::UnsupportedVersion)?;
+    let data = crate::strip_byte_order_mark(&data);
 
-    let item_count: usize = accounts
-        .iter()
-        .flat_map(|account| &account.vaults)
-        .map(|vault| vault.items.len())
-        .sum();
-    if item_count > limits.max_items {
+    // Count first: an empty vault or a `0` item costs two bytes of input but
+    // a kept entry each, before any limit applied.
+    let shape: Shape = serde_json::from_slice(data).map_err(|error| ImportError::json(&error))?;
+    let entries = shape.accounts.ok_or(ImportError::UnsupportedVersion)?.total;
+    if entries > limits.max_items {
         return Err(ImportError::TooManyItems);
     }
+
+    let export: Export<'_> =
+        serde_json::from_slice(data).map_err(|error| ImportError::json(&error))?;
+    let accounts = export.accounts.ok_or(ImportError::UnsupportedVersion)?;
 
     let several_accounts = accounts.len() > 1;
     let mut parts = Parts::default();
@@ -216,26 +347,21 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
 
             // With several accounts, `Account / Vault` keeps same-named vaults apart.
             let folder = if several_accounts {
-                FolderPath::new([account_name, vault_name])
+                FolderPath::parse([account_name, vault_name])
             } else {
-                FolderPath::new([vault_name])
+                FolderPath::parse([vault_name])
             };
 
             for raw in &vault.items {
-                let key = SourceKey::from_item_index(index);
-                index += 1;
-
                 match serde_json::from_str::<Item<'_>>(raw.get()) {
-                    Ok(item) => add_item(&mut parts, item, key, &folder),
-                    Err(_) => {
-                        let key = serde_json::from_str::<ItemId>(raw.get())
-                            .ok()
-                            .and_then(|item| item.uuid)
-                            .and_then(|uuid| SourceKey::from_source_id(&uuid))
-                            .unwrap_or(key);
-                        parts.skip(Some(key), None, SkipReason::Malformed);
-                    }
+                    Ok(item) => add_item(&mut parts, item, index, &folder),
+                    Err(_) => parts.skip(
+                        Some(SourceKey::of_malformed(raw, index)),
+                        None,
+                        SkipReason::Malformed,
+                    ),
                 }
+                index += 1;
             }
         }
     }
@@ -243,31 +369,22 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     Ok(parts)
 }
 
-fn add_item(
-    parts: &mut Parts,
-    item: Item<'_>,
-    index_key: SourceKey,
-    folder: &Result<Option<FolderPath>, SegmentTooLong>,
-) {
-    let key = item
-        .uuid
-        .as_deref()
-        .and_then(SourceKey::from_source_id)
-        .unwrap_or(index_key);
+fn add_item(parts: &mut Parts, item: Item<'_>, index: usize, folder: &SourceFolder) {
+    let key = SourceKey::from_source_id_or_index(item.uuid.as_deref(), index);
     let name = item
         .overview
         .as_ref()
         .and_then(|overview| overview.title.as_deref());
 
-    let state = item.state.as_deref();
-    if item.trashed == Some(true) || matches!(state, Some("trashed" | "deleted")) {
+    let state = item.state.unwrap_or(ItemState::Active);
+    if item.trashed == Some(true) || matches!(state, ItemState::Trashed | ItemState::Deleted) {
         return parts.skip(Some(key), name, SkipReason::Trashed);
     }
-    if state == Some("archived") {
+    if state == ItemState::Archived {
         return parts.skip(Some(key), name, SkipReason::Archived);
     }
 
-    let category = category(item.category.as_deref());
+    let category = item.category.unwrap_or(Category::Unsupported);
     let kind = match category {
         Category::Login => ItemKind::Login,
         Category::Card => ItemKind::Card,
@@ -286,7 +403,10 @@ fn add_item(
     draft.set_folder(folder.clone());
 
     if let Some(overview) = item.overview {
-        for url in overview.urls.unwrap_or_default() {
+        if overview.urls.overflowed || overview.tags.overflowed {
+            draft.mark_too_large();
+        }
+        for url in overview.urls.entries {
             if let Some(url) = url.url {
                 draft.add_url(&url);
             }
@@ -294,7 +414,7 @@ fn add_item(
         if let Some(url) = overview.url {
             draft.add_url(&url);
         }
-        for tag in overview.tags.unwrap_or_default() {
+        for tag in overview.tags.entries {
             draft.add_tag(&tag);
         }
     }
@@ -307,27 +427,31 @@ fn add_item(
 }
 
 fn add_details(draft: &mut Draft, details: Details<'_>, category: Category) {
-    for field in details.login_fields.unwrap_or_default() {
+    if details.login_fields.overflowed || details.sections.overflowed {
+        draft.mark_too_large();
+    }
+
+    for field in details.login_fields.entries {
         let Some(value) = field.value else {
             continue;
         };
         let label = field.name.as_deref().unwrap_or_default();
 
-        match field.designation.as_deref() {
-            Some("username") => draft.username(value, label),
-            Some("password") => draft.password(value, label),
-            _ => {
-                let concealed = field.field_type.as_deref() == Some("P");
-                draft.field(label, value, concealed);
+        match field.designation {
+            Some(Designation::Username) => draft.add_username_labeled(value, label),
+            Some(Designation::Password) => draft.add_password_labeled(value, label),
+            Some(Designation::Other) | None => {
+                let concealed = field.field_type == Some(LoginFieldType::Password);
+                draft.add_field(label, value, concealed);
             }
         }
     }
 
     if let Some(password) = details.password {
-        draft.password(password, "Password");
+        draft.add_password(password);
     }
     if let Some(notes) = details.notes {
-        draft.notes(notes);
+        draft.set_notes(notes);
     }
 
     let history = details.password_history.map_or(0, |history| history.len());
@@ -340,10 +464,13 @@ fn add_details(draft: &mut Draft, details: Details<'_>, category: Category) {
     }
 
     let mut name_parts = NameParts::default();
-    for section in details.sections.unwrap_or_default() {
+    for section in details.sections.entries {
+        if section.fields.overflowed {
+            draft.mark_too_large();
+        }
         let section_title = section.title.as_deref().unwrap_or_default().trim();
 
-        for field in section.fields.unwrap_or_default() {
+        for field in section.fields.entries {
             let field_title = field
                 .title
                 .as_deref()
@@ -357,9 +484,7 @@ fn add_details(draft: &mut Draft, details: Details<'_>, category: Category) {
                 format!("{section_title} · {field_title}")
             };
 
-            let Some((value_type, raw)) =
-                field.value.as_ref().and_then(|value| value.iter().next())
-            else {
+            let TypedValue(Some((value_type, raw))) = field.value else {
                 continue;
             };
             let id = field.id.as_deref().unwrap_or_default();
@@ -377,11 +502,9 @@ fn add_details(draft: &mut Draft, details: Details<'_>, category: Category) {
     }
 
     if draft.kind() == ItemKind::Identity {
-        let full_name = Secret::join(
+        draft.add_full_name(
             [&name_parts.first, &name_parts.initial, &name_parts.last].map(Secret::expose_secret),
-            " ",
         );
-        draft.username(full_name, "Name");
     }
 }
 
@@ -403,24 +526,27 @@ enum SectionValue {
     Unsupported,
 }
 
-fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
-    let text = |concealed| match serde_json::from_str::<Secret>(raw.get()) {
-        Ok(value) => SectionValue::Text { value, concealed },
-        Err(_) => SectionValue::Unsupported,
+fn decode(value_type: ValueType, raw: &RawValue) -> SectionValue {
+    let secret = || serde_json::from_str::<Secret>(raw.get()).ok();
+    let text = |concealed| {
+        secret().map_or(SectionValue::Unsupported, |value| SectionValue::Text {
+            value,
+            concealed,
+        })
     };
 
     match value_type {
-        "concealed" | "creditCardNumber" => text(true),
-        "string" | "phone" | "menu" | "gender" | "creditCardType" => text(false),
-        "url" => match serde_json::from_str::<Secret>(raw.get()) {
-            Ok(value) => SectionValue::Url(value),
-            Err(_) => SectionValue::Unsupported,
-        },
-        "totp" => match serde_json::from_str::<Secret>(raw.get()) {
-            Ok(value) => SectionValue::OneTimePassword(value),
-            Err(_) => SectionValue::Unsupported,
-        },
-        "email" => match serde_json::from_str::<EmailValue>(raw.get()) {
+        ValueType::Concealed | ValueType::CreditCardNumber => text(true),
+        ValueType::String
+        | ValueType::Phone
+        | ValueType::Menu
+        | ValueType::Gender
+        | ValueType::CreditCardType => text(false),
+        ValueType::Url => secret().map_or(SectionValue::Unsupported, SectionValue::Url),
+        ValueType::Totp => {
+            secret().map_or(SectionValue::Unsupported, SectionValue::OneTimePassword)
+        }
+        ValueType::Email => match serde_json::from_str::<EmailValue>(raw.get()) {
             Ok(EmailValue::Plain(value)) => SectionValue::Text {
                 value,
                 concealed: false,
@@ -432,7 +558,7 @@ fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
             Err(_) => SectionValue::Unsupported,
         },
         // Unix seconds, shown as a calendar date.
-        "date" => match serde_json::from_str::<i64>(raw.get())
+        ValueType::Date => match serde_json::from_str::<i64>(raw.get())
             .ok()
             .and_then(|seconds| chrono::DateTime::from_timestamp(seconds, 0))
         {
@@ -442,7 +568,7 @@ fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
             },
             None => SectionValue::Unsupported,
         },
-        "monthYear" => match serde_json::from_str::<u32>(raw.get()) {
+        ValueType::MonthYear => match serde_json::from_str::<u32>(raw.get()) {
             // `YYYYMM`, shown the way cards print it.
             Ok(month_year) => SectionValue::Text {
                 value: Secret::new(format!("{:02}/{}", month_year % 100, month_year / 100)),
@@ -450,7 +576,7 @@ fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
             },
             Err(_) => SectionValue::Unsupported,
         },
-        "address" => match serde_json::from_str::<AddressValue>(raw.get()) {
+        ValueType::Address => match serde_json::from_str::<AddressValue>(raw.get()) {
             Ok(address) => {
                 let parts = [
                     &address.street,
@@ -459,24 +585,23 @@ fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
                     &address.zip,
                     &address.country,
                 ];
-                let value =
-                    Secret::join(parts.into_iter().flatten().map(Secret::expose_secret), ", ");
                 SectionValue::Text {
-                    value,
+                    value: draft::address_text(
+                        parts.into_iter().flatten().map(Secret::expose_secret),
+                    ),
                     concealed: false,
                 }
             }
             Err(_) => SectionValue::Unsupported,
         },
-        "sshKey" => match serde_json::from_str::<SshKeyValue>(raw.get()) {
+        ValueType::SshKey => match serde_json::from_str::<SshKeyValue>(raw.get()) {
             Ok(key) => SectionValue::SshKey(key),
             Err(_) => SectionValue::Unsupported,
         },
-        "file" => SectionValue::Attachment,
-        // A link to another item, meaningless outside 1Password.
-        "reference" => SectionValue::Unsupported,
+        ValueType::File => SectionValue::Attachment,
+        ValueType::Reference => SectionValue::Unsupported,
         // Unknown value types are kept when they are plain text.
-        _ => text(false),
+        ValueType::Unknown => text(false),
     }
 }
 
@@ -485,15 +610,15 @@ fn add_section_field(
     category: Category,
     id: &str,
     label: &str,
-    value_type: &str,
+    value_type: ValueType,
     raw: &RawValue,
     name_parts: &mut NameParts,
 ) {
     let (value, concealed) = match decode(value_type, raw) {
         SectionValue::Text { value, concealed } => (value, concealed),
-        SectionValue::OneTimePassword(value) => return draft.one_time_password(value),
+        SectionValue::OneTimePassword(value) => return draft.add_one_time_password(value),
         SectionValue::Url(value) => {
-            return draft.add_labeled_url(Some(label.to_owned()), value.expose_secret());
+            return draft.add_labeled_url(Some(label.to_owned()), value.expose_secret(), false);
         }
         SectionValue::SshKey(key) => return add_ssh_key(draft, key, label),
         SectionValue::Attachment => return draft.drop_part(DroppedPart::Attachment, 1),
@@ -501,48 +626,40 @@ fn add_section_field(
     };
 
     match (category, id) {
-        (Category::Login, "username" | "pop_username") => draft.username(value, label),
-        (Category::Login, "password" | "pop_password") => draft.password(value, label),
-        (Category::Login, "url" | "hostname" | "server") => {
-            draft.add_labeled_url(Some(label.to_owned()), value.expose_secret());
+        (Category::Login, "username" | "pop_username") => draft.add_username_labeled(value, label),
+        (Category::Login, "password" | "pop_password") => draft.add_password_labeled(value, label),
+        // A hidden value stays hidden wherever it lands.
+        (Category::Login, "url" | "hostname" | "server") | (Category::Api, "hostname") => {
+            draft.add_labeled_url(Some(label.to_owned()), value.expose_secret(), concealed);
         }
-        (Category::Card, "cardholder") => draft.username(value, label),
-        (Category::Card, "ccnum") => draft.password(value, label),
-        (Category::Card, "expiry") => draft.field(draft::EXPIRES, value, false),
-        (Category::Card, "cvv") => draft.field(draft::SECURITY_CODE, value, true),
+        (Category::Card, "cardholder") => draft.add_username_labeled(value, label),
+        (Category::Card, "ccnum") => draft.add_password_labeled(value, label),
+        (Category::Card, "expiry") => draft.add_field(draft::EXPIRES, value, false),
+        (Category::Card, "cvv") => draft.add_field(draft::SECURITY_CODE, value, true),
         (Category::Identity, "firstname") => name_parts.first = value,
         (Category::Identity, "initial") => name_parts.initial = value,
         (Category::Identity, "lastname") => name_parts.last = value,
-        (Category::Identity, "fullname" | "name" | "member_name") => draft.username(value, label),
-        (Category::Identity, "email") => draft.field(draft::EMAIL, value, false),
+        (Category::Identity, "fullname" | "name" | "member_name") => {
+            draft.add_username_labeled(value, label);
+        }
+        (Category::Identity, "email") => draft.add_field(draft::EMAIL, value, false),
         (Category::Identity, "defphone" | "cellphone" | "homephone" | "busphone") => {
-            draft.field(draft::PHONE, value, false);
+            draft.add_field(draft::PHONE, value, false);
         }
-        (Category::Identity, "address") => draft.field(draft::ADDRESS, value, false),
-        (Category::Api, "credential") => draft.password(value, label),
-        (Category::Api, "username") => draft.username(value, label),
-        (Category::Api, "hostname") => {
-            draft.add_labeled_url(Some(label.to_owned()), value.expose_secret());
-        }
-        _ => draft.field(label, value, concealed),
+        (Category::Identity, "address") => draft.add_field(draft::ADDRESS, value, false),
+        (Category::Api, "credential") => draft.add_password_labeled(value, label),
+        (Category::Api, "username") => draft.add_username_labeled(value, label),
+        _ => draft.add_field(label, value, concealed),
     }
 }
 
 fn add_ssh_key(draft: &mut Draft, key: SshKeyValue, label: &str) {
-    if let Some(private_key) = key.private_key {
-        draft.password(private_key, label);
-    }
-
-    let Some(metadata) = key.metadata else {
-        return;
+    let (public_key, fingerprint, key_type) = match key.metadata {
+        Some(metadata) => (metadata.public_key, metadata.fingerprint, metadata.key_type),
+        None => (None, None, None),
     };
-    if let Some(public_key) = metadata.public_key {
-        draft.username(public_key, "Public key");
-    }
-    if let Some(fingerprint) = metadata.fingerprint {
-        draft.field("Fingerprint", fingerprint, false);
-    }
-    if let Some(key_type) = metadata.key_type {
-        draft.field("Key type", key_type, false);
+    draft.add_ssh_key(key.private_key, label, public_key, fingerprint);
+    if let Some(key_type) = key_type {
+        draft.add_field("Key type", key_type, false);
     }
 }

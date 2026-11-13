@@ -130,7 +130,7 @@ fn errors_show_no_content() {
     )]);
 
     let errors: Vec<ImportError> = vec![
-        detect(broken_json.as_bytes()).expect_err("broken JSON"),
+        detect(broken_json.as_bytes(), &Limits::default()).expect_err("broken JSON"),
         parse(
             broken_json.as_bytes(),
             SourceFormat::BitwardenJson,
@@ -143,7 +143,7 @@ fn errors_show_no_content() {
             &Limits::default(),
         )
         .expect_err("unsafe zip"),
-        detect(headerless_csv.as_bytes()).expect_err("unknown CSV"),
+        detect(headerless_csv.as_bytes(), &Limits::default()).expect_err("unknown CSV"),
         parse(
             headerless_csv.as_bytes(),
             SourceFormat::BitwardenCsv,
