@@ -838,8 +838,7 @@ export type RetireSuggestionRequest = {
 };
 
 /**
- * Where one of the person's suggestions is, for a routines session
- * managing them.
+ * Where one of the person's routine suggestions is.
  */
 export type ReviewedState = 'open' | 'dismissed' | 'retired' | 'saved';
 
@@ -2686,6 +2685,9 @@ export type AcceptSuggestionData = {
 };
 
 export type AcceptSuggestionErrors = {
+    /**
+     * A routine suggestion: the person saves its routine in the app instead
+     */
     400: string;
     401: string;
     /**
