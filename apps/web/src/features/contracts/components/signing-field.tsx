@@ -4,6 +4,7 @@ import { Checkbox, Input } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { isMark } from '../core/fields';
 import type { PacketField, Recipient } from '../core/packet';
+import { fieldPrint } from '../core/printed-fields';
 import { fieldKindLabel } from './field-kind';
 import { formatDayWithYear } from './format';
 import { SignatureMark } from './signature-mark';
@@ -54,19 +55,22 @@ export function FilledField(props: {
   field: PacketField;
   recipient: Recipient;
 }) {
-  /** The recipient's mark, once they have signed a signature or initials field. */
-  const signedMark = () => {
-    if (!isMark(props.field.kind) || !props.recipient.signedAt)
-      return undefined;
-    return props.field.kind === 'signature'
-      ? props.recipient.signature
-      : props.recipient.initials;
+  /** The same print the downloaded PDF draws for this field. */
+  const print = () =>
+    fieldPrint(props.field, props.recipient, formatDayWithYear);
+  const mark = () => {
+    const current = print();
+    return current?.t === 'mark' ? current.mark : undefined;
+  };
+  const text = () => {
+    const current = print();
+    return current?.t === 'text' ? current.text : undefined;
   };
 
   return (
     <Positioned field={props.field} tone="neutral">
       <Switch>
-        <Match when={signedMark()}>
+        <Match when={mark()}>
           {(adopted) => (
             <SignatureMark
               mark={adopted()}
@@ -77,18 +81,10 @@ export function FilledField(props: {
             />
           )}
         </Match>
-        <Match
-          when={props.field.kind === 'checkbox' && props.field.value === true}
-        >
+        <Match when={print()?.t === 'check'}>
           <span class="font-semibold text-[#1c1c1c]">✓</span>
         </Match>
-        <Match
-          when={
-            props.recipient.signedAt
-              ? printedValue(props.field, props.recipient)
-              : undefined
-          }
-        >
+        <Match when={text()}>
           {(value) => <span class="truncate text-[#1c1c1c]">{value()}</span>}
         </Match>
       </Switch>

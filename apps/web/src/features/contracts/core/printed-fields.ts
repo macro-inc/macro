@@ -15,7 +15,8 @@ type FieldPrint =
 
 export type PrintedField = { id: string; box: FieldBox; print: FieldPrint };
 
-function printOf(
+/** What one field prints for its recipient, or nothing before they sign. */
+export function fieldPrint(
   field: PacketField,
   recipient: Recipient,
   formatDate: (iso: string) => string
@@ -55,7 +56,7 @@ export function printedFields(
   return packet.fields.flatMap((field) => {
     if (field.documentId !== documentId || field.page !== page) return [];
     const recipient = findRecipient(packet, field.recipientId);
-    const print = recipient && printOf(field, recipient, formatDate);
+    const print = recipient && fieldPrint(field, recipient, formatDate);
     return print ? [{ id: field.id, box: field.box, print }] : [];
   });
 }
