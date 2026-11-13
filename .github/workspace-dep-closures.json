@@ -12969,6 +12969,9 @@
       "crates/pairing_id",
       "crates/workspace-hack"
     ],
+    "password_import": [
+      "crates/password_import"
+    ],
     "passwords": [
       "crates/activity",
       "crates/agent",

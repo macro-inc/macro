@@ -1,0 +1,99 @@
+//! Bitwarden CSV: `folder,favorite,type,name,notes,fields,reprompt,login_uri,
+//! login_username,login_password,login_totp`. `type` is `login` or `note`;
+//! `fields` is `name: value` lines; `login_uri` is comma-separated.
+//! Organization exports have `collections` in place of `folder`, and every
+//! row of one is skipped as `SharedCollection`. Newer exports add
+//! `archivedDate` (ISO 8601, empty when live); a dated row is `Archived`.
+use nom::Parser;
+use nom::bytes::complete::{tag, take_until};
+
+use crate::csv_table;
+use crate::draft::{Draft, Parts};
+use crate::error::ImportError;
+use crate::model::{FolderPath, ItemKind, Limits, Secret, SkipReason, SourceKey};
+
+pub(crate) const REQUIRED_COLUMNS: [&str; 5] = [
+    "type",
+    "name",
+    "login_uri",
+    "login_username",
+    "login_password",
+];
+
+pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
+    let table = csv_table::read(bytes, limits)?;
+    table.require(&REQUIRED_COLUMNS)?;
+
+    let folder = table.column("folder");
+    let collections = table.column("collections");
+    let favorite = table.column("favorite");
+    let item_type = table.column("type");
+    let name = table.column("name");
+    let notes = table.column("notes");
+    let fields = table.column("fields");
+    let uris = table.column("login_uri");
+    let username = table.column("login_username");
+    let password = table.column("login_password");
+    let one_time_password = table.column("login_totp");
+    let archived = table.column("archiveddate");
+
+    let mut parts = Parts::default();
+    for (index, row) in table.rows.into_iter().enumerate() {
+        let key = SourceKey::from_row_index(index);
+        let Some(mut row) = row else {
+            parts.skip(Some(key), None, SkipReason::Malformed);
+            continue;
+        };
+
+        let item_name = Some(row.text(name));
+        // Organization exports have a `collections` column; every row in
+        // them belongs to the organization, collected or not.
+        if collections.is_some() {
+            parts.skip(Some(key), item_name, SkipReason::SharedCollection);
+            continue;
+        }
+
+        if !row.text(archived).trim().is_empty() {
+            parts.skip(Some(key), item_name, SkipReason::Archived);
+            continue;
+        }
+
+        let kind = match row.text(item_type).trim() {
+            "login" => ItemKind::Login,
+            "note" => ItemKind::Note,
+            _ => {
+                parts.skip(Some(key), item_name, SkipReason::UnsupportedCategory);
+                continue;
+            }
+        };
+
+        let mut draft = Draft::new(key, kind);
+        draft.set_name(item_name.map(str::to_owned));
+        draft.set_favorite(row.text(favorite).trim() == "1");
+        draft.set_folder(FolderPath::parse(row.text(folder).split('/')));
+        for uri in row.text(uris).split(',') {
+            draft.add_url(uri);
+        }
+        draft.add_username(row.take(username));
+        draft.add_password(row.take(password));
+        draft.add_one_time_password(row.take(one_time_password));
+        draft.set_notes(row.take(notes));
+        add_fields(&mut draft, &row.take(fields));
+
+        parts.add(draft);
+    }
+
+    Ok(parts)
+}
+
+/// `name: value` lines. The CSV doesn't say which fields were hidden, so all
+/// are concealed.
+fn add_fields(draft: &mut Draft, fields: &Secret) {
+    for line in fields.expose_secret().lines() {
+        let (label, value) = match (take_until::<_, _, ()>(": "), tag(": ")).parse(line) {
+            Ok((value, (label, _))) => (label, value),
+            Err(_) => ("", line),
+        };
+        draft.add_field(label, Secret::new(value.to_owned()), true);
+    }
+}

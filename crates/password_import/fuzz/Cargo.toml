@@ -1,0 +1,47 @@
+# cargo-fuzz targets, outside the workspace (nightly-only, libFuzzer).
+# Run from this directory: `cargo +nightly fuzz run <target>`; see ../AGENTS.md.
+[package]
+edition = "2024"
+name = "password_import_fuzz"
+publish = false
+version = "0.0.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+password_import = { path = ".." }
+
+# Not a member of the root workspace.
+[workspace]
+
+[[bin]]
+doc = false
+name = "detect"
+path = "fuzz_targets/detect.rs"
+test = false
+
+[[bin]]
+doc = false
+name = "one_password_pux"
+path = "fuzz_targets/one_password_pux.rs"
+test = false
+
+[[bin]]
+doc = false
+name = "one_password_csv"
+path = "fuzz_targets/one_password_csv.rs"
+test = false
+
+[[bin]]
+doc = false
+name = "bitwarden_json"
+path = "fuzz_targets/bitwarden_json.rs"
+test = false
+
+[[bin]]
+doc = false
+name = "bitwarden_csv"
+path = "fuzz_targets/bitwarden_csv.rs"
+test = false
