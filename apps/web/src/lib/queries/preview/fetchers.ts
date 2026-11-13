@@ -173,7 +173,7 @@ async function fetchCallPreviews(ids: string[]): Promise<PreviewItem[]> {
 
     switch (call.type) {
       case 'exists': {
-        // Match the call block (CallRecordingSplitHeader / CallRecordingBody):
+        // Match the call block (its header views / CallRecordingBody):
         // prefer the user-supplied / AI-generated `customName`, fall back to
         // the channel the call lives in.
         const displayName = call.customName ?? call.channelName;
