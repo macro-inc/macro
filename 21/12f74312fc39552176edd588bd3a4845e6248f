@@ -1,0 +1,19 @@
+apps/web/src/features/dynamic-ui/queries/agent-panes.ts
+  s_471e2069ef160b::t_a6d42554e1e661 11,16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2112f74312fc39552176edd588bd3a4845e6248f",
+  "prompts": {},
+  "sessions": {
+    "s_471e2069ef160b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae591ca2-a46b-438d-9342-5bfaf81ffb1e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
