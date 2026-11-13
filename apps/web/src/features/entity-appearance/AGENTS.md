@@ -58,7 +58,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.
 - Render public metadata without mounting authenticated preview queries.
 - Preserve appearance in identity projections and renderers, including inbox cards, project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
-- Keep editable header icons outside breadcrumb navigation buttons; keep read-only and flag-disabled icons inside those buttons so icon clicks still navigate.
+- Keep editable header icons outside breadcrumb navigation buttons; keep read-only and flag-disabled icons inside those buttons so icon clicks still navigate. Project breadcrumbs use the lightweight identity read, including owner metadata, without loading task counts or membership.
 - Keep header icon buttons at 24px with 16px glyphs; retain the shared larger touch targets.
 - Pass document identity through the `MarkdownDocument` context's `entity` accessor from each host; do not read legacy block metadata inside `Notebook`.
 - Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.

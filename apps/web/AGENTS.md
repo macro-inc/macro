@@ -240,6 +240,13 @@ scroll anchoring; see `keepScrollAnchorOnResize`):
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
 
+Directional split focus (`Shift+H/J/K/L`, `Shift+Arrow`) has a backend-free
+browser regression over the real split manager, `SplitLayout`, and hotkey
+engine, with stand-in panes: moving through two stacked splits beside three,
+returning to the split you came from, a list keeping `Shift+Up/Down` for its
+selection, and a grid marked `data-owns-arrow-keys` keeping `Shift+Arrow`:
+`bunx playwright test --config src/components/app/split-layout/focus-browser-test/playwright.config.ts`.
+
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
 own instance and keeps its own state, and reopening within a tab reuses it. The
@@ -383,6 +390,12 @@ and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
+
+A record's Pipelines card (the real card over `GridCell`, with a 21-field
+contact row) has a backend-free desktop/phone regression: one label column with
+every value on one edge, prose under its label on a narrow card, an email cut
+to one line with an ellipsis, the empty-fields row, and editing in place:
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts pipeline-card.browser.e2e.ts`.
 
 Collapsible document sections (the real heading-folds plugin and its gutter
 controls) have a backend-free desktop/tablet/phone regression: placement in
@@ -677,6 +690,13 @@ Keep cold row metadata reads non-suspending so virtual scrolling never detaches
 its list; permission revalidation remains independent of row mounts. Project
 reads retain client-scoped denial state across remounts and immediately reauthorize
 previous-viewer cache hits; older requests never clear newer denial decisions.
+A project view mounts one full project read (`createProjectSource`): breadcrumbs
+and labels use the identity read, and embedded lists take the view's source.
+Keep editable breadcrumb icons on that identity read, including owner metadata;
+never load project counts or task membership just to open the appearance editor.
+Project reads refresh only through the activity registry (pushes, websocket
+connects, the app's own project writes; `registerProjectRevalidation`); never
+add a timer or focus refetch to them.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
@@ -1020,6 +1040,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
+- Bind channel Join, recovery, and retry to one call ID; only explicit Start or Call again may use get-or-create. Preserve that intent and ID through channel navigation.
 - Keep active phone calls viewport-filling with visible header islands and idle
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.

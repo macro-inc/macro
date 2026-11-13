@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
 import {
   type Client,
@@ -17,6 +17,7 @@ import {
 } from 'solid-js';
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import { filter, fromPromise, mergeMap, pipe } from 'wonka';
+import type { EntityData } from '../entity/types/entity';
 
 const mocks = vi.hoisted(() => ({
   enabled: (): boolean => false,
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   soup: vi.fn(),
   graphql: undefined as Client | undefined,
   get: vi.fn(),
+  changeIcon: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => createMemo(() => ({ enabled: mocks.enabled() })),
@@ -41,6 +43,15 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({}));
 vi.mock('@ui', () => ({
   Button: (props: ParentProps) => <button>{props.children}</button>,
 }));
+vi.mock('@app/components/view-shell', () => ({
+  ViewBreadcrumbs: {
+    Item: (props: {
+      children: (item: { isActive(): boolean; onSelect(): void }) => unknown;
+    }) => props.children({ isActive: () => true, onSelect: () => {} }),
+    Button: (props: ParentProps) => <button>{props.children}</button>,
+  },
+}));
+vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('./primitives/project-collection', () => ({}));
 vi.mock('./project-collection-persistence', () => ({}));
 vi.mock('./project-share', () => ({}));
@@ -48,6 +59,12 @@ vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
 vi.mock('../entity-appearance/entity-appearance', () => ({
   useChangeEntityIcon: () => vi.fn(),
+  EntityAppearanceTrigger: (props: { entity: EntityData }) => (
+    <button
+      aria-label="Change icon"
+      onClick={() => mocks.changeIcon(props.entity)}
+    />
+  ),
 }));
 vi.mock('@app/features/tasks-view/tasks-create-action', () => ({
   TasksCreateAction: () => null,
@@ -90,6 +107,7 @@ import {
   type ProjectsContext,
   useProjectsContext,
 } from './context/projects-context';
+import { ProjectBreadcrumb } from './project-breadcrumb';
 import { Projects } from './projects';
 import { createProjectSources } from './queries/project-sources';
 
@@ -220,8 +238,9 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
   });
   expect(mocks.page).not.toHaveBeenCalled();
   expect(mocks.soup).toHaveBeenCalledTimes(2);
+  // Nothing reads an open project again on a timer.
   await vi.advanceTimersByTimeAsync(30_000);
-  expect(callsFor('Initiative')).toHaveLength(2);
+  expect(callsFor('Initiative')).toHaveLength(1);
 
   setEnabled(false);
   const soupRequests = mocks.soup.mock.calls.length;
@@ -234,7 +253,7 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     queryClient.invalidateQueries(),
   ]);
   await vi.advanceTimersByTimeAsync(60_000);
-  expect(callsFor('Initiative')).toHaveLength(2);
+  expect(callsFor('Initiative')).toHaveLength(1);
 
   expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
   setEnabled(true);
@@ -242,6 +261,35 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     expect(mocks.soup.mock.calls.length).toBeGreaterThan(soupRequests)
   );
   expect(sources.detail.project()?.name).toBe('Launch');
+});
+
+it("names a route's project without the project's full read", async () => {
+  mocks.enabled = () => true;
+  setupGraphql();
+  const view = render(() => (
+    <ProjectBreadcrumb
+      entry={{
+        value: 'initiative:launch',
+        data: { type: 'initiative', id: 'launch' },
+      }}
+      order={1}
+    />
+  ));
+  await vi.waitFor(() =>
+    expect(view.getByRole('button', { name: 'Launch' }).textContent).toBe(
+      'Launch'
+    )
+  );
+  expect(callsFor('Initiative')).toHaveLength(0);
+  expect(callsFor('InitiativeIdentity')).toHaveLength(1);
+  fireEvent.click(view.getByRole('button', { name: 'Change icon' }));
+  expect(mocks.changeIcon).toHaveBeenCalledWith({
+    type: 'initiative',
+    id: 'launch',
+    name: 'Launch',
+    ownerId: 'viewer',
+    appearance: null,
+  });
 });
 
 it('keeps standalone source adapters enabled when no rollout gate is injected', async () => {
@@ -289,6 +337,7 @@ it('reads chip identity without the fields that check every task', async () => {
     expect(query.data).toEqual({
       id: 'launch',
       name: 'Launch',
+      ownerId: 'viewer',
       access: 'owner',
       appearance: null,
     })

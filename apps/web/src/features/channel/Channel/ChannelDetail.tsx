@@ -22,6 +22,7 @@ import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
 import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
+import type { CallJoinIntent } from '@channel/Call/call-lifecycle';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
@@ -75,8 +76,8 @@ import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { withChannelTabIcons } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
-  isJoinCallRequested,
   isOpenCallTabRequested,
+  parseCallJoinIntent,
   toChannelTargetRequest,
   URL_PARAMS,
 } from './link';
@@ -371,7 +372,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     )
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
   });
-  const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
+  const [pendingJoinCall, setPendingJoinCall] = createSignal<CallJoinIntent>();
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.
@@ -401,9 +402,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
           return;
         }
 
-        if (isJoinCallRequested(params[URL_PARAMS.joinCall])) {
+        const intent = parseCallJoinIntent(params[URL_PARAMS.joinCall]);
+        if (intent) {
           setActiveTab(getCallJoinTab());
-          setPendingJoinCall(true);
+          setPendingJoinCall(intent);
         }
       },
       goToLatest: async () => {
@@ -435,7 +437,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
             canCall={canCall}
             channelId={channelId}
             pendingJoinCall={pendingJoinCall}
-            onHandled={() => setPendingJoinCall(false)}
+            onHandled={() => setPendingJoinCall(undefined)}
           />
         </DebugSuspense>
         <DmWorkProvider
@@ -508,7 +510,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
                     <TraceFlow name="channel.call.view">
                       <ChannelCallTab
                         channelId={channelId}
-                        pendingJoin={pendingJoinCall}
+                        pendingJoin={() => !!pendingJoinCall()}
                       />
                     </TraceFlow>
                   </DebugSuspense>

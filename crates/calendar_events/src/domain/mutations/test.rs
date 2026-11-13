@@ -2,12 +2,12 @@ use super::*;
 use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventOverride, CalendarEventSource,
-    CalendarLinkTokenIdentity, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
-    ConferenceChange, DisconnectedCalendar, EventDetails, EventStart, EventStatus,
-    EventTransparency, EventType, EventVisibility, GoogleCalendarSyncSnapshot, GoogleWatchChannel,
-    GuestPolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, OwnedInbox, ProviderCalendar,
-    ProviderCalendarTarget, ProviderEventSource, StoredGoogleCalendar, ViewerCapabilities,
-    VisibleCalendar,
+    CalendarLinkTokenIdentity, CalendarOccurrenceCursor, CalendarSyncFailure, CalendarSyncStatus,
+    CalendarWatchRelease, ConferenceChange, DisconnectedCalendar, EventDetails, EventStart,
+    EventStatus, EventTransparency, EventType, EventVisibility, GoogleCalendarSyncSnapshot,
+    GoogleWatchChannel, GuestPolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, OwnedInbox,
+    ProviderCalendar, ProviderCalendarTarget, ProviderEventSource, StoredGoogleCalendar,
+    ViewerCapabilities, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -458,6 +458,7 @@ impl CalendarRepository for FakeRepo {
         _lease_token: Uuid,
         _account_id: Uuid,
         _calendar_id: Uuid,
+        _kind: CalendarSyncFailure,
         _message: &str,
     ) -> Result<(), rootcause::Report> {
         unreachable!()

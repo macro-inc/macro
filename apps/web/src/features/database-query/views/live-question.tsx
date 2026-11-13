@@ -3,7 +3,8 @@ import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { AnswerSkeleton, ValueSkeleton } from '../components/answer-skeleton';
 import { AnswerTitleField } from '../components/answer-title-field';
 import { QueryResults, ScalarValue } from '../components/query-results';
 import { QuestionDetails } from '../components/question-details';
@@ -64,6 +65,8 @@ export function LiveQuestion(props: {
     isScalarAnswer(props.answer)
       ? props.answer
       : undefined;
+  const answering = () =>
+    !!props.source.queryId && !props.error && !props.answer;
   const value = () => {
     if (!props.source.queryId) return 'Database';
     if (props.error) return 'Answer unavailable';
@@ -125,15 +128,20 @@ export function LiveQuestion(props: {
                 <span class="text-ink-extra-muted">·</span>
               </Show>
               <span class="truncate tabular-nums">
-                <Show when={scalarAnswer()} fallback={value()}>
-                  {(answer) => (
-                    <ScalarValue
-                      answer={answer()}
-                      names={names()}
-                      display={display}
-                    />
-                  )}
-                </Show>
+                <Switch fallback={value()}>
+                  <Match when={scalarAnswer()}>
+                    {(answer) => (
+                      <ScalarValue
+                        answer={answer()}
+                        names={names()}
+                        display={display}
+                      />
+                    )}
+                  </Match>
+                  <Match when={answering()}>
+                    <ValueSkeleton />
+                  </Match>
+                </Switch>
               </span>
             </Popover.Trigger>
           </Show>
@@ -179,8 +187,7 @@ export function LiveQuestion(props: {
             height={props.source.height}
             onResize={props.onResize}
           >
-            <Show
-              when={!props.error && props.answer}
+            <Switch
               fallback={
                 <p
                   role={props.error ? 'alert' : 'status'}
@@ -190,18 +197,23 @@ export function LiveQuestion(props: {
                 </p>
               }
             >
-              {(answer) => (
-                <QueryResults
-                  answer={answer()}
-                  names={names()}
-                  display={display}
-                  compact
-                  unbounded
-                  displayMode={props.source.displayMode}
-                  chart={props.source.chart}
-                />
-              )}
-            </Show>
+              <Match when={!props.error && props.answer}>
+                {(answer) => (
+                  <QueryResults
+                    answer={answer()}
+                    names={names()}
+                    display={display}
+                    compact
+                    unbounded
+                    displayMode={props.source.displayMode}
+                    chart={props.source.chart}
+                  />
+                )}
+              </Match>
+              <Match when={answering()}>
+                <AnswerSkeleton displayMode={props.source.displayMode} />
+              </Match>
+            </Switch>
           </ResizableAnswer>
         </div>
       </Show>
