@@ -1,6 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import type { ErrorResponseHandler } from '@core/util/safeFetch';
+import { ThrownResultError } from '@core/util/result';
+import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import {
   type AI_USAGE_LIMIT_ERROR,
   readAiUsageLimitError,
@@ -61,6 +62,47 @@ const sessionAiError: ErrorResponseHandler<
 > = async (response) =>
   (await readAiUsageLimitError(response)) ?? (await sessionError(response));
 
+export const PROVIDER_CREDENTIAL_REJECTED =
+  'PROVIDER_CREDENTIAL_REJECTED' as const;
+
+/**
+ * Model and capability probes answer a provider refusing the caller's
+ * connected credential (a Cursor team-owned service token, a revoked key) as
+ * a JSON 409 whose message says what to reconnect with.
+ */
+const providerProbeError: ErrorResponseHandler<
+  typeof PROVIDER_CREDENTIAL_REJECTED
+> = async (response) => {
+  if (response.status === 409) {
+    try {
+      const body: unknown = await response.clone().json();
+      if (
+        typeof body === 'object' &&
+        body !== null &&
+        'code' in body &&
+        body.code === 'provider_credential_rejected' &&
+        'message' in body &&
+        typeof body.message === 'string'
+      ) {
+        return { code: PROVIDER_CREDENTIAL_REJECTED, message: body.message };
+      }
+    } catch {
+      // A plain-text 409 is a disconnected runtime, not a refused credential.
+    }
+  }
+  return statusError(response.status);
+};
+
+/** The provider's reconnect instruction, when a probe failed on the caller's credential. */
+export function providerCredentialRejectedMessage(
+  error: unknown
+): string | undefined {
+  if (!(error instanceof ThrownResultError)) return;
+  return error.errors.find(
+    (entry) => entry.code === PROVIDER_CREDENTIAL_REJECTED
+  )?.message;
+}
+
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
   preview(sessionIds: string[]) {
@@ -75,30 +117,32 @@ export const agentHarnessServiceClient = {
   },
   /** Probes one agent target for its current, uncached model catalog. */
   loadAgentModels(request: LoadAgentModelsRequest, signal?: AbortSignal) {
-    return fetchWithToken<LoadAgentModelsResponse>(
-      `${agentHarnessHost}/agent-models/load`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        signal,
-      }
-    );
+    return fetchWithToken<
+      LoadAgentModelsResponse,
+      typeof PROVIDER_CREDENTIAL_REJECTED
+    >(`${agentHarnessHost}/agent-models/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+      errorResponseHandler: providerProbeError,
+    });
   },
 
   discoverAgentCapabilities(
     request: DiscoverAgentCapabilitiesRequest,
     signal?: AbortSignal
   ) {
-    return fetchWithToken<DiscoverAgentCapabilitiesResponse>(
-      `${agentHarnessHost}/agent-capabilities/discover`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        signal,
-      }
-    );
+    return fetchWithToken<
+      DiscoverAgentCapabilitiesResponse,
+      typeof PROVIDER_CREDENTIAL_REJECTED
+    >(`${agentHarnessHost}/agent-capabilities/discover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+      errorResponseHandler: providerProbeError,
+    });
   },
 
   /** Prepare a hidden, unprompted in-memory session for this browser. */

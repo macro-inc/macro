@@ -1,6 +1,11 @@
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import { ThrownResultError } from '@core/util/result';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { agentHarnessServiceClient } from './client';
+import {
+  agentHarnessServiceClient,
+  PROVIDER_CREDENTIAL_REJECTED,
+  providerCredentialRejectedMessage,
+} from './client';
 
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'agent-harness': 'https://harness.example.com' },
@@ -67,5 +72,64 @@ describe('repository listing', () => {
       'https://harness.example.com/agent-repositories/branches?repoUrl=https%3A%2F%2Fgithub.com%2Fmacro-inc%2Fmacro',
       { method: 'GET' }
     );
+  });
+});
+
+describe('provider probe errors', () => {
+  const reconnect =
+    'Cursor refused your connected API key. Reconnect Cursor in Settings with a personal or service-account Cursor API key.';
+
+  it.each([
+    [
+      'model discovery',
+      () => agentHarnessServiceClient.loadAgentModels({ harness: 'cursor' }),
+    ],
+    [
+      'capability discovery',
+      () =>
+        agentHarnessServiceClient.discoverAgentCapabilities({
+          harness: 'cursor',
+        }),
+    ],
+  ])(
+    'carries the reconnect message for a refused credential on %s',
+    async (_, call) => {
+      await call();
+      const error = await errorHandler()(
+        new Response(
+          JSON.stringify({
+            code: 'provider_credential_rejected',
+            message: reconnect,
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+      expect(error).toEqual({
+        code: PROVIDER_CREDENTIAL_REJECTED,
+        message: reconnect,
+      });
+      expect(
+        providerCredentialRejectedMessage(new ThrownResultError([error]))
+      ).toBe(reconnect);
+    }
+  );
+
+  it('keeps a disconnected runtime and other failures generic', async () => {
+    await agentHarnessServiceClient.loadAgentModels({ harness: 'cursor' });
+    const disconnected = await errorHandler()(
+      new Response('the requested harness is disconnected', {
+        status: 409,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    );
+    expect(disconnected.code).toBe('CONFLICT');
+    const failed = await errorHandler()(
+      new Response('model probe failed', { status: 502 })
+    );
+    expect(failed.code).toBe('HTTP_ERROR');
+    expect(
+      providerCredentialRejectedMessage(new ThrownResultError([failed]))
+    ).toBeUndefined();
+    expect(providerCredentialRejectedMessage(new Error('x'))).toBeUndefined();
   });
 });

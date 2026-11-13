@@ -2,6 +2,7 @@ import {
   type AgentModelTarget,
   useAgentModelsQuery,
 } from '@queries/agents/models';
+import { providerCredentialRejectedMessage } from '@service-agent-harness/client';
 import { ModelHarnessDto } from '@service-agent-harness/generated/schemas/modelHarnessDto';
 import type { Accessor } from 'solid-js';
 import type { RosterAgent } from '../core/roster';
@@ -60,7 +61,11 @@ export function createComposerModels(agent: Accessor<RosterAgent | undefined>) {
       if (!agent()?.runtime.connected)
         return 'Connect the runtime to load models.';
       if (!target()) return 'This runtime does not provide model discovery.';
-      if (query.isError) return 'Could not load models from this runtime.';
+      if (query.isError)
+        return (
+          providerCredentialRejectedMessage(query.error) ??
+          'Could not load models from this runtime.'
+        );
       if (query.isPending) return 'Loading models…';
       if (data()?.status === 'unsupported') {
         return 'This runtime does not provide model discovery.';
