@@ -2031,7 +2031,7 @@ export type SetupProgress = {
 /**
  * Steps a new computer goes through, in order.
  */
-export type SetupStep = 'creating' | 'booting' | 'connecting' | 'ready';
+export type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting' | 'ready';
 
 /**
  * A size with its resources, price and whether it can be bought now.

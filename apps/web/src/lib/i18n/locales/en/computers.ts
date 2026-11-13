@@ -53,6 +53,7 @@ export default {
   standard: 'Standard',
   large: 'Large',
   xl: 'XL',
+  stepBilling: 'Updating billing',
   stepCreating: 'Creating the computer',
   stepBooting: 'Starting up',
   stepConnecting: 'Connecting to Macro',

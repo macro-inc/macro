@@ -82,6 +82,7 @@ function currentStageId(computer: ComputerStatus): SetupStageId {
 
 export function setupStageLabel(stage: SetupStageId): string {
   return match(stage)
+    .with('billing', () => t('computers.stepBilling'))
     .with('creating', () => t('computers.stepCreating'))
     .with('booting', () => t('computers.stepBooting'))
     .with('connecting', () => t('computers.stepConnecting'))

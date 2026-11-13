@@ -359,7 +359,9 @@ impl Reservation {
         format!("computer-add:{}", self.id)
     }
 
-    /// A reservation as its team sees it: purchasing, setup step Creating.
+    /// A reservation as its team sees it: purchasing, setup step
+    /// Billing, since a reservation exists only while its charge is
+    /// being confirmed.
     pub fn status(&self) -> ComputerStatus {
         ComputerStatus {
             id: self.id,
@@ -375,7 +377,7 @@ impl Reservation {
                 Funding::Comped { reason } => Some(reason.clone()),
                 Funding::Stripe { .. } => None,
             },
-            setup: Some(SetupProgress::of(SetupStep::Creating)),
+            setup: Some(SetupProgress::of(SetupStep::Billing)),
             powered_on: true,
             cancels_at: None,
             can_undo_cancel: false,
@@ -622,6 +624,10 @@ pub enum BillingStatus {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SetupStep {
+    /// The purchase is being charged on the team's subscription: a
+    /// reservation whose subscription change is not confirmed yet (it may be
+    /// waiting on another change to the subscription to finish).
+    Billing,
     /// Creating the guest.
     Creating,
     /// Starting the guest operating system.
