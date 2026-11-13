@@ -493,7 +493,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         include_hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Add a missing email or link/switch a personal-provider contact company.
+    /// Add, remove or choose the primary of a contact's addresses, link or
+    /// switch a personal-provider contact's company, or unlink a company.
     /// Validate the domain command against the locked current record.
     /// Preserve history, sources and visibility; protect manually edited records
     /// from sync orphan cleanup. Reject same-team email conflicts and inaccessible

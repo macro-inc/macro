@@ -363,10 +363,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   CPU pinning; dev-only Docker guests still see host totals in `/proc` and
   `nproc`. Do not add lxcfs; Incus VMs see their real CPU and memory limits.
 
-- Demo Incus access uses Wolf's own Tailscale tailnet; production must use
-  the company tailnet. Admin access is Tailscale SSH via `root@runtime-dev-1`
-  (MagicDNS); serial console is break-glass. See `nix/hosts/README.md` for the
-  last-IAP switch, root-only auth-key file transfer, and tailnet rebuild commands.
+- The dev control plane reaches `runtime-dev-1`'s Incus API over WireGuard
+  through a gateway in the dev VPC; admin access is IAP SSH and serial console
+  is break-glass. See `nix/hosts/README.md` for the tunnel, the root-only key
+  file transfer, and rebuild commands.
 
 - Lifecycle state stores the phase tag at `state.phase.phase` and the billing
   tag at `state.billing.billing`; SQL selectors must read those nested tags.

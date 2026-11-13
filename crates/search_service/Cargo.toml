@@ -55,3 +55,6 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
