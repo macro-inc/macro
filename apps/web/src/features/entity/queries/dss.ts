@@ -77,8 +77,29 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
         );
       }
     );
+    // A sub-routine is listed under its parent, and goes with it.
+    queryClient.setQueryData(
+      scheduledActionKeys.subRoutines.queryKey,
+      (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.filter(
+          (item: { id?: string; sub_routine?: { parent_id?: string } }) =>
+            !(item.id && deletedIds.has(item.id)) &&
+            !(
+              item.sub_routine?.parent_id &&
+              deletedIds.has(item.sub_routine.parent_id)
+            )
+        );
+      }
+    );
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
+    });
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.subRoutines.queryKey,
+    });
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.children._def,
     });
     for (const scheduleId of deletedIds) {
       queryClient.removeQueries({
