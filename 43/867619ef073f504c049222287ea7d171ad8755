@@ -1,0 +1,47 @@
+crates/event_stream/AGENTS.md
+  s_8703f73ae8e37d::t_abf24fc3116cf3 104-107
+crates/event_stream/src/domain/fan_out/test.rs
+  s_8703f73ae8e37d::t_df51e3f718b306 1152-1321
+crates/event_stream/src/domain/filters.rs
+  s_8703f73ae8e37d::t_1842fb535e9282 3-11,37-65,73-75,113-114,118,124-125,130,154-158,211-215,219,234-237
+crates/event_stream/src/domain/filters/test.rs
+  s_8703f73ae8e37d::t_39eb414ae5b036 17-18,20,23-42,53-56,70,76,83,91-96,101-112,119,125
+crates/event_stream/src/domain/registry.rs
+  s_8703f73ae8e37d::t_78bce027e347fd 9,119-121,213-217
+crates/event_stream/src/domain/stream.rs
+  s_8703f73ae8e37d::t_26aeb5364873d4 11,13-14,21-22,258,500-504
+crates/event_stream/src/domain/stream/test.rs
+  s_8703f73ae8e37d::t_ed5d007dc28015 349,352,366-383
+crates/webhook/AGENTS.md
+  s_8703f73ae8e37d::t_04229b031f5402 46-49
+crates/webhook/README.md
+  s_8703f73ae8e37d::t_cd113924f74ced 201-204
+crates/webhook/src/domain/ingestion.rs
+  s_8703f73ae8e37d::t_0efe73137a79c8 23,555,564-566
+crates/webhook/src/domain/service.rs
+  s_8703f73ae8e37d::t_bb7168216a732f 19,21,24,32-33,38-52,78-92,145-151,155,163,168,174,183,212,303,308,315-316,396-403
+crates/webhook/src/domain/service/test.rs
+  s_8703f73ae8e37d::t_0f622b56763ddf 1442-1476
+packages/sdk/README.md
+  s_8703f73ae8e37d::t_0815a1d14f4abc 893,895-896
+services/document_storage_service/src/api/context.rs
+  s_8703f73ae8e37d::t_113b106b35e5b3 913-920
+services/document_storage_service/src/server.rs
+  s_8703f73ae8e37d::t_b233f91cf79243 1004-1007
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "43867619ef073f504c049222287ea7d171ad8755",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
