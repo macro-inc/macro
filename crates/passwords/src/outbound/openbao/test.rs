@@ -4,6 +4,7 @@ use std::{process::Command, sync::Mutex};
 use tracing::instrument::WithSubscriber;
 
 mod recovery;
+mod token_reuse;
 
 // This external protocol can finish after one adapter polling budget. Busy-only
 // reinvocation models its durable retry; each call already waits on namespace GET.
@@ -693,7 +694,7 @@ async fn status_pins_operation_to_metadata_version_during_independent_write() {
     let newer = uuid::Uuid::now_v7();
     let item = ItemId(uuid::Uuid::now_v7());
     let app = Router::new()
-        .route("/v1/auth/macro/login",post(|| async { axum::Json(serde_json::json!({"auth":{"client_token":"synthetic-token"}})) }))
+        .route("/v1/auth/macro/login",post(|| async { axum::Json(serde_json::json!({"auth":{"client_token":"synthetic-token","lease_duration":60}})) }))
         .route(&format!("/v1/passwords/metadata/{}",item.0),get(|| async {
             axum::Json(serde_json::json!({"data":{"current_version":1,"versions":{"1":{"created_time":"2026-01-01T00:00:00Z","deletion_time":"","destroyed":false}}}}))
         }))
