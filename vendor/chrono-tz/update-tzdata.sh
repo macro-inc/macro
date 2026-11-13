@@ -26,8 +26,10 @@ curl -fsSL -o "$work/tzdata.tar.gz.asc" "$url.asc"
 export GNUPGHOME="$work/gnupg"
 mkdir -m 700 "$GNUPGHOME"
 gpg --quiet --keyserver hkps://keyserver.ubuntu.com --recv-keys "$signing_key"
-if ! gpg --status-fd 1 --verify "$work/tzdata.tar.gz.asc" "$work/tzdata.tar.gz" 2>/dev/null |
-  grep -q "^\[GNUPG:\] VALIDSIG $signing_key "; then
+# Read gpg's whole status first: grep -q would stop reading at the match, and
+# gpg's next status line would then fail the pipeline under pipefail.
+status="$(gpg --status-fd 1 --verify "$work/tzdata.tar.gz.asc" "$work/tzdata.tar.gz" 2>/dev/null || true)"
+if ! grep -q "^\[GNUPG:\] VALIDSIG $signing_key " <<<"$status"; then
   echo "tzdata$release.tar.gz is not signed by $signing_key" >&2
   exit 1
 fi
@@ -42,13 +44,16 @@ fi
 # chrono-tz-build drops everything after '#' on each line, so removing comments
 # does not change the generated tables. The comments name contributors and
 # carry their email addresses, which the repository's PII scan rejects.
-rm -f "$crate"/tz/*
+# Build the new tz/ beside the download and copy it in only once it is
+# complete, so a failed run leaves the committed files as they were.
+mkdir "$work/tz"
 for f in "${files[@]}"; do
-  sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$work/src/$f" | grep -v '^$' >"$crate/tz/$f"
+  sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$work/src/$f" | grep -v '^$' >"$work/tz/$f"
 done
-cp "$work/src/LICENSE" "$crate/tz/LICENSE"
+cp "$work/src/LICENSE" "$work/tz/LICENSE"
 # chrono-tz-build reads IANA_TZDB_VERSION from the first release heading.
-grep -m1 "^Release $release - " "$work/src/NEWS" >"$crate/tz/NEWS"
+grep -m1 "^Release $release - " "$work/src/NEWS" >"$work/tz/NEWS"
+cp "$work"/tz/* "$crate/tz/"
 
 # tests/codegen.rs rewrites src/prebuilt and fails when the output changed;
 # the second run must pass.
