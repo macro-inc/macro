@@ -24,6 +24,9 @@ Graph and token spans, so find them by their fields:
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
 indexed, with their whole trace; successes are sampled.
 
+Re-importing folders whose first import was cut short has its own runbook:
+[Outlook folder re-import](outlook-folder-reimport.md).
+
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in
 production.

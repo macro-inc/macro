@@ -380,6 +380,13 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
         build.contains("just build-dev"),
         "build still produces the vite bundle: {build}"
     );
+    let package_cache = format!("WASM_PKG_CACHE_DIR: {}", vars::WASM_PKG_CACHE_DIR);
+    assert!(build.contains(&package_cache), "{build}");
+    assert_eq!(
+        yaml.matches("WASM_PKG_HTTP_CACHE: '1'").count(),
+        yaml.matches(&package_cache).count(),
+        "every PR step that reuses wasm packages shares them across nodes: {yaml}"
+    );
 }
 
 /// The Test legs, up to the next job.

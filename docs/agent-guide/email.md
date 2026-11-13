@@ -684,8 +684,11 @@ right after the subject's last word, in place of Copy subject, holds **Ask AI**,
 **Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate
 groups contain **Previous item** / **Next item**, icon-only **Ask Macro** / **Create
-task**, and the **Share** icon and label / copy-link icon. Mobile keeps its existing
-controls. The arrows
+task**, and the **Share** icon and label / copy-link icon. On touch (phones and
+tablets) the thread header has only Back, the subject, and the Info button:
+tapping the subject opens the title menu as a sheet, which holds every thread
+action including **Ask Macro**, **Create task**, and **Remind me**, and Info
+opens the details sheet. The arrows
 follow the current filtered list and disable at its ends. When the open thread
 leaves the list while it stays open (a reply in Signal marks it done, or another
 device archives it), they step from its former neighbours. Mark done advances in

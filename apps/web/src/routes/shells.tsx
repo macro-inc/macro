@@ -12,9 +12,11 @@ import {
   NO_SPLITS_TAB_HOST,
 } from '@components/app/tab-layout/DesktopTabsController';
 import { useIsAuthenticated } from '@core/auth';
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
+import { useMeetingMessageSync } from '@queries/messages/meeting-sync';
 import { ImperativeDialogHost } from '@ui';
 import { type JSX, onCleanup, onMount, type ParentProps, Show } from 'solid-js';
 import { LIKELY_NEXT_VIEWS, OTHER_APP_VIEWS } from './lazy-route-views';
@@ -96,8 +98,12 @@ export function withFormRespondShell(Page: () => JSX.Element) {
 export function withMeetingShell(Page: () => JSX.Element) {
   return function MeetingShell(): JSX.Element {
     useDismissBootShell();
+    const isAuthenticated = useIsAuthenticated();
     return (
       <PageContent>
+        <Show when={isAuthenticated() === true}>
+          <MeetingMessageSync />
+        </Show>
         <DesktopTabsController
           router={useSplitRouter()}
           manager={NO_SPLITS_TAB_HOST}
@@ -107,6 +113,11 @@ export function withMeetingShell(Page: () => JSX.Element) {
       </PageContent>
     );
   };
+}
+
+function MeetingMessageSync() {
+  useMeetingMessageSync(useUserId());
+  return null;
 }
 
 function AppPage(props: ParentProps) {

@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: fusionauth
+    app.kubernetes.io/name: fusionauth
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: fusionauth
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: fusionauth
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        macro.com/env-revision: reference
+      labels:
+        app: fusionauth
+        app.kubernetes.io/name: fusionauth
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: PLATFORM_FUSIONAUTH_DB_PASSWORD
+                  name: macro-env
+            - name: DATABASE_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: PLATFORM_FUSIONAUTH_DB_ROOT_PASSWORD
+                  name: macro-env
+            - name: DATABASE_ROOT_USERNAME
+              value: postgres
+            - name: DATABASE_URL
+              value: jdbc:postgresql://db:5432/fusionauth
+            - name: DATABASE_USERNAME
+              value: fusionauth
+            - name: FUSIONAUTH_APP_KICKSTART_FILE
+              value: /kickstart/kickstart.json
+            - name: FUSIONAUTH_APP_MEMORY
+              value: 512M
+            - name: FUSIONAUTH_APP_RUNTIME_MODE
+              value: development
+            - name: FUSIONAUTH_APP_SILENT_MODE
+              value: "true"
+            - name: FUSIONAUTH_APP_URL
+              value: http://fusionauth:9011
+            - name: SEARCH_TYPE
+              value: database
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/fusionauth:build.xjqi795qpnivw9qjb4j1b3bzfbjbll4s
+          imagePullPolicy: IfNotPresent
+          name: fusionauth
+          ports:
+            - containerPort: 9011
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  [ "$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: $FUSIONAUTH_API_KEY" "http://127.0.0.1:9011/api/application/$FUSIONAUTH_CLIENT_ID")" = 200 ]
+            failureThreshold: 3
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /var/lib/fusionauth/config
+              name: vol-config
+            - mountPath: /kickstart
+              name: file-kickstart
+              readOnly: true
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - chown -R 1000:1000 /var/lib/fusionauth/config
+          image: localhost:32550/macro/volume-permissions:build.x4bn243bk1zkmjzg3qqrbgknr2q6p8wg
+          name: permissions
+          securityContext:
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /var/lib/fusionauth/config
+              name: vol-config
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-config
+          persistentVolumeClaim:
+            claimName: fusionauth-config
+        - name: file-kickstart
+          secret:
+            secretName: fusionauth-kickstart
