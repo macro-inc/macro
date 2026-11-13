@@ -1062,9 +1062,10 @@ shows bring-ups, stacks, traces, error logs and logs by machine.
 includes request attributes, log messages and error text from your local data;
 the forwarder drops the collector's own telemetry and debug and trace logs. It
 keeps every trace with an error in its first 30 seconds and a tenth of the
-others (by trace id, so a kept trace is whole), and all other logs and metrics. Everything is tagged `host.name` = the machine name,
-`deployment.environment` = `local` (which keeps it off dev's dashboards and
-alerts) and, per stack, `macro.local.instance`; your run events gain
+others, keeping each trace whole, and all other logs and metrics. Everything
+is tagged `host.name` = the machine name, `deployment.environment` = `local`
+(which keeps it off dev's dashboards and alerts) and, per stack,
+`macro.local.instance` (also a metric label); your run events gain
 `host_name`. A machine running about ten stacks sends under one request a
 second.
 

@@ -61,11 +61,15 @@ otelcol.processor.filter "forwarder" {
 }
 
 // Every trace with an error in its first 30 seconds, and a tenth of the rest.
-// The tenth hashes the trace id, so a trace's spans that arrive after the
-// decision follow it.
+// Spans that arrive after the decision follow it: the caches remember it after
+// the trace leaves the buffer.
 otelcol.processor.tail_sampling "forwarder" {
   decision_wait = "30s"
   num_traces = 20000
+  decision_cache = {
+    sampled_cache_size     = 200000,
+    non_sampled_cache_size = 200000,
+  }
   policy {
     name = "errors"
     type = "status_code"
@@ -107,12 +111,13 @@ otelcol.processor.transform "forwarder" {
   }
   // The hosted Prometheus keeps datapoint attributes, not resource ones, as
   // series labels: without these, a local series and dev's series of the same
-  // service would be one series.
+  // service, or two stacks' on one machine, would be one series.
   metric_statements {
     context = "datapoint"
     statements = [
       `set(attributes["deployment.environment"], "local")`,
       `set(attributes["host.name"], "` + sys.env("MACRO_MACHINE_NAME") + `")`,
+      `set(attributes["macro.local.instance"], resource.attributes["macro.local.instance"]) where resource.attributes["macro.local.instance"] != nil`,
     ]
   }
   output {

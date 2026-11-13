@@ -163,7 +163,8 @@ forwarder on their machine (`docker/grafana-forwarder/config.alloy`) keeps every
 trace with an error in its first 30 seconds and a tenth of the rest, drops the
 local collector's own telemetry and debug and trace logs,
 and tags resources and metric datapoints with `host.name` (the machine's name)
-and `deployment.environment="local"`; services add `macro.local.instance`. Dev
+and `deployment.environment="local"`; services add `macro.local.instance`,
+which the forwarder copies onto metric datapoints. Dev
 dashboards and alerts select `dev`/`development`, so this data stays out of
 them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
 under `deployment_environment="local"`. The `Macro run_local` dashboard's
