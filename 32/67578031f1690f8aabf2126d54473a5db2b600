@@ -1,0 +1,30 @@
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/routine-mention.browser.e2e.ts
+  s_40002bd3b63a7c::t_4441e522eeeeed 27-40
+  s_566949b96aabd0::t_cc26e4f620a09c 41-42
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/routine-mention.tsx
+  s_40002bd3b63a7c::t_c63320dedf63d0 38-53,73-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3267578031f1690f8aabf2126d54473a5db2b600",
+  "prompts": {},
+  "sessions": {
+    "s_40002bd3b63a7c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de40e00c-9b42-4ec1-ac0a-a928cb29cc53",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_566949b96aabd0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4cf7ecf1-c75e-4236-a82c-0eb762650a3d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
