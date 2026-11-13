@@ -1,0 +1,19 @@
+packages/sdk/src/entities/dashboards/dashboard.ts
+  s_c6fe7b7c1d36f7::t_ae526e5d5d5b78 87-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8fb011e8cea789acfea42b31c70678ead44ecaf8",
+  "prompts": {},
+  "sessions": {
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
