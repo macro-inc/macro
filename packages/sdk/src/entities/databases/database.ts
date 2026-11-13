@@ -691,8 +691,10 @@ export class Database extends MacroEntity<DatabaseDetail> {
   }
 
   /**
-   * Add a table kept in sync with `source`, named after it, and run its
-   * first sync at once. Its writes act with the caller's access. Takes edit
+   * Add a table synced with `source`; the first sync runs at once.
+   *
+   * The table is named after the source. Its writes act with the caller's
+   * access. Takes edit
    * access; the source must be connected (see `macro.databases.syncSources()`).
    *
    * @write
@@ -710,8 +712,7 @@ export class Database extends MacroEntity<DatabaseDetail> {
   }
 
   /**
-   * Create a database, named after `source`, whose one table is kept in sync
-   * with it, and run its first sync at once.
+   * Create a database whose one table syncs with `source`; the first sync runs at once.
    */
   static async createSynced(
     client: MacroClient,

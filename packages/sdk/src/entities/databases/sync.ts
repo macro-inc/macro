@@ -31,6 +31,7 @@ export class NotionDataSource {
     return new NotionDataSource(id, title);
   }
 
+  /** This data source as plain JSON. */
   toJSON(): { id: string; title: string | undefined } {
     return { id: this.id, title: this.title };
   }
@@ -197,6 +198,7 @@ export class DatabaseSync {
     );
   }
 
+  /** This sync as plain JSON. */
   toJSON() {
     return {
       id: this.id,
