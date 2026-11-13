@@ -936,8 +936,16 @@ coordinating query lifetimes.
 
 A predicate that still trails the observed cache revision after three consecutive
 reads reports a cache error instead of holding initial hydration indefinitely.
-The existing network path then resolves missing entities; stale rows stay
-unpublished, and a later cache change can recover the local predicate.
+The existing network path then refreshes every requested identity once per
+failure, including previously cached rows. Existing rows remain visible while
+loading; a complete recovery response replaces them, including removals. A later
+cache change can recover the local predicate without publishing stale replies.
+A change received during the final stale read is deferred to a new task rather
+than lost or retried indefinitely in the same microtask chain. If the predicate
+recovers before its network refresh finishes, its confirmed removals remain
+hidden from late network responses and persistence acknowledgements. Identities
+not previously covered by the local view remain eligible for hydration; a later
+local re-addition releases the removal guard.
 
 Deletion markers use the same `typename:id` identity through pending mutations,
 retention, display filtering, and restore confirmation. Deleting or restoring a

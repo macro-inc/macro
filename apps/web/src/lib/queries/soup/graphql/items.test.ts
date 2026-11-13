@@ -566,6 +566,259 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it.each([
+    {
+      name: 'fully cached',
+      initiallyMissing: false,
+      inFlight: false,
+      count: 1,
+      earlyRecovery: false,
+    },
+    {
+      name: 'network hydrated',
+      initiallyMissing: true,
+      inFlight: false,
+      count: 1,
+      earlyRecovery: false,
+    },
+    {
+      name: 'in-flight full lookup',
+      initiallyMissing: false,
+      inFlight: true,
+      count: 1,
+      earlyRecovery: false,
+    },
+    {
+      name: 'short page limit',
+      initiallyMissing: false,
+      inFlight: false,
+      count: 3,
+      earlyRecovery: false,
+    },
+    {
+      name: 'local recovery before the network reply',
+      initiallyMissing: false,
+      inFlight: false,
+      count: 1,
+      earlyRecovery: true,
+    },
+    {
+      name: 'mixed missing and removed rows',
+      initiallyMissing: true,
+      inFlight: false,
+      count: 2,
+      earlyRecovery: true,
+      mixed: true,
+    },
+    {
+      name: 'late persistence acknowledgement',
+      initiallyMissing: false,
+      inFlight: false,
+      count: 1,
+      earlyRecovery: true,
+      persistenceAck: true,
+    },
+  ])(
+    'refreshes all requested identities after a stale predicate failure with $name rows',
+    async ({
+      initiallyMissing,
+      inFlight,
+      count,
+      earlyRecovery,
+      mixed,
+      persistenceAck,
+    }) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const cached = Array.from({ length: count }, (_, index) => ({
+        __typename: 'GraphqlSoupChannel' as const,
+        id: index === 0 ? 'cached' : `cached-${index}`,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }));
+      const allRows = [
+        ...cached,
+        ...(initiallyMissing ? [{ ...cached[0], id: 'missing' }] : []),
+      ];
+      const visibleIds = allRows.map((row) => row.id);
+      const unknown = mixed ? { ...cached[0], id: 'unknown' } : undefined;
+      const allIds = [...visibleIds, ...(unknown ? [unknown.id] : [])];
+      let removed = false;
+      const localResult = (revision: string): LiveQueryUpdate => ({
+        kind: 'live-query',
+        revision: parseCacheRevision(revision),
+        reset: true,
+        keys: (removed
+          ? mixed
+            ? visibleIds.filter((id) => id !== 'cached' && id !== 'missing')
+            : []
+          : visibleIds
+        ).map((id) => `GraphqlSoupChannel:${id}`),
+        upserts: (removed
+          ? mixed
+            ? cached.filter((row) => row.id !== 'cached')
+            : []
+          : cached
+        ).map((record) => ({
+          recordKey: `GraphqlSoupChannel:${record.id}`,
+          record,
+        })),
+        patches: [],
+        removed: [],
+        retainedKeys:
+          initiallyMissing && (!removed || mixed)
+            ? ['GraphqlSoupChannel:missing']
+            : [],
+        optimistic: false,
+      });
+      const changes = new Set<(revision: string) => void>();
+      let revision = REVISION_1;
+      let fails = false;
+      entityFilterMock.mockImplementation((args) => {
+        if (args.liveQuery?.release)
+          return Promise.resolve({ kind: 'unsupported' });
+        if (fails) return Promise.reject(new Error('stale predicate read'));
+        return Promise.resolve(localResult(revision));
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: (revision: string) => void) => {
+          changes.add(callback);
+          return () => changes.delete(callback);
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      const { query, dispose } = createRoot((dispose) => ({
+        query: createSoupLiveQuery(
+          () => ({ sortMethod: 'CREATED_AT', limit: 2 }),
+          () => ({
+            projection: 'channel-list',
+            cacheFirstEntities: allIds.map((entityId) => ({
+              entityType: 'CHANNEL',
+              entityId,
+            })),
+          })
+        ),
+        dispose,
+      }));
+      try {
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('ready'));
+        if (initiallyMissing) {
+          await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+          fake.executions[0].next(
+            graphqlSoupPage({ items: [allRows.at(-1)!], next_cursor: null })
+          );
+          await vi.waitFor(() =>
+            expect(query.data()?.map((row) => row.id)).toEqual(visibleIds)
+          );
+        } else {
+          expect(fake.executions).toHaveLength(0);
+        }
+        const priorRequests = fake.executions.length;
+        fails = true;
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('error'));
+        await vi.waitFor(() =>
+          expect(fake.executions).toHaveLength(priorRequests + 1)
+        );
+        const refreshedInput = JSON.stringify(
+          fake.executions[priorRequests].variables
+        );
+        for (const id of allIds)
+          expect(refreshedInput).toContain(`"channelId":"${id}"`);
+        expect(fake.executions[priorRequests].variables).toMatchObject({
+          input: { initial: { limit: allIds.length } },
+        });
+        expect(query.data()?.map((row) => row.id)).toEqual(visibleIds);
+        if (earlyRecovery) {
+          removed = true;
+          fails = false;
+          revision = REVISION_2;
+          for (const changed of changes) changed(REVISION_2);
+          await vi.waitFor(() => expect(query.cacheStatus()).toBe('ready'));
+          const surviving = mixed ? ['cached-1', 'missing', 'unknown'] : [];
+          expect(query.data()?.map((row) => row.id)).toEqual(
+            mixed ? ['cached-1', 'missing'] : []
+          );
+          const persistence = deferred<string | undefined>();
+          fake.executions[priorRequests].next(
+            graphqlSoupPage({
+              items: [...allRows, ...(unknown ? [unknown] : [])],
+              next_cursor: null,
+            }),
+            persistenceAck
+              ? { source: 'live-network', persistence: persistence.promise }
+              : undefined
+          );
+          await vi.waitFor(() => expect(query.isFetching()).toBe(false));
+          if (persistenceAck) {
+            persistence.resolve(REVISION_1);
+            await persistence.promise;
+          }
+          expect(
+            query
+              .data()
+              ?.map((row) => row.id)
+              .sort()
+          ).toEqual([...surviving].sort());
+          removed = false;
+          revision = '3';
+          for (const changed of changes) changed('3');
+          await vi.waitFor(() =>
+            expect(query.data()?.some((row) => row.id === 'cached')).toBe(true)
+          );
+          return;
+        }
+        fake.executions[priorRequests].next(
+          graphqlSoupPage({ items: allRows, next_cursor: null })
+        );
+        await vi.waitFor(() => expect(query.isFetching()).toBe(false));
+        expect(fake.executions).toHaveLength(priorRequests + 1);
+        fails = false;
+        revision = REVISION_2;
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('ready'));
+        expect(query.data()?.map((row) => row.id)).toEqual(allIds);
+        const refresh = inFlight ? query.refresh() : undefined;
+        const recoveryIndex = fake.executions.length;
+        fails = true;
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('error'));
+        if (refresh) {
+          fake.executions[recoveryIndex - 1].next(
+            graphqlSoupPage({ items: allRows, next_cursor: null })
+          );
+          await refresh;
+        }
+        await vi.waitFor(() =>
+          expect(fake.executions).toHaveLength(recoveryIndex + 1)
+        );
+        expect(fake.executions[recoveryIndex].context.requestPolicy).toBe(
+          'network-only'
+        );
+        expect(query.data()?.map((row) => row.id)).toEqual(allIds);
+        const remaining = allRows.filter((row) => row.id !== 'cached');
+        fake.executions[recoveryIndex].next(
+          graphqlSoupPage({ items: remaining, next_cursor: null })
+        );
+        await vi.waitFor(() => expect(query.isFetching()).toBe(false));
+        expect(query.data()?.map((row) => row.id)).toEqual(
+          remaining.map((row) => row.id)
+        );
+        for (const changed of changes) changed('3');
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('error'));
+        expect(fake.executions).toHaveLength(recoveryIndex + 1);
+        expect(query.data()?.map((row) => row.id)).toEqual(
+          remaining.map((row) => row.id)
+        );
+      } finally {
+        dispose();
+      }
+    }
+  );
+
   it('restarts missing-ID hydration after a cache generation changes', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
