@@ -102,6 +102,53 @@ pub(super) async fn track_pictures_in(
     Ok(())
 }
 
+/// The owner detached this chat: stop tracking (and release the files of)
+/// its own picture and its people's, for the owner's account, except those
+/// another of the owner's added chats still shows. Re-adding a chat makes a
+/// new chat that tracks them again.
+pub(super) async fn release_detached_pictures_in(
+    tx: &mut Transaction<'_, Postgres>,
+    chat: Uuid,
+) -> ExternalChatResult<()> {
+    let Some(detached) = sqlx::query!(
+        r#"SELECT d.user_id, array_append(
+            ARRAY(SELECT x.jid FROM whatsapp_identity_alias x WHERE x.chat_id = d.id), d.remote_id) AS "jids!"
+        FROM external_chat d WHERE d.id = $1 AND d.state = 'detached'"#,
+        chat
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(failure)?
+    else {
+        return Ok(());
+    };
+    // Serializes one owner's detaches: two chats sharing a person, detached
+    // at once, would each still see the other as added and both keep the row.
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('whatsapp-pictures-detach:' || $1, 0))",
+        detached.user_id
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?;
+    sqlx::query!(
+        r#"DELETE FROM whatsapp_profile_picture p
+        WHERE p.account_id IN (SELECT a.id FROM whatsapp_linked_account a WHERE a.user_id = $1)
+          AND p.jid = ANY($2)
+          AND NOT EXISTS (
+            SELECT 1 FROM external_chat c
+            WHERE c.user_id = $1 AND c.provider = 'whatsapp' AND c.state <> 'detached'
+              AND (c.remote_id = p.jid
+                OR EXISTS (SELECT 1 FROM whatsapp_identity_alias y WHERE y.chat_id = c.id AND y.jid = p.jid)))"#,
+        detached.user_id,
+        &detached.jids
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?;
+    Ok(())
+}
+
 /// Tell the owner's chats that show this person or group that its picture
 /// changed.
 async fn notify_picture_chats_in(

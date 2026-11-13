@@ -523,3 +523,165 @@ async fn storing_the_same_file_again_keeps_it(pool: PgPool) {
         "the stored file is never queued for deletion"
     );
 }
+
+/// The migration that tracks chats and people added before pictures were.
+const BACKFILL: &str = include_str!(
+    "../../../../../macro_db_client/migrations/20261113035846_whatsapp_profile_picture_backfill.sql"
+);
+const CUSTOMER_LID: &str = "100000000000001@lid";
+
+async fn backfill(pool: &PgPool) {
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::raw_sql(BACKFILL).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_backfill_tracks_added_chats_and_their_people_as_live_tracking_would(pool: PgPool) {
+    let (linked, session, _, binding, alice, bob) = adopted(&pool).await;
+    session
+        .ingest_event(alice, &text(1, CUSTOMER_JID, "3EB0AAAA", "Hello?"))
+        .await
+        .unwrap();
+    session
+        .ingest_event(alice, &text(2, BOB_JID, "3EB0BBBB", "On it"))
+        .await
+        .unwrap();
+    assert_eq!(
+        pictures(&pool, alice.account_id).await,
+        vec![
+            (GROUP.to_owned(), "due".to_owned(), None, None),
+            (CUSTOMER_JID.to_owned(), "due".to_owned(), None, None),
+        ],
+        "live tracking: the group and the customer, not Bob, a Macro user"
+    );
+    // The customer's LID became known; phones key people by it.
+    sqlx::query!(
+        "INSERT INTO whatsapp_identity_alias (chat_id, jid, person_id, evidence_account_id, verified_at)
+        SELECT chat_id, $2, person_id, evidence_account_id, now() FROM whatsapp_identity_alias WHERE chat_id = $1 AND jid = $3",
+        binding.id,
+        CUSTOMER_LID,
+        CUSTOMER_JID
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Before this change nothing was tracked; running it twice changes nothing.
+    sqlx::query!("DELETE FROM whatsapp_profile_picture")
+        .execute(&pool)
+        .await
+        .unwrap();
+    backfill(&pool).await;
+    backfill(&pool).await;
+    assert_eq!(
+        pictures(&pool, alice.account_id).await,
+        vec![
+            (CUSTOMER_LID.to_owned(), "due".to_owned(), None, None),
+            (GROUP.to_owned(), "due".to_owned(), None, None),
+        ],
+        "the owner's added group, and its non-Macro person once, by LID"
+    );
+    assert!(pictures(&pool, bob.account_id).await.is_empty());
+
+    linked
+        .chats
+        .detach(
+            &receipt::<MessageView>(ALICE, binding.id),
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    sqlx::query!("DELETE FROM whatsapp_profile_picture")
+        .execute(&pool)
+        .await
+        .unwrap();
+    backfill(&pool).await;
+    assert!(
+        pictures(&pool, alice.account_id).await.is_empty(),
+        "a detached chat is not tracked"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn detaching_a_chat_stops_checks_only_it_needed_and_releases_their_files(pool: PgPool) {
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
+    // Another of Alice's groups.
+    let other_group = GROUP.replace("0001@", "0002@");
+    let mut other = group(&[ALICE_JID, CUSTOMER_JID]);
+    other.jid = other_group.clone();
+    session
+        .update_groups(
+            alice,
+            &[group(&[ALICE_JID, BOB_JID, CUSTOMER_JID]), other],
+            true,
+        )
+        .await
+        .unwrap();
+    let second = linked
+        .chats
+        .add(
+            &person(ALICE),
+            &AddChat {
+                provider: ExternalChatProvider::WhatsApp,
+                remote_id: other_group.as_str().into(),
+                kind: ExternalChatKind::Group,
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    session
+        .ingest_event(alice, &text(1, CUSTOMER_JID, "3EB0AAAA", "Hello?"))
+        .await
+        .unwrap();
+    let mut elsewhere = text(2, CUSTOMER_JID, "3EB0BBBB", "Same here");
+    elsewhere.group_jid = other_group;
+    session.ingest_event(alice, &elsewhere).await.unwrap();
+    let file = Uuid::now_v7();
+    sqlx::query!(
+        "UPDATE whatsapp_profile_picture SET state = 'ready', picture_id = '1700000001', static_file_id = $2 WHERE jid = $1",
+        CUSTOMER_JID,
+        file
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    linked
+        .chats
+        .detach(
+            &receipt::<MessageView>(ALICE, second.id),
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        pictures(&pool, alice.account_id).await,
+        vec![
+            (GROUP.to_owned(), "due".to_owned(), None, None),
+            (
+                CUSTOMER_JID.to_owned(),
+                "ready".to_owned(),
+                Some("1700000001".to_owned()),
+                Some(file)
+            ),
+        ],
+        "the customer is still shown by the first group"
+    );
+    assert!(released_files(&pool).await.is_empty());
+
+    linked
+        .chats
+        .detach(
+            &receipt::<MessageView>(ALICE, binding.id),
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    assert!(
+        pictures(&pool, alice.account_id).await.is_empty(),
+        "no added chat shows them: nothing is checked"
+    );
+    assert_eq!(released_files(&pool).await, [file]);
+}
