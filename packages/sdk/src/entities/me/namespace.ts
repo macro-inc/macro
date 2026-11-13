@@ -1,5 +1,7 @@
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Dashboard } from '../dashboards/dashboard';
+import { DashboardNamespace } from '../dashboards/namespace';
 import { StaticImage } from '../images/image';
 import type { ProfilePicture } from '../users/profile-picture';
 import { User } from '../users/user';
@@ -116,5 +118,40 @@ export class MeNamespace {
         }),
       );
     }
+  }
+
+  /**
+   * Make a dashboard you can edit your home dashboard: the one people see on
+   * your page in the app. An agent sets its own.
+   *
+   * @write
+   * @idempotent
+   */
+  async setHomeDashboard(dashboard: Dashboard): Promise<void> {
+    unwrap(
+      await this.client.storage.setHomeDashboard({
+        body: { dashboardId: dashboard.id },
+      }),
+    );
+  }
+
+  /**
+   * Stop showing a home dashboard on your page. The dashboard itself stays.
+   *
+   * @write
+   * @idempotent
+   */
+  async clearHomeDashboard(): Promise<void> {
+    unwrap(await this.client.storage.clearHomeDashboard());
+  }
+
+  /**
+   * Your home dashboard, or `undefined` when you have none.
+   *
+   * @readonly
+   */
+  async homeDashboard(): Promise<Dashboard | undefined> {
+    const me = await User.me(this.client);
+    return new DashboardNamespace(this.client).home(me);
   }
 }

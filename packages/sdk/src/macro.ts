@@ -12,6 +12,7 @@ import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
 import { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 import { CrmNamespace } from './entities/crm/namespace';
+import { DashboardNamespace } from './entities/dashboards/namespace';
 import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
 import { EmailNamespace } from './entities/email/namespace';
@@ -227,6 +228,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Your own profile: set your name and profile picture. */
   readonly me: MeNamespace;
 
+  /** Saved, versioned views shown full-page in the app, such as an agent's home dashboard. */
+  readonly dashboards: DashboardNamespace;
+
   readonly notifications: NotificationNamespace;
 
   readonly pins: PinsNamespace;
@@ -276,6 +280,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.apiKeys = new ApiKeyNamespace(client);
     this.accountManagers = new AccountManagerNamespace(client);
     this.me = new MeNamespace(client);
+    this.dashboards = new DashboardNamespace(client);
     this.harnesses = new HarnessNamespace(client);
     this.meetings = new MeetingNamespace(client);
     this.githubPullRequests = new GithubPullRequestNamespace(client);
@@ -450,6 +455,14 @@ export {
   type PipelineOptionCounts,
   type PipelineRecordInput,
 } from './entities/crm/pipeline-entry';
+export {
+  Dashboard,
+  type DashboardVersionEntry,
+  type DashboardView,
+  type DashboardWidget,
+  type UpdateDashboardOptions,
+} from './entities/dashboards/dashboard';
+export { DashboardNamespace } from './entities/dashboards/namespace';
 export type {
   DatabaseQueryOptions,
   DatabaseQueryResult,

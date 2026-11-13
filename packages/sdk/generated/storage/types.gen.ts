@@ -286,7 +286,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat' | 'dashboard';
 };
 
 /**
@@ -4199,7 +4199,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat' | 'dashboard';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -5241,6 +5241,19 @@ export type CreateCrmTeamContactRequest = {
      * Display name for the contact.
      */
     name: string;
+};
+
+/**
+ * A new dashboard.
+ */
+export type CreateDashboardBody = {
+    /**
+     * A dynamic-UI view, in the format of the PresentView schema; widgets may
+     * carry a stable `id` so they can be patched later.
+     */
+    view: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -6300,6 +6313,140 @@ export type CustomSpeakerAssignment = {
      * The diarization label whose rows this assignment targets.
      */
     diarizedSpeakerId: string;
+};
+
+/**
+ * A dashboard as one caller reads it.
+ */
+export type Dashboard = {
+    /**
+     * The caller's access.
+     */
+    accessLevel: AccessLevel;
+    /**
+     * When it was created.
+     */
+    createdAt: string;
+    /**
+     * Its id.
+     */
+    id: DashboardId;
+    /**
+     * Who owns it (`macro|...`).
+     */
+    ownerId: string;
+    /**
+     * The view's title, when it has one.
+     */
+    title?: string | null;
+    /**
+     * When its current version was saved.
+     */
+    updatedAt: string;
+    /**
+     * The current version; every save makes a new one.
+     */
+    version: Version;
+    /**
+     * The dynamic-UI view, decoded and checked when it was saved.
+     */
+    view: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * A dashboard's id.
+ */
+export type DashboardId = string;
+
+/**
+ * The caller's dashboards.
+ */
+export type DashboardList = {
+    /**
+     * Most recently saved first.
+     */
+    dashboards: Array<DashboardSummary>;
+};
+
+/**
+ * A dashboard in a list.
+ */
+export type DashboardSummary = {
+    /**
+     * Its id.
+     */
+    id: DashboardId;
+    /**
+     * Who owns it (`macro|...`).
+     */
+    ownerId: string;
+    /**
+     * The current view's title.
+     */
+    title?: string | null;
+    /**
+     * When its current version was saved.
+     */
+    updatedAt: string;
+    /**
+     * The current version.
+     */
+    version: Version;
+};
+
+/**
+ * One saved version with the view it saved.
+ */
+export type DashboardVersion = {
+    /**
+     * Who saved it (`macro|...`).
+     */
+    authorId: string;
+    /**
+     * When it was saved.
+     */
+    createdAt: string;
+    /**
+     * The version.
+     */
+    version: Version;
+    /**
+     * The view as that save left it, undecoded: an old version may not
+     * match today's schema.
+     */
+    view: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * A dashboard's history.
+ */
+export type DashboardVersionList = {
+    /**
+     * Newest first, at most 100.
+     */
+    versions: Array<DashboardVersionSummary>;
+};
+
+/**
+ * One saved version, without its view.
+ */
+export type DashboardVersionSummary = {
+    /**
+     * Who saved it (`macro|...`).
+     */
+    authorId: string;
+    /**
+     * When it was saved.
+     */
+    createdAt: string;
+    /**
+     * The version.
+     */
+    version: Version;
 };
 
 /**
@@ -9342,7 +9489,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat' | 'dashboard';
 };
 
 /**
@@ -10556,7 +10703,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat' | 'dashboard';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -10578,7 +10725,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat' | 'dashboard';
 };
 
 /**
@@ -15733,6 +15880,23 @@ export type PatchChannelRequest = {
 };
 
 /**
+ * One pane's new widget.
+ */
+export type PatchDashboardPaneBody = {
+    /**
+     * Refuse the save when the current version is no longer this one.
+     */
+    expectedVersion?: number | null;
+    /**
+     * The widget replacing the pane; give it the pane's id to keep the pane
+     * addressable.
+     */
+    widget: {
+        [key: string]: unknown;
+    };
+};
+
+/**
  * Request to change a registered harness. Omitted fields stay as they are.
  */
 export type PatchHarnessRequest = {
@@ -17955,6 +18119,16 @@ export type SetHarnessTeamAccessRequest = {
 };
 
 /**
+ * The caller's new home dashboard.
+ */
+export type SetHomeDashboardBody = {
+    /**
+     * A dashboard the caller can edit.
+     */
+    dashboardId: DashboardId;
+};
+
+/**
  * How a cell's options or references relate to a set of them. The first
  * two fit a column holding one value, the last three one holding several.
  */
@@ -18031,7 +18205,7 @@ export type ShareEntity = {
 /**
  * An entity type with an existing Share surface.
  */
-export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat' | 'harness';
+export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat' | 'harness' | 'dashboard';
 
 export type SharePermissionV2 = {
     /**
@@ -22172,6 +22346,22 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
+ * A whole new view.
+ */
+export type UpdateDashboardBody = {
+    /**
+     * Refuse the save when the current version is no longer this one.
+     */
+    expectedVersion?: number | null;
+    /**
+     * The view.
+     */
+    view: {
+        [key: string]: unknown;
+    };
+};
+
+/**
  * Entries to change.
  */
 export type UpdateEntriesRequest = {
@@ -22616,6 +22806,11 @@ export type Vec = Array<{
      */
     ids?: Array<string> | null;
 }>;
+
+/**
+ * A saved version number; the first save is 1.
+ */
+export type Version = number;
 
 /**
  * A table and its version.
@@ -28070,6 +28265,323 @@ export type PutCrmTeamStagesResponses = {
 
 export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
 
+export type ListDashboardsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/dashboards';
+};
+
+export type ListDashboardsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListDashboardsError = ListDashboardsErrors[keyof ListDashboardsErrors];
+
+export type ListDashboardsResponses = {
+    200: DashboardList;
+};
+
+export type ListDashboardsResponse = ListDashboardsResponses[keyof ListDashboardsResponses];
+
+export type CreateDashboardData = {
+    body: CreateDashboardBody;
+    path?: never;
+    query?: never;
+    url: '/dashboards';
+};
+
+export type CreateDashboardErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateDashboardError = CreateDashboardErrors[keyof CreateDashboardErrors];
+
+export type CreateDashboardResponses = {
+    200: Dashboard;
+};
+
+export type CreateDashboardResponse = CreateDashboardResponses[keyof CreateDashboardResponses];
+
+export type ClearHomeDashboardData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/dashboards/home';
+};
+
+export type ClearHomeDashboardErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClearHomeDashboardError = ClearHomeDashboardErrors[keyof ClearHomeDashboardErrors];
+
+export type ClearHomeDashboardResponses = {
+    204: void;
+};
+
+export type ClearHomeDashboardResponse = ClearHomeDashboardResponses[keyof ClearHomeDashboardResponses];
+
+export type SetHomeDashboardData = {
+    body: SetHomeDashboardBody;
+    path?: never;
+    query?: never;
+    url: '/dashboards/home';
+};
+
+export type SetHomeDashboardErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetHomeDashboardError = SetHomeDashboardErrors[keyof SetHomeDashboardErrors];
+
+export type SetHomeDashboardResponses = {
+    204: void;
+};
+
+export type SetHomeDashboardResponse = SetHomeDashboardResponses[keyof SetHomeDashboardResponses];
+
+export type GetHomeDashboardData = {
+    body?: never;
+    path: {
+        /**
+         * The account (`macro|...`).
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/dashboards/home/{user_id}';
+};
+
+export type GetHomeDashboardErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetHomeDashboardError = GetHomeDashboardErrors[keyof GetHomeDashboardErrors];
+
+export type GetHomeDashboardResponses = {
+    200: Dashboard;
+};
+
+export type GetHomeDashboardResponse = GetHomeDashboardResponses[keyof GetHomeDashboardResponses];
+
+export type DeleteDashboardData = {
+    body?: never;
+    path: {
+        /**
+         * Dashboard id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/dashboards/{id}';
+};
+
+export type DeleteDashboardErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteDashboardError = DeleteDashboardErrors[keyof DeleteDashboardErrors];
+
+export type DeleteDashboardResponses = {
+    204: void;
+};
+
+export type DeleteDashboardResponse = DeleteDashboardResponses[keyof DeleteDashboardResponses];
+
+export type GetDashboardData = {
+    body?: never;
+    path: {
+        /**
+         * Dashboard id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/dashboards/{id}';
+};
+
+export type GetDashboardErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDashboardError = GetDashboardErrors[keyof GetDashboardErrors];
+
+export type GetDashboardResponses = {
+    200: Dashboard;
+};
+
+export type GetDashboardResponse = GetDashboardResponses[keyof GetDashboardResponses];
+
+export type UpdateDashboardData = {
+    body: UpdateDashboardBody;
+    path: {
+        /**
+         * Dashboard id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/dashboards/{id}';
+};
+
+export type UpdateDashboardErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateDashboardError = UpdateDashboardErrors[keyof UpdateDashboardErrors];
+
+export type UpdateDashboardResponses = {
+    200: Dashboard;
+};
+
+export type UpdateDashboardResponse = UpdateDashboardResponses[keyof UpdateDashboardResponses];
+
+export type PatchDashboardPaneData = {
+    body: PatchDashboardPaneBody;
+    path: {
+        /**
+         * Dashboard id.
+         */
+        id: string;
+        /**
+         * The pane's widget id.
+         */
+        pane_id: string;
+    };
+    query?: never;
+    url: '/dashboards/{id}/panes/{pane_id}';
+};
+
+export type PatchDashboardPaneErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchDashboardPaneError = PatchDashboardPaneErrors[keyof PatchDashboardPaneErrors];
+
+export type PatchDashboardPaneResponses = {
+    200: Dashboard;
+};
+
+export type PatchDashboardPaneResponse = PatchDashboardPaneResponses[keyof PatchDashboardPaneResponses];
+
+export type ListDashboardVersionsData = {
+    body?: never;
+    path: {
+        /**
+         * Dashboard id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/dashboards/{id}/versions';
+};
+
+export type ListDashboardVersionsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListDashboardVersionsError = ListDashboardVersionsErrors[keyof ListDashboardVersionsErrors];
+
+export type ListDashboardVersionsResponses = {
+    200: DashboardVersionList;
+};
+
+export type ListDashboardVersionsResponse = ListDashboardVersionsResponses[keyof ListDashboardVersionsResponses];
+
+export type GetDashboardVersionData = {
+    body?: never;
+    path: {
+        /**
+         * Dashboard id.
+         */
+        id: string;
+        /**
+         * Version number.
+         */
+        number: number;
+    };
+    query?: never;
+    url: '/dashboards/{id}/versions/{number}';
+};
+
+export type GetDashboardVersionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDashboardVersionError = GetDashboardVersionErrors[keyof GetDashboardVersionErrors];
+
+export type GetDashboardVersionResponses = {
+    200: DashboardVersion;
+};
+
+export type GetDashboardVersionResponse = GetDashboardVersionResponses[keyof GetDashboardVersionResponses];
+
+export type RevertDashboardData = {
+    body?: never;
+    path: {
+        /**
+         * Dashboard id.
+         */
+        id: string;
+        /**
+         * Version number.
+         */
+        number: number;
+    };
+    query?: never;
+    url: '/dashboards/{id}/versions/{number}/revert';
+};
+
+export type RevertDashboardErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevertDashboardError = RevertDashboardErrors[keyof RevertDashboardErrors];
+
+export type RevertDashboardResponses = {
+    200: Dashboard;
+};
+
+export type RevertDashboardResponse = RevertDashboardResponses[keyof RevertDashboardResponses];
+
 export type ListDatabasesData = {
     body?: never;
     path?: never;
@@ -31611,7 +32123,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat' | 'dashboard'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -31680,7 +32192,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat' | 'dashboard';
         /**
          * The id of the favorited entity.
          */

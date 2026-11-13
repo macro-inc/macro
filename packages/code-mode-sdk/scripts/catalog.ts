@@ -44,6 +44,7 @@ export const entityDirectories: readonly string[] = [
   'properties',
   'referrals',
   'saved-views',
+  'dashboards',
   'spreadsheets',
   'tasks',
   'teams',

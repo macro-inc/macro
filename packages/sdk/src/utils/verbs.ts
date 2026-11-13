@@ -232,7 +232,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getProjectUserAccessLevel getProjectPermissionsV2 getEmailFollowup getDocumentPermissionsV2
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
-      exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
+      exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition getDashboard getDashboardVersion getHomeDashboard readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -245,7 +245,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       listHarnessAgents listHarnessSessions listInitiatives messageTimeline messageTimelineEntries
       getPinsHandler getProjectContentHandler recentlyDeleted listEmailReminders listUserApiKeys
       listWebhooks whatsappChats
-      getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
+      getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives listDashboards listDashboardVersions
     `,
     searched: `
       searchContacts taskSimilaritySearchHandler
@@ -268,7 +268,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
-      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
+      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall createDashboard
     `,
     edited: `
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
@@ -282,7 +282,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown updateDashboard patchDashboardPane setHomeDashboard clearHomeDashboard
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -291,7 +291,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       externalChatRemove deleteDatabaseWebhook deleteSelfHarness deleteHarness deleteInitiative
       entityMessageDeleteMessage entityMessageDeleteThread deleteProjectHandler
       permanentlyDeleteProject deleteUserApiKey deleteWebhook
-      deleteSavedViewDefinition
+      deleteSavedViewDefinition deleteDashboard
     `,
     removed: `
       removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler
@@ -313,7 +313,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     uploaded: 'uploadFile externalChatUpload',
     archived: 'trashCrmPipeline',
-    restored: 'revertDeleteDocument revertDeleteProject',
+    restored: 'revertDeleteDocument revertDeleteProject revertDashboard',
     shared: `
       meetingShare toggleShareWithTeam shareCrmPipeline accessRequestsDirect
       shareWithChannel
