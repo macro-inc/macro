@@ -126,12 +126,24 @@ export function useUsersMention(
     const term = searchTerm();
     const list = usersList();
     if (usesDirectory()) {
-      const personal = list.filter((item) => item.personOrder !== undefined);
-      const extras = userSearch()(
-        list.filter((item) => item.personOrder === undefined),
+      // Bots (Macro among them) lead the list, as they do in scoped composers
+      // where the bot boost decides the order. The personal window keeps its
+      // own order, so a bot is lifted out of it and ranked on its own instead
+      // of taking a window position or trailing the window.
+      const search = userSearch();
+      const bots = search(list.filter(isBotMentionUser), term).map(
+        ({ item }) => item
+      );
+      const people = list.filter((item) => !isBotMentionUser(item));
+      const personal = people.filter((item) => item.personOrder !== undefined);
+      const extras = search(
+        people.filter((item) => item.personOrder === undefined),
         term
       ).map(({ item }) => item);
-      return preservePersonOrder([...personal, ...extras], list);
+      return [
+        ...bots,
+        ...preservePersonOrder([...personal, ...extras], people),
+      ];
     }
     return userSearch()(list, term).map(({ item }) => item);
   });

@@ -43,6 +43,11 @@ const sean: IUser = {
   name: 'Sean Aye',
   email: 'sean@macro.com',
 };
+const macroBot: IUser = {
+  id: 'bot|00000000-0000-0000-0000-00000000a1a1',
+  name: 'Macro',
+  email: 'Macro',
+};
 const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
   id: user.id,
   data: user,
@@ -183,6 +188,37 @@ it('decorates only the current window and never widens an empty or explicit rost
     } finally {
       dispose();
     }
+  });
+});
+
+it('lists Macro ahead of the personal window in directory mentions, as scoped composers do', () => {
+  createRoot((dispose) => {
+    const [searchTerm, setSearchTerm] = createSignal('');
+    // The directory window carries person order; the bot may sit outside it
+    // or inside it, and leads either way.
+    for (const botOrder of [undefined, 2]) {
+      mocks.users = () => [
+        { ...userItem(sean, new Date()), personOrder: 0 },
+        { ...userItem(seamus), personOrder: 1 },
+        { ...userItem(macroBot), personOrder: botOrder },
+      ];
+      const directory = useUsersMention({ searchTerm });
+      expect(directory.users().map((item) => item.id)).toEqual([
+        macroBot.id,
+        sean.id,
+        seamus.id,
+      ]);
+      setSearchTerm('mac');
+      expect(directory.users()[0].id).toBe(macroBot.id);
+      setSearchTerm('');
+    }
+
+    const scoped = useUsersMention({
+      searchTerm,
+      users: () => [sean, seamus, macroBot],
+    });
+    expect(scoped.users()[0].id).toBe(macroBot.id);
+    dispose();
   });
 });
 
