@@ -1,0 +1,21 @@
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_699e95788b47ad::t_3e7871edb14a8c 16718,16722,16724,16749,16753,16755
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_699e95788b47ad::t_55337575c9d1ac 11885,11902,11957,11974
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cdb35a59ce2d4b3e6fe2e1499c57422a8f2a12c1",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
