@@ -792,15 +792,11 @@ async fn documents_access_matches_the_source_list_form(pool: PgPool) -> anyhow::
         let user_id = viewer
             .user_id()
             .ok_or_else(|| anyhow::anyhow!("{} is not a user", viewer.label))?;
-        let old: std::collections::BTreeMap<_, _> = source_list_oracle::get_documents_access(
-            &pool,
-            &documents,
-            &viewer.sources,
-            &user_id,
-        )
-        .await?
-        .into_iter()
-        .collect();
+        let old: std::collections::BTreeMap<_, _> =
+            source_list_oracle::get_documents_access(&pool, &documents, &viewer.sources, &user_id)
+                .await?
+                .into_iter()
+                .collect();
         let new: std::collections::BTreeMap<_, _> =
             get_documents_access(&pool, &documents, user_id.as_ref())
                 .await?

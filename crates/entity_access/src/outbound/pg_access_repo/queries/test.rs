@@ -451,7 +451,9 @@ fn no_statement_binds_a_source_list() {
     );
     assert!(files.len() > 20, "found only {} source files", files.len());
     assert!(
-        files.iter().any(|path| path.ends_with("documents_access.sql")),
+        files
+            .iter()
+            .any(|path| path.ends_with("documents_access.sql")),
         "the batched document statement is not scanned"
     );
     let found: Vec<String> = files

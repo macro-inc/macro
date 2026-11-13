@@ -116,12 +116,9 @@ impl AccessRepository for PgAccessRepository {
         let mut uuids: Vec<Uuid> = by_uuid.keys().copied().collect();
         uuids.sort_unstable();
         for batch in uuids.chunks(DOCUMENTS_PER_ACCESS_STATEMENT) {
-            let found = queries::document_access::get_documents_access(
-                &self.pool,
-                batch,
-                user_id.as_ref(),
-            )
-            .await?;
+            let found =
+                queries::document_access::get_documents_access(&self.pool, batch, user_id.as_ref())
+                    .await?;
             for (id, level) in found {
                 for document_id in by_uuid.get(&id).into_iter().flatten() {
                     levels.insert((*document_id).clone(), level);
