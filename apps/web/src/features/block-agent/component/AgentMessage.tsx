@@ -305,17 +305,23 @@ function replySentAt(message: FoldedMessage): string | undefined {
   return message.postedAt;
 }
 
-/**
- * What the working row says: the last part names the work — a tool call or
- * a plan — and a bare turn is just working.
- */
+/** What the working row says: a plan names the work; anything else is working. */
 function workingLabel(message: FoldedMessage): string {
   const last = message.parts.at(-1);
   if (last === undefined) return 'Working';
   return match(last)
-    .with({ kind: 'tool_use' }, () => 'Running tools')
     .with({ kind: 'plan' }, () => 'Planning')
     .otherwise(() => 'Working');
+}
+
+/**
+ * Whether the turn ends in a group of tool calls, which then carries the
+ * session's live line as the turn's one working indicator. A call that stands
+ * outside a group (a subagent, a presented view) carries no line. Only asked
+ * while the working row would show, so the last part is never a thought.
+ */
+function inToolRun(message: FoldedMessage): boolean {
+  return segmentParts(message.parts).at(-1)?.kind === 'tools';
 }
 
 /**
@@ -417,6 +423,13 @@ export function Message(props: {
   inFlight: boolean;
 }) {
   const inFlight = () => props.inFlight;
+  const liveLine = useSessionActivity(() => props.message.agentSessionId);
+  // One working indicator per turn: the live line on the newest run, or else
+  // a single working row.
+  const showsWorkingRow = () =>
+    inFlight() &&
+    showsWorkingLine(props.message) &&
+    !(liveLine() && inToolRun(props.message));
   const failure = () =>
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
@@ -463,9 +476,9 @@ export function Message(props: {
                 </Show>
               )}
             </Index>
-            {/* The turn is open with nothing to read yet — a ripple and a label
-              naming the work, so the wait reads as work rather than a stall. */}
-            <Show when={inFlight() && showsWorkingLine(props.message)}>
+            {/* The turn is open with nothing to read yet — a ripple and a working
+              label, so the wait reads as work rather than a stall. */}
+            <Show when={showsWorkingRow()}>
               <WorkingLine label={workingLabel(props.message)} />
             </Show>
             {/* A turn the runtime errored is something that happened to the

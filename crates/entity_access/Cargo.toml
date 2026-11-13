@@ -26,7 +26,7 @@ explain_binary = [
   "ports",
 ]
 inbound = ["axum", "ports"]
-outbound = ["dep:cached", "ports"]
+outbound = ["dep:cached", "dep:single_flight", "ports"]
 ports = ["dep:tokio"]
 schema = ["dep:utoipa"]
 
@@ -67,6 +67,7 @@ utoipa = { workspace = true, optional = true }
 
 # Database
 cached = { workspace = true, optional = true }
+single_flight = { path = "../single_flight", optional = true }
 sqlx = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

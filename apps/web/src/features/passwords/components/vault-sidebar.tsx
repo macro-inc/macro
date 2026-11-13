@@ -37,6 +37,7 @@ import {
   type PasswordItem,
   type PasswordKind,
 } from '../core/types';
+import type { PasswordFolderDrag } from '../primitives/folder-drag';
 import { NewItemMenu } from './new-item-menu';
 
 const COLLECTIONS = [
@@ -45,8 +46,6 @@ const COLLECTIONS = [
   { id: 'recent', icon: ClockIcon },
   { id: 'shared', icon: UsersIcon },
 ] as const;
-
-export const PASSWORD_ITEM_DRAG_TYPE = 'application/x-macro-password';
 
 export type FolderEditing =
   | { kind: 'rename'; id: string }
@@ -61,39 +60,6 @@ export type FolderCommands = {
   move: (id: string, parentId: string | null) => Promise<boolean | undefined>;
   moveItem: (itemId: string, folderId: string | null) => Promise<void>;
 };
-
-/** Dropping a password row onto a folder (or the root) files it there. */
-function DropTarget(
-  props: ParentProps<{
-    onDrop: (itemId: string) => void;
-  }>
-) {
-  const [over, setOver] = createSignal(false);
-  return (
-    <div
-      class={cn(
-        'rounded-lg',
-        over() && 'outline-2 -outline-offset-2 outline-accent'
-      )}
-      onDragOver={(event) => {
-        if (!event.dataTransfer?.types.includes(PASSWORD_ITEM_DRAG_TYPE))
-          return;
-        event.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(event) => {
-        setOver(false);
-        const id = event.dataTransfer?.getData(PASSWORD_ITEM_DRAG_TYPE);
-        if (!id) return;
-        event.preventDefault();
-        props.onDrop(id);
-      }}
-    >
-      {props.children}
-    </div>
-  );
-}
 
 /** Inline name field used for new folders and renames. */
 export function FolderNameField(props: {
@@ -361,10 +327,12 @@ export function VaultSidebarContent(props: {
   onToggle: (id: string) => void;
   onFilter: (filter: PasswordFilter) => void;
   commands: FolderCommands;
+  drag?: PasswordFolderDrag;
   onLock?: () => void;
 }) {
   const [open, setOpen] = createSignal(true);
   const tree = createMemo(() => buildFolderTree(props.folders));
+  const rootTarget = props.drag?.target(() => null);
   const selectedFolder = () =>
     props.filter.startsWith('folder:') ? props.filter.slice(7) : undefined;
   const folderById = (id: string) =>
@@ -388,45 +356,41 @@ export function VaultSidebarContent(props: {
         : undefined;
     return (
       <Show when={folder()} fallback={rowProps.children}>
-        {(current) => (
-          <ContextMenu>
-            <ContextMenu.Trigger class="block w-full">
-              <DropTarget
-                onDrop={(itemId) =>
-                  fireAndForget(
-                    props.commands.moveItem(itemId, current().id),
-                    'passwords-item-move'
-                  )
-                }
-              >
-                {rowProps.children}
-              </DropTarget>
-            </ContextMenu.Trigger>
-            <ContextMenu.Portal>
-              <ContextMenuContent>
-                <FolderActionItems
-                  onSubfolder={() => startSubfolder(current().id)}
-                  onRename={() =>
-                    props.onEditing({ kind: 'rename', id: current().id })
-                  }
-                  onMove={() =>
-                    props.onEditing({ kind: 'move', id: current().id })
-                  }
-                  onDelete={() =>
-                    props.onEditing({ kind: 'delete', id: current().id })
-                  }
-                  item={(item) => (
-                    <MenuItem
-                      text={item.text}
-                      class={item.danger ? 'text-failure-ink' : undefined}
-                      onClick={item.onSelect}
-                    />
-                  )}
-                />
-              </ContextMenuContent>
-            </ContextMenu.Portal>
-          </ContextMenu>
-        )}
+        {(current) => {
+          const source = props.drag?.source('folder', current().id, () => (
+            <FolderIcon class="size-4" />
+          ));
+          return (
+            <ContextMenu>
+              <ContextMenu.Trigger class="block w-full">
+                <div {...source}>{rowProps.children}</div>
+              </ContextMenu.Trigger>
+              <ContextMenu.Portal>
+                <ContextMenuContent>
+                  <FolderActionItems
+                    onSubfolder={() => startSubfolder(current().id)}
+                    onRename={() =>
+                      props.onEditing({ kind: 'rename', id: current().id })
+                    }
+                    onMove={() =>
+                      props.onEditing({ kind: 'move', id: current().id })
+                    }
+                    onDelete={() =>
+                      props.onEditing({ kind: 'delete', id: current().id })
+                    }
+                    item={(item) => (
+                      <MenuItem
+                        text={item.text}
+                        class={item.danger ? 'text-failure-ink' : undefined}
+                        onClick={item.onSelect}
+                      />
+                    )}
+                  />
+                </ContextMenuContent>
+              </ContextMenu.Portal>
+            </ContextMenu>
+          );
+        }}
       </Show>
     );
   }
@@ -468,13 +432,13 @@ export function VaultSidebarContent(props: {
         </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label={t('passwords.folders')}>
-            <DropTarget
-              onDrop={(itemId) =>
-                fireAndForget(
-                  props.commands.moveItem(itemId, null),
-                  'passwords-item-move'
-                )
-              }
+            <div
+              ref={(element) => rootTarget?.ref(element)}
+              class={cn(
+                'rounded-lg',
+                rootTarget?.isOver() &&
+                  'outline-2 -outline-offset-2 outline-accent'
+              )}
             >
               <ViewSidebar.Item
                 active={props.filter === 'all'}
@@ -485,7 +449,7 @@ export function VaultSidebarContent(props: {
                 </ViewSidebar.Icon>
                 <span class="truncate">{t('passwords.passwordsRoot')}</span>
               </ViewSidebar.Item>
-            </DropTarget>
+            </div>
             <ViewSidebar.Branch>
               <Show when={props.editing?.kind === 'create' && props.editing}>
                 {(editing) => (
@@ -512,6 +476,7 @@ export function VaultSidebarContent(props: {
                 onToggle={props.onToggle}
                 onSelect={(id) => props.onFilter(`folder:${id}`)}
                 locationMenu={FolderRowShell}
+                createDropTarget={props.drag?.target}
                 renamingId={replacedRow()}
                 renderRename={(node) => (
                   <FolderRowEditor

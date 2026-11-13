@@ -1,18 +1,23 @@
-use crate::pubsub::context::CrmServiceType;
+use crate::composition::workers::CrmServiceType;
+use crate::outbound::crm_cleanup::{
+    CrmCleanupClock, CrmCleanupContacts, CrmCleanupQueue, PgCrmCleanup,
+};
 use crate::pubsub::crm_cleanup::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
+use email::domain::crm_cleanup::CrmCleanupService;
 use futures::StreamExt;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
-/// Shared dependencies for the CRM cleanup handlers. Much smaller than the
-/// backfill `PubSubContext` — this worker only talks to the DB, SQS, and the
-/// CRM service.
+/// Concrete cleanup service assembled from the worker's existing dependencies.
+pub type CrmCleanupUseCase =
+    CrmCleanupService<PgCrmCleanup, CrmCleanupContacts, CrmCleanupQueue, CrmCleanupClock>;
+
+/// Cleanup use case and delivery acknowledgement handle.
 #[derive(Clone)]
 pub struct CrmCleanupContext {
-    pub db: sqlx::Pool<sqlx::Postgres>,
+    pub service: Arc<CrmCleanupUseCase>,
     pub sqs_worker: sqs_worker::SQSWorker,
-    pub sqs_client: sqs_client::SQS,
-    pub crm_service: CrmServiceType,
 }
 
 /// method that ingests sqs messages and calls the process function for each
@@ -32,6 +37,24 @@ pub async fn run_worker(
     .await;
 }
 
+/// Builds the production context for the worker loop.
+pub(crate) fn context(
+    db: sqlx::Pool<sqlx::Postgres>,
+    worker: &sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    crm_service: CrmServiceType,
+) -> CrmCleanupContext {
+    CrmCleanupContext {
+        service: Arc::new(CrmCleanupService {
+            repository: PgCrmCleanup(db),
+            crm_service: CrmCleanupContacts(crm_service),
+            queue: CrmCleanupQueue(sqs_client),
+            clock: CrmCleanupClock,
+        }),
+        sqs_worker: worker.clone(),
+    }
+}
+
 /// Ingests CRM cleanup messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
@@ -42,12 +65,7 @@ pub async fn run_worker_with_cancellation(
     crm_service: CrmServiceType,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = CrmCleanupContext {
-        db,
-        sqs_worker: worker.clone(),
-        sqs_client,
-        crm_service,
-    };
+    let ctx = context(db, &worker, sqs_client, crm_service);
 
     loop {
         let worker_result = tokio::spawn({
