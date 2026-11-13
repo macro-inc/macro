@@ -1,0 +1,76 @@
+packages/lexical-core/tests/agent-context.test.ts
+  s_877cfccae63665::t_4f896236fbc82d 428-440
+  s_877cfccae63665::t_6fafb460f878bd 425-427,441-443
+services/lexical-service/src/endpoints/agent-context.ts
+  s_877cfccae63665::t_4f896236fbc82d 430-436
+  s_877cfccae63665::t_3ef6196924177d 376
+packages/lexical-core/utils/agent-context.ts
+  s_877cfccae63665::t_4f896236fbc82d 431-440,456-457,1237-1245,1258,1273-1277,1569-1582
+  s_877cfccae63665::t_bf952ba4356e01 145-146,1583-1585,1651
+crates/agent_harness/src/domain/ports.rs
+  s_f1e9dcc3b2a336::t_cedd5e834c4533 235-236,241
+crates/agent_harness/src/domain/service/deliver.rs
+  s_f1e9dcc3b2a336::t_4e379c28829681 475-477,502
+crates/agent_harness/src/domain/service/test.rs
+  s_f1e9dcc3b2a336::t_830cd596308f72 264
+crates/agent_harness/src/outbound/agent_prompt_composer.rs
+  s_877cfccae63665::t_305338de385598 3-4,8,46,62-69,78
+crates/agent_harness/src/outbound/agent_prompt_composer/test.rs
+  s_f1e9dcc3b2a336::t_614f8303987451 82-87,103-107,164
+crates/agent_trigger/src/domain/service.rs
+  s_877cfccae63665::t_59307915f00ad2 646-652,832-837,848-851
+crates/agent_trigger/src/domain/thread_window.rs
+  s_877cfccae63665::t_01e4cfbb76f8df 113-118
+crates/channel_bots/src/outbound/fast_model_trigger_classifier.rs
+  s_9ff7de86a3a729::t_3adc1b76d352be 69-76,120-122
+crates/lexical_client/src/parse_markdown.rs
+  s_f1e9dcc3b2a336::t_2312a7329d50a9 337-347,377-378,712,724
+packages/lexical-core/tests/agent-trigger-context.test.ts
+  s_877cfccae63665::t_79ffcdd1b46262 322,391-392
+services/lexical-service/src/endpoints/agent-context.test.ts
+  s_877cfccae63665::t_9256d2db6bfcb9 77-98
+crates/agent_harness/AGENTS.md
+  s_fb3e62830425eb::t_6dcf1eb2eca6d9 193-195
+crates/agent_trigger/AGENTS.md
+  s_fb3e62830425eb::t_b88eb57cebff28 27-29,58-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b5ee520b01eafe9dc8eba3610c7bcf20a13c895c",
+  "prompts": {},
+  "sessions": {
+    "s_877cfccae63665": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f7342dac-5ffc-44f3-9d96-6de7de836cd0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9ff7de86a3a729": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73fe2108-d100-4a9e-aab1-a5196d40a1f2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f1e9dcc3b2a336": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2842fb2d-f22e-45ba-af0a-beecb3924c9c",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fb3e62830425eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fcdff70-f5b1-4849-9585-6d4147c7231a",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
