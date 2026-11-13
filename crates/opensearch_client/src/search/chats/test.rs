@@ -42,6 +42,11 @@ fn test_build_bool_query_join_shape() -> anyhow::Result<()> {
     let has_child = &must[0]["has_child"];
     assert_eq!(has_child["type"], "message");
     assert_eq!(has_child["inner_hits"]["name"], "term_0");
+    assert_eq!(
+        has_child["inner_hits"]["_source"],
+        serde_json::json!(["chat_message_id", "role"]),
+        "inner hits must not ship message content"
+    );
 
     // role is a child-side field: it must sit inside the has_child query
     // alongside the term match, so the same message that matches the term
