@@ -111,12 +111,13 @@ where
                 .await
                 .map_err(SuggestionError::internal)?;
             return Err(match now {
-                // Changed since the card, or still settling an earlier run
-                // (restored while it is cancelled): the caller sees it as it
-                // is now.
+                // Changed since the card, or open but still settling an
+                // earlier run (restored while it is cancelled): the caller
+                // sees it as it is now. A closed one isn't there to accept.
                 Some(now)
                     if now.updated_at != shown_updated_at
-                        || now.run.as_ref().is_some_and(|run| !run.state.is_settled()) =>
+                        || (now.state.is_open()
+                            && now.run.as_ref().is_some_and(|run| !run.state.is_settled())) =>
                 {
                     SuggestionError::Changed(Box::new(now))
                 }
@@ -140,10 +141,19 @@ where
         };
         span.record("suggestion.run.outcome", outcome);
         // A failed write leaves the run starting; the sweep reads its session.
-        let advanced = self
+        let advanced = match self
             .advance(runs, run.clone(), Evidence::Event(event))
             .await
-            .inspect_err(|error| tracing::warn!(?error, "could not record a run's start"));
+        {
+            // An uncertain start writes nothing, so it never sees the run as
+            // stored: a cancel that landed while it held the run is acted on
+            // here, before it lets go.
+            Ok(Advanced::Stayed) if event == RunEvent::StartUncertain => {
+                self.after_uncertain_start(runs, &run).await
+            }
+            advanced => advanced,
+        }
+        .inspect_err(|error| tracing::warn!(?error, "could not record a run's start"));
         // A move lets go of the run; anything else lets go here.
         if !matches!(advanced, Ok(Advanced::Moved(_))) {
             let _ = self
@@ -161,10 +171,36 @@ where
         result
     }
 
-    /// Delete `started`'s session when it took its prompt after its run had
-    /// settled without finishing (its hold ran out while it started), or
-    /// after the run's row went with its suggestion, so nothing runs that no
-    /// one watches. Best effort.
+    /// After a start whose answer was lost, act on run `started` as it is
+    /// stored: still starting, it stays for its session to settle; cancelled
+    /// meanwhile, its session is read and stopped now; settled or gone, its
+    /// session, which may have taken the prompt, is deleted.
+    async fn after_uncertain_start(
+        &self,
+        runs: &Runs,
+        started: &StoredRun,
+    ) -> Result<Advanced, SuggestionError> {
+        match self
+            .repo
+            .run(started.session)
+            .await
+            .map_err(SuggestionError::internal)?
+        {
+            Some(now) if now.state == RunState::Starting => Ok(Advanced::Stayed),
+            Some(now) if !now.state.is_settled() => {
+                self.advance(runs, now, Evidence::ReadSession).await
+            }
+            _ => {
+                self.stop_orphaned_session(runs, started).await;
+                Ok(Advanced::Refused)
+            }
+        }
+    }
+
+    /// Delete `started`'s session when it took (or may have taken) its
+    /// prompt after its run had settled without finishing (its hold ran out
+    /// while it started), or after the run's row went with its suggestion,
+    /// so nothing runs that no one watches. Best effort.
     async fn stop_orphaned_session(&self, runs: &Runs, started: &StoredRun) {
         let state = match self.repo.run(started.session).await {
             Ok(Some(now)) => Some(now.state),

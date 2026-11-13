@@ -167,7 +167,9 @@ scheduler's spec.
   (`claimed_until`), so two processes never act on one run; its effect (read
   what it made, stop, delete) runs before it lands. A run is stored already
   held by the accept that starts it, so a dismissal while its session opens
-  only cancels it, and the start stops what it opened; a missing session
+  only cancels it, and the start stops what it opened (reading the run back
+  when its answer was lost; a session that opens after its run settled or
+  went is deleted); a missing session
   settles no stopping or cancelling run within its 10 minutes to start, since
   one may still open and take the prompt. A finished run makes an
   accepted suggestion done with the session and what it created as `produced`
@@ -180,7 +182,8 @@ scheduler's spec.
   every 5 minutes in the harness (`SuggestionRuns::reconcile_runs`, at most 200
   runs, least recently checked first) that reads each unsettled run's session,
   for missed events and runs over their time. One run's error, or a row that
-  doesn't decode (skipped and logged), never stops the sweep. A finish takes
+  doesn't decode (skipped, logged and marked checked so it doesn't hold the
+  front), never stops the sweep. A finish takes
   the suggestion's row before the run's, as closing a suggestion does, so the
   two never deadlock. A run is never started twice: a prompt whose answer was lost
   (`RunStartError::Uncertain`) stays `starting` for its session to settle; only
@@ -189,7 +192,8 @@ scheduler's spec.
 - Dismissing, retiring or resolving a suggestion moves its unsettled run to
   `cancelling` in the same write (`lifecycle::cancels_run`); dismiss and retire
   also stop its session at once, resolve leaves that to the sweep. A cancelled
-  run that finishes never makes its suggestion done. Accepting any other
+  run that finishes never makes its suggestion done, even one restored and
+  taken on again since; it records what it made. Accepting any other
   suggestion makes it done (`done` in the feed); accepting a done suggestion
   again changes nothing.
 - Every state write follows the suggestion lifecycle table

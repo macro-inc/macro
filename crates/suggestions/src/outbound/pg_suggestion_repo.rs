@@ -700,18 +700,30 @@ impl SuggestionRepo for PgSuggestionRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        // One broken row must not stop the sweep for every other run.
-        Ok(rows
-            .into_iter()
-            .filter_map(|row| {
-                let session = row.session_id;
-                run(row)
-                    .inspect_err(|error| {
-                        tracing::warn!(agent.session.id = %session, error = %error, "skipped an undecodable run row");
-                    })
-                    .ok()
-            })
-            .collect())
+        // One broken row must not stop the sweep for every other run, nor
+        // keep its place at the front of every later sweep.
+        let mut runs = Vec::with_capacity(rows.len());
+        let mut broken = Vec::new();
+        for row in rows {
+            let session = row.session_id;
+            match run(row) {
+                Ok(run) => runs.push(run),
+                Err(error) => {
+                    tracing::warn!(agent.session.id = %session, error = %error, "skipped an undecodable run row");
+                    broken.push(session);
+                }
+            }
+        }
+        if !broken.is_empty() {
+            sqlx::query!(
+                "UPDATE suggestion_run SET checked_at = $2 WHERE session_id = ANY($1)",
+                &broken,
+                now,
+            )
+            .execute(&self.pool)
+            .await?;
+        }
+        Ok(runs)
     }
 
     async fn claim_run(
@@ -807,17 +819,20 @@ impl SuggestionRepo for PgSuggestionRepo {
             .execute(&mut *tx)
             .await?;
             // A run of a suggestion closed meanwhile still records what it made;
-            // only one still accepted becomes done.
-            sqlx::query!(
-                r#"UPDATE suggestion SET state = $3, updated_at = $2, state_changed_at = $2
-                   WHERE id = $1 AND state = ANY($4)"#,
-                suggestion,
-                now,
-                SuggestionState::Done.as_ref(),
-                &state_names(&lifecycle::sources(LifecycleEvent::RunFinished)),
-            )
-            .execute(&mut *tx)
-            .await?;
+            // only one still accepted becomes done, and never by a run its
+            // closing cancelled, even once it was restored and taken on again.
+            if !matches!(run.state, RunState::Cancelling { .. }) {
+                sqlx::query!(
+                    r#"UPDATE suggestion SET state = $3, updated_at = $2, state_changed_at = $2
+                       WHERE id = $1 AND state = ANY($4)"#,
+                    suggestion,
+                    now,
+                    SuggestionState::Done.as_ref(),
+                    &state_names(&lifecycle::sources(LifecycleEvent::RunFinished)),
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
         }
         tx.commit().await?;
         Ok(true)

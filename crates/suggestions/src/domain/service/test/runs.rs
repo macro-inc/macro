@@ -1055,6 +1055,103 @@ async fn a_run_dismissed_while_starting_is_stopped_by_its_start(pool: PgPool) {
     );
 }
 
+/// A dismissal while a start's answer is lost is acted on by the start
+/// itself: it reads the session and stops it then, not at the next sweep.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_uncertain_start_stops_a_run_dismissed_meanwhile(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    *runs.starts_as.lock().unwrap() = StartsAs::Uncertain;
+    let (entered, began) = tokio::sync::oneshot::channel();
+    let (proceed, held) = tokio::sync::oneshot::channel();
+    *runs.start_gate.lock().unwrap() = Some(StartGate {
+        entered,
+        proceed: held,
+    });
+    let dismiss = async {
+        began.await.unwrap();
+        h.service
+            .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+            .await
+            .unwrap();
+        assert!(runs.stopped.lock().unwrap().is_empty());
+        proceed.send(()).unwrap();
+    };
+    let owner = user(OWNER);
+    let (accepted, ()) = tokio::join!(h.accept(&owner, suggestion.id), dismiss);
+    accepted.unwrap();
+    let run = runs.last().session;
+    assert_eq!(*runs.stopped.lock().unwrap(), [run]);
+    // Let go: its stopped session settles it cancelled at the next sweep.
+    h.sweeps_to(run, RunStateName::Cancelled).await;
+}
+
+/// A run its dismissal cancelled never makes its suggestion done, even when
+/// the suggestion was restored and taken on again before the run finished.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_cancelled_run_never_makes_its_restored_suggestion_done(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    let run = runs.last();
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    h.service
+        .restore(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    // An agent takes it on for the person.
+    h.service
+        .accept(
+            &user(OWNER),
+            SuggestionCaller::Agent { correlation: None },
+            suggestion.id,
+            shown(&h.stored(suggestion.id).await),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        h.stored(suggestion.id).await.state,
+        SuggestionState::Accepted
+    );
+    h.news(
+        run.session,
+        SessionNews::TurnEnded {
+            action: run.action,
+            finished: true,
+        },
+    )
+    .await;
+    assert_eq!(h.run_state(run.session).await, RunStateName::Finished);
+    let taken_on = h.in_feed(suggestion.id).await.unwrap();
+    assert_eq!(taken_on.state, SuggestionState::Accepted);
+    assert_eq!(taken_on.status, SuggestionStatus::Open);
+    assert_eq!(taken_on.result, None);
+}
+
+/// Accepting a closed suggestion whose run is still being cancelled finds
+/// nothing to accept, as for any closed suggestion.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn accepting_a_dismissed_suggestion_whose_run_is_cancelling_finds_nothing(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    let run = runs.last().session;
+    runs.stops_ignored
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    assert_eq!(h.run_state(run).await, RunStateName::Cancelling);
+    assert!(matches!(
+        h.accept(&user(OWNER), suggestion.id).await,
+        Err(SuggestionError::NotFound)
+    ));
+}
+
 /// A start that outlives its hold and its start window may find its run
 /// settled when its session opens: that session is deleted, so none runs
 /// unwatched.

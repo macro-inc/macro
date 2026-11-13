@@ -144,8 +144,8 @@ async fn a_run_starts_held_by_its_starter(pool: PgPool) {
     );
 }
 
-/// A run row that doesn't decode is skipped, so the sweep still checks the
-/// others.
+/// A run row that doesn't decode is skipped and counted as checked, so the
+/// sweep still checks the others and the row never holds the front of it.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_sweep_skips_a_run_it_cant_read(pool: PgPool) {
     let f = fixture(pool).await;
@@ -162,15 +162,20 @@ async fn the_sweep_skips_a_run_it_cant_read(pool: PgPool) {
     .execute(&f.pool)
     .await
     .unwrap();
-    let checked: Vec<_> = f
-        .repo
-        .runs_to_check(Utc::now(), 10)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|run| run.session)
-        .collect();
-    assert_eq!(checked, [fine]);
+    let checked = |limit| {
+        let repo = &f.repo;
+        async move {
+            repo.runs_to_check(Utc::now(), limit)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|run| run.session)
+                .collect::<Vec<_>>()
+        }
+    };
+    assert_eq!(checked(10).await, [fine]);
+    // The broken row, started first, no longer comes first.
+    assert_eq!(checked(1).await, [fine]);
 }
 
 /// A move lands only on the run as it was read, lets go of it, and stamps
