@@ -641,8 +641,8 @@ reads retain client-scoped denial state across remounts and immediately reauthor
 previous-viewer cache hits; older requests never clear newer denial decisions.
 A project view mounts one full project read (`createProjectSource`): breadcrumbs
 and labels use the identity read, and embedded lists take the view's source.
-Project reads poll for permission changes only while visible
-(`registerProjectRevalidation`).
+Project reads refresh only on activity pushes and Soup websocket reconnects
+(`registerProjectRevalidation`); never add a timer or focus refetch to them.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail

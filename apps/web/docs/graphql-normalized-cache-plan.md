@@ -827,8 +827,9 @@ separate assignment mutations no longer exist. Task creation includes that
 property in its ordinary create request. Project descriptions use the project's
 collaborative surface, provisioned by an authoritative ensure mutation.
 
-Permissions and server-owned membership still revalidate on activity, focus, and
-the existing project polling interval. Project denials are scoped to the client,
+Permissions and server-owned membership revalidate on activity pushes and Soup
+websocket reconnects only; projects have no polling or focus refetch, so an
+access change reaches an open project with its next push or reopen. Project denials are scoped to the client,
 viewer, project, and operation, surviving row remounts until a fresh authorized
 network response succeeds. Recovery requests capture the current denial version;
 older responses and cache updates cannot clear a newer denial. A rejected
