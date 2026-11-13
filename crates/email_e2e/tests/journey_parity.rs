@@ -173,7 +173,7 @@ async fn flag_both_ways(provider: Provider) -> Result<(), Report> {
 /// leaves its starred state, which Macro's views and thread read: a flag
 /// changed in Gmail never shows in Macro.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "known bug: gmail-provider-star-not-synced"]
+#[ignore = "known bug: labels-starred-removed-flag-kept"]
 async fn gmail_flag_both_ways() -> Result<(), Report> {
     flag_both_ways(Provider::Gmail).await
 }
