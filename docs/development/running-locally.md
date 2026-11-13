@@ -238,6 +238,51 @@ and `google_gmail` identity providers and the services' Google URLs
 
 With real Google keys the emulator does not start and Google is used as before.
 
+### Microsoft sign-in and Outlook without a Microsoft account
+
+A stack whose environment names no real Microsoft OAuth client
+(`MICROSOFT_CLIENT_ID` absent from Doppler and `--env-file`) starts the Outlook
+emulator (`crates/outlook_emulator`) as the `outlook_emulator` service.
+FusionAuth's `microsoft` identity provider and the services' Microsoft URLs
+(`OVERRIDE_MICROSOFT_GRAPH_URL`, `OVERRIDE_MICROSOFT_LOGIN_URL`,
+`OVERRIDE_MICROSOFT_LOGIN_PAGE_URL`, with the emulator's OAuth client and the
+Outlook switches, in `xtask_local`'s `microsoft_emulator.rs`) point at it.
+The authentication service runs without a PostHog key there, so
+`OUTLOOK_CONNECTIONS_ENABLED` alone admits new Outlook connections, not the
+`enable-outlook` flag. Nothing talks to Microsoft.
+
+- **Continue with Microsoft** opens the emulator's page in place of Microsoft's.
+  Pick one of the seeded users (`ada@example.com`, `bob@example.com`,
+  `carol@example.com`, from `crates/outlook_emulator/seed.example.yaml`). A first
+  sign-in creates the Macro account.
+- **Connect Outlook**, in onboarding and in Email, opens the same page; pick a
+  seeded user to connect their mailbox. Sign-in and the mailbox are separate
+  grants, as with Microsoft, so a Microsoft sign-up connects its mailbox in the
+  onboarding email step.
+- The page and the emulator's control API are at the `outlook_emulator` port,
+  `http://localhost:8481` on the default instance and the window's port on a
+  named one (`docker compose port outlook_emulator 8080`). Add users, mail and
+  calendars while the stack runs with `POST /_emulator/seed`; deliver new mail with
+  `POST /_emulator/mailboxes/{email}/messages`. See the crate's `AGENTS.md`.
+- Like FusionAuth's own pages, the sign-in page is addressed as `localhost`,
+  so sign in with Microsoft from a browser on this machine.
+- The emulator keeps its state in memory: restarting its container returns it
+  to the seed, while Macro's database keeps what it synced and the refresh
+  tokens it holds stop working. Reconnect the mailbox after a restart.
+- Change notifications are not delivered: Graph subscriptions need an HTTPS
+  webhook, and the stack's services reach each other over HTTP. Mail that
+  arrives at the emulator later shows up with the next sync, not at once.
+- A connected mailbox's Outlook calendars sync from the emulator too: the
+  seed gives Ada and Bob calendars with repeating events, and events created
+  or changed in Macro are written to the emulator. The calendar service polls
+  every two minutes, so a change made in the emulator
+  (`POST /_emulator/mailboxes/{email}/calendars/default/events`) shows up
+  with the next poll.
+
+With a real Microsoft client in the environment the emulator does not start.
+Sign in with Microsoft is then unavailable locally, as before: the stack defines
+no `microsoft` identity provider for a real client.
+
 ### Recover an existing instance without resetting data
 
 `just run_local --detach --instance <name>` brings an existing instance back up over
@@ -321,6 +366,7 @@ A `--no-doppler` stack supplies deterministic stubs for required configuration. 
 | --- | --- | --- |
 | Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | The Gmail emulator answers in Google's place: Google sign-in and Gmail linking work with its seeded users, never a real account. Real keys (a `GOCSPX-` secret) switch the stack to Google. |
 | Pipedream | `PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET`, `PIPEDREAM_PROJECT_ID` | Placeholders satisfy the harness configuration loader; Pipedream integrations require real credentials. |
+| Microsoft login / Outlook | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | The Outlook emulator answers in Microsoft's place: Microsoft sign-in, Outlook linking and Outlook calendar sync work with its seeded users, never a real account. A real client id switches the emulator off. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
 | Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |

@@ -200,6 +200,14 @@ pub fn resolve(
         env.extend(super::google_emulator::env(instance));
     }
 
+    // A local stack with no real Microsoft client runs the Outlook emulator
+    // in Microsoft's place. Decided last, on the env the services will see,
+    // so a client from Doppler, `--env-file` or the process env keeps real
+    // Microsoft.
+    if super::microsoft_emulator::stands_in(mode, &env) {
+        env.extend(super::microsoft_emulator::env(instance));
+    }
+
     // Remote-AWS modes (dev): pin ENVIRONMENT/project, strip any leaked local
     // endpoints, and resolve the developer's real AWS credentials (incl. session
     // token) over the dev_personal placeholders — the process-env layer can't add
