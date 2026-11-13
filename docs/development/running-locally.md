@@ -1030,8 +1030,3 @@ dropped after a week.
 
 To try it without the hosted stack, run a throwaway Loki and point the file at
 it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
-
-## Local Kubernetes
-
-For the Nix-declared kind runtime, isolated namespaces and two HTTPS slots, see
-[local Kubernetes](local-kubernetes.md).
