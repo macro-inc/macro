@@ -2,7 +2,8 @@
 //! login_username,login_password,login_totp`. `type` is `login` or `note`;
 //! `fields` is `name: value` lines; `login_uri` is comma-separated.
 //! Organization exports have `collections` in place of `folder`, and every
-//! row of one is skipped as `SharedCollection`.
+//! row of one is skipped as `SharedCollection`. Newer exports add
+//! `archivedDate` (ISO 8601, empty when live); a dated row is `Archived`.
 use nom::Parser;
 use nom::bytes::complete::{tag, take_until};
 
@@ -34,6 +35,7 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     let username = table.column("login_username");
     let password = table.column("login_password");
     let one_time_password = table.column("login_totp");
+    let archived = table.column("archiveddate");
 
     let mut parts = Parts::default();
     for (index, row) in table.rows.into_iter().enumerate() {
@@ -48,6 +50,11 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
         // them belongs to the organization, collected or not.
         if collections.is_some() {
             parts.skip(Some(key), item_name, SkipReason::SharedCollection);
+            continue;
+        }
+
+        if !row.text(archived).trim().is_empty() {
+            parts.skip(Some(key), item_name, SkipReason::Archived);
             continue;
         }
 

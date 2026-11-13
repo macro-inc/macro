@@ -200,3 +200,26 @@ fn null_bitwarden_fields_read_as_empty() {
     assert!(export.skipped.is_empty());
     assert_eq!(export.items.len(), 1);
 }
+
+#[test]
+fn a_bitwarden_csv_row_with_an_archived_date_is_skipped_as_archived() {
+    let csv = "folder,favorite,type,name,notes,fields,reprompt,archivedDate,login_uri,login_username,login_password,login_totp\n\
+               ,,login,Live,,,0,,https://live.example.com,user-one,secret-one,\n\
+               ,,login,Old,,,0,2026-01-02T03:04:05.000Z,https://old.example.com,user-two,secret-two,\n";
+
+    let export = parse(
+        csv.as_bytes(),
+        SourceFormat::BitwardenCsv,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert_eq!(export.items.len(), 1);
+    assert_eq!(export.items[0].name, "Live");
+    let skipped: Vec<_> = export
+        .skipped
+        .iter()
+        .map(|skipped| skipped.reason)
+        .collect();
+    assert_eq!(skipped, vec![password_import::SkipReason::Archived]);
+}
