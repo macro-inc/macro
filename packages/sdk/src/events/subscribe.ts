@@ -22,6 +22,13 @@ const DEDUPE_WINDOW = 4_096;
  */
 const READ_AHEAD = 256;
 
+/**
+ * Revoked closes in a row, with no event delivered between them, after which
+ * a refreshable listener gives up: its token source keeps handing out tokens
+ * the server rejects within a minute.
+ */
+const MAX_REVOKED_RECONNECTS = 3;
+
 /** First reconnect delay; doubles per failed attempt up to the cap. */
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
@@ -46,11 +53,17 @@ export class EventStreamResetError extends MacroError {
  * `listen({ onError })`; reconnect with a fresh credential.
  */
 export class EventStreamRevokedError extends MacroError {
-  constructor() {
+  /** Why: `credential` (expired or revoked) or `bot_deleted`. */
+  readonly reason: string | undefined;
+
+  constructor(reason?: string) {
     super(
-      'event stream credential revoked: pass a token function that refreshes, or listen again with a fresh credential',
+      reason === 'bot_deleted'
+        ? 'event stream closed: the listening bot was deleted'
+        : 'event stream credential revoked: pass a token function that refreshes, or listen again with a fresh credential',
     );
     this.name = 'EventStreamRevokedError';
+    this.reason = reason;
   }
 }
 
@@ -75,7 +88,7 @@ type Frame =
 /** How one connection ended. */
 type ConnectionEnd =
   | { kind: 'reconnect'; immediate: boolean }
-  | { kind: 'revoked' }
+  | { kind: 'revoked'; reason?: string }
   | { kind: 'reset' }
   | { kind: 'fatal'; error: MacroError };
 
@@ -203,6 +216,15 @@ export class EventStream<T> implements AsyncIterable<T> {
     return this.closed;
   }
 
+  /**
+   * Why the server revoked the stream (`credential` or `bot_deleted`), when
+   * it ended as `revoked`.
+   */
+  get revokeReason(): string | undefined {
+    return this.revokedReason;
+  }
+
+  private revokedReason: string | undefined;
   private position: string | undefined;
   private closed: EventStreamCloseReason | undefined;
   private started = false;
@@ -259,11 +281,14 @@ export class EventStream<T> implements AsyncIterable<T> {
 
   private async *loop(): AsyncGenerator<T, void, undefined> {
     const signal = this.controller.signal;
-    const retry = { attempt: 0, idle: 0 };
+    const retry = { attempt: 0, idle: 0, revoked: 0 };
     while (!signal.aborted) {
       const { end, delivered } = yield* this.connection(signal);
       if (signal.aborted) break;
-      if (delivered) retry.attempt = 0;
+      if (delivered) {
+        retry.attempt = 0;
+        retry.revoked = 0;
+      }
       if (!(await this.afterConnection(end, delivered, retry, signal))) return;
     }
     this.closed ??= 'closed';
@@ -277,12 +302,20 @@ export class EventStream<T> implements AsyncIterable<T> {
   private async afterConnection(
     end: ConnectionEnd,
     delivered: boolean,
-    retry: { attempt: number; idle: number },
+    retry: { attempt: number; idle: number; revoked: number },
     signal: AbortSignal,
   ): Promise<boolean> {
     if (end.kind === 'revoked') {
-      if (!this.request.reconnectOnRevoked) {
+      retry.revoked += 1;
+      // Only an expired credential can come back with a refreshed token (a
+      // deleted bot cannot), and only while the refreshed tokens work.
+      const refreshable =
+        this.request.reconnectOnRevoked &&
+        end.reason === 'credential' &&
+        retry.revoked < MAX_REVOKED_RECONNECTS;
+      if (!refreshable) {
         this.closed = 'revoked';
+        this.revokedReason = end.reason;
         return false;
       }
       // Backed off, so a token source that keeps returning the expired
@@ -368,7 +401,7 @@ export class EventStream<T> implements AsyncIterable<T> {
         if (cursor) this.position = cursor;
         return { kind: 'reconnect', immediate: true };
       })
-      .with({ type: 'revoked' }, () => ({ kind: 'revoked' }))
+      .with({ type: 'revoked' }, ({ reason }) => ({ kind: 'revoked', reason }))
       .with({ type: 'reset' }, () => ({ kind: 'reset' }))
       .exhaustive((unknown) => {
         console.warn('macro sdk: unknown stream control event', unknown);

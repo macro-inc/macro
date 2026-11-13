@@ -885,8 +885,10 @@ for await (const event of stream) {
   (`stream.closeReason === 'revoked'`; reconnect with a fresh credential).
   `listen()` instead reconnects by itself when the credential is a token
   function (`auth: { type: 'user', token: () => getFreshToken() }`), which it
-  resolves again on every reconnect; with a fixed token it stops and reports
-  `EventStreamRevokedError` to `listen({ onError })` (logged otherwise).
+  resolves again on every reconnect. It stops and reports
+  `EventStreamRevokedError` (with its `reason`) to `listen({ onError })`
+  (logged otherwise) with a fixed token, when its bot was deleted, or after 3
+  revoked closes in a row with no event between them.
 - `macro.events.catalog()` lists the events your credential can receive, with
   their entity types, who receives them and their stage.
 

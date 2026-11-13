@@ -189,6 +189,55 @@ describe('MacroEvents', () => {
     expect(requests[1]?.headers.get('last-event-id')).toBe('1-0');
   });
 
+  test('listen() does not reconnect a deleted bot, even with a token function', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"bot_deleted"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      auth: { type: 'user', token: () => 'fresh-token' },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const reported = Promise.withResolvers<unknown>();
+    await macro.events.listen({ onError: reported.resolve });
+
+    const error = await reported.promise;
+    expect(error).toBeInstanceOf(EventStreamRevokedError);
+    expect((error as EventStreamRevokedError).reason).toBe('bot_deleted');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requests).toHaveLength(1);
+  });
+
+  test('listen() gives up after 3 revoked closes in a row with no event', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      auth: { type: 'user', token: () => 'soon-expiring-token' },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const reported = Promise.withResolvers<unknown>();
+    await macro.events.listen({ onError: reported.resolve });
+
+    const error = await reported.promise;
+    expect(error).toBeInstanceOf(EventStreamRevokedError);
+    expect((error as EventStreamRevokedError).reason).toBe('credential');
+    expect(requests).toHaveLength(3);
+  }, 10_000);
+
   test('listen() stops and reports a revoked fixed credential', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input) => {

@@ -301,8 +301,10 @@ export class MacroEvents {
    *
    * The server re-checks the credential every minute and closes the stream
    * when it no longer validates. With a token function (`token: () => ...`)
-   * the listener reconnects with a freshly resolved token; with a fixed token
-   * it stops and reports {@link EventStreamRevokedError} to `onError`.
+   * the listener reconnects with a freshly resolved token. It stops and
+   * reports {@link EventStreamRevokedError} to `onError` with a fixed token,
+   * when its bot was deleted, or after 3 revoked closes in a row with no event
+   * between them (the refreshed tokens are not accepted either).
    *
    * Filters default to the event names currently registered with {@link on}.
    * The stream uses those filters for its lifetime; later `.on` / unsubscribe
@@ -345,7 +347,7 @@ export class MacroEvents {
           await this.dispatch(event);
         }
         if (stream.closeReason === 'revoked') {
-          report(new EventStreamRevokedError());
+          report(new EventStreamRevokedError(stream.revokeReason));
         }
       } catch (error) {
         // Never an unhandled rejection: listen() has already returned, and
