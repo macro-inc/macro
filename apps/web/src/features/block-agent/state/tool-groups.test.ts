@@ -5,7 +5,7 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import { isCodeModeSupportCall } from './code-mode-support';
-import { rendersOwnView, segmentParts } from './tool-groups';
+import { liveToolSegment, rendersOwnView, segmentParts } from './tool-groups';
 
 const text = (): MessagePart => ({ kind: 'text', text: 'hi' });
 type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
@@ -164,16 +164,12 @@ describe('segmentParts', () => {
   it('groups consecutive thinking blocks with tool calls', () => {
     expect(
       segmentParts([thought(), tool(), thought(), tool(), thought()])
-    ).toEqual([
-      { kind: 'tools', start: 0, end: 4 },
-      { kind: 'part', start: 4, end: 5 },
-    ]);
+    ).toEqual([{ kind: 'tools', start: 0, end: 5 }]);
   });
 
-  it('leaves a trailing thought out of a run that closes the message', () => {
+  it('keeps a trailing thought in a run that closes the message', () => {
     expect(segmentParts([thought(), tool(), thought()])).toEqual([
-      { kind: 'tools', start: 0, end: 2 },
-      { kind: 'part', start: 2, end: 3 },
+      { kind: 'tools', start: 0, end: 3 },
     ]);
   });
 
@@ -184,18 +180,15 @@ describe('segmentParts', () => {
     ]);
   });
 
-  it('leaves a thought after a single tool as its own part', () => {
+  it('keeps a thought after a single tool in its run', () => {
     expect(segmentParts([tool(), thought()])).toEqual([
-      { kind: 'tools', start: 0, end: 1 },
-      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 0, end: 2 },
     ]);
   });
 
-  it('keeps every trailing thought visible after the last tool', () => {
+  it('keeps every trailing thought after the last tool in its run', () => {
     expect(segmentParts([tool(), thought(), thought()])).toEqual([
-      { kind: 'tools', start: 0, end: 1 },
-      { kind: 'part', start: 1, end: 2 },
-      { kind: 'part', start: 2, end: 3 },
+      { kind: 'tools', start: 0, end: 3 },
     ]);
   });
 
@@ -317,6 +310,35 @@ describe('segmentParts', () => {
       ]);
     }
   );
+});
+
+describe('liveToolSegment', () => {
+  const live = (parts: MessagePart[]) =>
+    liveToolSegment(parts, segmentParts(parts));
+
+  it('is the run that closes the message, between calls too', () => {
+    expect(live([text(), tool(), tool()])).toBe(1);
+    expect(live([tool(), thought()])).toBe(0);
+  });
+
+  it('is only ever the last run', () => {
+    expect(live([tool({ status: 'running' }), text(), tool()])).toBe(2);
+  });
+
+  it('is none once prose or a standalone view follows the last run', () => {
+    expect(live([tool({ status: 'running' }), text()])).toBe(-1);
+    expect(live([tool(), displayResults()])).toBe(-1);
+  });
+
+  it('stays on a run whose call waits on the person', () => {
+    expect(live([tool(), tool({ status: 'running' }), permission()])).toBe(0);
+    expect(live([tool(), permission()])).toBe(-1);
+  });
+
+  it('is none without a run', () => {
+    expect(live([text(), thought()])).toBe(-1);
+    expect(live([])).toBe(-1);
+  });
 });
 
 describe('rendersOwnView', () => {

@@ -14,5 +14,7 @@ export default defineConfig({
         },
       },
     },
+    // One native solid-js per worker; see ../core/vitest.config.ts.
+    server: { deps: { external: [/[\\/]node_modules[\\/]solid-js[\\/]/] } },
   },
 } as any);
