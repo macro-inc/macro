@@ -9,7 +9,7 @@
   --heading: #fff;
   --ink-muted: #a8a8a8;
   --ink-extra-muted: #737373;
-  --ink-placeholder: #737373;
+  --ink-placeholder: #858585;
   --edge: #292929;
   --input: #171717;
   --hover: rgb(255 255 255 / 5%);
@@ -30,7 +30,7 @@
     --heading: #000;
     --ink-muted: #54524f;
     --ink-extra-muted: #72706c;
-    --ink-placeholder: #8f8c86;
+    --ink-placeholder: #72706c;
     --edge: #d9d4ca;
     --input: #faf8f3;
     --hover: rgb(29 28 26 / 5%);
