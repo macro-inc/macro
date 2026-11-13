@@ -62,6 +62,8 @@ export function createTagPickerSession(props: {
    * and Escape saves.
    */
   confirmsWithDone: boolean;
+  /** Embedded menus handle keys locally so their parent cannot intercept them. */
+  keyboardTarget?: 'document' | 'local';
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -426,14 +428,17 @@ export function createTagPickerSession(props: {
     dropdown.handleKeyDown(event);
   };
 
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown);
-  });
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown);
-  });
+  if (props.keyboardTarget !== 'local') {
+    onMount(() => {
+      document.addEventListener('keydown', handleKeyDown);
+    });
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown);
+    });
+  }
 
   return {
+    handleKeyDown,
     search,
     setSearch: (value: string) => {
       setSearch(value);

@@ -20,9 +20,14 @@ export type AppearanceEditorProps = ManagedDialogProps & {
   isCurrent: () => boolean;
   save: (appearance: EntityAppearance) => Promise<Result<void, string>>;
 };
-export function AppearanceEditor(props: AppearanceEditorProps) {
-  let anchor: HTMLSpanElement | undefined;
-  const close = () => props.onOpenChange(false);
+export function AppearanceEditorContent(
+  props: Pick<
+    AppearanceEditorProps,
+    'entity' | 'userId' | 'isCurrent' | 'save'
+  > & {
+    onClose: () => void;
+  }
+) {
   const editor = createAppearanceEditor({
     initial: props.entity.appearance,
     isCurrent: props.isCurrent,
@@ -30,10 +35,9 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
   });
   const recent = createRecentIcons(props.userId);
   createEffect(() => {
-    if (!props.isCurrent()) close();
+    if (!props.isCurrent()) props.onClose();
   });
-  // Reparent one picker when the overlay changes; retain search and keyboard state.
-  const content = (
+  return (
     <AppearancePicker
       appearance={editor.appearance()}
       mobile={isMobile()}
@@ -45,7 +49,17 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
       error={editor.error()}
       recent={recent.icons()}
       onPick={recent.record}
-      onClose={close}
+      onClose={props.onClose}
+    />
+  );
+}
+
+export function AppearanceEditor(props: AppearanceEditorProps) {
+  let anchor: HTMLSpanElement | undefined;
+  const content = (
+    <AppearanceEditorContent
+      {...props}
+      onClose={() => props.onOpenChange(false)}
     />
   );
   return (

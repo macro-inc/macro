@@ -5,11 +5,39 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import { Dropdown } from '@ui';
+import { ok } from 'neverthrow';
 import { createComponent, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EntityAppearanceMenu } from '../appearance-menu';
 import type { EntityAppearance } from '../core/appearance';
 import { createRecentIcons } from '../primitives/create-recent-icons';
+import type { AppearanceEditorProps } from '../views/appearance-editor';
 import { AppearancePicker } from './appearance-picker';
+
+const menuSave = vi.hoisted(() => vi.fn());
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'picker-test' }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
+}));
+vi.mock('../entity-appearance', () => ({ useChangeEntityIcon: () => vi.fn() }));
+vi.mock('../appearance-dialog', async () => {
+  const { AppearanceEditorContent } = await import(
+    '../views/appearance-editor'
+  );
+  return {
+    AppearanceMenuContent: (
+      props: Omit<AppearanceEditorProps, 'open' | 'onOpenChange'> & {
+        onClose: () => void;
+      }
+    ) =>
+      createComponent(AppearanceEditorContent, {
+        ...props,
+        onClose: props.onClose,
+        save: menuSave,
+      }),
+  };
+});
 
 type Icon = NonNullable<EntityAppearance['icon']>;
 const SCROLL_TO = Object.getOwnPropertyDescriptor(
@@ -353,4 +381,61 @@ describe('appearance picker interaction', () => {
       ).toBe(key);
     }
   );
+});
+
+// Use the real menu, picker, and editor state; replace only the persistence adapter.
+it('keeps the appearance submenu open while saving and returns to the parent menu', async () => {
+  let finish: ((result: ReturnType<typeof ok<void>>) => void) | undefined;
+  menuSave.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  render(() =>
+    createComponent(Dropdown, {
+      get children() {
+        return [
+          createComponent(Dropdown.Trigger, { children: 'Actions' }),
+          createComponent(Dropdown.Content, {
+            get children() {
+              return createComponent(EntityAppearanceMenu, {
+                entity: {
+                  type: 'document',
+                  id: 'document-1',
+                  name: 'Document',
+                  ownerId: 'picker-test',
+                  fileType: 'md',
+                },
+              });
+            },
+          }),
+        ];
+      },
+    })
+  );
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions' }), {
+    key: 'Enter',
+  });
+  const trigger = await screen.findByRole('menuitem', { name: 'Change icon' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+  const search = await screen.findByRole('textbox', { name: 'Search icons' });
+  search.focus();
+  fireEvent.keyDown(search, { key: 'ArrowLeft' });
+  expect(screen.getByRole('textbox', { name: 'Search icons' })).toBe(search);
+  fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+  expect(menuSave).toHaveBeenCalledWith({ icon: null, color: 'blue' });
+  expect(screen.getByRole('textbox', { name: 'Search icons' })).toBe(search);
+  finish?.(ok(undefined));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Blue' }).getAttribute('aria-pressed')
+    ).toBe('true')
+  );
+  fireEvent.keyDown(search, { key: 'Escape' });
+  await waitFor(() =>
+    expect(screen.queryByRole('textbox', { name: 'Search icons' })).toBeNull()
+  );
+  expect(screen.getByRole('menuitem', { name: 'Change icon' })).toBe(trigger);
 });

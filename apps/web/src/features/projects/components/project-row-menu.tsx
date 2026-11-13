@@ -1,3 +1,4 @@
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import {
   SoupEntityActionDrawer,
   type SoupEntityDrawerActionGroup,
@@ -378,16 +379,27 @@ function ProjectMenuItems(props: ProjectMenuProps) {
             {(entry) =>
               match(entry)
                 .with({ kind: 'action' }, (action) => (
-                  <Dynamic
-                    component={action.copy ? CopyMenuItem : MenuItem}
-                    text={action.label}
-                    icon={action.icon}
-                    shortcut={action.shortcut}
-                    disabled={action.disabled}
-                    class={action.destructive ? 'text-failure-ink' : undefined}
-                    onClick={action.run}
-                    onCopy={async () => (await action.run()) !== false}
-                  />
+                  <Show
+                    when={action.id === 'change-icon' && rows[0]}
+                    fallback={
+                      <Dynamic
+                        component={action.copy ? CopyMenuItem : MenuItem}
+                        text={action.label}
+                        icon={action.icon}
+                        shortcut={action.shortcut}
+                        disabled={action.disabled}
+                        class={
+                          action.destructive ? 'text-failure-ink' : undefined
+                        }
+                        onClick={action.run}
+                        onCopy={async () => (await action.run()) !== false}
+                      />
+                    }
+                  >
+                    {(row) => (
+                      <EntityAppearanceMenu entity={initiativeEntity(row())} />
+                    )}
+                  </Show>
                 ))
                 .with({ kind: 'options' }, (entry) => (
                   <ContextMenu.Sub>

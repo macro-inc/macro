@@ -14,6 +14,7 @@ import { refreshProjectQueries } from '../projects/queries/project-revalidation'
 import { createSaveEntityAppearance } from './queries/appearance';
 import {
   AppearanceEditor,
+  AppearanceEditorContent,
   type AppearanceEditorProps,
 } from './views/appearance-editor';
 
@@ -53,5 +54,21 @@ export function AppearanceDialog(props: Omit<AppearanceEditorProps, 'save'>) {
         }
       />
     </Show>
+  );
+}
+
+/** The same save adapter and picker state inside a menu-owned submenu. */
+export function AppearanceMenuContent(
+  props: Pick<AppearanceEditorProps, 'entity' | 'userId' | 'isCurrent'> & {
+    onClose: () => void;
+  }
+) {
+  return (
+    <AppearanceEditorContent
+      {...props}
+      save={(appearance) =>
+        saveEntityAppearance(props.entity, appearance, props.isCurrent)
+      }
+    />
   );
 }

@@ -345,6 +345,17 @@ export function MenuSeparator() {
   );
 }
 
+/** Kobalte context-menu roots are uncontrolled; use their native Escape dismissal. */
+export function dismissContextMenu() {
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    })
+  );
+}
+
 function MobileConditionalOverlay(
   props: ParentProps<{ mobileFullScreen?: boolean }>
 ) {

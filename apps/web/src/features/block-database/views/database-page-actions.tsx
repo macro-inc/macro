@@ -1,5 +1,5 @@
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
-import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
@@ -10,7 +10,6 @@ import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import DuplicateIcon from '@icon/system/regular/copy-simple.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
-import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
@@ -71,7 +70,6 @@ export function DatabasePageActions(props: {
   const [exporting, setExporting] = createSignal(false);
   const [reading, setReading] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
-  const changeIcon = useChangeEntityIcon();
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
@@ -198,28 +196,20 @@ export function DatabasePageActions(props: {
               <>
                 <Dropdown.Group>
                   <Show when={editable() && appearanceFlag().enabled}>
-                    <Dropdown.Item
-                      onSelect={() =>
-                        changeIcon(
-                          {
-                            type: 'database',
-                            id: props.detail.database.id,
-                            name: props.detail.database.name,
-                            ownerId: props.detail.database.owner_id,
-                            grant: props.detail.grant,
-                            appearance: readEntityAppearance(
-                              props.detail.database.appearance
-                            ),
-                            projectId:
-                              props.detail.database.project_id ?? undefined,
-                          },
-                          menuButton
-                        )
-                      }
-                    >
-                      <PaintBrushIcon class="size-4 shrink-0" />
-                      {t('appearance.title')}
-                    </Dropdown.Item>
+                    <EntityAppearanceMenu
+                      entity={{
+                        type: 'database',
+                        id: props.detail.database.id,
+                        name: props.detail.database.name,
+                        ownerId: props.detail.database.owner_id,
+                        grant: props.detail.grant,
+                        appearance: readEntityAppearance(
+                          props.detail.database.appearance
+                        ),
+                        projectId:
+                          props.detail.database.project_id ?? undefined,
+                      }}
+                    />
                   </Show>
                   <Dropdown.CopyItem onCopy={actions().onCopyLink}>
                     Copy Link

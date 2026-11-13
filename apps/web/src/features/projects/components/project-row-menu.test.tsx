@@ -1,3 +1,5 @@
+import { MenuItem } from '@core/component/ContextMenu';
+import type { EntityData } from '@entity';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +8,13 @@ import type { ProjectAccess } from '../core/project';
 import { ProjectMenuDropdown } from './project-row-menu';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+
+const showAppearance = vi.hoisted(() => vi.fn());
+vi.mock('@app/features/entity-appearance/appearance-menu', () => ({
+  EntityAppearanceMenu: (props: { entity: EntityData }) => (
+    <MenuItem text="Change icon" onClick={() => showAppearance(props.entity)} />
+  ),
+}));
 
 vi.mock('@entity', () => ({
   InlineEntity: (props: { entity: { name: string } }) => props.entity.name,
@@ -146,7 +155,11 @@ describe('project actions dropdown', () => {
     ]);
     setEditing(true);
     click(screen.getByRole('menuitem', { name: 'Change icon' }));
-    await waitFor(() => expect(changeIcon).toHaveBeenCalledWith(original));
+    await waitFor(() =>
+      expect(showAppearance).toHaveBeenCalledWith(
+        expect.objectContaining({ id: original.project.id })
+      )
+    );
   });
 
   it('keeps view access to navigation and links', async () => {

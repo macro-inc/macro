@@ -1,6 +1,7 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -20,10 +21,7 @@ import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { getOwner, onMount, Show } from 'solid-js';
-import {
-  EntityAppearanceTrigger,
-  useChangeEntityIcon,
-} from '../entity-appearance/entity-appearance';
+import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
@@ -87,7 +85,6 @@ export function RoutineDetail(props: {
     },
     onKept: () => toast.success(t('subRoutines.kept')),
   });
-  const changeIcon = useChangeEntityIcon();
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;
@@ -171,13 +168,14 @@ export function RoutineDetail(props: {
             )}
           </Show>
         }
-        onChangeIcon={
-          appearanceFlag().enabled
-            ? () => {
-                const entity = source.entity();
-                if (entity && ownedByViewer()) changeIcon(entity);
-              }
-            : undefined
+        appearanceMenu={
+          <Show
+            when={
+              appearanceFlag().enabled && ownedByViewer() && source.entity()
+            }
+          >
+            {(entity) => <EntityAppearanceMenu entity={entity()} />}
+          </Show>
         }
         defaultModel={defaultModelForPlan(hasPaidAccess())}
         decisionsEnabled={decisions().enabled}

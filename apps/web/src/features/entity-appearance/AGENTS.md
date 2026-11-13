@@ -8,6 +8,7 @@ snippets, task projects (initiatives), forms, and databases.
 ## Start here
 
 - `entity-appearance.tsx`: lazy editor launcher and header-only trigger.
+- `appearance-menu.tsx`: desktop submenu composition with the existing mobile sheet fallback.
 - `core/appearance.ts`: eligibility and appearance comparisons.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
@@ -47,6 +48,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Preserve independent appearance overrides on unknown wire values: unknown colors fall back to type color, and unknown icon kinds retain their valid color.
 - Show colors only on Icons; Default uses the entity type color and Remove clears only the icon.
 - Keep the compact shared-visibility footer on both tabs; label editing actions “Change icon” without an ellipsis and with the shared appearance icon.
+- Embed the existing picker in desktop Change icon submenus; keep header popovers and mobile sheets, with picker keyboard events scoped to the submenu.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
 - Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.

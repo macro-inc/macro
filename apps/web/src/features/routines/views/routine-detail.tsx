@@ -7,7 +7,6 @@ import { formatDateAndTime } from '@entity';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
-import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
@@ -131,7 +130,7 @@ export function RoutineDetailView(props: {
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
-  onChangeIcon?(): void;
+  appearanceMenu?: JSX.Element;
   identityIcon?: JSX.Element;
   /** Opens an agent conversation about this routine. */
   onCompose?(): void;
@@ -271,12 +270,7 @@ export function RoutineDetailView(props: {
                 </Dropdown.Trigger>
                 <Dropdown.Content portalScope="local">
                   <Dropdown.Group>
-                    <Show when={props.onChangeIcon}>
-                      <Dropdown.Item onSelect={props.onChangeIcon}>
-                        <PaintBrushIcon class="size-4" />
-                        {t('appearance.title')}
-                      </Dropdown.Item>
-                    </Show>
+                    {props.appearanceMenu}
                     <Dropdown.Item
                       disabled={!state() || props.source.duplicationPending()}
                       onSelect={() => props.source.duplicate()}

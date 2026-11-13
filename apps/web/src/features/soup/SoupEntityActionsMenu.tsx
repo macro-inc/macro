@@ -12,7 +12,9 @@ import {
 } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
-import { children, For, type JSX, Show } from 'solid-js';
+import { Key } from '@solid-primitives/keyed';
+import { children, createMemo, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,
@@ -49,7 +51,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const extraItems = children(() => props.extraItems);
   const hasExtraItems = () => extraItems.toArray().length > 0;
 
-  const groups = () => {
+  const groups = createMemo(() => {
     const content = panel.handle.content();
     return buildActionGroups(props.list, props.entities, {
       viewContext: props.viewContext,
@@ -60,7 +62,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       splitHandle: panel.handle,
       createActionNavigationHandler: props.createActionNavigationHandler,
     });
-  };
+  });
 
   const handleAction = async (onClick: () => void | Promise<unknown>) => {
     await onClick();
@@ -69,49 +71,72 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
 
   return (
     <>
-      <For each={groups()}>
+      <Key each={groups()} by="id">
         {(group, groupIndex) => (
           <>
             <Show when={groupIndex() > 0}>
               <MenuSeparator />
             </Show>
-            <For each={group.items}>
+            <Key each={group().items} by="id">
               {(action) => {
-                if (action.muteMenu) {
-                  return (
-                    <NotificationMuteMenu
-                      {...action.muteMenu}
-                      onActionComplete={props.onActionComplete}
-                    />
-                  );
-                }
-                if (action.copy)
-                  return (
-                    <CopyMenuItem
-                      text={action.label}
-                      icon={action.icon}
-                      hotkeyToken={action.hotkeyToken}
-                      shortcut={action.shortcut}
-                      disabled={action.disabled}
-                      onCopy={async () => (await action.onClick()) !== false}
-                    />
-                  );
                 return (
-                  <MenuItem
-                    text={action.label}
-                    icon={action.icon}
-                    hotkeyToken={action.hotkeyToken}
-                    shortcut={action.shortcut}
-                    disabled={action.disabled}
-                    onClick={() => handleAction(action.onClick)}
-                    class={action.destructive ? 'text-failure-ink' : undefined}
-                  />
+                  <Show
+                    when={action().menuItem}
+                    fallback={
+                      <Show
+                        when={action().muteMenu}
+                        fallback={
+                          <Show
+                            when={action().copy}
+                            fallback={
+                              <MenuItem
+                                text={action().label}
+                                icon={action().icon}
+                                hotkeyToken={action().hotkeyToken}
+                                shortcut={action().shortcut}
+                                disabled={action().disabled}
+                                onClick={() => handleAction(action().onClick)}
+                                class={
+                                  action().destructive
+                                    ? 'text-failure-ink'
+                                    : undefined
+                                }
+                              />
+                            }
+                          >
+                            <CopyMenuItem
+                              text={action().label}
+                              icon={action().icon}
+                              hotkeyToken={action().hotkeyToken}
+                              shortcut={action().shortcut}
+                              disabled={action().disabled}
+                              onCopy={async () =>
+                                (await action().onClick()) !== false
+                              }
+                            />
+                          </Show>
+                        }
+                      >
+                        <NotificationMuteMenu
+                          {...action().muteMenu!}
+                          onActionComplete={props.onActionComplete}
+                        />
+                      </Show>
+                    }
+                  >
+                    {(component) => (
+                      <Dynamic
+                        component={component()}
+                        onActionComplete={props.onActionComplete}
+                      />
+                    )}
+                  </Show>
                 );
               }}
-            </For>
+            </Key>
           </>
         )}
-      </For>
+      </Key>
       <Show when={hasExtraItems()}>
         <Show when={groups().length > 0}>
           <MenuSeparator />

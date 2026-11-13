@@ -466,7 +466,7 @@ function TagPickerBody(props: {
 }
 
 /** The search, tag rows, and create flow of a picker session. */
-function TagPickerList(props: {
+export function TagPickerList(props: {
   session: TagPickerSession;
   /** Fill a sized container, such as a sheet, rather than a popover's height. */
   fillHeight?: boolean;

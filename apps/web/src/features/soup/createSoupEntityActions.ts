@@ -1,4 +1,5 @@
 import { createCrmEntityActionItems } from '@app/features/crm/crm-action-items';
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import {
   type EntityActionListState,
   type EntityActionNavigationHandler,
@@ -37,6 +38,7 @@ import {
 import { openProjectEntityAction } from '@app/features/projects/project-entity-actions';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
+import { EntityTagSubmenu } from '@app/features/property/tags/EntityTagSubmenu';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -87,7 +89,7 @@ import type { NotificationMuteMenuProps } from '@notifications/components/Notifi
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import type { Component, JSX } from 'solid-js';
+import { type Component, createComponent, type JSX } from 'solid-js';
 import { supportsEntityAppearance } from '../entity-appearance/core/appearance';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import { useAppearanceEditAccess } from '../entity-appearance/queries/access';
@@ -104,9 +106,12 @@ export type SoupEntityActionItem = {
   destructive?: boolean;
   disabled?: boolean;
   muteMenu?: NotificationMuteMenuProps;
+  /** Desktop-only composed item, such as an entity picker submenu. */
+  menuItem?: Component<{ onActionComplete?: () => void }>;
 };
 
 type SoupEntityActionGroup = {
+  id: string;
   items: SoupEntityActionItem[];
 };
 
@@ -162,6 +167,20 @@ export function createSoupEntityActions(
     return entities?.length === 1 ? entities[0] : undefined;
   };
   const canEditIcon = useAppearanceEditAccess(selectedEntity, userId);
+  // Keep the component identity while the selected entity receives new metadata.
+  const appearanceMenuItem: Component = () =>
+    createComponent(EntityAppearanceMenu, {
+      get entity() {
+        return selectedEntity()!;
+      },
+    });
+  const tagMenuItem: Component<{ onActionComplete?: () => void }> = (menu) =>
+    createComponent(EntityTagSubmenu, {
+      get entity() {
+        return selectedEntity()!;
+      },
+      onActionComplete: menu.onActionComplete,
+    });
   const isTeamAdmin = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
@@ -434,6 +453,7 @@ export function createSoupEntityActions(
         id: 'change-icon',
         icon: PaintBrushIcon,
         label: t('appearance.title'),
+        menuItem: appearanceMenuItem,
         onClick: () => {
           changeIcon(entity);
         },
@@ -523,6 +543,7 @@ export function createSoupEntityActions(
         icon: TagIcon,
         label: t('entityActions.addTag'),
         onClick: openTagPicker,
+        menuItem: tagMenuItem,
       });
     }
 
@@ -766,9 +787,13 @@ export function createSoupEntityActions(
       });
     }
 
-    return [topItems, middleItems, senderItems, crmItems, deleteItems]
-      .filter((items) => items.length > 0)
-      .map((items) => ({ items }));
+    return [
+      { id: 'top', items: topItems },
+      { id: 'middle', items: middleItems },
+      { id: 'sender', items: senderItems },
+      { id: 'crm', items: crmItems },
+      { id: 'delete', items: deleteItems },
+    ].filter((group) => group.items.length > 0);
   };
 
   return { buildActionGroups, isFavorited: favoriteAction.isFavorited };

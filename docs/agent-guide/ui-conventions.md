@@ -56,7 +56,8 @@ retain the open menu and focused row; the explicit icon blurs and fades to a pla
 green check after the clipboard write succeeds, then resets after the last copy.
 Labels remain unchanged and success toasts do not appear. A failed copy keeps the
 original icon and reports the error. The same behavior applies to mobile action
-sheets. Non-copy actions still close immediately without waiting for their work.
+sheets. Ordinary actions close immediately without waiting; desktop Change icon
+and Add tag open the existing pickers inside submenus instead.
 
 ## Entity icons and colors
 
@@ -76,7 +77,8 @@ entry points, and disabling closes an open picker. Saved appearance remains
 visible, including public/read-only views; API/SDK access and permissions do not
 change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
 
-Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
+Desktop header icons use a compact 344px anchored popover; desktop menu entries
+use the same picker inside a submenu. Phones retain a bottom sheet with
 **Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
 stays open. Escape, outside clicks, and Done close without undoing saved choices.
 There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back

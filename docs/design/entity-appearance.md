@@ -101,12 +101,12 @@ an allowed icon name does not change that schema.
 
 ## Editing
 
-Header icons and existing entity menus open the same lazy editor. Desktop uses
-a 344px anchored popover; mobile uses a bottom sheet. Document and task-project
-header icons are editable controls separate from breadcrumb name navigation. Document content
-titles have no leading icon or Add icon pill; use the header icon or More menu
-to edit appearance. Row icons retain navigation. Popup loading stays inside the
-dialog's Suspense boundary without suspending the surrounding app.
+Header icons and existing entity menus share the same lazy picker and save path.
+Desktop headers use a 344px anchored popover; desktop menus embed the picker in a
+submenu. Mobile retains the bottom sheet. Document and task-project header icons
+are separate from breadcrumb navigation. Document content titles have no leading
+icon or Add icon pill. Row icons retain navigation. Picker loading stays inside a
+local Suspense boundary without suspending the surrounding app.
 
 Each icon, emoji, color, or Remove pick saves immediately through the existing
 optimistic, per-entity serialized path. The picker stays open; dismissal does
