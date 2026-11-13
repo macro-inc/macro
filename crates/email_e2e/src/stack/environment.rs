@@ -176,6 +176,10 @@ pub(crate) fn service_env(addresses: &Addresses<'_>) -> BTreeMap<String, String>
             "OVERRIDE_GOOGLE_OAUTH_CERTS_URL",
             addresses.gmail.certs_url(),
         ),
+        (
+            "OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL",
+            format!("{gmail}/oauth2/v3/tokeninfo"),
+        ),
         ("OVERRIDE_MICROSOFT_GRAPH_URL", format!("{outlook}/v1.0/")),
         (
             "OVERRIDE_MICROSOFT_LOGIN_URL",

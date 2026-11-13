@@ -185,6 +185,43 @@ impl User {
         ))
     }
 
+    /// Links the mailbox of the user's own address the way signing in with
+    /// Google does: `POST /email/init` with no sign-in attempt, so Macro
+    /// asks Google which scopes the mailbox's token carries. Waits for the
+    /// first sync. The mailbox is created at the emulator unless the
+    /// scenario added it already (with the scopes it wants the grant to
+    /// hold).
+    pub async fn link_gmail_through_sign_in(&self) -> Result<Inbox, Report> {
+        if !self
+            .gmail
+            .mailboxes()
+            .iter()
+            .any(|mailbox| mailbox.email == self.email)
+        {
+            self.gmail.add_mailbox(&gmail_emulator::SeedMailbox {
+                email: self.email.clone(),
+                ..Default::default()
+            })?;
+        }
+        let linked = self
+            .post("/email/init", None)
+            .await?
+            .ok()
+            .context("could not link the Gmail mailbox signed in with")?;
+        let link_id: Uuid = linked["link_id"]
+            .as_str()
+            .and_then(|id| id.parse().ok())
+            .ok_or_else(|| report!("POST /email/init answered no link id: {linked}"))?;
+        let inbox = Inbox::new(
+            self.clone(),
+            ProviderHandle::Gmail(self.gmail.clone()),
+            self.email.clone(),
+            link_id,
+        );
+        inbox.wait_until_synced().await?;
+        Ok(inbox)
+    }
+
     /// `GET path` as the user.
     pub async fn get(&self, path: &str) -> Result<ApiResponse, Report> {
         self.request(Method::GET, path, None, None).await
