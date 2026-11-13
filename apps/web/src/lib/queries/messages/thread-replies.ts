@@ -9,8 +9,9 @@ import {
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
+import { defaultQueryRetry } from '../retry';
 import { messageKeys } from './keys';
-import { channelReadNetworkMode } from './local/flag';
+import { channelReadNetworkMode, retryOnceOnline } from './local/flag';
 import { loadLocalChannelThread } from './local/source';
 import { normalizeMessageThreadSenders } from './message-sender';
 import { useMessageSubscription } from './subscription';
@@ -48,6 +49,7 @@ export function threadRepliesQueryOptions(
     queryKey: messageKeys.threadReplies(parent, messageId).queryKey,
     queryFn: () => fetchMessageThread(parent, messageId),
     networkMode: channelReadNetworkMode(parent),
+    retry: retryOnceOnline(defaultQueryRetry),
     staleTime: Infinity,
   };
 }

@@ -6,6 +6,7 @@ import type {
   MessageThread,
   MessageTimelinePage,
 } from '@service-storage/messages';
+import { onlineManager } from '@tanstack/solid-query';
 import { catchUpAndRefresh, catchUpChannel } from './catch-up';
 import { channelCacheAnswered, channelCacheHost } from './flag';
 import {
@@ -54,6 +55,8 @@ function pageRequest(
 function reportFallback(error: unknown, signal?: AbortSignal): void {
   // A cancelled read is the caller's doing, not a failure of the device path.
   if (signal?.aborted) throw error;
+  // Offline, a read the device cannot serve is expected, not a fault.
+  if (!onlineManager.isOnline()) return;
   Telemetry.error(error);
 }
 
