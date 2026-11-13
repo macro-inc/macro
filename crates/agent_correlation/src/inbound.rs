@@ -213,12 +213,17 @@ async fn propagate_request(
         return CorrelationRejection(CorrelationError::OutOfScope).into_response();
     }
     let correlation_id = correlation.map(|(id, _)| id);
+    // Handlers read the scope stored with the correlation, else the one the
+    // credential signs (the harness signs the stored one).
+    let signed = SignedScope::from_claim(token.as_ref().and_then(|t| t.agent_scope.as_deref()));
     // The routine claim needs no lookup: the token's signature is its authority.
     let attribution = Attribution {
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
         session_id: correlation.map(|(_, correlation)| correlation.session_id),
-        scope: correlation.and_then(|(_, correlation)| correlation.scope),
+        scope: correlation
+            .and_then(|(_, correlation)| correlation.scope)
+            .or(signed.known()),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };
     crate::context::scope_attribution(attribution, next.run(Request::from_parts(parts, body)))

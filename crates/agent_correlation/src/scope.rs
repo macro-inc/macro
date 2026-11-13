@@ -263,6 +263,14 @@ impl SignedScope {
             Self::Unknown => reads_by_method(method),
         }
     }
+
+    /// The signed scope, if it is one this build knows.
+    pub fn known(self) -> Option<SessionScope> {
+        match self {
+            Self::Known(scope) => Some(scope),
+            Self::Unscoped | Self::Unknown => None,
+        }
+    }
 }
 
 /// Requests whose method says they only read.

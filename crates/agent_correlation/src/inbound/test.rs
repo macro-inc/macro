@@ -329,6 +329,57 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
     assert_eq!(repository.calls.load(Ordering::SeqCst), 1);
 }
 
+/// A handler sees the scope stored with the correlation, else the one the
+/// credential signs, so a route's own scope rule holds either way.
+#[tokio::test]
+async fn a_handler_reads_the_signed_scope_when_none_is_stored() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let app = axum::Router::new()
+        .route(
+            "/scope",
+            axum::routing::get(|| async {
+                crate::context::current_scope().map_or("none", crate::scope::SessionScope::as_str)
+            }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    let agent = Some(Uuid::from_u128(3));
+    let unscoped = Some(Uuid::from_u128(1));
+    let generation = Some(Uuid::from_u128(6));
+    for (bearer, expected) in [
+        (mint(unscoped, agent, None, None), "none"),
+        (mint(unscoped, agent, None, Some("no_send")), "no_send"),
+        (mint(None, None, None, Some("no_send")), "no_send"),
+        (
+            mint(generation, agent, None, Some("generation")),
+            "generation",
+        ),
+        (mint(unscoped, agent, None, Some("newer")), "none"),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/scope")
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, expected);
+    }
+}
+
 /// A service with no database refuses requests outside a credential's signed
 /// scope, and lets unscoped credentials and other callers through.
 #[tokio::test]
