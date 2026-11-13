@@ -210,8 +210,16 @@ async fn guest_tokens_preserve_names_and_only_grant_the_room() {
 }
 
 fn receive_egress_ended(status: &str, size: &str) -> crate::domain::models::CallWebhookEvent {
+    receive_egress_event("egress_ended", status, size)
+}
+
+fn receive_egress_event(
+    event: &str,
+    status: &str,
+    size: &str,
+) -> crate::domain::models::CallWebhookEvent {
     let body = serde_json::json!({
-        "event": "egress_ended",
+        "event": event,
         "id": "EV_egress",
         "createdAt": 1,
         "egressInfo": {
@@ -255,5 +263,14 @@ fn receive_webhook_drops_file_egress_never_uploaded() {
         let event = receive_egress_ended(status, size);
         assert_eq!(event.egress_id.as_deref(), Some("EG_test"));
         assert_eq!(event.file_url, None, "{status} size {size}");
+    }
+}
+
+#[test]
+fn receive_webhook_ignores_planned_file_before_egress_ends() {
+    for event in ["egress_started", "egress_updated"] {
+        let event = receive_egress_event(event, "EGRESS_ACTIVE", "0");
+        assert_eq!(event.egress_id.as_deref(), Some("EG_test"));
+        assert_eq!(event.file_url, None);
     }
 }

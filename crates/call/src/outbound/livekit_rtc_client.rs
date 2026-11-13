@@ -543,10 +543,13 @@ impl CallRtcClient for LivekitRtcClient {
                 CallError::Auth
             })?;
 
-        // Extract file URL from egress info if available.
+        // Extract file URL from egress info if available. Earlier egress
+        // events list the planned file before anything is uploaded.
         let (egress_id, file_url) = match &event.egress_info {
             Some(info) => {
-                let url = recorded_file_location(info);
+                let url = (event.event == EGRESS_ENDED_EVENT)
+                    .then(|| recorded_file_location(info))
+                    .flatten();
                 let id = if info.egress_id.is_empty() {
                     None
                 } else {
@@ -609,6 +612,8 @@ fn is_not_found(error: &ServiceError) -> bool {
         ServiceError::Twirp(TwirpError::Twirp(code)) if code.code == TwirpErrorCode::NOT_FOUND
     )
 }
+
+const EGRESS_ENDED_EVENT: &str = "egress_ended";
 
 /// The uploaded file of an egress that wrote one. A failed or aborted egress
 /// (e.g. a call that ended within a second or two) still lists its planned
