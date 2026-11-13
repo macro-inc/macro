@@ -1,5 +1,6 @@
 services/agent_harness_service/src/lib.rs
   s_7f65392b5f68c8::t_d2f441ae176fbb 2-16,20,22-45,47,49-786,800-813,815-833,838-848,859-922,924-1400,1402-1403,1415-1416,1423,1436-1858,1860-1869,1875-1893,1895-1917,1926-2096,2110-2129,2131-2159,2161-2626,2630-2673
+  s_32bb7dbdd998e8::t_405c73cde8764b 21,46,48,787-799,814,834-837,849-858,923,1401,1404-1414,1417-1422,1424-1435,1859,1870-1874,1894,1918-1925,2097-2109,2130,2160,2627-2629
 services/agent_harness_service/src/main.rs
   s_7f65392b5f68c8::t_5ecf9c24fb218a 2,4,17
 ---
@@ -9,6 +10,14 @@ services/agent_harness_service/src/main.rs
   "base_commit_sha": "384707498557b5535281b0642515e953013cfe50",
   "prompts": {},
   "sessions": {
+    "s_32bb7dbdd998e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "504be32e-43fc-4128-93f1-102ad421a2cf",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
     "s_7f65392b5f68c8": {
       "agent_id": {
         "tool": "claude",
