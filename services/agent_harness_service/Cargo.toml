@@ -218,6 +218,7 @@ macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 mcp_select = { path = "../../crates/mcp_select" }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+wiremock = { workspace = true }
 
 [features]
 local = []

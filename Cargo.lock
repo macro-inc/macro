@@ -749,6 +749,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 

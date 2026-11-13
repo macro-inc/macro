@@ -39,8 +39,37 @@ each run.
 - `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step
-  boxes in the web editor). It runs the draft in an ordinary hidden agent
-  session (`RoutineSessions`) of the in-process Macro agent: the person's own
+  boxes in the web editor). The harness drafts directly
+  (`drafts/direct.rs`, `RoutineDrafts::with_direct`), in two or three model
+  calls and no session. A call on the fast model (`direct/find.md`) names
+  the items the words refer to and the SDK areas the routine needs
+  (`RoutineCode::sdk_areas`). The `NameLookups` port (document storage's
+  `POST /search/names`, as the person) finds each name, and `settle` keeps
+  it only when exactly one item of its likeliest kind has it; a name none
+  or several have is left for the person to pick, never guessed. One call
+  on the person's Ask AI model (`DraftContext::agent_model`) writes the
+  whole routine as JSON from its own system prompt (`direct/write.md`: the
+  routines guide, the code-step guide, the SDK's `ai` area and Macro's
+  catalog code routines as examples), built once per mix of code and
+  trigger conditions (`DirectPrompts`) so the provider caches it; its user
+  turn carries the request, the found items by id and the reference of the
+  areas named (`RoutineCode::area_reference`). A `setup` module creating
+  what the routine uses runs once, as the person, and its ids replace each
+  `{{setup.<key>}}`. Saving's checks (`DraftChecks`, the service's
+  `check_draft`) run on the result; only their problems, with the SDK
+  declarations they name, go back to the model, at most
+  `DirectTuning::max_fixes` times. The calls are admitted and billed as
+  the person's automation usage (`DraftModel`, `AiFeature::Automation`).
+  Progress reports what was found and left by name
+  (`DraftMilestone::Found`). Spans: `routine.draft` records drafter
+  `direct`, names found and left, checks, fixes and `ended`;
+  `routine.draft.call` each call's purpose and answer size;
+  `routine.draft.lookup` and `routine.draft.setup`; never the words or the
+  names. With it, discarding a job deletes only its row, so a job a
+  replica on older code drafted in a session keeps its stopped hidden
+  session. Without direct drafting (tests), the draft runs in an ordinary
+  hidden agent session (`RoutineSessions`) of the in-process Macro agent:
+  the person's own
   (source `user`, origin `requested`) but hidden, a background session
   (`AgentSession::is_background`) that notifies nobody and only the scheduler
   may delete, never counted as a routine's run. It runs as the person, with its usual
