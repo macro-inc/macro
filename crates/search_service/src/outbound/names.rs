@@ -40,12 +40,27 @@ impl ChannelNames {
             .filter(|word| !word.is_empty())
             .map(|word| format!("%{}%", name_search::escape_like(word)))
             .collect();
+        let mut ids = self.read(viewer, &patterns, false).await?;
+        // The read returns the newest matches, so a full one may have left out
+        // an older channel named exactly this; read those on their own.
+        if ids.len() >= CHANNELS_PER_NAME as usize {
+            ids.extend(self.read(viewer, &[exact_pattern(needle)], true).await?);
+        }
+        Ok(ids)
+    }
+
+    async fn read(
+        &self,
+        viewer: &NameViewer,
+        patterns: &[String],
+        regex_patterns: bool,
+    ) -> Result<Vec<Uuid>, NameSourceError> {
         let matches = match_channel_names(
             &self.db,
             ChannelNameSearch {
                 viewer_user_id: viewer.user.clone(),
-                patterns: &patterns,
-                regex_patterns: false,
+                patterns,
+                regex_patterns,
                 channel_ids: &[],
                 channel_types: &[],
                 after: None,
@@ -56,6 +71,18 @@ impl ChannelNames {
         .map_err(|error| NameSourceError::Internal(rootcause::Report::new(error).into_dynamic()))?;
         Ok(matches.into_iter().map(|hit| hit.channel_id).collect())
     }
+}
+
+/// A case-insensitive regex for a name the lookup would call `needle`
+/// exactly: surrounding space, one leading `#` or `@`, any run of space
+/// between words.
+fn exact_pattern(needle: &Needle) -> String {
+    let words: Vec<String> = needle
+        .as_str()
+        .split_whitespace()
+        .map(name_search::escape_regex)
+        .collect();
+    format!(r"^\s*[#@]?\s*{}\s*$", words.join(r"\s+"))
 }
 
 #[async_trait::async_trait]
@@ -101,3 +128,6 @@ impl NameSource for ChannelNames {
             .collect())
     }
 }
+
+#[cfg(test)]
+mod test;

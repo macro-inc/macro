@@ -27,7 +27,10 @@ per-entity-type search plus a unified search across them — mounted into
   (`IndexedDocuments` in `src/api/search/names.rs`, the name index); the host
   supplies every other kind through `SearchHandlerState::name_sources`. A
   source that queries once per name runs at most `READS_PER_SOURCE` of them
-  at a time, so one lookup can't drain a connection pool.
+  at a time, so one lookup can't drain a connection pool. A read capped at a
+  row count returns the newest matches, so it can miss an older exact name:
+  the channel source reads exact names on their own when its substring read
+  fills.
 - `src/outbound.rs` + `src/outbound/agent_session.rs`: the OpenSearch query
   builders.
 

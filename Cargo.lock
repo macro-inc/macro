@@ -18209,6 +18209,7 @@ dependencies = [
  "item_filters",
  "macro_authorization",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_user_id",
  "model",
  "models_email",
