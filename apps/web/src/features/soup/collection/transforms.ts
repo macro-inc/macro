@@ -69,6 +69,28 @@ export function prioritizeItems<TItem>(
     .map(({ item }) => item);
 }
 
+/**
+ * Orders two names the way Soup's `name` sort does: lower-cased, in ICU's
+ * root collation (`und-x-icu` on the server), with an empty name first and a
+ * missing name after every present one. Names the collation calls equal fall
+ * back to code-unit order, as Postgres breaks ties in a deterministic
+ * collation; `0` means the server ranks them on its tie breakers.
+ */
+export function compareSoupNames(
+  left: string | null | undefined,
+  right: string | null | undefined
+): number {
+  if (left == null || right == null) {
+    if (left == null && right == null) return 0;
+    return left == null ? 1 : -1;
+  }
+  const a = left.toLowerCase();
+  const b = right.toLowerCase();
+  if (a === b) return 0;
+
+  return a.localeCompare(b, 'und') || (a < b ? -1 : 1);
+}
+
 export type SortDefinition<TItem, TId extends string = string> = {
   id: TId;
   compare: (left: TItem, right: TItem) => number;

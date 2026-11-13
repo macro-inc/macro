@@ -1,3 +1,4 @@
+import { compareSoupNames } from '@app/features/soup/collection/transforms';
 import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import { compareDateDesc } from '@core/util/date';
 import type { DocumentEntity, EntityData } from '@entity';
@@ -75,13 +76,10 @@ export function driveEntityMatchesLocation(
   return documentMatchesTab(entity, location.tab, selection.scope, userId);
 }
 
-/** Matches the server's `name` order: case-insensitive, then newest update and descending ID. */
+/** Matches the server's `name` order, then newest update and descending ID. */
 function compareNames(left: EntityData, right: EntityData): number {
-  const a = left.name?.toLocaleLowerCase();
-  const b = right.name?.toLocaleLowerCase();
-  if (!a && b) return 1;
-  if (a && !b) return -1;
-  if (a && b && a !== b) return a.localeCompare(b);
+  const names = compareSoupNames(left.name, right.name);
+  if (names) return names;
 
   const updated = compareDateDesc(left.updatedAt, right.updatedAt);
   if (updated) return updated;

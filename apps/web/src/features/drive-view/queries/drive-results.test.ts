@@ -49,6 +49,17 @@ describe('orderDriveEntities with the name sort', () => {
     ).toEqual(['c', 'b', 'a']);
   });
 
+  it('puts an empty name first, as the server does', () => {
+    const entities = [
+      file('named', 'Alpha', '2026-03-01T00:00:00Z'),
+      file('empty', '', '2026-03-01T00:00:00Z'),
+    ];
+
+    expect(
+      orderDriveEntities(entities, selection, []).map((entity) => entity.id)
+    ).toEqual(['empty', 'named']);
+  });
+
   it('keeps the local-search featured prefix ahead of the alphabet', () => {
     const entities = [
       file('alpha', 'Alpha notes', '2026-03-01T00:00:00Z'),

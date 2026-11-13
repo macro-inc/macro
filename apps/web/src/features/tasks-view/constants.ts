@@ -1,5 +1,6 @@
 import type { SortDefinition } from '@app/features/soup';
 import {
+  compareSoupNames,
   type SortSelection,
   sortItems,
 } from '@app/features/soup/collection/transforms';
@@ -186,15 +187,12 @@ function sortTasksByTitle(
   items: TaskEntityWithProperties[],
   ascending: boolean
 ): TaskEntityWithProperties[] {
-  const key = (item: TaskEntityWithProperties) =>
-    item.name?.toLocaleLowerCase();
   return [...items].sort((left, right) => {
-    const a = key(left);
-    const b = key(right);
-    if (a === undefined && b !== undefined) return 1;
-    if (a !== undefined && b === undefined) return -1;
-    if (a !== undefined && b !== undefined && a !== b) {
-      return ascending ? a.localeCompare(b) : b.localeCompare(a);
+    const names = compareSoupNames(left.name, right.name);
+    // Missing names stay last whichever way the names run.
+    if (names) {
+      const missing = left.name == null || right.name == null;
+      return ascending || missing ? names : -names;
     }
     const updated =
       (propertyDateSortKey(right.updatedAt) ?? 0) -
