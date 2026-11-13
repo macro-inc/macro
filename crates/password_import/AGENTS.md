@@ -62,7 +62,12 @@ From public format docs and open-source importers (format knowledge only):
   reference. Other `files/` entries are never read.
 - 1Password CSV: 1Password 8 header `Title,Url,Username,Password,OTPAuth,
   Favorite,Archived,Tags,Notes` (case-insensitive); extra columns become fields;
-  `Tags` is kept whole as written. Older 1Password CSV layouts are unknown formats.
+  `Tags` is kept whole as written. Any CSV with `title,url,username,password`
+  and none of the columns below is read this way.
+- 1Password 7 CSV (`UUID,TITLE,…,SCOPE,AUTOSUBMIT`, card and identity data in
+  numbered `SECTION n:` columns): `detect` and `parse` refuse it with
+  `UnsupportedVersion` when a `title` column sits beside `uuid`, `scope` or
+  `autosubmit`; the user exports `.1pux` or from 1Password 8 instead.
 - Bitwarden JSON: `encrypted`, `folders[{id,name}]` (`a/b` nests),
   `items[]` with `type` 1–5, `login.{uris,username,password,totp,fido2Credentials}`,
   `card`, `identity`, `sshKey`, `fields[{name,value,type 0–3}]`,

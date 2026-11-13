@@ -3,30 +3,30 @@ source: crates/password_import/tests/import/golden.rs
 expression: snapshot(&export)
 ---
 {
+  "summary": {
+    "itemsByKind": {},
+    "folders": 0,
+    "skippedByReason": {
+      "shared_collection": 2
+    },
+    "droppedByPart": {}
+  },
   "export": {
-    "dropped": [],
-    "folders": [],
     "format": "bitwarden_csv",
+    "folders": [],
     "items": [],
     "skipped": [
       {
+        "sourceKey": "row:1",
         "name": "Shared login",
-        "reason": "shared_collection",
-        "sourceKey": "row:1"
+        "reason": "shared_collection"
       },
       {
+        "sourceKey": "row:2",
         "name": "Uncollected org login",
-        "reason": "shared_collection",
-        "sourceKey": "row:2"
+        "reason": "shared_collection"
       }
-    ]
-  },
-  "summary": {
-    "droppedByPart": {},
-    "folders": 0,
-    "itemsByKind": {},
-    "skippedByReason": {
-      "shared_collection": 2
-    }
+    ],
+    "dropped": []
   }
 }

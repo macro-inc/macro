@@ -26,4 +26,5 @@ insta = { workspace = true }
 # The golden tests snapshot the parsed export through the adapter's serializer.
 password_import = { path = ".", features = ["serde"] }
 proptest = { workspace = true }
-serde_json = { workspace = true }
+# Snapshot key order: the workspace test build enables it anyway.
+serde_json = { workspace = true, features = ["preserve_order"] }

@@ -3,34 +3,34 @@ source: crates/password_import/tests/import/golden.rs
 expression: snapshot(&export)
 ---
 {
+  "summary": {
+    "itemsByKind": {
+      "login": 5,
+      "card": 1,
+      "note": 2,
+      "identity": 1,
+      "api": 1
+    },
+    "folders": 3,
+    "skippedByReason": {
+      "trashed": 1,
+      "archived": 1,
+      "passkey": 1,
+      "shared_collection": 2,
+      "unsupported_category": 1,
+      "too_large": 1,
+      "malformed": 1
+    },
+    "droppedByPart": {
+      "attachment": 1,
+      "passkey": 1,
+      "password_history": 2,
+      "totp_non_default": 1,
+      "extra_field": 1
+    }
+  },
   "export": {
-    "dropped": [
-      {
-        "count": 1,
-        "sourceKey": "10000000-0000-4000-8000-000000000001",
-        "what": "passkey"
-      },
-      {
-        "count": 1,
-        "sourceKey": "10000000-0000-4000-8000-000000000001",
-        "what": "extra_field"
-      },
-      {
-        "count": 2,
-        "sourceKey": "10000000-0000-4000-8000-000000000001",
-        "what": "password_history"
-      },
-      {
-        "count": 1,
-        "sourceKey": "10000000-0000-4000-8000-000000000010",
-        "what": "totp_non_default"
-      },
-      {
-        "count": 1,
-        "sourceKey": "10000000-0000-4000-8000-000000000018",
-        "what": "attachment"
-      }
-    ],
+    "format": "bitwarden_json",
     "folders": [
       [
         "Work"
@@ -45,317 +45,317 @@ expression: snapshot(&export)
         "Ünïcødé"
       ]
     ],
-    "format": "bitwarden_json",
     "items": [
       {
-        "favorite": true,
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "kind": "login",
+        "name": "Ünïcødé 🔑 名前",
+        "url": "https://login.example.test/sign-in",
+        "username": "ünïcødé-user",
+        "password": "pässwörd-🔑",
+        "notes": "Notes with ünïcødé 名前 and\nnew lines.",
         "fields": [
           {
-            "concealed": true,
             "label": "Recovery code",
-            "value": "recovery-0000"
+            "value": "recovery-0000",
+            "concealed": true
           },
           {
-            "concealed": false,
             "label": "Plan",
-            "value": "premium"
+            "value": "premium",
+            "concealed": false
           },
           {
-            "concealed": false,
             "label": "Remember me",
-            "value": "true"
+            "value": "true",
+            "concealed": false
           },
           {
-            "concealed": false,
             "label": "Field",
-            "value": "unnamed value"
+            "value": "unnamed value",
+            "concealed": false
           },
           {
-            "concealed": false,
             "label": "Website 2",
-            "value": "androidapp://com.example.app"
+            "value": "androidapp://com.example.app",
+            "concealed": false
           },
           {
-            "concealed": false,
             "label": "Website 3",
-            "value": "https://second.example.test/"
+            "value": "https://second.example.test/",
+            "concealed": false
           }
         ],
+        "totp": "JBSWY3DPEHPK3PXP",
         "folder": [
           "Work",
           "Clients",
           "Ünïcødé"
         ],
-        "kind": "login",
-        "name": "Ünïcødé 🔑 名前",
-        "notes": "Notes with ünïcødé 名前 and\nnew lines.",
-        "password": "pässwörd-🔑",
-        "sourceKey": "10000000-0000-4000-8000-000000000001",
-        "totp": "JBSWY3DPEHPK3PXP",
-        "url": "https://login.example.test/sign-in",
-        "username": "ünïcødé-user"
+        "favorite": true
       },
       {
-        "favorite": false,
-        "fields": [],
-        "folder": null,
-        "kind": "login",
-        "name": "Duplicate",
-        "notes": "",
-        "password": "dup-pass",
         "sourceKey": "10000000-0000-4000-8000-000000000002",
-        "totp": null,
-        "url": "https://dup.example.test/",
-        "username": "dup-user"
-      },
-      {
-        "favorite": false,
-        "fields": [],
-        "folder": null,
         "kind": "login",
         "name": "Duplicate",
+        "url": "https://dup.example.test/",
+        "username": "dup-user",
+        "password": "dup-pass",
         "notes": "",
-        "password": "",
-        "sourceKey": "10000000-0000-4000-8000-000000000003",
+        "fields": [],
         "totp": null,
-        "url": null,
-        "username": ""
+        "folder": null,
+        "favorite": false
       },
       {
-        "favorite": false,
+        "sourceKey": "10000000-0000-4000-8000-000000000003",
+        "kind": "login",
+        "name": "Duplicate",
+        "url": null,
+        "username": "",
+        "password": "",
+        "notes": "",
         "fields": [],
+        "totp": null,
+        "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000004",
+        "kind": "note",
+        "name": "Secure note",
+        "url": null,
+        "username": "",
+        "password": "",
+        "notes": "Note body",
+        "fields": [],
+        "totp": null,
         "folder": [
           "Work"
         ],
-        "kind": "note",
-        "name": "Secure note",
-        "notes": "Note body",
-        "password": "",
-        "sourceKey": "10000000-0000-4000-8000-000000000004",
-        "totp": null,
-        "url": null,
-        "username": ""
+        "favorite": false
       },
       {
-        "favorite": false,
-        "fields": [
-          {
-            "concealed": false,
-            "label": "Expires",
-            "value": "07/2030"
-          },
-          {
-            "concealed": true,
-            "label": "Security code",
-            "value": "123"
-          },
-          {
-            "concealed": false,
-            "label": "Brand",
-            "value": "Visa"
-          }
-        ],
-        "folder": null,
+        "sourceKey": "10000000-0000-4000-8000-000000000005",
         "kind": "card",
         "name": "Synthetic Visa",
-        "notes": "",
-        "password": "4111111111111111",
-        "sourceKey": "10000000-0000-4000-8000-000000000005",
-        "totp": null,
         "url": null,
-        "username": "Synthetic Holder"
-      },
-      {
-        "favorite": false,
+        "username": "Synthetic Holder",
+        "password": "4111111111111111",
+        "notes": "",
         "fields": [
           {
-            "concealed": false,
-            "label": "Email",
-            "value": "identity@example.test"
+            "label": "Expires",
+            "value": "07/2030",
+            "concealed": false
           },
           {
-            "concealed": false,
-            "label": "Phone",
-            "value": "+1 555 0101"
+            "label": "Security code",
+            "value": "123",
+            "concealed": true
           },
           {
-            "concealed": false,
-            "label": "Address",
-            "value": "Street line one, Unit 2, Testville, TS, 00000, US"
-          },
-          {
-            "concealed": false,
-            "label": "Title",
-            "value": "Mx"
-          },
-          {
-            "concealed": false,
-            "label": "Company",
-            "value": "Synthetic Co"
-          },
-          {
-            "concealed": false,
-            "label": "Username",
-            "value": "synthetic"
-          },
-          {
-            "concealed": true,
-            "label": "Social security number",
-            "value": "000-00-0000"
-          },
-          {
-            "concealed": true,
-            "label": "Passport number",
-            "value": "P000000"
-          },
-          {
-            "concealed": true,
-            "label": "License number",
-            "value": "D000000"
+            "label": "Brand",
+            "value": "Visa",
+            "concealed": false
           }
         ],
+        "totp": null,
         "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000006",
         "kind": "identity",
         "name": "Synthetic Identity",
-        "notes": "",
-        "password": "",
-        "sourceKey": "10000000-0000-4000-8000-000000000006",
-        "totp": null,
         "url": null,
-        "username": "Synthetic Q Person"
-      },
-      {
-        "favorite": false,
+        "username": "Synthetic Q Person",
+        "password": "",
+        "notes": "",
         "fields": [
           {
-            "concealed": false,
-            "label": "Fingerprint",
-            "value": "SHA256:synthetic"
+            "label": "Email",
+            "value": "identity@example.test",
+            "concealed": false
+          },
+          {
+            "label": "Phone",
+            "value": "+1 555 0101",
+            "concealed": false
+          },
+          {
+            "label": "Address",
+            "value": "Street line one, Unit 2, Testville, TS, 00000, US",
+            "concealed": false
+          },
+          {
+            "label": "Title",
+            "value": "Mx",
+            "concealed": false
+          },
+          {
+            "label": "Company",
+            "value": "Synthetic Co",
+            "concealed": false
+          },
+          {
+            "label": "Username",
+            "value": "synthetic",
+            "concealed": false
+          },
+          {
+            "label": "Social security number",
+            "value": "000-00-0000",
+            "concealed": true
+          },
+          {
+            "label": "Passport number",
+            "value": "P000000",
+            "concealed": true
+          },
+          {
+            "label": "License number",
+            "value": "D000000",
+            "concealed": true
           }
         ],
+        "totp": null,
         "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000007",
         "kind": "api",
         "name": "Deploy key",
-        "notes": "",
+        "url": null,
+        "username": "ssh-ed25519 c3ludGhldGlj",
         "password": "synthetic-private-key-material",
-        "sourceKey": "10000000-0000-4000-8000-000000000007",
-        "totp": null,
-        "url": null,
-        "username": "ssh-ed25519 c3ludGhldGlj"
-      },
-      {
-        "favorite": false,
-        "fields": [],
-        "folder": null,
-        "kind": "note",
-        "name": "Note at limit",
-        "notes": "<65536 bytes of 'n'>",
-        "password": "",
-        "sourceKey": "10000000-0000-4000-8000-000000000008",
-        "totp": null,
-        "url": null,
-        "username": ""
-      },
-      {
-        "favorite": false,
+        "notes": "",
         "fields": [
           {
-            "concealed": true,
-            "label": "One-time password",
-            "value": "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=8"
+            "label": "Fingerprint",
+            "value": "SHA256:synthetic",
+            "concealed": false
           }
         ],
-        "folder": null,
-        "kind": "login",
-        "name": "Eight digit codes",
-        "notes": "",
-        "password": "",
-        "sourceKey": "10000000-0000-4000-8000-000000000010",
         "totp": null,
-        "url": null,
-        "username": "code-user"
+        "folder": null,
+        "favorite": false
       },
       {
-        "favorite": false,
+        "sourceKey": "10000000-0000-4000-8000-000000000008",
+        "kind": "note",
+        "name": "Note at limit",
+        "url": null,
+        "username": "",
+        "password": "",
+        "notes": "<65536 bytes of 'n'>",
         "fields": [],
+        "totp": null,
         "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000010",
+        "kind": "login",
+        "name": "Eight digit codes",
+        "url": null,
+        "username": "code-user",
+        "password": "",
+        "notes": "",
+        "fields": [
+          {
+            "label": "One-time password",
+            "value": "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=8",
+            "concealed": true
+          }
+        ],
+        "totp": null,
+        "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000018",
         "kind": "login",
         "name": "With attachments",
-        "notes": "",
-        "password": "",
-        "sourceKey": "10000000-0000-4000-8000-000000000018",
-        "totp": null,
         "url": null,
-        "username": "attachment-user"
+        "username": "attachment-user",
+        "password": "",
+        "notes": "",
+        "fields": [],
+        "totp": null,
+        "folder": null,
+        "favorite": false
       }
     ],
     "skipped": [
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000009",
         "name": "Note over limit",
-        "reason": "too_large",
-        "sourceKey": "10000000-0000-4000-8000-000000000009"
+        "reason": "too_large"
       },
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000011",
         "name": "Organization login",
-        "reason": "shared_collection",
-        "sourceKey": "10000000-0000-4000-8000-000000000011"
+        "reason": "shared_collection"
       },
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000012",
         "name": "Collection login",
-        "reason": "shared_collection",
-        "sourceKey": "10000000-0000-4000-8000-000000000012"
+        "reason": "shared_collection"
       },
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000013",
         "name": "Deleted login",
-        "reason": "trashed",
-        "sourceKey": "10000000-0000-4000-8000-000000000013"
+        "reason": "trashed"
       },
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000014",
         "name": "Archived login",
-        "reason": "archived",
-        "sourceKey": "10000000-0000-4000-8000-000000000014"
+        "reason": "archived"
       },
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000015",
         "name": "Passkey only",
-        "reason": "passkey",
-        "sourceKey": "10000000-0000-4000-8000-000000000015"
+        "reason": "passkey"
       },
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000016",
         "name": "Future type",
-        "reason": "unsupported_category",
-        "sourceKey": "10000000-0000-4000-8000-000000000016"
+        "reason": "unsupported_category"
       },
       {
+        "sourceKey": "10000000-0000-4000-8000-000000000017",
         "name": null,
-        "reason": "malformed",
-        "sourceKey": "10000000-0000-4000-8000-000000000017"
+        "reason": "malformed"
+      }
+    ],
+    "dropped": [
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "passkey",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "extra_field",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "password_history",
+        "count": 2
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000010",
+        "what": "totp_non_default",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000018",
+        "what": "attachment",
+        "count": 1
       }
     ]
-  },
-  "summary": {
-    "droppedByPart": {
-      "attachment": 1,
-      "extra_field": 1,
-      "passkey": 1,
-      "password_history": 2,
-      "totp_non_default": 1
-    },
-    "folders": 3,
-    "itemsByKind": {
-      "api": 1,
-      "card": 1,
-      "identity": 1,
-      "login": 5,
-      "note": 2
-    },
-    "skippedByReason": {
-      "archived": 1,
-      "malformed": 1,
-      "passkey": 1,
-      "shared_collection": 2,
-      "too_large": 1,
-      "trashed": 1,
-      "unsupported_category": 1
-    }
   }
 }
