@@ -1,7 +1,6 @@
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import CompanyIcon from '@icon/system/regular/building-office.svg';
 import CommentIcon from '@icon/system/regular/chat-text.svg';
-import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EmailIcon from '@icon/system/regular/envelope.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import CallIcon from '@icon/system/regular/phone-call.svg';
@@ -162,13 +161,6 @@ export function SheetAgentDemo(props: { compact?: boolean }) {
 
   return (
     <div ref={root} class="sheet-story">
-      <div class="sheet-prompt">
-        <Avatar person="julia" />
-        <p>
-          <span class="sheet-mention">@Claude</span> build a forecast for next
-          quarter
-        </p>
-      </div>
       <div class="sheet-frame">
         <SheetTitle name="Launch budget">
           <Avatar person="julia" />
@@ -424,39 +416,40 @@ export function SheetChartGraphic(props: { compact?: boolean }) {
   );
 }
 
-/** An Excel workbook opens as an editable sheet and exports back out. */
-export function SheetImportGraphic() {
+/**
+ * An uploaded Excel workbook as the app opens it: read-only under the notice
+ * that offers an editable copy, with its sheets as tabs along the bottom.
+ */
+export function SheetImportGraphic(props: { compact?: boolean }) {
   return (
-    <div class="sheet-story" data-layout="import">
-      <div class="sheet-import">
-        <div class="sheet-import-file">
-          <span class="sheet-import-badge">XLSX</span>
-          <div>
-            <strong>Launch budget.xlsx</strong>
-            <span>3 sheets · 48 formulas</span>
-          </div>
+    <div class="sheet-story">
+      <div class="sheet-frame">
+        <SheetTitle name="Launch budget.xlsx" />
+        <div class="sheet-upload">
+          <span>
+            Uploaded workbook · Convert to edit and collaborate. The original
+            file stays available.
+          </span>
+          <span class="sheet-upload-action">Edit in Macro</span>
         </div>
-        <span class="sheet-import-action">
-          Edit in Macro
-          <ArrowRight aria-hidden="true" />
-        </span>
-        <div class="sheet-import-sheet">
-          <div class="sheet-import-name">
-            <SheetIcon aria-hidden="true" />
-            <strong>Launch budget</strong>
-          </div>
-          <div class="sheet-import-tabs">
-            <span data-active="true">Budget</span>
-            <span>Forecast</span>
-            <span>Vendors</span>
-          </div>
+        <SheetGrid
+          widths={props.compact ? [116, 96, 110] : [156, 112, 124, 112]}
+          numeric={[1, 2, 3]}
+          rows={[
+            (props.compact
+              ? ['Team', 'Q4 spend', 'Q1 forecast']
+              : ['Team', 'Q4 spend', 'Q1 forecast', 'Change']
+            ).map((heading) => <b>{heading}</b>),
+            ...[...budget, budgetTotal].map((row) =>
+              row.slice(0, props.compact ? 3 : 4)
+            ),
+          ]}
+        />
+        <div class="sheet-tabs">
+          <span data-active="true">Budget</span>
+          <span>Forecast</span>
+          <span>Vendors</span>
         </div>
-      </div>
-      <div class="sheet-export">
-        <DownloadIcon aria-hidden="true" />
-        Download as
-        <span>Excel (.xlsx)</span>
-        <span>CSV</span>
       </div>
     </div>
   );
