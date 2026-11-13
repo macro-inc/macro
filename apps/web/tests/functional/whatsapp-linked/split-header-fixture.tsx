@@ -75,6 +75,7 @@ export function ChatHeaderFixture(props: ParentProps) {
         bottomPanel: () => undefined,
         registerBottomPanel: () => () => {},
         layoutRefs: refs,
+        mobileHeaderOwner: createSignal<symbol>(),
         titleFileMenuRef: titleRef,
         setTitleFileMenuRef: setTitleRef,
         titleFileMenuTrigger: titleTrigger,

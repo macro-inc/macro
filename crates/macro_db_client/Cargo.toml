@@ -33,6 +33,7 @@ non_empty = { path = "../non_empty" }
 rand = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+single_flight = { path = "../single_flight" }
 sqlx = { workspace = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }

@@ -229,6 +229,24 @@ color field (Shift makes larger steps). **Reset to default** clears the override
 Visibility and colors share the calendar sidebar's browser-local preferences,
 survive reload, and do not change the Google calendar or booking conflict checks.
 
+Each calendar row also has a **Busy** switch (`<name> counts as busy`), right of
+its color dot: the saved, per-user `calendar_availability_preferences` choice
+(`GET`/`PUT /calendar/availability-calendars`). It is a switch, not a checkbox,
+and its visible `Busy` label sets it apart from the visibility checkbox on the
+same row; hiding a calendar never changes it. Every calendar counts until the
+user turns Busy off, and one choice governs every reader of busy time: booking
+slots, reschedule slots and the agent's booking tools (`MacroCalendars::busy`),
+team availability, and the agent and SDK `contributesToAvailability` labels.
+An event still blocks time when another copy sits on a Busy calendar, when its
+calendar is unknown, or when the user is in the meeting and has not declined it
+(`labels::attends_meeting`): invited as a guest, or organizing it with other
+guests on a copy they can change. A solo entry listing the user's inbox as its
+organizer, as Macro writes on a primary calendar, and the mailbox organizer row
+Outlook puts on every event of a read-only calendar are not meetings. The switch shows once the setting loads,
+saves at once and restores itself with a toast when the save fails. Phones reach
+the same rows from the mobile Settings sheet's **Calendar** page; the calendar
+view's own phone settings sheet lists accounts, not calendars.
+
 The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
 the same browser-local preferences) controls the app rail's Calendar badge:
 `Now` during a meeting, or minutes until one under an hour away. Turning it off
@@ -265,7 +283,8 @@ that private link. Rescheduling defaults to the browser's time zone; `Your time
 zone` controls both the selected calendar date and the displayed times. Changing
 the zone clears the date and times and discards outstanding availability results.
 Calendar provider failures show an error; they never report a
-confirmed booking. Current integrations check hosts' connected calendars and
+confirmed booking. Current integrations check hosts' connected calendars that
+count as Busy in Settings → Calendar (every calendar unless turned off) and
 write invitations/Google Meet through the existing calendar service.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
@@ -313,22 +332,16 @@ With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
 `Busy blocks` (the default), `Event details`, and `Nothing`, with a one-line
 description of the current choice under the label. A new choice shows at once
 and saves in the background; a failed save restores the previous choice and
-shows a toast. Neither settings section returns to a loading state after a
-change, including when the server's `team_sharing_changed` push arrives.
+shows a toast. Neither it nor the Busy switches return to a loading state
+after a change, including when the server's `team_sharing_changed` push arrives.
 These are Macro read permissions. They do not change Google Calendar ACLs,
 invite teammates to meetings, or let teammates edit, RSVP, or manage reminders.
 The sharing choice covers every currently authorized calendar synced to Macro.
 Private/confidential events only expose generic time blocks.
 
-**Calendars that count as busy** reuses the sidebar's `Calendars` list: each
-connected account is a folded row with a checkbox, color swatch, and disclosure
-button that expands to its calendars. An account checkbox includes or excludes
-all of its calendars at once. These choices decide which calendars represent the
-user's personal schedule. Primary calendars count by default; other calendars
-require explicit inclusion. Meetings the user attends also contribute, except
-declined meetings. Following a coworker's calendar does not automatically make
-that coworker's events occupy the user's time. The section is hidden when the
-user has no calendars to list.
+Which calendars count toward the user's availability is the **Busy** switch on
+each Connected calendars row (above); the team settings have no list of their
+own. Meetings the user is in also contribute, by the same rule.
 
 Teammates' shared events do not render on the grid; `Team out of office` is the
 only teammate overlay. Replacing a login session clears team data and open
@@ -501,6 +514,11 @@ event is written, so the single invitation already carries the link. The MCP ser
 accepts `addMacroCall` directly; the channel bot creates events through
 `calendar.createConfirmed`. `addMacroCall` and `addGoogleMeet`
 are mutually exclusive, and out-of-office entries accept neither.
+An existing event switches to a Macro call without being recreated:
+`UpdateCalendarEvent`'s `addMacroCall` and the SDK's `event.update({ macroCall: true })`
+send `macroCall` on the update route, which writes the join link and removes the
+Google Meet in one update. An event already holding a Macro call keeps it, and an
+Outlook event's Teams meeting cannot be removed this way.
 
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of

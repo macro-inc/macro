@@ -46,11 +46,11 @@ export function TeammateRuntimesSection(props: {
         <p class="mb-3 px-6 text-xs text-ink-extra-muted">
           {t('runtimeSharing.teammatesRuntimesHint')}
         </p>
-        <SettingsCard>
+        <SettingsCard inset="wide">
           <For each={owners()}>
             {(owner) => (
-              <div class="flex flex-col py-2" data-teammate-runtime-owner>
-                <div class="flex items-center gap-2 px-4 pt-1 pb-1 text-sm font-medium text-ink">
+              <div class="flex flex-col" data-teammate-runtime-owner>
+                <div class="flex items-center gap-2 px-6 pt-4 text-sm font-medium text-ink">
                   <OwnerLabel
                     ownerId={owner}
                     suppressClick
@@ -105,7 +105,7 @@ function TeammateRuntimeRow(props: {
   };
   return (
     <div
-      class="flex items-start justify-between gap-4 py-2 pr-4 pl-12 transition-colors touch:min-h-[56px] @max-[480px]:flex-col @max-[480px]:gap-2 @max-[480px]:pl-4 [&.ring-2]:bg-accent-bg/50 [&.ring-2]:ring-inset [&.ring-offset-2]:ring-offset-0"
+      class="flex items-start justify-between gap-4 py-4 pr-6 pl-14 transition-colors @max-[480px]:flex-col @max-[480px]:gap-2 @max-[480px]:pl-6 [&.ring-2]:bg-accent-bg/50 [&.ring-2]:ring-inset [&.ring-offset-2]:ring-offset-0"
       data-settings-target={`runtime-${props.harness.id}`}
       data-teammate-runtime={props.harness.name}
     >

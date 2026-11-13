@@ -106,6 +106,9 @@ missing-file message (`docker exec <id> journalctl -u macrod-enroll`).
 
 ## Importing into an Incus host (runtime-dev-1)
 
+`root@runtime-dev-1` goes over IAP; pass the SSH options from the Deploy
+section of `nix/hosts/README.md` to `scp` and `ssh`.
+
 ```sh
 nix build .#macro-box-incus
 scp -L result/metadata.tar.xz result/disk.qcow2 root@runtime-dev-1:/tmp/

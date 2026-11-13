@@ -130,6 +130,13 @@ pub(crate) fn sql(
 pub(crate) struct FakeDatabases(pub(crate) Shared);
 
 impl DatabasesService for FakeDatabases {
+    async fn set_appearance(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        Err(DatabaseError::Unauthorized)
+    }
     async fn apply_ops_with_changes(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -247,6 +254,7 @@ impl DatabasesService for FakeDatabases {
 
     async fn create_database(&self, input: CreateDatabase) -> Result<Database, DatabaseError> {
         let database = Database {
+            appearance: None,
             id: DatabaseId::new(),
             name: input.name.clone(),
             owner_id: input.owner_id.to_string(),

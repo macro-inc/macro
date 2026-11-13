@@ -38,6 +38,10 @@ errors; extend it additively before services begin writing new turn states.
 Install widened checks as `NOT VALID` and validate in a separate migration so
 the scan does not retain the replacement migration's exclusive table lock.
 
+Entity appearance is nullable JSON on each owning entity table (including routine
+template snapshots); appearance-only writes preserve content timestamps. Document
+lists and content save responses retain the stored appearance alongside ordinary metadata.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -82,6 +86,11 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
+- `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)
+  and `call_record::get::get_accessible_call_ids` (uncached) share one run of
+  their queries between concurrent identical callers through `single_flight`.
+  The unit tests compile with the cache off; `tests/coalesced_access_lookups.rs`
+  covers the cached path and needs its own user ids per test.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;
