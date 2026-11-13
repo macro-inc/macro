@@ -18,7 +18,7 @@ use crate::domain::catalog::{self, CatalogEntry};
 use crate::domain::filters::WebhookFilters;
 use crate::domain::models::{PrincipalKind, StreamItem, StreamPrincipal, WebhookScope};
 use crate::domain::ports::CredentialCheck;
-use crate::domain::stream::{EventStreamService, OpenStream, StreamError};
+use crate::domain::stream::{EventStreamService, OpenStream, Resume, StreamError};
 use axum::extract::{FromRef, FromRequestParts, Query, State};
 use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -276,8 +276,8 @@ where
     let resume = headers
         .get("last-event-id")
         .and_then(|value| value.to_str().ok())
-        .map(str::to_owned)
-        .or(query.cursor);
+        .map(|value| Resume::LastEventId(value.to_owned()))
+        .or(query.cursor.map(Resume::Cursor));
     let credential = Arc::new(RequestCredential {
         headers,
         uri,

@@ -113,6 +113,8 @@ type EntityKey = (EntityType, String);
 pub struct AccessCaches {
     accessors: TtlCache<EntityKey, Result<Arc<HashSet<String>>, Unsupported>>,
     exact: TtlCache<(EntityKey, String), bool>,
+    at_least: TtlCache<(EntityKey, String, MinAccessLevel), bool>,
+    contacts: TtlCache<(String, String), bool>,
     team_members: TtlCache<Uuid, Arc<HashMap<String, TeamRole>>>,
     user_teams: TtlCache<String, Arc<Vec<(Uuid, TeamRole)>>>,
     github_claims: TtlCache<(String, String), bool>,
@@ -127,6 +129,8 @@ impl Default for AccessCaches {
         Self {
             accessors: TtlCache::new(ACCESS_CACHE_TTL),
             exact: TtlCache::new(ACCESS_CACHE_TTL),
+            at_least: TtlCache::new(ACCESS_CACHE_TTL),
+            contacts: TtlCache::new(ACCESS_CACHE_TTL),
             team_members: TtlCache::new(ACCESS_CACHE_TTL),
             user_teams: TtlCache::new(ACCESS_CACHE_TTL),
             github_claims: TtlCache::new(ACCESS_CACHE_TTL),
@@ -144,9 +148,16 @@ impl AccessCaches {
             } => {
                 let key = (*entity_type, entity_id.clone());
                 self.exact.evict_where(|(entity, _)| *entity == key);
+                self.at_least.evict_where(|(entity, _, _)| *entity == key);
                 self.accessors.evict(&key);
             }
             Invalidation::Team { team_id, user_id } => {
+                // Team grants make members accessors of whatever the team was
+                // granted, which no single entity key names: drop every
+                // entity fact. Membership changes are rare.
+                self.exact.evict_where(|_| true);
+                self.at_least.evict_where(|_| true);
+                self.accessors.evict_where(|_| true);
                 self.team_members.evict(team_id);
                 if let Some(user_id) = user_id {
                     self.user_teams.evict(&user_id.as_ref().to_owned());
@@ -402,12 +413,20 @@ where
                 self.has_github_claim(installation_id, kind.user()).await
             }
             Audience::Any(audiences) => {
+                // One branch failing must not hide another that admits: the
+                // event is dropped only if no branch admits and one failed.
+                let mut failure = None;
                 for audience in audiences {
-                    if Box::pin(self.admits(memo, audience, candidate)).await? {
-                        return Ok(true);
+                    match Box::pin(self.admits(memo, audience, candidate)).await {
+                        Ok(true) => return Ok(true),
+                        Ok(false) => {}
+                        Err(report) => failure = Some(report),
                     }
                 }
-                Ok(false)
+                match failure {
+                    Some(report) => Err(report),
+                    None => Ok(false),
+                }
             }
         }
     }
@@ -458,8 +477,9 @@ where
         Ok(admitted)
     }
 
-    /// Explicit accessors at or above a level are always checked one by one:
-    /// the audience is rare (form responses) and its level is per person.
+    /// Explicit accessors at or above a level are checked one by one (cached
+    /// like exact checks): the audience is rare (form responses) and its
+    /// level is per person.
     async fn at_least(
         &self,
         memo: &mut EventMemo,
@@ -472,15 +492,18 @@ where
             return Ok(*admitted);
         }
         let ((entity_type, entity_id), _, _) = &memo_key;
-        let admitted = match self
-            .access
-            .is_accessor_at_least(principal_id, *entity_type, entity_id, min_level)
-            .await
-        {
-            Ok(admitted) => admitted,
-            Err(AccessLookupError::Unsupported(_)) => false,
-            Err(AccessLookupError::Failed(report)) => return Err(report),
-        };
+        let lookup = self.caches.at_least.get_or_load(&memo_key, || async {
+            match self
+                .access
+                .is_accessor_at_least(principal_id, *entity_type, entity_id, min_level)
+                .await
+            {
+                Ok(admitted) => Ok(admitted),
+                Err(AccessLookupError::Unsupported(_)) => Ok(false),
+                Err(AccessLookupError::Failed(report)) => Err(report),
+            }
+        });
+        let (admitted, _) = lookup.await?;
         memo.at_least.insert(memo_key, admitted);
         Ok(admitted)
     }
@@ -495,7 +518,11 @@ where
         if let Some(contact) = memo.contacts.get(&memo_key) {
             return Ok(*contact);
         }
-        let contact = self.contacts.is_contact(user, other).await?;
+        let (contact, _) = self
+            .caches
+            .contacts
+            .get_or_load(&memo_key, || self.contacts.is_contact(user, other))
+            .await?;
         memo.contacts.insert(memo_key, contact);
         Ok(contact)
     }

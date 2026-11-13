@@ -525,7 +525,7 @@ async fn a_bot_listens_as_its_acting_user_without_their_personal_events() {
         .open(
             bot(&member, false),
             WebhookScope::User,
-            filter(&["document.updated", "call.ringing"]),
+            filter(&["document.updated", "call.ringing", "webhook.created"]),
             None,
         )
         .await

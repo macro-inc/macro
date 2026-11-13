@@ -221,22 +221,20 @@ pub fn is_public_event(name: &str) -> bool {
 }
 
 /// The catalog entries a stream held by `principal` can receive: preview
-/// entries only with the flag, no account-holder families for an account
-/// manager, and no purely personal events for a bot its acting user does
-/// not own.
+/// entries only with the flag, account-holder families only for the account
+/// holder, and no purely personal events for a bot its acting user does not
+/// own.
 pub fn visible_to(
     principal: &crate::domain::models::StreamPrincipal,
     preview: bool,
 ) -> Vec<&'static CatalogEntry> {
-    use crate::domain::models::PrincipalKind;
-
     CATALOG
         .iter()
         .filter(|entry| preview || entry.stage == Stage::Stable)
-        .filter(|entry| match &principal.kind {
-            PrincipalKind::AccountManager { .. } => !crate::domain::filters::family(entry.name)
-                .is_some_and(|family| ACCOUNT_HOLDER_FAMILIES.contains(&family)),
-            PrincipalKind::User { .. } | PrincipalKind::Bot { .. } => true,
+        .filter(|entry| {
+            principal.kind.is_account_holder()
+                || !crate::domain::filters::family(entry.name)
+                    .is_some_and(|family| ACCOUNT_HOLDER_FAMILIES.contains(&family))
         })
         .filter(|entry| {
             principal.kind.sees_personal_events()

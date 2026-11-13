@@ -250,7 +250,7 @@ async fn an_api_key_holds_at_most_five_streams() {
     let holder = user("holder@example.com");
     let key = StreamPrincipal {
         kind: PrincipalKind::User {
-            user: holder.clone(),
+            user: holder,
             api_key: true,
         },
         credential_id: "key-digest".to_owned(),
@@ -280,29 +280,16 @@ async fn an_api_key_holds_at_most_five_streams() {
         .await;
     assert!(matches!(sixth, Err(StreamError::TooManyStreams)));
 
-    // Closing one frees its lease.
+    // Closing one frees its lease once its task has run; with the clock
+    // paused, this sleep returns only after every task is idle.
     drop(open.pop());
-    tokio::task::yield_now().await;
-    let mut reopened = harness
-        .open(key, WebhookScope::User, filter(&["document.updated"]), None)
-        .await;
-    while reopened.is_err() {
-        tokio::task::yield_now().await;
-        reopened = harness
-            .open(
-                StreamPrincipal {
-                    kind: PrincipalKind::User {
-                        user: holder.clone(),
-                        api_key: true,
-                    },
-                    credential_id: "key-digest".to_owned(),
-                },
-                WebhookScope::User,
-                filter(&["document.updated"]),
-                None,
-            )
-            .await;
-    }
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    assert!(
+        harness
+            .open(key, WebhookScope::User, filter(&["document.updated"]), None)
+            .await
+            .is_ok()
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -389,4 +376,90 @@ async fn team_scope_needs_a_team() {
         .await;
 
     assert!(matches!(opened, Err(StreamError::BadRequest(_))));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_lagging_tail_never_redelivers_what_precedes_the_cursor() {
+    let (harness, reader) = flagged();
+    let mut stream = harness
+        .open(
+            person(&reader),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+            Some("5000-0".to_owned()),
+        )
+        .await
+        .unwrap();
+
+    // The tail hands out an entry older than the client's cursor.
+    harness
+        .fan_out
+        .deliver(crate::domain::models::LogEntry {
+            cursor: Cursor { ms: 4_000, seq: 0 },
+            record: doc_event("document.updated"),
+            span: tracing::Span::none(),
+        })
+        .await;
+
+    assert_eq!(next_id(&mut stream).await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_last_event_id_that_is_not_a_cursor_starts_live() {
+    use crate::domain::stream::{EventStreamService as _, OpenStream, Resume};
+    let (harness, reader) = flagged();
+
+    let opened = harness
+        .service
+        .open_stream(OpenStream {
+            principal: person(&reader),
+            scope: WebhookScope::User,
+            filters: filter(&["document.updated"]),
+            resume: Some(Resume::LastEventId(
+                "0193b3a0-0000-7000-8000-000000000001".to_owned(),
+            )),
+            credential: std::sync::Arc::new(FakeCredential(Default::default())),
+        })
+        .await;
+
+    assert!(opened.is_ok());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_cursor_ahead_of_the_clock_is_refused() {
+    let (harness, reader) = flagged();
+    let ahead = format!("{}-0", u64::MAX / 2);
+
+    let opened = harness
+        .open(
+            person(&reader),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+            Some(ahead),
+        )
+        .await;
+
+    assert!(matches!(opened, Err(StreamError::BadRequest(_))));
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_event_held_for_coalescing_keeps_the_resume_point_before_it() {
+    let (harness, reader) = flagged();
+    let mut stream = harness
+        .open(
+            person(&reader),
+            WebhookScope::User,
+            filter(&["document.interaction", "document.updated"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness.publish(doc_event("document.interaction")).await;
+    let held = harness.publish(doc_event("document.interaction")).await;
+    harness.publish(doc_event("document.updated")).await;
+
+    let _first = next_id(&mut stream).await;
+    let updated_id: Cursor = next_id(&mut stream).await.unwrap().parse().unwrap();
+    assert!(updated_id < held, "resuming from it replays the held event");
 }

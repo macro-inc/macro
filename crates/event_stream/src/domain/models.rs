@@ -231,6 +231,17 @@ impl PrincipalKind {
         }
     }
 
+    /// Whether the credential acts as the account holder: the user's own, or
+    /// a bot the user owns. Only they see the account's webhook, bot and API
+    /// key lifecycle.
+    pub fn is_account_holder(&self) -> bool {
+        match self {
+            Self::User { .. } => true,
+            Self::AccountManager { .. } => false,
+            Self::Bot { owned_by_user, .. } => *owned_by_user,
+        }
+    }
+
     /// The span value for `principal.kind`.
     pub fn as_str(&self) -> &'static str {
         match self {

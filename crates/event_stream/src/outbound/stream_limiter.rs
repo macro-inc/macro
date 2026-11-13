@@ -40,16 +40,37 @@ fn config(key: &LimitKey) -> ConcurrencyLimitConfig {
 impl<C: ConcurrencyLimitPort> StreamLimiter for LeaseStreamLimiter<C> {
     async fn acquire(&self, keys: &[LimitKey], stream: &str) -> Result<Option<LimitKey>, Report> {
         for (index, key) in keys.iter().enumerate() {
-            let lease = self
+            let lease = match self
                 .leases
                 .acquire(&rate_limit_key(key), stream, config(key))
-                .await?;
+                .await
+            {
+                Ok(lease) => lease,
+                Err(error) => {
+                    self.release(&keys[..index], stream).await;
+                    return Err(error);
+                }
+            };
             if let ConcurrencyLease::Exceeded { .. } = lease {
                 self.release(&keys[..index], stream).await;
                 return Ok(Some(key.clone()));
             }
         }
         Ok(None)
+    }
+
+    async fn renew(&self, keys: &[LimitKey], stream: &str) -> Result<Vec<LimitKey>, Report> {
+        let mut refused = Vec::new();
+        for key in keys {
+            let lease = self
+                .leases
+                .acquire(&rate_limit_key(key), stream, config(key))
+                .await?;
+            if let ConcurrencyLease::Exceeded { .. } = lease {
+                refused.push(key.clone());
+            }
+        }
+        Ok(refused)
     }
 
     async fn release(&self, keys: &[LimitKey], stream: &str) {

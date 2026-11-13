@@ -7,9 +7,7 @@
 
 use crate::domain::catalog::{self, ACCOUNT_HOLDER_FAMILIES};
 use crate::domain::filters::{self, ALL_EVENTS, FilterSubject, WebhookFilters};
-use crate::domain::models::{
-    CloseReason, Cursor, NormalizedEvent, PrincipalKind, StreamPrincipal, WebhookScope,
-};
+use crate::domain::models::{CloseReason, Cursor, NormalizedEvent, StreamPrincipal, WebhookScope};
 use event_exposure::Stage;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -87,8 +85,9 @@ pub struct Registry {
 }
 
 /// Whether a stream held by `principal` may receive an event at all, before
-/// its audience is resolved: preview events need the flag, and an account
-/// manager never receives the account holder's own families.
+/// its audience is resolved: preview events need the flag, and only the
+/// account holder (or a bot they own) receives their own webhook, bot and API
+/// key lifecycle.
 pub fn eligible(
     principal: &StreamPrincipal,
     preview: bool,
@@ -98,13 +97,9 @@ pub fn eligible(
     if stage == Stage::Preview && !preview {
         return false;
     }
-    let family = filters::family(&event.event_name);
-    match &principal.kind {
-        PrincipalKind::AccountManager { .. } => {
-            !family.is_some_and(|family| ACCOUNT_HOLDER_FAMILIES.contains(&family))
-        }
-        PrincipalKind::User { .. } | PrincipalKind::Bot { .. } => true,
-    }
+    let holder_family = filters::family(&event.event_name)
+        .is_some_and(|family| ACCOUNT_HOLDER_FAMILIES.contains(&family));
+    !holder_family || principal.kind.is_account_holder()
 }
 
 impl Registry {

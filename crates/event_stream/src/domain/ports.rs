@@ -12,16 +12,29 @@ pub trait EventLog: Send + Sync + 'static {
     /// Append one record; returns its cursor. Carries the current trace.
     fn append(&self, record: &LogRecord) -> impl Future<Output = Result<Cursor, Report>> + Send;
 
-    /// Up to `count` entries strictly after `after`, oldest first.
+    /// Up to `count` raw entries strictly after `after`, oldest first, of
+    /// which those this version can read are returned.
     fn read_after(
         &self,
         after: Cursor,
         count: usize,
-    ) -> impl Future<Output = Result<Vec<LogEntry>, Report>> + Send;
+    ) -> impl Future<Output = Result<LogPage, Report>> + Send;
 
     /// The oldest cursor the log still guarantees: every entry at or after
     /// it is retained.
     fn retained_floor(&self) -> impl Future<Output = Result<Cursor, Report>> + Send;
+}
+
+/// One page of the log.
+#[derive(Debug, Default)]
+pub struct LogPage {
+    /// The readable entries.
+    pub entries: Vec<LogEntry>,
+    /// The cursor of the last raw entry read, readable or not: where the
+    /// next page starts.
+    pub last: Option<Cursor>,
+    /// Whether the page was full, so more may follow.
+    pub full: bool,
 }
 
 /// A process' tail of the log, from the moment it started.
@@ -137,6 +150,15 @@ pub trait StreamLimiter: Send + Sync + 'static {
         keys: &[LimitKey],
         stream: &str,
     ) -> impl Future<Output = Result<Option<LimitKey>, Report>> + Send;
+
+    /// Renew `stream`'s leases on `keys`. Never releases; returns the keys
+    /// whose limit refused the renewal (the lease had lapsed and others took
+    /// the slot).
+    fn renew(
+        &self,
+        keys: &[LimitKey],
+        stream: &str,
+    ) -> impl Future<Output = Result<Vec<LimitKey>, Report>> + Send;
 
     /// Release `stream`'s leases on `keys`.
     fn release(&self, keys: &[LimitKey], stream: &str) -> impl Future<Output = ()> + Send;

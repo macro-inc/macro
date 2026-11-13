@@ -44,6 +44,9 @@ pub const COALESCE_WINDOW: Duration = Duration::from_secs(1);
 /// once, the latest of the rest when the window ends.
 pub const COALESCED_EVENTS: &[&str] = &["document.interaction", "document.content_changed"];
 
+/// Longest a credential check or lease renewal may take.
+const CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Entries read per replay page.
 const REPLAY_PAGE: usize = 500;
 
@@ -58,11 +61,25 @@ pub struct OpenStream {
     pub scope: WebhookScope,
     /// What it delivers.
     pub filters: WebhookFilters,
-    /// Resume after this cursor (`Last-Event-ID` or `?cursor=`).
-    pub resume: Option<String>,
+    /// Where to resume.
+    pub resume: Option<Resume>,
     /// Re-validates the credential while the stream is open.
     pub credential: Arc<dyn CredentialCheck>,
 }
+
+/// Where a client asks to resume.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Resume {
+    /// The `Last-Event-ID` header. A value that is not a cursor (a broker
+    /// event id from before cursors, or from a stream without the flag) is
+    /// ignored: the stream starts live.
+    LastEventId(String),
+    /// The `?cursor=` parameter: must be a cursor.
+    Cursor(String),
+}
+
+/// How far ahead of this server's clock a cursor may be.
+const CURSOR_CLOCK_SKEW_MS: u64 = 60_000;
 
 /// Why a stream could not be opened.
 #[derive(Debug, thiserror::Error)]
@@ -160,6 +177,35 @@ pub fn limit_keys(principal: &StreamPrincipal) -> Vec<LimitKey> {
     }
 }
 
+impl<A, T, C, G, L, P, Lim> StreamService<A, T, C, G, L, P, Lim>
+where
+    L: EventLog,
+{
+    /// A resume cursor inside the replay window and not ahead of the clock.
+    async fn check_cursor(
+        &self,
+        cursor: Cursor,
+        span: &tracing::Span,
+    ) -> Result<Cursor, StreamError> {
+        let now = now_ms();
+        span.record("cursor_age_ms", now.saturating_sub(cursor.ms));
+        if cursor.ms > now.saturating_add(CURSOR_CLOCK_SKEW_MS) {
+            return Err(StreamError::BadRequest(
+                "cursor is in the future".to_owned(),
+            ));
+        }
+        let floor = self
+            .log
+            .retained_floor()
+            .await
+            .map_err(StreamError::Internal)?;
+        if cursor < floor {
+            return Err(StreamError::CursorExpired);
+        }
+        Ok(cursor)
+    }
+}
+
 impl<A, T, C, G, L, P, Lim> EventStreamService for StreamService<A, T, C, G, L, P, Lim>
 where
     A: AccessDirectory,
@@ -201,21 +247,19 @@ where
 
         // Without the flag a stream has no cursors: `Last-Event-ID` carries a
         // broker event id from an older client and is ignored, as before.
-        let resume = match (preview, request.resume.as_deref()) {
-            (true, Some(raw)) => {
-                let cursor: Cursor = raw
-                    .parse()
-                    .map_err(|_| StreamError::BadRequest("invalid cursor".to_owned()))?;
-                span.record("cursor_age_ms", now_ms().saturating_sub(cursor.ms));
-                let floor = self
-                    .log
-                    .retained_floor()
-                    .await
-                    .map_err(StreamError::Internal)?;
-                if cursor < floor {
-                    return Err(StreamError::CursorExpired);
+        let resume = match (preview, request.resume) {
+            (true, Some(resume)) => {
+                let parsed = match resume {
+                    Resume::LastEventId(raw) => raw.parse::<Cursor>().ok(),
+                    Resume::Cursor(raw) => Some(
+                        raw.parse()
+                            .map_err(|_| StreamError::BadRequest("invalid cursor".to_owned()))?,
+                    ),
+                };
+                match parsed {
+                    Some(cursor) => Some(self.check_cursor(cursor, &span).await?),
+                    None => None,
                 }
-                Some(cursor)
             }
             _ => None,
         };
@@ -346,7 +390,10 @@ where
         {
             return stop;
         }
-        let replayed_through = self.last_sent;
+        // Live events at or before what the client already has (its cursor,
+        // or what the replay sent) are skipped: the tail can still be handing
+        // out entries older than the replay's last read.
+        let replayed_through = self.last_sent.max(resume);
 
         let mut revalidate = tokio::time::interval_at(
             tokio::time::Instant::now() + REVALIDATE_INTERVAL,
@@ -411,15 +458,14 @@ where
                     return Err(Stop::Closed(CloseReason::Lagged));
                 }
             };
-            let full = page.len() == REPLAY_PAGE;
-            for entry in page {
-                after = entry.cursor;
+            for entry in page.entries {
                 if let Some(delivery) = self.replayable(entry).await? {
                     self.offer(delivery, closed).await?;
                 }
             }
-            if !full {
-                return Ok(());
+            match page.last {
+                Some(last) if page.full => after = last,
+                _ => return Ok(()),
             }
         }
     }
@@ -520,13 +566,15 @@ where
         delivery: Delivery,
         closed: &mut oneshot::Receiver<CloseReason>,
     ) -> Result<(), Stop> {
-        // A coalesced event can trail newer ones; its id is the highest
-        // cursor sent so far, so resuming from it never skips an event.
+        // A coalesced event can trail newer ones, so the highest cursor sent
+        // is not always a safe place to resume: the SSE id is the resume
+        // point (see `resume_point`), and resuming from it never skips an
+        // event still held for its window.
         let cursor = self
             .last_sent
             .map_or(delivery.cursor, |last| last.max(delivery.cursor));
         let id = if self.preview {
-            cursor.to_string()
+            self.resume_point(cursor).to_string()
         } else {
             delivery.event.event_id.clone()
         };
@@ -548,30 +596,57 @@ where
         }
     }
 
+    /// Where a client that has seen everything through `sent` resumes: just
+    /// before the oldest event still held in a coalescing window, if any.
+    fn resume_point(&self, sent: Cursor) -> Cursor {
+        self.coalescing
+            .values()
+            .filter_map(|coalescing| coalescing.pending.as_ref())
+            .map(|pending| before(pending.cursor))
+            .fold(sent, Cursor::min)
+    }
+
     async fn revalidate(&mut self) -> Result<(), Stop> {
-        match self.credential.still_valid().await {
-            Ok(true) => {}
-            Ok(false) => return Err(Stop::Closed(CloseReason::Revoked)),
-            Err(error) => {
+        // Bounded, so a hung check never stops the stream draining its
+        // buffer; a timeout is treated like a failed check.
+        match tokio::time::timeout(CHECK_TIMEOUT, self.credential.still_valid()).await {
+            Ok(Ok(true)) => {}
+            Ok(Ok(false)) => return Err(Stop::Closed(CloseReason::Revoked)),
+            Ok(Err(error)) => {
                 tracing::warn!(error = ?error, stream.id = self.id, "failed to re-validate a stream's credential; keeping it open");
             }
-        }
-        match self
-            .service
-            .limiter
-            .acquire(&self.limit_keys, &self.lease_holder)
-            .await
-        {
-            Ok(None) => {}
-            Ok(Some(key)) => {
+            Err(_) => {
                 tracing::warn!(
-                    limit = key.kind(),
                     stream.id = self.id,
-                    "a stream lost its concurrency lease; keeping it open"
+                    "re-validating a stream's credential timed out; keeping it open"
                 );
             }
-            Err(error) => {
+        }
+        let renewal = tokio::time::timeout(
+            CHECK_TIMEOUT,
+            self.service
+                .limiter
+                .renew(&self.limit_keys, &self.lease_holder),
+        )
+        .await;
+        match renewal {
+            Ok(Ok(refused)) => {
+                for key in refused {
+                    tracing::warn!(
+                        limit = key.kind(),
+                        stream.id = self.id,
+                        "a stream lost its concurrency lease; keeping it open"
+                    );
+                }
+            }
+            Ok(Err(error)) => {
                 tracing::warn!(error = ?error, stream.id = self.id, "failed to renew a stream's concurrency lease");
+            }
+            Err(_) => {
+                tracing::warn!(
+                    stream.id = self.id,
+                    "renewing a stream's concurrency lease timed out"
+                );
             }
         }
         Ok(())
@@ -591,7 +666,7 @@ where
                     .preview
                     .then_some(self.last_sent)
                     .flatten()
-                    .map(|cursor| cursor.to_string()),
+                    .map(|cursor| self.resume_point(cursor).to_string()),
             }),
             CloseReason::Revoked => Some(ControlEvent::Revoked {
                 reason: "credential",
@@ -624,6 +699,20 @@ async fn sleep_until(deadline: Option<tokio::time::Instant>) {
     match deadline {
         Some(deadline) => tokio::time::sleep_until(deadline).await,
         None => std::future::pending().await,
+    }
+}
+
+/// The cursor just before `cursor`.
+fn before(cursor: Cursor) -> Cursor {
+    match cursor.seq {
+        0 => Cursor {
+            ms: cursor.ms.saturating_sub(1),
+            seq: u64::MAX,
+        },
+        seq => Cursor {
+            ms: cursor.ms,
+            seq: seq - 1,
+        },
     }
 }
 

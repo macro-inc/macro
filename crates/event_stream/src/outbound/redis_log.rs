@@ -13,7 +13,7 @@
 mod test;
 
 use crate::domain::models::{Cursor, LogEntry, LogRecord};
-use crate::domain::ports::{EventLog, LogTail, TailItem};
+use crate::domain::ports::{EventLog, LogPage, LogTail, TailItem};
 use redis::aio::MultiplexedConnection;
 use redis::streams::{StreamId, StreamRangeReply, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands as _, AsyncConnectionConfig, RedisError};
@@ -55,6 +55,24 @@ mod field {
     /// Prefix of the trace context fields (`tc.traceparent`, ...).
     pub const TRACE_PREFIX: &str = "tc.";
 }
+
+/// Set the floor key to ARGV[1] unless it already holds a later entry id.
+const RAISE_FLOOR_SCRIPT: &str = r"
+local current = redis.call('GET', KEYS[1])
+local function parse(id)
+  local ms, seq = string.match(id, '^(%d+)-(%d+)$')
+  return tonumber(ms), tonumber(seq)
+end
+if current then
+  local cms, cseq = parse(current)
+  local nms, nseq = parse(ARGV[1])
+  if cms > nms or (cms == nms and cseq >= nseq) then
+    return 0
+  end
+end
+redis.call('SET', KEYS[1], ARGV[1])
+return 1
+";
 
 fn now_ms() -> u64 {
     u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or_default()
@@ -173,6 +191,26 @@ impl RedisEventLog {
             }
         }
     }
+
+    async fn raise_length_floor(
+        &self,
+        connection: &mut MultiplexedConnection,
+    ) -> Result<(), Report> {
+        let first: StreamRangeReply = connection
+            .xrange_count(&self.stream, "-", "+", 1)
+            .await
+            .context("failed to read the public event log's first entry")?;
+        let Some(first) = first.ids.first() else {
+            return Ok(());
+        };
+        let _: i64 = redis::Script::new(RAISE_FLOOR_SCRIPT)
+            .key(floor_key(&self.stream))
+            .arg(&first.id)
+            .invoke_async(connection)
+            .await
+            .context("failed to record the public event log's length floor")?;
+        Ok(())
+    }
 }
 
 impl EventLog for RedisEventLog {
@@ -243,16 +281,10 @@ impl EventLog for RedisEventLog {
         if trimmed_by_length > 0 {
             // The cap cut into the retention window: record the first entry
             // left, so resumes from before it are reset rather than silently
-            // missing what was trimmed.
-            let first: StreamRangeReply = connection
-                .xrange_count(&self.stream, "-", "+", 1)
-                .await
-                .context("failed to read the public event log's first entry")?;
-            if let Some(first) = first.ids.first() {
-                let _: () = connection
-                    .set(floor_key(&self.stream), &first.id)
-                    .await
-                    .context("failed to record the public event log's length floor")?;
+            // missing what was trimmed. Best effort (the append succeeded),
+            // and the floor only moves forward even with several writers.
+            if let Err(error) = self.raise_length_floor(&mut connection).await {
+                tracing::error!(error = ?error, "failed to record the public event log's length floor");
             }
         }
 
@@ -262,7 +294,7 @@ impl EventLog for RedisEventLog {
     }
 
     #[tracing::instrument(name = "events.log.read_after", skip(self), err)]
-    async fn read_after(&self, after: Cursor, count: usize) -> Result<Vec<LogEntry>, Report> {
+    async fn read_after(&self, after: Cursor, count: usize) -> Result<LogPage, Report> {
         let mut connection = self.connection().await?;
         let reply: Result<StreamRangeReply, RedisError> = connection
             .xrange_count(&self.stream, format!("({after}"), "+", count)
@@ -276,7 +308,11 @@ impl EventLog for RedisEventLog {
                     .into_dynamic());
             }
         };
-        Ok(reply.ids.iter().filter_map(|raw| self.entry(raw)).collect())
+        Ok(LogPage {
+            entries: reply.ids.iter().filter_map(|raw| self.entry(raw)).collect(),
+            last: reply.ids.last().and_then(|raw| raw.id.parse().ok()),
+            full: reply.ids.len() == count,
+        })
     }
 
     async fn retained_floor(&self) -> Result<Cursor, Report> {
@@ -329,9 +365,26 @@ impl RedisLogTail {
             }
         };
 
-        let from = self
-            .last
-            .map_or_else(|| "$".to_owned(), |last| last.to_string());
+        // Start from a concrete id, never `$`: a blocking read that times out
+        // and is reissued with `$` would skip whatever was appended between
+        // the two reads.
+        let from = match self.last {
+            Some(last) => last,
+            None => {
+                let newest: StreamRangeReply = connection
+                    .xrevrange_count(&self.log.stream, "+", "-", 1)
+                    .await
+                    .context("failed to read the public event log's newest entry")?;
+                let start = newest
+                    .ids
+                    .first()
+                    .and_then(|raw| raw.id.parse().ok())
+                    .unwrap_or_default();
+                self.last = Some(start);
+                start
+            }
+        }
+        .to_string();
         let block_ms = usize::try_from(READ_BLOCK.as_millis()).unwrap_or(usize::MAX);
         let options = StreamReadOptions::default()
             .block(block_ms)

@@ -7,6 +7,7 @@ use crate::domain::models::{
     Cursor, LogEntry, LogRecord, NormalizedEvent, PrincipalKind, PublicLogEvent, StreamItem,
     StreamPrincipal, WebhookScope,
 };
+use crate::domain::ports::LogPage;
 use crate::domain::ports::{
     AccessDirectory, AccessLookupError, ContactDirectory, CredentialCheck, EventLog, GithubClaims,
     LimitKey, PreviewFlag, StreamLimiter, TeamDirectory, TeamRole,
@@ -261,8 +262,8 @@ impl EventLog for FakeLog {
         Ok(cursor)
     }
 
-    async fn read_after(&self, after: Cursor, count: usize) -> Result<Vec<LogEntry>, Report> {
-        Ok(self
+    async fn read_after(&self, after: Cursor, count: usize) -> Result<LogPage, Report> {
+        let entries: Vec<LogEntry> = self
             .entries
             .lock()
             .unwrap()
@@ -274,7 +275,12 @@ impl EventLog for FakeLog {
                 record: record.clone(),
                 span: tracing::Span::none(),
             })
-            .collect())
+            .collect();
+        Ok(LogPage {
+            last: entries.last().map(|entry| entry.cursor),
+            full: entries.len() == count,
+            entries,
+        })
     }
 
     async fn retained_floor(&self) -> Result<Cursor, Report> {
@@ -320,6 +326,17 @@ impl StreamLimiter for FakeLimiter {
             held.insert(stream.to_owned());
         }
         Ok(None)
+    }
+
+    async fn renew(&self, keys: &[LimitKey], stream: &str) -> Result<Vec<LimitKey>, Report> {
+        let mut holders = self.holders.lock().unwrap();
+        for key in keys {
+            holders
+                .entry(key.clone())
+                .or_default()
+                .insert(stream.to_owned());
+        }
+        Ok(Vec::new())
     }
 
     async fn release(&self, keys: &[LimitKey], stream: &str) {
@@ -542,7 +559,7 @@ impl Harness {
                 principal,
                 scope,
                 filters,
-                resume,
+                resume: resume.map(crate::domain::stream::Resume::Cursor),
                 credential: Arc::new(FakeCredential(valid.clone())),
             })
             .await?;
