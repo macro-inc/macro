@@ -87,7 +87,7 @@ export type TaskComposerHost = {
 
 /**
  * Draft, property, and submission state for one task composer, shared by the
- * desktop and mobile views through the `TaskComposer` parts.
+ * desktop and mobile views through `TaskComposerParts`.
  */
 export function createTaskComposer(
   props: ComposeTaskProps,

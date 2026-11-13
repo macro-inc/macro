@@ -984,6 +984,14 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
 
+/** A text search someone is waiting on; an empty query only browses a list. */
+export function isTypedSearch(request: CacheRequest): boolean {
+  if (request.kind !== 'search') return false;
+
+  const query = request.request.query ?? '';
+  return query.trim() !== '';
+}
+
 /**
  * A read-only request was refused because the database was moving between
  * owners and the foreground wait ran out. Storage is untouched and the engine
