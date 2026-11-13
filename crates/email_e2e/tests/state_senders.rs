@@ -1,5 +1,10 @@
 //! Rules about senders: which mail counts as signal, and blocked senders.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a scenario reads and seeds its own database, which the query cache does not describe"
+)]
+
 use email_e2e::{Inbox, Mail, Provider, Report, Stack};
 use rootcause::prelude::*;
 use serde_json::{Value, json};

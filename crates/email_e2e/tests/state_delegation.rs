@@ -1,5 +1,10 @@
 //! Shared inboxes: one user's mailbox that another user has access to.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a scenario reads and seeds its own database, which the query cache does not describe"
+)]
+
 use std::collections::BTreeSet;
 
 use email_e2e::{Inbox, Mail, Provider, Report, Stack, User};
