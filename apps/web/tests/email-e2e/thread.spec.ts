@@ -109,7 +109,11 @@ test.describe('the thread view', () => {
     test('Reply opens the full-screen composer', async ({ page, mailbox }) => {
       const thread = await deliverThread(mailbox, 'Offsite plan', FIVE);
       await mailbox.open(`/app/mail/${thread.id}`);
-      await page.getByRole('button', { name: 'Reply', exact: true }).tap();
+      // The bar under the thread, not the Reply icon on each message.
+      await page
+        .getByRole('button', { name: 'Reply', exact: true })
+        .filter({ hasText: 'Reply' })
+        .tap();
       const composer = page.getByRole('dialog', { name: 'Reply composer' });
       await expect(composer).toBeVisible();
       const body = composer.getByRole('textbox', { name: /reference files/ });
