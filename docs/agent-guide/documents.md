@@ -37,6 +37,8 @@ Link, Query and Database require their document-owned request callbacks. Verify 
 the document retires its menu registrations without affecting a newly opened
 editor.
 
+Click the document title breadcrumb after moving focus from the body to the title. Body focus should return with the existing body caret or range intact, including a backward range; verify the next typed character uses that position. Do not recreate the body selection by clicking it before checking the breadcrumb.
+
 Switch the body read-only and try paste, cut, drop and composition input: the
 model must stay unchanged while selecting and copying remain available. Unlock
 the same view and verify editing resumes. A rich paste waiting for its HTML

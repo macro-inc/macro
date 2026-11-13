@@ -53,6 +53,7 @@ import type {
   RenderContext,
 } from './registry';
 import {
+  isSelectionCapturedInDecoratorInput,
   readFocusedHistorySelection,
   readFocusedRootSelection,
   readSelection,
@@ -1252,7 +1253,23 @@ export class EditorView implements ViewSink {
     return () => this.decoratorListeners.delete(listener);
   }
   focus(): void {
+    if (!this.isMounted) return;
+    const selection = this.selectionInfo.selection;
+    const restoreRange =
+      selection.kind === 'range' &&
+      !isSelectionCapturedInDecoratorInput(
+        this,
+        this.root.ownerDocument.activeElement
+      );
+    if (restoreRange) writeSelection(this, selection);
+    if (!this.isMounted) return;
     this.root.focus();
+    if (
+      restoreRange &&
+      this.isMounted &&
+      this.selectionInfo.selection.kind === 'range'
+    )
+      writeSelection(this, this.selectionInfo.selection);
   }
   blur(): void {
     this.root.blur();
