@@ -11,8 +11,8 @@ use model_entity::EntityType;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
-    Category, Change, GenerationSession, NewKind, SessionKind, Suggestion, SuggestionContent,
-    SuggestionKind, SuggestionState, Target, TargetRole,
+    Category, Change, NewKind, Suggestion, SuggestionContent, SuggestionKind, SuggestionState,
+    Target, TargetRole,
 };
 use crate::domain::ports::{Limits, SuggestionRepo, Written};
 
@@ -387,28 +387,17 @@ async fn log(
 impl SuggestionRepo for PgSuggestionRepo {
     type Err = PgSuggestionRepoError;
 
-    async fn generation_session(
-        &self,
-        session: Uuid,
-    ) -> Result<Option<GenerationSession>, Self::Err> {
-        let row = sqlx::query!(
-            r#"SELECT session_id, generation_id, user_id, kind
-               FROM suggestion_generation_session
-               WHERE session_id = $1 AND closed_at IS NULL"#,
+    async fn kept_by(&self, generation: Uuid, session: Uuid) -> Result<u32, Self::Err> {
+        // By generation first: its index bounds the scan to one generation.
+        let count = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM suggestion_change
+               WHERE generation_id = $1 AND session_id = $2 AND subject = 'suggestion'"#,
+            generation,
             session,
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        row.map(|row| {
-            Ok(GenerationSession {
-                session: row.session_id,
-                generation: row.generation_id,
-                user: MacroUserIdStr::try_from(row.user_id)
-                    .map_err(|_| PgSuggestionRepoError::Decode("a session's user".to_owned()))?,
-                kind: parse::<SessionKind>(&row.kind)?,
-            })
-        })
-        .transpose()
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
     }
 
     async fn shown(

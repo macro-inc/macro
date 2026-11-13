@@ -6,5 +6,6 @@ use utoipa::OpenApi;
 fn main() {
     let mut openapi = ApiDoc::openapi();
     openapi.merge(SuggestionsApiDoc::openapi());
+    openapi.merge(suggestion_generation::swagger::GenerationApiDoc::openapi());
     println!("{}", openapi.to_pretty_json().unwrap());
 }

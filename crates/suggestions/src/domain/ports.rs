@@ -8,9 +8,9 @@ use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Change, GenerationSession, NewKind, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
-    Suggestion, SuggestionContent, SuggestionError, SuggestionFeed, SuggestionState,
-    SuggestionWriteOutcome, SuggestionsReview, Target,
+    Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion, RetireSuggestionRequest,
+    RewriteSuggestion, Suggestion, SuggestionContent, SuggestionError, SuggestionFeed,
+    SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 
 /// Limits a write must stay within, checked where it is stored so two
@@ -42,12 +42,6 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// The generation session `session`, if it is one and still open.
-    fn generation_session(
-        &self,
-        session: Uuid,
-    ) -> impl Future<Output = Result<Option<GenerationSession>, Self::Err>> + Send;
-
     /// The person's open suggestions, and those done since `done_since`.
     fn shown(
         &self,
@@ -78,6 +72,14 @@ pub trait SuggestionRepo: Send + Sync + 'static {
 
     /// How many suggestions generation `generation` added or brought back.
     fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
+
+    /// How many changes session `session` of generation `generation`
+    /// logged.
+    fn kept_by(
+        &self,
+        generation: Uuid,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
     /// Add a proposed suggestion `id` with `content` for the person, within
     /// `limits`, logging `change`.
@@ -148,14 +150,39 @@ pub trait RequestSessions: Send + Sync + 'static {
     async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>, rootcause::Report>;
 }
 
+/// The open hidden sessions of generations. Object-safe, so one adapter
+/// serves every crate whose tools a generation session calls.
+#[async_trait::async_trait]
+pub trait GenerationSessions: Send + Sync + 'static {
+    /// Session `session`, if it is a generation's and still open.
+    async fn open_session(
+        &self,
+        session: Uuid,
+    ) -> Result<Option<GenerationSession>, rootcause::Report>;
+}
+
+/// Who gets a nightly generation. Object-safe, for the same reason.
+#[async_trait::async_trait]
+pub trait SuggestionAudience: Send + Sync + 'static {
+    /// The person opened their suggestions at `now`, in IANA zone `timezone`.
+    async fn seen(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        timezone: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), rootcause::Report>;
+}
+
 /// Suggestions as the API serves them: the person's feed, and the tools hidden
 /// generation sessions manage it with.
 pub trait SuggestionApi: Send + Sync + 'static {
     /// The person's open suggestions they can still open every item of, best
-    /// first.
+    /// first. With their `timezone`, it also counts them in for nightly
+    /// generations.
     fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
+        timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<SuggestionFeed, SuggestionError>> + Send;
 
     /// The person acts on a proposed suggestion.
@@ -171,6 +198,18 @@ pub trait SuggestionApi: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
+
+    /// What a suggestions session of a generation started by `trigger` is told,
+    /// for a person in `timezone`.
+    fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String;
+
+    /// How many changes suggestions session `session` of generation `generation`
+    /// made.
+    fn kept(
+        &self,
+        generation: Uuid,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32, SuggestionError>> + Send;
 
     /// Every suggestion of the person's, for the suggestions session the request
     /// `correlation` names.

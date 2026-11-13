@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO agent_correlations (id, agent_session_id) SELECT $1, id FROM agent_session WHERE id = $2 AND bot_id = $3 RETURNING id",
+  "query": "INSERT INTO agent_correlations (id, agent_session_id, scope) SELECT $1, id, $4 FROM agent_session WHERE id = $2 AND bot_id = $3 RETURNING id",
   "describe": {
     "columns": [
       {
@@ -13,12 +13,13 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Uuid"
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "369c1ecead8f5758fb9e93420d91d9b03e563897f41d8d22539b23199182f0cd"
+  "hash": "85bb8be3fca559c75e84626ac7ab1ccb1fae6da9bcdfdb001ba0430041c27fea"
 }
