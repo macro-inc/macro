@@ -92,6 +92,23 @@ where
         Ok(owners)
     }
 
+    async fn claimants(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        installation_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        // Installation ids are numeric; anything else names no installation.
+        let Ok(installation_id) = installation_id.parse::<u64>() else {
+            return Ok(Vec::new());
+        };
+        self.claims
+            .claimants(users, installation_id)
+            .await
+            .map_err(|error| {
+                rootcause::report!("failed to read GitHub installation claims: {error:?}")
+            })
+    }
+
     async fn has_claim(
         &self,
         user: &MacroUserIdStr<'static>,

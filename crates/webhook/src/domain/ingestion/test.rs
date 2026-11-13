@@ -2488,6 +2488,22 @@ mod team_and_installation_audiences {
     }
 
     impl GithubClaims for Directories {
+        async fn claimants(
+            &self,
+            users: &[MacroUserIdStr<'static>],
+            installation_id: &str,
+        ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+            let claimants = lock(&self.claimants).clone();
+            Ok(users
+                .iter()
+                .filter(|user| {
+                    installation_id == INSTALLATION
+                        && claimants.iter().any(|claimant| claimant == user.as_ref())
+                })
+                .cloned()
+                .collect())
+        }
+
         async fn installation_owners(
             &self,
             _installation_id: &str,

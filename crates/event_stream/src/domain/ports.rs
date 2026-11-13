@@ -222,6 +222,14 @@ pub trait GithubClaims: Send + Sync + 'static {
         installation_id: &str,
     ) -> impl Future<Output = Result<InstallationOwners, Report>> + Send;
 
+    /// The users among `users` who hold a claim on the installation: the
+    /// set form of [`Self::has_claim`], in one read.
+    fn claimants(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        installation_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
     /// Whether `user` holds a claim on the installation.
     fn has_claim(
         &self,

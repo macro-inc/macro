@@ -373,6 +373,19 @@ impl FakeGithub {
 }
 
 impl GithubClaims for FakeGithub {
+    async fn claimants(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        installation_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        let claims = self.claims.lock().unwrap();
+        Ok(users
+            .iter()
+            .filter(|user| claims.contains(&(user.as_ref().to_owned(), installation_id.to_owned())))
+            .cloned()
+            .collect())
+    }
+
     async fn installation_owners(
         &self,
         _installation_id: &str,

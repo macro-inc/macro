@@ -70,4 +70,50 @@ impl GithubInstallationClaims for PgGithubInstallationClaims {
         .await
         .map_err(|error| GithubError::Internal(error.into()))
     }
+
+    // The set form of `has_claim`: the same predicate, for every candidate at
+    // once. Each arm starts from the installation's rows (one installation,
+    // few owners) and probes `github_links` and `team_user` by key.
+    #[tracing::instrument(skip(self, users), fields(candidates = users.len()), err)]
+    async fn claimants(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        installation_id: u64,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, GithubError> {
+        if users.is_empty() {
+            return Ok(Vec::new());
+        }
+        let candidates: Vec<String> = users.iter().map(|user| user.as_ref().to_owned()).collect();
+        let claimants = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT u.user_id AS "user_id!"
+            FROM unnest($2::text[]) AS u(user_id)
+            JOIN github_app_installation i ON i.id = $1
+            WHERE EXISTS (SELECT 1 FROM github_links l WHERE l.macro_id = u.user_id)
+              AND (
+                (i.source_type = 'user' AND i.source_id = u.user_id AND NOT EXISTS (
+                    SELECT 1 FROM github_app_installation_installer installer
+                    WHERE installer.installation_id = i.id
+                      AND installer.github_user_id NOT IN (
+                          SELECT l.github_user_id FROM github_links l WHERE l.macro_id = u.user_id
+                      )
+                ))
+                OR (i.source_type = 'team' AND EXISTS (
+                    SELECT 1 FROM team_user t
+                    WHERE t.team_id::text = i.source_id AND t.user_id = u.user_id
+                ))
+              )
+            "#,
+            installation_id.to_string(),
+            &candidates,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| GithubError::Internal(error.into()))?;
+        Ok(users
+            .iter()
+            .filter(|user| claimants.iter().any(|claimant| claimant == user.as_ref()))
+            .cloned()
+            .collect())
+    }
 }

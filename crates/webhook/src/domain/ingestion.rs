@@ -247,6 +247,14 @@ impl TeamDirectory for Unconfigured {
 }
 
 impl GithubClaims for Unconfigured {
+    async fn claimants(
+        &self,
+        _users: &[MacroUserIdStr<'static>],
+        _installation_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Err(rootcause::report!("GitHub claims not configured"))
+    }
+
     async fn installation_owners(
         &self,
         _installation_id: &str,
@@ -417,15 +425,11 @@ where
         candidates.dedup();
 
         let mut workspaces: Vec<String> = owners.teams.iter().map(ToString::to_string).collect();
-        for candidate in candidates {
-            if github
-                .has_claim(&candidate, installation_id)
-                .await
-                .map_err(directory_error)?
-            {
-                workspaces.push(candidate.to_string());
-            }
-        }
+        let claimants = github
+            .claimants(&candidates, installation_id)
+            .await
+            .map_err(directory_error)?;
+        workspaces.extend(claimants.iter().map(ToString::to_string));
         Ok(workspaces)
     }
 
@@ -443,17 +447,12 @@ where
             MinAccessLevel::Edit => AccessLevel::Edit,
             MinAccessLevel::Owner => AccessLevel::Owner,
         };
-        let mut admitted = Vec::new();
-        for accessor in self.users_with_access(entity_id, entity_type).await? {
-            let level = self
-                .entity_access_service
-                .get_access_level(Some(&accessor.0), entity_id, entity_type)
-                .await?;
-            if level.is_some_and(|level| level >= floor) {
-                admitted.push(accessor);
-            }
-        }
-        Ok(admitted)
+        // One set-based read over the grants, uncached, not a level lookup
+        // per accessor.
+        self.entity_access_service
+            .get_users_by_entity_at_least(entity_id, entity_type, floor)
+            .await
+            .map_err(WebhookEventIngestionError::EntityAccess)
     }
 
     #[tracing::instrument(
