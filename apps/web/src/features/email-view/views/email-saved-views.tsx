@@ -761,7 +761,7 @@ export function EmailSaveViewButton() {
   const create = useCreateEmailSavedView();
   return (
     <Show when={visible()}>
-      <HeaderActionGroup label={t('emailViews.viewActions')}>
+      <HeaderActionGroup label={t('emailViews.viewActions')} size="md">
         <ButtonGroup.Button
           variant="primary"
           class="touch:order-last"
@@ -870,7 +870,7 @@ export function EmailSavedViewActions() {
   return (
     <>
       <Show when={selected()?.dirty}>
-        <HeaderActionGroup label={t('emailViews.viewActions')}>
+        <HeaderActionGroup label={t('emailViews.viewActions')} size="md">
           <Show when={selected()?.record.ownerId === viewerId()}>
             <ButtonGroup.Button
               variant="primary"
@@ -891,7 +891,7 @@ export function EmailSavedViewActions() {
       </Show>
       <Show when={failure()}>
         {(error) => (
-          <HeaderActionGroup label={t('emailViews.saveError')}>
+          <HeaderActionGroup label={t('emailViews.saveError')} size="md">
             <span
               role="alert"
               class="max-w-48 truncate text-xs text-failure-ink"

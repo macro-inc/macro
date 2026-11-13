@@ -63,6 +63,7 @@ import {
   PendingDirectMessage,
   PendingDirectMessageTitle,
 } from '@channel/views/pending-direct-message';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -319,7 +320,9 @@ function NewTop(props: { channelId: string }) {
         <SplitHeaderRight>
           <HeaderIsland class="px-1">
             <div class="flex items-center gap-1.5">
-              <ChannelCallButton channelId={props.channelId} />
+              <HeaderActionGroup label="Call actions">
+                <ChannelCallButton grouped channelId={props.channelId} />
+              </HeaderActionGroup>
             </div>
           </HeaderIsland>
         </SplitHeaderRight>
