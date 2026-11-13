@@ -792,28 +792,18 @@
         }
       }
     },
-    "/scheduled-actions/suggestions/generate": {
-      "post": {
+    "/scheduled-actions/suggestions/review": {
+      "get": {
         "tags": ["scheduled actions"],
-        "operationId": "generate_routine_suggestions",
-        "parameters": [
-          {
-            "name": "timezone",
-            "in": "query",
-            "description": "IANA time zone, e.g. `America/New_York`.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "summary": "What a routines generation session reads before managing suggestions.",
+        "operationId": "review_routine_suggestions",
         "responses": {
           "200": {
-            "description": "The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing",
+            "description": "Every suggestion AI made for the user, open or not",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoutineSuggestions"
+                  "$ref": "#/components/schemas/SuggestionReview"
                 }
               }
             }
@@ -828,8 +818,18 @@
               }
             }
           },
+          "403": {
+            "description": "Only a routines generation session may review",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Routine suggestions are off for the caller",
+            "description": "Routine suggestions are off for the user",
             "content": {
               "text/plain": {
                 "schema": {
@@ -882,6 +882,86 @@
           },
           "404": {
             "description": "No such suggestion for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions/{id}/retire": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Retire an open suggestion that no longer fits, from a routines\ngeneration session.",
+        "operationId": "retire_routine_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireSuggestion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was retired, and why not when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a routines generation session may retire",
             "content": {
               "text/plain": {
                 "schema": {
@@ -1803,6 +1883,591 @@
           }
         }
       }
+    },
+    "/suggestions": {
+      "get": {
+        "tags": ["suggestions"],
+        "summary": "The caller's feed.",
+        "operationId": "list_suggestions",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`: nightly generations run in\nthe reader's night.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's open suggestions they can open every item of, best first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionFeed"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Add a suggestion from a suggestions generation session, or a new version of the\none with its dedup key.",
+        "operationId": "add_suggestion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSuggestion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was added or updated, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may suggest",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/generate": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Start the caller's onboarding generation, once their inbox is connected.",
+        "operationId": "start_suggestion_generation",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's onboarding generation started in the background: their suggestions and routine suggestions, as each is on for them. Later calls start nothing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationStarted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Neither suggestions nor routine suggestions are on for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/review": {
+      "get": {
+        "tags": ["suggestions"],
+        "summary": "What a suggestions generation session reads before managing suggestions.",
+        "operationId": "review_suggestions",
+        "responses": {
+          "200": {
+            "description": "Every suggestion of the user's, open first, and how many more this generation may add",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionsReview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may review",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/seen": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller loaded the app in their time zone.",
+        "operationId": "record_suggestions_seen",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Recorded: with suggestions on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}": {
+      "patch": {
+        "tags": ["suggestions"],
+        "summary": "Change an open suggestion from a suggestions generation session.",
+        "operationId": "rewrite_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RewriteSuggestion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was rewritten, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may rewrite",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the user, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/accept": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller acts on a suggestion: a background prompt suggestion is taken on; any\nother is done once they act on it (open its item, the composer, the\nroutine), and shows in the feed's `done`.",
+        "operationId": "accept_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open or done suggestion with this id for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/dismiss": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller isn't interested in an open suggestion.",
+        "operationId": "dismiss_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dismissed; generation sessions see when"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open suggestion with this id for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/retire": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Retire an open suggestion from a suggestions generation session.",
+        "operationId": "retire_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireSuggestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was retired, and why not when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may retire",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the user, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2245,6 +2910,11 @@
             "description": "When it runs; schedules are in the zone the catalog was asked for."
           }
         }
+      },
+      "Category": {
+        "type": "string",
+        "description": "A filter on the feed. Not kinds: a suggestion may have several.",
+        "enum": ["important", "revisit", "save_money", "make_money"]
       },
       "CheckRoutineRequest": {
         "type": "object",
@@ -2974,6 +3644,11 @@
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
       },
+      "EntityAction": {
+        "type": "string",
+        "description": "What an entity suggestion suggests doing about its items.",
+        "enum": ["reply", "review", "follow_up"]
+      },
       "EntityAppearance": {
         "type": "object",
         "description": "An entity's optional icon and tint overrides; absent values retain type defaults.",
@@ -3002,6 +3677,37 @@
           }
         },
         "additionalProperties": false
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "channel_message",
+          "document",
+          "project",
+          "email_thread",
+          "calendar_event",
+          "team",
+          "call",
+          "foreign_entity",
+          "static_file",
+          "crm_company",
+          "crm_contact",
+          "crm_pipeline",
+          "reminder",
+          "harness",
+          "skill",
+          "agent_session",
+          "scheduled_action",
+          "initiative",
+          "database",
+          "database_row",
+          "form",
+          "external_chat"
+        ]
       },
       "EventFilter": {
         "type": "object",
@@ -3182,6 +3888,17 @@
           }
         }
       },
+      "GenerationStarted": {
+        "type": "object",
+        "description": "What starting a generation did.",
+        "required": ["started"],
+        "properties": {
+          "started": {
+            "type": "boolean",
+            "description": "Whether a run started; false when one ran before or is running."
+          }
+        }
+      },
       "GenerationStatus": {
         "type": "string",
         "description": "Where a person's suggestions are in being generated.",
@@ -3243,6 +3960,11 @@
           }
         }
       },
+      "KindName": {
+        "type": "string",
+        "description": "A suggestion's kind, without its data.",
+        "enum": ["prompt", "entity", "routine"]
+      },
       "KnobName": {
         "type": "string",
         "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
@@ -3251,6 +3973,80 @@
         "type": "string",
         "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
         "enum": ["tag", "channel", "label"]
+      },
+      "NewSuggestion": {
+        "type": "object",
+        "description": "A new suggestion, or a new version of one with the same `dedupKey`, as a\ngeneration session hands it back through `macro.suggestions.suggest`.",
+        "required": ["kind", "dedupKey", "title", "summary", "importance"],
+        "properties": {
+          "about": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Target"
+            },
+            "description": "The items it is about."
+          },
+          "action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAction",
+                "description": "An entity suggestion's action."
+              }
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "The feed's filters it shows under."
+          },
+          "dedupKey": {
+            "type": "string",
+            "description": "Names the suggestion across nights; the same key updates the same suggestion."
+          },
+          "importance": {
+            "type": "integer",
+            "format": "int32",
+            "description": "0 to 100.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/KindName",
+            "description": "`prompt` or `entity`; routine suggestions come from `macro.routines.suggest`."
+          },
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "A prompt suggestion's prompt."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why, for the change log; required to bring back a suggestion the person\ndismissed."
+          },
+          "runMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunMode",
+                "description": "A prompt suggestion's run mode."
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "Why, in a line or two."
+          },
+          "title": {
+            "type": "string",
+            "description": "What to do, in a few words."
+          }
+        },
+        "additionalProperties": false
       },
       "PayloadCondition": {
         "type": "object",
@@ -3334,6 +4130,130 @@
               "type": "string"
             },
             "description": "Select option ids or referenced entity ids, one of which the change must\nadd. Any change to the property matches when empty."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RetireSuggestion": {
+        "type": "object",
+        "description": "Retiring an open suggestion that no longer fits.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RetireSuggestionRequest": {
+        "type": "object",
+        "description": "Retiring an open suggestion that no longer matters.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReviewedState": {
+        "type": "string",
+        "description": "Where one of the person's suggestions is, for a routines session\nmanaging them.",
+        "enum": ["open", "dismissed", "retired", "saved"]
+      },
+      "ReviewedSuggestion": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SuggestedPick"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "surfaces",
+              "reason",
+              "keepProbability",
+              "state",
+              "createdAt"
+            ],
+            "properties": {
+              "closedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When it was dismissed or retired."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was suggested."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "keepProbability": {
+                "type": "number",
+                "format": "float"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/components/schemas/ReviewedState"
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                }
+              }
+            }
+          }
+        ],
+        "description": "One suggestion AI made for the person, as a routines session reviews it."
+      },
+      "RewriteSuggestion": {
+        "type": "object",
+        "description": "Changes to an open suggestion; fields left out stay.",
+        "required": ["reason"],
+        "properties": {
+          "about": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Target"
+            },
+            "description": "New items it is about."
+          },
+          "categories": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "New categories."
+          },
+          "importance": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "A new importance.",
+            "minimum": 0
+          },
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "Only on prompt suggestions."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "A new summary."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "A new title."
           }
         },
         "additionalProperties": false
@@ -3835,6 +4755,11 @@
             "description": "The IANA time zone code reads `at` in, when the run had one."
           }
         }
+      },
+      "RunMode": {
+        "type": "string",
+        "description": "How a prompt suggestion runs.",
+        "enum": ["composer", "background"]
       },
       "RunStart": {
         "oneOf": [
@@ -4374,10 +5299,284 @@
         ],
         "description": "What is suggested: a catalog routine with its knobs, or a routine AI\ndrafted and checked."
       },
+      "Suggestion": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SuggestionKind",
+            "description": "Its kind, with that kind's data."
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "dedupKey",
+              "title",
+              "summary",
+              "importance",
+              "categories",
+              "state",
+              "about",
+              "produced",
+              "createdAt",
+              "updatedAt",
+              "stateChangedAt"
+            ],
+            "properties": {
+              "about": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Target"
+                },
+                "description": "The items it is about."
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Category"
+                },
+                "description": "The feed's filters it shows under."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was first proposed."
+              },
+              "dedupKey": {
+                "type": "string",
+                "description": "Names the suggestion across nights: proposing the same key again changes\nthis suggestion instead of adding one."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The suggestion's id."
+              },
+              "importance": {
+                "type": "integer",
+                "format": "int32",
+                "description": "0 to 100, for ordering.",
+                "minimum": 0
+              },
+              "produced": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Target"
+                },
+                "description": "What acting on it produced."
+              },
+              "state": {
+                "$ref": "#/components/schemas/SuggestionState",
+                "description": "Where it is for the person."
+              },
+              "stateChangedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When its state last changed, such as when it was dismissed."
+              },
+              "stateReason": {
+                "type": ["string", "null"],
+                "description": "Why it was resolved; only on resolved suggestions."
+              },
+              "summary": {
+                "type": "string",
+                "description": "Why, in a line or two."
+              },
+              "title": {
+                "type": "string",
+                "description": "What to do, in a few words."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it last changed."
+              }
+            }
+          }
+        ],
+        "description": "One proactive suggestion for one person."
+      },
+      "SuggestionFeed": {
+        "type": "object",
+        "description": "A person's feed: their open suggestions, best first, and the ones they\nfinished in the last day, newest first.",
+        "required": ["suggestions", "done"],
+        "properties": {
+          "done": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "description": "Suggestions done in the last 24 hours, with what they produced."
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "description": "The open suggestions."
+          }
+        }
+      },
       "SuggestionFrom": {
         "type": "string",
         "description": "Who suggests a routine.",
         "enum": ["for_you", "macro"]
+      },
+      "SuggestionKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A prompt for an agent: opened in the composer, or run in the\nbackground.",
+            "required": ["prompt", "runMode", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["prompt"]
+              },
+              "prompt": {
+                "type": "string",
+                "description": "What the agent is asked to do."
+              },
+              "runMode": {
+                "$ref": "#/components/schemas/RunMode",
+                "description": "How it runs."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A note about specific items, with what to do about them.",
+            "required": ["action", "kind"],
+            "properties": {
+              "action": {
+                "$ref": "#/components/schemas/EntityAction",
+                "description": "What to do about the items."
+              },
+              "draft": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Target",
+                    "description": "The draft made for it, once made."
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["entity"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine suggestion, shown among suggestions.",
+            "required": ["routineSuggestionId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "routineSuggestionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The suggestion it shows."
+              }
+            }
+          }
+        ],
+        "description": "What kind of suggestion it is, with that kind's data. A kind never changes."
+      },
+      "SuggestionReview": {
+        "type": "object",
+        "description": "Every suggestion AI made for the person, for a routines session.",
+        "required": ["suggestions", "keptLeft"],
+        "properties": {
+          "keptLeft": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Suggestions this session may still hand back.",
+            "minimum": 0
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewedSuggestion"
+            }
+          }
+        }
+      },
+      "SuggestionState": {
+        "type": "string",
+        "description": "Where a suggestion is for the person.",
+        "enum": [
+          "proposed",
+          "accepted",
+          "done",
+          "dismissed",
+          "resolved",
+          "retired"
+        ]
+      },
+      "SuggestionWriteOutcome": {
+        "type": "object",
+        "description": "What became of a session's write.",
+        "required": ["ok", "problems"],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Whether it was applied."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why it wasn't, to fix and try again."
+          },
+          "suggestion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Suggestion",
+                "description": "The suggestion as it now is."
+              }
+            ]
+          }
+        }
+      },
+      "SuggestionsReview": {
+        "type": "object",
+        "description": "What a generation session reads before managing the person's suggestions:\nevery suggestion they have, open or not, and how many more it may add.",
+        "required": ["suggestions", "open", "openLimit", "newLeft"],
+        "properties": {
+          "newLeft": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Suggestions this generation may still add or bring back.",
+            "minimum": 0
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Open suggestions the person has, and the most they may have.",
+            "minimum": 0
+          },
+          "openLimit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The most open suggestions a person may have.",
+            "minimum": 0
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "description": "Open suggestions first, best first, then closed ones newest first. A\ndismissed suggestion's `stateChangedAt` is when the person dismissed it."
+          }
+        }
       },
       "Surface": {
         "type": "string",
@@ -4393,6 +5592,26 @@
           "reviews",
           "agents"
         ]
+      },
+      "Target": {
+        "type": "object",
+        "description": "An item, or a part of one such as a message in a thread.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The item's id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The item's type."
+          },
+          "partId": {
+            "type": ["string", "null"],
+            "description": "A part of it, such as one message in a channel."
+          }
+        },
+        "additionalProperties": false
       },
       "TemplateVariable": {
         "oneOf": [
@@ -4476,6 +5695,14 @@
     {
       "name": "scheduled actions",
       "description": "Scheduled action service"
+    },
+    {
+      "name": "suggestions",
+      "description": "Each person's suggestions, and the tools generation sessions manage them with"
+    },
+    {
+      "name": "suggestions",
+      "description": "Generations of each person's suggestions and routine suggestions"
     }
   ]
 }

@@ -13,8 +13,8 @@ use serde_json::{Value, json};
 use super::{RoutineSuggestionRouterState, routine_suggestion_router};
 use crate::domain::models::ActionPolicyError;
 use crate::domain::suggestions::model::{
-    GenerationStatus, RoutineSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest,
-    SuggestedPick, SuggestionFrom,
+    GenerationStatus, RetireSuggestion, RoutineSuggestion, RoutineSuggestions, SuggestOutcome,
+    SuggestRequest, SuggestedPick, SuggestionFrom, SuggestionReview,
 };
 use crate::domain::suggestions::ports::RoutineSuggestionApi;
 use crate::inbound::axum_router::test::{FakeAuth, request};
@@ -53,13 +53,46 @@ impl RoutineSuggestionApi for Suggestions {
         Ok(one(GenerationStatus::Ready))
     }
 
-    async fn generate(
+    async fn brief(
         &self,
         _: &MacroUserIdStr<'static>,
-        timezone: chrono_tz::Tz,
-    ) -> Result<RoutineSuggestions> {
-        assert_eq!(timezone, chrono_tz::Europe::Paris);
-        Ok(one(GenerationStatus::Generating))
+        _: &[Surface],
+        _: suggestions::domain::model::GenerationTrigger,
+        _: chrono_tz::Tz,
+    ) -> Result<String> {
+        unreachable!("routes never brief")
+    }
+
+    async fn kept(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<u32> {
+        unreachable!("routes never count")
+    }
+
+    async fn record(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: crate::domain::suggestions::model::RoutineGenerationReport,
+    ) {
+        unreachable!("routes never log generations")
+    }
+
+    async fn review(
+        &self,
+        _: &CreationPrincipal,
+        correlation: Option<Uuid>,
+    ) -> Result<SuggestionReview> {
+        assert_eq!(correlation, None);
+        bail!(ActionPolicyError::NotSuggesting)
+    }
+
+    async fn retire(
+        &self,
+        _: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        _: Uuid,
+        _: RetireSuggestion,
+    ) -> Result<SuggestOutcome> {
+        assert_eq!(correlation, None);
+        bail!(ActionPolicyError::NotSuggesting)
     }
 
     async fn dismiss(&self, _: &MacroUserIdStr<'static>, id: Uuid) -> Result<()> {
@@ -116,16 +149,6 @@ async fn serves_suggestions_in_the_wire_shape_clients_read() {
             }],
         })
     );
-    let (status, body) = request(
-        &app,
-        "POST",
-        "/scheduled-actions/suggestions/generate?timezone=Europe/Paris",
-        "owner",
-        Value::Null,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["status"], "generating");
 }
 
 #[tokio::test]
@@ -166,6 +189,29 @@ async fn suggesting_outside_a_suggestion_session_is_forbidden() {
             "surfaces": ["email"],
             "keepProbability": 0.5,
         }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn reviewing_and_retiring_outside_a_routines_session_is_forbidden() {
+    let app = router();
+    let (status, _) = request(
+        &app,
+        "GET",
+        "/scheduled-actions/suggestions/review",
+        "owner",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = request(
+        &app,
+        "POST",
+        &format!("/scheduled-actions/suggestions/{KNOWN}/retire"),
+        "owner",
+        json!({ "reason": "No longer fits" }),
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);

@@ -36,7 +36,7 @@ use scheduled_action::domain::ports::{
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::suggestions::{
-    RoutineSuggestionService, StoredSuggestionOrigins, SuggestionAgent,
+    RoutineBriefing, RoutineSuggestionService, StoredSuggestionOrigins,
 };
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
@@ -67,8 +67,17 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
-use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
+use suggestion_generation::domain::audience::PaidAudience;
+use suggestion_generation::domain::model::GenerationAgent;
+use suggestion_generation::domain::service::GenerationService;
+use suggestion_generation::inbound::router::{GenerationRouterState, generation_router};
+use suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo;
+use suggestions::domain::service::SuggestionService;
+use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -87,8 +96,10 @@ const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 /// How often drafts a stopped process left behind are cleaned up.
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often suggestion sessions a stopped process left behind are cleaned up.
-const SUGGESTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+/// How often generation sessions a stopped process left behind are cleaned up.
+const GENERATION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+/// How often people in their night are checked for a nightly generation.
+const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 /// What a session's programs created, from the activity recorded for its
 /// code-mode invocations.
@@ -141,6 +152,37 @@ impl RequestSessions for CorrelationSessions {
     }
 }
 
+/// Paid plans, as AI billing sees them: a paid seat or an enterprise team.
+struct EntitlementPlans(ai_billing::composition::PgEntitlementSource);
+
+#[async_trait::async_trait]
+impl suggestion_generation::domain::ports::Plans for EntitlementPlans {
+    async fn paid(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<bool, rootcause::Report> {
+        use ai_billing::domain::EntitlementSource as _;
+        let entitlement = self
+            .0
+            .entitlement(user)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))?;
+        Ok(entitlement.unlimited || entitlement.tier.is_paid())
+    }
+}
+
+#[async_trait::async_trait]
+impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
+    async fn session_of(
+        &self,
+        correlation: uuid::Uuid,
+    ) -> Result<Option<uuid::Uuid>, rootcause::Report> {
+        RequestSessions::session_of(self, correlation)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
+    }
+}
+
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
     pub router: Router,
@@ -173,6 +215,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
+    let generation_ready = ready.clone();
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
@@ -445,10 +488,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let suggestion_code = Arc::clone(&code);
     // Which agent session a code-mode request came from, for drafts' checks
     // and suggestion sessions' suggestions.
-    let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
+    let correlation_sessions = Arc::new(CorrelationSessions(
         agent_correlation::outbound::PgCorrelationRepository(db.clone()),
     ));
-    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
+    let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
+    let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -467,12 +511,16 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
-    // Suggestions run once per person, when their inbox connects, in hidden
-    // sessions of the in-process Macro agent on the free tier's model, as
-    // drafts do, but opened non-billable (`SessionBilling::NonBillable`), so
-    // their usage is recorded, never billed; each session hands back its
-    // suggestions through `macro.routines.suggest`. They read the newest mail through
-    // email_service, which reads it from the provider.
+    // Generations: hidden sessions of the in-process Macro agent on the free
+    // tier's model, at onboarding and in each person's night, opened
+    // non-billable (`SessionBilling::NonBillable`), so their usage is
+    // recorded, never billed. Suggestions sessions write through `macro.suggestions.*`;
+    // routines sessions through `macro.routines.suggest`, reading the newest
+    // mail through email_service, which reads it from the provider.
+    let generations = Arc::new(PgGenerationRepo::new(db.clone()));
+    let plans: Arc<dyn suggestion_generation::domain::ports::Plans> = Arc::new(EntitlementPlans(
+        ai_billing::composition::pg_entitlement_source(db.clone()),
+    ));
     let suggestions = Arc::new(RoutineSuggestionService::new(
         Arc::clone(&service),
         suggestion_repo,
@@ -485,38 +533,93 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
             ),
         }),
-        sessions,
         suggestion_code,
         request_sessions,
+        generations.clone(),
+        generations.clone(),
         routine_flags.clone(),
-        SuggestionAgent {
-            bot: bot_id::MACRO_NEW_BOT_ID,
+        RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            model: chat::domain::models::FREE_MODEL.to_owned(),
+            agent_model: chat::domain::models::FREE_MODEL.to_owned(),
         },
-        lifecycle.workers.clone(),
-        lifecycle.stop_workers.clone(),
     ));
-    // Suggestion sessions a stopped process left behind lose their session.
+    let feed = Arc::new(
+        SuggestionService::new(
+            Arc::new(PgSuggestionRepo::new(db.clone())),
+            Arc::new(EntitySuggestionAccess {
+                access: access.as_ref().clone(),
+                pool: db.clone(),
+            }),
+            correlation_sessions,
+            generations.clone(),
+            // Reading the feed counts paid readers in for nightly runs.
+            Arc::new(PaidAudience::new(generations.clone(), Arc::clone(&plans))),
+            routine_flags.clone(),
+        )
+        .with_sdk_reference(agent_code_mode::domain::index_digest(
+            suggestions::domain::prompt::SYMBOLS,
+            suggestions::domain::prompt::FIELDS_OF,
+        ))
+        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned()),
+    );
+    let generation = Arc::new(
+        GenerationService::new(
+            generations,
+            sessions,
+            Arc::clone(&suggestions),
+            Arc::clone(&feed),
+            routine_flags.clone(),
+            GenerationAgent {
+                bot: bot_id::MACRO_NEW_BOT_ID,
+                model: chat::domain::models::FREE_MODEL.to_owned(),
+            },
+            lifecycle.workers.clone(),
+            lifecycle.stop_workers.clone(),
+        )
+        // Nightly runs are for paid plans; onboarding runs for everyone.
+        .with_plans(plans),
+    );
+    // Generation sessions a stopped process left behind lose their session;
+    // once ready, people in their night get their nightly generation.
     {
-        let suggestions = Arc::clone(&suggestions);
+        let generation = Arc::clone(&generation);
         let stop = lifecycle.stop_workers.clone();
+        let mut ready = generation_ready;
         lifecycle.workers.spawn(async move {
-            let mut every = tokio::time::interval(SUGGESTION_SWEEP_INTERVAL);
-            every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
+            }
+            let mut sweep = tokio::time::interval(GENERATION_SWEEP_INTERVAL);
+            sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let mut nightly = tokio::time::interval(NIGHTLY_INTERVAL);
+            nightly.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
+                // Each is logged by its own span.
                 tokio::select! {
                     biased;
                     _ = stop.cancelled() => return,
-                    _ = every.tick() => {}
+                    _ = sweep.tick() => { let _ = generation.sweep().await; }
+                    _ = nightly.tick() => { let _ = generation.nightly().await; }
                 }
-                // Logged by the sweep's span.
-                let _ = suggestions.sweep().await;
             }
         });
     }
     let suggestion_state = RoutineSuggestionRouterState {
         service: suggestions,
+        authorization_state: authorization_state.clone(),
+    };
+    // Suggestions: written and managed by generation sessions through
+    // `macro.suggestions.*`, read and acted on by the person. Served here, under
+    // the scheduler's prefix, next to the routine suggestions they share
+    // generations with.
+    let feed_state = SuggestionRouterState {
+        service: feed,
+        authorization_state: authorization_state.clone(),
+    };
+    let generation_state = GenerationRouterState {
+        service: generation,
         authorization_state: authorization_state.clone(),
     };
     let template_state = RoutineTemplateRouterState {
@@ -545,7 +648,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
         .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
-        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
+        .merge(suggestion_router::<_, _, ()>(feed_state))
+        .merge(generation_router::<_, _, ()>(generation_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
@@ -559,8 +664,17 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 fn mount_router(routes: Router) -> Router {
     Router::new().nest(GATEWAY_PATH_PREFIX, routes).merge(
         SwaggerUi::new("/scheduled-action/docs")
-            .url("/scheduled-action/api-doc/openapi.json", ApiDoc::openapi()),
+            .url("/scheduled-action/api-doc/openapi.json", openapi()),
     )
+}
+
+/// The scheduler's OpenAPI, with the suggestions routes it also serves, as
+/// `scheduling_openapi` prints it.
+fn openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = ApiDoc::openapi();
+    openapi.merge(suggestions::swagger::SuggestionsApiDoc::openapi());
+    openapi.merge(suggestion_generation::swagger::GenerationApiDoc::openapi());
+    openapi
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for
