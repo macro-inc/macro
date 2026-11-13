@@ -33,6 +33,11 @@ import { LocalRuntimeCard } from './components/local-runtime-card';
 import { PendingRequestsSection } from './components/pending-requests-section';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
+import {
+  COMPUTER_SETUP_PARAM,
+  parseComputerSetupParam,
+  requestComputerSetup,
+} from './computers/primitives/setup-request';
 import { useTeamComputers } from './computers/primitives/team-computers';
 import { MacroComputers } from './computers/views/MacroComputers';
 import {
@@ -108,6 +113,14 @@ export function Harness(
     if (typeof pair === 'string' && pair.length > 0) {
       setPairingDialog({ initialCode: pair });
       setSearchParams({ pair: undefined }, { replace: true });
+    }
+    // A computer setup notification's link, opened cold.
+    const computerId = parseComputerSetupParam(
+      searchParams[COMPUTER_SETUP_PARAM]
+    );
+    if (computerId) {
+      requestComputerSetup(computerId);
+      setSearchParams({ [COMPUTER_SETUP_PARAM]: undefined }, { replace: true });
     }
   });
 

@@ -122,6 +122,14 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .exhaustive(() => `${agent} sign-in expires soon`);
       })
       .with('runtime_access_removed', () => 'removed your access to')
+      // The computer is the actor: "<computer> is ready".
+      .with('computer_setup', () => {
+        const meta = n.notification_metadata;
+        return meta.tag === 'computer_setup' &&
+          meta.content.outcome.kind === 'failed'
+          ? 'could not be set up'
+          : 'is ready';
+      })
       .exhaustive(() => 'notified you about')
   );
 }
@@ -186,6 +194,7 @@ export function getNotificationTargetName(
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
+      .with({ tag: 'computer_setup' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -291,6 +300,19 @@ export function getNotificationContent(
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
+      .with({ tag: 'computer_setup' }, (m) =>
+        match(m.content.outcome)
+          .with(
+            { kind: 'ready' },
+            () =>
+              'Connect your AI and finish setup, then create an agent on it.'
+          )
+          .with(
+            { kind: 'failed' },
+            ({ failureReason }) => `${failureReason} Retry from the setup flow.`
+          )
+          .exhaustive()
+      )
       .exhaustive(() => undefined)
   );
 }
@@ -360,6 +382,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'agent_sign_in_expiry' }, () => false)
+      .with({ tag: 'computer_setup' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {

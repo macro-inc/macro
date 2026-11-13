@@ -21,7 +21,7 @@ pub use backoff::{BILLING_BACKOFF, Backoff, CAPACITY_BACKOFF, RESTART_BACKOFF, R
 mod capacity;
 use capacity::{power_on, wait_for_room};
 mod event;
-pub use event::{Effect, EffectWorker, Event, InstanceStatus, Rejected, TimerKind};
+pub use event::{Effect, EffectWorker, Event, InstanceStatus, Rejected, SetupOutcome, TimerKind};
 
 #[cfg(test)]
 mod test;
@@ -690,7 +690,31 @@ pub fn transition(
     if next.billing != state.billing {
         next.billing_changed_at = now;
     }
+    if let Some(outcome) = setup_outcome(state, &next, now) {
+        effects.push(Effect::NotifySetup { outcome });
+    }
     Ok((next, effects))
+}
+
+/// How this transition ended first setup, if it did. The applier latches
+/// `setup.connected_at` on the first connection, so `Ready` comes once; a
+/// give-up comes once per attempt, since only a retry leaves it.
+fn setup_outcome(
+    state: &ComputerState,
+    next: &ComputerState,
+    now: DateTime<Utc>,
+) -> Option<SetupOutcome> {
+    state.setup.as_ref().filter(|setup| !setup.complete())?;
+    if !state.macrod_connected && next.macrod_connected {
+        return Some(SetupOutcome::Ready);
+    }
+    if !gave_up(&state.phase) && gave_up(&next.phase) {
+        return next.failure.map(|failure| SetupOutcome::Failed {
+            failure,
+            failed_at: now,
+        });
+    }
+    None
 }
 
 /// Whether a cancellation can still be undone at `now`: before its paid

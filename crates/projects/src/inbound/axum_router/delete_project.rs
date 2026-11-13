@@ -20,13 +20,14 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
 /// Run a folder tree operation on its own task and wait for it. Trash,
 /// restore and purge write every item in the tree, so a dropped request must
 /// not cancel them partway: the task carries on to completion, including a
-/// purge's document cleanup after its commit.
+/// purge's document cleanup after its commit. The task keeps the request's
+/// agent attribution, which the operation's events carry.
 pub(super) async fn run_on_own_task<R, F>(work: F) -> Result<R, ProjectError>
 where
     R: Send + 'static,
     F: Future<Output = Result<R, ProjectError>> + Send + 'static,
 {
-    tokio::spawn(work.in_current_span())
+    tokio::spawn(agent_correlation::context::capture(work.in_current_span()))
         .await
         .map_err(|error| ProjectError::Internal(anyhow::anyhow!(error)))?
 }
