@@ -1,0 +1,43 @@
+crates/event_stream/src/domain/invalidations.rs
+  s_b0da33e00deeb2::t_25be1977884c39 80-86,117-122
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_b0da33e00deeb2::t_25be1977884c39 158-181
+crates/event_stream/src/domain/log_writer/test.rs
+  s_b0da33e00deeb2::t_ffa8e0680f38df 6,16,25,73,87-89,99-133
+  s_b0da33e00deeb2::t_77005513a704a2 134
+crates/event_stream/Cargo.toml
+  s_b0da33e00deeb2::t_25be1977884c39 19,21-22,26,28,32,35,54,58,64,72,87
+crates/event_stream/src/domain/catalog/exposure_samples.json
+  s_b0da33e00deeb2::t_b545427699475f 1033,1044,1060,1071,1077,1089,1100,1106,1120,1131,1136,1153,1164,1171,1186,1197,1215,1226,1242,1253,1258,1260,1273,1284,1300,1311,1325,1336,1350,1353,1829,1832,1845,1863,1881,1895,1909,1927,1935,1942,1958,1974,1990,2005,2018,2031,2044,2061,2079,2097,2114,2132,2150,2168,2185,2199,2215,2231,2247
+  s_b0da33e00deeb2::t_e8edf05f3093db 1937-1941,1943-1957,1959-1973,1975-1989,1991-2004,2006-2017,2019-2030,2032-2043,2045-2060,2062-2078,2080-2096,2098-2113,2115-2131,2133-2149,2151-2167,2169-2184,2186-2198,2200-2214,2216-2230,2232-2246,2248-2255
+  s_b0da33e00deeb2::t_f6b43d89d1e4a4 2-657,1824-1828,1830-1831,1833-1844,1846-1862,1864-1880,1882-1894,1896-1908,1910-1926,1928-1934,1936
+crates/event_stream/src/domain/catalog/test.rs
+  s_b0da33e00deeb2::t_f6b43d89d1e4a4 171-173,192,195-204,231
+crates/event_stream/src/topics.rs
+  s_b0da33e00deeb2::t_0e63d647d4a835 13,31
+  s_b0da33e00deeb2::t_25be1977884c39 17,21,25,27,34,57-64,84-88,91,95-99,101-107
+Cargo.lock
+  s_b0da33e00deeb2::t_aad49e86223791 8132,8137,8144,8150,8162
+crates/event_stream/src/domain/catalog.rs
+  s_b0da33e00deeb2::t_cc161744b90d1c 12,14-15,19,23,26,30-32,36,278-279,283-287,299-359
+crates/webhook/src/inbound/kafka_consumer/test.rs
+  s_b0da33e00deeb2::t_25be1977884c39 86-93
+crates/webhook/src/topics.rs
+  s_b0da33e00deeb2::t_25be1977884c39 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9589acd18a9d9f632c2f3eb10555b740267fa29c",
+  "prompts": {},
+  "sessions": {
+    "s_b0da33e00deeb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70fd566d-6642-47ee-813b-5061c81e1901",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
