@@ -12,18 +12,22 @@
  * Once `@macro-inc/sdk` has these methods, that is the SDK's (see `FORMAT.md`); until then, a fetch with the agent's API key:
  *
  *     const wakes = `${api}/agents/${encodeURIComponent(me)}/wakes`;  // me: the agent account's user id
- *     const send = async (method: string, url: string, body: unknown) => {
+ *     const send = async (method: string, url: string, body: unknown, signal?: AbortSignal) => {
  *       const response = await fetch(url, {
  *         method,
- *         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+ *         headers: { "x-macro-user-api-key": key, "content-type": "application/json" },
  *         body: JSON.stringify(body),
+ *         signal,
  *       });
+ *       // 404 for a record: wakes are off for this account; stop for the run.
+ *       if (response.status === 404 && method === "POST") throw new WakesUnavailable();
  *       if (!response.ok) throw new Error(`${method} ${url}: ${response.status}`);
  *     };
  *     const sink = macroSink({
  *       client: {
- *         recordWake: (record) => send("POST", wakes, record),
- *         uploadTrace: (wake, trace) => send("PUT", `${wakes}/${encodeURIComponent(wake)}/trace`, trace),
+ *         recordWake: (record, signal) => send("POST", wakes, record, signal),
+ *         uploadTrace: (wake, trace, signal) =>
+ *           send("PUT", `${wakes}/${encodeURIComponent(wake)}/trace`, trace, signal),
  *       },
  *       clock,
  *       traces: {
@@ -45,12 +49,36 @@ import type { WakeTrace } from "../traces/trace.ts";
 import type { Sink } from "./index.ts";
 import type { Session, WakeRecord } from "./record.ts";
 
-/** What sends to Macro, for the agent account muppet runs as. Either may throw or reject: that costs the record or the trace, nothing else. */
+/**
+ * Thrown (or rejected with) by a `WakeClient` when Macro answers that this
+ * agent account has no wakes, e.g. a 404 while `enable-agent-dashboards` is off
+ * for it: the sink then sends nothing more for the rest of the run.
+ */
+export class WakesUnavailable extends Error {
+	constructor(message = "Macro has no wakes for this agent account") {
+		super(message);
+		this.name = "WakesUnavailable";
+	}
+}
+
+/**
+ * What sends to Macro, for the agent account muppet runs as. Either may throw
+ * or reject: that costs the record or the trace, nothing else, unless it is a
+ * `WakesUnavailable`. Each is handed a signal that aborts once the sink stops
+ * waiting on it; a client should pass it to `fetch`.
+ */
 export type WakeClient = {
 	/** `POST /agents/{agent}/wakes` with the record as it is. */
-	readonly recordWake: (record: WakeRecord) => Promise<void>;
+	readonly recordWake: (
+		record: WakeRecord,
+		signal?: AbortSignal,
+	) => Promise<void>;
 	/** `PUT /agents/{agent}/wakes/{wake}/trace`, replacing the wake's trace. */
-	readonly uploadTrace: (wake: string, trace: WakeTrace) => Promise<void>;
+	readonly uploadTrace: (
+		wake: string,
+		trace: WakeTrace,
+		signal?: AbortSignal,
+	) => Promise<void>;
 };
 
 /** Where a wake's trace comes from. */
@@ -59,7 +87,7 @@ export type WakeTraces = {
 	readonly transcript: (
 		session: Session,
 	) => Promise<readonly unknown[] | undefined>;
-	/** The exact values to redact, e.g. `credentialValues(credentials)`. Asked before every upload. */
+	/** The exact values to redact, e.g. `credentialValues(credentials)`. Asked before every upload; if it rejects, that upload is skipped. */
 	readonly secrets: () => Promise<readonly string[]>;
 	/** How often a running wake's trace is sent again, if it changed. 60 seconds unless said. */
 	readonly intervalMs?: number;
@@ -71,8 +99,8 @@ type Watch = {
 	stopped: boolean;
 	/** The JSON last sent, so an unchanged trace isn't sent again. */
 	last?: string;
-	/** The upload under way, if any. */
-	busy: Promise<void>;
+	/** The upload under way, if any, settling when its request does (not when the sink stopped waiting on it). */
+	inflight: Promise<void>;
 };
 
 /**
@@ -80,8 +108,11 @@ type Watch = {
  * given `traces`, the wake's trace: from its `session` record every
  * `intervalMs` while it runs (only when it changed), and once more, no longer
  * live, at its `end`. No call to Macro is waited on longer than `timeoutMs`
- * (10 seconds unless said), so a slow Macro holds up no other sink for long,
- * and nothing it does ever throws out of the sink.
+ * (10 seconds unless said): past it, the call's signal aborts. A live upload
+ * still running at the end is waited on, again no longer than the timeout,
+ * before the final one, so it can't land after it. A slow Macro holds up no
+ * other sink for long, nothing it does ever throws out of the sink, and once
+ * the client throws `WakesUnavailable` the sink does nothing more.
  */
 export const macroSink = ({
 	client,
@@ -96,15 +127,39 @@ export const macroSink = ({
 	readonly timeoutMs?: number;
 }): Sink => {
 	const watches = new Map<string, Watch>();
+	let unavailable = false;
+
+	/**
+	 * Starts `work`: `done` settles when it does and never rejects; `waited`
+	 * settles when it does or the timeout passes, aborting its signal then.
+	 */
+	const start = (
+		work: (signal: AbortSignal) => Promise<void>,
+	): { readonly done: Promise<void>; readonly waited: Promise<void> } => {
+		const controller = new AbortController();
+		const done = (async () => {
+			try {
+				await work(controller.signal);
+			} catch (error) {
+				// Telemetry costs the trace or the record, never the wake.
+				if (error instanceof WakesUnavailable) {
+					unavailable = true;
+					for (const watch of watches.values()) watch.stopped = true;
+				}
+			}
+		})();
+		const waited = Promise.race([
+			done.then(() => true),
+			clock.sleep(timeoutMs).then(() => false),
+		]).then((finished) => {
+			if (!finished) controller.abort();
+		});
+		return { done, waited };
+	};
 
 	/** Does `work`, waiting on it no longer than the timeout. Never rejects. */
-	const within = async (work: () => Promise<void>): Promise<void> => {
-		try {
-			await Promise.race([work(), clock.sleep(timeoutMs)]);
-		} catch {
-			// Telemetry costs the trace or the record, never the wake.
-		}
-	};
+	const within = (work: (signal: AbortSignal) => Promise<void>) =>
+		start(work).waited;
 
 	const upload = async (
 		sources: WakeTraces,
@@ -112,9 +167,11 @@ export const macroSink = ({
 		session: Session,
 		live: boolean,
 		watch: Watch,
+		signal: AbortSignal,
 	): Promise<void> => {
 		const lines = await sources.transcript(session);
 		if (lines === undefined) return;
+		// A credential that can't be read rejects here: no trace this time.
 		const redact = redactor(await sources.secrets());
 		const trace = wakeTrace({ lines, live, redact });
 		if (trace === undefined) return;
@@ -122,7 +179,8 @@ export const macroSink = ({
 		const fitted = fitTrace(trace, limit);
 		const json = JSON.stringify(fitted);
 		if (json === watch.last || traceBytes(fitted) > limit) return;
-		await client.uploadTrace(wake, fitted);
+		if (signal.aborted || unavailable) return;
+		await client.uploadTrace(wake, fitted, signal);
 		watch.last = json;
 	};
 
@@ -133,20 +191,25 @@ export const macroSink = ({
 		watch: Watch,
 	): Promise<void> => {
 		while (!watch.stopped) {
-			watch.busy = within(() => upload(sources, wake, session, true, watch));
-			await watch.busy;
+			const call = start((signal) =>
+				upload(sources, wake, session, true, watch, signal),
+			);
+			watch.inflight = call.done;
+			await call.waited;
 			if (watch.stopped) return;
 			await clock.sleep(sources.intervalMs ?? 60_000);
 		}
 	};
 
 	return async (record) => {
-		await within(() => client.recordWake(record));
+		if (unavailable) return;
+		await within((signal) => client.recordWake(record, signal));
+		if (unavailable) return;
 		if (traces === undefined || record.session === undefined) return;
 		const { session } = record;
 		if (record.phase === "session") {
 			if (watches.has(record.wake)) return;
-			const watch: Watch = { stopped: false, busy: Promise.resolve() };
+			const watch: Watch = { stopped: false, inflight: Promise.resolve() };
 			watches.set(record.wake, watch);
 			void follow(traces, record.wake, session, watch);
 			return;
@@ -154,12 +217,14 @@ export const macroSink = ({
 		if (record.phase !== "end") return;
 		const watch = watches.get(record.wake) ?? {
 			stopped: true,
-			busy: Promise.resolve(),
+			inflight: Promise.resolve(),
 		};
 		watches.delete(record.wake);
 		watch.stopped = true;
 		// A live upload still under way would otherwise land after the last one.
-		await watch.busy;
-		await within(() => upload(traces, record.wake, session, false, watch));
+		await Promise.race([watch.inflight, clock.sleep(timeoutMs)]);
+		await within((signal) =>
+			upload(traces, record.wake, session, false, watch, signal),
+		);
 	};
 };

@@ -65,7 +65,12 @@ export {
 export { attributes, line, namespace } from "./attributes.ts";
 export type { MacroSpan, MacroTelemetry } from "./framework.ts";
 export { macroTelemetry } from "./macro.ts";
-export { macroSink, type WakeClient, type WakeTraces } from "./wakes.ts";
+export {
+	macroSink,
+	type WakeClient,
+	WakesUnavailable,
+	type WakeTraces,
+} from "./wakes.ts";
 export {
 	type Classified,
 	type Effect,

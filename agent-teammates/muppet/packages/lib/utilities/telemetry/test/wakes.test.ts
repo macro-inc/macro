@@ -7,6 +7,7 @@ import {
 	type Started,
 	type WakeClient,
 	type WakeRecord,
+	WakesUnavailable,
 } from "../index.ts";
 
 const fixture = join(
@@ -236,5 +237,125 @@ describe("macroSink", () => {
 		await sink(session);
 		await sink(ended);
 		expect(traces).toEqual([]);
+	});
+
+	test("skips a tick's upload when a credential can't be read, then carries on", async () => {
+		const clock = fakeClock();
+		const { traces, client } = recording();
+		let readable = false;
+		const sink = macroSink({
+			client,
+			clock,
+			traces: {
+				transcript,
+				secrets: async () => {
+					if (!readable) throw new Error("keychain locked");
+					return [];
+				},
+				intervalMs: 60_000,
+			},
+		});
+		await sink(session);
+		await clock.advance(0);
+		expect(traces).toEqual([]);
+		readable = true;
+		await clock.advance(60_000);
+		expect(traces.map(({ trace }) => trace.live)).toEqual([true]);
+		readable = false;
+		await sink(ended);
+		expect(traces).toHaveLength(1); // no final upload without the credentials
+	});
+
+	test("waits for a live upload still under way before the final one", async () => {
+		const clock = fakeClock();
+		const landed: boolean[] = [];
+		let release = () => {};
+		const client: WakeClient = {
+			recordWake: async () => {},
+			uploadTrace: (_, trace) => {
+				if (trace.live)
+					return new Promise<void>((resolve) => {
+						release = () => {
+							landed.push(true);
+							resolve();
+						};
+					});
+				landed.push(false);
+				return Promise.resolve();
+			},
+		};
+		const sink = macroSink({
+			client,
+			clock,
+			traces: { transcript, secrets: async () => [] },
+			timeoutMs: 5_000,
+		});
+		await sink(session);
+		await clock.advance(1_000); // the live upload is under way
+		let ended_ = false;
+		const ending = sink(ended).then(() => {
+			ended_ = true;
+		});
+		await clock.advance(1_000);
+		expect(ended_).toBe(false);
+		expect(landed).toEqual([]);
+		release();
+		await ending;
+		expect(landed).toEqual([true, false]); // the final one lands last
+	});
+
+	test("aborts a live upload that outlasts the timeout, and waits on it no longer than that at the end", async () => {
+		const clock = fakeClock();
+		const signals: AbortSignal[] = [];
+		const finals: WakeTrace[] = [];
+		const client: WakeClient = {
+			recordWake: async () => {},
+			uploadTrace: (_, trace, signal) => {
+				if (!trace.live) {
+					finals.push(trace);
+					return Promise.resolve();
+				}
+				if (signal) signals.push(signal);
+				return new Promise<void>(() => {}); // ignores its signal
+			},
+		};
+		const sink = macroSink({
+			client,
+			clock,
+			traces: { transcript, secrets: async () => [], intervalMs: 60_000 },
+			timeoutMs: 5_000,
+		});
+		await sink(session);
+		await clock.advance(0);
+		expect(signals.map((signal) => signal.aborted)).toEqual([false]);
+		await clock.advance(5_000);
+		expect(signals.map((signal) => signal.aborted)).toEqual([true]);
+		const ending = sink(ended);
+		await clock.advance(5_000);
+		await ending;
+		expect(finals.map((trace) => trace.live)).toEqual([false]);
+	});
+
+	test("sends nothing more once Macro says the agent has no wakes", async () => {
+		const clock = fakeClock();
+		let calls = 0;
+		const sink = macroSink({
+			client: {
+				recordWake: async () => {
+					calls += 1;
+					throw new WakesUnavailable();
+				},
+				uploadTrace: async () => {
+					calls += 1;
+				},
+			},
+			clock,
+			traces: { transcript, secrets: async () => [] },
+		});
+		await sink(started);
+		await sink(session);
+		await clock.advance(600_000);
+		await sink(ended);
+		expect(calls).toBe(1);
 	});
 });

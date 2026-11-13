@@ -155,7 +155,10 @@ const client: WakeClient = {
 };
 ```
 
-or, until then, a fetch (see `wakes.ts`).
+or, until then, a fetch with the agent's API key in `x-macro-user-api-key`
+(see `wakes.ts`; `starter-agent`'s `behavior/agent/telemetry.ts` is a whole
+one). A client that throws `WakesUnavailable` (a 404 for a record: wakes are
+off for this account) stops the sink for the rest of the run.
 
 - `POST /agents/{agent}/wakes`: the record, as above, at each phase.
 - `PUT /agents/{agent}/wakes/{wake}/trace`: the trace, at most 10 MiB of
@@ -163,9 +166,12 @@ or, until then, a fetch (see `wakes.ts`).
   `intervalMs` (60 seconds) while it changed, and once more at `end`, with
   `live: false`; nothing after that.
 
-No call is waited on longer than `timeoutMs` (10 seconds), and failures are
-dropped: a slow or down Macro costs records and traces, never the wake or the
-other sinks.
+No call is waited on longer than `timeoutMs` (10 seconds): past it, the
+signal the client was handed aborts. A live upload still running at `end` is
+waited on (again at most `timeoutMs`) before the final one, so it can't land
+after it. Failures are dropped: a slow or down Macro costs records and traces,
+never the wake or the other sinks. A trace is redacted with every credential's
+value (`secrets`); if one can't be read, that upload is skipped.
 
 ### The trace
 
@@ -222,8 +228,11 @@ Claude Code's transcript or Codex's rollout, told apart by their lines.
 - Redacted before it leaves: the agent's credential values exactly (8
   characters or more, longest first), then anything shaped like a credential
   (private keys; GitHub, Anthropic, OpenAI, Google, Slack and AWS tokens; JWTs;
-  `Bearer`/`Basic` values; `password=`; secret URL parameters; one-time codes
-  in prose; secret-looking JSON keys, in tool inputs and in text).
+  `Bearer`/`Basic` values; `password=`; env-style `STRIPE_KEY=…` assignments,
+  `export` lines and `.env` dumps included; passwords and tokens in URL
+  userinfo; secret URL parameters; one-time codes in prose; secret-looking
+  JSON keys, in tool inputs and in text, except numeric token counts such as
+  `max_tokens`). If a credential can't be read, the trace isn't sent.
 - Each text is cut at 200,000 characters. A trace whose JSON is still over
   10 MiB loses tool results and thinking past 20,000, then 2,000 characters,
   then every text and tool input past 2,000, then its oldest spans (the
