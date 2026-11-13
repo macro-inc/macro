@@ -130,6 +130,10 @@ scheduling runtime.
 - A status, cleanup state or nightly outcome named in SQL must match its
   domain table: partial-index scans spell states as literals, PK-addressed
   writes bind `sources()`. Change both, and the DB test says so if you don't.
+- `suggestion_generation_session.closed_at` is written, never read: the
+  previous release tells an open session by a NULL `closed_at`, so every write
+  that moves a session out of `open` sets it too. Once no deployed code reads
+  it, stop writing it, then drop it and its index in a later change.
 - At onboarding a routines session that suggested nothing is retried once;
   never otherwise, where suggesting nothing is a fine answer.
 - `routine_suggestions.generated`/`.surface` logs feed a Datadog dashboard;

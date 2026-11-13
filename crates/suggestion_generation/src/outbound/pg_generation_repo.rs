@@ -274,9 +274,10 @@ impl GenerationRepo for PgGenerationRepo {
     ) -> Result<bool, Self::Err> {
         let event = CleanupEvent::Ended;
         let sources = names(&event.sources());
+        // And `closed_at`, by which the previous release tells an open session.
         let ended = sqlx::query!(
             r#"UPDATE suggestion_generation_session
-               SET cleanup = $2, ending = $3, ended_at = $4, cleanup_at = $4
+               SET cleanup = $2, ending = $3, ended_at = $4, cleanup_at = $4, closed_at = $4
                WHERE session_id = $1 AND cleanup = ANY($5)"#,
             session,
             <&str>::from(event.entered()),
@@ -324,9 +325,11 @@ impl GenerationRepo for PgGenerationRepo {
         limit: u16,
     ) -> Result<Vec<StaleSession>, Self::Err> {
         // CleanupEvent::Ended: open → stopping, ending interrupted.
+        // And `closed_at`, by which the previous release tells an open session.
         let rows = sqlx::query!(
             r#"UPDATE suggestion_generation_session AS s
-               SET cleanup = 'stopping', ending = 'interrupted', ended_at = $2, cleanup_at = $2
+               SET cleanup = 'stopping', ending = 'interrupted', ended_at = $2, cleanup_at = $2,
+                   closed_at = $2
                WHERE s.session_id IN (
                    SELECT o.session_id FROM suggestion_generation_session AS o
                    JOIN suggestion_generation AS g ON g.id = o.generation_id

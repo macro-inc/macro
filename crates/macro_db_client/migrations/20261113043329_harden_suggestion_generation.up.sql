@@ -51,8 +51,10 @@ ALTER TABLE suggestion_generation_session
     ADD CONSTRAINT suggestion_generation_session_ended_check
         CHECK ((cleanup = 'open') = (ending IS NULL AND ended_at IS NULL));
 
-DROP INDEX suggestion_generation_session_open_idx;
-ALTER TABLE suggestion_generation_session DROP COLUMN closed_at;
+-- `closed_at` and its index stay while the previous release may run: it
+-- tells open sessions by a NULL `closed_at`, so a session leaving open still
+-- sets it. A later change stops writing it, then drops it.
+
 -- The sweep reads only sessions still running or being cleaned up.
 CREATE INDEX suggestion_generation_session_unfinished_idx
     ON suggestion_generation_session (opened_at) WHERE cleanup IN ('open', 'stopping');

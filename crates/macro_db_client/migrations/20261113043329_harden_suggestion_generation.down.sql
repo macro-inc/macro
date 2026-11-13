@@ -8,12 +8,9 @@ ALTER TABLE suggestion_audience
     DROP COLUMN last_routines_ok_at;
 
 DROP INDEX suggestion_generation_session_unfinished_idx;
-ALTER TABLE suggestion_generation_session ADD COLUMN closed_at timestamptz;
 UPDATE suggestion_generation_session
 SET closed_at = coalesce(cleanup_at, ended_at, opened_at)
-WHERE cleanup <> 'open';
-CREATE INDEX suggestion_generation_session_open_idx
-    ON suggestion_generation_session (opened_at) WHERE closed_at IS NULL;
+WHERE cleanup <> 'open' AND closed_at IS NULL;
 ALTER TABLE suggestion_generation_session
     DROP COLUMN ending,
     DROP COLUMN ended_at,

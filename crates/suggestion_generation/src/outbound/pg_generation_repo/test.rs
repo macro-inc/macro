@@ -106,8 +106,8 @@ async fn insert_session(
     sqlx::query!(
         r#"INSERT INTO suggestion_generation_session
              (session_id, generation_id, user_id, agent_id, kind, opened_at,
-              cleanup, ending, ended_at, cleanup_at)
-           VALUES ($1, $2, $3, $4, 'suggestions', $5, $6, $7, $8, $8)"#,
+              cleanup, ending, ended_at, cleanup_at, closed_at)
+           VALUES ($1, $2, $3, $4, 'suggestions', $5, $6, $7, $8, $8, $8)"#,
         session,
         generation,
         user,
@@ -128,11 +128,12 @@ struct StoredSession {
     ending: Option<SessionEnding>,
     attempts: i16,
     cleanup_at: Option<DateTime<Utc>>,
+    closed_at: Option<DateTime<Utc>>,
 }
 
 async fn stored_session(pool: &PgPool, session: Uuid) -> StoredSession {
     let row = sqlx::query!(
-        r#"SELECT cleanup, ending, cleanup_attempts, cleanup_at
+        r#"SELECT cleanup, ending, cleanup_attempts, cleanup_at, closed_at
            FROM suggestion_generation_session WHERE session_id = $1"#,
         session
     )
@@ -144,6 +145,7 @@ async fn stored_session(pool: &PgPool, session: Uuid) -> StoredSession {
         ending: row.ending.map(|ending| ending.parse().unwrap()),
         attempts: row.cleanup_attempts,
         cleanup_at: row.cleanup_at,
+        closed_at: row.closed_at,
     }
 }
 
@@ -521,6 +523,18 @@ async fn session_cleanup_follows_the_table(pool: PgPool) {
                 before.ending
             };
             assert_eq!(after.ending, ending, "{state:?} {event:?}");
+            // Leaving open sets `closed_at`, which the previous release
+            // reads; nothing else touches it.
+            let closed_at = if moved && event == CleanupEvent::Ended {
+                Some(later.timestamp_micros())
+            } else {
+                before.closed_at.map(|at| at.timestamp_micros())
+            };
+            assert_eq!(
+                after.closed_at.map(|at| at.timestamp_micros()),
+                closed_at,
+                "{state:?} {event:?}"
+            );
         }
     }
     for ending in SessionEnding::iter() {
@@ -695,11 +709,17 @@ async fn the_sweep_ends_sessions_left_open(pool: PgPool) {
         assert_eq!(stored.cleanup, expected.unwrap_or(state), "{state:?}");
         if expected.is_ok() {
             assert_eq!(stored.ending, Some(SessionEnding::Interrupted));
+            assert_eq!(
+                stored.closed_at.map(|at| at.timestamp_micros()),
+                Some(now.timestamp_micros())
+            );
         }
     }
     assert!(ended.contains(&overdue));
     assert!(!ended.contains(&live));
-    assert_eq!(stored_session(&pool, live).await.cleanup, Cleanup::Open);
+    let live_stored = stored_session(&pool, live).await;
+    assert_eq!(live_stored.cleanup, Cleanup::Open);
+    assert_eq!(live_stored.closed_at, None);
     assert!(
         swept
             .iter()
