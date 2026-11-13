@@ -4,7 +4,9 @@
 #[path = "send_support/support.rs"]
 mod support;
 
-use email_e2e::{ApiResponse, Inbox, Mail, Provider, Report, Stack, StackOptions};
+use email_e2e::{
+    ApiResponse, DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, StackOptions, eventually,
+};
 use rootcause::prelude::*;
 use serde_json::{Value, json};
 use support::{first_message, html, message_in_thread, provider_copies, wait_for_wire};
@@ -514,16 +516,32 @@ async fn undo_within_the_window_delivers_nothing(provider: Provider) -> Result<(
     stack.finish().await
 }
 
-/// A delivery request for a message that no longer exists is dropped, and
-/// the scheduled message behind it in the queue still goes out. Failing
-/// means one bad entry stops the delivery worker (`finish` reports a panic)
-/// and later scheduled mail waits.
+/// A delivery request for a message that no longer exists is dropped: it
+/// leaves the queue without being retried into the dead-letter queue, and a
+/// message scheduled after it still goes out. Failing means one bad entry is
+/// retried until it is dead-lettered or stops the delivery worker (`finish`
+/// reports a panic), and later scheduled mail waits.
 async fn a_missing_message_does_not_hold_up_the_next(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let grace = stack.user("grace").await?;
     let from = ada.link(provider, ada.email()).await?;
     let to = grace.link(provider, grace.email()).await?;
+
+    // The request is alone on the queue, so an empty queue means the worker
+    // is done with it: dropped at once, or dead-lettered after its retries.
+    sweep(&stack, &from, &Uuid::now_v7().to_string()).await?;
+    eventually(
+        "the request for the missing message to leave the queue",
+        DEFAULT_TIMEOUT,
+        async || Ok((stack.queue_depth(SCHEDULED_QUEUE).await? == 0).then_some(())),
+    )
+    .await?;
+    assert_eq!(
+        stack.dead_letters(SCHEDULED_QUEUE).await?,
+        0,
+        "the request for a missing message was retried until it was given up on"
+    );
 
     let draft = from
         .save_draft(&json!({
@@ -537,11 +555,9 @@ async fn a_missing_message_does_not_hold_up_the_next(provider: Provider) -> Resu
     let current = generation(&from, &thread, &id).await?;
     schedule(&from, &id, current, LATER).await?.ok()?;
 
-    sweep(&stack, &from, &Uuid::now_v7().to_string()).await?;
     come_due(&stack, &from, &id).await?;
 
     wait_for_wire(&stack, &to, "Second in line").await?;
-    assert_eq!(stack.dead_letters(SCHEDULED_QUEUE).await?, 0);
 
     stack.finish().await
 }
