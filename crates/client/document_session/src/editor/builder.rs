@@ -151,12 +151,6 @@ struct TransformIds {
     length: usize,
 }
 
-/// Source's `idToNodeKeyMap` entries recorded by this update's transforms; the index (updated by
-/// after_commit) holds the entries as of update start, including nodes this update destroys.
-#[cfg(feature = "application")]
-#[derive(Default)]
-struct UpdateIds(std::collections::HashMap<String, NodeKey>);
-
 /// Source nodeIdPlugin's transform (nodeIdPlugin.ts:120-131): `$assertId`, then `$regenId` when
 /// the id already belongs to another node; the node transformed first keeps it. An exhausted
 /// mint leaves the node as it is and lets the update commit; after_commit reports it.
@@ -166,20 +160,13 @@ fn transform_id(tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
     // Source's map at update start: the index minus stale entries an earlier subtree removal
     // left (Source's destroyed listener drops those); a node this update destroys still counts.
     // The same predicate decides keeping a stored id and accepting a fresh draw.
+    // Source's map: this update's claims first, then the start-of-update index (shared rule,
+    // macro_document_model node_ids). It decides keeping a stored id and accepting a draw.
     let owned_elsewhere = |tx: &Transaction<'_>, id: &str| -> Result<bool, Error> {
-        let indexed = tx
-            .extension::<NodeIdIndex>()?
-            .ids
-            .get(id)
-            .copied()
-            .filter(|owner| {
-                *owner != key
-                    && (tx.is_attached(*owner) || tx.committed_state().view().is_attached(*owner))
-            });
-        let recorded = tx
-            .update_local::<UpdateIds>()
-            .and_then(|ids| ids.0.get(id).copied());
-        Ok(indexed.is_some() || recorded.is_some_and(|owner| owner != key))
+        let indexed = tx.extension::<NodeIdIndex>()?.ids.get(id).copied();
+        Ok(macro_document_model::node_ids::id_owned_by_other(
+            tx, indexed, id, key,
+        ))
     };
     let stored = tx.get_state(key, id_state)?.unwrap_or_default();
     let id = if !stored.is_empty() && !owned_elsewhere(tx, &stored)? {
@@ -194,8 +181,7 @@ fn transform_id(tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
     if id != stored {
         tx.set_state(key, id_state, Some(id.clone()))?;
     }
-    tx.update_local_mut::<UpdateIds>()?.0.insert(id, key);
-    Ok(())
+    macro_document_model::node_ids::claim_id(tx, &id, key)
 }
 
 /// How a node without a usable id receives one.
@@ -307,14 +293,23 @@ impl Plugin for NodeIds {
                 Some(tx.get_state(*key, self.id_state)?.unwrap_or_default())
             };
             // Subtree removal can leave stale descendant index entries. Only
-            // an attached owner can conflict with a restored durable identity.
+            // an attached owner that still stores the id conflicts: an owner whose id
+            // changed in this commit (its own mutation updates the index later in this
+            // loop) gave the id up, as the in-update transform decided.
+            let indexed = match &id {
+                Some(value) => tx.extension::<NodeIdIndex>()?.ids.get(value).copied(),
+                None => None,
+            };
+            let conflict = match (&id, indexed) {
+                (Some(value), Some(owner)) => {
+                    owner != *key
+                        && tx.is_attached(owner)
+                        && tx.get_state(owner, self.id_state)?.as_deref() == Some(value.as_str())
+                }
+                _ => false,
+            };
             if let Some(value) = &mut id
-                && (value.is_empty()
-                    || tx
-                        .extension::<NodeIdIndex>()?
-                        .ids
-                        .get(value)
-                        .is_some_and(|owner| owner != key && tx.is_attached(*owner)))
+                && (value.is_empty() || conflict)
             {
                 *value = match self.mint {
                     IdMint::Session => {

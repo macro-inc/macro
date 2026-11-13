@@ -139,17 +139,50 @@ pub fn prepare_clipboard_nodes(
     }
     Ok(())
 }
+/// Source nodeIdPlugin's `idToNodeKeyMap.set` calls made inside the current update: the last
+/// write wins, and a claim overrides the start-of-update index. Shared by every id host.
+#[derive(Default)]
+pub struct IdClaims(std::collections::HashMap<String, NodeKey>);
+
+/// Record that `key` holds `id` from now on in this update.
+pub fn claim_id(tx: &mut Transaction<'_>, id: &str, key: NodeKey) -> crate::ModelResult<()> {
+    tx.update_local_mut::<IdClaims>()?
+        .0
+        .insert(id.to_owned(), key);
+    Ok(())
+}
+
+/// The node this update last claimed `id` for, if any.
+pub fn claimed_id_owner(tx: &Transaction<'_>, id: &str) -> Option<NodeKey> {
+    tx.update_local::<IdClaims>()
+        .and_then(|claims| claims.0.get(id).copied())
+}
+
+/// Whether `id` belongs to a node other than `key`: this update's claim decides; without one,
+/// the start-of-update index owner counts while attached now or at update start (a node this
+/// update destroys keeps its id reserved until commit; a stale entry does not).
+pub fn id_owned_by_other(
+    tx: &Transaction<'_>,
+    indexed: Option<NodeKey>,
+    id: &str,
+    key: NodeKey,
+) -> bool {
+    match claimed_id_owner(tx, id) {
+        Some(owner) => owner != key,
+        None => indexed.is_some_and(|owner| {
+            owner != key
+                && (tx.is_attached(owner) || tx.committed_state().view().is_attached(owner))
+        }),
+    }
+}
+
 /// Assign missing ids and make the currently transformed duplicate lose.
 pub fn id_transform(tx: &mut Transaction<'_>, key: NodeKey) -> crate::ModelResult<()> {
     let previous = get_id(tx.view(), key)?;
     let state = tx.extension::<NodeIdState>()?;
-    // Removed subtrees need not publish a mutation for each descendant.
     let duplicate = previous.as_ref().is_some_and(|id| {
-        state
-            .mappings
-            .id_to_node_key
-            .get(id)
-            .is_some_and(|owner| *owner != key && tx.is_attached(*owner))
+        let indexed = state.mappings.id_to_node_key.get(id).copied();
+        id_owned_by_other(tx, indexed, id.as_str(), key)
     });
     // Stored highlight identity is preserved; highlighting remains a view concern.
     let id = if previous.is_none() || (duplicate && tx.type_name(key)? != "code-highlight") {
@@ -161,6 +194,7 @@ pub fn id_transform(tx: &mut Transaction<'_>, key: NodeKey) -> crate::ModelResul
     if get_id(tx.view(), key)?.as_ref() != Some(&id) {
         set_id(tx, key, Some(id.clone()))?;
     }
+    claim_id(tx, id.as_str(), key)?;
     let state = tx.extension_mut::<NodeIdState>()?;
     state.mappings.id_to_node_key.insert(id.clone(), key);
     state.mappings.node_key_to_id.insert(key, id);
@@ -243,3 +277,7 @@ pub const DEFAULT_PLUGIN_ID_LENGTH: usize = lexical_node_id::PLUGIN_DEFAULT_ID_L
 pub const UPDATE_ALL_ID_LENGTH: usize = lexical_node_id::WEB_ID_LENGTH;
 /// Source nanoid alphabet in generator order.
 pub const NANOID_ALPHABET: &[u8; 64] = lexical_node_id::NANOID_URL_ALPHABET;
+
+#[cfg(test)]
+#[path = "node_ids/claims_test.rs"]
+mod claims_test;
