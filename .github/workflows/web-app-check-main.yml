@@ -50,6 +50,9 @@ jobs:
             - 'services/ai-editing-worker/**'
             - 'services/mcp-chatgpt-worker/**'
             - 'packages/code-mode-sdk/**'
+            - 'packages/muppet/**'
+            - 'packages/starter-agent/**'
+            - 'tooling/scripts/starter-agent-lock.sh'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
           web_artifact_changed:
@@ -353,6 +356,9 @@ jobs:
     - name: Install SDK Documentation Dependencies
       run: bun install --frozen-lockfile
       working-directory: packages/sdk
+    - name: Build SDK
+      run: bun run build
+      working-directory: packages/sdk
     - name: Run checks
       run: |
         set -uo pipefail
@@ -378,6 +384,8 @@ jobs:
         check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
         check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
         check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
+        check 'Check Agent Runtime' 'packages/muppet' 'bun run typecheck && bun run test'
+        check 'Check Starter Agent' 'packages/starter-agent' 'bun run check && ../../tooling/scripts/starter-agent-lock.sh --check'
         failed=0
         for index in "${!names[@]}"; do
           status=0

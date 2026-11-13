@@ -45,9 +45,14 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let body = body.into_inner();
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(body.share_permission.is_some())
+        .map_err(|refused| ProjectError::Forbidden(refused.to_string()))?;
     state
         .service
-        .edit_project(access.entity_access_receipt, project.0, body.into_inner())
+        .edit_project(access.entity_access_receipt, project.0, body)
         .await?;
 
     Ok(Json(SuccessResponse {

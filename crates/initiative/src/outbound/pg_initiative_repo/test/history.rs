@@ -75,7 +75,7 @@ async fn project_history_filters_task_events_until_task_access_is_granted(
     assert!(hidden.records.is_empty());
 
     entity_access_db_utils::upsert_user_entity_access_bulk(
-        &pool,
+        &mut *pool.acquire().await?,
         &[user(MEMBER)],
         &Uuid::parse_str(&task_id)?,
         EntityType::Document,

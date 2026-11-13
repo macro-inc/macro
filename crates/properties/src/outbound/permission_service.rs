@@ -209,7 +209,7 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
 
         // Grant edit permissions to all users
         entity_access_db_utils::upsert_user_entity_access_bulk(
-            &self.db,
+            &mut *self.db.acquire().await?,
             user_ids,
             &macro_uuid::string_to_uuid(task_id).unwrap(),
             model_entity::EntityType::Document,

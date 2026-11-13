@@ -13,6 +13,7 @@ use crate::domain::{
         CrmEntityAccess, EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
+    telemetry::span_count,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
@@ -61,7 +62,7 @@ fn team_foreign_entity_source_pairs(
 }
 
 impl AccessRepository for PgAccessRepository {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_document_access(
         &self,
         document_id: &str,
@@ -83,7 +84,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_chat_access(
         &self,
         chat_id: &str,
@@ -100,7 +101,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_project_access(
         &self,
         project_id: &str,
@@ -117,7 +118,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_thread_access(
         &self,
         thread_id: &str,
@@ -134,7 +135,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_calendar_event_access(
         &self,
         event_id: &str,
@@ -211,7 +212,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_call_access(
         &self,
         call_id: &str,
@@ -403,6 +404,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_external_chat_access(
         &self,
         group_id: &str,
@@ -436,7 +438,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip_all, fields(row_count = row_ids.len()))]
+    #[tracing::instrument(err, skip_all, fields(row_count = span_count(row_ids.len())))]
     async fn get_database_rows_access(
         &self,
         row_ids: &[Uuid],
@@ -686,7 +688,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn has_foreign_entity_access(
         &self,
         foreign_entity_id: &str,
@@ -712,7 +714,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_company_access(
         &self,
         company_id: &str,
@@ -730,7 +732,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_contact_access(
         &self,
         contact_id: &str,
@@ -748,7 +750,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn check_user_channel_membership(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -762,7 +764,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_channel_role(
         &self,
         channel_id: &Uuid,
@@ -861,7 +863,7 @@ impl AccessRepository for PgAccessRepository {
         }))
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_user_team(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
