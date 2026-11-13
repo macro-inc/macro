@@ -2,13 +2,9 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { describe, expect, it, vi } from 'vitest';
 import { CREATABLE_BLOCKS } from './Launcher';
 
-const flags = vi.hoisted(() => ({ agents: false }));
-
 // Keep the actual shared create-menu entries, with all pilots enabled. Their
 // action implementations are unrelated to shortcut selection.
 vi.mock('@app/features/agents-view/primitives/open-composer', () => ({}));
-vi.mock('@app/features/block-agent/context/pending-session', () => ({}));
-vi.mock('@app/features/block-agent/ui/AgentInput', () => ({}));
 vi.mock(
   '@app/features/block-spreadsheet/primitives/use-spreadsheet-access',
   () => ({})
@@ -29,13 +25,11 @@ vi.mock('@app/features/routines', () => ({}));
 vi.mock('@block-md/observability', () => ({}));
 vi.mock('@channel/CreateChannelModal', () => ({}));
 vi.mock('@components/app/split-layout/layout', () => ({}));
-vi.mock('@core/component/AI/component/input/ChatInput', () => ({}));
 vi.mock('@core/component/EntityIcon', () => ({
   getIconConfig: () => ({ icon: () => null }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableAiEditor: 'ai',
-  enableChatV3Agents: 'agents',
   enableDatabases: 'databases',
   enableFigViewer: 'fig',
   enableForms: 'forms',
@@ -43,7 +37,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   enablePsdEditor: 'psd',
   enableReminders: 'reminders',
   enableSnippets: 'snippets',
-  isFeatureEnabled: (flag: string) => flag !== 'agents' || flags.agents,
+  isFeatureEnabled: () => true,
 }));
 vi.mock('@core/directive/focusInput', () => ({}));
 vi.mock('@core/hotkey/hotkeys', () => ({}));
@@ -59,28 +53,26 @@ vi.mock('@ui/components/Hotkey', () => ({}));
 vi.mock('./mobile/MobileCreateSheet', () => ({}));
 
 describe('create-menu keyboard shortcuts', () => {
-  it.each([false, true])(
-    'keeps database and spreadsheet reachable with agent rollout %s',
-    (agents) => {
-      flags.agents = agents;
-      const enabled = CREATABLE_BLOCKS.filter(
-        (item) => item.enabled?.() ?? true
-      );
-      const bindings = new Map(enabled.map((item) => [item.hotkey, item]));
+  it('keeps every create shortcut reachable', () => {
+    const enabled = CREATABLE_BLOCKS.filter((item) => item.enabled?.() ?? true);
+    const bindings = new Map(enabled.map((item) => [item.hotkey, item]));
 
-      // Registration overrides earlier entries with the same key. Both pilots
-      // must survive, alongside every other available create action.
-      expect(bindings.size).toBe(enabled.length);
-      expect(bindings.get('l')).toMatchObject({
-        blockName: 'database',
-        hotkeyToken: TOKENS.create.database,
-        altHotkeyToken: TOKENS.create.databaseNewSplit,
-      });
-      expect(bindings.get('b')).toMatchObject({
-        blockName: 'spreadsheet',
-        hotkeyToken: TOKENS.create.spreadsheet,
-        altHotkeyToken: TOKENS.create.spreadsheetNewSplit,
-      });
-    }
-  );
+    // Registration overrides earlier entries with the same key. Both pilots
+    // must survive, alongside every other available create action.
+    expect(bindings.size).toBe(enabled.length);
+    expect(bindings.get('l')).toMatchObject({
+      blockName: 'database',
+      hotkeyToken: TOKENS.create.database,
+      altHotkeyToken: TOKENS.create.databaseNewSplit,
+    });
+    expect(bindings.get('b')).toMatchObject({
+      blockName: 'spreadsheet',
+      hotkeyToken: TOKENS.create.spreadsheet,
+      altHotkeyToken: TOKENS.create.spreadsheetNewSplit,
+    });
+    expect(bindings.get('a')).toMatchObject({
+      blockName: 'agent',
+      hotkeyToken: TOKENS.create.agent,
+    });
+  });
 });

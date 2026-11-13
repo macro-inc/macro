@@ -279,7 +279,6 @@ mod code_mode {
     use agent_code_mode::domain::{
         CodeModeError, ExecutionStatus, UserCodeMode, UserExecutionReceipt,
     };
-    use agent_inmem::domain::tool_mode::ToolModeSelector;
     use ai_toolset::{ToolAnnotated, ToolAnnotations};
     use axum::{
         body::{Body, to_bytes},
@@ -290,42 +289,31 @@ mod code_mode {
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
     use serde::Deserialize;
-    use std::{future::Future, pin::Pin, sync::Mutex};
+    use std::sync::Mutex;
     use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
 
-    const FLAGGED: &str = "flagged@example.com";
-    const UNFLAGGED: &str = "unflagged@example.com";
-
-    /// Code mode only for [`FLAGGED`].
-    struct Flag;
-    impl ToolModeSelector for Flag {
-        fn select<'a>(
-            &'a self,
-            owner: &'a MacroUserIdStr<'_>,
-        ) -> Pin<Box<dyn Future<Output = ToolMode> + Send + 'a>> {
-            let mode = if owner.as_ref() == format!("macro|{FLAGGED}") {
-                ToolMode::Code
-            } else {
-                ToolMode::Standard
-            };
-            Box::pin(async move { mode })
-        }
-    }
+    const USER: &str = "user@example.com";
 
     /// Records who ran what, as which agent, and returns the source length as data.
     #[derive(Default)]
-    struct Runs(Mutex<Vec<(String, String)>>, Mutex<Vec<ToolCaller>>);
+    struct Runs(
+        Mutex<Vec<(String, String)>>,
+        Mutex<Vec<ToolCaller>>,
+        Mutex<Vec<Option<uuid::Uuid>>>,
+    );
     #[async_trait::async_trait]
     impl UserCodeMode for Runs {
         async fn execute(
             &self,
             user: &MacroUserIdStr<'static>,
             caller: &ToolCaller,
+            session: Option<uuid::Uuid>,
             request: ExecuteRequest,
             _: CancellationToken,
         ) -> Result<UserExecutionReceipt, CodeModeError> {
             self.1.lock().unwrap().push(caller.clone());
+            self.2.lock().unwrap().push(session);
             self.0
                 .lock()
                 .unwrap()
@@ -414,13 +402,13 @@ mod code_mode {
     }
 
     #[derive(Deserialize, schemars::JsonSchema)]
-    #[schemars(title = "Subagent", description = "Delegate a task.")]
-    struct Subagent {}
-    impl ToolAnnotated for Subagent {
-        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Delegate a task");
+    #[schemars(title = "ManageAgentSession", description = "Manage a session.")]
+    struct ManageAgentSession {}
+    impl ToolAnnotated for ManageAgentSession {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Manage a session");
     }
     #[async_trait::async_trait]
-    impl ai_toolset::AsyncTool<()> for Subagent {
+    impl ai_toolset::AsyncTool<()> for ManageAgentSession {
         type Output = serde_json::Value;
         async fn call(
             &self,
@@ -434,9 +422,9 @@ mod code_mode {
     const DIRECT_TOOLS: [&str; 5] = [
         "EditDocument",
         "ListCalendarEvents",
+        "ManageAgentSession",
         "NameSearch",
         "ReadContent",
-        "Subagent",
     ];
     const CHATGPT_TOOLS: [&str; 4] = [
         "EditDocument",
@@ -452,7 +440,7 @@ mod code_mode {
                 .add_tool::<ReadContent, ()>()
                 .add_tool::<EditDocument, ()>()
                 .add_tool::<ListCalendarEvents, ()>()
-                .add_tool::<Subagent, ()>(),
+                .add_tool::<ManageAgentSession, ()>(),
         )
     }
 
@@ -471,11 +459,10 @@ mod code_mode {
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
             service: runs,
             cognition: None,
-            selector: Arc::new(Flag),
         });
         let mut config =
             StreamableHttpServerConfig::default().with_allowed_hosts(["localhost".to_owned()]);
-        config.stateful_mode = false;
+        config.legacy_session_mode = false;
         config.json_response = true;
         let service = StreamableHttpService::new(
             move || Ok(catalog_service().with_code_mode(surface.clone())),
@@ -550,11 +537,11 @@ mod code_mode {
     }
 
     #[tokio::test]
-    async fn chatgpt_lists_standard_tools_for_a_flagged_user() {
+    async fn chatgpt_lists_standard_tools() {
         let app = app(Arc::new(Runs::default()));
         let listed = rpc_as(
             app.clone(),
-            FLAGGED,
+            USER,
             mcp_client("ChatGPT"),
             "tools/list",
             serde_json::json!({}),
@@ -564,7 +551,7 @@ mod code_mode {
 
         let nameless = rpc_as(
             app.clone(),
-            FLAGGED,
+            USER,
             Some(ToolCaller::McpClient { name: None }),
             "tools/list",
             serde_json::json!({}),
@@ -574,7 +561,7 @@ mod code_mode {
 
         let other = rpc_as(
             app,
-            FLAGGED,
+            USER,
             mcp_client("Claude"),
             "tools/list",
             serde_json::json!({}),
@@ -587,10 +574,10 @@ mod code_mode {
     async fn chatgpt_cannot_call_a_hidden_tool() {
         let response = rpc_as(
             app(Arc::new(Runs::default())),
-            UNFLAGGED,
+            USER,
             mcp_client("ChatGPT"),
             "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
+            serde_json::json!({"name": "ManageAgentSession", "arguments": {}}),
         )
         .await;
         assert!(
@@ -599,24 +586,36 @@ mod code_mode {
                 .is_some_and(|message| message.contains("not found")),
             "{response}"
         );
-
-        let other = rpc_as(
-            app(Arc::new(Runs::default())),
-            UNFLAGGED,
-            mcp_client("Claude"),
-            "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
-        )
-        .await;
-        assert!(other.get("error").is_none(), "{other}");
     }
 
     #[tokio::test]
-    async fn chatgpt_cannot_run_code_for_a_flagged_user() {
+    async fn chatgpt_calls_native_tools_directly() {
+        for caller in [
+            mcp_client("ChatGPT"),
+            Some(ToolCaller::McpClient { name: None }),
+        ] {
+            let response = rpc_as(
+                app(Arc::new(Runs::default())),
+                USER,
+                caller,
+                "tools/call",
+                serde_json::json!({"name": "NameSearch", "arguments": {}}),
+            )
+            .await;
+            assert_eq!(
+                response["result"]["structuredContent"],
+                serde_json::json!({"ok": true}),
+                "{response}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn chatgpt_cannot_run_code() {
         let runs = Arc::new(Runs::default());
         let response = rpc_as(
             app(runs.clone()),
-            FLAGGED,
+            USER,
             mcp_client("ChatGPT"),
             "tools/call",
             serde_json::json!({"name": "ExecuteCode", "arguments": {"source": "1"}}),
@@ -643,38 +642,31 @@ mod code_mode {
     }
 
     #[tokio::test]
-    async fn only_flagged_users_see_code_mode_tools_and_instructions() {
+    async fn every_client_but_chatgpt_sees_code_mode_tools_and_instructions() {
         let app = app(Arc::new(Runs::default()));
 
-        let flagged = rpc(app.clone(), FLAGGED, "tools/list", serde_json::json!({})).await;
+        let listed = rpc(app.clone(), USER, "tools/list", serde_json::json!({})).await;
         assert_eq!(
-            tool_names(&flagged),
+            tool_names(&listed),
             ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
         );
         for leaked in DIRECT_TOOLS {
             assert!(
-                !tool_names(&flagged).iter().any(|name| name == leaked),
+                !tool_names(&listed).iter().any(|name| name == leaked),
                 "{leaked} must not appear on the code-mode catalog"
             );
         }
-        let unflagged = rpc(app.clone(), UNFLAGGED, "tools/list", serde_json::json!({})).await;
-        assert_eq!(tool_names(&unflagged), DIRECT_TOOLS);
-        assert!(
-            !tool_names(&unflagged)
-                .iter()
-                .any(|name| name == "ExecuteCode")
-        );
 
         let initialize = serde_json::json!({
             "protocolVersion": "2025-06-18",
             "capabilities": {},
             "clientInfo": {"name": "test", "version": "1"},
         });
-        let flagged = rpc(app.clone(), FLAGGED, "initialize", initialize.clone()).await;
-        let flagged_instructions = flagged["result"]["instructions"].as_str().unwrap();
-        assert!(flagged_instructions.contains("Code mode is on"));
-        assert!(flagged_instructions.contains("ExecuteCode"));
-        assert!(flagged_instructions.contains("DescribeCodeTools"));
+        let listed = rpc(app.clone(), USER, "initialize", initialize.clone()).await;
+        let code_mode_instructions = listed["result"]["instructions"].as_str().unwrap();
+        assert!(code_mode_instructions.contains("Code mode is on"));
+        assert!(code_mode_instructions.contains("ExecuteCode"));
+        assert!(code_mode_instructions.contains("DescribeCodeTools"));
         for leaked in [
             "NameSearch",
             "ReadContent",
@@ -682,19 +674,19 @@ mod code_mode {
             "Direct tools remain",
         ] {
             assert!(
-                !flagged_instructions.contains(leaked),
+                !code_mode_instructions.contains(leaked),
                 "code-mode initialize must not advertise {leaked}"
             );
         }
-        let unflagged = rpc(app, UNFLAGGED, "initialize", initialize).await;
-        let unflagged_instructions = unflagged["result"]["instructions"].as_str().unwrap();
-        assert!(!unflagged_instructions.contains("Code mode is on"));
-        assert!(unflagged_instructions.contains("ContentSearch"));
-        assert!(unflagged_instructions.contains("NameSearch"));
+        let chatgpt = rpc_as(app, USER, mcp_client("ChatGPT"), "initialize", initialize).await;
+        let chatgpt_instructions = chatgpt["result"]["instructions"].as_str().unwrap();
+        assert!(!chatgpt_instructions.contains("Code mode is on"));
+        assert!(chatgpt_instructions.contains("ContentSearch"));
+        assert!(chatgpt_instructions.contains("NameSearch"));
     }
 
     #[tokio::test]
-    async fn execute_code_runs_as_the_caller_only_when_flagged() {
+    async fn execute_code_runs_as_the_caller() {
         let runs = Arc::new(Runs::default());
         let app = app(runs.clone());
         let call = serde_json::json!({
@@ -702,19 +694,12 @@ mod code_mode {
             "arguments": {"source": "export async function main() { return {data: 1}; }"},
         });
 
-        let unflagged = rpc(app.clone(), UNFLAGGED, "tools/call", call.clone()).await;
-        assert!(unflagged.get("error").is_some());
-        assert!(runs.0.lock().unwrap().is_empty());
-
-        let flagged = rpc(app.clone(), FLAGGED, "tools/call", call).await;
-        assert_eq!(
-            flagged["result"]["structuredContent"]["status"],
-            "succeeded"
-        );
+        let listed = rpc(app.clone(), USER, "tools/call", call).await;
+        assert_eq!(listed["result"]["structuredContent"]["status"], "succeeded");
         assert_eq!(
             *runs.0.lock().unwrap(),
             [(
-                format!("macro|{FLAGGED}"),
+                format!("macro|{USER}"),
                 "export async function main() { return {data: 1}; }".to_owned()
             )]
         );
@@ -739,17 +724,31 @@ mod code_mode {
         ];
 
         for caller in callers.clone() {
-            rpc_as(
-                app.clone(),
-                FLAGGED,
-                Some(caller),
-                "tools/call",
-                call.clone(),
-            )
-            .await;
+            rpc_as(app.clone(), USER, Some(caller), "tools/call", call.clone()).await;
         }
 
         assert_eq!(*runs.1.lock().unwrap(), callers);
+    }
+
+    #[tokio::test]
+    async fn managed_mcp_provenance_reaches_code_mode_but_external_callers_have_none() {
+        let runs = Arc::new(Runs::default());
+        let session = uuid::Uuid::now_v7();
+        let external = app(runs.clone());
+        let managed = external.clone().layer(axum::Extension(
+            mcp_auth_proxy::inbound::middleware::ManagedAgentSession(session),
+        ));
+        let call = serde_json::json!({"name": "ExecuteCode", "arguments": {"source": "export async function main() { return {data: 1}; }"}});
+        rpc_as(
+            managed,
+            USER,
+            Some(ToolCaller::Agent(BotId::TEST_A)),
+            "tools/call",
+            call.clone(),
+        )
+        .await;
+        rpc_as(external, USER, Some(ToolCaller::ApiKey), "tools/call", call).await;
+        assert_eq!(*runs.2.lock().unwrap(), [Some(session), None]);
     }
 
     /// A request the middleware left without a caller runs nothing.
@@ -762,25 +761,74 @@ mod code_mode {
             "arguments": {"source": "export async function main() { return {data: 1}; }"},
         });
 
-        let response = rpc_as(app, FLAGGED, None, "tools/call", call).await;
+        let response = rpc_as(app, USER, None, "tools/call", call).await;
 
         assert!(response.get("error").is_some());
         assert!(runs.1.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
-    async fn hidden_native_tools_remain_callable_in_code_mode() {
-        let app = app(Arc::new(Runs::default()));
-        let result = rpc(
+    async fn unlisted_native_tools_are_refused_in_code_mode() {
+        for (caller, name) in [
+            (Some(ToolCaller::ApiKey), "NameSearch"),
+            (mcp_client("Claude"), "NameSearch"),
+            (mcp_client("Claude"), "ManageAgentSession"),
+            (mcp_client("Claude"), "NoSuchTool"),
+            (Some(ToolCaller::Agent(BotId::TEST_A)), "NameSearch"),
+        ] {
+            let response = rpc_as(
+                app(Arc::new(Runs::default())),
+                USER,
+                caller,
+                "tools/call",
+                serde_json::json!({"name": name, "arguments": {}}),
+            )
+            .await;
+            assert!(
+                response["error"]["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("not available in code mode")),
+                "{name}: {response}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn native_tools_are_callable_without_a_code_runner() {
+        let service = StreamableHttpService::new(
+            || Ok(catalog_service()),
+            Arc::new(LocalSessionManager::default()),
+            {
+                let mut config = StreamableHttpServerConfig::default()
+                    .with_allowed_hosts(["localhost".to_owned()]);
+                config.legacy_session_mode = false;
+                config.json_response = true;
+                config
+            },
+        );
+        let app =
+            axum::Router::new()
+                .nest_service("/mcp", service)
+                .layer(axum::middleware::from_fn(
+                    |mut request: axum::extract::Request, next: axum::middleware::Next| async move {
+                        request
+                            .extensions_mut()
+                            .insert(MacroUserIdStr::try_from_email(USER).unwrap());
+                        next.run(request).await
+                    },
+                ));
+        let response = rpc_as(
             app,
-            FLAGGED,
+            USER,
+            mcp_client("Claude"),
             "tools/call",
             serde_json::json!({"name": "NameSearch", "arguments": {}}),
         )
         .await;
         assert_eq!(
-            result["result"]["structuredContent"],
-            serde_json::json!({"ok": true})
+            response["result"]["structuredContent"],
+            serde_json::json!({"ok": true}),
+            "{response}"
         );
     }
 
@@ -804,6 +852,7 @@ mod code_mode {
             &self,
             _: &MacroUserIdStr<'static>,
             _: &ToolCaller,
+            _: Option<uuid::Uuid>,
         ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
             Ok(code_execution::domain::RunEnvironment::default())
         }
@@ -811,7 +860,7 @@ mod code_mode {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn flagged_user_runs_real_javascript_over_mcp() {
+    async fn a_user_runs_real_javascript_over_mcp() {
         let scratch = tempfile::tempdir().unwrap();
         let path = tokio::process::Command::new("which")
             .arg("deno")
@@ -838,7 +887,7 @@ mod code_mode {
 
         let succeeded = rpc(
             app.clone(),
-            FLAGGED,
+            USER,
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
@@ -855,7 +904,7 @@ mod code_mode {
 
         let failed = rpc(
             app,
-            FLAGGED,
+            USER,
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",

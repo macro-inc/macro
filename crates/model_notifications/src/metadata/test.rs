@@ -86,6 +86,40 @@ fn view_access_notifications_preserve_permission_and_format_copy() {
     );
 }
 
+#[test]
+fn runtime_access_removal_names_the_owner_the_runtime_and_the_stopped_agents() {
+    let stopped = |names: &[&str]| RuntimeAccessRemovedMetadata {
+        runtime_name: "Studio Mac".into(),
+        agents: names
+            .iter()
+            .map(|name| StoppedAgent {
+                bot_id: Uuid::nil(),
+                name: (*name).to_owned(),
+            })
+            .collect(),
+    };
+    let owner = || Some(uid("macro|owner@macro.com"));
+
+    assert_eq!(
+        stopped(&["Scout"]).format_title(owner()).unwrap(),
+        "owner@macro.com removed your access to Studio Mac"
+    );
+    assert_eq!(
+        stopped(&["Scout"]).format_body(owner()).unwrap(),
+        "Scout has stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger"]).format_body(owner()).unwrap(),
+        "Scout and Ranger have stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger", "Pilot"])
+            .format_body(owner())
+            .unwrap(),
+        "Scout and 2 others have stopped."
+    );
+}
+
 fn channel_reaction() -> ChannelMessageReactionMetadata {
     ChannelMessageReactionMetadata {
         message_id: "message-1".to_string(),
@@ -1351,6 +1385,34 @@ fn agent_session_alerts_show_mentions_by_name() {
 }
 
 #[test]
+fn alerts_show_nameless_mentions_as_their_kind() {
+    // Agents leave documentName empty or omit it; the app fills in live names.
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one is <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"0195c94f-3b0c-79f0-8558-e5e509ac9dd9"}}</m-document-mention>, about <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dda","blockName":"task","blockParams":{}}</m-document-mention>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one is <message>, about <task>."
+    );
+
+    let channel = ChannelMessageSendMetadata {
+        message_content: r#"I made <m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":{}}</m-document-mention> from <m-document-mention>{"documentId":"d2","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>."#.to_string(),
+        ..bot_channel_message_send()
+    };
+    assert_eq!(
+        channel.format_body(None).unwrap(),
+        "I made <document> from <database>."
+    );
+}
+
+#[test]
 fn agent_session_settled_with_only_hidden_tags_falls_back_to_the_session_name() {
     let metadata = AgentSessionSettledMetadata {
         session: agent_session_ref(),
@@ -1414,4 +1476,172 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
     }))
     .unwrap();
     assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
+}
+
+#[test]
+fn agent_sign_in_expiry_serializes_with_the_agent_and_the_computer() {
+    let expiring = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresSoon,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+
+    assert_eq!(
+        serde_json::to_value(&expiring).unwrap(),
+        serde_json::json!({
+            "agent": "claude",
+            "harnessId": "00000000-0000-0000-0000-000000000000",
+            "computerName": "Build box",
+            "stage": "expires_soon",
+            "expiresAt": "2026-11-20T12:00:00Z",
+        })
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "agent_sign_in_expiry",
+        "content": {
+            "agent": "claude",
+            "harnessId": "00000000-0000-0000-0000-000000000000",
+            "computerName": "Build box",
+            "stage": "expired",
+            "expiresAt": null,
+        },
+    }))
+    .unwrap();
+    let NotifEvent::AgentSignInExpiry(metadata) = event else {
+        panic!("expected an agent sign-in expiry, got {event:?}");
+    };
+    assert_eq!(
+        metadata,
+        AgentSignInExpiryMetadata {
+            agent: AgentProvider::Claude,
+            harness_id: Uuid::nil(),
+            computer_name: "Build box".to_string(),
+            stage: AgentSignInExpiryStage::Expired,
+            expires_at: None,
+        }
+    );
+}
+
+#[test]
+fn agent_sign_in_expiry_titles_name_the_agent_the_computer_and_the_stage() {
+    let expires_soon = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresSoon,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+    let expires_today = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresToday,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+    let expired = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::Expired,
+        expires_at: None,
+    };
+
+    assert_eq!(
+        expires_soon.format_title(None).unwrap(),
+        "Claude sign-in on Build box expires soon"
+    );
+    assert_eq!(
+        expires_today.format_title(None).unwrap(),
+        "Claude sign-in on Build box expires today"
+    );
+    assert_eq!(
+        expired.format_title(None).unwrap(),
+        "Claude sign-in on Build box expired"
+    );
+}
+
+#[test]
+fn computer_setup_serializes_with_the_computer_and_the_outcome() {
+    let failed = ComputerSetupMetadata {
+        computer_id: Uuid::from_u128(1),
+        harness_id: None,
+        computer_name: "Build box".to_string(),
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer kept crashing.".to_string(),
+        },
+    };
+
+    assert_eq!(
+        serde_json::to_value(&failed).unwrap(),
+        serde_json::json!({
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": null,
+            "computerName": "Build box",
+            "outcome": {
+                "kind": "failed",
+                "failureReason": "The computer kept crashing.",
+            },
+        })
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "computer_setup",
+        "content": {
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": "00000000-0000-0000-0000-000000000002",
+            "computerName": "Build box",
+            "outcome": { "kind": "ready" },
+        },
+    }))
+    .unwrap();
+    let NotifEvent::ComputerSetup(metadata) = event else {
+        panic!("expected a computer setup notice, got {event:?}");
+    };
+    assert_eq!(
+        metadata,
+        ComputerSetupMetadata {
+            computer_id: Uuid::from_u128(1),
+            harness_id: Some(Uuid::from_u128(2)),
+            computer_name: "Build box".to_string(),
+            outcome: ComputerSetupOutcome::Ready,
+        }
+    );
+}
+
+#[test]
+fn computer_setup_titles_say_ready_or_name_the_computer_and_why_it_failed() {
+    let ready = ComputerSetupMetadata {
+        computer_id: Uuid::nil(),
+        harness_id: Some(Uuid::nil()),
+        computer_name: "Build box".to_string(),
+        outcome: ComputerSetupOutcome::Ready,
+    };
+    let failed = ComputerSetupMetadata {
+        computer_id: Uuid::nil(),
+        harness_id: None,
+        computer_name: "Build box".to_string(),
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer couldn't be created on the host.".to_string(),
+        },
+    };
+
+    assert_eq!(
+        ready.format_title(None).unwrap(),
+        "Your computer is ready: connect your AI and finish setup"
+    );
+    assert_eq!(
+        ready.format_body(None).unwrap(),
+        "Build box is up. Bring your AI, then create an agent on it."
+    );
+    assert_eq!(
+        failed.format_title(None).unwrap(),
+        "Build box could not be set up"
+    );
+    assert_eq!(
+        failed.format_body(None).unwrap(),
+        "The computer couldn't be created on the host. Retry from the setup flow."
+    );
 }

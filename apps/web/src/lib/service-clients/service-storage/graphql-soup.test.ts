@@ -1,8 +1,10 @@
+import { fetchToken } from '@core/util/fetchWithToken';
 import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
 import type { Operation } from '@urql/core';
 import { parse } from 'graphql';
+import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   ChannelListItemFieldsFragment,
@@ -149,6 +151,7 @@ it('preserves initiative identity, properties, and metadata separately from fold
   expect(
     mapGraphqlSoupItem({
       __typename: 'GraphqlSoupInitiative',
+      appearance: null,
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
@@ -389,6 +392,13 @@ const mocks = vi.hoisted(() => {
         host,
       })
     ),
+    registerCacheHost: vi.fn(
+      (
+        _host: CacheHost,
+        _recover?: (error: unknown) => CacheHost | undefined
+      ) =>
+        () => {}
+    ),
     createWorkerCacheHost: vi.fn(
       (options: {
         onInitializationError?: (error: Error) => void;
@@ -456,7 +466,7 @@ vi.mock('@graphql-cache/index', () => ({
   entityFromArgument: () => () => undefined,
 }));
 vi.mock('@graphql-cache/lifecycle', () => ({
-  registerCacheHost: () => () => undefined,
+  registerCacheHost: mocks.registerCacheHost,
 }));
 vi.mock('@graphql-cache/scope', () => ({
   getOrCreateCacheScope: () => 'anonymous-scope',
@@ -551,7 +561,7 @@ vi.mock('@urql/core', () => ({
   },
 }));
 
-it('maps the unread alias without pretending it is the full notification edge', async () => {
+it('maps the unread and mention aliases without pretending either is the full notification edge', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const item = {
     __typename: 'GraphqlSoupChannel',
@@ -577,6 +587,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
     unreadNotifications: [
       { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
     ],
+    unreadMentions: [{ id: 'mention', state: 'UNSEEN' }],
   } satisfies ChannelListItemFieldsFragment;
   expect(mapGraphqlSoupItem(item)).toMatchObject({
     tag: 'channel',
@@ -585,6 +596,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
       unreadNotifications: [
         { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
       ],
+      unreadMentions: [{ id: 'mention', state: 'unseen' }],
     },
   });
 });
@@ -765,6 +777,7 @@ describe('GraphQL Soup document sub types', () => {
       const { mapGraphqlSoupItem } = await import('./graphql-soup');
       const item = {
         __typename: 'GraphqlSoupDocument',
+        appearance: null,
         id: 'doc-sub-type',
         entityType: 'DOCUMENT' as GraphqlSoupEntityType,
         displayName: 'Plan',
@@ -809,6 +822,116 @@ describe('GraphQL Soup browser cache session gate', () => {
     const soup = await import('./graphql-soup');
     soup.setGraphqlSoupSessionActive(false);
     vi.unstubAllGlobals();
+  });
+
+  it.each([false, true])(
+    'binds contact cleanup recovery to its original backend and scope (native=%s)',
+    async (native) => {
+      mocks.tauri = native;
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const recover = mocks.registerCacheHost.mock.calls[0]?.[1];
+      expect(recover).toBeDefined();
+      soup.setGraphqlSoupSessionActive(false);
+      mocks.tauri = !native;
+      expect(recover?.(new Error('unknown storage failure'))).toBeUndefined();
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(native ? 0 : 1);
+      expect(mocks.createTauriCacheHost).toHaveBeenCalledTimes(native ? 1 : 0);
+      const ownerLost = Object.assign(new Error('Owner unavailable'), {
+        errorCode: 'owner-lock-unavailable',
+      });
+      const repaired = recover?.(ownerLost);
+      expect(repaired).toBeDefined();
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(native ? 0 : 2);
+      expect(mocks.createTauriCacheHost).toHaveBeenCalledTimes(native ? 2 : 0);
+      const createHost = native
+        ? mocks.createTauriCacheHost
+        : mocks.createWorkerCacheHost;
+      expect(createHost.mock.calls[1]?.[0]).toMatchObject({
+        scope: 'anonymous-scope',
+        onInitializationError: undefined,
+      });
+      expect(mocks.normalizedCacheExchange).toHaveBeenCalledOnce();
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+      repaired?.dispose();
+    }
+  );
+
+  it('passes caller cancellation through auth refresh and retries a live session', async () => {
+    const controller = new AbortController();
+    mocks.platformFetch
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    vi.mocked(fetchToken).mockResolvedValueOnce(ok(undefined));
+    const soup = await import('./graphql-soup');
+
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      signal: controller.signal,
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetchToken).toHaveBeenCalledWith(controller.signal);
+    expect(mocks.platformFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves the caller cancellation reason while waiting for refresh', async () => {
+    const controller = new AbortController();
+    const reason = new DOMException('Request aborted', 'AbortError');
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 401 })
+    );
+    vi.mocked(fetchToken).mockImplementationOnce(() => {
+      controller.abort(reason);
+      return Promise.resolve(
+        err([
+          {
+            code: 'NETWORK_ERROR',
+            message: 'Authentication refresh cancelled',
+          },
+        ])
+      );
+    });
+    const soup = await import('./graphql-soup');
+
+    await expect(
+      soup.dssGraphqlFetch('http://dss.test/graphql', {
+        signal: controller.signal,
+      })
+    ).rejects.toBe(reason);
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
+  });
+
+  it('surfaces a refresh timeout as a retryable transport failure', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 401 })
+    );
+    vi.mocked(fetchToken).mockResolvedValueOnce(
+      err([
+        { code: 'NETWORK_ERROR', message: 'Authentication refresh timed out' },
+      ])
+    );
+    const soup = await import('./graphql-soup');
+
+    const request = soup.dssGraphqlFetch('http://dss.test/graphql');
+    await expect(request).rejects.toMatchObject({
+      errors: [{ code: 'NETWORK_ERROR' }],
+    });
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a definitive session rejection as HTTP 401', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 401 })
+    );
+    vi.mocked(fetchToken).mockResolvedValueOnce(
+      err([{ code: 'UNAUTHORIZED', message: 'Invalid refresh token' }])
+    );
+    const soup = await import('./graphql-soup');
+
+    expect((await soup.dssGraphqlFetch('http://dss.test/graphql')).status).toBe(
+      401
+    );
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
   });
 
   it('keeps an old client compatible with a server that has the additive field', async () => {
@@ -1108,6 +1231,31 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.commitOptimisticWrite).toHaveBeenCalledOnce();
     expect(mocks.queueDepth()).toBe(0);
     expect(mocks.host.dispose).not.toHaveBeenCalled();
+  });
+
+  it('keeps activity pushes out of the cache and other subscriptions in it', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const subscription = (text: string): Operation => ({
+      kind: 'subscription',
+      key: 43,
+      query: parse(text),
+      variables: {},
+      context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+    });
+    const uncached =
+      mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.isUncachedSubscription;
+
+    expect(
+      uncached?.(
+        subscription('subscription ActivityUpdates { activityUpdates { id } }')
+      )
+    ).toBe(true);
+    expect(
+      uncached?.(
+        subscription('subscription SoupUpdates { soupUpdates { __typename } }')
+      )
+    ).toBe(false);
   });
 
   it.each(['query', 'mutation', 'subscription'] as const)(

@@ -21,6 +21,14 @@ path = "src/openapi.rs"
 name = "authentication_service_doppler_config"
 path = "src/doppler_config.rs"
 
+
+# Built only by the `build-service-bins` CI job, which needs the real binaries;
+# `test = false` keeps it out of the test job.
+[[test]]
+name = "service_binary_builds"
+path = "tests/service_binary_builds.rs"
+test = false
+
 [features]
 default = ["rate_limit"]
 local = []
@@ -31,6 +39,8 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+passwords = { path = "../../crates/passwords" }
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_billing = { path = "../../crates/ai_billing" }
@@ -74,8 +84,9 @@ document_storage_service_client = { path = "../../crates/document_storage_servic
 models_sfs = { path = "../../crates/models_sfs" }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
+team_agents = { path = "../../crates/team_agents", features = ["inbound", "outbound"] }
+agent_git = { path = "../../crates/agent_git", default-features = false, features = ["client"] }
 email = { path = "../../crates/email", features = ["http_client", "outbound"] }
-doppleganger = { workspace = true }
 email_db_client = { path = "../../crates/email_db_client" }
 email_validator = { path = "../../crates/email_validator" }
 entity_access = { path = "../../crates/entity_access" }
@@ -100,9 +111,13 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "service",
 ] }
 hmac = { workspace = true }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = [
+  "inbound",
+  "outbound",
+] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
-last_online_tracker = { path = "../../crates/last_online_tracker" }
+lazy-regex = { workspace = true }
 loops_client = { path = "../../crates/loops_client" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
@@ -138,27 +153,26 @@ macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 maud = { version = "0.27.0" }
 miniserde = "0.1.45"
-microsoft_oauth_grant_db_utils = { path = "../../crates/microsoft_oauth_grant_db_utils" }
 mobile_welcome_email_db_client = { path = "../../crates/mobile_welcome_email_db_client" }
 models_email = { path = "../../crates/models_email" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 models_permissions = { path = "../../crates/models_permissions" }
-model_notifications = { path = "../../crates/model_notifications" }
 native_app_service = { path = "../../crates/native_app_service" }
 non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification" }
 onboarding = { path = "../../crates/onboarding" }
 rand = { workspace = true }
 rate_limit = { path = "../../crates/rate_limit" }
+user_events = { path = "../../crates/user_events" }
 redis = { workspace = true }
 referral = { path = "../../crates/referral" }
 remote_env_var = { path = "../../crates/remote_env_var" }
 reqwest = { workspace = true, features = ["query"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions" }
 rootcause = { workspace = true }
-rsa = { version = "0.9.10", features = ["getrandom"] }
+rsa = { workspace = true, features = ["getrandom"] }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -204,6 +218,7 @@ cool_asserts = "2"
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 serde_urlencoded = { workspace = true }
+tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }
 
 [package.metadata.cargo-machete]

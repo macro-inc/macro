@@ -9,6 +9,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 /// Intermediate struct for SQL row mapping with compile-time validation.
 #[derive(sqlx::FromRow)]
 struct PreviewQueryResult {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     document_id: String,
     file_type: Option<String>,
     document_name: String,
@@ -21,6 +22,7 @@ struct PreviewQueryResult {
 impl From<PreviewQueryResult> for DocumentPreviewData {
     fn from(row: PreviewQueryResult) -> Self {
         Self {
+            appearance: row.appearance.map(|value| value.0),
             document_id: row.document_id,
             file_type: row.file_type,
             document_name: row.document_name,
@@ -44,6 +46,7 @@ pub async fn batch_get_document_preview_v2(
         r#"
             SELECT
                 d.id as "document_id!",
+                d.appearance AS "appearance: _",
                 d.name as "document_name!",
                 d."fileType" as file_type,
                 d.owner as "owner!",

@@ -1,7 +1,5 @@
-//! Windows to IANA global mappings from Unicode CLDR 48, plus the British
-//! Columbia, Alberta and Manitoba zones CLDR 49 added, in CLDR 49's order.
-//! Source: https://github.com/unicode-org/cldr/blob/release-48/common/supplemental/windowsZones.xml
-//! and https://github.com/unicode-org/cldr/blob/release-49/common/supplemental/windowsZones.xml
+//! Windows to IANA global mappings from Unicode CLDR 49.
+//! Source: https://github.com/unicode-org/cldr/blob/release-49/common/supplemental/windowsZones.xml
 //! License: CLDR-LICENSE.txt in this directory. Generated territory="001" entries.
 use chrono_tz::Tz;
 

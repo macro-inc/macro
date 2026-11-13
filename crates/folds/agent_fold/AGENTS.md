@@ -21,8 +21,11 @@ to the browser via `inbound/wasm`.
 - `src/domain/fold/convert.rs` + `turn.rs`: map image blocks into attachments,
   using source URLs or inline data; attach live image chunks to the user prompt
   and deduplicate attachments by URI during replay.
-- `src/domain/model/segment/code_execution.rs`: expands internal code receipts
-  into SDK activity rows for conversation snapshots, independent of harness.
+- `src/domain/model/segment/code_execution.rs`: how code-mode calls read in
+  conversations, independent of harness: internal code receipts expand into
+  SDK activity rows, a run without them reads as work in the workspace, and the
+  agent's tool lookups (`DescribeCodeTools`, `ReadCodeDocs`, `SearchTools`,
+  `LoadTools`) belong to no segment. People never see code wording.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
 - `src/domain/model/segment.rs`: activity rows for conversations. A row's
@@ -59,7 +62,7 @@ to the browser via `inbound/wasm`.
 - Add a new message/event kind: `src/domain/log.rs` (raw shape) →
   `src/domain/fold.rs` (fold logic) → `src/domain/model.rs` (renderable type)
   → `src/inbound/wire.rs` if the browser needs it → `cargo run -p agent_fold
-  --bin export_types` to regenerate the TypeScript contract.
+  --bin agent_fold_types` to regenerate the TypeScript contract.
 - Debug a fold against a recorded session: `cargo run -p agent_fold --bin
   fold_jsonl -- <path>.jsonl`.
 
@@ -96,7 +99,7 @@ session projection carries that state to list rows without loading transcripts.
 
 - `cargo test -p agent_fold`.
 - After changing `inbound/wire.rs` or exported `domain/model.rs` types:
-  `cargo run -p agent_fold --bin export_types` and commit the regenerated
+  `cargo run -p agent_fold --bin agent_fold_types` and commit the regenerated
   TypeScript: the web client's copy and the SDK's
   `packages/sdk/generated/agent-fold/`, which types
   `AgentSession.foldedLog()`.

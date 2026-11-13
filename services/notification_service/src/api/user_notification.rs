@@ -61,6 +61,9 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         AgentSessionWaitingForInputMetadata::TYPE_NAME,
         AgentSessionMentionedMetadata::TYPE_NAME,
         model_notifications::RoutineRunFinishedMetadata::TYPE_NAME,
+        model_notifications::AgentSignInExpiryMetadata::TYPE_NAME,
+        model_notifications::ComputerSetupMetadata::TYPE_NAME,
+        model_notifications::RuntimeAccessRemovedMetadata::TYPE_NAME,
     ])
 });
 

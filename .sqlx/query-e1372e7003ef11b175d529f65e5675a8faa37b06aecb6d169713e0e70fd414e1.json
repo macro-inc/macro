@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE microsoft_oauth_grant_versions SET created_at=now()-interval '2 days' WHERE grant_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e1372e7003ef11b175d529f65e5675a8faa37b06aecb6d169713e0e70fd414e1"
+}

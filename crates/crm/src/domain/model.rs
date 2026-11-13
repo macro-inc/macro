@@ -191,6 +191,13 @@ pub struct CrmContact {
     pub created_at: DateTime<Utc>,
     /// When the contact record was last updated
     pub updated_at: DateTime<Utc>,
+    /// Every address the contact is known by, lowercased: the primary
+    /// (`email`) first, then the rest oldest first
+    pub emails: Vec<String>,
+    /// The addresses on a domain of the contact's company. A contact with
+    /// any is a company-domain contact: it cannot be unlinked or moved, and
+    /// the last of these addresses cannot be removed
+    pub company_domain_emails: Vec<String>,
 }
 
 /// What a depopulate teardown actually removed. Every field is `false` on
@@ -223,19 +230,13 @@ impl DepopulateContactOutcome {
 /// needs to either accept or reject a CRM-scoped query before it runs.
 #[derive(Debug, Clone)]
 pub struct CrmScopePrecheck {
-    /// `team_crm_settings.crm_enabled` for the requesting team. `false`
-    /// when the team's row exists with `crm_enabled = false`, *or* when no
-    /// row exists at all (older teams predating `team_crm_settings`).
+    /// Compatibility field, always true for current CRM record scopes.
+    /// Email eligibility is checked separately for every candidate thread.
     pub crm_enabled: bool,
     /// One row per requested domain, in the same order as the input list.
-    /// **Exception:** when `crm_enabled = false`, this vec is empty —
-    /// the email service short-circuits on the killswitch before
-    /// consulting per-input rows, so the per-domain probes are skipped
-    /// and callers must not assume length parity with the input list
-    /// without first checking `crm_enabled`.
     pub domains: Vec<CrmDomainStatus>,
     /// One row per requested address, in the same order as the input
-    /// list. Same `crm_enabled = false` exception as [`Self::domains`].
+    /// list.
     pub addresses: Vec<CrmAddressStatus>,
 }
 
@@ -304,8 +305,7 @@ impl CrmPermissionRole {
 }
 
 /// Team-level CRM configuration stored on `team_crm_settings`
-/// (everything except the `crm_enabled` killswitch, which stays owned
-/// by the teams crate).
+/// (excluding the retired `crm_enabled` flag owned by the teams crate).
 #[derive(Debug, Clone)]
 pub struct CrmTeamSettings {
     /// Who can change the deal stage set in CRM settings.
@@ -397,16 +397,16 @@ pub enum CrmError {
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     AdminRoleRequired,
     /// The request changes governance fields of the team CRM settings
-    /// (permission thresholds, closed stages) but the caller's team role
+    /// (permission thresholds, closed stages, or team email exclusions), but the caller's team role
     /// is below admin/owner.
-    #[error("changing crm permission or stage settings requires admin/owner team role")]
+    #[error("changing CRM admin settings requires admin/owner team role")]
     SettingsAdminRequired,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),
     /// Tried to mutate a CRM company in a way that contradicts its
-    /// `hidden = true` state — currently raised when attempting to
-    /// re-enable `email_sync` on a hidden company.
+    /// `hidden = true` state, including enabling sync or changing a
+    /// contact relation in a way that would reveal an archived record.
     #[error("crm company is hidden")]
     CompanyHidden,
     /// The team already tracks a company for the requested domain.
@@ -415,12 +415,19 @@ pub enum CrmError {
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
-    /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
-    #[error("crm is not enabled for this team")]
+    /// Another visible contact in the owning team already uses this address.
+    #[error("a crm contact with this email already exists for the team")]
+    ContactAlreadyExistsForTeam,
+    /// The team no longer exists.
+    #[error("crm is unavailable for this team")]
     CrmDisabledForTeam,
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,
+    /// Another write held the records this one needs for longer than it may
+    /// wait. Nothing was written; retry later.
+    #[error("crm records are busy; retry later")]
+    Contended,
 }
 
 /// Contact fields plus the owning team/company and the viewer's history.

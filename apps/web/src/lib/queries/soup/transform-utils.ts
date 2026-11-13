@@ -26,6 +26,7 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
+  HarnessEntity,
   InitiativeEntity,
   Notification,
   ProjectEntity,
@@ -95,12 +96,14 @@ type SoupEntity =
   | CrmCompanyEntity
   | CrmContactEntity
   | CalendarEventEntity
-  | ForeignEntity;
+  | ForeignEntity
+  | HarnessEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
     notifications?: Notification[] | null;
     unreadNotifications?: ChannelEntity['unreadNotifications'];
+    unreadMentions?: ChannelEntity['unreadMentions'];
   };
 };
 
@@ -896,6 +899,8 @@ export const mapApiSoupItemToEntity = (
         type: 'channel',
         unreadNotifications: (item as SoupItemWithOptionalNotifications).data
           .unreadNotifications,
+        unreadMentions: (item as SoupItemWithOptionalNotifications).data
+          .unreadMentions,
         id: item.data.channel.id,
         name: item.data.channel.name || 'Unknown Channel',
         channelType: item.data.channel.channel_type,
@@ -982,6 +987,14 @@ export const mapApiSoupItemToEntity = (
 
       return out;
     })
+    .with({ tag: 'harness' }, (item) => ({
+      id: item.data.id,
+      name: item.data.name,
+      ownerId: item.data.ownerId,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: 'harness' as const,
+    }))
     .with({ tag: 'document' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,

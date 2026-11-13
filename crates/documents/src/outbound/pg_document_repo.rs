@@ -99,7 +99,7 @@ impl<B: BotFacts + 'static> PgDocumentRepo<B> {
                 self.reused_linked_email_attachment(email_attachment_id)
                     .await
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(create::email_link_error(e)),
         }
     }
 }
@@ -129,6 +129,45 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
+    async fn set_appearance(
+        &self,
+        document_id: &str,
+        update: &activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query!(
+            r#"SELECT appearance FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL FOR UPDATE"#,
+            document_id,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        let previous: model_entity::EntityAppearance = row
+            .appearance
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+            .unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        sqlx::query!(
+            r#"UPDATE "Document" SET appearance = $2 WHERE id = $1"#,
+            document_id,
+            serde_json::to_value(&update.appearance)
+                .map_err(|e| sqlx::Error::Encode(Box::new(e)))?,
+        )
+        .execute(&mut *tx)
+        .await?;
+        if let Some(activity) =
+            update.activity(model_entity::EntityType::Document, document_id, &previous)
+        {
+            activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
+        }
+        tx.commit().await?;
+        Ok(Some(previous))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_document_metadata(
         &self,
         document_id: &str,
@@ -137,6 +176,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner as "owner",
                 COALESCE(db.id, di.id) as "document_version_id!",
                 d.name as "document_name",
@@ -217,6 +257,11 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .try_map(|row| {
             Ok(DocumentMetadata {
+                appearance: row
+                    .appearance
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
                 owner: Owner::from_principal_str(&row.owner)
@@ -268,6 +313,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner,
                 d.name as "document_name",
                 d."branchedFromId" as "branched_from_id",
@@ -534,7 +580,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(metadata)
     }
 
-    #[tracing::instrument(err, skip(self, args, share_permission))]
+    #[tracing::instrument(skip(self, args, share_permission))]
     async fn import_email_attachment_document(
         &self,
         args: ImportEmailAttachmentRepoArgs,
@@ -576,7 +622,8 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             &document.sha,
             email_attachment_id,
         )
-        .await?
+        .await
+        .map_err(create::email_link_error)?
         {
             transaction.commit().await?;
             return self.reused_email_document(existing_id).await;
@@ -604,7 +651,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
                     .reused_linked_email_attachment(email_attachment_id)
                     .await;
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(create::email_link_error(e)),
         }
 
         transaction.commit().await?;
@@ -1099,6 +1146,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner as "owner",
                 d.name as "document_name",
                 COALESCE(di.id, db.id) as "document_version_id!",
@@ -1178,6 +1226,11 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .try_map(|row| {
             Ok(DocumentMetadata {
+                appearance: row
+                    .appearance
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
                 owner: Owner::from_principal_str(&row.owner)

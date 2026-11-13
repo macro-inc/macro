@@ -6,7 +6,7 @@
 //! respect for `MACRO_LOCAL_VERBOSE`, `MACRO_LOCAL_DRY_RUN`, and `NO_COLOR`.
 //!
 //! Only the subprocess capture is hand-rolled, on purpose: stdout and stderr
-//! are drained on dedicated threads so a chatty child (e.g. `cargo zigbuild`)
+//! are drained on dedicated threads so a chatty child (e.g. `cargo build`)
 //! cannot deadlock by filling a pipe buffer while we wait. `indicatif` only
 //! animates — it never reads the child's pipes.
 
@@ -18,6 +18,10 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, bail};
 use console::Style;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
+
+use super::supervisor::Job;
+use super::telemetry::RunTelemetry;
+use super::{BringUp, Mode};
 
 #[cfg(test)]
 mod test;
@@ -107,6 +111,12 @@ pub struct Stage {
     /// [`Stage::quiet`] children so folded sub-steps are recorded too, and with
     /// the threads that run the background lanes.
     timings: Arc<Mutex<Vec<(String, Duration)>>>,
+    /// Where steps are recorded, so another process can read what this one is
+    /// doing and which step failed (see `supervisor`).
+    job: Option<Arc<Job>>,
+    /// Where steps are recorded for local telemetry when there is no job (a
+    /// job records its own): `stack up`, `stack update`, `build-services`.
+    telemetry: Option<RunTelemetry>,
 }
 
 impl Stage {
@@ -122,6 +132,30 @@ impl Stage {
             dry_run: env_flag("MACRO_LOCAL_DRY_RUN"),
             quiet: false,
             timings: Arc::new(Mutex::new(Vec::new())),
+            job: None,
+            telemetry: None,
+        }
+    }
+
+    /// Record every step of this stage, and of the stages derived from it, on `job`.
+    pub fn with_job(mut self, job: Arc<Job>) -> Self {
+        self.job = Some(job);
+        self
+    }
+
+    /// Record every step of this stage, and of the stages derived from it, as
+    /// local telemetry. Only for stages without a job.
+    pub(super) fn with_telemetry(mut self, telemetry: Option<RunTelemetry>) -> Self {
+        self.telemetry = telemetry;
+        self
+    }
+
+    /// Tell whoever records this stage's steps the bring-up's shape.
+    pub(super) fn record_bring_up(&self, mode: Mode, plan: &BringUp) {
+        if let Some(job) = &self.job {
+            job.bring_up(mode, plan);
+        } else if let Some(telemetry) = &self.telemetry {
+            telemetry.bring_up(mode, plan);
         }
     }
 
@@ -143,11 +177,6 @@ impl Stage {
         self.verbose
     }
 
-    /// Whether stdout is an interactive terminal (drives the hotkey loop).
-    pub fn is_tty(&self) -> bool {
-        self.is_tty
-    }
-
     /// A child stage that suppresses its own output, so a multi-step action can
     /// be folded under a single parent spinner. Commands still run and capture;
     /// a failure surfaces via the returned error (with the captured output) so
@@ -159,6 +188,8 @@ impl Stage {
             dry_run: self.dry_run,
             quiet: true,
             timings: Arc::clone(&self.timings),
+            job: self.job.clone(),
+            telemetry: self.telemetry.clone(),
         }
     }
 
@@ -322,6 +353,33 @@ impl Stage {
     /// captured and a spinner animates until completion; on failure the
     /// captured output is dumped and the error propagated (fail-fast).
     pub fn run(&self, label: &str, cmd: &mut Command) -> Result<()> {
+        self.recording_job(label, || self.run_command(label, cmd))
+    }
+
+    /// Run a step, telling the job it started, how long it took and whether it
+    /// failed.
+    fn recording_job(&self, label: &str, step: impl FnOnce() -> Result<()>) -> Result<()> {
+        if let Some(job) = &self.job {
+            job.step_started(label);
+            let start = Instant::now();
+            let result = step();
+            if result.is_err() {
+                job.step_failed(label);
+            }
+            job.step_finished(label, start.elapsed(), result.is_ok());
+            return result;
+        }
+        let Some(telemetry) = &self.telemetry else {
+            return step();
+        };
+        telemetry.step_started(label);
+        let start = Instant::now();
+        let result = step();
+        telemetry.step_finished(label, start.elapsed(), result.is_ok());
+        result
+    }
+
+    fn run_command(&self, label: &str, cmd: &mut Command) -> Result<()> {
         let program = cmd.get_program().to_string_lossy().to_string();
         let args: Vec<String> = cmd
             .get_args()
@@ -368,6 +426,11 @@ impl Stage {
         let status = child.wait();
         let mut captured = out_handle.join().unwrap_or_default();
         captured.extend(err_handle.join().unwrap_or_default());
+        if let Some(job) = &self.job {
+            job.step_output(label, &captured);
+        } else if let Some(telemetry) = &self.telemetry {
+            telemetry.step_output(label, &captured);
+        }
         if self.quiet {
             self.record(label, start.elapsed());
             // Silent on success; on failure bubble the captured output up in the
@@ -396,6 +459,10 @@ impl Stage {
     /// while the closure blocks this one, with the same ✓/✗ contract and
     /// dry-run handling.
     pub fn run_step<F: FnOnce() -> Result<()>>(&self, label: &str, f: F) -> Result<()> {
+        self.recording_job(label, || self.run_closure(label, f))
+    }
+
+    fn run_closure<F: FnOnce() -> Result<()>>(&self, label: &str, f: F) -> Result<()> {
         if self.dry_run {
             println!("{}", self.line("•", label, "Dry run", &Style::new().dim()));
             return Ok(());

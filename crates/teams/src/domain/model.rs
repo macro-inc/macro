@@ -12,8 +12,10 @@ use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPerm
 
 use crate::domain::owned_entity_cleanup::OwnedEntityCleanupError;
 
+mod error;
 mod invite_link;
 
+pub use error::*;
 pub use invite_link::{
     JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, ManageTeamInviteLinkError,
     TeamInviteLinkTeam, TeamInviteLinkToken,
@@ -216,28 +218,28 @@ impl std::fmt::Display for SeatPlan {
 #[derive(Debug, Clone)]
 pub struct SeatPrices {
     /// Premium seat price.
-    pub premium: String,
+    pub premium: stripe::PriceId,
     /// Max seat price, when the plan is sold.
-    pub max: Option<String>,
+    pub max: Option<stripe::PriceId>,
 }
 
 impl SeatPrices {
     /// The price a seat on `plan` is billed at.
-    pub fn price_id(&self, plan: SeatPlan) -> Result<&str, CustomerError> {
+    pub fn price_id(&self, plan: SeatPlan) -> Result<&stripe::PriceId, CustomerError> {
         match plan {
             SeatPlan::Premium => Ok(&self.premium),
             SeatPlan::Max => self
                 .max
-                .as_deref()
+                .as_ref()
                 .ok_or(CustomerError::PlanUnavailable(plan)),
         }
     }
 
     /// Which plan a subscription item's price belongs to, if any.
     pub fn plan_for_price(&self, price_id: &str) -> Option<SeatPlan> {
-        if price_id == self.premium {
+        if price_id == self.premium.as_str() {
             Some(SeatPlan::Premium)
-        } else if self.max.as_deref() == Some(price_id) {
+        } else if self.max.as_ref().map(stripe::PriceId::as_str) == Some(price_id) {
             Some(SeatPlan::Max)
         } else {
             None
@@ -245,11 +247,113 @@ impl SeatPrices {
     }
 
     /// Every price that carries a seat item.
-    pub fn all(&self) -> Vec<String> {
+    pub fn all(&self) -> Vec<stripe::PriceId> {
         std::iter::once(self.premium.clone())
             .chain(self.max.clone())
             .collect()
     }
+}
+
+/// A change to the quantity of one price's item on a subscription. Items
+/// other than seats (computers) are keyed by price alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemQuantityChange {
+    /// The Stripe price whose item changes.
+    pub price_id: stripe::PriceId,
+    /// Added to the item's quantity: a new item when the price is absent,
+    /// removed when the quantity reaches zero.
+    pub delta: i64,
+}
+
+/// One subscription item, as the billing provider reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubscriptionItemView {
+    /// The item.
+    pub id: stripe::SubscriptionItemId,
+    /// The price it bills.
+    pub price_id: stripe::PriceId,
+    /// How many of the price it bills.
+    pub quantity: u64,
+    /// The `computer_id` metadata on the item, or else on its price.
+    pub computer_id: Option<String>,
+}
+
+/// What removing one subscription item did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemRemoval {
+    /// The item was removed.
+    Removed,
+    /// The item (or its subscription) was already gone.
+    AlreadyGone,
+}
+
+/// How an item change whose outcome was never learned ended for good.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemChangeSettlement {
+    /// The change reached the subscription.
+    Applied,
+    /// The change never reached the subscription and never will: its
+    /// receipt is abandoned, so no replay can send it.
+    NotApplied,
+}
+
+/// Where an item change stands, from its durable receipt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemChangeStatus {
+    /// Sent, outcome not known yet; the next guarded change settles it.
+    Pending,
+    /// The change reached the subscription.
+    Applied,
+    /// The change was refused or abandoned and is never sent again.
+    NotApplied,
+}
+
+/// How an item change bills the part of the period already paid for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ItemProration {
+    /// Invoice the prorated difference now: an addition is charged for the
+    /// rest of the period at once.
+    #[default]
+    InvoiceNow,
+    /// No proration: a removal stops billing without crediting unused time.
+    NoProration,
+}
+
+/// How often a subscription or recurring price bills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BillingCadence {
+    /// Daily.
+    Day,
+    /// Weekly.
+    Week,
+    /// Monthly.
+    Month,
+    /// Yearly.
+    Year,
+}
+
+/// The billing terms of a subscription.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubscriptionTerms {
+    /// When the current billing period ends.
+    pub current_period_end: DateTime<Utc>,
+    /// How often the subscription bills.
+    pub interval: BillingCadence,
+    /// ISO currency code, lowercase.
+    pub currency: String,
+    /// The subscription is in a trial.
+    pub trialing: bool,
+}
+
+/// What a Stripe price charges.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PriceInfo {
+    /// Per unit, in the currency's smallest unit.
+    pub amount: i64,
+    /// ISO currency code, lowercase.
+    pub currency: String,
+    /// `None` for a one-time price.
+    pub interval: Option<BillingCadence>,
 }
 
 /// Request body for `PATCH /team/members/{member_user_id}/plan`.
@@ -315,10 +419,10 @@ pub struct TeamMembers {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct PatchTeamCrmSettingsRequest {
-    /// The desired CRM state for the team.
+    /// Legacy compatibility flag. True is a no-op; false is rejected.
     pub enabled: bool,
-    /// On a disabled → enabled transition, whether to backfill the CRM
-    /// from members' existing email history. Ignored when disabling.
+    /// Retained for compatibility and ignored. Email backfill requires
+    /// each member's explicit consent through CRM email privacy settings.
     #[serde(default = "default_crm_backfill")]
     #[cfg_attr(feature = "axum", schema(default = true))]
     pub backfill: bool,
@@ -328,23 +432,18 @@ fn default_crm_backfill() -> bool {
     true
 }
 
-/// Response for `PATCH /team/crm`. Reports both the resulting state
-/// and whether this call changed it; for the enable-flip case it also
-/// reports the backfill fan-out tallies.
+/// Compatibility response for `PATCH /team/crm`. CRM records are always
+/// available; this endpoint does not enroll mailboxes or backfill emails.
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct PatchTeamCrmSettingsResponse {
-    /// The resulting `crm_enabled` value after the call.
+    /// Always true: CRM records are available to team members.
     pub enabled: bool,
-    /// True if this call flipped the value (false → true or true →
-    /// false). False if the team was already at the requested state.
+    /// Always false: the legacy command does not change availability.
     pub changed: bool,
-    /// Number of members for whom a `PopulateCrmForUser` message was
-    /// enqueued. Non-zero only on a disabled → enabled transition;
-    /// per-user enqueue failures are logged and swallowed.
+    /// Always zero: mailbox contributions require individual consent.
     pub backfill_enqueued: usize,
-    /// Number of members whose enqueue failed (and was swallowed).
-    /// Non-zero only on a disabled → enabled transition.
+    /// Always zero: this endpoint does not enqueue backfills.
     pub backfill_failed: usize,
 }
 
@@ -462,8 +561,8 @@ pub struct Team {
     pub(crate) slug: String,
     #[cfg_attr(feature = "axum", schema(value_type = String))]
     pub(crate) owner_id: MacroUserIdStr<'static>,
-    /// Whether the CRM is enabled for this team (from `team_crm_settings`;
-    /// `false` when no row exists).
+    /// CRM record availability, always true for teams. This compatibility
+    /// field does not indicate whether any mailbox contributes emails.
     pub(crate) crm_enabled: bool,
     /// The email domain new users are automatically joined to this team
     /// with, when automatic domain joining is enabled (None otherwise).
@@ -531,7 +630,7 @@ impl Team {
         self.owner_id.as_ref()
     }
 
-    /// Whether the CRM is enabled for this team
+    /// CRM record availability, independent of email contribution consent.
     pub fn crm_enabled(&self) -> bool {
         self.crm_enabled
     }
@@ -660,297 +759,6 @@ pub struct AcceptedTeamInvite<'a> {
     pub member: TeamMember<'a>,
     /// Snapshot of the invite before it was accepted
     pub invite: TeamInviteSnapshot<'a>,
-}
-
-/// Errors for team
-#[derive(Debug, thiserror::Error)]
-pub enum TeamError {
-    /// The team does not exist
-    #[error("The team does not exist")]
-    TeamDoesNotExist,
-    /// Team member was not found
-    #[error("Team member not found for team {0}")]
-    TeamMemberNotFound(uuid::Uuid),
-    /// The subscription does not exist
-    #[error("No subscription")]
-    NoSubscription,
-    /// The team subscription id is invalid
-    #[error("Invalid subscription id")]
-    InvalidSubscriptionId,
-    /// The team invite does not exist
-    #[error("The team invite does not exist")]
-    TeamInviteDoesNotExist,
-    /// The team is not paying
-    #[error("The team is not paying")]
-    TeamNotPaying,
-    /// Underlying entity access error
-    #[error("Access error")]
-    AccessError(#[from] entity_access::domain::models::AccessError),
-    /// Bad request
-    #[error("Bad request: {0}")]
-    BadRequest(String),
-    /// Storage layer error
-    #[error("Storage layer error {0}")]
-    StorageLayerError(#[from] anyhow::Error),
-}
-
-/// Errors for creating team
-#[derive(Debug, thiserror::Error)]
-pub enum CreateTeamError {
-    /// The team name is invalid
-    #[error("The team name is invalid: {0}")]
-    InvalidTeamName(String),
-    /// Storage layer error
-    #[error("Storage layer error {0}")]
-    StorageLayerError(#[from] anyhow::Error),
-}
-
-/// Errors for inviting users to team
-#[derive(Debug, thiserror::Error)]
-pub enum InviteUsersToTeamError {
-    /// The team has hit its daily limit on new invites
-    #[error("the team has sent too many invites today")]
-    TooManyEmails,
-    /// The team only allows admins to invite and the caller is not an admin
-    #[error("only team admins may invite users to this team")]
-    NonAdminInvitesDisabled,
-    /// Underlying team error
-    #[error("Underlying team error {0}")]
-    TeamError(#[from] TeamError),
-    /// Underlying customer error
-    #[error("Underlying customer error {0}")]
-    CustomerError(#[from] CustomerError),
-    /// Storage layer error
-    #[error("Storage layer error {0}")]
-    StorageLayerError(#[from] anyhow::Error),
-}
-
-/// Errors for removing a user from a team
-#[derive(Debug, thiserror::Error)]
-pub enum RemoveUserFromTeamError {
-    /// The team does not exist
-    #[error("The team does not exist")]
-    TeamDoesNotExist,
-    /// The user is not in the team
-    #[error("The user is not in the team")]
-    UserNotInTeam,
-    /// Team error
-    #[error("Team error")]
-    TeamError(#[from] TeamError),
-    /// There is no subscription for the team
-    #[error("There is no subscription for the team")]
-    NoSubscription,
-    /// Underlying customer error
-    #[error("Underlying customer error {0}")]
-    CustomerError(#[from] CustomerError),
-    /// The user is the owner of the team
-    #[error("Cannot remove owner")]
-    CannotRemoveOwner,
-    /// Storage layer error
-    #[error("Storage layer error")]
-    StorageLayerError(#[from] anyhow::Error),
-    /// Remove roles from user error
-    #[error("Remove roles from user error")]
-    RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
-    /// The removed member's open seat could not be released, and the removal was rolled back.
-    #[error("failed to release the removed member's open seat")]
-    OpenSeatRelease(#[source] Box<dyn std::error::Error + Send + Sync>),
-}
-
-/// Arguments for creating a subscription
-#[derive(Debug, Clone)]
-pub struct CreateSubscriptionArgs {
-    /// The customer id
-    pub customer_id: stripe::CustomerId,
-    /// The quantity
-    pub quantity: u64,
-    /// The metadata to attach to the subscription
-    pub metadata: Option<HashMap<String, String>>,
-}
-
-/// Errors for customer repository
-#[derive(Debug, thiserror::Error)]
-pub enum CustomerError {
-    /// The subscription is neither active nor trialing
-    #[error("Subscription is not active")]
-    SubscriptionNotActive,
-    /// Invalid promotion code
-    #[error("Invalid promotion code {0}")]
-    InvalidPromotionCode(String),
-    /// No subscription line item matched the configured Stripe price id.
-    #[error("No matching line item")]
-    NoMatchingLineItem,
-    /// The plan has no Stripe price configured.
-    #[error("The {0} plan is not available")]
-    PlanUnavailable(SeatPlan),
-    /// Storage layer error
-    #[error("Storage layer error {0}")]
-    StorageLayerError(#[from] anyhow::Error),
-}
-
-/// Errors for moving a team member between seat plans.
-#[derive(Debug, thiserror::Error)]
-pub enum SetTeamMemberPlanError {
-    /// Seat plans only apply to paying (or enterprise) teams.
-    #[error("The team has no active subscription")]
-    TeamNotPaying,
-    /// Underlying team error
-    #[error("{0}")]
-    TeamError(#[from] TeamError),
-    /// Underlying customer error
-    #[error("{0}")]
-    CustomerError(#[from] CustomerError),
-    /// Usage could not be reset for the upgraded seat.
-    #[error("failed to update seat usage after a plan change")]
-    UsageReset(#[source] Box<dyn std::error::Error + Send + Sync>),
-    /// Roles could not be updated
-    #[error("Roles error: {0}")]
-    RolesError(#[from] UserRolesAndPermissionsError),
-}
-
-/// Errors for removing a team invite
-#[derive(Debug, thiserror::Error)]
-pub enum RemoveTeamInviteError {
-    /// The user is not invited to the team
-    #[error("The user is not invited to the team")]
-    UserNotInTeam,
-    /// The team invite does not exist
-    #[error("The team invite does not exist")]
-    TeamInviteDoesNotExist,
-    /// Storage layer error
-    #[error("Storage layer error {0}")]
-    StorageLayerError(#[from] anyhow::Error),
-    /// Underlying team error
-    #[error("Underlying team error {0}")]
-    TeamError(#[from] TeamError),
-    /// Underlying customer error
-    #[error("Underlying customer error {0}")]
-    CustomerError(#[from] CustomerError),
-}
-
-/// Errors for deleting a team
-#[derive(Debug, thiserror::Error)]
-pub enum DeleteTeamError {
-    /// Storage layer error
-    #[error("Storage layer error")]
-    StorageLayerError(#[from] anyhow::Error),
-    /// Underlying team error
-    #[error("Underlying team error")]
-    TeamError(#[from] TeamError),
-    /// Underlying customer error
-    #[error("Underlying customer error {0}")]
-    CustomerError(#[from] CustomerError),
-    /// Remove roles from user error
-    #[error("Remove roles from user error")]
-    RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
-    /// The team's content could not be purged, so the team was not deleted
-    #[error("unable to purge the team's content")]
-    OwnedEntityCleanup(#[from] OwnedEntityCleanupError),
-}
-
-/// Errors for detaching a user from every team ahead of account deletion
-#[derive(Debug, thiserror::Error)]
-pub enum RemoveUserFromAllTeamsError {
-    /// Underlying team error
-    #[error("Underlying team error")]
-    TeamError(#[from] TeamError),
-    /// A team the user owns could not be deleted
-    #[error("Unable to delete a team the user owns")]
-    DeleteTeam(#[from] DeleteTeamError),
-    /// The user could not be removed from a team they belong to
-    #[error("Unable to remove the user from a team")]
-    RemoveUserFromTeam(#[from] RemoveUserFromTeamError),
-}
-
-/// Errors for joining a team
-#[derive(Debug, thiserror::Error)]
-pub enum JoinTeamError {
-    /// Storage layer error
-    #[error("Storage layer error")]
-    StorageLayerError(#[from] anyhow::Error),
-    /// Underlying team error
-    #[error("Underlying team error")]
-    TeamError(#[from] TeamError),
-    /// Underlying customer error
-    #[error("Underlying customer error {0}")]
-    CustomerError(#[from] CustomerError),
-    /// The user was not invited to the team
-    #[error("User not invited")]
-    UserNotInvited,
-    #[error("Underlying user roles and permissions error")]
-    /// Underlying user roles and permissions error
-    AddRolesToUserError(#[from] UserRolesAndPermissionsError),
-}
-
-/// Errors for toggling a team's auto-join domain
-#[derive(Debug, thiserror::Error)]
-pub enum ToggleAutoJoinDomainError {
-    /// The team owner's email domain is a generic email provider domain
-    #[error("Auto-join isn't available for {0}")]
-    GenericDomainNotAllowed(String),
-    /// Underlying team error
-    #[error("Underlying team error {0}")]
-    TeamError(#[from] TeamError),
-}
-
-/// Errors for adding a user to a team without an email invite: by matching
-/// the team's auto-join domain, or through the team's invite link.
-#[derive(Debug, thiserror::Error)]
-pub enum JoinTeamDirectlyError {
-    /// Underlying team error
-    #[error("Underlying team error {0}")]
-    TeamError(#[from] TeamError),
-    /// Underlying join team error
-    #[error("Underlying join team error {0}")]
-    JoinTeamError(#[from] JoinTeamError),
-}
-
-/// Errors for revoking permissions for team members
-#[derive(Debug, thiserror::Error)]
-pub enum RevokePermissionsForTeamMembersError {
-    /// Underlying team error
-    #[error("Underlying team error")]
-    TeamError(#[from] TeamError),
-    /// Underlying user roles and permissions error
-    #[error("Underlying user roles and permissions error")]
-    RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
-}
-
-/// Error when restoring permissions for team members
-#[derive(Debug, thiserror::Error)]
-pub enum RestorePermissionsForTeamMembersError {
-    /// Provider renewal state could not be read or acknowledged.
-    #[error(transparent)]
-    Customer(#[from] CustomerError),
-    /// Underlying team error
-    #[error("Underlying team error")]
-    TeamError(#[from] TeamError),
-    /// Underlying user roles and permissions error
-    #[error("Underlying user roles and permissions error")]
-    AddRolesToUserError(#[from] UserRolesAndPermissionsError),
-    /// Initial seat upgrade usage could not be reset; retry activation.
-    #[error("failed to reset usage for an activated team seat")]
-    UsageReset(#[source] Box<dyn std::error::Error + Send + Sync>),
-}
-
-/// Error when creating team checkout
-#[derive(Debug, thiserror::Error)]
-pub enum TeamCheckoutError {
-    /// Team already has a plan
-    #[error("Team already has a plan")]
-    TeamAlreadyHasPlanError,
-    /// Missing customer id
-    #[error("User does not have a customer id")]
-    MissingCustomerId,
-    /// Underlying team error
-    #[error("{0}")]
-    TeamError(#[from] TeamError),
-    /// Underlying customer error
-    #[error("{0}")]
-    CustomerError(#[from] CustomerError),
-    /// Customer already has a subscription
-    #[error("User already has an active subscription")]
-    AlreadySubscribed,
 }
 
 #[cfg(test)]

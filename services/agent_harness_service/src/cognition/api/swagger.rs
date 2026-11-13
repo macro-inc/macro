@@ -1,7 +1,7 @@
 use crate::cognition::api::{
     attachments::get_chats_for_attachment,
     chats::{chat_history, chat_history_batch_messages},
-    citations, database_query, decisions, health,
+    citations, confirmed_actions, database_query, decisions, health,
     preview::get_batch_preview,
     stream::chat_message::{
         self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
@@ -28,7 +28,9 @@ use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
 };
-use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
+use memory::inbound::axum_router::{
+    self as memory_api, MemoryErrorBody, MemoryResponse, UpdateExplicitMemoryRequest,
+};
 use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 use pipedream_mcp::inbound::axum_router::{
     self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
@@ -95,9 +97,19 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             decisions::decide,
+            confirmed_actions::send_confirmed_email,
+            confirmed_actions::create_confirmed_calendar_event,
             image_generation_api::generate_image_handler,
+            web_search::inbound::axum_router::search_handler,
+            web_search::inbound::axum_router::fetch_handler,
+            skills::inbound::axum_router::list_skills_handler,
+            skills::inbound::axum_router::read_skill_handler,
             database_query::generate_database_query,
             memory_api::get_memory_handler,
+            memory_api::get_explicit_memory_handler,
+            memory_api::update_explicit_memory_handler,
+            memory_api::get_user_activity_handler,
+            activity::inbound::axum_router::read_activity_handler,
             import_api::get_state_handler,
             import_api::run_import_handler,
             import_api::discover_handler,
@@ -105,6 +117,10 @@ use utoipa::OpenApi;
             import_api::workspace_report_handler,
             import_api::cancel_workspace_handler,
             import_api::cancel_notion_handler,
+            import_api::ledger::list_entities_handler,
+            import_api::ledger::track_entity_handler,
+            import_api::ledger::decline_entity_handler,
+            import_api::ledger::import_notion_page_handler,
             onboarding_api::get_state_handler,
             onboarding_api::complete_handler,
             onboarding_api::dismissed_prompts_handler,
@@ -211,11 +227,34 @@ use utoipa::OpenApi;
                 image_generation_api::GenerateImageErrorBody,
                 image_generation_api::GenerateImageAspectRatio,
                 image_generation_api::GenerateImageReference,
+                web_search::domain::models::WebSearch,
+                web_search::domain::models::WebSearchResponse,
+                web_search::domain::models::WebSearchResult,
+                web_search::domain::models::WebSearchTopic,
+                web_search::domain::models::WebFetch,
+                web_search::domain::models::WebFetchResponse,
+                web_search::inbound::axum_router::WebErrorBody,
+                skills::inbound::axum_router::SkillsMatchType,
+                skills::inbound::axum_router::SkillListing,
+                skills::inbound::axum_router::SkillsResponse,
+                skills::inbound::axum_router::SkillContentResponse,
+                skills::inbound::axum_router::SkillErrorBody,
                 agent::structured_output::DynamicSchema,
 
                 // Memory
                 MemoryResponse,
                 MemoryErrorBody,
+                UpdateExplicitMemoryRequest,
+                memory::domain::models::ExplicitMemory,
+                memory::domain::models::MemoryEdit,
+                memory::domain::models::ActivityReports,
+                memory::domain::models::Activity,
+                memory::domain::models::Granularity,
+                // Activity
+                activity::domain::activity_range::ReadActivityResponse,
+                activity::domain::activity_range::ToolActivityEvent,
+                activity::domain::activity_range::ToolActivityAction,
+                activity::inbound::axum_router::ActivityErrorBody,
 
                 // Import pipeline
                 import::domain::models::ImportState,
@@ -237,6 +276,14 @@ use utoipa::OpenApi;
                 import::domain::models::SlackParticipant,
                 import::domain::service::RunImportOutcome,
                 RunImportRequest,
+                import_api::ledger::ImportEntitiesResponse,
+                import_api::ledger::TrackImportStatus,
+                import_api::ledger::TrackImportEntityRequest,
+                import_api::ledger::TrackImportOutcome,
+                import_api::ledger::TrackImportEntityResponse,
+                import_api::ledger::ImportNotionPageRequest,
+                import_api::ledger::ImportNotionPageResult,
+                import_api::ledger::ImportNotionPageResponse,
 
                 // Onboarding
                 onboarding::domain::models::OnboardingState,

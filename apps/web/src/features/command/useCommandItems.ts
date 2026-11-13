@@ -24,6 +24,7 @@ import {
   newProjectCommand,
 } from './project-items';
 import { useEntitySearch } from './queries/entity-search';
+import { sameRankInput } from './rank-command-search-items';
 import { getCommandLastUsedAt } from './recency';
 import { CommandState } from './state';
 import type { CategoryFilter, DisplayHotkeyStep } from './types';
@@ -75,6 +76,7 @@ type CommandMenuItem =
   | CreateProjectCommandItem;
 
 export type PaginationControls = {
+  windowKey?: Accessor<string | undefined>;
   hasMore: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
@@ -83,6 +85,8 @@ export type PaginationControls = {
 /** CRM contacts matching a typed query, beyond those Quick Access holds. */
 export type CommandContactSource = PaginationControls & {
   contacts: Accessor<CrmContactEntity[]>;
+  /** Exact personal-contact resolution for this bounded CRM window. */
+  users?: Accessor<UserItem[]>;
   isLoading: Accessor<boolean>;
   error: Accessor<Error | undefined>;
 };
@@ -409,6 +413,9 @@ export function useCommandItems(
         : []),
     ];
   };
+  const rankInput = createMemo(categoryItems, undefined, {
+    equals: sameRankInput,
+  });
   const rankItems = entities.rankItems;
 
   const shouldShowSearchRow = (q: string) => {
@@ -421,7 +428,7 @@ export function useCommandItems(
 
   const filteredItems = createMemo(() => {
     const q = query();
-    const items = categoryItems();
+    const ranked = rankItems(rankInput(), q);
 
     if (
       q.trim().length <= 3 &&
@@ -430,7 +437,6 @@ export function useCommandItems(
       !CommandState.isEntityActionMode()
     ) {
       const trimmedQuery = q.trim();
-      const ranked = rankItems(items, q);
       const topCommands = ranked.filter(isCommandItem).slice(0, 3);
 
       if (!trimmedQuery || topCommands.length > 0) {
@@ -447,8 +453,6 @@ export function useCommandItems(
       }
     }
 
-    const ranked = rankItems(items, q);
-
     if (shouldShowSearchRow(q)) {
       // With no direct results the menu would only offer search, so also
       // offer handing the query to AI.
@@ -464,6 +468,7 @@ export function useCommandItems(
   return {
     items: filteredItems,
     isLoadingEntities: entities.isLoadingEntities,
+    isSearchingEntities: entities.isSearchingEntities,
     isSettling: entities.isSettling,
     pagination: entities.pagination,
   };

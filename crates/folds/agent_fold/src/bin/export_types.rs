@@ -3,7 +3,7 @@
 //! Run with:
 //!
 //! ```text
-//! cargo run -p agent_fold --bin export_types
+//! cargo run -p agent_fold --bin agent_fold_types
 //! ```
 
 use agent_fold::domain::model::SessionMetadata;

@@ -75,6 +75,16 @@ pub trait MailboxContentReader: Send + Sync + 'static {
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxMessage>, EmailApiError>> + Send;
 
+    /// The newest inbox messages, newest first, without attachment metadata,
+    /// for a quick look at a mailbox before it has synchronized.
+    fn recent_inbox_messages(
+        &self,
+        token: &AccessToken,
+        link_id: Uuid,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> impl Future<Output = Result<Vec<MailboxMessage>, EmailApiError>> + Send;
+
     /// Fetch decoded attachment bytes, including attached messages where supported.
     fn attachment(
         &self,
@@ -93,6 +103,11 @@ pub trait MailboxContentReader: Send + Sync + 'static {
 
 /// Per-folder providers enumerate bounded pages for initial and incremental sync.
 pub trait FolderChangeReader: Send + Sync + 'static {
+    /// Revision of the folder delta request. Raise it with a change that lets
+    /// a fresh delta round list mail an older revision's round missed: each
+    /// folder stream records the revision its round started at, and a stream
+    /// whose round started at an older one is due a re-import.
+    const READER_REVISION: i16;
     /// Return one page. The caller must commit work atomically with its position.
     fn folder_changes(
         &self,

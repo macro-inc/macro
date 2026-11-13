@@ -30,7 +30,7 @@ async fn logged(pool: &PgPool, link_id: Uuid) -> Vec<(i64, CalendarChangeOp)> {
     .collect()
 }
 
-async fn ops_after(pool: &PgPool, link_id: Uuid, after: i64) -> Vec<CalendarChangeOp> {
+pub(super) async fn ops_after(pool: &PgPool, link_id: Uuid, after: i64) -> Vec<CalendarChangeOp> {
     logged(pool, link_id)
         .await
         .into_iter()
@@ -39,7 +39,7 @@ async fn ops_after(pool: &PgPool, link_id: Uuid, after: i64) -> Vec<CalendarChan
         .collect()
 }
 
-async fn counter(pool: &PgPool, link_id: Uuid) -> i64 {
+pub(super) async fn counter(pool: &PgPool, link_id: Uuid) -> i64 {
     sqlx::query_scalar!(
         "SELECT seq FROM calendar_change_counters WHERE link_id = $1",
         link_id,

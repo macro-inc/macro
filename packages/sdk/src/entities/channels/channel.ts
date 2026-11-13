@@ -11,6 +11,11 @@ import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
+import { Bot } from '../bots/bot';
+import { CallRecord } from '../calls/call-record';
+import { CallConnection, type JoinOptions } from '../calls/connection';
+import { callAdmissionError } from '../calls/errors';
+import type { Document } from '../documents/document';
 import { PropertiedEntity } from '../entity';
 import type { StaticImage } from '../images/image';
 import {
@@ -18,7 +23,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { ChannelAccessRequest } from './access-request';
@@ -41,7 +46,47 @@ export type ChannelAttachment =
  * A channel.
  */
 export class Channel extends PropertiedEntity<ChannelDetail> {
-  /** Record a view or interaction in this channel. */
+  /**
+   * Start or join this channel's call, ringing members if a new call starts.
+   *
+   * @write
+   * @mcp-exclude Returns a live call room credential; MCP calls carry JSON only.
+   */
+  async startCall(opts: JoinOptions = {}): Promise<CallConnection> {
+    try {
+      const response = unwrap(
+        await this.client.storage.startCall({
+          path: { channel_id: this.id },
+          body: opts,
+        }),
+      );
+      return new CallConnection(this.client, response);
+    } catch (error) {
+      return callAdmissionError(error);
+    }
+  }
+
+  /**
+   * Check the current call without creating one; undefined means no call.
+   *
+   * @readonly
+   */
+  async activeCall(): Promise<CallRecord | undefined> {
+    const result = await this.client.storage.checkActiveCall({
+      path: { channel_id: this.id },
+    });
+    if (result.response?.status === 204) return undefined;
+
+    const response = unwrap(result);
+    if (!response) return undefined;
+    return CallRecord.byId(this.client, response.callId);
+  }
+
+  /**
+   * Record a view or interaction in this channel.
+   *
+   * @write
+   */
   async recordActivity(type: ActivityType): Promise<ChannelActivity> {
     return new ChannelActivity(
       this.client,
@@ -54,7 +99,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Set an uploaded profile picture, or clear it. */
+  /**
+   * Set an uploaded profile picture, or clear it.
+   *
+   * @write
+   * @idempotent
+   */
   async setPicture(picture?: ChannelPicture): Promise<void> {
     await this.mutate((c) =>
       c.storage.setChannelPicture({
@@ -64,7 +114,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** A shared message thread scoped to this resource. */
+  /**
+   * A shared message thread scoped to this resource.
+   *
+   * @readonly
+   */
   messageThreadById(id: string): MessageThread {
     return MessageThread.byId(
       this.client,
@@ -73,7 +127,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** A mixed message and activity timeline page. */
+  /**
+   * A mixed message and activity timeline page.
+   *
+   * @readonly
+   */
   timelinePage(selection?: TimelineOptions<Message>) {
     return timeline(
       this.client,
@@ -83,7 +141,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Conversations maintained by agents in this channel. */
+  /**
+   * Conversations maintained by agents in this channel.
+   *
+   * @readonly
+   */
   async agentConversations(): Promise<AgentConversation[]> {
     return unwrap(
       await this.client.agentHarness.listAgentConversations({
@@ -121,7 +183,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return new Channel(client, channel_id);
   }
 
-  /** Open (creating if needed) the private group channel with a set of users. */
+  /** Open (creating if needed) the group direct message with exactly these people, excluding the caller. */
   static async private(
     client: MacroClient,
     recipients: User[],
@@ -168,26 +230,43 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Post a message. Plain text, or a rich body composed with `msg`.
    * `images` attaches static images, such as one from
-   * `macro.images.generate()`, below the text.
+   * `macro.images.generate()`, below the text; `documents` attaches Macro
+   * documents as file chips, such as a file from `macro.documents.upload()`.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
-   * The webhook endpoint takes no images.
+   * The webhook endpoint takes no attachments.
+   *
+   * @example Share a generated CSV.
+   * ```js
+   * const file = await macro.documents.upload({ name: 'q3.csv', content: csv });
+   * await channel.send('Q3 numbers attached.', { documents: [file] });
+   * ```
+   *
+   * @write
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread; images?: StaticImage[] },
+    opts?: {
+      thread?: Thread;
+      images?: StaticImage[];
+      documents?: Document[];
+    },
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
       opts?.thread ?? this,
       toBody(body),
-      opts?.images,
+      opts,
     );
     return Message.byId(this.client, this.id, id);
   }
 
-  /** Root messages in this channel, most recent first, auto-paginated. */
+  /**
+   * Root messages in this channel, most recent first, auto-paginated.
+   *
+   * @readonly
+   */
   messages(opts?: { pageSize?: number }): AsyncGenerator<Message> {
     return this.timeline({ limit: opts?.pageSize });
   }
@@ -195,6 +274,8 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Root messages created or replied to at or after `after`, most recent
    * first, auto-paginated. Use it to catch up after a disconnect.
+   *
+   * @readonly
    */
   messagesAfter(
     after: Date | string,
@@ -223,12 +304,21 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     });
   }
 
-  /** A handle to a message in this channel by id. */
+  /**
+   * A handle to a message in this channel by id.
+   *
+   * @readonly
+   */
   message(id: string): Message {
     return Message.byId(this.client, this.id, id);
   }
 
-  /** Rename the channel. */
+  /**
+   * Rename the channel.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.patchChannel({
@@ -238,21 +328,35 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Delete the channel. This is not reversible. */
+  /**
+   * Delete the channel. This is not reversible.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteChannel({ path: { channel_id: this.id } }),
     );
   }
 
-  /** Join the channel as the current user. */
+  /**
+   * Join the channel as the current user.
+   *
+   * @write
+   * @idempotent
+   */
   async join(): Promise<void> {
     await this.mutate((c) =>
       c.storage.joinChannel({ path: { channel_id: this.id } }),
     );
   }
 
-  /** A reusable code that lets a user join this channel. */
+  /**
+   * A reusable code that lets a user join this channel.
+   *
+   * @readonly
+   */
   async joinCode(): Promise<string> {
     const { join_code } = unwrap(
       await this.client.storage.getChannelJoinLink({
@@ -265,6 +369,8 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Read the current user's join request, eligibility, and retry time.
    * Works without channel access. Denial or withdrawal may delay retries.
+   *
+   * @readonly
    */
   async myAccessRequest(): Promise<{
     request?: ChannelAccessRequest;
@@ -288,6 +394,9 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Ask to join a private or team channel.
    * Repeated calls return the pending request.
+   *
+   * @write
+   * @idempotent
    */
   async requestAccess(): Promise<ChannelAccessRequest> {
     return ChannelAccessRequest.from(
@@ -301,7 +410,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Withdraw the current user's pending join request. */
+  /**
+   * Withdraw the current user's pending join request.
+   *
+   * @destructive
+   * @idempotent
+   */
   async cancelAccessRequest(): Promise<void> {
     unwrap(
       await this.client.storage.cancelChannelAccessRequest({
@@ -310,14 +424,23 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Leave the channel as the current user. */
+  /**
+   * Leave the channel as the current user.
+   *
+   * @destructive
+   * @idempotent
+   */
   async leave(): Promise<void> {
     await this.mutate((c) =>
       c.storage.leaveChannel({ path: { channel_id: this.id } }),
     );
   }
 
-  /** The channel's members, with their roles and join times. */
+  /**
+   * The channel's members, with their roles and join times.
+   *
+   * @readonly
+   */
   async participants(): Promise<ChannelParticipant[]> {
     return unwrap(
       await this.client.storage.getChannelParticipants({
@@ -326,7 +449,25 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Add users to the channel. */
+  /**
+   * Bots that can post to the channel.
+   *
+   * @readonly
+   */
+  async bots(): Promise<Bot[]> {
+    return unwrap(
+      await this.client.storage.listChannelBots({
+        path: { channel_id: this.id },
+      }),
+    ).map((record) => Bot.from(this.client, record));
+  }
+
+  /**
+   * Add users to the channel.
+   *
+   * @write
+   * @idempotent
+   */
   async addParticipants(users: User[]): Promise<void> {
     await this.mutate((c) =>
       c.storage.addParticipants({
@@ -336,7 +477,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Remove users from the channel. */
+  /**
+   * Remove users from the channel.
+   *
+   * @destructive
+   * @idempotent
+   */
   async removeParticipants(users: User[]): Promise<void> {
     await this.mutate((c) =>
       c.storage.removeParticipants({
@@ -346,7 +492,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Broadcast a typing indicator, optionally scoped to a thread. */
+  /**
+   * Broadcast a typing indicator, optionally scoped to a thread.
+   *
+   * @write
+   * @idempotent
+   */
   async typing(
     action: 'start' | 'stop',
     opts?: { thread?: Thread },
@@ -362,7 +513,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** The attachments posted in this channel, auto-paginated. */
+  /**
+   * The attachments posted in this channel, auto-paginated.
+   *
+   * @readonly
+   */
   attachments(opts?: {
     pageSize?: number;
     /** Filter by type: `static` for images/videos, `dss` for documents. */
@@ -383,7 +538,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     });
   }
 
-  /** The channel's URL in the Macro web app. */
+  /**
+   * The channel's URL in the Macro web app.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/channel/${this.id}`;
   }

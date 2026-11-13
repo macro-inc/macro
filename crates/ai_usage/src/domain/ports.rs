@@ -16,7 +16,7 @@ use super::financial::{
 };
 
 /// The reserved system user recorded for completions with no originating
-/// end-user (background tasks, internal summarization, subagents, …).
+/// end-user (background tasks, internal summarization, …).
 ///
 /// Building a [`MacroUserIdStr`] parses the id at runtime (there is no
 /// `const fn` constructor), so this is a `LazyLock` rather than a literal
@@ -73,12 +73,19 @@ pub enum AiFeature {
     AgentRepositoryChoice,
     /// Choosing Chat or Code for a prompt sent from the agent composer's Auto mode.
     AgentModeChoice,
+    /// The live one-line status summarizing a running agent session's tool calls.
+    AgentActivitySummary,
     /// User-confirmed audio transcription.
     Dictation,
     /// Image generation and editing.
     ImageGeneration,
     /// Classifying signal email threads for the Focus view.
     EmailFocus,
+    /// Web search and page fetches for agents and the SDK.
+    WebSearch,
+    /// An agent session its opener made non-billable: background work the
+    /// user didn't ask for turn by turn. Recorded, never billed.
+    NonBillableAgentSession,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id
@@ -91,6 +98,15 @@ pub fn normalize_model_id(model: &str) -> &str {
     match model.rsplit_once('/') {
         Some((_, bare)) if !bare.is_empty() => bare,
         _ => model,
+    }
+}
+
+/// The provider segment of a routing id (`fireworks` in `fireworks/kimi-k3`),
+/// or `None` for a bare id, whose provider the caller did not say.
+pub fn model_provider(model: &str) -> Option<&str> {
+    match model.split_once('/') {
+        Some((provider, bare)) if !provider.is_empty() && !bare.is_empty() => Some(provider),
+        _ => None,
     }
 }
 
@@ -114,6 +130,11 @@ pub enum UsageAmount {
         /// Provider-reported duration of the audio.
         duration: std::time::Duration,
     },
+    /// Credits a vendor billed for a request (e.g. Tavily search/extract credits).
+    ProviderCredits {
+        /// Vendor-reported credits consumed.
+        credits: u64,
+    },
 }
 
 /// Rates for a model's billing unit.
@@ -135,6 +156,11 @@ pub enum ModelPricing {
         /// Audio minute rate.
         per_minute: f32,
     },
+    /// Price per vendor credit (USD).
+    ProviderCredits {
+        /// Credit rate.
+        per_credit: f32,
+    },
 }
 
 impl ModelPricing {
@@ -154,6 +180,7 @@ impl ModelPricing {
                     && cache_write.is_none_or(valid)
             }
             Self::Audio { per_minute } => valid(per_minute),
+            Self::ProviderCredits { per_credit } => valid(per_credit),
         };
         if is_valid {
             Ok(self)
@@ -199,6 +226,10 @@ impl Price {
             (ModelPricing::Audio { per_minute }, UsageAmount::Audio { duration }) => {
                 duration.as_secs_f64() / 60.0 * f64::from(per_minute)
             }
+            (
+                ModelPricing::ProviderCredits { per_credit },
+                UsageAmount::ProviderCredits { credits },
+            ) => credits as f64 * f64::from(per_credit),
             _ => return None,
         };
         Some(Self {
@@ -244,7 +275,9 @@ pub struct CompletionUsage {
     /// The agent's own API key that paid for the completion, if Macro
     /// did not. Such usage is recorded but never counted toward a quota.
     pub agent_api_key_id: Option<Uuid>,
-    /// Token/audio usage and cost.
+    /// The agent session whose work made the completion, if any.
+    pub agent_session_id: Option<Uuid>,
+    /// Token/audio/credit usage and cost.
     pub cost: Usage,
 }
 
@@ -297,6 +330,8 @@ pub struct UsageEvent {
     pub amount: UsageAmount,
     /// The agent's own API key that paid for the completion, if any.
     pub agent_api_key_id: Option<Uuid>,
+    /// The agent session whose work made the completion, if any.
+    pub agent_session_id: Option<Uuid>,
 }
 
 /// The constant attributes of a logical completion (everything except the model
@@ -315,6 +350,9 @@ pub struct UsageContext {
     /// The agent's own API key the completion runs on, when Macro is
     /// not paying for it.
     pub agent_api_key_id: Option<Uuid>,
+    /// The agent session whose work the completion is part of: its turns,
+    /// the tools they call, and its titles.
+    pub agent_session_id: Option<Uuid>,
 }
 
 impl UsageContext {
@@ -325,6 +363,7 @@ impl UsageContext {
             user,
             entity: None,
             agent_api_key_id: None,
+            agent_session_id: None,
         }
     }
 
@@ -335,12 +374,19 @@ impl UsageContext {
             user: SYSTEM_USER_ID.clone(),
             entity: None,
             agent_api_key_id: None,
+            agent_session_id: None,
         }
     }
 
     /// Set the related entity.
     pub fn with_entity(mut self, entity: Option<Uuid>) -> Self {
         self.entity = entity;
+        self
+    }
+
+    /// Set the agent session the completion is part of.
+    pub fn with_agent_session(mut self, agent_session_id: Option<Uuid>) -> Self {
+        self.agent_session_id = agent_session_id;
         self
     }
 
@@ -363,6 +409,7 @@ impl UsageContext {
             model,
             amount,
             agent_api_key_id: self.agent_api_key_id,
+            agent_session_id: self.agent_session_id,
         }
     }
 
@@ -375,6 +422,20 @@ impl UsageContext {
             model,
             amount: UsageAmount::Audio { duration },
             agent_api_key_id: self.agent_api_key_id,
+            agent_session_id: self.agent_session_id,
+        }
+    }
+
+    /// Build a credit-based event for a vendor that bills in its own credits.
+    pub fn into_provider_credits_event(self, model: String, credits: u64) -> UsageEvent {
+        UsageEvent {
+            feature: self.feature,
+            user: self.user,
+            entity: self.entity,
+            model,
+            amount: UsageAmount::ProviderCredits { credits },
+            agent_api_key_id: self.agent_api_key_id,
+            agent_session_id: self.agent_session_id,
         }
     }
 }

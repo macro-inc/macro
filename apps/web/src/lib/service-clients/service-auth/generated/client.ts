@@ -7,6 +7,7 @@
 import type {
   AgentApiKey,
   AgentSetupResponse,
+  AgentVoice,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -17,6 +18,7 @@ import type {
   CodexEnvironment,
   CodexLoginPoll,
   CodexLoginStart,
+  ComputerStatus,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
   CreatedTeamInviteLinkResponse,
@@ -24,6 +26,7 @@ import type {
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateProfilePictureUploadRequest,
+  CreateTeamAgent,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -81,9 +84,12 @@ import type {
   Permission,
   PlanCatalogResponse,
   PostGetNamesRequestBody,
+  PowerBody,
   ProfilePictures,
   ProfilePictureUpload,
   PublicGtmInviteLink,
+  PurchaseBody,
+  Purchased,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
@@ -91,6 +97,7 @@ import type {
   PutProfilePictureParams,
   PutUserNameParams,
   RedeemGtmInviteLinkRequest,
+  ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
   SendDomainNoticeResponse,
   SendInviteBody,
@@ -100,6 +107,7 @@ import type {
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
   SetGithubPullRequestStateResponse,
+  SizeOffer,
   SsoLoginParams,
   SsoRequiredResponse,
   StatusUpdate,
@@ -108,6 +116,8 @@ import type {
   SystemStatus,
   SystemStatusHistory,
   Team,
+  TeamAgent,
+  TeamAgents,
   TeamInviteLinkResponse,
   TeamInviteLinkTeam,
   TeamInviteLinkTokenRequest,
@@ -1158,12 +1168,15 @@ export const deleteCursorApiKey = async (
 };
 
 /**
- * Stores the id only; its parameters are resolved from Cursor's own default
-variant at session start. Not validated against the live model list here —
-the settings dropdown offers only real ids, and a stale id degrades to the
-deployment default at spawn rather than failing, so a round trip to Cursor
-on every save would buy nothing.
- * @summary Choose the model this user's `@cursor` sessions start on.
+ * Stores the id and effort value only; the other parameters are resolved from
+Cursor's own variants at session start. Saving a model without an effort
+clears the previous effort, which belonged to the previous model. Not
+validated against the live model list here — the settings controls offer
+only real values, and a stale id or effort degrades to the deployment or
+model default at spawn rather than failing, so a round trip to Cursor on
+every save would buy nothing.
+ * @summary Choose the model, and optionally the effort, this user's `@cursor` sessions
+start on.
  */
 export type putCursorDefaultModelResponse200 = {
   data: CursorApiKeyStatus;
@@ -4533,6 +4546,11 @@ export type createTeamResponse403 = {
   status: 403;
 };
 
+export type createTeamResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type createTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -4544,6 +4562,7 @@ export type createTeamResponseSuccess = createTeamResponse200 & {
 export type createTeamResponseError = (
   | createTeamResponse400
   | createTeamResponse403
+  | createTeamResponse409
   | createTeamResponse500
 ) & {
   headers: Headers;
@@ -4790,15 +4809,538 @@ export const toggleTeamAutoJoinDomain = async (
 };
 
 /**
- * @summary Enables or disables CRM for the team. On enable with `backfill`
-(the default), kicks off a best-effort backfill that enqueues a
-`PopulateCrmForUser` message per team member (no-op if CRM is
-already enabled); without `backfill` the CRM starts empty and fills
-from new activity only. On disable,
-flips the flag and purges the team's CRM data (cascading through
-`crm_companies` → `crm_domains` / `crm_contacts` /
-`crm_contact_sources`). Requires the caller to be an Admin or
-Owner of the team.
+ * @summary The team's computers, oldest first.
+ */
+export type listTeamComputersResponse200 = {
+  data: ComputerStatus[];
+  status: 200;
+};
+
+export type listTeamComputersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamComputersResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamComputersResponseSuccess = listTeamComputersResponse200 & {
+  headers: Headers;
+};
+export type listTeamComputersResponseError = (
+  | listTeamComputersResponse401
+  | listTeamComputersResponse403
+) & {
+  headers: Headers;
+};
+
+export type listTeamComputersResponse =
+  | listTeamComputersResponseSuccess
+  | listTeamComputersResponseError;
+
+export const getListTeamComputersUrl = () => {
+  return `/team/computers`;
+};
+
+export const listTeamComputers = async (
+  options?: RequestInit
+): Promise<listTeamComputersResponse> => {
+  const res = await fetch(getListTeamComputersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputersResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputersResponse;
+};
+
+/**
+ * @summary Buy a computer for the team, billed on the team subscription. An error
+means nothing was charged; 202 means the charge is still being confirmed.
+ */
+export type purchaseTeamComputerResponse200 = {
+  data: Purchased;
+  status: 200;
+};
+
+export type purchaseTeamComputerResponse202 = {
+  data: Purchased;
+  status: 202;
+};
+
+export type purchaseTeamComputerResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
+export type purchaseTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type purchaseTeamComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type purchaseTeamComputerResponseSuccess = (
+  | purchaseTeamComputerResponse200
+  | purchaseTeamComputerResponse202
+) & {
+  headers: Headers;
+};
+export type purchaseTeamComputerResponseError = (
+  | purchaseTeamComputerResponse402
+  | purchaseTeamComputerResponse409
+  | purchaseTeamComputerResponse503
+) & {
+  headers: Headers;
+};
+
+export type purchaseTeamComputerResponse =
+  | purchaseTeamComputerResponseSuccess
+  | purchaseTeamComputerResponseError;
+
+export const getPurchaseTeamComputerUrl = () => {
+  return `/team/computers`;
+};
+
+export const purchaseTeamComputer = async (
+  purchaseBody: PurchaseBody,
+  options?: RequestInit
+): Promise<purchaseTeamComputerResponse> => {
+  const res = await fetch(getPurchaseTeamComputerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: purchaseTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as purchaseTeamComputerResponse;
+};
+
+/**
+ * @summary Every size with its price and availability.
+ */
+export type listTeamComputerOffersResponse200 = {
+  data: SizeOffer[];
+  status: 200;
+};
+
+export type listTeamComputerOffersResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listTeamComputerOffersResponseSuccess =
+  listTeamComputerOffersResponse200 & {
+    headers: Headers;
+  };
+export type listTeamComputerOffersResponseError =
+  listTeamComputerOffersResponse503 & {
+    headers: Headers;
+  };
+
+export type listTeamComputerOffersResponse =
+  | listTeamComputerOffersResponseSuccess
+  | listTeamComputerOffersResponseError;
+
+export const getListTeamComputerOffersUrl = () => {
+  return `/team/computers/offers`;
+};
+
+export const listTeamComputerOffers = async (
+  options?: RequestInit
+): Promise<listTeamComputerOffersResponse> => {
+  const res = await fetch(getListTeamComputerOffersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputerOffersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputerOffersResponse;
+};
+
+/**
+ * @summary Stop billing at the end of the current period.
+ */
+export type cancelTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type cancelTeamComputerResponseSuccess =
+  cancelTeamComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type cancelTeamComputerResponse = cancelTeamComputerResponseSuccess;
+
+export const getCancelTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/cancel`;
+};
+
+export const cancelTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<cancelTeamComputerResponse> => {
+  const res = await fetch(getCancelTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelTeamComputerResponse;
+};
+
+/**
+ * @summary Keep a computer that was canceled at period end.
+ */
+export type undoCancelTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type undoCancelTeamComputerResponseSuccess =
+  undoCancelTeamComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type undoCancelTeamComputerResponse =
+  undoCancelTeamComputerResponseSuccess;
+
+export const getUndoCancelTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/cancel`;
+};
+
+export const undoCancelTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<undoCancelTeamComputerResponse> => {
+  const res = await fetch(getUndoCancelTeamComputerUrl(computerId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: undoCancelTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as undoCancelTeamComputerResponse;
+};
+
+/**
+ * @summary Turn a computer on or off. A computer that is off keeps its disk and stays billed.
+ */
+export type setTeamComputerPowerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type setTeamComputerPowerResponseSuccess =
+  setTeamComputerPowerResponse200 & {
+    headers: Headers;
+  };
+
+export type setTeamComputerPowerResponse = setTeamComputerPowerResponseSuccess;
+
+export const getSetTeamComputerPowerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/power`;
+};
+
+export const setTeamComputerPower = async (
+  computerId: string,
+  powerBody: PowerBody,
+  options?: RequestInit
+): Promise<setTeamComputerPowerResponse> => {
+  const res = await fetch(getSetTeamComputerPowerUrl(computerId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(powerBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamComputerPowerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamComputerPowerResponse;
+};
+
+/**
+ * @summary Stop billing and destroy the computer now, without a refund.
+ */
+export type releaseTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type releaseTeamComputerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type releaseTeamComputerResponseSuccess =
+  releaseTeamComputerResponse200 & {
+    headers: Headers;
+  };
+export type releaseTeamComputerResponseError =
+  releaseTeamComputerResponse400 & {
+    headers: Headers;
+  };
+
+export type releaseTeamComputerResponse =
+  | releaseTeamComputerResponseSuccess
+  | releaseTeamComputerResponseError;
+
+export const getReleaseTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/release`;
+};
+
+export const releaseTeamComputer = async (
+  computerId: string,
+  releaseBody: ReleaseBody,
+  options?: RequestInit
+): Promise<releaseTeamComputerResponse> => {
+  const res = await fetch(getReleaseTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(releaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: releaseTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as releaseTeamComputerResponse;
+};
+
+/**
+ * @summary Keep a computer whose billing ended, during retention: re-adds its
+billing item (the rest of the period is invoiced now) and keeps the
+stopped computer and its disk.
+ */
+export type restoreTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type restoreTeamComputerResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
+export type restoreTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type restoreTeamComputerResponseSuccess =
+  restoreTeamComputerResponse200 & {
+    headers: Headers;
+  };
+export type restoreTeamComputerResponseError = (
+  | restoreTeamComputerResponse402
+  | restoreTeamComputerResponse409
+) & {
+  headers: Headers;
+};
+
+export type restoreTeamComputerResponse =
+  | restoreTeamComputerResponseSuccess
+  | restoreTeamComputerResponseError;
+
+export const getRestoreTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/restore`;
+};
+
+export const restoreTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<restoreTeamComputerResponse> => {
+  const res = await fetch(getRestoreTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: restoreTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as restoreTeamComputerResponse;
+};
+
+/**
+ * @summary Retry a failed computer without changing billing.
+ */
+export type retryTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type retryTeamComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type retryTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type retryTeamComputerResponseSuccess = retryTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type retryTeamComputerResponseError = (
+  | retryTeamComputerResponse404
+  | retryTeamComputerResponse409
+) & {
+  headers: Headers;
+};
+
+export type retryTeamComputerResponse =
+  | retryTeamComputerResponseSuccess
+  | retryTeamComputerResponseError;
+
+export const getRetryTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/retry`;
+};
+
+export const retryTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<retryTeamComputerResponse> => {
+  const res = await fetch(getRetryTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryTeamComputerResponse;
+};
+
+/**
+ * @summary Mark the guided setup after buying the computer finished. Idempotent;
+allowed to the team's owner and admins, like Claude sign-in.
+ */
+export type completeTeamComputerSetupResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type completeTeamComputerSetupResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type completeTeamComputerSetupResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type completeTeamComputerSetupResponseSuccess =
+  completeTeamComputerSetupResponse200 & {
+    headers: Headers;
+  };
+export type completeTeamComputerSetupResponseError = (
+  | completeTeamComputerSetupResponse403
+  | completeTeamComputerSetupResponse404
+) & {
+  headers: Headers;
+};
+
+export type completeTeamComputerSetupResponse =
+  | completeTeamComputerSetupResponseSuccess
+  | completeTeamComputerSetupResponseError;
+
+export const getCompleteTeamComputerSetupUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/setup-complete`;
+};
+
+export const completeTeamComputerSetup = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<completeTeamComputerSetupResponse> => {
+  const res = await fetch(getCompleteTeamComputerSetupUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeTeamComputerSetupResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeTeamComputerSetupResponse;
+};
+
+/**
+ * @summary Legacy compatibility endpoint for team admins and owners. Enabling
+is a no-op; disabling is rejected. CRM records remain available.
+Each member manages mailbox contribution through `/crm/email-privacy`;
+this endpoint does not enroll mailboxes, backfill emails, or purge records.
  */
 export type patchTeamCrmSettingsResponse200 = {
   data: PatchTeamCrmSettingsResponse;
@@ -5952,6 +6494,391 @@ export const getUserInvites = async (
 };
 
 /**
+ * @summary The caller's team's agents, with their computers' status.
+ */
+export type listTeamAgentsResponse200 = {
+  data: TeamAgents;
+  status: 200;
+};
+
+export type listTeamAgentsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamAgentsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamAgentsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listTeamAgentsResponseSuccess = listTeamAgentsResponse200 & {
+  headers: Headers;
+};
+export type listTeamAgentsResponseError = (
+  | listTeamAgentsResponse401
+  | listTeamAgentsResponse403
+  | listTeamAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listTeamAgentsResponse =
+  | listTeamAgentsResponseSuccess
+  | listTeamAgentsResponseError;
+
+export const getListTeamAgentsUrl = () => {
+  return `/team_agents`;
+};
+
+export const listTeamAgents = async (
+  options?: RequestInit
+): Promise<listTeamAgentsResponse> => {
+  const res = await fetch(getListTeamAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamAgentsResponse;
+};
+
+/**
+ * @summary Invite an agent teammate and buy its computer. Requires a team admin or
+owner using their own credential. The agent comes back `provisioning`.
+ */
+export type createTeamAgentResponse201 = {
+  data: TeamAgent;
+  status: 201;
+};
+
+export type createTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createTeamAgentResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type createTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type createTeamAgentResponseSuccess = createTeamAgentResponse201 & {
+  headers: Headers;
+};
+export type createTeamAgentResponseError = (
+  | createTeamAgentResponse400
+  | createTeamAgentResponse401
+  | createTeamAgentResponse403
+  | createTeamAgentResponse409
+  | createTeamAgentResponse500
+  | createTeamAgentResponse502
+) & {
+  headers: Headers;
+};
+
+export type createTeamAgentResponse =
+  | createTeamAgentResponseSuccess
+  | createTeamAgentResponseError;
+
+export const getCreateTeamAgentUrl = () => {
+  return `/team_agents`;
+};
+
+export const createTeamAgent = async (
+  createTeamAgent: CreateTeamAgent,
+  options?: RequestInit
+): Promise<createTeamAgentResponse> => {
+  const res = await fetch(getCreateTeamAgentUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createTeamAgent),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamAgentResponse;
+};
+
+/**
+ * @summary Remove an agent teammate: release its computer, take it off the team and
+delete its repository and account. Requires a team admin or owner.
+ */
+export type deleteTeamAgentResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type deleteTeamAgentResponseSuccess = deleteTeamAgentResponse204 & {
+  headers: Headers;
+};
+export type deleteTeamAgentResponseError = (
+  | deleteTeamAgentResponse400
+  | deleteTeamAgentResponse401
+  | deleteTeamAgentResponse403
+  | deleteTeamAgentResponse404
+  | deleteTeamAgentResponse500
+  | deleteTeamAgentResponse502
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamAgentResponse =
+  | deleteTeamAgentResponseSuccess
+  | deleteTeamAgentResponseError;
+
+export const getDeleteTeamAgentUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}`;
+};
+
+export const deleteTeamAgent = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<deleteTeamAgentResponse> => {
+  const res = await fetch(getDeleteTeamAgentUrl(agentUserId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamAgentResponse;
+};
+
+/**
+ * @summary The agent's call voice, as committed in its workspace repository.
+Requires a team admin or owner.
+ */
+export type getTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type getTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamAgentVoiceResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentVoiceResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentVoiceResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getTeamAgentVoiceResponseSuccess = getTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentVoiceResponseError = (
+  | getTeamAgentVoiceResponse400
+  | getTeamAgentVoiceResponse401
+  | getTeamAgentVoiceResponse403
+  | getTeamAgentVoiceResponse404
+  | getTeamAgentVoiceResponse500
+  | getTeamAgentVoiceResponse502
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentVoiceResponse =
+  | getTeamAgentVoiceResponseSuccess
+  | getTeamAgentVoiceResponseError;
+
+export const getGetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const getTeamAgentVoice = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentVoiceResponse> => {
+  const res = await fetch(getGetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentVoiceResponse;
+};
+
+/**
+ * @summary Change the agent's call voice: a commit to its workspace repository that
+its next call picks up. Requires a team admin or owner.
+ */
+export type setTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type setTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type setTeamAgentVoiceResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setTeamAgentVoiceResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setTeamAgentVoiceResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type setTeamAgentVoiceResponseSuccess = setTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type setTeamAgentVoiceResponseError = (
+  | setTeamAgentVoiceResponse400
+  | setTeamAgentVoiceResponse401
+  | setTeamAgentVoiceResponse403
+  | setTeamAgentVoiceResponse404
+  | setTeamAgentVoiceResponse500
+  | setTeamAgentVoiceResponse502
+) & {
+  headers: Headers;
+};
+
+export type setTeamAgentVoiceResponse =
+  | setTeamAgentVoiceResponseSuccess
+  | setTeamAgentVoiceResponseError;
+
+export const getSetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const setTeamAgentVoice = async (
+  agentUserId: string,
+  agentVoice: AgentVoice,
+  options?: RequestInit
+): Promise<setTeamAgentVoiceResponse> => {
+  const res = await fetch(getSetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentVoice),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamAgentVoiceResponse;
+};
+
+/**
  * Safe to repeat until the agent confirms it saved the token: a reload replaces
 the key, and a failed join stays pending for the next attempt.
  * @summary Finishes an agent's signup: joins the team that invited it and mints its
@@ -6842,6 +7769,11 @@ export type putProfilePictureResponse401 = {
   status: 401;
 };
 
+export type putProfilePictureResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -6852,6 +7784,7 @@ export type putProfilePictureResponseSuccess = putProfilePictureResponse200 & {
 };
 export type putProfilePictureResponseError = (
   | putProfilePictureResponse401
+  | putProfilePictureResponse429
   | putProfilePictureResponse500
 ) & {
   headers: Headers;
@@ -6919,6 +7852,11 @@ export type putProfilePictureFileResponse404 = {
   status: 404;
 };
 
+export type putProfilePictureFileResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureFileResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -6932,6 +7870,7 @@ export type putProfilePictureFileResponseError = (
   | putProfilePictureFileResponse400
   | putProfilePictureFileResponse401
   | putProfilePictureFileResponse404
+  | putProfilePictureFileResponse429
   | putProfilePictureFileResponse500
 ) & {
   headers: Headers;
@@ -6987,6 +7926,16 @@ export type createProfilePictureUploadResponse401 = {
   status: 401;
 };
 
+export type createProfilePictureUploadResponse413 = {
+  data: ErrorResponse;
+  status: 413;
+};
+
+export type createProfilePictureUploadResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type createProfilePictureUploadResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -6999,6 +7948,8 @@ export type createProfilePictureUploadResponseSuccess =
 export type createProfilePictureUploadResponseError = (
   | createProfilePictureUploadResponse400
   | createProfilePictureUploadResponse401
+  | createProfilePictureUploadResponse413
+  | createProfilePictureUploadResponse429
   | createProfilePictureUploadResponse500
 ) & {
   headers: Headers;

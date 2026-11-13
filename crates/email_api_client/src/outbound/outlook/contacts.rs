@@ -1,6 +1,5 @@
 use std::collections::{HashSet, VecDeque};
 
-use reqwest::Method;
 use serde::Deserialize;
 
 use super::{OutlookApiClientRepository, transport::invalid_response, wire};
@@ -41,7 +40,7 @@ impl MailboxAddressBookReader for OutlookApiClientRepository {
         let mut queue = VecDeque::from([(self.endpoint(&["me", "contactFolders"])?, true)]);
         while let Some((url, root)) = queue.pop_front() {
             if !visited_pages.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("contactFolders pages repeat"));
             }
             let page: wire::Page<Folder> = self.get(token, url).await?;
             for folder in page.value {
@@ -106,7 +105,11 @@ impl MailboxAddressBookReader for OutlookApiClientRepository {
         let position = match (page.next, page.delta) {
             (Some(next), None) => StreamPosition::Continue(StreamToken::new(next)),
             (None, Some(delta)) => StreamPosition::Checkpoint(StreamToken::new(delta)),
-            _ => return Err(invalid_response()),
+            _ => {
+                return Err(invalid_response(
+                    "contacts delta page lacks one of nextLink and deltaLink",
+                ));
+            }
         };
         let (StreamPosition::Continue(next) | StreamPosition::Checkpoint(next)) = &position;
         self.continuation(next)?;
@@ -120,7 +123,8 @@ impl MailboxAddressBookReader for OutlookApiClientRepository {
                 let mut emails: Vec<_> = contact
                     .email_addresses
                     .into_iter()
-                    .map(|address| address.address.trim().to_lowercase())
+                    .filter_map(|address| address.address)
+                    .map(|address| address.trim().to_lowercase())
                     .filter(|address| {
                         !address.is_empty()
                             && address.len() < 310
@@ -183,9 +187,9 @@ impl MailboxAddressBookReader for OutlookApiClientRepository {
             ])?,
             None => self.endpoint(&["me", "photo", "$value"])?,
         };
-        let mut response = match self.request(token, Method::GET, url, None).await {
-            Err(EmailApiError::NotFound) => return Ok(None),
-            response => response?,
+        // Most contacts have no photo, which Graph answers with a 404.
+        let Some(mut response) = self.optional_request(token, url).await? else {
+            return Ok(None);
         };
         let content_type = response
             .headers()
@@ -193,24 +197,28 @@ impl MailboxAddressBookReader for OutlookApiClientRepository {
             .and_then(|header| header.to_str().ok())
             .and_then(|value| value.split(';').next())
             .map(str::to_owned)
-            .ok_or_else(invalid_response)?;
+            .ok_or_else(|| invalid_response("contact photo has no Content-Type"))?;
         if !matches!(
             content_type.as_str(),
             "image/jpeg" | "image/png" | "image/gif" | "image/webp"
         ) {
-            return Err(invalid_response());
+            return Err(invalid_response("contact photo is not an image"));
         }
         const MAX_PHOTO_SIZE: usize = 4 * 1024 * 1024;
         if response
             .content_length()
             .is_some_and(|size| size > MAX_PHOTO_SIZE as u64)
         {
-            return Err(invalid_response());
+            return Err(invalid_response("contact photo is too large"));
         }
         let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(|_| invalid_response())? {
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| invalid_response("contact photo was cut off"))?
+        {
             if bytes.len() + chunk.len() > MAX_PHOTO_SIZE {
-                return Err(invalid_response());
+                return Err(invalid_response("contact photo is too large"));
             }
             bytes.extend_from_slice(&chunk);
         }

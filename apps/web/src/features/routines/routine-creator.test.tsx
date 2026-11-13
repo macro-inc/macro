@@ -1,5 +1,7 @@
+import { queryClient } from '@queries/client';
 import type {
   ActionConfiguration,
+  DraftJob,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
@@ -11,33 +13,93 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import { createSignal, type JSX } from 'solid-js';
+import { match } from 'ts-pattern';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster } from '../agents-view/core/roster';
+import {
+  createDraftsOnScreen,
+  DraftsOnScreenContext,
+} from './context/drafts-on-screen';
 import { getDefaultTimezone } from './core/routine-draft';
+import { newRoutineDraft } from './core/routine-templates';
 import { loadRoutineComposerDraft } from './draft-storage';
+import { applyDraftUpdate } from './queries/draft-jobs-sync';
+import { scheduledActionKeys } from './queries/keys';
 import { RoutineCreator } from './routine-creator';
+import { startRoutineDraft } from './routine-draft-start';
+import { RoutineNew } from './routine-new';
+
+import { TEST_CATALOG, testTemplate } from './tests/catalog';
 
 const host = vi.hoisted(() => ({
   create: vi.fn<(body: ActionConfiguration) => Promise<ScheduledAction>>(),
   openWithSplit: vi.fn(),
   created: vi.fn(),
+  flags: new Set<string>(),
+  cancelled: vi.fn(),
+  started: vi.fn(),
   success: vi.fn(),
   alert: vi.fn(),
   editorMount: vi.fn(),
   githubLinked: true as boolean | undefined,
   connectGithub: vi.fn(),
 }));
+const drafts = vi.hoisted(() => ({
+  start: vi.fn(),
+  list: vi.fn(),
+  discard: vi.fn(),
+}));
+// The page's own client, without the app's persistence.
+vi.mock('@queries/client', async (importOriginal) => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return {
+    ...(await importOriginal<typeof import('@queries/client')>()),
+    queryClient: new QueryClient(),
+  };
+});
+vi.mock('@service-scheduled-action/client', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@service-scheduled-action/client')>();
+  return {
+    ...actual,
+    scheduledActionClient: {
+      ...actual.scheduledActionClient,
+      startRoutineDraftJob: drafts.start,
+      listRoutineDraftJobs: drafts.list,
+      discardRoutineDraftJob: drafts.discard,
+    },
+  };
+});
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-routine-conditions',
+    enabled: host.flags.has(flag.key),
   }),
+}));
+vi.mock('./queries/catalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./queries/catalog')>()),
+  useRoutineCatalog: () => () => TEST_CATALOG,
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: host.openWithSplit }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({ handle: { close: vi.fn() } }),
+  useSplitPanel: () => undefined,
+  useSplitPanelOrThrow: () => ({
+    handle: { close: vi.fn(), setDisplayName: vi.fn() },
+    setTitleFileMenuRef: vi.fn(),
+  }),
+  returnSplitToRecentListView: vi.fn(),
+}));
+vi.mock('@components/app/split-layout/components/HeaderIsland', () => ({
+  HeaderIsland: (props: { children: JSX.Element }) => props.children,
+}));
+vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
+  SplitHeaderLeft: (props: { children: JSX.Element }) => props.children,
+}));
+vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
+  SplitTitleFileMenu: (props: { children: JSX.Element }) => props.children,
 }));
 vi.mock('@queries/agent-repositories/repositories', () => ({
   useAgentRepositoriesQuery: () => ({
@@ -87,12 +149,34 @@ vi.mock('./queries/schedules', async () => {
     useCreateScheduleMutation: (callbacks: {
       onSuccess: (schedule: ScheduledAction) => Promise<void>;
       onError: (error: Error) => void;
-    }) => useMutation(() => ({ mutationFn: host.create, ...callbacks })),
+    }) =>
+      useMutation(() => ({
+        mutationFn: (request: { body: ActionConfiguration }) =>
+          host.create(request.body),
+        ...callbacks,
+      })),
   };
 });
 
 // Keep the real trigger menu, picker, model discovery adapter, storage, and mutation
 // lifecycle. The editor double exposes initialValue and detects any remount.
+vi.mock('./routine-ai-composer', () => ({
+  RoutineAiComposer: () => null,
+  useComposerContext: () => () => ({}),
+}));
+// Steps are added by hand here; AI adding steps is covered with the steps.
+vi.mock('./routine-step-author', () => ({
+  createRoutineStepAuthor: undefined,
+}));
+vi.mock('./routine-step-pickers', () => ({
+  routineToolSlots: {
+    LabelPicker: () => null,
+    TagPicker: () => null,
+    ChannelPicker: () => null,
+    AssigneePicker: () => null,
+    FolderPicker: () => null,
+  },
+}));
 vi.mock('./routine-prompt-editor', () => ({
   RoutinePromptEditor: (props: {
     initialValue: string;
@@ -158,16 +242,29 @@ vi.mock('@queries/agents/models', () => ({
   }),
 }));
 
+class NoResize {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 let styles: HTMLStyleElement;
 beforeEach(() => {
   vi.clearAllMocks();
   host.githubLinked = true;
+  host.flags = new Set([
+    'enable-routine-conditions',
+    'enable-event-routines',
+    'enable-routine-starter-templates',
+  ]);
   localStorage.clear();
   setCatalogState('success');
   styles = document.createElement('style');
   styles.textContent = '* { animation-name: none; transition-duration: 0s; }';
   document.head.append(styles);
   vi.stubGlobal('scrollTo', vi.fn());
+  // The page measures its pane; every test unstubs globals afterwards.
+  vi.stubGlobal('ResizeObserver', NoResize);
 });
 afterEach(() => {
   cleanup();
@@ -182,10 +279,16 @@ async function mount(): Promise<void> {
   });
   render(() => (
     <QueryClientProvider client={client}>
-      <RoutineCreator onCreated={host.created} />
+      <RoutineNew onCreated={host.created} onCancel={host.cancelled} />
     </QueryClientProvider>
   ));
+  // A blank page starts without steps; an unsent draft resumes as it was.
+  if (!screen.queryByRole('textbox', { name: 'Instructions' })) {
+    fireEvent.click(await screen.findByRole('button', { name: 'Add step' }));
+    fireEvent.click(await screen.findByRole('option', { name: /^Ask AI/ }));
+  }
   await screen.findByRole('textbox', { name: 'Routine name' });
+  await screen.findByRole('textbox', { name: 'Instructions' });
 }
 
 function inputPrompt(value = 'Summarize updates'): HTMLTextAreaElement {
@@ -236,10 +339,29 @@ async function selectTarget(
 function create(): void {
   fireEvent.click(screen.getByRole('button', { name: 'Create routine' }));
 }
+/** Kobalte menus open from the keyboard in jsdom. */
+function press(element: HTMLElement, key: string) {
+  element.focus();
+  fireEvent.keyDown(element, { key });
+}
+/** Add trigger, then a trigger from its type's submenu. */
+function chooseTrigger(type: string, name: string) {
+  press(screen.getAllByRole('button', { name: 'Add trigger' })[0]!, 'Enter');
+  press(
+    screen.getByRole('menuitem', { name: type, hidden: true }),
+    'ArrowRight'
+  );
+  press(
+    screen.getByRole('menuitem', {
+      name: new RegExp(`^${name}`),
+      hidden: true,
+    }),
+    'Enter'
+  );
+}
 async function addScheduled(name = 'Daily') {
   const add = screen.getByRole('button', { name: 'Add trigger' });
-  fireEvent.click(add);
-  fireEvent.click(await screen.findByRole('button', { name: 'Scheduled' }));
+  chooseTrigger('Schedule', 'On a schedule');
   fireEvent.click(await screen.findByRole('radio', { name }));
   fireEvent.click(
     within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
@@ -251,10 +373,7 @@ async function addScheduled(name = 'Daily') {
 }
 async function addDocumentEvent() {
   const add = screen.getByRole('button', { name: 'Add trigger' });
-  fireEvent.click(add);
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Document created' })
-  );
+  chooseTrigger('Documents', 'Document created');
   fireEvent.click(
     within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
       'button',
@@ -321,16 +440,12 @@ describe('routine composer execution selection', () => {
     await mount();
     inputPrompt('Summarize updates');
     await addScheduled();
-    const visibility = screen.getByRole('button', { name: 'Runs hidden' });
-    visibility.focus();
-    fireEvent.keyDown(visibility, { key: 'Enter' });
-    const show = await screen.findByRole('menuitemradio', {
-      name: 'Show runs',
+    const visibility = screen.getByRole<HTMLInputElement>('switch', {
+      name: 'Show runs in Home and Agents',
     });
-    fireEvent.keyDown(show, { key: 'Enter' });
-    expect(
-      await screen.findByRole('button', { name: 'Runs shown' })
-    ).toBeTruthy();
+    expect(visibility.checked).toBe(false);
+    fireEvent.click(visibility);
+    expect(visibility.checked).toBe(true);
     create();
     await waitFor(() => expect(host.create).toHaveBeenCalledOnce());
     expect(host.create.mock.calls[0][0]).toMatchObject({
@@ -425,6 +540,8 @@ describe('routine composer execution selection', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(loadRoutineComposerDraft()).toBeNull();
     cleanup();
+    // Nothing was kept, so the next routine starts fresh.
+    vi.useRealTimers();
     await mount();
     expect(
       screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
@@ -493,13 +610,21 @@ describe('routine composer execution selection', () => {
     host.create.mockImplementation(async (body) => created(body));
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    for (const name of ['Channels', 'Documents', 'Tasks', 'Email']) {
-      expect(await screen.findByText(name)).toBeTruthy();
-    }
+    press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
     for (const name of [
-      'Scheduled',
-      'Run once',
+      'Schedule',
+      'Email',
+      'Tasks',
+      'Channels',
+      'Documents',
+    ]) {
+      expect(screen.getByRole('menuitem', { name, hidden: true })).toBeTruthy();
+    }
+    // Searching reaches every submenu's events.
+    const search = screen.getByRole('textbox', { name: 'Search triggers' });
+    for (const name of [
+      'On a schedule',
+      'Once',
       'Channel created',
       'Message sent in channel',
       '@ mentioned in channel',
@@ -515,24 +640,36 @@ describe('routine composer execution selection', () => {
       'Any property changed',
       'New email received',
     ]) {
-      expect(screen.getByRole('button', { name })).toBeTruthy();
+      fireEvent.input(search, { target: { value: name } });
+      expect(
+        screen.getByRole('menuitem', {
+          name: new RegExp(`^${name}`),
+          hidden: true,
+        })
+      ).toBeTruthy();
     }
     for (const name of [
       'Document details changed',
       'Message edited',
       'Attachment added',
     ]) {
-      expect(screen.queryByRole('button', { name })).toBeNull();
+      fireEvent.input(search, { target: { value: name } });
+      expect(
+        screen.queryByRole('menuitem', {
+          name: new RegExp(`^${name}`),
+          hidden: true,
+        })
+      ).toBeNull();
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Task created' }));
+    fireEvent.input(search, { target: { value: 'Task created' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
         'button',
         { name: 'Add trigger' }
       )
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'New email received' }));
+    chooseTrigger('Email', 'New email received');
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
         'button',
@@ -556,11 +693,10 @@ describe('routine composer execution selection', () => {
     host.create.mockImplementation(async (body) => created(body));
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'New email received' })
-    );
-    const condition = screen.getByRole('textbox', { name: 'Only run if' });
+    chooseTrigger('Email', 'New email received');
+    const condition = screen.getByRole('textbox', {
+      name: 'Only run if AI says yes',
+    });
     expect(condition.getAttribute('placeholder')).toBe(
       'Is this email an invoice or a receipt?'
     );
@@ -573,8 +709,11 @@ describe('routine composer execution selection', () => {
         { name: 'Add trigger' }
       )
     );
+    // The page's trigger reads as a sentence, its condition hanging below.
     expect(
-      screen.getByTitle('New email received · if Is this email an invoice?')
+      screen.getByRole('button', {
+        name: 'Edit condition: Is this email an invoice?',
+      })
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
     await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
@@ -595,11 +734,8 @@ describe('routine composer execution selection', () => {
     host.create.mockImplementation(async (body) => created(body));
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Workflow failed' })
-    );
-    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    chooseTrigger('GitHub', 'Workflow failed');
+    const panel = await screen.findByRole('dialog', { name: 'Add trigger' });
     fireEvent.click(
       within(panel).getByRole('checkbox', { name: 'macro-inc/macro' })
     );
@@ -614,9 +750,12 @@ describe('routine composer execution selection', () => {
     fireEvent.input(values[1], { target: { value: 'CI' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
     expect(
-      screen.getByRole('button', { name: 'Edit Workflow failed trigger' })
+      screen.getByRole('button', { name: 'Change Workflow failed trigger' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Repositories for Workflow failed' })
         .textContent
-    ).toContain('Workflow failed · macro-inc/macro');
+    ).toContain('macro-inc/macro');
     fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
     await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
     expect(host.create.mock.calls[0][0]).toMatchObject({
@@ -648,39 +787,73 @@ describe('routine composer execution selection', () => {
     host.githubLinked = false;
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    const panel = await screen.findByRole('dialog', { name: 'Add trigger' });
-    expect(
-      within(panel).queryByRole('button', { name: 'Workflow failed' })
-    ).toBeNull();
-    expect(
-      within(panel).queryByRole('button', { name: 'Webhook received' })
-    ).toBeNull();
-    fireEvent.click(
-      within(panel).getByRole('button', { name: 'Connect GitHub' })
+    press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
+    press(
+      screen.getByRole('menuitem', { name: 'GitHub', hidden: true }),
+      'ArrowRight'
     );
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Connect GitHub',
+        hidden: true,
+      })
+    );
+    expect(
+      screen.queryByRole('menuitem', {
+        name: /^Workflow failed/,
+        hidden: true,
+      })
+    ).toBeNull();
     expect(host.connectGithub).toHaveBeenCalledOnce();
+  });
+
+  it('offers only schedules without the event routines flag', async () => {
+    host.flags.delete('enable-event-routines');
+    await mount();
+    inputPrompt();
+    press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
+    expect(
+      screen.getByRole('menuitem', { name: 'Schedule', hidden: true })
+    ).toBeTruthy();
+    for (const name of ['Email', 'Tasks', 'GitHub']) {
+      expect(screen.queryByRole('menuitem', { name, hidden: true })).toBeNull();
+    }
+    // Searching finds no events either.
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search triggers' }), {
+      target: { value: 'document' },
+    });
+    expect(
+      screen.queryByRole('menuitem', {
+        name: /^Document created/,
+        hidden: true,
+      })
+    ).toBeNull();
   });
 
   it('keeps trigger edits local until confirmed and leaves an add chip', async () => {
     await mount();
     const editor = inputPrompt();
     await addScheduled();
-    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day at/ }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Run time' }), {
       target: { value: '3:30pm' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Edit trigger' })).getByRole(
+        'button',
+        { name: 'Cancel' }
+      )
+    );
     expect(
-      screen.getByRole('button', { name: 'Edit Every day, 9:00 AM trigger' })
+      screen.getByRole('button', { name: 'Edit Every day at 9:00 AM trigger' })
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day at/ }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Run time' }), {
       target: { value: '3:30pm' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(
-      screen.getByRole('button', { name: 'Edit Every day, 3:30 PM trigger' })
+      screen.getByRole('button', { name: 'Edit Every day at 3:30 PM trigger' })
     ).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Add trigger' })).toHaveLength(
       1
@@ -694,8 +867,7 @@ describe('routine composer execution selection', () => {
     await mount();
     inputPrompt();
     const before = Date.now();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
+    chooseTrigger('Schedule', 'Once');
     const date = screen.getByRole('textbox', { name: 'Run once date' });
     fireEvent.input(date, { target: { value: 'in 2 hours' } });
     fireEvent.keyDown(date, { key: 'Enter' });
@@ -722,8 +894,7 @@ describe('routine composer execution selection', () => {
   it('configures one-off dates and the calendar in the same panel', async () => {
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
+    chooseTrigger('Schedule', 'Once');
     const panel = screen.getByRole('dialog', { name: 'Add trigger' });
     const confirm = () =>
       within(panel).getByRole('button', { name: 'Add trigger' });
@@ -764,15 +935,290 @@ describe('routine composer execution selection', () => {
     inputPrompt();
     await addScheduled('Daily');
     await addDocumentEvent();
-    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day at/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove trigger' }));
     cleanup();
     await mount();
     expect(
-      screen.getByRole('button', { name: 'Edit Document created trigger' })
+      screen.getByRole('button', { name: 'Change Document created trigger' })
     ).toBeTruthy();
     expect(loadRoutineComposerDraft()?.triggers).toMatchObject([
       { kind: 'event', events: ['document.created'] },
     ]);
+  });
+});
+
+describe('new routine', () => {
+  function openNewRoutine() {
+    const client = new QueryClient();
+    render(() => (
+      <QueryClientProvider client={client}>
+        <RoutineCreator onStart={host.started} />
+      </QueryClientProvider>
+    ));
+  }
+
+  it('starts a template on the new routine’s page, unsaved', async () => {
+    openNewRoutine();
+    expect(screen.queryByRole('button', { name: 'Create routine' })).toBeNull();
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Start a routine from Morning brief',
+      })
+    );
+    expect(host.started).toHaveBeenCalledOnce();
+    expect(host.create).not.toHaveBeenCalled();
+    cleanup();
+    await mount();
+    expect(
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'Routine name' })
+        .value
+    ).toBe('Morning brief');
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
+        .value
+    ).toMatch(/Summarize my day/);
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', {
+        name: 'Routine description',
+      }).value
+    ).toBe('Weekdays at 9, sum up my day');
+  });
+
+  it('offers no templates while Macro’s templates are flagged off', async () => {
+    host.flags.delete('enable-routine-starter-templates');
+    openNewRoutine();
+    await screen.findByRole('button', { name: 'Start fresh' });
+    expect(screen.queryByRole('region', { name: 'Templates' })).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Start a routine from Morning brief',
+      })
+    ).toBeNull();
+  });
+
+  it('starts fresh on a blank page', async () => {
+    openNewRoutine();
+    fireEvent.click(await screen.findByRole('button', { name: 'Start fresh' }));
+    expect(host.started).toHaveBeenCalledOnce();
+    expect(loadRoutineComposerDraft()).toMatchObject({
+      name: '',
+      triggers: [],
+      steps: [],
+    });
+  });
+
+  it('starts over when a new routine starts while its page is open', async () => {
+    await mount();
+    const name = screen.getByRole<HTMLInputElement>('textbox', {
+      name: 'Routine name',
+    });
+    fireEvent.input(name, { target: { value: 'Old idea' } });
+    fireEvent.blur(name);
+    inputPrompt('An unsaved prompt');
+    startRoutineDraft(
+      newRoutineDraft(testTemplate('brief'), {
+        defaultModel: 'claude-sonnet-4-6',
+        codeSteps: false,
+      })
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole<HTMLInputElement>('textbox', { name: 'Routine name' })
+          .value
+      ).toBe('Morning brief')
+    );
+    // The replaced page doesn't write its draft over the new one.
+    expect(loadRoutineComposerDraft()?.name).toBe('Morning brief');
+  });
+
+  it('discards the draft on Cancel', async () => {
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    // A routine with anything in it asks before it is dropped.
+    expect(host.cancelled).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    expect(host.cancelled).toHaveBeenCalledOnce();
+    expect(loadRoutineComposerDraft()).toBeNull();
+  });
+});
+
+describe('new routine drafting in the background', () => {
+  const REQUEST = 'When an invoice arrives, label it Finance.';
+  const KEY = scheduledActionKeys.draftJobs.queryKey;
+  type State = 'drafting' | 'ready' | 'failed';
+  const finished = { finishedAt: '2026-11-12T10:00:30Z' };
+  const outcome = (state: State) =>
+    match(state)
+      .with('drafting', () => ({}))
+      .with('ready', () => ({
+        ...finished,
+        draft: {
+          outcome: 'routine',
+          name: 'Invoices to Finance',
+          trigger: {
+            type: 'events',
+            filters: [{ events: ['email.message_received'] }],
+          },
+          steps: [
+            {
+              type: 'code',
+              id: 'label_finance',
+              title: 'Label it Finance',
+              summary: 'Adds the Finance label.',
+              source: 'export async function main() {}',
+            },
+          ],
+          problems: [],
+          created: [],
+        },
+      }))
+      .with('failed', () => ({
+        ...finished,
+        message: 'There’s no label named Finance.',
+        created: [],
+      }))
+      .exhaustive();
+  const job = (id: string, state: State, stage = 'started') =>
+    ({
+      id,
+      state,
+      request: { kind: 'routine', description: REQUEST },
+      progress: { stage },
+      createdAt: '2026-11-12T10:00:00Z',
+      ...outcome(state),
+    }) as DraftJob;
+
+  // The server's drafts. Each test drafts under its own id: a page keeps
+  // the ids it discarded out of its list.
+  let server: DraftJob[] = [];
+  let count = 0;
+  let id = '';
+  /** The server moves the draft on and says so. */
+  function report(state: State, stage: string) {
+    server = server.map((each) =>
+      each.id === id ? job(id, state, stage) : each
+    );
+    applyDraftUpdate({ draftId: id, state, progress: { stage } });
+  }
+
+  beforeEach(() => {
+    host.flags.add('enable-routine-background-drafts');
+    queryClient.clear();
+    server = [];
+    id = `draft-${++count}`;
+    drafts.list.mockImplementation(async () => ok(structuredClone(server)));
+    drafts.start.mockImplementation(async () => {
+      server = [job(id, 'drafting'), ...server];
+      return ok(job(id, 'drafting'));
+    });
+    drafts.discard.mockImplementation(
+      async ({ draftId }: { draftId: string }) => {
+        server = server.filter((each) => each.id !== draftId);
+        return ok(undefined);
+      }
+    );
+  });
+
+  function openNewRoutine() {
+    render(() => (
+      <QueryClientProvider client={queryClient}>
+        <DraftsOnScreenContext.Provider value={createDraftsOnScreen()}>
+          <RoutineCreator onStart={host.started} />
+        </DraftsOnScreenContext.Provider>
+      </QueryClientProvider>
+    ));
+  }
+
+  async function draftIt() {
+    openNewRoutine();
+    fireEvent.input(
+      await screen.findByRole('textbox', { name: 'Describe your routine' }),
+      { target: { value: REQUEST } }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Draft it' }));
+    return await screen.findByRole('region', { name: 'Drafting your routine' });
+  }
+
+  it('shows how the draft is going in place of the box', async () => {
+    const progress = await draftIt();
+    expect(within(progress).getByText(REQUEST)).toBeTruthy();
+    expect(
+      screen.queryByRole('region', { name: 'Describe your routine' })
+    ).toBeNull();
+    report('drafting', 'writing');
+    await waitFor(() =>
+      expect(within(progress).getByText('Writing the steps…')).toBeTruthy()
+    );
+    // Nothing opens, and nothing else is asked, until the draft is ready.
+    expect(host.started).not.toHaveBeenCalled();
+    expect(drafts.start).toHaveBeenCalledOnce();
+  });
+
+  it('opens the draft on the new routine’s page once it is ready', async () => {
+    await draftIt();
+    report('ready', 'checked');
+    await waitFor(() => expect(host.started).toHaveBeenCalledOnce());
+    expect(loadRoutineComposerDraft()).toMatchObject({
+      name: 'Invoices to Finance',
+    });
+    // Handed over, the job is done with.
+    expect(drafts.discard).toHaveBeenCalledWith({ draftId: id });
+  });
+
+  it('puts the request back with why, when the draft fails', async () => {
+    await draftIt();
+    report('failed', 'writing');
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'There’s no label named Finance.'
+    );
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', {
+        name: 'Describe your routine',
+      }).value
+    ).toBe(REQUEST);
+    expect(host.started).not.toHaveBeenCalled();
+  });
+
+  it('cancels the draft and keeps the request', async () => {
+    const progress = await draftIt();
+    fireEvent.click(
+      within(progress).getByRole('button', { name: 'Cancel draft' })
+    );
+    expect(
+      (
+        await screen.findByRole<HTMLTextAreaElement>('textbox', {
+          name: 'Describe your routine',
+        })
+      ).value
+    ).toBe(REQUEST);
+    expect(drafts.discard).toHaveBeenCalledWith({ draftId: id });
+    expect(queryClient.getQueryData(KEY)).toEqual([]);
+  });
+
+  it('picks up a draft still going when it opens again', async () => {
+    server = [job(id, 'drafting', 'writing')];
+    openNewRoutine();
+    const progress = await screen.findByRole('region', {
+      name: 'Drafting your routine',
+    });
+    expect(within(progress).getByText(REQUEST)).toBeTruthy();
+    expect(drafts.start).not.toHaveBeenCalled();
+  });
+
+  it('offers a draft that finished while it was closed', async () => {
+    server = [job(id, 'ready', 'checked')];
+    openNewRoutine();
+    const ready = await screen.findByRole('group', {
+      name: 'Routine draft ready',
+    });
+    expect(within(ready).getByText(/Invoices to Finance/)).toBeTruthy();
+    // The box stays, for something new.
+    expect(
+      screen.getByRole('region', { name: 'Describe your routine' })
+    ).toBeTruthy();
+    fireEvent.click(within(ready).getByRole('button', { name: 'Review' }));
+    expect(host.started).toHaveBeenCalledOnce();
   });
 });

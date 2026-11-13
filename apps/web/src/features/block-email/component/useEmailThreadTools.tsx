@@ -1,5 +1,4 @@
 import {
-  ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -18,7 +17,7 @@ import {
 } from '@app/features/next-soup/utils';
 import { EmailReminderStatus } from '@app/features/reminders/email-reminder-status';
 import { t } from '@app/lib/i18n';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -30,7 +29,6 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
@@ -49,6 +47,7 @@ import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
+import type { JSX } from 'solid-js';
 
 export type EmailThreadToolsOptions = {
   id: string;
@@ -61,6 +60,22 @@ export type EmailThreadToolsOptions = {
   onDeleted?: () => void;
   listNavigation?: EmailThreadListNavigation;
 };
+
+/** Read and done state for a thread header's toggles, with its reminder. */
+export type EmailThreadControlState = {
+  reminder?: JSX.Element;
+  isOwnThread: boolean;
+  isDone: boolean;
+  isUnread: boolean;
+  canToggleDone: boolean;
+  onToggleDone: () => void;
+  onToggleUnread: () => void;
+};
+
+/** Every thread action by name. Each view lists the ones its menu offers. */
+export type EmailThreadMenuActions = ReturnType<
+  typeof useEmailThreadTools
+>['actions'];
 
 export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   const emailCtx = useEmailThreadState();
@@ -187,6 +202,8 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     }
 
     const toastId = toast.success('Moved to Trash', {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         {
           label: 'Undo',
@@ -231,15 +248,15 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     focusTarget: getShareDrawerRecipientInput,
   };
 
-  const emailActions: BlockTool[] = [
-    {
+  const actions = {
+    markDone: {
       label: 'Mark Done',
       icon: CheckIcon,
       action: toggleMarkDone,
       condition: () => isOwnThread() && !isDone(),
       hotkeyToken: TOKENS.entity.action.markDone,
     },
-    {
+    markNotDone: {
       label: 'Mark Not Done',
       icon: CheckBoldIcon,
       action: toggleMarkDone,
@@ -247,21 +264,21 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         isOwnThread() && isDone() && emailCtx.canMarkThreadNotDone(),
       hotkeyToken: TOKENS.entity.action.markNotDone,
     },
-    {
+    markUnread: {
       label: 'Mark Unread',
       icon: EnvelopeSimpleOpenIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && !emailCtx.isThreadMarkedUnread(),
       hotkeyToken: TOKENS.entity.action.markUnread,
     },
-    {
+    markRead: {
       label: 'Mark Read',
       icon: EnvelopeSimpleIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && emailCtx.isThreadMarkedUnread(),
       hotkeyToken: TOKENS.entity.action.markRead,
     },
-    {
+    askMacro: {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => {
@@ -278,13 +295,13 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       },
       condition: () => !!emailCtx.thread()?.db_id,
     },
-    {
+    createTask: {
       label: 'Create task',
       icon: TaskIcon,
       action: () => props.onCreateTask?.(),
       condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
     },
-    {
+    createEvent: {
       get label() {
         return t('entityActions.createEvent');
       },
@@ -293,8 +310,8 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       condition: () => props.canCreateEvent?.() === true,
       hotkeyToken: TOKENS.email.createEvent,
     },
-    shareTool,
-    {
+    share: shareTool,
+    moveToFolder: {
       group: 'file',
       label: 'Move to folder',
       icon: ArrowRightIcon,
@@ -304,7 +321,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         return !!entity && canMoveToFolder();
       },
     },
-    {
+    downloadEml: {
       group: 'file',
       get label() {
         return t('entityActions.downloadEml');
@@ -313,7 +330,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       action: downloadEml,
       condition: () => !!emlMessage(),
     },
-    {
+    trash: {
       group: 'delete',
       label: 'Delete',
       icon: TrashIcon,
@@ -321,7 +338,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       condition: isOwnThread,
       hotkeyToken: TOKENS.email.trash,
     },
-    {
+    senderToSignal: {
       group: 'sender',
       label: 'Sender → Signal',
       icon: SignalIcon,
@@ -331,7 +348,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         emailCtx.canActOnSender() &&
         senderBucket() !== 'signal',
     },
-    {
+    senderToNoise: {
       group: 'sender',
       label: 'Sender → Noise',
       icon: NoiseIcon,
@@ -341,58 +358,27 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         emailCtx.canActOnSender() &&
         senderBucket() !== 'noise',
     },
-    {
+    blockSender: {
       group: 'sender',
       label: 'Block Sender',
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),
       condition: () => isOwnThread() && emailCtx.canActOnSender(),
     },
-  ];
-
-  const tools: BlockTool[] = [
-    {
-      label: 'Chat',
-      icon: ChatWithAgentIcon,
-      action: () => {
-        const threadId = emailCtx.thread()?.db_id;
-        if (!threadId) return;
-        fireAndForget(
-          openChatWithAgent({
-            type: 'email',
-            id: threadId,
-            name: props.title,
-          }),
-          'email-thread-tools'
-        );
-      },
-      condition: () => !!emailCtx.thread()?.db_id,
-      buttonComponent: (control) => {
-        const id = emailCtx.thread()?.db_id;
-        return id ? (
-          <ChatWithAgentButton
-            grouped={control.grouped}
-            entity={{ type: 'email', id, name: props.title }}
-          />
-        ) : null;
-      },
-    },
-    shareTool,
-  ];
+  } satisfies Record<string, BlockTool>;
 
   return {
     openShare,
     isInvite,
     emailEntity,
     permissions: () => getPermissions(emailCtx.thread()?.access_level),
-    tools,
-    menuTools: emailActions,
+    actions,
     controls: {
       get reminder() {
         const entity = emailEntity();
         return entity && isOwnThread() ? (
           <EmailReminderStatus
-            grouped={!isTouchDevice()}
+            grouped
             entity={entity}
             onSaved={async () => {
               const navigation = props.listNavigation;
@@ -418,6 +404,6 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       },
       onToggleDone: toggleMarkDone,
       onToggleUnread: toggleMarkUnread,
-    },
+    } satisfies EmailThreadControlState,
   };
 }

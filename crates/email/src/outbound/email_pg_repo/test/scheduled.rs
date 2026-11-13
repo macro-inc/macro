@@ -155,6 +155,9 @@ async fn service_authorizes_actor_and_validates_future_time(
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
         ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
+        ),
         email_repo: EmailPgRepo::new(pool),
         frecency_service: (),
         enqueuer: (),
@@ -210,6 +213,9 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
     let service = EmailServiceImpl {
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
+        ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
         email_repo: EmailPgRepo::new(pool.clone()),
         frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
@@ -322,6 +328,7 @@ fn stale_input(message: Uuid) -> ResolvedDraftInput {
         provider_thread_id: None,
         thread_db_id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
         subject: "stale autosave".into(),
+        from_name: None,
         to: vec![],
         cc: vec![],
         bcc: vec![],
@@ -514,6 +521,9 @@ async fn initial_schedule_prepares_signature_but_time_updates_preserve_content(
     let service = EmailServiceImpl {
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
+        ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
         email_repo: EmailPgRepo::new(pool.clone()),
         frecency_service: (),
@@ -783,5 +793,40 @@ async fn late_provider_upload_cannot_change_a_committed_schedule(
         .fetch_one(&pool)
         .await?
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn scheduled_delivery_keeps_the_latest_invocation_after_request_completion(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let (link, message) = identity();
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    for id in [first, second] {
+        agent_correlation::context::scope(
+            Some(id),
+            repo.change_schedule(link, message, &actor(), future(), None, 0),
+        )
+        .await?;
+    }
+    assert_eq!(agent_correlation::context::current(), None);
+    let scheduled =
+        email_db_client::messages::scheduled::get::get_scheduled_message(&pool, link, message)
+            .await?
+            .unwrap();
+    assert_eq!(scheduled.agent_correlation_id, Some(second));
+    // A later ordinary SDK schedule must not retain an earlier agent attribution.
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
+        .await?;
+    let scheduled =
+        email_db_client::messages::scheduled::get::get_scheduled_message(&pool, link, message)
+            .await?
+            .unwrap();
+    assert_eq!(scheduled.agent_correlation_id, None);
     Ok(())
 }

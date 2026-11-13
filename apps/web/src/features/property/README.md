@@ -90,6 +90,34 @@ height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
 
+## Assignee selection
+
+The system Assignees property uses the existing selected-first ordering at opening
+with available agents and the current team roster. Row positions stay stable while
+selecting. Search uses these options without contact discovery; preserve the
+existing Add/Change property and command-menu search placeholders.
+Initially selected outsiders remain visible and removable, including references
+absent from contacts. They stay searchable for re-adding during that editing
+session. Once the editor closes without them, they cannot be added again unless
+they join the team.
+
+This applies to task/project composers, property pills, side panels, bulk
+editors, and touch picker sheets. References remain `USER` values. Company owner
+stays strictly team-only, and custom people properties keep their existing pool.
+`src/lib/queries/team/members.ts` owns the shared non-suspending roster hook.
+The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster
+scope, outsider retention, and roster-status UI. Keep that policy out of
+`PropertyEntitySelector`; its empty-state content remains generic. Reuse existing
+picker ordering rather than adding Assignee-specific priority APIs. The command-menu
+composer/bulk editor lives in `editor/entity-property-editor.tsx`; both editor compositions share
+`editors/selectors/scoped-user-options.ts`.
+
+`PropertyEntitySelector` handles keyboard navigation on its search input, before
+an enclosing dropdown consumes the event. Do not move that handler to `document`:
+Kobalte can prevent the arrow key's default before a document listener runs.
+Ignore IME confirmation keys, including WebKit's key code 229; composing Escape
+must cancel composition without dismissing the popover.
+
 ## Side-panel collections
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary
@@ -152,10 +180,16 @@ Inline Tags property rows retain their compact treatment.
 
 ## Side-panel row actions
 
-Compose `PropertyRowActions.Root`, `.Pin`, and `.Remove` through children so
-callers own action order. Multi-value layouts and collections accept JSX children,
-not action render callbacks. Each collection row owns one saving signal shared
-with its collection editor and row actions.
+Compose `PropertyRowActions.Root`, `.Remove`, and `.Pin` through children, in
+that order, so the trash sits left of the pin. When the panel supports an action
+a row cannot take, the action renders an empty slot of the same size, keeping
+every row's pin in one column. Rows with an add button (multi-value layouts and
+collections) wrap the layout in `PropertyRowActions.Provider` and pass `.Remove`
+and `.Pin` as the `actionsBeforeAdd` and `actionsAfterAdd` JSX slots, so the row
+reads trash, add, pin and the add button sits next to the pin. A collection's
+add button stays one element when its first item arrives, because an open picker
+is anchored to it. Each collection row owns one saving signal shared with its
+collection editor and row actions.
 
 ## Side-panel header actions
 

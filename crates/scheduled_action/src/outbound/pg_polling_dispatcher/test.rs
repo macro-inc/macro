@@ -59,6 +59,13 @@ impl FakeRepository {
 }
 
 impl ScheduledActionRepo for FakeRepository {
+    async fn set_appearance(
+        &self,
+        _change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        anyhow::bail!("appearance writes are not supported by this execution-only adapter")
+    }
+
     async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
         Ok(action)
     }
@@ -121,7 +128,7 @@ impl ScheduledActionRepo for FakeRepository {
     async fn last_runs(
         &self,
         _: &[Uuid],
-    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
         Ok(std::collections::HashMap::new())
     }
 
@@ -200,6 +207,10 @@ fn due_action() -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
+        suggestion_id: None,
+        description: String::new(),
+        sub_routine: None,
     }
 }
 

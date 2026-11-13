@@ -1,8 +1,8 @@
 //! The attention candidate query behind Home's work feed and the
 //! notifications inbox: one keyset-paginated page merging the viewer's
 //! attention (the newest pending, i.e. unseen or seen, notification) with,
-//! when asked, their own work (latest activity that counts as work), newest
-//! first.
+//! when asked, their own work (latest activity they did themselves that
+//! counts as work; an agent's work for them does not), newest first.
 //!
 //! An item's place in the feed is `sort_at = max(attention_at, touched_at)`.
 //! The query runs two streams, each ordered by its own timestamp: the
@@ -32,8 +32,9 @@
 //! drops candidates their hydration legs reject and refills from the next
 //! page; a short page here still means the feed is exhausted.
 
-use activity::Action;
+use activity::{Action, Actor};
 use cowlike::CowLike;
+use item_filters::ast::properties::properties_filter_matches_propertyless;
 use model_entity::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -45,14 +46,16 @@ use crate::outbound::pg_soup_repo::candidate_gates::{
     channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, initiative_gate,
     project_gate, uuid_guarded,
 };
+use crate::outbound::pg_soup_repo::harness::harness_gate;
 use crate::outbound::pg_soup_repo::notified::{
     ID_SQL, agent_session_gate, calendar_event_gate, foreign_entity_gate, included_types,
 };
-use crate::outbound::pg_soup_repo::touched::view_tags_sql;
+use crate::outbound::pg_soup_repo::touched::non_touch_tags_sql;
 use crate::outbound::pg_soup_repo::type_err;
 
 /// Every type an attention feed can surface, in the order the notified-at
-/// feed decides them, then the CRM records only attention feeds list.
+/// feed decides them, then the CRM records and runtimes only attention feeds
+/// list. Runtimes carry no properties, so a properties filter rules them out.
 fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str> {
     let notified = NotifiedSoupRequest {
         user_id: req.user_id.copied(),
@@ -69,25 +72,33 @@ fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str>
     } else {
         &[]
     };
+    let propertyless_ok = req
+        .filter
+        .and_then(|filter| filter.properties_filter.as_deref())
+        .is_none_or(properties_filter_matches_propertyless);
+    let harness: &[&'static str] = if propertyless_ok {
+        &[EntityType::Harness.into()]
+    } else {
+        &[]
+    };
     included_types(&notified)
         .into_iter()
         .chain(crm.iter().copied())
+        .chain(harness.iter().copied())
         .filter(|entity_type| requested.contains(entity_type))
         .collect()
 }
 
 /// The `crm_companies` row aliased `alias` is visible to the viewer: its
-/// team has CRM enabled, the viewer belongs to that team, and the company is
-/// not hidden (hidden records are listed only on explicit admin requests).
+/// viewer belongs to its team and the company is not hidden. Mailbox
+/// contribution consent does not control record visibility.
 fn visible_crm_record(alias: &str) -> String {
     format!(
         r#"NOT {alias}.hidden
             AND EXISTS (
                 SELECT 1 FROM team_user tu
-                JOIN team_crm_settings tcs ON tcs.team_id = tu.team_id
                 WHERE tu.team_id = {alias}.team_id
                 AND tu.user_id = $1
-                AND tcs.crm_enabled
             )"#
     )
 }
@@ -140,16 +151,31 @@ fn email_inbox_gate() -> String {
 }
 
 /// Whether the `activity_events` row aliased `alias` is the viewer's own work:
-/// any action but a view, except that an email thread is only worked on by
-/// sending from it. Archiving, starring, labeling and moving a thread record
-/// edits, and done itself archives, so counting them would bring every
-/// completed email back as own work.
+/// any action but a view that they did themselves, except that an email
+/// thread is only worked on by sending from it. Archiving, starring, labeling
+/// and moving a thread record edits, and done itself archives, so counting
+/// them would bring every completed email back as own work.
+///
+/// What an agent did for the viewer is the agent's work, not theirs: a bot
+/// acting on their behalf, or any write made inside an agent session's
+/// code-mode invocation (a correlation is recorded, whatever the actor). The
+/// one bot whose work for them counts is the system bot, which writes only
+/// the starter documents and support channel a new account starts with.
+///
+/// The actor is matched against bot ids, not compared with the subject:
+/// Postgres has no statistics for a comparison between two columns, and its
+/// fixed guess made the planner read a heavy viewer's whole history.
 fn own_work(alias: &str) -> String {
     let sent: &'static str = Action::Sent.into();
+    let system = Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
     format!(
-        "{alias}.action NOT IN ({views}) \
+        "({alias}.actor_id NOT LIKE '{bots}|%' OR {alias}.actor_id = '{system}') \
+         AND {alias}.agent_correlation_id IS NULL \
+         AND {alias}.action NOT IN ({views}) \
          AND ({alias}.entity_type <> 'email_thread' OR {alias}.action = '{sent}')",
-        views = view_tags_sql(),
+        bots = bot_id::BOT_STORAGE_PREFIX,
+        system = system.as_ref(),
+        views = non_touch_tags_sql(),
     )
 }
 
@@ -184,6 +210,7 @@ fn build_query(req: &AttentionCandidateRequest<'_>) -> String {
         agent_session_gate = agent_session_gate(filter),
         crm_company_gate = crm_company_gate(),
         crm_contact_gate = crm_contact_gate(),
+        harness_gate = harness_gate(),
     )
 }
 

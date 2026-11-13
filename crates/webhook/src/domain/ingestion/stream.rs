@@ -3,8 +3,8 @@
 use super::{
     LifecycleAudience, TriggerAudience, WebhookEventIngestionError, lifecycle_audience,
     normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
-    normalized_channel_event, normalized_document_event, normalized_message_event,
-    normalized_webhook_event,
+    normalized_call_notification_event, normalized_channel_event, normalized_document_event,
+    normalized_message_event, normalized_user_event, normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
@@ -12,11 +12,13 @@ use crate::domain::{
 };
 use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
+use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::EntityType;
 use macro_event_broker::Event;
 use messages::outbound::broker::MessageTopicEvent;
+use user_events::UserTopicEvent;
 
 pub(crate) fn document_stream_candidate(
     event: &Event<DocumentTopicEvent>,
@@ -45,6 +47,23 @@ pub(crate) fn channel_stream_candidate(
     })
 }
 
+pub(crate) fn call_stream_candidate(
+    event: &Event<CallNotificationEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let (normalized, recipient) = normalized_call_notification_event(event)?;
+    let audience = match recipient {
+        Some(user_id) => StreamAudience::User { user_id },
+        None => StreamAudience::Entity {
+            entity_id: normalized.entity_id.clone(),
+            entity_type: EntityType::Call,
+        },
+    };
+    Ok(StreamCandidateEvent {
+        event: normalized,
+        audience,
+    })
+}
+
 pub(crate) fn message_stream_candidate(
     event: &Event<MessageTopicEvent>,
 ) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
@@ -54,6 +73,28 @@ pub(crate) fn message_stream_candidate(
             entity_id: normalized.entity_id.clone(),
             entity_type,
         },
+        event: normalized,
+    })
+}
+
+/// `team_workspace_ids` are the user's team workspaces (resolved once per
+/// event by the consumer); the user and their contacts are matched per
+/// subscriber through [`StreamAudience::ContactsOf`].
+pub(crate) fn user_stream_candidate(
+    event: &Event<UserTopicEvent>,
+    team_workspace_ids: Vec<String>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let (normalized, user_id) = normalized_user_event(event)?;
+    let mut audiences = vec![StreamAudience::ContactsOf {
+        user_id: user_id.to_string(),
+    }];
+    audiences.extend(
+        team_workspace_ids
+            .into_iter()
+            .map(|workspace_id| StreamAudience::Workspace { workspace_id }),
+    );
+    Ok(StreamCandidateEvent {
+        audience: StreamAudience::Any(audiences),
         event: normalized,
     })
 }
@@ -80,14 +121,19 @@ pub(crate) fn agent_trigger_stream_candidate(
             entity_id,
             entity_type,
         },
-        // Named people subscribe from their own workspaces, as a departed
-        // session's owner does.
+        // Named people get it on their own streams, team-scoped ones too: a
+        // runtime shared with a team streams team-scoped, and a requester's
+        // composer request is still theirs alone.
         TriggerAudience::People(people) => StreamAudience::Any(
             people
                 .into_iter()
-                .map(|person| StreamAudience::Workspace {
-                    workspace_id: person.to_string(),
-                })
+                .map(|person| person.to_string())
+                // A requested session also reaches its runtime's own stream,
+                // which authenticates as the harness owner rather than as
+                // whichever teammate asked. Only the live stream: persisted
+                // webhooks keep the requester alone.
+                .chain(requested_runtime_user(&event.event))
+                .map(|user_id| StreamAudience::Person { user_id })
                 .collect(),
         ),
     };
@@ -95,6 +141,17 @@ pub(crate) fn agent_trigger_stream_candidate(
         audience,
         event: normalized,
     })
+}
+
+/// The user a requested session's runtime streams as, when the producer
+/// named one.
+fn requested_runtime_user(event: &AgentTriggerTopicEvent) -> Option<String> {
+    match event {
+        AgentTriggerTopicEvent::New(new) => new
+            .requested()
+            .and_then(|requested| requested.runtime_user.clone()),
+        _ => None,
+    }
 }
 
 pub(crate) fn agent_session_lifecycle_stream_candidate(

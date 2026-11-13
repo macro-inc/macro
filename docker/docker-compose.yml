@@ -336,6 +336,9 @@ services:
       # sandboxes are siblings of this container rather than children. Harmless
       # under the Daytona provider, which never opens it.
       - /var/run/docker.sock:/var/run/docker.sock
+      # Agent workspace git remotes under /agent-git: bare repositories at
+      # REPO_STORAGE_ROOT, the same path as the deployed EFS volume.
+      - agent_git_repos:/data/agent-git
     depends_on:
       - postgres
       - redis
@@ -498,8 +501,8 @@ services:
       # This worker exports OTLP/JSON over HTTP, so it needs the
       # HTTP intake (:4318) — NOT the gRPC :4317 endpoint the
       # shared env (env_layer) injects for the .with_tonic() Rust services.
-      # Pinning it here overrides the shared env_file value for this service.
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      # xtask sets this only for runs with tracing; direct Compose defaults off.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT:-}
     networks:
       services:
         aliases:
@@ -738,6 +741,8 @@ services:
 
 volumes:
   sync_state:
+  # agent_harness_service's agent git bare repositories.
+  agent_git_repos:
   # Backing store for the `lgtm` collector (profile-gated, global project).
   lgtm_data:
 

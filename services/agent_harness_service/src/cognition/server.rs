@@ -96,12 +96,14 @@ impl CognitionRuntime {
 ///
 /// `import_jobs` are the harness's import jobs: this runtime's Notion imports
 /// and the stalled-import sweeper run on them, and the harness hands them
-/// over on shutdown.
+/// over on shutdown. `mcp_http` is the harness's guarded client for users'
+/// own MCP servers.
 pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
+    mcp_http: mcp_client::outbound::guarded_http::McpHttp,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -385,6 +387,14 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
+    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+        config.environment,
+    )? {
+        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
+        None => document_tool_context,
+    };
 
     tracing::info!("initialized document tool context");
 
@@ -436,6 +446,15 @@ pub async fn build(
 
     tracing::info!("initialized properties tool context");
 
+    // The AI billing gate below and the email tools' send-as lookup both
+    // reach the authentication service.
+    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        AuthServiceUrl::new()?.to_string(),
+    ));
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),
@@ -447,6 +466,14 @@ pub async fn build(
             ),
             0,
         )
+        // Lets `SendEmail`'s `from` name a verified send-as alias of an inbox.
+        .with_sender_provider(email::outbound::GmailSenderProvider::new(
+            gmail_client::GmailClient::without_watch(),
+            email::outbound::GmailTokenProviderImpl::lazy(
+                (*redis_client).clone(),
+                auth_service_client.clone(),
+            ),
+        ))
         .with_macro_event_broker(macro_event_broker.clone()),
     );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
@@ -511,13 +538,6 @@ pub async fn build(
     // collection (Stripe) lives in the authentication service, which the
     // recorder below asks to settle once a payer runs past their allowance
     // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
-    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
-        config
-            .authentication_service_secret_key
-            .as_ref()
-            .to_string(),
-        AuthServiceUrl::new()?.to_string(),
-    ));
     let ai_pricing = config.ai_pricing();
     let ai_billing = Arc::new(
         ai_billing::domain::BillingServiceImpl::new(
@@ -670,6 +690,7 @@ pub async fn build(
     let rollout = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )?;
     let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
         let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
@@ -714,6 +735,7 @@ pub async fn build(
     // The import service's live Slack source shares this selector.
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
+        mcp_http.clone(),
         Arc::new(pipedream_repo.clone()),
         Arc::new(connectors.clone()),
     ));
@@ -866,7 +888,7 @@ pub async fn build(
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
-        activity_tool_context: ai_tools::build_activity_tool_context(
+        activity_service: ai_tools::build_activity_read_service(
             db.clone(),
             properties_service,
             entity_access_service.clone(),
@@ -944,6 +966,7 @@ pub async fn build(
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
@@ -1037,6 +1060,7 @@ pub async fn build(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
         mcp_client_metadata.clone(),
+        mcp_http,
         mcp_pre_registered,
     );
     // Record connector connects and disconnects for product analytics.
@@ -1153,6 +1177,11 @@ pub async fn build(
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),
+        web_rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: rate_limit::RedisRateLimitAdapter {
+                redis: (*redis_client).clone(),
+            },
+        },
         mcp_state,
         pipedream_state,
         granola_sync,

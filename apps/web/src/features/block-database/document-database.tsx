@@ -1,8 +1,9 @@
+import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
-import DatabaseIcon from '@icon/system/regular/database.svg';
 import {
   onDatabaseBatchCommitted,
   undoDatabaseChange,
@@ -102,7 +103,13 @@ export function DocumentDatabase(props: {
         })
       ),
     offer: (label, revert) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: revert }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
+          { label: 'Undo', icon: ArrowCounterClockwise, onClick: revert },
+        ],
+      }),
   });
 
   return (
@@ -134,7 +141,14 @@ export function DocumentDatabase(props: {
       }}
     >
       <div class="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
-        <DatabaseIcon class="size-4 shrink-0 text-ink-muted" />
+        <EntityIcon
+          targetType="database"
+          appearance={
+            detail.isSuccess ? detail.data.database.appearance : undefined
+          }
+          size="sm"
+          class="shrink-0 text-ink-muted"
+        />
         <div class="min-w-0 flex-1">
           <DatabaseTitle
             name={name()}
@@ -268,6 +282,7 @@ export function DocumentDatabase(props: {
                     </div>
                     <DatabaseGrid
                       host="document"
+                      schema="cached"
                       contentClass="m-3 rounded-lg border border-edge-muted"
                       databaseId={databaseId}
                       table={shown()}
@@ -281,6 +296,17 @@ export function DocumentDatabase(props: {
                         })
                       }
                       onOpenRelated={openRelated}
+                      // The card is too small for the record panel: a clicked row opens in the full table.
+                      // Hosts without splits, such as call chat, keep the panel.
+                      onOpenRecord={(rowId) => {
+                        const opened = open({
+                          databaseId,
+                          tableId: shown().table.id,
+                          viewId: currentView().id,
+                          rowId,
+                        });
+                        return !!opened && opened.status !== 'unavailable';
+                      }}
                       actionsRef={setRecordActions}
                     />
                   </div>

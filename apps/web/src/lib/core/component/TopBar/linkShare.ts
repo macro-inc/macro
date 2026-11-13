@@ -46,6 +46,7 @@ export function getShareItemNoun(itemType: ShareItemType): string {
     .with('channel_message', () => 'message')
     .with('channel_thread', () => 'thread')
     .with('foreign', () => 'item')
+    .with('harness', () => 'machine')
     .with('external_chat', () => 'chat')
     .with(
       'document',

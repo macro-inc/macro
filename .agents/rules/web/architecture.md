@@ -65,9 +65,11 @@ Module layout, layering, and TypeScript conventions.
   and review. Register adopting feature paths in both language variants of every
   feature rule. Enforced by ast-grep `ts-/tsx-feature-core-pure`,
   `ts-/tsx-feature-components-presentational`, `ts-/tsx-feature-data-no-ui`,
-  `ts-/tsx-feature-layers-use-context`, warning; currently scoped to activity.
+  `ts-/tsx-feature-layers-use-context`, warning; each covers only the feature
+  paths in its `files` list.
   Separate production composition and source-contract inversion still require
   explicit review; the existing rules do not enforce them.
+- **FE-71** A primitive owns real logic or is shared; one component's local UI state stays in that component.
 - **FE-34** Treat the legacy block state system as adapter-boundary code, not
   state management for new or refactored surfaces. Do not add new `useBlock*`,
   `createBlock*`, block-scoped signal/store/memo/resource, or block permission
@@ -92,6 +94,8 @@ Module layout, layering, and TypeScript conventions.
 ## TypeScript
 
 - Represent sets of independently enabled UI features with typed arrays instead of parallel boolean props.
+- Import types with `import type` instead of inline `import('module').Type` annotations.
+- Declare TypeScript types and interfaces at module scope, outside functions and component bodies.
 
 - Name module-level value constants in `SCREAMING_SNAKE_CASE`, except schema definitions; keep functions and local variables in `camelCase`.
 - For exhaustive matching use `match(...).exhaustive()` from `ts-pattern`, never

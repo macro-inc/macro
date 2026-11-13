@@ -30,12 +30,7 @@ import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  $isTextNode,
-} from 'lexical';
+import { $getRoot, $setSelection } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -46,7 +41,8 @@ import {
   Show,
 } from 'solid-js';
 import { IMAGE_INPUT_WARNING } from '../../block-agent/state/image-input';
-import { AgentComposerAddMenu } from '../views/ComposerAddMenu';
+import { AgentComposerAddMenu } from '../../block-agent/ui/AgentComposerAddMenu';
+import { openComposerTypeahead } from '../../block-agent/ui/open-composer-typeahead';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
@@ -123,7 +119,8 @@ export function ChatComposer(props: {
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .withRestoreFocus()
+    // Focusing the composer without a selection continues the draft.
+    .withRestoreFocus('rootEnd')
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         fireAndForget(
@@ -171,13 +168,29 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
+  // Markdown import leaves the selection at the start, and focusing the editor
+  // restores it there. After a seeded draft (Ask AI's mentions), put the caret
+  // at its end when the editor has focus. Otherwise clear the selection, so
+  // the next focus lands at the end (withRestoreFocus('rootEnd')) without this
+  // update moving the DOM selection or taking focus.
+  const placeCaretAfterDraft = () => {
+    const focused = editor.lexical
+      .getRootElement()
+      ?.contains(document.activeElement);
+    editor.lexical.update(() => {
+      if (focused) $getRoot().selectEnd();
+      else $setSelection(null);
+    });
+  };
+
   // Only host draft changes should replace the editor contents.
   createEffect(
     on(
       () => props.draft,
       (draft) => {
-        if (draft !== editor.controls.getMarkdown())
-          editor.controls.setMarkdown(draft);
+        if (draft === editor.controls.getMarkdown()) return;
+        editor.controls.setMarkdown(draft);
+        placeCaretAfterDraft();
       }
     )
   );
@@ -236,36 +249,15 @@ export function ChatComposer(props: {
     if (event.type === 'pointerdown') editor.controls.focus();
   };
 
-  const openTypeahead = (kind: 'library' | 'skills') => {
-    editor.lexical.focus(() => {
-      editor.lexical.update(
-        () => {
-          if (!$isRangeSelection($getSelection())) $getRoot().selectEnd();
-          const selection = $getSelection();
-          if (!$isRangeSelection(selection)) return;
-          const node = selection.anchor.getNode();
-          const preceding = $isTextNode(node)
-            ? node
-                .getTextContent()
-                .slice(selection.anchor.offset - 1, selection.anchor.offset)
-            : '';
-          if (preceding && !/\s/.test(preceding)) selection.insertText(' ');
-        },
-        {
-          discrete: true,
-          onUpdate: () =>
-            editor.lexical.dispatchCommand(
-              kind === 'library'
-                ? TYPE_AT_SYMBOL_COMMAND
-                : props.session
-                  ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
-                  : TYPE_SKILL_SYMBOL_COMMAND,
-              undefined
-            ),
-        }
-      );
-    });
-  };
+  const openTypeahead = (kind: 'library' | 'skills') =>
+    openComposerTypeahead(
+      editor.lexical,
+      kind === 'library'
+        ? TYPE_AT_SYMBOL_COMMAND
+        : props.session
+          ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+          : TYPE_SKILL_SYMBOL_COMMAND
+    );
 
   const editorRow = () => (
     <div
@@ -279,6 +271,9 @@ export function ChatComposer(props: {
         class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
+        onConnect={() => {
+          if (props.draft) placeCaretAfterDraft();
+        }}
         placeholder={
           isTouchDevice()
             ? // Phones are too narrow for the full mention and skills hint.

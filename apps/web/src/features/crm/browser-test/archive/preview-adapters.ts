@@ -11,6 +11,10 @@ import {
   useSetEmailSyncMutation,
 } from '../../queries/companies';
 import {
+  useSetContactCompanyMutation,
+  useSetContactEmailMutation,
+} from '../../queries/contact-edit';
+import {
   useContactQuery,
   useSetContactHiddenMutation,
   useSetContactNameMutation,
@@ -23,10 +27,13 @@ export async function invalidateCachedCrmContacts() {}
 export const prepareCrmVisibilityWrite = () => ({
   isCurrent: () => true,
   async commit() {},
+  async invalidate() {},
 });
+export const prepareCrmContactEdit = prepareCrmVisibilityWrite;
 export const client = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
+export const [selectedContact, selectContact] = createSignal('contact-1');
 export const [role, setRole] = createSignal('admin');
 export const [writes, setWrites] = createSignal(0);
 export const [message, setMessage] = createSignal('');
@@ -52,22 +59,110 @@ let company: CrmCompanyResponse = {
   updatedAt: '2026-10-15',
   contacts: [],
 };
+const PERSONAL_DOMAIN = 'gmail.com';
+// `independent` is a business address away from the company's domain.
+const domain = params.has('personal')
+  ? PERSONAL_DOMAIN
+  : params.has('independent')
+    ? 'example.org'
+    : 'example.com';
+const isPersonal = (email: string | null | undefined) =>
+  !!email?.endsWith(`@${PERSONAL_DOMAIN}`);
+/** The identity fields the server derives from a contact's addresses. */
+function identity(
+  emails: string[],
+  companyId: string | null | undefined
+): Pick<
+  CrmContactResponse,
+  | 'email'
+  | 'emails'
+  | 'personalEmail'
+  | 'companyId'
+  | 'companyDomain'
+  | 'companyDomainEmails'
+> {
+  const companyDomainEmails = companyId
+    ? emails.filter((email) => email.endsWith('@example.com'))
+    : [];
+  return {
+    email: emails[0] ?? null,
+    emails,
+    personalEmail: isPersonal(emails[0]),
+    companyId: companyId ?? null,
+    companyDomain: companyDomainEmails.length > 0,
+    companyDomainEmails,
+  };
+}
 let contacts: CrmContactResponse[] = ['Example person', 'Second person'].map(
-  (name, index) => ({
-    id: `contact-${index + 1}`,
-    companyId: company.id,
-    name,
-    email: `person${index + 1}@example.com`,
-    hidden:
-      params.has('legacyParent') && index === 0
-        ? false
-        : company.hidden || index === 1 || params.has('archived'),
-    createdAt: '2026-10-15',
-    updatedAt: '2026-10-15',
-    firstInteraction: '2026-10-15',
-    lastInteraction: '2026-10-15',
-  })
+  (name, index) => {
+    const emails = params.has('empty')
+      ? []
+      : [
+          `person${index + 1}@${domain}`,
+          ...(params.has('several') && index === 0
+            ? [`person1@${PERSONAL_DOMAIN}`, 'person1.alt@example.org'].filter(
+                (email) => email !== `person1@${domain}`
+              )
+            : []),
+        ];
+    const full = identity(
+      emails,
+      params.has('empty') || params.has('unlinked') ? null : company.id
+    );
+    return {
+      id: `contact-${index + 1}`,
+      name,
+      // `legacy` stands in for a server that predates the address list.
+      ...(params.has('legacy')
+        ? {
+            email: full.email,
+            companyId: full.companyId,
+            personalEmail: full.personalEmail,
+          }
+        : full),
+      hidden:
+        params.has('legacyParent') && index === 0
+          ? false
+          : company.hidden || index === 1 || params.has('archived'),
+      createdAt: '2026-10-15',
+      updatedAt: '2026-10-15',
+      firstInteraction: '2026-10-15',
+      lastInteraction: '2026-10-15',
+    };
+  }
 );
+/** Apply a committed identity change to one contact and return its response. */
+function commit(
+  contactId: string,
+  change: (contact: CrmContactResponse) => {
+    emails: string[];
+    companyId: string | null | undefined;
+  }
+) {
+  contacts = contacts.map((contact) => {
+    if (contact.id !== contactId) return contact;
+    const next = change(contact);
+    const full = identity(next.emails, next.companyId);
+    return {
+      ...contact,
+      ...(params.has('legacy')
+        ? {
+            email: full.email,
+            companyId: full.companyId,
+            personalEmail: full.personalEmail,
+          }
+        : full),
+      updatedAt: new Date().toISOString(),
+    };
+  });
+  return ok({ ...contacts.find((contact) => contact.id === contactId)! });
+}
+const held = (contact: CrmContactResponse) =>
+  contact.emails ?? (contact.email ? [contact.email] : []);
+const takenByAnother = (contactId: string, email: string) =>
+  contacts.some(
+    (contact) => contact.id !== contactId && held(contact).includes(email)
+  );
 async function save() {
   setWrites((value) => value + 1);
   if (hold)
@@ -82,14 +177,67 @@ async function save() {
   return true;
 }
 export const storageServiceClient = {
-  async getCompany() {
+  async getCompany({ companyId }) {
+    const selected =
+      companyId === 'company-2'
+        ? { ...company, id: companyId, name: 'Second company' }
+        : company;
     return ok({
-      ...company,
-      contacts: contacts.map((contact) => ({ ...contact })),
+      ...selected,
+      contacts: contacts
+        .filter((contact) => contact.companyId === companyId)
+        .map((contact) => ({ ...contact })),
     });
   },
   async getContact({ contactId }) {
     return ok({ ...contacts.find((contact) => contact.id === contactId)! });
+  },
+  async setContactEmail({ contactId, email }) {
+    const address = email.trim().toLowerCase();
+    if (!(await save()) || takenByAnother(contactId, address))
+      return err([{ code: 'CONFLICT', message: 'Save rejected' }]);
+    return commit(contactId, (contact) => ({
+      emails: [address, ...held(contact).filter((other) => other !== address)],
+      companyId: contact.companyId,
+    }));
+  },
+  async addContactEmail({ contactId, email }) {
+    const address = email.trim().toLowerCase();
+    // A server that predates the address list has no such route.
+    if (params.has('legacy'))
+      return err([{ code: 'NOT_FOUND', message: 'No route' }]);
+    if (!(await save()) || takenByAnother(contactId, address))
+      return err([{ code: 'CONFLICT', message: 'Save rejected' }]);
+    return commit(contactId, (contact) => ({
+      emails: [...held(contact).filter((other) => other !== address), address],
+      companyId: contact.companyId,
+    }));
+  },
+  async removeContactEmail({ contactId, email }) {
+    const current = contacts.find((contact) => contact.id === contactId);
+    if (!(await save()) || current?.companyDomainEmails?.join() === email)
+      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
+    return commit(contactId, (contact) => ({
+      emails: held(contact).filter((other) => other !== email),
+      companyId: contact.companyId,
+    }));
+  },
+  async setContactCompany({ contactId, companyId }) {
+    if (!(await save()))
+      return err([{ code: 'FORBIDDEN', message: 'Save rejected' }]);
+    return commit(contactId, (contact) => ({
+      emails: held(contact),
+      companyId,
+    }));
+  },
+  async unlinkContactCompany({ contactId }) {
+    const current = contacts.find((contact) => contact.id === contactId);
+    if (!(await save()) || current?.companyDomain)
+      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
+    return commit(contactId, (contact) => ({
+      emails: held(contact),
+      companyId: null,
+    }));
   },
   async setContactHidden({ contactId, hidden }) {
     if (!(await save()))
@@ -126,6 +274,11 @@ export const storageServiceClient = {
   },
 } satisfies Pick<
   typeof Storage,
+  | 'setContactEmail'
+  | 'addContactEmail'
+  | 'removeContactEmail'
+  | 'setContactCompany'
+  | 'unlinkContactCompany'
   | 'getCompany'
   | 'getContact'
   | 'setCompanyHidden'
@@ -147,10 +300,12 @@ export const useCrmContext = () => ({
   hideContact: () => useSetContactHiddenMutation(deps),
   renameCompany: () => useSetCompanyNameMutation(deps),
   renameContact: () => useSetContactNameMutation(deps),
+  editContactEmail: () => useSetContactEmailMutation(deps),
+  editContactCompany: () => useSetContactCompanyMutation(deps),
   setEmailSync: () => useSetEmailSyncMutation(deps),
   createNavigation: () => ({
-    openWithSplit() {
-      location.search = '?kind=company&companyArchived';
+    openWithSplit(target: { id: string }) {
+      location.search = `?kind=company&companyArchived&opened=${target.id}`;
     },
   }),
   copyRecordLink: async () => true,
@@ -174,6 +329,7 @@ Object.assign(window, {
       release?.();
     },
     setRole,
+    selectContact,
     writes,
     snapshot: () => ({ company, contacts }),
   },
@@ -188,6 +344,7 @@ declare global {
       holdNext(): void;
       release(): void;
       setRole(value: string): void;
+      selectContact(value: string): void;
       writes(): number;
       snapshot(): {
         company: CrmCompanyResponse;

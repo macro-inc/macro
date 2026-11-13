@@ -22,6 +22,7 @@ Components, styling, and interaction conventions.
   default palette is disabled via `--color-*: initial` in
   `apps/web/src/index.css`, so classes like `text-red-500` silently render
   nothing. Enforced by ast-grep `tsx-no-raw-tailwind-palette`, CI error.
+  Use existing semantic surface tokens instead of component-local color mixes.
 - Keep runtime theme tokens together in `apps/web/src/index.css`: one
   `:root, [data-theme-light]` block for dark defaults, followed by one
   `[data-theme-light='true']` override block. Keep any narrower root/device
@@ -75,9 +76,11 @@ Components, styling, and interaction conventions.
 - Use `Dropdown.MultiSelectItem` for multiselect filter rows; keep independent
   checkbox settings on `Dropdown.CheckboxItem`. Follow the
   [shared interaction pattern](../../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns).
-- **FE-54** Decide mobile behavior deliberately. Unless the change makes it
-  obvious, ask the user how a UI change should look and behave on mobile, then
-  follow [`mobile.md`](mobile.md).
+- **FE-54** Decide mobile behavior deliberately. A UI change lands in the
+  desktop view unless the task says otherwise; edit a file in `views/mobile/`
+  file only on purpose, so a desktop feature is absent on mobile until someone
+  adds it there. Unless the change makes it obvious, ask the user how it
+  should look and behave on mobile, then follow [`mobile.md`](mobile.md).
 - **FE-55** UI tests drive real interactions (click, type, keyboard, focus)
   through `@solidjs/testing-library` and assert what the user sees or can do.
   No tests that only render and check classes, snapshot markup, or mock the

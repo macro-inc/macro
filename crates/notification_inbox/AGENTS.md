@@ -4,15 +4,16 @@
 
 The unified notifications inbox: the viewer's pending notifications grouped
 by the entity they are filed under and cut into rows (one per channel thread,
-channel top level, entity's comments, email thread, task, pull request, request
-or agent session). Built on the shared feed layer, `crates/attention_feed`.
+channel top level, entity's comments, email thread, task, pull request, request,
+agent session or runtime). Built on the shared feed layer, `crates/attention_feed`.
 
 ## Start here
 
 - `src/domain/rows.rs`: the row rules — every notification's home row,
   one message one row, one stack per top-level message and per entity's
   comments, noise hidden in its natural row.
-- `src/domain/service.rs`: page, recompute, done, seen and undo.
+- `src/domain/service.rs`: page, recompute, done (of rows or of one notification of a
+  stack), seen and undo.
 - `src/domain/policy.rs`: which groups the inbox lists.
 
 ## Scope
@@ -55,6 +56,9 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
   (`groupId`, `principalId`, `targetId`).
 - Row contents must not depend on the scope; scopes only filter rows, so the
   web cache can normalize rows by id across inboxes.
+- An unread scope filters on each row's `unseen`, which follows the row's own
+  rule (mail by its unread messages), so a row leaves or returns through the
+  same recompute as any other change.
 
 ## Related
 

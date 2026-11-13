@@ -2,14 +2,23 @@ import { formatLocale, t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import XIcon from '@icon/system/regular/x.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Tabs } from '@ui';
-import { createEffect, createSignal, type JSX, on, onCleanup } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 
-export type CallPanelTab = 'chat' | 'participants';
+export type CallPanelTab = 'chat' | 'participants' | 'work';
 
-/** Share one mounted panel between the desktop sidebar and phone drawer. */
+/** Keep the desktop panel attached while its reserved column changes size. */
 export function CallChatPanel(props: {
   id: string;
+  animateEntrance?: boolean;
   open: boolean;
   onClose: () => void;
   activeTab: CallPanelTab;
@@ -17,11 +26,16 @@ export function CallChatPanel(props: {
   chatAvailable: boolean;
   participantCount: number;
   participants: JSX.Element;
+  /** Present while someone in the call has work the viewer can see. */
+  work?: JSX.Element;
+  /** Marks the Work tab while the viewer is elsewhere. */
+  workDot?: boolean;
   children: JSX.Element;
   sidebarMount?: HTMLElement;
   overlayMount?: HTMLElement;
   returnFocus?: HTMLButtonElement;
 }) {
+  const sidebarSize = createElementSize(() => props.sidebarMount);
   const [sidebarBody, setSidebarBody] = createSignal<HTMLDivElement>();
   const [sheetBody, setSheetBody] = createSignal<HTMLDivElement>();
   const sheetOpen = () => isMobile() && props.open;
@@ -37,15 +51,9 @@ export function CallChatPanel(props: {
 
   createEffect(
     on(
-      [
-        isMobile,
-        sidebarBody,
-        sheetBody,
-        () => props.sidebarMount,
-        () => props.overlayMount,
-      ],
-      ([mobile, sidebar, sheet, sidebarMount, overlayMount]) => {
-        const target = !mobile && sidebarMount ? sidebarMount : overlayMount;
+      [isMobile, sidebarBody, sheetBody, () => props.overlayMount],
+      ([mobile, sidebar, sheet, overlayMount]) => {
+        const target = overlayMount;
         if (target && aside.parentElement !== target) target.appendChild(aside);
         const content = mobile ? sheet : sidebar;
         if (content && body.parentElement !== content)
@@ -58,6 +66,16 @@ export function CallChatPanel(props: {
     body.remove();
   });
 
+  const dockStyle = () => {
+    if (!props.sidebarMount) return undefined;
+    return {
+      left: 'auto',
+      right: '0px',
+      top: '8px',
+      bottom: '8px',
+      width: `${sidebarSize.width ?? 0}px`,
+    };
+  };
   return (
     <MobileDrawer
       open={sheetOpen()}
@@ -74,10 +92,13 @@ export function CallChatPanel(props: {
         aria-label={t('calls.panel')}
         hidden={isMobile() || !props.open}
         inert={isMobile() || !props.open}
-        class="absolute top-2 right-0 bottom-2 z-20 w-full max-w-90 min-h-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-surface-2 transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none @min-[800px]/call:static @min-[800px]/call:h-full @min-[800px]/call:max-w-none"
+        class="absolute inset-3 z-30 w-auto min-h-0 flex-col overflow-hidden rounded-2xl bg-surface-2 shadow-xl @min-[800px]/call:shadow-none light-mode:@min-[800px]/call:shadow-lg transition-[opacity,translate,display] transition-discrete duration-200 ease-out motion-reduce:transition-none"
+        style={dockStyle()}
         classList={{
           flex: !isMobile() && props.open,
           'opacity-0 translate-x-3 pointer-events-none': !props.open,
+          'starting:opacity-0 starting:translate-x-3':
+            props.animateEntrance !== false,
         }}
       >
         <div ref={setSidebarBody} class="flex min-h-0 flex-1 flex-col" />
@@ -88,7 +109,7 @@ export function CallChatPanel(props: {
           forceMount
           aria-hidden={!sheetOpen()}
           inert={!sheetOpen()}
-          targetHeight={80}
+          targetHeight={65}
           class="data-closed:hidden motion-reduce:duration-0!"
         >
           <MobileDrawer.Handle />
@@ -103,8 +124,10 @@ export function CallChatPanel(props: {
         class="flex min-h-0 flex-1 flex-col"
         onKeyDown={closeOnEscape}
       >
-        <div class="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
+        <div class="flex h-12 shrink-0 items-center justify-between gap-2 px-3">
           <Tabs<CallPanelTab>
+            touch="segmented"
+            class="mobile:w-full"
             aria-label={t('calls.panel')}
             value={props.activeTab}
             onChange={props.onTabChange}
@@ -117,19 +140,32 @@ export function CallChatPanel(props: {
               {
                 value: 'participants',
                 label: t('calls.participants'),
-                count: props.participantCount.toLocaleString(formatLocale()),
+                count: isMobile()
+                  ? props.participantCount.toLocaleString(formatLocale())
+                  : undefined,
               },
+              ...(props.work
+                ? [
+                    {
+                      value: 'work' as const,
+                      label: t('agentWork.title'),
+                      dot: props.workDot,
+                    },
+                  ]
+                : []),
             ]}
           />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('calls.closePanel')}
-            tooltip={t('calls.closePanel')}
-            onClick={props.onClose}
-          >
-            <XIcon class="size-4" />
-          </Button>
+          <Show when={!isMobile()}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('calls.closePanel')}
+              tooltip={t('calls.closePanel')}
+              onClick={props.onClose}
+            >
+              <XIcon class="size-4" />
+            </Button>
+          </Show>
         </div>
         <section
           aria-label={t('calls.chat')}
@@ -152,6 +188,17 @@ export function CallChatPanel(props: {
           )}
         >
           {props.participants}
+        </section>
+        <section
+          aria-label={t('agentWork.title')}
+          hidden={props.activeTab !== 'work'}
+          inert={props.activeTab !== 'work'}
+          class={cn(
+            'flex min-h-0 flex-1 flex-col',
+            props.activeTab !== 'work' && 'hidden'
+          )}
+        >
+          {props.work}
         </section>
       </div>
     </MobileDrawer>

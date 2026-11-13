@@ -8,13 +8,13 @@ mod team_roster;
 
 use crate::domain::{
     models::{
-        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotOwnerProfile, BotProfile,
-        BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, HarnessFacts, HarnessId, HarnessOwner, PatchBotRequest,
-        UpdateAgentRequest,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AgentStoppedReason,
+        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner,
+        BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessFacts,
+        HarnessId, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::BotRepo,
+    ports::{BotRepo, HarnessRemoved},
 };
 use anyhow::Context;
 use bot_token::{HashedBotToken, hash_token};
@@ -39,6 +39,30 @@ impl PgBotsRepo {
 
 fn principal_id(bot_id: BotId) -> String {
     bot_id.into_storage_id().to_string()
+}
+
+/// Hold a live harness's row `FOR SHARE` until the binding transaction ends,
+/// refusing a deleted one with [`HarnessRemoved`].
+///
+/// Deleting a harness locks the same row `FOR UPDATE` first. So a bind either
+/// commits before the delete takes the lock (and a Macro computer's release
+/// then deletes the agent with the rest, since it lists bindings after its
+/// harness delete commits), or waits for the delete and finds the row gone.
+async fn hold_live_harness(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    harness_id: HarnessId,
+) -> anyhow::Result<()> {
+    let live = sqlx::query_scalar!(
+        "SELECT id FROM harnesses WHERE id = $1 AND deleted_at IS NULL FOR SHARE",
+        harness_id.as_uuid(),
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .context("failed to hold the agent's harness")?;
+    if live.is_none() {
+        return Err(anyhow::Error::new(HarnessRemoved));
+    }
+    Ok(())
 }
 
 fn owner_columns(owner: BotOwner) -> (Option<String>, Option<Uuid>) {
@@ -137,6 +161,7 @@ struct AgentRow {
     mcp_server_names: Vec<String>,
     auto_accept_permissions: Option<bool>,
     is_coding: bool,
+    runtime_stopped: bool,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -188,6 +213,9 @@ impl TryFrom<AgentRow> for Agent {
             mcp,
             auto_accept_permissions: row.auto_accept_permissions,
             is_coding: row.is_coding,
+            stopped_reason: row
+                .runtime_stopped
+                .then_some(AgentStoppedReason::NoRuntimeAccess),
         })
     }
 }
@@ -375,6 +403,9 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to create agent bot")?;
 
+        if let Some(harness_id) = req.harness_id {
+            hold_live_harness(&mut tx, harness_id).await?;
+        }
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
@@ -429,6 +460,8 @@ impl BotRepo for PgBotsRepo {
             is_coding: req.is_coding,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
+            // Creating one checks that its owner may run on its runtime.
+            stopped_reason: None,
         })
     }
 
@@ -455,6 +488,7 @@ impl BotRepo for PgBotsRepo {
                 handle = $5,
                 description = $6,
                 avatar_url = $7,
+                has_agent = true,
                 updated_at = now()
             WHERE id = $1
               AND deleted_at IS NULL
@@ -490,6 +524,9 @@ impl BotRepo for PgBotsRepo {
             return Ok(None);
         };
 
+        if let Some(harness_id) = req.harness_id {
+            hold_live_harness(&mut tx, harness_id).await?;
+        }
         sqlx::query!(
             r#"
             UPDATE agent_configs
@@ -585,6 +622,8 @@ impl BotRepo for PgBotsRepo {
             mcp: req.mcp,
             auto_accept_permissions: req.auto_accept_permissions,
             is_coding: req.is_coding,
+            // Saving one checks that its owner may run on its runtime.
+            stopped_reason: None,
         }))
     }
 
@@ -616,6 +655,11 @@ impl BotRepo for PgBotsRepo {
                 a.channel_scope,
                 a.auto_accept_permissions,
                 a.is_coding,
+                (
+                    a.harness_id IS NOT NULL
+                    AND NOT a.is_coding
+                    AND NOT agent_owner_can_run(b.id)
+                ) AS "runtime_stopped!",
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -1059,6 +1103,11 @@ impl BotRepo for PgBotsRepo {
                 a.channel_scope,
                 a.auto_accept_permissions,
                 a.is_coding,
+                (
+                    a.harness_id IS NOT NULL
+                    AND NOT a.is_coding
+                    AND NOT agent_owner_can_run(b.id)
+                ) AS "runtime_stopped!",
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -1100,13 +1149,55 @@ impl BotRepo for PgBotsRepo {
         row.map(Agent::try_from).transpose()
     }
 
+    async fn harness_granted_to_team(
+        &self,
+        harness_id: HarnessId,
+        team_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        let granted = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM entity_access ea
+                JOIN harnesses h ON h.id = ea.entity_id AND h.deleted_at IS NULL
+                WHERE ea.entity_id = $1
+                  AND ea.entity_type = 'harness'
+                  AND ea.source_type = 'team'
+                  AND ea.source_id = $2
+            ) AS "granted!"
+            "#,
+            harness_id.as_uuid(),
+            team_id.to_string(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to read harness team grant")?;
+        Ok(granted)
+    }
+
+    async fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        user_id: &str,
+    ) -> Result<bool, Self::Err> {
+        let may_use = sqlx::query_scalar!(
+            r#"SELECT harness_can_run($1, $2) AS "may_use!""#,
+            harness_id.as_uuid(),
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to read harness access")?;
+        Ok(may_use)
+    }
+
     async fn get_harness_facts(
         &self,
         harness_id: HarnessId,
     ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT owner_user_id, team_id, allow_permission_bypass
+            SELECT allow_permission_bypass, computer_id IS NOT NULL AS "on_computer!"
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -1114,21 +1205,12 @@ impl BotRepo for PgBotsRepo {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to fetch harness owner")?;
+        .context("failed to fetch harness facts")?;
 
-        row.map(|row| match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => Ok(HarnessFacts {
-                owner: HarnessOwner::User { user_id },
-                allow_permission_bypass: row.allow_permission_bypass,
-            }),
-            (None, Some(team_id)) => Ok(HarnessFacts {
-                owner: HarnessOwner::Team { team_id },
-                allow_permission_bypass: row.allow_permission_bypass,
-            }),
-            // Unreachable: harnesses_owner_check enforces exactly one owner.
-            _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
-        })
-        .transpose()
+        Ok(row.map(|row| HarnessFacts {
+            allow_permission_bypass: row.allow_permission_bypass,
+            on_computer: row.on_computer,
+        }))
     }
 
     async fn user_has_team(
@@ -1373,6 +1455,13 @@ impl BotRepo for PgBotsRepo {
 
         tx.commit().await?;
         Ok(result.rows_affected() > 0)
+    }
+
+    async fn delete_harness_agents(
+        &self,
+        harness: HarnessId,
+    ) -> Result<Vec<(BotId, BotOwner)>, Self::Err> {
+        self.delete_harness_agents_inner(harness).await
     }
 
     async fn add_bot_to_channel(&self, channel_id: Uuid, bot_id: BotId) -> Result<(), Self::Err> {
@@ -1641,3 +1730,5 @@ impl BotRepo for PgBotsRepo {
         Ok(())
     }
 }
+
+mod harness_assignments;

@@ -17,6 +17,7 @@ import {
 } from './auto-rejoin';
 import type { CallSessionDisconnectOptions } from './CallSessionController';
 import { LK_DISCONNECT_REASON } from './livekit-loader';
+import { isMicrophoneAccessError } from './microphone-access';
 
 export const JOIN_TIMEOUT_MS = 15_000;
 export const LEAVE_TIMEOUT_MS = 10_000;
@@ -28,6 +29,8 @@ export const LEAVE_TIMEOUT_MS = 10_000;
 const MAX_ENDED_CALL_RELEASES = 2;
 const ALREADY_IN_CALL_MESSAGE =
   "You're already in another call. Leave your current call before joining a new one.";
+const MICROPHONE_BLOCKED_MESSAGE =
+  'Microphone access is off. Allow it in Settings to join the call.';
 export type CallIdentity = { channelId: string; callId: string | null };
 /** What started a join, recorded with the joined event. */
 export type JoinSource =
@@ -179,6 +182,13 @@ function changeIntent(event: Event) {
     .otherwise(() => undefined);
 }
 
+function joinFailureMessage(error: unknown) {
+  if (thrownResultErrorHasCode(error, 'CONFLICT'))
+    return ALREADY_IN_CALL_MESSAGE;
+  if (isMicrophoneAccessError(error)) return MICROPHONE_BLOCKED_MESSAGE;
+  return 'Unable to join the call. Please check your connection.';
+}
+
 function shouldRejoin(reason?: DisconnectReason) {
   return match(reason)
     .with(
@@ -197,7 +207,7 @@ export function createCallLifecycle(options: {
   shouldRequestToken: (channelId: string) => boolean;
   prepareToken?: (channelId: string) => Promise<() => Promise<void>>;
   requestToken: (channelId: string) => Promise<CallTokenResponse>;
-  connect: (token: CallTokenResponse) => Promise<void>;
+  connect: (token: CallTokenResponse, source: JoinSource) => Promise<void>;
   disconnect: (options?: CallSessionDisconnectOptions) => Promise<void>;
   leave: (channelId: string) => Promise<LeaveResult>;
   lookup: (channelId: string) => Promise<ActiveCallLookup>;
@@ -205,6 +215,8 @@ export function createCallLifecycle(options: {
   beginJoin: (channelId: string) => void;
   rollbackJoin: () => void;
   setError: (error: string | null) => void;
+  /** The join failed because the microphone is denied. */
+  microphoneBlocked: () => void;
   watch: (
     call: CallIdentity,
     disconnected: (reason?: DisconnectReason) => void,
@@ -356,7 +368,7 @@ export function createCallLifecycle(options: {
                 await releaseStaleNativeSession(call);
                 return;
               }
-              if (needsConnection) await options.connect(token);
+              if (needsConnection) await options.connect(token, request.source);
               call = { channelId: token.channelId, callId: token.callId };
             } else {
               // Let the joining scope finish mounting before dispatching its
@@ -473,11 +485,8 @@ export function createCallLifecycle(options: {
       },
       failed: ({ channelId, error }) => {
         options.rollbackJoin();
-        options.setError(
-          thrownResultErrorHasCode(error, 'CONFLICT')
-            ? ALREADY_IN_CALL_MESSAGE
-            : 'Unable to join the call. Please check your connection.'
-        );
+        options.setError(joinFailureMessage(error));
+        if (isMicrophoneAccessError(error)) options.microphoneBlocked();
         let active = true;
         // Recovery must not keep Try again pending, or tear down a newer join.
         async function cleanUpFailedJoin() {
@@ -532,7 +541,7 @@ export function createCallLifecycle(options: {
             !request.skipServerLeave && request.options?.endNativeCall !== false
               ? leaveServerOnce()
               : undefined;
-          let result: LeaveResult = undefined;
+          let result: LeaveResult;
           try {
             try {
               await options.disconnect(request.options);
@@ -542,6 +551,7 @@ export function createCallLifecycle(options: {
               if (releasing) result = await releasing;
               else if (active && !request.skipServerLeave)
                 result = await leaveServerOnce();
+              else result = undefined;
             }
             finish(undefined, result);
           } catch (error) {

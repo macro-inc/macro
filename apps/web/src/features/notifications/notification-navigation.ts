@@ -1,7 +1,10 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { requestComputerSetup } from '@app/features/settings/computers/primitives/setup-request';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { analytics } from '@app/lib/analytics';
+import { paneRoute } from '@app/routes/app-route';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -296,6 +299,27 @@ function getSupportedHandler(
             !isFeatureEnabled(enableWhatsappLinked))
         )
           return null;
+        // A runtime has no page of its own: its requests wait in its Share menu.
+        if (target.entityType === 'harness') {
+          const harnessId = target.entityId;
+          return async (lm: SplitManager, newSplit = false) =>
+            Telemetry.span(
+              'access_requests.notification.open',
+              async (span) => {
+                span.setAttr('entity.id', harnessId);
+                span.setAttr('entity.type', 'harness');
+                span.setAttr('notification.id', notification.id);
+                span.setAttr('notification.type', meta.tag);
+                span.setAttr('access_request.id', meta.content.requestId);
+                requestRuntimeShare(
+                  harnessId,
+                  meta.tag === 'entity_access_requested'
+                );
+                openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+              }
+            );
+        }
+        const sharedEntityType = target.entityType;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {
             span.setAttr('entity.id', target.entityId);
@@ -355,15 +379,15 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'external_chat'
+                sharedEntityType === 'external_chat'
                   ? 'external_chat'
-                  : target.entityType === 'initiative'
+                  : sharedEntityType === 'initiative'
                     ? 'initiative'
                     : itemToBlockName({
                         type:
-                          target.entityType === 'email_thread'
+                          sharedEntityType === 'email_thread'
                             ? 'email'
-                            : target.entityType,
+                            : sharedEntityType,
                         fileType:
                           document?.fileType ??
                           entity?.fileType ??
@@ -381,9 +405,9 @@ function getSupportedHandler(
                   openShareModal({
                     id: target.entityId,
                     itemType:
-                      target.entityType === 'email_thread'
+                      sharedEntityType === 'email_thread'
                         ? 'email'
-                        : target.entityType,
+                        : sharedEntityType,
                     blockAlias: block,
                     name: meta.content.entityName,
                     owner: state.owner ?? undefined,
@@ -658,7 +682,64 @@ function getSupportedHandler(
             onApplied,
           });
       })
+      // Signing in again happens on the computer's row in Settings → Runtimes.
+      .with(
+        'agent_sign_in_expiry',
+        () =>
+          async (lm: SplitManager, newSplit: boolean = false) =>
+            openContent(
+              lm,
+              {
+                type: 'component',
+                id: 'settings',
+                entryMetadata: {
+                  route: paneRoute({
+                    id: 'settings',
+                    params: { tab: 'runtimes' },
+                  }),
+                },
+              },
+              { newSplit, sourceHandle, onApplied }
+            )
+      )
+      // Back into the computer's guided setup, at Bring your AI: a ready
+      // computer continues there, a failed one offers Retry setup.
+      .with('computer_setup', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'computer_setup') return null;
+        const computerId = meta.content.computerId;
+        return async (lm: SplitManager, newSplit = false) => {
+          requestComputerSetup(computerId);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
+      // Its machine has no page of its own; Settings → Runtimes points it out.
+      .with('runtime_access_removed', () => {
+        const harnessId = notification.entity_id;
+        return async (lm: SplitManager, newSplit = false) => {
+          requestRuntimeShare(harnessId, false);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
       .exhaustive(() => null)
+  );
+}
+
+/** Settings → Runtimes, where a runtime's sharing and access live. */
+export function openRuntimesSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'harness' } }),
+      },
+    },
+    options
   );
 }
 

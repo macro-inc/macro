@@ -161,6 +161,7 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 import { ShareDialogFrame, ShareDialogTitle } from './ShareDialogFrame';
+import { getShareDrawerRecipientInput } from './ShareDrawer';
 
 false && clickOutside;
 
@@ -190,6 +191,8 @@ export function shareLevelsFor(
   blockAlias?: ShareBlockType
 ): readonly AccessLevel[] | undefined {
   if (itemType === 'form') return ['view', 'edit'];
+  // Edit on a shared email thread lets the recipient reply from their own inbox.
+  if (itemType === 'email') return ['view', 'edit'];
   if (
     itemType === 'document' &&
     blockAlias &&
@@ -308,19 +311,10 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
 const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
 export const refetchDocumentShareButtonResource = () => {
   invalidateSharePermissions();
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
+  refetchArray().forEach((refetch) => refetch());
 };
 
-export function getShareDrawerRecipientInput(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    '[data-share-drawer-recipient] input'
-  );
-}
+export { getShareDrawerRecipientInput };
 
 interface ShareModalProps extends ManagedDialogProps {
   userPermissions: Permissions;
@@ -794,9 +788,8 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                   onSubmit={() => props.setIsOpen(false)}
                   refetch={props.refetch}
                   name={props.name}
-                  hideAccessLevelSelector={props.itemType === 'email'}
                   initialAccessLevel={
-                    props.itemType === 'email' ? 'view' : null
+                    props.itemType === 'email' ? 'edit' : null
                   }
                   allowedAccessLevels={shareLevelsFor(
                     props.itemType,
@@ -1057,7 +1050,8 @@ export function ShareModal(props: ShareModalProps) {
     props.itemType === 'external_chat' &&
     props.userPermissions === Permissions.OWNER;
   const editPermissionEnabled = () => {
-    if (props.itemType === 'agent_session') return true;
+    if (props.itemType === 'agent_session' || props.itemType === 'email')
+      return true;
     if (
       props.itemType === 'document' &&
       props.blockAlias !== 'external_chat' &&
@@ -1754,9 +1748,8 @@ export function ShareModal(props: ShareModalProps) {
                   onCancel={() => props.onOpenChange(false)}
                   refetch={refetch}
                   name={props.name}
-                  hideAccessLevelSelector={props.itemType === 'email'}
                   initialAccessLevel={
-                    props.itemType === 'email' ? 'view' : null
+                    props.itemType === 'email' ? 'edit' : null
                   }
                   allowedAccessLevels={shareLevelsFor(
                     props.itemType,

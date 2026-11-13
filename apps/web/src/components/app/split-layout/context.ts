@@ -1,4 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -25,9 +26,10 @@ export type SplitBottomPanelRegistration = {
 
 export type SplitFileMenuAction = {
   label: string | JSX.Element;
-  icon: Component;
+  icon?: Component;
   action?: (e?: MouseEvent) => void;
   children?: SplitFileMenuAction[];
+  muteMenu?: NotificationMuteMenuProps;
   /** Only set when the token's shortcut is executable from the split. */
   hotkeyToken?: HotkeyToken;
   group?: SplitFileMenuActionGroup;
@@ -115,6 +117,12 @@ export type SplitPanelContextType = {
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
+  /**
+   * Set while a mobile view's `MobileHeader` owns this pane's header. Other
+   * header contributions stand down, so the header shows only what that view
+   * composes.
+   */
+  mobileHeaderOwner: Signal<symbol | undefined>;
   titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
   setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;
   titleFileMenuTrigger: Accessor<(() => void) | undefined>;

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, ChooseAgentModeData, ChooseAgentModeErrors, ChooseAgentModeResponses, ClassifyData, ClassifyErrors, ClassifyResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, CreateSessionReviewData, CreateSessionReviewErrors, CreateSessionReviewResponses, DecideSessionReviewData, DecideSessionReviewErrors, DecideSessionReviewResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, ExtractData, ExtractErrors, ExtractResponses, GetAgentAutoArchivePreferencesData, GetAgentAutoArchivePreferencesErrors, GetAgentAutoArchivePreferencesResponses, GetAgentCodingPreferencesData, GetAgentCodingPreferencesErrors, GetAgentCodingPreferencesResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionAutoArchiveData, GetAgentSessionAutoArchiveErrors, GetAgentSessionAutoArchiveResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionFoldedLogData, GetAgentSessionFoldedLogErrors, GetAgentSessionFoldedLogResponses, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetCodeExecutionData, GetCodeExecutionErrors, GetCodeExecutionResponses, GetSessionReviewData, GetSessionReviewErrors, GetSessionReviewResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentConversationsData, ListAgentConversationsErrors, ListAgentConversationsResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, ListExecutionReviewsData, ListExecutionReviewsErrors, ListExecutionReviewsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PresentSessionViewData, PresentSessionViewErrors, PresentSessionViewResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentAutoArchivePreferencesData, PutAgentAutoArchivePreferencesErrors, PutAgentAutoArchivePreferencesResponses, PutAgentCodingPreferencesData, PutAgentCodingPreferencesErrors, PutAgentCodingPreferencesResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionAutoArchiveData, PutAgentSessionAutoArchiveErrors, PutAgentSessionAutoArchiveResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, ReportAgentSessionAppConnectedData, ReportAgentSessionAppConnectedErrors, ReportAgentSessionAppConnectedResponses, RetryAgentConversationTurnData, RetryAgentConversationTurnErrors, RetryAgentConversationTurnResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartFreshAgentConversationData, StartFreshAgentConversationErrors, StartFreshAgentConversationResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
+import type { AddConnectedMcpServerData, AddConnectedMcpServerErrors, AddConnectedMcpServerResponses, AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, CallConnectedAppToolData, CallConnectedAppToolErrors, CallConnectedAppToolResponses, ChooseAgentModeData, ChooseAgentModeErrors, ChooseAgentModeResponses, ClassifyData, ClassifyErrors, ClassifyResponses, ClaudeSignOutData, ClaudeSignOutErrors, ClaudeSignOutResponses, CompleteClaudeSignInData, CompleteClaudeSignInErrors, CompleteClaudeSignInResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, CreateSessionReviewData, CreateSessionReviewErrors, CreateSessionReviewResponses, DecideSessionReviewData, DecideSessionReviewErrors, DecideSessionReviewResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, DiscoverConnectedAppsData, DiscoverConnectedAppsErrors, DiscoverConnectedAppsResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, ExtractData, ExtractErrors, ExtractResponses, GetAgentAutoArchivePreferencesData, GetAgentAutoArchivePreferencesErrors, GetAgentAutoArchivePreferencesResponses, GetAgentCodingPreferencesData, GetAgentCodingPreferencesErrors, GetAgentCodingPreferencesResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionActivityData, GetAgentSessionActivityErrors, GetAgentSessionActivityResponses, GetAgentSessionAutoArchiveData, GetAgentSessionAutoArchiveErrors, GetAgentSessionAutoArchiveResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionFoldedLogData, GetAgentSessionFoldedLogErrors, GetAgentSessionFoldedLogResponses, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetAgentVoiceSampleData, GetAgentVoiceSampleErrors, GetAgentVoiceSampleResponses, GetAgentVoicesData, GetAgentVoicesErrors, GetAgentVoicesResponses, GetClaudeModeData, GetClaudeModeErrors, GetClaudeModeResponses, GetCodeExecutionData, GetCodeExecutionErrors, GetCodeExecutionResponses, GetSessionReviewData, GetSessionReviewErrors, GetSessionReviewResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, LinkAgentSessionTaskData, LinkAgentSessionTaskErrors, LinkAgentSessionTaskResponses, ListAgentConversationsData, ListAgentConversationsErrors, ListAgentConversationsResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, ListAgentSessionUpdatesData, ListAgentSessionUpdatesErrors, ListAgentSessionUpdatesResponses, ListAgentWorkRegistrationsData, ListAgentWorkRegistrationsErrors, ListAgentWorkRegistrationsResponses, ListCodingAgentsData, ListCodingAgentsErrors, ListCodingAgentsResponses, ListConnectedAppToolsData, ListConnectedAppToolsErrors, ListConnectedAppToolsResponses, ListExecutionConnectedAppsData, ListExecutionConnectedAppsErrors, ListExecutionConnectedAppsResponses, ListExecutionReviewsData, ListExecutionReviewsErrors, ListExecutionReviewsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, OpenInAppData, OpenInAppErrors, OpenInAppResponses, PresentSessionViewData, PresentSessionViewErrors, PresentSessionViewResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentAutoArchivePreferencesData, PutAgentAutoArchivePreferencesErrors, PutAgentAutoArchivePreferencesResponses, PutAgentCodingPreferencesData, PutAgentCodingPreferencesErrors, PutAgentCodingPreferencesResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionAutoArchiveData, PutAgentSessionAutoArchiveErrors, PutAgentSessionAutoArchiveResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RegisterAgentSessionWorkData, RegisterAgentSessionWorkErrors, RegisterAgentSessionWorkResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, ReportAgentSessionAppConnectedData, ReportAgentSessionAppConnectedErrors, ReportAgentSessionAppConnectedResponses, RetryAgentConversationTurnData, RetryAgentConversationTurnErrors, RetryAgentConversationTurnResponses, SearchConnectedAppToolsData, SearchConnectedAppToolsErrors, SearchConnectedAppToolsResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartClaudeSignInData, StartClaudeSignInErrors, StartClaudeSignInResponses, StartFreshAgentConversationData, StartFreshAgentConversationErrors, StartFreshAgentConversationResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UnregisterAgentSessionWorkData, UnregisterAgentSessionWorkErrors, UnregisterAgentSessionWorkResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -298,6 +298,14 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * The caller's coding sessions waiting for their answer, or stalled for over 20 minutes,
+     * newest activity first.
+     */
+    public listAgentSessionUpdates<ThrowOnError extends boolean = false>(options?: Options<ListAgentSessionUpdatesData, ThrowOnError>): RequestResult<ListAgentSessionUpdatesResponses, ListAgentSessionUpdatesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListAgentSessionUpdatesResponses, ListAgentSessionUpdatesErrors, ThrowOnError>({ url: '/agent-sessions/updates', ...options });
+    }
+
+    /**
      * Prepare MCP connections without sending a prompt or creating a visible list row.
      */
     public warmAgentSessionHandler<ThrowOnError extends boolean = false>(options: Options<WarmAgentSessionHandlerData, ThrowOnError>): RequestResult<WarmAgentSessionHandlerResponses, unknown, ThrowOnError> {
@@ -328,6 +336,13 @@ export class Sdk extends HeyApiClient {
      */
     public getAgentSession<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionData, ThrowOnError>): RequestResult<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });
+    }
+
+    /**
+     * Read activity using the same visibility capability as the session transcript.
+     */
+    public getAgentSessionActivity<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionActivityData, ThrowOnError>): RequestResult<GetAgentSessionActivityResponses, GetAgentSessionActivityErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionActivityResponses, GetAgentSessionActivityErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/activity', ...options });
     }
 
     /**
@@ -410,6 +425,69 @@ export class Sdk extends HeyApiClient {
      */
     public getCodeExecution<ThrowOnError extends boolean = false>(options: Options<GetCodeExecutionData, ThrowOnError>): RequestResult<GetCodeExecutionResponses, GetCodeExecutionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetCodeExecutionResponses, GetCodeExecutionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/code-executions/{execution_id}', ...options });
+    }
+
+    /**
+     * List the connected apps and custom MCP servers the session's agent may use.
+     */
+    public listExecutionConnectedApps<ThrowOnError extends boolean = false>(options: Options<ListExecutionConnectedAppsData, ThrowOnError>): RequestResult<ListExecutionConnectedAppsResponses, ListExecutionConnectedAppsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListExecutionConnectedAppsResponses, ListExecutionConnectedAppsErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps', ...options });
+    }
+
+    /**
+     * Search the connectable app catalog, or inspect one app's tools and connection status.
+     */
+    public discoverConnectedApps<ThrowOnError extends boolean = false>(options: Options<DiscoverConnectedAppsData, ThrowOnError>): RequestResult<DiscoverConnectedAppsResponses, DiscoverConnectedAppsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DiscoverConnectedAppsResponses, DiscoverConnectedAppsErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/discover',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Add a custom MCP server to the execution account's connections.
+     */
+    public addConnectedMcpServer<ThrowOnError extends boolean = false>(options: Options<AddConnectedMcpServerData, ThrowOnError>): RequestResult<AddConnectedMcpServerResponses, AddConnectedMcpServerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AddConnectedMcpServerResponses, AddConnectedMcpServerErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/servers',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Find tools across the agent's connected apps by keywords.
+     */
+    public searchConnectedAppTools<ThrowOnError extends boolean = false>(options: Options<SearchConnectedAppToolsData, ThrowOnError>): RequestResult<SearchConnectedAppToolsResponses, SearchConnectedAppToolsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<SearchConnectedAppToolsResponses, SearchConnectedAppToolsErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools', ...options });
+    }
+
+    /**
+     * Call one tool of a connected app as the execution's account.
+     */
+    public callConnectedAppTool<ThrowOnError extends boolean = false>(options: Options<CallConnectedAppToolData, ThrowOnError>): RequestResult<CallConnectedAppToolResponses, CallConnectedAppToolErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CallConnectedAppToolResponses, CallConnectedAppToolErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * List the tools one connected app serves.
+     */
+    public listConnectedAppTools<ThrowOnError extends boolean = false>(options: Options<ListConnectedAppToolsData, ThrowOnError>): RequestResult<ListConnectedAppToolsResponses, ListConnectedAppToolsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListConnectedAppToolsResponses, ListConnectedAppToolsErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools', ...options });
     }
 
     /**
@@ -616,6 +694,21 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Link a session the caller owns to a task they can view, replacing any earlier link. The
+     * session's pull request, now or later, is linked to the task.
+     */
+    public linkAgentSessionTask<ThrowOnError extends boolean = false>(options: Options<LinkAgentSessionTaskData, ThrowOnError>): RequestResult<LinkAgentSessionTaskResponses, LinkAgentSessionTaskErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<LinkAgentSessionTaskResponses, LinkAgentSessionTaskErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/task',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * Answer a tool call the agent made in a turn somebody other than the
      * session's owner prompted. Approve and deny are the owner's; cancel is
      * anyone's with edit access.
@@ -623,6 +716,22 @@ export class Sdk extends HeyApiClient {
     public answerAgentSessionToolApproval<ThrowOnError extends boolean = false>(options: Options<AnswerAgentSessionToolApprovalData, ThrowOnError>): RequestResult<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/tool-approvals/{approval_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Open an item in a new pane of the app tab the person who prompted the
+     * running turn typed in. Only a running execution of the session's current
+     * turn may send, as the account it acts as.
+     */
+    public openInApp<ThrowOnError extends boolean = false>(options: Options<OpenInAppData, ThrowOnError>): RequestResult<OpenInAppResponses, OpenInAppErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<OpenInAppResponses, OpenInAppErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/ui-commands',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -643,6 +752,78 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * End the caller's own registration of a session. Repeating does nothing. It touches only the
+     * caller's own row, so it needs no access to the session: losing access must not strand it.
+     */
+    public unregisterAgentSessionWork<ThrowOnError extends boolean = false>(options: Options<UnregisterAgentSessionWorkData, ThrowOnError>): RequestResult<UnregisterAgentSessionWorkResponses, UnregisterAgentSessionWorkErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<UnregisterAgentSessionWorkResponses, UnregisterAgentSessionWorkErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/work-registration', ...options });
+    }
+
+    /**
+     * Register a session as the caller's work. Requires edit access. Repeating returns the active
+     * registration. Registering does not share the session: viewers who cannot open it do not see
+     * it, so share it too.
+     */
+    public registerAgentSessionWork<ThrowOnError extends boolean = false>(options: Options<RegisterAgentSessionWorkData, ThrowOnError>): RequestResult<RegisterAgentSessionWorkResponses, RegisterAgentSessionWorkErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<RegisterAgentSessionWorkResponses, RegisterAgentSessionWorkErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/work-registration', ...options });
+    }
+
+    /**
+     * List the caller's active registrations of sessions they can still view, newest first.
+     */
+    public listAgentWorkRegistrations<ThrowOnError extends boolean = false>(options?: Options<ListAgentWorkRegistrationsData, ThrowOnError>): RequestResult<ListAgentWorkRegistrationsResponses, ListAgentWorkRegistrationsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListAgentWorkRegistrationsResponses, ListAgentWorkRegistrationsErrors, ThrowOnError>({ url: '/agent-work-registrations', ...options });
+    }
+
+    /**
+     * List the coding agents the caller can start a session as: the same
+     * personas the `ListCodingAgents` tool offers, including built-in ones whose
+     * runtime the caller has connected (Cursor once its key is saved).
+     */
+    public listCodingAgents<ThrowOnError extends boolean = false>(options?: Options<ListCodingAgentsData, ThrowOnError>): RequestResult<ListCodingAgentsResponses, ListCodingAgentsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListCodingAgentsResponses, ListCodingAgentsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/coding-agents',
+            ...options
+        });
+    }
+
+    /**
+     * How Claude Code on the computer is paid for.
+     */
+    public getClaudeMode<ThrowOnError extends boolean = false>(options: Options<GetClaudeModeData, ThrowOnError>): RequestResult<GetClaudeModeResponses, GetClaudeModeErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetClaudeModeResponses, GetClaudeModeErrors, ThrowOnError>({ url: '/harnesses/{harness_id}/claude-mode', ...options });
+    }
+
+    /**
+     * Start a Claude sign-in on the computer and return its URL.
+     */
+    public startClaudeSignIn<ThrowOnError extends boolean = false>(options: Options<StartClaudeSignInData, ThrowOnError>): RequestResult<StartClaudeSignInResponses, StartClaudeSignInErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<StartClaudeSignInResponses, StartClaudeSignInErrors, ThrowOnError>({ url: '/harnesses/{harness_id}/claude-sign-in', ...options });
+    }
+
+    /**
+     * Finish the Claude sign-in with what the user pasted.
+     */
+    public completeClaudeSignIn<ThrowOnError extends boolean = false>(options: Options<CompleteClaudeSignInData, ThrowOnError>): RequestResult<CompleteClaudeSignInResponses, CompleteClaudeSignInErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CompleteClaudeSignInResponses, CompleteClaudeSignInErrors, ThrowOnError>({
+            url: '/harnesses/{harness_id}/claude-sign-in/complete',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Forget the computer's Claude credential and return it to Macro credits.
+     */
+    public claudeSignOut<ThrowOnError extends boolean = false>(options: Options<ClaudeSignOutData, ThrowOnError>): RequestResult<ClaudeSignOutResponses, ClaudeSignOutErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ClaudeSignOutResponses, ClaudeSignOutErrors, ThrowOnError>({ url: '/harnesses/{harness_id}/claude-sign-out', ...options });
     }
 
     /**
@@ -671,5 +852,20 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * The voices an agent teammate can speak with on calls. Team admins only.
+     */
+    public getAgentVoices<ThrowOnError extends boolean = false>(options?: Options<GetAgentVoicesData, ThrowOnError>): RequestResult<GetAgentVoicesResponses, GetAgentVoicesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAgentVoicesResponses, GetAgentVoicesErrors, ThrowOnError>({ url: '/voices', ...options });
+    }
+
+    /**
+     * A catalog voice saying a fixed line, as WAV. Team admins only; the first
+     * play of each voice is billed to the admin's team.
+     */
+    public getAgentVoiceSample<ThrowOnError extends boolean = false>(options: Options<GetAgentVoiceSampleData, ThrowOnError>): RequestResult<GetAgentVoiceSampleResponses, GetAgentVoiceSampleErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentVoiceSampleResponses, GetAgentVoiceSampleErrors, ThrowOnError>({ url: '/voices/{model}/sample', ...options });
     }
 }

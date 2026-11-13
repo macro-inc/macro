@@ -2,12 +2,15 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   type GetOrCreateChannelResponse,
   storageServiceClient,
 } from '@service-storage/client';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { useMutation } from '@tanstack/solid-query';
-import { invalidateListChannels } from './channels';
+import { ResultAsync } from 'neverthrow';
+import { invalidateListChannels, loadChannelList } from './channels';
 
 type GetOrCreateDmResponse = GetOrCreateChannelResponse;
 
@@ -58,19 +61,40 @@ export function useGetOrCreateDirectMessageMutation(
 }
 
 /**
- * Resolves the 1:1 DM with a recipient when a control is pressed. Avatars in
- * a message list render by the dozen, and a mutation observer per avatar
- * costs setup for a press that rarely comes.
+ * The 1:1 DM between `viewerId` and `recipientId` in a channel list, picked as
+ * the server's get-or-create picks it: the oldest two-member DM with both.
  */
-export async function getOrCreateDirectMessage(recipientId: string) {
-  const result = await storageServiceClient.getOrCreateDirectMessage({
-    recipient_id: recipientId,
-  });
-  fireAndForget(invalidateListChannels(), 'channel-list');
-  return result;
+function findDirectMessage(
+  channels: ApiChannelWithLatest[],
+  viewerId: string,
+  recipientId: string
+): string | undefined {
+  let found: ApiChannelWithLatest | undefined;
+  for (const channel of channels) {
+    if (channel.channel_type !== ChannelType.direct_message) continue;
+    if (channel.participants.length !== 2) continue;
+    const members = channel.participants.map(({ user_id }) => user_id);
+    if (!members.includes(viewerId) || !members.includes(recipientId)) continue;
+    if (!found || channel.created_at < found.created_at) found = channel;
+  }
+  return found?.id;
+}
+
+/**
+ * The viewer's existing DM with a recipient, without creating one. Reads the
+ * channel list the app already keeps, fetching it only when it isn't loaded.
+ */
+export function existingDirectMessage(
+  viewerId: string,
+  recipientId: string
+): ResultAsync<string | undefined, unknown> {
+  return ResultAsync.fromPromise(loadChannelList(), (error) => error).map(
+    (channels) => findDirectMessage(channels, viewerId, recipientId)
+  );
 }
 
 type GetOrCreatePrivateChannelParams = {
+  parentSpan?: TraceContext;
   recipients: string[];
 };
 
@@ -89,9 +113,11 @@ export function useGetOrCreatePrivateChannelMutation(
     gcTime: 0,
     mutationFn: async (vars: GetOrCreatePrivateChannelParams) => {
       return await throwOnErr(async () =>
-        storageServiceClient.getOrCreatePrivateChannel({
-          recipients: vars.recipients,
-        })
+        (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
+          storageServiceClient.getOrCreatePrivateChannel({
+            recipients: vars.recipients,
+          })
+        )
       );
     },
     ...withCallbacks<
@@ -107,7 +133,8 @@ export function useGetOrCreatePrivateChannelMutation(
         onSettled: () =>
           fireAndForget(invalidateListChannels(), 'channel-list'),
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
 }

@@ -1,5 +1,7 @@
 //! Unified entity-mutation capability impls for projects.
 
+use std::collections::HashSet;
+
 use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel,
 };
@@ -17,8 +19,8 @@ use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use super::{
     models::ProjectError,
     ports::{
-        BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService,
-        ProjectUploadUrlPort, ShaCounterPort,
+        BulkUploadRequestPort, FiledItemsUnfiler, ProjectRepo, ProjectSearchIndexer,
+        ProjectService, ProjectUploadUrlPort, ShaCounterPort,
     },
     service::ProjectServiceImpl,
 };
@@ -59,16 +61,22 @@ fn access_error(error: AccessError) -> EntityMutationErrorCode {
     }
 }
 
-/// Deduplicate effects while preserving their domain-defined order.
+/// Deduplicate effects while preserving their domain-defined order. A folder
+/// tree yields one effect per item, so this stays linear in its size.
 fn unique_effects(
     effects: impl IntoIterator<Item = EntityMutationEffect>,
 ) -> Vec<EntityMutationEffect> {
-    effects.into_iter().fold(Vec::new(), |mut unique, effect| {
-        if !unique.contains(&effect) {
-            unique.push(effect);
-        }
-        unique
-    })
+    let mut seen = HashSet::new();
+    effects
+        .into_iter()
+        .filter(|effect| {
+            let key = match effect {
+                EntityMutationEffect::Updated(entity) => (false, entity.clone()),
+                EntityMutationEffect::Deleted(entity) => (true, entity.clone()),
+            };
+            seen.insert(key)
+        })
+        .collect()
 }
 
 /// Fetch project metadata; access is enforced separately via receipts.
@@ -81,7 +89,8 @@ async fn basic_project<S: ProjectService>(
         .await?)
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> RenameEntity for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> RenameEntity
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -89,6 +98,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
     Self: ProjectService,
 {
@@ -122,7 +132,8 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> MoveEntity for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> MoveEntity
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -130,6 +141,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
     Self: ProjectService,
 {
@@ -177,8 +189,8 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> UpdateEntitySharePolicy
-    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> UpdateEntitySharePolicy
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -186,6 +198,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
     Self: ProjectService,
 {
@@ -215,7 +228,8 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> TrashEntity for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> TrashEntity
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -223,6 +237,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
     Self: ProjectService,
 {
@@ -260,7 +275,8 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> RestoreEntity for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> RestoreEntity
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -268,6 +284,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
     Self: ProjectService,
 {
@@ -301,8 +318,8 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> DeleteEntityPermanently
-    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> DeleteEntityPermanently
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -310,6 +327,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
     Self: ProjectService,
 {

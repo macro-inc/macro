@@ -4,6 +4,7 @@ import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
+import { contactEmails } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
@@ -14,7 +15,6 @@ import { ContactEmailsSection } from './contact-emails-section';
 import { ContactHeader } from './contact-header';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
@@ -71,7 +71,7 @@ function ContactContent(props: ContactProps) {
       return {
         type: 'contact',
         id: current.id,
-        email: current.email,
+        emails: contactEmails(current),
         companyId: current.companyId,
       };
     },
@@ -118,9 +118,6 @@ function ContactContent(props: ContactProps) {
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
-            </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />

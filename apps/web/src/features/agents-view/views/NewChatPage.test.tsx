@@ -24,7 +24,7 @@ import {
 } from '../primitives/composer-draft';
 import { createPreferredRepository } from '../primitives/preferred-repository';
 import { AgentPicker } from './AgentPicker';
-import { NewChatPage } from './NewChatPage';
+import { type AgentRequest, NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
   userId: () => 'user' as string | undefined,
@@ -968,6 +968,52 @@ describe('agent-led new conversation', () => {
     });
   });
 
+  it('selects a requested agent once the roster has it, and again on every request', async () => {
+    const computerAgent: PersistedAgentLike = {
+      bot: { id: 'computer-agent', name: "Maya's Agent", handle: 'maya' },
+      harness: 'macrod',
+      harness_id: 'computer',
+      default_model: 'default',
+    };
+    const [agents, setAgents] = createSignal<PersistedAgentLike[]>([]);
+    const [requested, setRequested] = createSignal<AgentRequest>({
+      agentId: 'computer-agent',
+      request: 'first',
+    });
+    const send = vi.fn();
+    render(() => (
+      <NewChatPage
+        mode="code"
+        requestedAgent={requested()}
+        roster={buildAgentRoster({
+          agents: agents(),
+          runtimes: [{ id: 'computer', name: 'Agent Box', connected: true }],
+          cursorConnected: true,
+          cursorNeedsConnection: false,
+        })}
+        rosterLoading={false}
+        onStart={send}
+        onOpenRoster={vi.fn()}
+      />
+    ));
+    const trigger = () => screen.getByRole('button', { name: 'Agent' });
+    // The agent list was cached before the computer created its agent.
+    expect(trigger().title).not.toContain("Maya's Agent");
+
+    setAgents([computerAgent]);
+    expect(trigger().title).toContain("Maya's Agent");
+
+    await selectAgent(/Cursor/);
+    expect(trigger().title).toContain('Cursor');
+    setRequested({ agentId: 'computer-agent', request: 'second' });
+    expect(trigger().title).toContain("Maya's Agent");
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ botId: 'computer-agent' })
+    );
+  });
+
   it('keeps a disconnected paired agent visible and offers to reconnect it', () => {
     page(
       true,
@@ -988,8 +1034,8 @@ describe('agent-led new conversation', () => {
     // The row stays clickable: selecting it opens Settings → Runtimes, where
     // the runtime can be restarted (one click on desktop) or re-paired.
     expect(row.getAttribute('aria-disabled')).not.toBe('true');
-    expect(row.getAttribute('title')).toBe('Its runtime is disconnected');
-    expect(row.textContent).toContain('Reconnect runtime');
+    expect(row.getAttribute('title')).toBe('Its machine is disconnected');
+    expect(row.textContent).toContain('Reconnect machine');
   });
 
   it.each([false, true])(
@@ -1042,9 +1088,9 @@ describe('agent-led new conversation', () => {
       expect(offline.textContent).toContain('Offline agent');
       // The disconnected row stays clickable: it offers to reconnect the
       // runtime (opens Settings → Runtimes) and keeps the reason as a tooltip.
-      expect(offline.textContent).toContain('Reconnect runtime');
+      expect(offline.textContent).toContain('Reconnect machine');
       expect(
-        within(picker).queryByText('Connect the runtime to load models.')
+        within(picker).queryByText('Connect the machine to load models.')
       ).toBeNull();
       expect(within(picker).queryByText('Models')).toBeNull();
       const unavailable = within(offline).getByRole(
@@ -1054,7 +1100,7 @@ describe('agent-led new conversation', () => {
       // title attribute.
       if (!touch) {
         expect(unavailable.getAttribute('title')).toBe(
-          'Its runtime is disconnected'
+          'Its machine is disconnected'
         );
       }
       expect(

@@ -133,6 +133,28 @@ The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
 
+### APK for sideloading
+
+Each production release gets a signed ARM64 APK,
+`macro-<tag>-android-arm64.apk`, and its `.sha256` as release assets. The
+`Android APK on Release` workflow builds them on the same `released` event as
+`Deploy Production Release`. It is a separate workflow, so the deploy never
+waits on it, and a failed APK build leaves the release in place.
+
+- It runs the App Bundle build with `--apk`, with the same production `VITE_*`
+  environment, which is defined once in the generated workflow sources. Both
+  builds fail when the PostHog key is empty, because without it every feature
+  flag reads false.
+- It signs with the upload key, so an APK updates an earlier APK install in
+  place. A Play-installed app has the Play App Signing certificate: uninstall it
+  before installing an APK, and the reverse.
+- The version code is the one committed at the tag. The installed app then
+  takes web updates over the air like a Play install.
+- To rebuild a release's APK, re-run its build job, or run the workflow with
+  "Use workflow from" set to the release tag. Only tags that contain the
+  workflow can be picked, so releases cut before it have no APK build. Assets
+  stay with their release; nothing prunes them.
+
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
@@ -150,7 +172,8 @@ statuses on the PR's commits: `android-play/release` (set by the publisher
 around the production promotion) and `android-play/live` (set by the watcher
 once the release is live).
 
-**`Android Native Check`** runs on every PR against `main`. Its native tree
+**`Android Native Check`** runs whenever CI runs on a PR against `main` (the
+`run-ci` label), and the release starts only after CI has run on the head. Its native tree
 excludes platform-specific desktop/iOS files and Markdown docs, which do not
 ship in the Android binary (`apps/web/scripts/android-native.mjs` defines
 what counts). When the Android native code changed, it requires a
@@ -160,7 +183,7 @@ The watcher sets that status only once Google has **published** the release
 (through review and available to users; the edit API's `status: completed`
 only describes the rollout, so the watcher also reads the release list's
 `releaseLifecycleState`) with a provenance stamp matching the merge result.
-Until then the check fails and the required `Web App Status Check` fails with
+Until then the check fails and the required `CI gate` status fails with
 it. Web-only pushes after the release keep it valid: the status on an earlier
 commit still matches.
 
@@ -232,8 +255,8 @@ To release:
    and a link to the run.
 3. Wait for Google. The **`Android Release Watch`** workflow (every 30
    minutes) notices the version code being published on production, marks
-   the PR head `android-play/live`, re-runs the PR's failed
-   `Android Native Check` job, and comments; the PR merges if auto-merge is
+   the PR head `android-play/live`, re-runs the failed jobs of the PR's latest
+   `PR CI` run (the `Android Native Check` among them), and comments; the PR merges if auto-merge is
    on.
 4. Pushes after the label: web-only commits need nothing. Native commits make
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
@@ -999,12 +1022,15 @@ as core functionality;
 check with `adb shell appops get <package> USE_FULL_SCREEN_INTENT`. Once
 notifications are on, Macro shows a toast while the setting is off; **Allow**
 opens Android's per-app setting, and the toast stays until returning to Macro
-finds access granted; **Hide** stops the prompt on that device. The
+finds access granted; **Dismiss** stops the prompt on that device. The return
+check runs when the page becomes visible again: the Android WebView fires no
+window `focus` when the app comes back from Settings. The
 call notification is public, so the lock screen shows the call and its actions.
-Test both permission states. Microphone access is required to join;
-camera access is requested when enabling video, and Bluetooth access when selecting
-that route on Android 12 or newer. A denied permission does not silently enable
-capture.
+Test both permission states. Microphone access is required to join: a denied
+join shows the **Microphone access is off** toast with **Open Settings**, and a
+denied Answer leaves **Open settings** on the call screen. Camera access is
+requested when enabling video, and Bluetooth access when selecting that route on
+Android 12 or newer. A denied permission does not silently enable capture.
 
 While ringing, the native call activity fills the screen with an opaque themed
 background, caller initials and name (or channel name when unavailable), channel

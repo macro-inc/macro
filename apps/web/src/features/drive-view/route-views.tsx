@@ -8,17 +8,14 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { useIsAuthenticated } from '@core/auth';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import {
   DriveView,
   type DriveViewProps,
   SignedOutDriveView,
 } from './drive-view';
 import { DriveViewSkeleton } from './drive-view-skeleton';
-
-const DriveCallDetail = lazy(async () => ({
-  default: (await import('./views/DriveCallDetail')).DriveCallDetail,
-}));
+import { DriveCallDetail } from './views/DriveCallDetail';
 
 const AuthenticatedDriveRouteView = withAuth(() => {
   useViewRestoration();

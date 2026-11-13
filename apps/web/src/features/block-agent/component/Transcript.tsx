@@ -17,6 +17,7 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { RuntimeRefusalRow } from '../components/runtime-refusal-row';
 import { SessionEventRow } from '../components/session-event-row';
 import { useAgentSession } from '../context/AgentSessionContext';
 import type { AgentMessageTarget } from '../core/search-location';
@@ -27,8 +28,15 @@ import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
 export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
-  const { messages, metadata, quoteSelection, sessionId, turn, userId } =
-    useAgentSession();
+  const {
+    messages,
+    metadata,
+    quoteSelection,
+    runtimeRefusal,
+    sessionId,
+    turn,
+    userId,
+  } = useAgentSession();
   // At most one turn runs, and the fold's `turn` is the one word on whether
   // it does - so which message shimmers is decided here, once, not by each
   // message from its own `stop` (see `state/live-turn`). A speculated stop
@@ -62,6 +70,7 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
   // extra row at the tail says the wait is work, not a stall - a prompt still
   // on the wire (`starting`) included.
   const workingKey = () => `${sessionId() ?? ''}:working`;
+  const refusalKey = () => `${sessionId() ?? ''}:refusal`;
   const showsWorking = createMemo(() => {
     const state = turn();
     if (state !== 'starting' && state !== 'running') return false;
@@ -98,6 +107,7 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
     return [
       ...rows.map((row) => row.key),
       ...(showsWorking() ? [workingKey()] : []),
+      ...(runtimeRefusal() ? [refusalKey()] : []),
     ];
   });
   let positionedTarget: AgentMessageTarget | undefined;
@@ -146,6 +156,8 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
       <ThreadList
         keys={keys}
         shortListAlign="start"
+        // A reply streams below the tool rows and thoughts the reader opens.
+        holdOnDisclosure
         initialPosition={
           initialTarget && initialSessionId
             ? {
@@ -174,6 +186,13 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
               </div>
             }
           >
+            <Show when={id === refusalKey() && runtimeRefusal()}>
+              {(reason) => (
+                <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+                  <RuntimeRefusalRow reason={reason()} />
+                </div>
+              )}
+            </Show>
             <Show when={eventsById().get(id)}>
               {(event) => (
                 <div class="macro-message-width mx-auto px-4 pb-2 min-w-0">

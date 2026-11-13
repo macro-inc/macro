@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
+import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
   groups: Accessor<ListFilterGroup<string, string>[]>;
@@ -22,7 +23,7 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
-import type { CrmSoupActivityTab } from '../core/navigation';
+import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
@@ -55,6 +56,15 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  createEmailPrivacy(): {
+    query: import('./crm-sources').CrmQuery<
+      import('../core/email-privacy').EmailPrivacy
+    >;
+    update: CrmMutation<
+      import('../core/email-privacy').EmailPrivacyChange,
+      import('../core/email-privacy').EmailPrivacy
+    >;
+  };
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
@@ -91,27 +101,25 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   createContactEmails(
-    email: Accessor<string | undefined>,
+    emails: Accessor<string[]>,
     scope: Accessor<CrmEmailScope>,
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
   createActivity(
-    tab: Accessor<CrmSoupActivityTab>,
+    tab: Accessor<CrmActivityTab>,
     options?: Accessor<CrmActivityViewState>
   ): ItemListSource;
-  /** Databases containing CRM-linked rows; undefined selects the workspace scope. */
-  createDatabases(scope: Accessor<CrmRecordScope | undefined>): ItemListSource;
-  openCreateItem(kind: 'notes' | 'calls' | 'databases'): void;
+  openCreateItem(kind: 'notes' | 'calls'): void;
   openEmailComposer(recipient?: string): void;
   createActivityState(
-    tab: CrmSoupActivityTab
+    tab: CrmActivityTab
   ): readonly [
     Store<CrmActivityViewState>,
     SetStoreFunction<CrmActivityViewState>,
   ];
   createActivityFilters(
-    tab: CrmSoupActivityTab,
+    tab: CrmActivityTab,
     state: Store<CrmActivityViewState>,
     setState: SetStoreFunction<CrmActivityViewState>
   ): ActivityFilters;
@@ -195,6 +203,14 @@ export type CrmContext = {
     companyId?: string | null;
     name: string;
   }>;
+  editContactEmail(): CrmMutation<
+    { contact: CrmContact; email: string; change: ContactEmailChange },
+    CrmContact
+  >;
+  editContactCompany(): CrmMutation<
+    { contact: CrmContact; companyId: string | null },
+    CrmContact
+  >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

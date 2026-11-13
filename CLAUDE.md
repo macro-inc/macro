@@ -27,6 +27,8 @@ patterns in older code.
 | `crates/` | Reusable backend libraries, domain services, and adapters. |
 | `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
 | `infra/` | Deployment definitions and local infrastructure. |
+| `agent-teammates/` | Agents that work in Macro as their own users: the `muppet` library and a `starter-agent` template. Outside the root workspace and its checks. |
+| `packages/muppet/`, `packages/starter-agent/` | The hosted agent teammate runtime, in the root workspace: the muppet library and the template each agent's repository starts from (`docs/design/agent-teammates.md`). |
 | `tooling/` | Development tools, scripts, and imported `just` recipes. |
 | `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
 
@@ -38,7 +40,7 @@ patterns in older code.
 | `AGENTS.md` in a directory | Scope, map, checks, and gotchas for that subtree; a sibling `CLAUDE.md` symlinks to it. |
 | `.agents/skills/` | Task workflows. Cursor loads this directory. `.claude/skills` and `.pi/skills` symlink here. |
 | `.agents/rules/` | Path-scoped conventions, loaded when you touch matching files. `.claude/rules` and `.cursor/rules` symlink here. |
-| `.agents/agents/` | Subagents (`auditor`, `browser-verifier`). `.claude/agents` symlinks here. |
+| `.agents/agents/` | Subagents (`auditor`, `browser-verifier`, `db-reviewer`). `.claude/agents` symlinks here. |
 | `.agents/templates/` | Templates for new rules and `AGENTS.md` files. |
 | `rules/ast-grep/` | Mechanically enforced code rules, run by `just check`. |
 
@@ -55,9 +57,11 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Adding, reading or removing a feature flag (web or backend) | `feature-flags` skill |
 | Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
+| Reviewing a diff before a push: query cost, migration locks | `review` skill |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
 | iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
 | Android Play releases from pull requests | [Android development](docs/development/android.md) |
+| Running CI on a pull request | [CI on pull requests](docs/development/ci.md), `run-ci` skill |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
 | Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
 | Giving the user a local preview link | `local-preview` skill |
@@ -80,6 +84,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   per-fix confirmation.
 - Keep each feature's development, validation, and local preview on one branch/worktree.
 - Flag real risks; once the user decides, act on it.
+- When the user gives improvement advice that applies beyond the current task, update the agent guidance it belongs in, in the same change (see **Keeping guidance current**).
 - Disagree when they're wrong. No flattery.
 - Answer simple questions directly.
 - For UI work, ask how it should behave on mobile unless that's obvious.
@@ -111,6 +116,8 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 
 - Commits, branches, and PRs follow the `git` skill: Conventional Commit titles
   such as `fix(onboarding): preserve team inputs`, and Why / What bodies with no test plan.
+- Run the `review` skill before every push to a PR, and fix or justify its
+  findings; changed SQL or migrations always get its database reviews.
 - Run the `audit` skill (via the `auditor` subagent) before saying work is done.
 - Update every doc your change makes stale, in the same change: the `AGENTS.md`
   of each directory you touched, `docs/guides/`, `docs/architecture/`, the
@@ -121,8 +128,11 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   reads it too.
 - Open pull requests ready for review. If one is created as a draft, mark it
   ready for review before handing off.
-- Get CI passing before handing off. A pull request whose checks are failing
-  or still running is not done.
+- Run CI deliberately with the `run-ci` label (`run-ci` skill): at a
+  checkpoint, a coherent locally tested chunk you want real CI on before
+  building further, or when you think the PR is done. Never after every push,
+  and never instead of local checks. A PR is done only when `CI gate` passes on
+  its latest commit.
 - Test the affected packages/services individually before committing. Use the
   relevant guide for setup; there is no root `just test` recipe.
 - For code changes, run `just check` (format/lint/code rules scoped to changes).

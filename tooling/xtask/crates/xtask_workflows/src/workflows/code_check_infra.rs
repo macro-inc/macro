@@ -4,9 +4,7 @@
 //! `Infra Status Check`, which is unchanged, so branch protection is
 //! unaffected by the file rename).
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
-};
+use gh_workflow::{Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
 
 use crate::workflows::{
     runners,
@@ -26,18 +24,7 @@ fn infra_runner() -> String {
 /// Build the workflow.
 pub fn code_check_infra() -> Workflow {
     Workflow::new("infra code check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
-        .concurrency(
-            Concurrency::new(Expression::new("code-check-infra-${{ github.ref }}"))
-                .cancel_in_progress(true),
-        )
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("path-check", path_check())
         .add_job("biome-check", biome_check())
         .add_job("check", check())
