@@ -347,6 +347,7 @@ async fn a_table_id_another_database_already_has_is_refused_as_taken(pool: PgPoo
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -411,6 +412,7 @@ async fn an_option_id_another_definition_already_has_is_refused_as_taken(pool: P
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -511,6 +513,7 @@ async fn a_view_id_another_database_already_has_is_refused_as_taken(pool: PgPool
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

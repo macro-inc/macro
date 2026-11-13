@@ -91,6 +91,7 @@ async fn a_webhook_call_inserts_a_row_the_owner_reads(pool: PgPool) {
             name: "Meetings".to_string(),
             owner_id: owner.clone(),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

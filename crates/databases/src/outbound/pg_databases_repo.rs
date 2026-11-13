@@ -398,7 +398,7 @@ where
             &command.name,
             command.owner_id.as_ref(),
             table_id,
-            first_table.name,
+            &first_table.name,
         )
         .await?;
         let title = self

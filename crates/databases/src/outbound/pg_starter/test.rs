@@ -266,6 +266,7 @@ async fn existing_database_skips_seed_even_after_it_is_deleted(pool: PgPool) {
                 name: "Already mine".into(),
                 owner_id: viewer().user_id,
                 acting_bot: None,
+                first_table: None,
             },
             FirstTable {
                 name: "Tasks",

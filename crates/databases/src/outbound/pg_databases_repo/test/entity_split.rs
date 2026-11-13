@@ -261,6 +261,7 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
                 name: "Fresh start".into(),
                 owner_id: user(),
                 acting_bot: None,
+                first_table: None,
             },
             FirstTable {
                 name: "Contacts",
