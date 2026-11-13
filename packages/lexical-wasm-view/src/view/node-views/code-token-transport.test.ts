@@ -294,6 +294,7 @@ test.each([
   (_, reenter) => {
     const observed: string[] = [];
     let armedReentry = true;
+    let thrown: Error | undefined;
     const holder: { session?: Session } = {};
     const { fixture, setLanguage, childTypes } = surfaceWith((_, text) => {
       if (armedReentry && holder.session) {
@@ -303,7 +304,8 @@ test.each([
           observed.push('no error');
         } catch (error) {
           observed.push(error instanceof Error ? error.message : String(error));
-          throw new Error(SENTINEL);
+          thrown = new Error(SENTINEL);
+          throw thrown;
         }
       }
       return fixtureReply(text);
@@ -319,6 +321,16 @@ test.each([
     expect(fixture.errors).toEqual([HOST]);
     expect(JSON.stringify([outer, fixture.errors])).not.toContain(SENTINEL);
     expect(childTypes()).toEqual(['text']);
+    // The rejected reentry leaves the outer entry's cause intact, takeable only by its own pair.
+    const failure = fixture.session.takeCodeTokenFailure();
+    if (!failure) throw new Error('missing code token failure');
+    const [cause] = failure.causes();
+    expect(
+      fixture.session.takeCodeTokenCause(failure.entry + 1n, cause)
+    ).toBeUndefined();
+    expect(fixture.session.takeCodeTokenCause(failure.entry, cause)?.[0]).toBe(
+      thrown
+    );
     // The fence depth is reset: an ordinary call and the next edit both succeed.
     expect(typeof fixture.session.serializedState()).toBe('string');
     setLanguage('javascript');
@@ -379,4 +391,139 @@ test('the production artifact ships no dev-probes registry export', async () => 
     'utf8'
   );
   expect(glue).not.toContain('debugCodeTokenProviders');
+});
+
+test.each([
+  ['an Error', new Error(SENTINEL)],
+  ['undefined', undefined],
+  ['null', null],
+  ['a plain object', { content: SENTINEL }],
+])(
+  'a thrown %s is taken back by identity through its reported (entry, cause), once',
+  (_, value) => {
+    const { fixture, setLanguage } = surfaceWith(() => {
+      throw value;
+    });
+    try {
+      try {
+        setLanguage('rust');
+      } catch {
+        // Asserted through the reported failure below.
+      }
+      expect(fixture.errors).toEqual([HOST]);
+      const failure = fixture.session.takeCodeTokenFailure();
+      if (!failure) throw new Error('missing code token failure');
+      expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
+      expect(failure.causes()).toHaveLength(1);
+      expect(failure.effectOrdinals()).toHaveLength(1);
+      const [cause] = failure.causes();
+      expect(
+        fixture.session.takeCodeTokenCause(failure.entry, cause + 1)
+      ).toBeUndefined();
+      expect(
+        fixture.session.takeCodeTokenCause(failure.entry + 1n, cause)
+      ).toBeUndefined();
+      const taken = fixture.session.takeCodeTokenCause(failure.entry, cause);
+      // Presence of the element, not its value, tells a thrown undefined from no cause.
+      expect(taken).toHaveLength(1);
+      expect(taken?.[0]).toBe(value);
+      expect(
+        fixture.session.takeCodeTokenCause(failure.entry, cause)
+      ).toBeUndefined();
+      expect(fixture.session.codeTokenCausesDropped()).toBe(0);
+    } finally {
+      fixture.close();
+    }
+  }
+);
+
+test('an unrelated tokenizer failure records no cause', () => {
+  const { fixture, setLanguage } = surfaceWith(() => '{');
+  try {
+    try {
+      setLanguage('rust');
+    } catch {
+      // Asserted through the reported failure below.
+    }
+    expect(fixture.errors).toEqual([HOST]);
+    expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
+    expect(fixture.session.codeTokenCausesDropped()).toBe(0);
+  } finally {
+    fixture.close();
+  }
+});
+
+test('an untaken cause is retired and counted when the next entry begins; later throws are still recorded', () => {
+  const values = Array.from(
+    { length: 9 },
+    (_, index) => new Error(String(index))
+  );
+  let next = 0;
+  const { fixture, setLanguage } = surfaceWith(() => {
+    throw values[next++];
+  });
+  try {
+    const failures = [];
+    for (const _ of values) {
+      try {
+        setLanguage('rust');
+      } catch {
+        // Every edit fails; asserted below.
+      }
+      failures.push(fixture.session.takeCodeTokenFailure());
+    }
+    expect(next).toBe(9);
+    expect(failures.every((failure) => failure?.causes().length === 1)).toBe(
+      true
+    );
+    // Entries 1-8 were never taken; each is retired when the next entry begins.
+    expect(fixture.session.codeTokenCausesDropped()).toBe(8);
+    const [first, last] = [failures[0], failures[8]];
+    if (!first || !last) throw new Error('missing failures');
+    expect(
+      fixture.session.takeCodeTokenCause(first.entry, first.causes()[0])
+    ).toBeUndefined();
+    expect(
+      fixture.session.takeCodeTokenCause(last.entry, last.causes()[0])?.[0]
+    ).toBe(values[8]);
+  } finally {
+    fixture.close();
+  }
+});
+
+// Carrier E3 pin (named open gap): a setState runs the code transform in a follow-up update,
+// whose failure is reported as FollowUpFailed with no takeable cause.
+test('a tokenizer throw inside a follow-up update carries no takeable cause', () => {
+  let threw = 0;
+  const { fixture } = surfaceWith(() => {
+    threw++;
+    throw new Error(SENTINEL);
+  });
+  try {
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'custom-code',
+                version: 1,
+                language: 'rust',
+                children: [{ type: 'text', version: 1, text: 'fn main() {}' }],
+              },
+            ],
+          },
+        })
+      );
+    } catch {
+      // Asserted below.
+    }
+    expect(threw).toBeGreaterThan(0);
+    expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
+    expect(fixture.session.codeTokenCausesDropped()).toBe(0);
+  } finally {
+    fixture.close();
+  }
 });

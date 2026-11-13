@@ -72,3 +72,76 @@ fn tokens_are_nonzero_and_never_wrap() {
     assert_eq!(next_token(1), Some((1, 2)));
     assert_eq!(next_token(u64::MAX), None);
 }
+
+#[test]
+fn one_cause_per_entry_and_a_second_is_dropped_and_counted() {
+    let mut causes = Causes::default();
+    causes.begin(1);
+    assert_eq!(causes.record("first"), Some(1));
+    assert_eq!(causes.record("second"), None);
+    assert_eq!(causes.dropped(), 1);
+    assert!(causes.carry(1));
+    causes.end();
+    assert_eq!(causes.take(1, 1), Some("first"));
+}
+
+#[test]
+fn an_untaken_cause_is_retired_and_counted_when_the_next_entry_begins() {
+    let mut causes = Causes::default();
+    causes.begin(1);
+    let cause = causes.record("first").unwrap();
+    assert!(causes.carry(cause));
+    causes.end();
+    // Still takeable until the next entry begins.
+    causes.begin(2);
+    assert_eq!(causes.dropped(), 1);
+    assert_eq!(causes.take(1, cause), None);
+}
+
+#[test]
+fn a_throw_after_many_untaken_entries_is_still_recorded() {
+    let mut causes = Causes::default();
+    for entry in 1..=8 {
+        causes.begin(entry);
+        let cause = causes.record(entry).unwrap();
+        assert!(causes.carry(cause));
+        causes.end();
+    }
+    causes.begin(9);
+    let cause = causes.record(9).unwrap();
+    assert!(causes.carry(cause));
+    causes.end();
+    assert_eq!(causes.take(9, cause), Some(9));
+    assert_eq!(causes.dropped(), 8);
+}
+
+#[test]
+fn an_unreported_cause_is_retired_with_its_entry_and_not_counted() {
+    let mut causes = Causes::default();
+    causes.begin(1);
+    assert_eq!(causes.record("swallowed"), Some(1));
+    causes.end();
+    assert_eq!(causes.take(1, 1), None);
+    assert_eq!(causes.dropped(), 0);
+}
+
+#[test]
+fn takes_need_the_exact_pair_and_succeed_once() {
+    let mut causes = Causes::default();
+    causes.begin(4);
+    let cause = causes.record("value").unwrap();
+    assert!(causes.carry(cause));
+    assert!(!causes.carry(cause + 1));
+    causes.end();
+    assert_eq!(causes.take(3, cause), None);
+    assert_eq!(causes.take(4, cause + 1), None);
+    assert_eq!(causes.take(4, cause), Some("value"));
+    assert_eq!(causes.take(4, cause), None);
+}
+
+#[test]
+fn a_throw_outside_every_entry_is_dropped_and_counted() {
+    let mut causes = Causes::default();
+    assert_eq!(causes.record("early"), None);
+    assert_eq!(causes.dropped(), 1);
+}

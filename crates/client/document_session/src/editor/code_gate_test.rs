@@ -124,3 +124,143 @@ fn with_a_tokenizer_the_active_path_writes_the_remote_default_as_fixup() {
     assert_eq!(stored, Some(serde_json::json!("plaintext")));
     assert!(fixups > 0);
 }
+
+/// Answers every call (all languages loaded, one plain token per text) except call number
+/// `throw_at`, which throws; counts every call.
+struct ThrowAt {
+    calls: AtomicUsize,
+    throw_at: usize,
+}
+impl ThrowAt {
+    fn call(&self) -> Result<(), CodeTokenError> {
+        let call = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
+        if call == self.throw_at {
+            return Err(CodeTokenError::Thrown { cause: call as u32 });
+        }
+        Ok(())
+    }
+}
+impl CodeTokenProvider for ThrowAt {
+    fn is_loaded(&self, _: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError> {
+        self.call().map(|()| true)
+    }
+    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError> {
+        self.call()?;
+        Ok(if request.text.is_empty() {
+            Vec::new()
+        } else {
+            vec![CodeToken::Text {
+                text: request.text.to_owned(),
+                highlight_type: None,
+            }]
+        })
+    }
+}
+
+fn code_state(surface: &EditorSurface) -> lexical_model::SerializedEditorState {
+    let mut state = surface.state().to_json().unwrap();
+    state.root.insert(
+        "children".into(),
+        serde_json::json!([
+            {"type":"custom-code","language":"rust","previewEnabled":false,"children":[
+                {"type":"text","text":"fn main() {}"}
+            ]}
+        ]),
+    );
+    state
+}
+
+/// Which phase reports a throw at tokenizer call `throw_at` during a local edit that creates a
+/// code block: (calls made, main update error, follow-up failure).
+fn local_code_edit(throw_at: usize) -> (usize, bool, bool) {
+    let provider = Arc::new(ThrowAt {
+        calls: AtomicUsize::new(0),
+        throw_at,
+    });
+    let doc = lexical_loro::new_doc(7).unwrap();
+    let mut local = EditorSurface::new(
+        config(CodeTokens::new(provider.clone(), "throw-at")),
+        7,
+        now(),
+    )
+    .unwrap();
+    local
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let state = code_state(&local);
+    let mut view = Vec::new();
+    let _ = local.apply(
+        &doc,
+        Input::SetState {
+            state,
+            tags: TagSet::default(),
+        },
+        now(),
+        Access::Edit,
+        &mut view,
+    );
+    let main = view
+        .iter()
+        .any(|effect| matches!(effect, ViewEffect::Error(_)));
+    let follow_up = view
+        .iter()
+        .any(|effect| matches!(effect, ViewEffect::Editor(Effect::FollowUpFailed { .. })));
+    (provider.calls.load(Ordering::Relaxed), main, follow_up)
+}
+
+// Carrier E3 reachability pin: a local SetState with a code block calls the tokenizer only
+// inside follow-up updates, so every throw surfaces as FollowUpFailed (which carries no
+// takeable cause) and none as a main-update error. A change in either direction fails here.
+#[test]
+fn follow_up_reachability_of_the_tokenizer_in_a_local_code_edit() {
+    let (calls, main, follow_up) = local_code_edit(0);
+    assert!(calls > 0 && !main && !follow_up, "baseline: {calls} calls");
+    for throw_at in 1..=calls {
+        assert_eq!(
+            local_code_edit(throw_at),
+            (throw_at, false, true),
+            "throw at call {throw_at} of {calls}"
+        );
+    }
+}
+
+// Carrier E4 reachability pin: does initializing a surface over a stored code block call the
+// tokenizer?
+#[test]
+fn init_reachability_of_the_tokenizer_over_a_stored_code_block() {
+    let doc = lexical_loro::new_doc(7).unwrap();
+    let mut writer = EditorSurface::new(config(CodeTokens::none()), 7, now()).unwrap();
+    writer
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let state = code_state(&writer);
+    writer
+        .apply(
+            &doc,
+            Input::SetState {
+                state,
+                tags: TagSet::default(),
+            },
+            now(),
+            Access::Edit,
+            &mut Vec::new(),
+        )
+        .unwrap();
+    let stored = lexical_loro::fork_doc(&doc, 61).unwrap();
+    let provider = Arc::new(ThrowAt {
+        calls: AtomicUsize::new(0),
+        throw_at: 0,
+    });
+    let mut reader = EditorSurface::new(
+        config(CodeTokens::new(provider.clone(), "throw-at")),
+        61,
+        now(),
+    )
+    .unwrap();
+    let mut view = Vec::new();
+    reader
+        .init(&stored, now(), Access::Edit, &mut view)
+        .unwrap();
+    let calls = provider.calls.load(Ordering::Relaxed);
+    assert_eq!(calls, 0);
+}
