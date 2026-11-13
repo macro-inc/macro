@@ -563,6 +563,15 @@ service_url! {
             dev: "https://static-file-service-dev.macro.com",
             prod: "https://static-file-service.macro.com",
         },
+        /// Public API gateway origin: every service's API under its path
+        /// prefix (`/auth`, `/dss`, `/cognition`, `/agent-harness`, ...), as
+        /// clients off Macro's network reach them. Locally this is the stack's
+        /// proxy, which mirrors the gateway's prefixes.
+        pub ApiGatewayUrl {
+            local: "https://localhost:8090",
+            dev: "https://dev-gateway.macro.com",
+            prod: "https://gateway.macro.com",
+        },
         /// Agent harness service API URL. Serves the agent-session control
         /// routes, which run in the process that owns the live sessions.
         pub AgentHarnessServiceUrl {
@@ -642,6 +651,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/calendar",
             prod: "https://gateway.macro.com/calendar",
         },
+        /// Agent workspace repos: smart-HTTP clone/push of each agent's repo
+        /// and the internal create/delete API, served by the agent harness
+        /// under the `/agent-git` gateway prefix.
+        pub AgentGitServiceUrl {
+            local: "http://localhost:8101/agent-git",
+            dev: "https://dev-gateway.macro.com/agent-git",
+            prod: "https://gateway.macro.com/agent-git",
+        },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",
@@ -666,6 +683,114 @@ service_url! {
             dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
             prod: "https://ai-editing-worker.macroverse.workers.dev",
         },
+    }
+}
+
+service_url! {
+    /// Gmail REST API base. Google's host in every environment; override it
+    /// to run against `crates/gmail_emulator`.
+    pub struct GmailApiUrl {
+        local: "https://www.googleapis.com/gmail/v1",
+        dev: "https://www.googleapis.com/gmail/v1",
+        prod: "https://www.googleapis.com/gmail/v1",
+    }
+}
+
+service_url! {
+    /// Google Calendar REST API base. Google's host in every environment;
+    /// override it to run against `crates/gmail_emulator`.
+    pub struct GoogleCalendarApiUrl {
+        local: "https://www.googleapis.com/calendar/v3",
+        dev: "https://www.googleapis.com/calendar/v3",
+        prod: "https://www.googleapis.com/calendar/v3",
+    }
+}
+
+service_url! {
+    /// Google People API base. Google's host in every environment; override
+    /// it to run against `crates/gmail_emulator`.
+    pub struct GooglePeopleApiUrl {
+        local: "https://people.googleapis.com/v1",
+        dev: "https://people.googleapis.com/v1",
+        prod: "https://people.googleapis.com/v1",
+    }
+}
+
+service_url! {
+    /// Google's public keys for verifying Gmail push tokens. Google's host in
+    /// every environment; override it to run against `crates/gmail_emulator`.
+    pub struct GoogleOauthCertsUrl {
+        local: "https://www.googleapis.com/oauth2/v3/certs",
+        dev: "https://www.googleapis.com/oauth2/v3/certs",
+        prod: "https://www.googleapis.com/oauth2/v3/certs",
+    }
+}
+
+service_url! {
+    /// Google's OAuth authorization endpoint, where a browser goes to sign in
+    /// and consent. Google's host in every environment; override it to run
+    /// against `crates/gmail_emulator`. The override is opened by a browser,
+    /// so it names an address the browser reaches, not an in-network one.
+    pub struct GoogleOauthAuthorizationUrl {
+        local: "https://accounts.google.com/o/oauth2/v2/auth",
+        dev: "https://accounts.google.com/o/oauth2/v2/auth",
+        prod: "https://accounts.google.com/o/oauth2/v2/auth",
+    }
+}
+
+service_url! {
+    /// Google's OAuth token endpoint: authorization code exchange and token
+    /// refresh. Google's host in every environment; override it to run
+    /// against `crates/gmail_emulator`.
+    pub struct GoogleOauthTokenUrl {
+        local: "https://oauth2.googleapis.com/token",
+        dev: "https://oauth2.googleapis.com/token",
+        prod: "https://oauth2.googleapis.com/token",
+    }
+}
+
+service_url! {
+    /// Google's OAuth token revocation endpoint. Google's host in every
+    /// environment; override it to run against `crates/gmail_emulator`.
+    pub struct GoogleOauthRevokeUrl {
+        local: "https://oauth2.googleapis.com/revoke",
+        dev: "https://oauth2.googleapis.com/revoke",
+        prod: "https://oauth2.googleapis.com/revoke",
+    }
+}
+
+service_url! {
+    /// Microsoft Graph v1.0 API root. Microsoft's host in every environment;
+    /// override it to run against `crates/outlook_emulator`.
+    pub struct MicrosoftGraphUrl {
+        local: "https://graph.microsoft.com/v1.0/",
+        dev: "https://graph.microsoft.com/v1.0/",
+        prod: "https://graph.microsoft.com/v1.0/",
+    }
+}
+
+service_url! {
+    /// The Microsoft identity platform's host, for the calls a service
+    /// makes: code exchange, token refresh, the OpenID discovery document
+    /// and its signing keys. Microsoft's host in every environment; override
+    /// it to run against `crates/outlook_emulator`.
+    pub struct MicrosoftLoginUrl {
+        local: "https://login.microsoftonline.com/",
+        dev: "https://login.microsoftonline.com/",
+        prod: "https://login.microsoftonline.com/",
+    }
+}
+
+service_url! {
+    /// The Microsoft identity platform's host, for the pages a browser
+    /// opens: sign-in and consent, and admin consent. Microsoft's host in
+    /// every environment; override it to run against
+    /// `crates/outlook_emulator`. The override names an address the browser
+    /// reaches, not an in-network one.
+    pub struct MicrosoftLoginPageUrl {
+        local: "https://login.microsoftonline.com/",
+        dev: "https://login.microsoftonline.com/",
+        prod: "https://login.microsoftonline.com/",
     }
 }
 

@@ -967,7 +967,8 @@ function InlineEditor(props: {
                 if (!props.mentionOpen) commit(false);
               }}
               onKeyDown={onKeyDown}
-              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none"
+              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] leading-5 text-ink outline-none"
+              classList={{ 'font-medium': props.column.dataType === 'STRING' }}
             />
           }
         >
@@ -977,10 +978,15 @@ function InlineEditor(props: {
               get value() {
                 return props.draft;
               },
+              // The value's own weight and line height, so its lines wrap
+              // where they did before the cell opened.
               class:
-                'min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none',
+                'min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] leading-5 font-medium text-ink outline-none',
               autoFocus: true,
               selectAll: props.selectAll,
+              // Enter saves and moves down; Shift+Enter would move up, and the
+              // next line typed would land in the record above.
+              lineBreakOnShiftEnter: true,
               inferType: props.column.inferType,
               onInferMention: (mention) => {
                 // Removing a focused editor can synchronously blur it. The typed
@@ -1404,7 +1410,10 @@ function DateCell(props: GridCellProps) {
   );
 }
 
-/** Multi-line text keeps its arrows until the caret is on the first or last line. */
+/**
+ * Multi-line text keeps its arrows until the caret is on the first or last
+ * line, whether lines end at a newline or wrap.
+ */
 function caretOnEdgeLine(
   target: EventTarget | null,
   direction: 1 | -1
@@ -1414,9 +1423,38 @@ function caretOnEdgeLine(
   const selection = target.ownerDocument.getSelection();
   if (!selection?.rangeCount || !selection.isCollapsed) return false;
   const caret = selection.getRangeAt(0);
-  const rest = target.ownerDocument.createRange();
-  rest.selectNodeContents(target);
-  if (direction === 1) rest.setStart(caret.endContainer, caret.endOffset);
-  else rest.setEnd(caret.startContainer, caret.startOffset);
-  return !rest.toString().includes('\n');
+  const before = target.ownerDocument.createRange();
+  before.selectNodeContents(target);
+  before.setEnd(caret.startContainer, caret.startOffset);
+  const after = target.ownerDocument.createRange();
+  after.selectNodeContents(target);
+  after.setStart(caret.endContainer, caret.endOffset);
+  const rest = direction === 1 ? after : before;
+  if (rest.toString().includes('\n')) return false;
+  const behind = visibleBoxes(before);
+  const ahead = visibleBoxes(after);
+  // The caret's own box can't place it: where a line wraps, the end of one
+  // line and the start of the next are the same position, and beside a pill
+  // the caret has no box. Read its line from the text beside it, on the side
+  // that keeps the arrow in the cell when the position is ambiguous. At
+  // worst the arrow first moves the caret to the start or end of its line.
+  let line: DOMRect | undefined;
+  if (direction === 1) {
+    const startsLine = !behind.length || before.toString().endsWith('\n');
+    line = startsLine ? ahead[0] : behind.at(-1);
+  } else {
+    const endsLine = !ahead.length || after.toString().startsWith('\n');
+    line = endsLine ? behind.at(-1) : ahead[0];
+  }
+  // Nothing beside the caret: an empty editor, or an empty last line.
+  if (!line) return true;
+  const middle = line.top + line.height / 2;
+  return (direction === 1 ? ahead : behind).every((box) =>
+    direction === 1 ? box.top <= middle : box.bottom >= middle
+  );
+}
+
+/** A range's boxes that draw something; empty ones mark the caret's own spot. */
+function visibleBoxes(range: Range) {
+  return Array.from(range.getClientRects()).filter((box) => box.width > 0);
 }

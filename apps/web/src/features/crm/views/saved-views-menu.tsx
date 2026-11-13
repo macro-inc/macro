@@ -184,7 +184,7 @@ export function CompanyViewsMenu(
 
   const triggerSize = () => {
     if (!props.hideLabel) return 'sm';
-    return props.grouped ? 'icon-sm' : 'icon-md';
+    return 'icon-md';
   };
 
   return (
@@ -337,7 +337,7 @@ export function CompanyDisplayMenu(props: { grouped?: boolean } = {}) {
           tooltip="Display options"
           as={props.grouped ? ButtonGroup.Button : Button}
           variant="ghost"
-          size={props.grouped ? 'icon-sm' : 'icon-md'}
+          size="icon-md"
         >
           <SlidersIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>

@@ -68,6 +68,15 @@ pub(super) async fn create_project<B: BotFacts>(
         args.owner.clone(),
     )
     .await?;
+    if let Ok(project_id) = uuid::Uuid::parse_str(&project.id) {
+        entity_access_db_utils::project_grants::refuse_filing_in(
+            transaction,
+            &project_id,
+            model_entity::EntityType::Project,
+            args.parent_id.as_deref(),
+        )
+        .await?;
+    }
 
     Ok(project)
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at) VALUES ($1, 'macrod_missing', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4555980c2b9992385d982c5e2ce218d2524c5a892c7552ab6cec349d9d34be19"
+}

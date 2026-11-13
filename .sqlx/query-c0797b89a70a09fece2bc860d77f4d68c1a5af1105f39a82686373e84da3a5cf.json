@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO macro_user_email_verification (macro_user_id, email, is_verified)\n            VALUES ($1, $2, true)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0797b89a70a09fece2bc860d77f4d68c1a5af1105f39a82686373e84da3a5cf"
+}

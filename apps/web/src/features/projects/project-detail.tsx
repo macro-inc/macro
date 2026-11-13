@@ -310,6 +310,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         navigation={(compact) => (
           <Tabs
             aria-label={t('tabs.projectSections')}
+            size={isTouchDevice() ? 'md' : 'sm'}
             touch="inset"
             class="shrink-0"
             options={[

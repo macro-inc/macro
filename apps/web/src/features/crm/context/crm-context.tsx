@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
-import type { CrmContact } from '../core/contact';
+import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
   groups: Accessor<ListFilterGroup<string, string>[]>;
@@ -104,7 +104,7 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   createContactEmails(
-    email: Accessor<string | undefined>,
+    emails: Accessor<string[]>,
     scope: Accessor<CrmEmailScope>,
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
@@ -207,11 +207,11 @@ export type CrmContext = {
     name: string;
   }>;
   editContactEmail(): CrmMutation<
-    { contact: CrmContact; email: string },
+    { contact: CrmContact; email: string; change: ContactEmailChange },
     CrmContact
   >;
   editContactCompany(): CrmMutation<
-    { contact: CrmContact; companyId: string },
+    { contact: CrmContact; companyId: string | null },
     CrmContact
   >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;

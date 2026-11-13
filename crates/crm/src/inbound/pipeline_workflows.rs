@@ -99,6 +99,10 @@ where
             get(search_entries::<Workflows, Transfer, Authorization>),
         )
         .route(
+            "/pipelines/details",
+            get(list_details::<Workflows, Transfer, Authorization>),
+        )
+        .route(
             "/pipelines/create",
             post(create::<Workflows, Transfer, Authorization>),
         )
@@ -165,6 +169,24 @@ fn csv_input(csv: Option<String>, document_id: Option<Uuid>) -> Result<CsvInput,
             "Give exactly one of csv (the CSV text) or documentId (a CSV file in Macro).".into(),
         )),
     }
+}
+
+/// The caller's live pipelines, each with its fields in column order (a
+/// select field lists its options, so Stage lists the stages) and its table
+/// version: what `ListPipelines` gives the agent, in one call.
+#[utoipa::path(get, path = "/crm/pipelines/details", operation_id = "list_crm_pipeline_details",
+    responses((status = 200, body = Vec<PipelineFields>), (status = 400, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn list_details<
+    Workflows: PipelineWorkflowService,
+    Transfer: CrmTransferService,
+    Authorization: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+    State(state): State<PipelineWorkflowRouterState<Workflows, Transfer, Authorization>>,
+) -> Result<Json<Vec<PipelineFields>>, WorkflowError> {
+    let pipelines = state.workflows.pipelines(&viewer(&auth)).await?;
+    Ok(Json(pipelines.iter().map(PipelineFields::from).collect()))
 }
 
 /// Entries of one pipeline matching filters, records or a search, with
@@ -426,6 +448,10 @@ pub async fn edit<
     Path(id): Path<Uuid>,
     Json(request): Json<EditPipelineRequest>,
 ) -> Result<Json<PipelineFields>, WorkflowError> {
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(request.sharing.is_some())
+        .map_err(|refused| WorkflowError::Forbidden(refused.to_string()))?;
     let edit = PipelineEdit {
         name: request.name,
         sharing: request.sharing,
@@ -569,6 +595,7 @@ impl IntoResponse for WorkflowError {
     fn into_response(self) -> Response {
         match self {
             Self::Invalid(text) => message(StatusCode::BAD_REQUEST, text),
+            Self::Forbidden(text) => message(StatusCode::FORBIDDEN, text),
             Self::NoTeam => message(
                 StatusCode::FORBIDDEN,
                 "the user is not in a team, so they have no CRM".into(),

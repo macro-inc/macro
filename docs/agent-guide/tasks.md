@@ -164,7 +164,7 @@ timestamps. At 600px, Updated fades and collapses over
 160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
-Updated remains sortable. Created by is the final column, with a 16px avatar above
+Updated remains sortable except during a main Tasks or project text search. Created by is the final column, with a 16px avatar above
 840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
 keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. The creator header and avatar
@@ -284,6 +284,13 @@ Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
 follows stored option order; Priority puts urgent tasks first. Missing values
 stay last. Property-sort ties use newest update, then descending task ID.
 Text search retains its existing ordering and flat list results; clear search to sort.
+While searching, the desktop header hides Sort (leaving Group in its island), the
+keyboard shortcut sheet and command menu drop **Sort tasks** (S does nothing), and
+the mobile drawer omits its Sort section. The list's column headers stop sorting:
+Due date shows a plain label, and Updated keeps a static descending arrow whatever
+the stored sort is. Clearing search brings back the stored sort and every control
+unchanged. CRM task lists search by rerunning their own query, so their column
+headers keep sorting during a search.
 Boards group the loaded search results as before, without complete counts or grouped-search requests.
 
 **Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
@@ -398,7 +405,8 @@ Deadline tints and the Today marker refresh at local midnight and when a tab
 becomes visible or focused again.
 The tint only appears when the actual end is inside the calendar range.
 Bar text stays inside the visible portion of its bar as you scroll, zoom, or
-open the item drawer, and truncates in narrow segments.
+open the item drawer. A bar too short for its name shows the name beside it,
+to its right, in muted text, until zooming in makes room.
 The full-width date header stays visible during vertical scrolling; the pointer's
 date label stays in that header, and the vertical scrollbar begins below it.
 Timeline-edge fades stay within the date header, beneath its floating buttons.
@@ -546,7 +554,8 @@ start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
 A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**,
-**Status**, **Priority**, or the active due-date sort label. The drop does not choose a pointer insertion slot:
+**Status**, **Priority**, or the active due-date sort label; during a text search it
+shows **Move here**. The drop does not choose a pointer insertion slot:
 its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
@@ -1202,7 +1211,8 @@ its target again.
 ## Bulk delete
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
-then confirm **Delete**. With GraphQL Soup enabled, selected rows disappear while
+then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms
+and Escape cancels. With GraphQL Soup enabled, selected rows disappear while
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
 reports how many items were deleted and keeps only failed items in the dialog for
@@ -1254,11 +1264,10 @@ Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
 when opening the picker. Rows stay in place while selecting or deselecting.
 Initially selected outsiders remain visible and removable, including references
-absent from contacts. They stay searchable for re-adding during that editing
-session without contact discovery. Once the editor closes without them, they
-cannot be added again unless they join the team.
+absent from contacts. They stay searchable for re-adding while the record stays
+mounted, even after the picker closes. Unrelated non-team contacts stay excluded.
 
-The same scope applies to task/project creation and editing, bulk Set assignee,
+The same roster scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
 keep their semantics; Created by and custom people fields keep their contact lists.
 Check that a teammate absent from contacts appears and can be selected, that

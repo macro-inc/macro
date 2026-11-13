@@ -48,8 +48,15 @@ event contract (schema, sanitization, delivery semantics).
   left pending is settled by the next holder of the subscription guard (applied
   iff its provider marker landed, else `abandoned`), so it never wedges seat,
   plan or computer changes. One younger than `PENDING_SETTLE_AFTER` (5 min)
-  may still be in flight at Stripe, so the guard refuses with
-  `ItemChangeInFlight` instead of settling it. A trialing subscription never
+  may still be in flight at Stripe (its sender let go of the guard, but its
+  request may still be running), so instead of abandoning it the guard sends
+  its exact stored request again under its own `Idempotency-Key`
+  (`finish_in_flight_locked`): Stripe runs a key at most once, answers a
+  finished request with its saved result and a running one with 409. Only a
+  409 or other unknown answer refuses with `ItemChangeInFlight`. Callers
+  keep one key per intent across retries (e.g. `computer-remove:{effect}:{n}`
+  moves to `n+1` only once `n` definitely did not apply), so a retry replays
+  its own change rather than being refused by it. A trialing subscription never
   gains a computer item (`SubscriptionTrialing`); its own replay sends the stored endpoint and exact
   request, including scheduled updates. Settling a key with no receipt writes
   an `abandoned` one on the team's subscription, fencing a send still on its

@@ -2,6 +2,7 @@ use harness_id::HarnessId;
 use harnesses::domain::models::{ClaudeMode, Harness, HarnessOwner};
 use ratatui::{Terminal, backend::TestBackend};
 
+use crate::profiles::ConfigSelection;
 use crate::tui::app::{App, Tab};
 use crate::tui::config_form::settings;
 use crate::tui::logging::LogBuffer;
@@ -25,7 +26,11 @@ fn short_config_keeps_selected_settings_and_web_owned_values_visible() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("macrod.toml");
     std::fs::write(&path, include_str!("../../../../../default.macrod.toml")).unwrap();
-    let mut app = App::load(&path, LogBuffer::default(), None).unwrap();
+    let selection = ConfigSelection {
+        path: path.clone(),
+        profile: None,
+    };
+    let mut app = App::load(&selection, LogBuffer::default(), None).unwrap();
     app.tab = Tab::Config;
     app.config.harness.args = vec!["herdr-acp".to_owned()];
     app.snapshot.harness = Some(Harness {
@@ -56,7 +61,7 @@ fn short_config_keeps_selected_settings_and_web_owned_values_visible() {
             );
             assert!(screen.contains("without approval"));
             assert!(screen.contains("teammates can command agents"));
-            assert!(screen.contains("https://macro.com/app/settings/harness"));
+            assert!(screen.contains("https://macro.com/app/settings/runtimes"));
         }
     }
     screen(&app, 20, 10);
@@ -67,11 +72,15 @@ fn unpaired_config_points_at_the_web_settings() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("macrod.toml");
     std::fs::write(&path, include_str!("../../../../../default.macrod.toml")).unwrap();
-    let mut app = App::load(&path, LogBuffer::default(), None).unwrap();
+    let selection = ConfigSelection {
+        path: path.clone(),
+        profile: None,
+    };
+    let mut app = App::load(&selection, LogBuffer::default(), None).unwrap();
     app.tab = Tab::Config;
 
     let screen = screen(&app, 100, 24);
     assert!(screen.contains("paired and reachable"));
-    assert!(screen.contains("https://macro.com/app/settings/harness"));
+    assert!(screen.contains("https://macro.com/app/settings/runtimes"));
     assert!(!screen.contains("without approval"));
 }

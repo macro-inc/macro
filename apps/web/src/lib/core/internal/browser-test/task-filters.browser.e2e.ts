@@ -198,3 +198,52 @@ for (const change of ['Manual priority', 'Navigate away', 'Replace login']) {
     await expect(page.getByTestId('task-reference-requests')).toHaveText('[]');
   });
 }
+
+test('Task list drawer offers Sort only while not searching', async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== 'phone', 'Desktop uses the header controls');
+  await page.goto('/?task-filters');
+  const drawer = page.getByRole('dialog', { name: 'Task list controls' });
+  const open = page.getByRole('button', { name: 'Open task filters' });
+  await open.click();
+  await expect(drawer.getByRole('radiogroup', { name: 'Sort' })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Search tasks' }).click();
+  await open.click();
+  await expect(drawer.getByRole('radiogroup', { name: 'Group' })).toBeVisible();
+  await expect(drawer.getByRole('radiogroup', { name: 'Sort' })).toHaveCount(0);
+  await expect(drawer.getByText(/search order/i)).toHaveCount(0);
+});
+
+test('Task list header offers no column sort while searching', async ({
+  page,
+}, info) => {
+  test.skip(info.project.name === 'phone', 'Phones have no column header');
+  await page.goto('/?task-filters');
+  const header = page.getByRole('grid', { name: 'Tasks' }).getByRole('row');
+  const sort = page.getByTestId('task-sort');
+  await header.getByRole('button', { name: 'Due date' }).click();
+  await expect(sort).toHaveText(
+    '[{"id":"due_date_earliest","reversed":false}]'
+  );
+
+  await page.getByRole('button', { name: 'Search tasks' }).click();
+  await expect(header.getByRole('button')).toHaveCount(0);
+  const arrows = (name: string) =>
+    header.getByRole('columnheader', { name }).locator('svg:visible');
+  await expect(arrows('Updated')).toHaveCount(1);
+  await expect(arrows('Due date')).toHaveCount(0);
+  await header.getByText('Due date').click();
+  await header.getByText('Updated').click();
+  await expect(sort).toHaveText(
+    '[{"id":"due_date_earliest","reversed":false}]'
+  );
+
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(header.getByRole('button')).toHaveText(['Due date', 'Updated']);
+  await expect(sort).toHaveText(
+    '[{"id":"due_date_earliest","reversed":false}]'
+  );
+});

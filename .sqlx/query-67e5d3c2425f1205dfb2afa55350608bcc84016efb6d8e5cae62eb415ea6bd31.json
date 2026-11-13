@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             (SELECT count(*) FROM suggestion\n              WHERE user_id = $1 AND state IN ('proposed', 'accepted')) AS \"open!\",\n             (SELECT count(*) FROM suggestion_change\n              WHERE generation_id = $2 AND subject = 'suggestion'\n                AND action IN ('created', 'restored')) AS \"added!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "open!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "added!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "67e5d3c2425f1205dfb2afa55350608bcc84016efb6d8e5cae62eb415ea6bd31"
+}
