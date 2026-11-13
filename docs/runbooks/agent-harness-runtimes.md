@@ -50,14 +50,15 @@ stall.
 - Group the warnings by `host` to find the replica, and look for a reattach
   storm or a slow blocking call on it at the same time.
 - `@delay_ms` above 1,000 means ticks ran over a second late.
-- `@cpu_wait_ms` near or above `@delay_ms` means the process's threads were
-  waiting for a CPU: the task spent its CPU quota for the 100 ms period, or
-  other processes held the CPUs. A task that keeps logging one constant
+- `@cpu_wait_ms`, the longest any one thread waited for a CPU, near or above
+  `@delay_ms` means the replica's threads could not get a CPU: the task spent
+  its CPU quota for the 100 ms period, or every CPU was busy (its own work,
+  its sidecars or other processes). A task that keeps logging one constant
   `@delay_ms` is hitting its quota. Moving work off the runtime does not help
   there; less CPU or a larger task does.
-- `@cpu_wait_ms` near zero with `@cpu_run_ms` above `@delay_ms` means a task
-  held a runtime thread with CPU-heavy work. Both near zero means a thread
-  blocked off the CPU (synchronous I/O or DNS, a `std::sync` lock).
+- `@cpu_wait_ms` well below `@delay_ms` means a task held a runtime thread,
+  computing or blocked. `@cpu_run_ms` (CPU all threads used in the interval,
+  `@actual_ms` long) tells which, against the replica's usual CPU use.
 
 ## Task memory near its limit
 

@@ -1,13 +1,17 @@
 use super::*;
 
+fn times(run_ms: u64, wait_ms: u64) -> ThreadCpuTimes {
+    ThreadCpuTimes {
+        run: Duration::from_millis(run_ms),
+        wait: Duration::from_millis(wait_ms),
+    }
+}
+
 #[test]
 fn parses_run_and_wait_nanoseconds() {
     assert_eq!(
         parse_schedstat(b"1500000000 25000000 812\n"),
-        Some(ThreadCpuTimes {
-            run: Duration::from_millis(1500),
-            wait: Duration::from_millis(25),
-        })
+        Some(times(1500, 25))
     );
 }
 
@@ -19,20 +23,37 @@ fn rejects_malformed_schedstat() {
 }
 
 #[test]
-fn difference_saturates_when_a_thread_exits() {
-    let earlier = ThreadCpuTimes {
-        run: Duration::from_millis(80),
-        wait: Duration::from_millis(30),
-    };
-    let later = ThreadCpuTimes {
-        run: Duration::from_millis(50),
-        wait: Duration::from_millis(45),
-    };
+fn sums_run_and_keeps_the_longest_single_wait() {
+    let earlier: ThreadCpuSample = [(1, times(100, 10)), (2, times(200, 20))]
+        .into_iter()
+        .collect();
+    let later: ThreadCpuSample = [(1, times(130, 15)), (2, times(210, 60))]
+        .into_iter()
+        .collect();
     assert_eq!(
-        later.since(earlier),
-        ThreadCpuTimes {
-            run: Duration::ZERO,
-            wait: Duration::from_millis(15),
+        later.since(&earlier),
+        IntervalCpu {
+            run: Duration::from_millis(40),
+            longest_wait: Duration::from_millis(40),
+        }
+    );
+}
+
+/// Blocking-pool threads exit after sitting idle; one that leaves mid
+/// interval must not cancel out what the other threads did.
+#[test]
+fn an_exited_thread_does_not_cancel_the_others() {
+    let earlier: ThreadCpuSample = [(1, times(100, 0)), (2, times(400, 0))]
+        .into_iter()
+        .collect();
+    let later: ThreadCpuSample = [(1, times(250, 30)), (3, times(5, 1))]
+        .into_iter()
+        .collect();
+    assert_eq!(
+        later.since(&earlier),
+        IntervalCpu {
+            run: Duration::from_millis(155),
+            longest_wait: Duration::from_millis(30),
         }
     );
 }
@@ -40,17 +61,12 @@ fn difference_saturates_when_a_thread_exits() {
 #[cfg(target_os = "linux")]
 #[test]
 fn samples_this_process_on_linux() {
-    assert!(ThreadCpuTimes::sample().is_some());
-
-    let own = || {
-        parse_schedstat(&std::fs::read("/proc/thread-self/schedstat").unwrap())
-            .expect("Linux exposes schedstat")
-    };
-    let before = own();
+    let before = ThreadCpuSample::take().expect("Linux exposes schedstat");
     let started = std::time::Instant::now();
     let mut spin = 0u64;
     while started.elapsed() < Duration::from_millis(20) {
         spin = std::hint::black_box(spin.wrapping_add(1));
     }
-    assert!(own().since(before).run > Duration::ZERO);
+    let after = ThreadCpuSample::take().expect("Linux exposes schedstat");
+    assert!(after.since(&before).run > Duration::ZERO);
 }
