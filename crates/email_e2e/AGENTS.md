@@ -69,6 +69,10 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   email-e2e-known-bugs` (a non-gating CI step) runs only those and reports
   which still fail and which now pass. Remove the attribute with the fix.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
+- Failures of what the services depend on: a provider fault on the emulator,
+  `stack.fail_next_service_request` for another Macro service,
+  `stack.refuse_queue_sends` for an enqueue. `stack.redis()` reaches the
+  services' Redis database.
 
 ## Start here
 

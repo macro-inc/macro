@@ -29,6 +29,8 @@ pub use inbox::{Inbox, Mail, MailAttachment, Provider, ProviderMessage};
 pub use macro_services::ServiceRequest;
 /// The Outlook emulator's own API, for what the inbox methods do not cover.
 pub use outlook_emulator;
+/// The Redis client [`Stack::redis`] answers with.
+pub use redis;
 /// The error type every harness method returns.
 pub use rootcause::Report;
 pub use stack::{Stack, StackOptions};

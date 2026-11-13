@@ -110,6 +110,15 @@ impl RedisDatabase {
         &self.url
     }
 
+    /// Opens a connection to the database.
+    pub(crate) async fn connect(&self) -> Result<MultiplexedConnection, Report> {
+        let connection = redis::Client::open(self.url.as_str())?
+            .get_multiplexed_async_connection()
+            .await
+            .context("could not connect to the scenario's Redis database")?;
+        Ok(connection)
+    }
+
     /// Fails when the lease ran out while the scenario was using the
     /// database: another scenario may have taken and emptied it since.
     pub(crate) fn ensure_held(&self) -> Result<(), Report> {

@@ -311,6 +311,54 @@ impl Stack {
             .unwrap_or_default()
     }
 
+    /// The base URL the email services call a Macro service stand-in at.
+    pub fn service_url(&self, service: &str) -> String {
+        self.macro_services
+            .as_ref()
+            .map(|macro_services| macro_services.url(service))
+            .unwrap_or_default()
+    }
+
+    /// Makes one of the Macro service stand-ins answer an error once: the
+    /// next request to `service` (`static-files`, `document-storage` or
+    /// `connection-gateway`) with this method whose path within the service
+    /// starts with `path_prefix` answers `status`. The request is still
+    /// recorded in [`Stack::service_requests`].
+    pub fn fail_next_service_request(
+        &self,
+        service: &str,
+        method: &str,
+        path_prefix: &str,
+        status: u16,
+    ) -> Result<(), Report> {
+        match &self.macro_services {
+            Some(macro_services) => macro_services.fail_next(service, method, path_prefix, status),
+            None => bail!("the stack was torn down"),
+        }
+    }
+
+    /// Refuses the next `times` messages the email services send to one of
+    /// their queues, with an error their AWS client does not retry: each
+    /// refused send is one failed enqueue in the service. Messages the
+    /// scenario sends itself are not affected.
+    pub fn refuse_queue_sends(&self, queue: &str, times: usize) -> Result<(), Report> {
+        let url = &self.queues().named(queue)?.url;
+        match &self.aws {
+            Some(aws) => aws.refuse_sends(url, times),
+            None => bail!("the stack was torn down"),
+        }
+        Ok(())
+    }
+
+    /// A connection to the scenario's Redis database, the one the email
+    /// services use: for reading or removing what they keep there.
+    pub async fn redis(&self) -> Result<redis::aio::MultiplexedConnection, Report> {
+        match &self.redis {
+            Some(redis) => redis.connect().await,
+            None => bail!("the stack was torn down"),
+        }
+    }
+
     /// The objects the email services put in object storage.
     pub fn stored_objects(&self) -> Vec<StoredObject> {
         self.aws.as_ref().map(Aws::objects).unwrap_or_default()
