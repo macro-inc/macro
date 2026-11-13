@@ -9,6 +9,7 @@ import { queryClient } from '@queries/client';
 import { teamKeys } from '@queries/team/keys';
 import type { Team } from '@service-auth/generated/schemas/team';
 import { QueryClientProvider } from '@tanstack/solid-query';
+import { ImperativeDialogHost } from '@ui';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
 import { themeCssVars } from '../../../theme/utils/themeCssVars';
@@ -49,6 +50,7 @@ if (root)
                 <div class="mx-auto max-w-3xl">
                   <TeamMembers team={team} />
                 </div>
+                <ImperativeDialogHost />
               </EmailLinksContextProvider>
             </UserContextProvider>
           </PosthogProvider>
