@@ -13,6 +13,7 @@ const SCOPE_OPTIONS = [
 export function EventRsvpScopeDialog(props: {
   open: boolean;
   scope: CalendarRsvpScope;
+  pending?: boolean;
   onScopeChange: (scope: CalendarRsvpScope) => void;
   onClose: () => void;
   onConfirm: () => void;
@@ -23,6 +24,7 @@ export function EventRsvpScopeDialog(props: {
       title="RSVP to recurring event"
       options={SCOPE_OPTIONS}
       scope={props.scope}
+      pending={props.pending}
       onScopeChange={props.onScopeChange}
       onClose={props.onClose}
       onConfirm={props.onConfirm}

@@ -21,6 +21,7 @@ export function RecurringEventScopeDialog<Scope extends string>(props: {
   children?: JSX.Element;
 }) {
   const onScopeChange = (value: string) => {
+    if (props.pending) return;
     const option = props.options.find((option) => option.scope === value);
     if (option) props.onScopeChange(option.scope);
   };
@@ -47,6 +48,7 @@ export function RecurringEventScopeDialog<Scope extends string>(props: {
           </ActionDialogShell.Header>
           <RadioGroup
             value={props.scope}
+            disabled={props.pending}
             onChange={onScopeChange}
             aria-label={props.scopeLabel ?? 'Apply changes to'}
             class="gap-2 text-sm text-ink"

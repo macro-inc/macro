@@ -172,6 +172,7 @@ export const toast = { success: announce, alert: announce, failure: announce };
 
 export const createCalendarRsvpController = () => ({
   pending: () => false,
+  blocked: () => false,
   error: () => undefined,
   scopeOpen: () => false,
   scope: () => 'this_event',

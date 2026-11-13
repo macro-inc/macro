@@ -509,13 +509,15 @@ Cancel. Scope confirmations for time changes and RSVP share a wider, padded
 layout with wrapping descriptions, no header divider or close icon, and footer
 actions. On phones they use the standard bottom sheet. After Save, cached
 occurrences update immediately. The affected event and its series show a spinner
-and cannot be dragged, resized, edited, or deleted until the provider save and
-post-save refresh requests finish. Earlier reads drain before a fresh read
+and cannot be dragged, resized, edited, deleted, or answered until the provider
+save and post-save refresh requests finish. Earlier reads drain before a fresh read
 starts, so navigation cannot release a save still in flight. Other events stay
 usable. A failed save rolls back the optimistic change and unlocks the event.
 Refresh completion releases the lock, but stale or incomplete provider data
 keeps the optimistic position until a confirming read. A failed refresh offers
-Retry. Account changes retire unsent edits.
+Retry. RSVP buttons and an already-open response-scope dialog stay disabled
+during the save, including in email invitations. Account changes retire
+unsent edits.
 Generic save failures show only `Update failed`, without raw provider error
 details. `This event` changes only the
 selected occurrence and leaves
