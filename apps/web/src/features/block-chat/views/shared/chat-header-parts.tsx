@@ -1,19 +1,9 @@
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
-import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import type { Model } from '@core/component/AI/types';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
@@ -23,15 +13,16 @@ import IconShared from '@icon/share.svg';
 import ChatDebugIcon from '@icon/system/regular/chat-text.svg';
 import type { Accessor } from 'solid-js';
 
-export function TopBar(props: {
+export interface ChatHeaderProps {
   model: Model;
   showStreamDebug?: Accessor<boolean>;
   toggleStreamDebug?: () => void;
-}) {
-  const blockId = useBlockId();
+}
 
+/** The chat block's title menu operations and named header actions. */
+export function useChatHeaderTools(props: ChatHeaderProps) {
+  const blockId = useBlockId();
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
-  const chatName = () => name();
 
   const permissions = useGetPermissions();
   const openShare = useShareModal(() => ({
@@ -60,34 +51,13 @@ export function TopBar(props: {
     { op: 'delete' },
   ];
 
-  const tools: BlockTool[] = [
-    {
-      group: 'sharing',
-      label: 'Share',
-      icon: IconShared,
-      action: openShare,
-      buttonComponent: () => <ShareTrigger onClick={openShare} />,
-      focusTarget: getShareDrawerRecipientInput,
-    },
-  ];
+  const share: BlockTool = {
+    group: 'sharing',
+    label: 'Share',
+    icon: IconShared,
+    action: openShare,
+    focusTarget: getShareDrawerRecipientInput,
+  };
 
-  return (
-    <>
-      <SplitHeaderLeft>
-        <BlockItemSplitLabel
-          icon={<ProviderIcon model={props.model} class="size-4 shrink-0" />}
-          fallbackName={DEFAULT_CHAT_NAME}
-          lockRename={false}
-        />
-      </SplitHeaderLeft>
-      <ResponsivePermissionsBadge />
-      <ResponsiveBlockToolbar
-        tools={tools}
-        ops={ops}
-        id={blockId}
-        itemType="chat"
-        name={chatName()}
-      />
-    </>
-  );
+  return { blockId, name, ops, openShare, actions: { share } };
 }

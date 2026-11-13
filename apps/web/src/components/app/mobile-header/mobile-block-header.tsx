@@ -17,6 +17,8 @@ export function MobileBlockHeader(props: {
   id: string;
   name: string;
   iconType: EntityIconSelector;
+  /** Replaces the entity icon, e.g. the chat's model. */
+  icon?: JSX.Element;
   /** Title menu rows, before the shared entity actions and `ops`. */
   menuTools: BlockTool[];
   ops: FileOperation[];
@@ -41,6 +43,7 @@ export function MobileBlockHeader(props: {
         <MobileHeader.Title
           class="ph-no-capture"
           iconType={props.iconType}
+          icon={props.icon}
           colorIcon
           badges={props.badges}
           label={props.name}
