@@ -5,7 +5,7 @@ import { useProjectHeaderTools } from '../shared/project-header-parts';
 
 /**
  * The project block's header on touch: the title with its menu, and Info.
- * On phones the title menu also offers Chat and Create.
+ * The title menu offers Share, and on phones Chat and Create too.
  */
 export function MobileProjectHeader() {
   const { id, name, ops, createTools, CreateDialog, actions } =
@@ -20,7 +20,11 @@ export function MobileProjectHeader() {
         menuName={name()}
         iconType="project"
         itemType="project"
-        menuTools={isMobile() ? [actions.chat, ...createTools] : []}
+        menuTools={
+          isMobile()
+            ? [actions.chat, ...createTools, actions.share]
+            : [actions.share]
+        }
         ops={ops()}
       />
       <CreateDialog />
