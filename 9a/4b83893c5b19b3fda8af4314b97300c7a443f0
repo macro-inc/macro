@@ -1,0 +1,26 @@
+crates/event_exposure/src/test.rs
+  s_800cdee5095ae4::t_9228f0f022f073 2,33-71
+  s_800cdee5095ae4::t_550aa948c766a1 72
+crates/event_exposure/src/lib.rs
+  s_800cdee5095ae4::t_9228f0f022f073 20,70-71,202-203,246-251,270-271
+crates/event_exposure/Cargo.toml
+  s_800cdee5095ae4::t_9228f0f022f073 15-17
+Cargo.lock
+  s_800cdee5095ae4::t_f2308a22d3794e 8120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9a4b83893c5b19b3fda8af4314b97300c7a443f0",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
