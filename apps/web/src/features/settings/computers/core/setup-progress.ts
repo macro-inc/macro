@@ -3,8 +3,15 @@ import type { ComputerStatus, SetupStep } from '@service-auth/computers';
 import { match } from 'ts-pattern';
 import { SETUP_PHASES, setupPhaseIndex } from './computer-display';
 
+/**
+ * The setup step the API reports while a purchase waits on billing. The
+ * backend is adding it (name to be confirmed); until the generated
+ * `SetupStep` carries it, `status: purchasing` means the same thing.
+ */
+export const BILLING_STEP = 'billing';
+
 /** A stage of getting a bought computer to a working agent. */
-export type SetupStageId = SetupStep | 'sign_in';
+export type SetupStageId = typeof BILLING_STEP | SetupStep | 'sign_in';
 
 export type SetupStageState =
   | 'done'
@@ -35,24 +42,41 @@ export function formatElapsed(ms: number): string {
 }
 
 /**
- * When each computer's current setup step was first seen, since the API
- * reports the step but not when it began. The first step counts from the
- * purchase. Module-level so the row and the dialog agree, and a reopened
- * dialog keeps counting.
+ * When each computer's current setup step was first seen here, for an API
+ * that reports the step but not when it began. The first step counts from
+ * the purchase. Module-level so the row and the dialog agree, and a
+ * reopened dialog keeps counting.
  */
 const stepStarts = new Map<string, { step: string; at: number }>();
 
-/** The time the computer's current step started, as best as known. */
+/**
+ * When the current step began, as the API reports it (`setup.stepStartedAt`,
+ * being added) or else as first seen here.
+ */
 export function setupStepStartedAt(computer: ComputerStatus): number {
+  const reported: unknown = computer.setup
+    ? Reflect.get(computer.setup, 'stepStartedAt')
+    : undefined;
+  if (typeof reported === 'string') {
+    const at = Date.parse(reported);
+    if (!Number.isNaN(at)) return at;
+  }
+
   const step = currentStageId(computer);
   const known = stepStarts.get(computer.id);
   if (known && known.step === step) return known.at;
   const at =
-    step === 'creating' && !known
+    step === BILLING_STEP && !known
       ? new Date(computer.createdAt).getTime()
       : Date.now();
   stepStarts.set(computer.id, { step, at });
   return at;
+}
+
+/** The purchase is still waiting on billing: the first live stage. */
+export function billingPending(computer: ComputerStatus): boolean {
+  const step: string | undefined = computer.setup?.step;
+  return computer.status === 'purchasing' || step === BILLING_STEP;
 }
 
 /** Forget a computer's timing, once setup is over or in tests. */
@@ -77,12 +101,13 @@ export function setupSettled(computer: ComputerStatus): boolean {
 
 function currentStageId(computer: ComputerStatus): SetupStageId {
   if (setupSettled(computer)) return 'ready';
+  if (billingPending(computer)) return BILLING_STEP;
   return SETUP_PHASES[setupPhaseIndex(computer)] ?? 'creating';
 }
 
 export function setupStageLabel(stage: SetupStageId): string {
   return match(stage)
-    .with('billing', () => t('computers.stepBilling'))
+    .with(BILLING_STEP, () => t('computers.stageBilling'))
     .with('creating', () => t('computers.stepCreating'))
     .with('booting', () => t('computers.stepBooting'))
     .with('connecting', () => t('computers.stepConnecting'))
@@ -92,8 +117,8 @@ export function setupStageLabel(stage: SetupStageId): string {
 }
 
 /**
- * The server's reason for a failed setup, once the API carries one on the
- * status (a fail-fast Failed state is being added); absent until then.
+ * The server's reason for a failed setup (`failureReason`, null until the
+ * fail-fast Failed state lands in the API).
  */
 export function setupFailureReason(
   computer: ComputerStatus
@@ -120,8 +145,9 @@ export type SignInPlan = 'needed' | 'skipped' | 'undecided';
 
 /**
  * The stages from purchase to a working agent, the same list on every
- * step: the three provisioning phases the API reports, then the Claude
- * sign-in, struck through when the agent runs on Macro's Claude.
+ * step: the billing wait, the three provisioning phases the API reports,
+ * then the Claude sign-in, struck through when the agent runs on Macro's
+ * Claude.
  */
 export function setupStages(
   computer: ComputerStatus,
@@ -133,7 +159,7 @@ export function setupStages(
     signedIn: boolean;
   }
 ): SetupStage[] {
-  const ids: SetupStageId[] = [...SETUP_PHASES, 'sign_in'];
+  const ids: SetupStageId[] = [BILLING_STEP, ...SETUP_PHASES, 'sign_in'];
   const settled = setupSettled(computer);
   const failed =
     computer.status === 'failed' || computer.status === 'needs_attention';
@@ -141,7 +167,9 @@ export function setupStages(
     ? options.signIn === 'needed' && !options.signedIn
       ? ids.indexOf('sign_in')
       : ids.length
-    : setupPhaseIndex(computer);
+    : billingPending(computer)
+      ? 0
+      : 1 + setupPhaseIndex(computer);
   const problem = setupProblem(computer);
 
   return ids.map((id, index) => {

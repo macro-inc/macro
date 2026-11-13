@@ -53,7 +53,6 @@ export default {
   standard: 'Standard',
   large: 'Large',
   xl: 'XL',
-  stepBilling: 'Updating billing',
   stepCreating: 'Creating the computer',
   stepBooting: 'Starting up',
   stepConnecting: 'Connecting to Macro',
@@ -123,12 +122,13 @@ export default {
   stepBringAiShort: 'Your AI',
   loadingSizes: 'Loading computer sizes',
   setupProgressLabel: 'Setup progress',
+  stageBilling: 'Updating billing…',
   stageSignIn: 'Sign in to Claude',
   signInUnlocksLater:
     'The sign-in link comes from the computer, so this unlocks by itself once it connects.',
   preparingSignIn: 'Preparing sign-in…',
   preparingSignInStatus: 'Preparing sign-in… {{stage}} · {{elapsed}}',
-  computerStarting: 'computer starting',
+  computerStarting: 'Computer starting',
   setupFailedReason:
     'The computer could not be set up. Retry sets it up again at no extra charge; contact support if it fails again.',
   retrySetup: 'Retry setup',

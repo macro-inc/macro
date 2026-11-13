@@ -14,10 +14,12 @@ const mocks = vi.hoisted(() => ({
   toastFailure: vi.fn(),
   toastAlert: vi.fn(),
   trackUpload: vi.fn(),
+  uploadPreparing: vi.fn(),
   uploadSending: vi.fn(),
   uploadProcessing: vi.fn(),
   uploadDone: vi.fn(),
   contentHash: vi.fn(),
+  hashFile: vi.fn(),
   fetch: vi.fn(),
   userInfo: vi.fn(),
 }));
@@ -47,6 +49,7 @@ vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: {},
 }));
 vi.mock('@core/util/hash', () => ({ contentHash: mocks.contentHash }));
+vi.mock('@core/util/hashFile', () => ({ hashFile: mocks.hashFile }));
 vi.mock('@queries/client', () => ({
   queryClient: { getQueryData: mocks.userInfo },
 }));
@@ -101,7 +104,9 @@ beforeEach(() => {
   mocks.userInfo.mockReturnValue({ id: USER_ID });
   vi.stubGlobal('fetch', mocks.fetch);
   mocks.contentHash.mockResolvedValue('cd'.repeat(32));
+  mocks.hashFile.mockResolvedValue('cd'.repeat(32));
   mocks.trackUpload.mockReturnValue({
+    preparing: mocks.uploadPreparing,
     sending: mocks.uploadSending,
     processing: mocks.uploadProcessing,
     done: mocks.uploadDone,
@@ -223,17 +228,27 @@ describe('pdf upload checksums', () => {
 });
 
 describe('browser upload checksums', () => {
-  it('still hashes and uploads the original file bytes', async () => {
-    const bytes = new Uint8Array([1, 2, 3]).buffer;
-    const file = new File([], 'browser.pdf', { type: 'application/pdf' });
-    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes });
+  // A large file read whole is held in memory several times over; the upload
+  // must hash it with `hashFile` and send the file itself.
+  function unreadableFile(name: string, type: string) {
+    const file = new File([], name, { type });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: () => {
+        throw new Error('Must not read the whole file into memory');
+      },
+    });
+    return file;
+  }
+
+  it('hashes the file and sends the file itself as the body', async () => {
+    const file = unreadableFile('browser.pdf', 'application/pdf');
 
     await upload(file);
 
-    expect(mocks.contentHash).toHaveBeenCalledWith(bytes);
+    expect(mocks.hashFile).toHaveBeenCalledWith(file, mocks.uploadPreparing);
     expect(mocks.browserPut).toHaveBeenCalledWith({
       presignedUrl: 'https://example.com/upload',
-      buffer: bytes,
+      buffer: file,
       sha: 'cd'.repeat(32),
       type: 'application/pdf',
       onProgress: mocks.uploadSending,
@@ -246,10 +261,7 @@ describe('browser upload checksums', () => {
   });
 
   it('clears the progress indicator if the PUT throws', async () => {
-    const file = new File([], 'browser.pdf', { type: 'application/pdf' });
-    Object.defineProperty(file, 'arrayBuffer', {
-      value: async () => new ArrayBuffer(0),
-    });
+    const file = unreadableFile('browser.pdf', 'application/pdf');
     mocks.browserPut.mockRejectedValue(new TypeError('Failed to fetch'));
 
     await expect(upload(file)).rejects.toThrow('Failed to fetch');
@@ -259,11 +271,8 @@ describe('browser upload checksums', () => {
   });
 
   it('clears the progress indicator before creating a document if hashing fails', async () => {
-    const file = new File([], 'browser.pdf', { type: 'application/pdf' });
-    Object.defineProperty(file, 'arrayBuffer', {
-      value: async () => new ArrayBuffer(0),
-    });
-    mocks.contentHash.mockRejectedValue(new Error('Hash failed'));
+    const file = unreadableFile('browser.pdf', 'application/pdf');
+    mocks.hashFile.mockRejectedValue(new Error('Hash failed'));
 
     await expect(upload(file)).rejects.toThrow('Hash failed');
 
