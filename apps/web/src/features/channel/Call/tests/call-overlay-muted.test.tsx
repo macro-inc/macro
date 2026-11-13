@@ -779,7 +779,7 @@ describe('CallOverlay muted microphone badges', () => {
     ).toHaveLength(2);
   });
 
-  it('keeps the only local tile unchanged when a call becomes solo', () => {
+  it('keeps the local pin when a call becomes solo and another participant returns', () => {
     const remote = createRemoteParticipant('remote', {}, 'Remote');
     const controls = setUpCallState([remote]);
     render(() => <CallOverlay onLeave={() => undefined} />);
@@ -787,7 +787,9 @@ describe('CallOverlay muted microphone badges', () => {
     controls.setParticipants(new Map());
     expect(screen.queryByRole('button', { name: 'Unpin You' })).toBeNull();
     controls.setParticipants(new Map([[remote.identity, remote]]));
-    expect(screen.getAllByRole('button', { name: 'Pin You' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Unpin You' })).toHaveLength(
+      2
+    );
   });
 
   it('leaves phone taps for long-press integration', () => {

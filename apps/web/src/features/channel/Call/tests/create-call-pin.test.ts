@@ -69,7 +69,7 @@ it('does not carry a pin into another call or revive it on rejoin', () => {
   });
 });
 
-it('clears local screen and participant pins when their sources disappear', () => {
+it('clears ended local shares but keeps the local camera pinned when others leave', () => {
   createRoot((dispose) => {
     const [screenSharing, setScreenSharing] = createSignal(true);
     const [participants, setParticipants] = createSignal([{}]);
@@ -86,7 +86,7 @@ it('clears local screen and participant pins when their sources disappear', () =
     pin.togglePin('local');
     expect(pin.activePin()).toBe('local');
     setParticipants([]);
-    expect(pin.activePin()).toBeUndefined();
+    expect(pin.activePin()).toBe('local');
     dispose();
   });
 });

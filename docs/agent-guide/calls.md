@@ -208,7 +208,8 @@ only after explicit selection and reports success or failure. More stays availab
 when copying is its only action. The grouped dropdown opens below More and aligns
 to its right edge. Away from the channel's Call tab, the desktop player
 starts bottom-right and keeps the pinned participant or screen, regardless of
-Layout. A pinned participant keeps their camera/avatar even while sharing.
+Layout. A pinned participant keeps their camera/avatar even while sharing;
+your own camera pin survives other participants leaving the call.
 Unpinning or losing the pinned source immediately restores the default selection:
 screen share, speaker, camera, then first participant. Without a pin, speaker
 changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen shares
