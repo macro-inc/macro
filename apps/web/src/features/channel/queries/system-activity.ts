@@ -3,7 +3,7 @@ import { isSelfJoin, type SystemActivity } from '../core/system-activity';
 
 function nonEmptyString(fields: object, key: string): string | undefined {
   const value: unknown = Reflect.get(fields, key);
-  return typeof value === 'string' && value ? value : undefined;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 /** Decode the durable vocabulary at the transport boundary, tolerating future actions. */

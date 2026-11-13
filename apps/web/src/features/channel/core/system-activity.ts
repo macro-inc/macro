@@ -16,6 +16,18 @@ export type SystemActivity = {
     | { kind: 'unknown' };
 };
 
+/** Like a mention: the requester's current name once it has loaded, else the
+ * name stored with the event, so the entry mounts at its final height. Older
+ * events have none and use `fallback` (the email until names load). */
+export function requesterLabel(
+  current: { firstName: string; lastName: string; fullName: string },
+  stored: string | undefined,
+  fallback: string
+): string {
+  if (current.firstName || current.lastName) return current.fullName;
+  return stored || fallback;
+}
+
 export function callDuration(durationMs: number): string {
   const seconds = Math.max(0, Math.floor(durationMs / 1000));
   if (seconds < 60) return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;

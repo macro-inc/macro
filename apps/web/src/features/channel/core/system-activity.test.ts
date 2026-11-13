@@ -9,7 +9,11 @@ import {
   decodeSystemActivityRow,
   mergesSystemActivity,
 } from '../queries/system-activity';
-import { callDuration, describeSystemActivity } from './system-activity';
+import {
+  callDuration,
+  describeSystemActivity,
+  requesterLabel,
+} from './system-activity';
 
 const ACTOR = 'macro|owner@example.com';
 
@@ -99,7 +103,7 @@ it('describes completed calls, renames, and self membership changes', () => {
     decodeSystemActivity({
       ...event,
       action: 'access_requested',
-      payload: { request_id: 'request-1', requester_name: 'Sarah Lee' },
+      payload: { request_id: 'request-1', requester_name: ' Sarah Lee ' },
     }).action
   ).toEqual({
     kind: 'access_requested',
@@ -173,4 +177,20 @@ it('keeps additions apart across other actors, joins, and messages', () => {
       ''
     )
   ).toBe('joined the channel');
+});
+
+it('names a requester from the stored name until the current one loads', () => {
+  const loading = {
+    firstName: '',
+    lastName: '',
+    fullName: 'sarah@example.com',
+  };
+  const loaded = { firstName: 'Sarah', lastName: 'Kim', fullName: 'Sarah Kim' };
+  const email = 'sarah@example.com';
+
+  expect(requesterLabel(loading, 'Sarah Lee', email)).toBe('Sarah Lee');
+  expect(requesterLabel(loaded, 'Sarah Lee', email)).toBe('Sarah Kim');
+  // Older events stored no name: the email until the name loads.
+  expect(requesterLabel(loading, undefined, email)).toBe(email);
+  expect(requesterLabel(loaded, undefined, email)).toBe('Sarah Kim');
 });

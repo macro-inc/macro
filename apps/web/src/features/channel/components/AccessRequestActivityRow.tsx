@@ -54,7 +54,7 @@ export function AccessRequestActivityRow(props: {
             asked to join the channel
           </p>
           <time
-            class="shrink-0 text-xs text-ink-extra-muted"
+            class="shrink-0 text-xs/6 text-ink-extra-muted"
             dateTime={props.occurredAt}
             title={formatEmailDate(props.occurredAt)}
           >

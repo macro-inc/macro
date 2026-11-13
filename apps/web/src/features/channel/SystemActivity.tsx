@@ -19,19 +19,18 @@ import {
   type AccessRequestOutcome,
 } from './components/AccessRequestActivityRow';
 import { SystemActivityRow } from './components/SystemActivityRow';
-import type { SystemActivity as SystemActivityEvent } from './core/system-activity';
+import {
+  requesterLabel,
+  type SystemActivity as SystemActivityEvent,
+} from './core/system-activity';
 
 function name(id: string | null | undefined): string {
   if (!id) return 'Someone';
   return getBotDisplayName(id) || getDisplayName(tryMacroId(id)) || 'Someone';
 }
 
-/** Like a mention: the name stored with the event until the current one loads,
- * so the entry mounts at its final height. Older events fall back to `name`. */
 function requesterName(id: string, stored: string | undefined): string {
-  const parts = getDisplayNameParts(tryMacroId(id));
-  if (parts.firstName || parts.lastName) return parts.fullName;
-  return stored || name(id);
+  return requesterLabel(getDisplayNameParts(tryMacroId(id)), stored, name(id));
 }
 
 /** App composition uses the same cached principal names as channel messages. */
