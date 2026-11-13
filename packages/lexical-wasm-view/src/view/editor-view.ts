@@ -412,6 +412,18 @@ export class EditorView implements ViewSink {
     this.prevented = false;
     return value;
   }
+  /** Mark tables a NodeSelection includes; unmark those it no longer does. */
+  private syncNodeSelectedTables(
+    previous: ViewSelection,
+    selection: ViewSelection
+  ): void {
+    const keys = (value: ViewSelection) =>
+      value.kind === 'node' ? value.keys : [];
+    const next = new Set(keys(selection));
+    for (const key of keys(previous))
+      if (!next.has(key)) this.tables.get(key)?.setNodeSelected(false);
+    for (const key of next) this.tables.get(key)?.setNodeSelected(true);
+  }
   acknowledgeSelection(selection: ViewSelection): void {
     if (
       selection.kind === 'keep' ||
@@ -426,6 +438,7 @@ export class EditorView implements ViewSink {
         ?.select(selection.anchorCell, selection.focusCell);
     else if (previous.kind === 'table')
       this.tables.get(previous.table)?.clear();
+    this.syncNodeSelectedTables(previous, selection);
     this.notify(
       {
         mutations: new Map(),
@@ -598,7 +611,8 @@ export class EditorView implements ViewSink {
         if (node.type === 'table') {
           if (
             diff.children.has(key) ||
-            this.tables.get(key)?.table !== this.dom.get(key)
+            this.tables.get(key)?.table !==
+              tableElementOf(this.dom.get(key) ?? null)
           )
             dirtyTables.set(key, dirtyTables.get(key) ?? new Set());
           continue;
@@ -629,6 +643,8 @@ export class EditorView implements ViewSink {
           const selection = this.selectionInfo.selection;
           if (observer && selection.kind === 'table' && selection.table === key)
             next.select(selection.anchorCell, selection.focusCell);
+          if (selection.kind === 'node' && selection.keys.includes(key))
+            next.setNodeSelected(true);
         }
       }
       attachments?.flush();
@@ -697,6 +713,7 @@ export class EditorView implements ViewSink {
                   ?.select(selection.anchorCell, selection.focusCell);
               else if (previousSelection.kind === 'table')
                 this.tables.get(previousSelection.table)?.clear();
+              this.syncNodeSelectedTables(previousSelection, selection);
               // Only a focused history-awareness restore may override the
               // content update's skip tag in this packet.
               const echo = this.domSelectionEcho;

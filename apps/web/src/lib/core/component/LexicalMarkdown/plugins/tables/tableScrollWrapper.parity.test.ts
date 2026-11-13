@@ -19,6 +19,7 @@ import {
 import { SupportedNodeTypes } from '@macro-inc/lexical-core';
 import {
   createBuiltinRegistry,
+  getTableObserverFromTableElement,
   mountLocalSessionView,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
@@ -340,4 +341,166 @@ test('formatting the table center, right, then left updates it as Source does', 
   expect(withoutSelectionClass(await nativeFormatSteps())).toEqual(
     withoutSelectionClass(await sourceFormatSteps())
   );
+});
+
+/** Source: select the whole table as a NodeSelection, then clear the selection. */
+async function sourceNodeSelectionSteps() {
+  const editor = createEditor({
+    namespace: 'table-scroll-source-select',
+    nodes: [...SupportedNodeTypes],
+    theme,
+    onError(error) {
+      throw error;
+    },
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const release = tablePlugin({
+    hasCellMerge: true,
+    hasCellBackgroundColor: true,
+    hasTabHandler: true,
+    hasHorizontalScroll: true,
+  })(editor);
+  const stopRichText = registerRichText(editor);
+  editor.setRootElement(root);
+  try {
+    editor.setEditorState(editor.parseEditorState(JSON.stringify(STATE)));
+    editor.update(
+      () => {
+        const selection = $createNodeSelection();
+        selection.add($getRoot().getFirstChildOrThrow().getKey());
+        $setSelection(selection);
+      },
+      { discrete: true }
+    );
+    const selected = shape(root);
+    editor.update(() => $setSelection(null), { discrete: true });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    return { selected, cleared: shape(root) };
+  } finally {
+    editor.setRootElement(null);
+    stopRichText();
+    release();
+    root.remove();
+  }
+}
+
+async function nativeNodeSelectionSteps() {
+  const root = document.createElement('div');
+  document.body.append(root);
+  const runtime = mountLocalSessionView(
+    root,
+    registerMacroElementViews(createBuiltinRegistry()),
+    {
+      namespace: 'table-scroll-native-select',
+      theme,
+      editable: true,
+      preset: 'rich',
+      parentSpan: NOOP_SPAN,
+      onError(error) {
+        throw error;
+      },
+    },
+    {
+      viewEngine: 1,
+      viewOs: 0,
+      nativeCommands: native,
+      create: (config, now, wall) =>
+        native.EditorSession.createMacroWithNamespace(
+          ABI_MAJOR,
+          config,
+          now,
+          wall,
+          'table-scroll-native-select'
+        ),
+    }
+  );
+  try {
+    runtime.port.setState(JSON.stringify(STATE));
+    const table = [...runtime.view.mirror.values()].find(
+      (node) => node.type === 'table'
+    );
+    if (!table) throw new Error('Missing native table');
+    runtime.port.selectionFromView({ kind: 'node', keys: [table.key] });
+    const selected = shape(root);
+    runtime.port.selectionFromView({ kind: 'none' });
+    return { selected, cleared: shape(root) };
+  } finally {
+    await runtime.close();
+    root.remove();
+  }
+}
+
+test('a NodeSelection of the table marks it md-table-selection in both engines', async () => {
+  const source = await sourceNodeSelectionSteps();
+  expect(source.selected).toEqual([
+    'div.first:mt-1.5.md-table-scrollable-wrapper<auto>',
+    'table.md-table.md-table-selection',
+  ]);
+  expect((await nativeNodeSelectionSteps()).selected).toEqual(source.selected);
+});
+
+// Named difference + shared Source bug (PM ruling): Source's table observer
+// leaves md-table-selection on the table after the selection clears; native
+// removes it. Pinned here so a later joint fix changes both lines together.
+test('clearing the selection removes md-table-selection natively; Source keeps it stale', async () => {
+  expect((await sourceNodeSelectionSteps()).cleared).toEqual([
+    'div.first:mt-1.5.md-table-scrollable-wrapper<auto>',
+    'table.md-table.md-table-selection',
+  ]);
+  expect((await nativeNodeSelectionSteps()).cleared).toEqual([
+    'div.first:mt-1.5.md-table-scrollable-wrapper<auto>',
+    'table.md-table',
+  ]);
+});
+
+// The wrapper is the table node's DOM; the renderer must keep comparing its
+// observer against the inner table, or every table property commit rebuilds it.
+test('a table property change keeps the native table observer', async () => {
+  const root = document.createElement('div');
+  document.body.append(root);
+  const runtime = mountLocalSessionView(
+    root,
+    registerMacroElementViews(createBuiltinRegistry()),
+    {
+      namespace: 'table-scroll-native-observer',
+      theme,
+      editable: true,
+      preset: 'rich',
+      parentSpan: NOOP_SPAN,
+      onError(error) {
+        throw error;
+      },
+    },
+    {
+      viewEngine: 1,
+      viewOs: 0,
+      nativeCommands: native,
+      create: (config, now, wall) =>
+        native.EditorSession.createMacroWithNamespace(
+          ABI_MAJOR,
+          config,
+          now,
+          wall,
+          'table-scroll-native-observer'
+        ),
+    }
+  );
+  try {
+    runtime.port.setState(JSON.stringify(STATE));
+    const table = [...runtime.view.mirror.values()].find(
+      (node) => node.type === 'table'
+    );
+    const element = root.querySelector('table');
+    if (!table || !element) throw new Error('Missing native table');
+    const before = getTableObserverFromTableElement(element);
+    expect(before).toBeDefined();
+    runtime.port.selectionFromView({ kind: 'node', keys: [table.key] });
+    runtime.port.command(CommandCode.FormatElement, 3);
+    expect(root.querySelector('table')).toBe(element);
+    expect(getTableObserverFromTableElement(element)).toBe(before);
+  } finally {
+    await runtime.close();
+    root.remove();
+  }
 });

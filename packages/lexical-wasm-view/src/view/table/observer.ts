@@ -76,6 +76,8 @@ export class TableObserver {
   private dragOwnsSelection = false;
   private readonly selectedCellClasses: string[];
   private readonly selectedTableClasses: string[];
+  /** A NodeSelection includes this table (Source TableNode.isSelected). */
+  private nodeSelected = false;
   constructor(
     readonly view: EditorView,
     readonly key: number,
@@ -112,7 +114,7 @@ export class TableObserver {
         this.domGrid.length = 0;
         this.selected.clear();
         this.selectionBounds = null;
-        this.table.classList.remove(...this.selectedTableClasses);
+        this.paintTableSelected();
         return;
       }
       let first = 0;
@@ -354,9 +356,22 @@ export class TableObserver {
       cell.element.setAttribute('data-lexical-table-selected', '');
       cell.element.setAttribute('aria-selected', 'true');
     }
-    if (selected.size) this.table.classList.add(...this.selectedTableClasses);
-    else this.table.classList.remove(...this.selectedTableClasses);
     this.selected = selected;
+    this.paintTableSelected();
+  }
+  /**
+   * Source $syncTableSelectionState marks the table selected for selected cells
+   * or a NodeSelection containing it; native also unmarks it once neither holds
+   * (Source leaves the class stale after a NodeSelection clears).
+   */
+  setNodeSelected(selected: boolean): void {
+    this.nodeSelected = selected;
+    this.paintTableSelected();
+  }
+  private paintTableSelected(): void {
+    if (this.selected.size || this.nodeSelected)
+      this.table.classList.add(...this.selectedTableClasses);
+    else this.table.classList.remove(...this.selectedTableClasses);
   }
   /** The browser text drag must yield once this gesture owns a table range. */
   preserveDragSelection(dom: Selection): boolean {
