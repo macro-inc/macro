@@ -1,12 +1,14 @@
-//! Connecting a Gmail account by signing in with Google: Macro has no
-//! record of what the user granted, so it asks Google which scopes the
-//! mailbox's token carries and records the grant from the answer.
+//! Connecting a Gmail account by signing in with Google, and turning an
+//! inbox's calendar off.
 //!
-//! Outlook connects only through the consent flow, which records the grant
-//! it asked for, so there is no Outlook counterpart.
+//! Signing in leaves Macro with no record of what the user granted, so it
+//! asks Google which scopes the mailbox's token carries and records the
+//! grant from the answer. Outlook connects only through the consent flow,
+//! which records the grant it asked for, so sign-in has no Outlook
+//! counterpart.
 
 use email_e2e::gmail_emulator::{Route, SeedMailbox};
-use email_e2e::{Inbox, Mail, Report, Stack};
+use email_e2e::{Inbox, Mail, Provider, Report, Stack};
 
 /// The scopes Macro asks Google for, without the calendar ones.
 const MAIL_ONLY: [&str; 7] = [
@@ -96,4 +98,54 @@ async fn signing_in_without_the_calendar_asks_for_it() -> Result<(), Report> {
     mail_arrives(&inbox).await?;
 
     stack.finish().await
+}
+
+/// Turning the calendar off: Ada turns off the calendar of an inbox that
+/// holds it. Another user cannot do it for her; once she does, the inbox
+/// asks for calendar access again and her mail keeps syncing.
+///
+/// When it fails, the calendar stays on after the user turned it off, the
+/// mail stops with it, or someone else can turn off her calendar.
+async fn turning_the_calendar_off(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let inbox = match provider {
+        Provider::Gmail => sign_in(&stack, None).await?,
+        Provider::Outlook => {
+            let ada = stack.user("ada").await?;
+            ada.link(provider, ada.email()).await?
+        }
+    };
+    let path = format!("/email/links/{}/calendar", inbox.link_id());
+    let link = inbox.link().await?;
+    assert_eq!(link["needs_calendar_permission"], false, "{link}");
+
+    let mallory = stack.user("mallory").await?;
+    let refused = mallory.delete(&path, None).await?;
+    assert!(
+        refused.status == 403 || refused.status == 404,
+        "another user turned the calendar off: {} {}",
+        refused.status,
+        refused.text
+    );
+    let link = inbox.link().await?;
+    assert_eq!(link["needs_calendar_permission"], false, "{link}");
+
+    let turned_off = inbox.delete(&path, None).await?;
+    assert_eq!(turned_off.status, 204, "{}", turned_off.text);
+    let link = inbox.link().await?;
+    assert_eq!(link["needs_calendar_permission"], true, "{link}");
+    assert_eq!(link["needs_reauth"], false, "{link}");
+    mail_arrives(&inbox).await?;
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_turning_the_calendar_off() -> Result<(), Report> {
+    turning_the_calendar_off(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_turning_the_calendar_off() -> Result<(), Report> {
+    turning_the_calendar_off(Provider::Outlook).await
 }
