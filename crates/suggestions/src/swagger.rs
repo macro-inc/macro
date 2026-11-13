@@ -8,6 +8,7 @@ use utoipa::OpenApi;
 #[openapi(
     paths(
         crate::inbound::router::list_suggestions,
+        crate::inbound::router::record_suggestions_viewed,
         crate::inbound::router::accept_suggestion,
         crate::inbound::router::dismiss_suggestion,
         crate::inbound::router::review_suggestions,

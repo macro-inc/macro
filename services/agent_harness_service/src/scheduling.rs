@@ -99,7 +99,8 @@ const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 /// How often drafts a stopped process left behind are cleaned up.
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often generation sessions a stopped process left behind are cleaned up.
+/// How often the generation sweep marks generations whose process died
+/// interrupted and deletes the sessions left behind.
 const GENERATION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 /// How often finished background runs of suggestions are settled.
 const SUGGESTION_RUN_SETTLE_INTERVAL: Duration = Duration::from_secs(30);
@@ -184,6 +185,27 @@ impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
     ) -> Result<Option<uuid::Uuid>, rootcause::Report> {
         RequestSessions::session_of(self, correlation)
             .await
+            .map_err(|error| rootcause::report!("{error:?}"))
+    }
+}
+
+/// Agent sessions as the session store has them, to tell a generation session
+/// that is gone from one that couldn't be deleted.
+struct StoredAgentSessions<Stored>(Stored);
+
+#[async_trait::async_trait]
+impl<Stored> suggestion_generation::domain::ports::StoredSessions for StoredAgentSessions<Stored>
+where
+    Stored: agent_session::domain::ports::AgentSessionRepo,
+{
+    async fn exists(
+        &self,
+        session: agent_session::domain::model::AgentSessionId,
+    ) -> Result<bool, rootcause::Report> {
+        self.0
+            .find(session)
+            .await
+            .map(|found| found.is_some())
             .map_err(|error| rootcause::report!("{error:?}"))
     }
 }
@@ -794,41 +816,63 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             lifecycle.workers.clone(),
             lifecycle.stop_workers.clone(),
         )
-        // Nightly runs are for paid plans; onboarding runs for everyone.
-        .with_plans(plans),
+        // Nightly runs are for paid plans; onboarding and manual ones run
+        // for everyone.
+        .with_plans(plans)
+        // A generation session that couldn't be deleted may be gone already.
+        .with_stored_sessions(Arc::new(StoredAgentSessions(
+            agent_session::outbound::postgres::PgAgentSessionRepo::new(
+                db.clone(),
+                registrar.clone(),
+            ),
+        ))),
     );
-    // Generation sessions a stopped process left behind lose their session;
-    // once ready, people in their night get their nightly generation.
+    // Once ready, each periodic job runs on its own task, so a slow nightly
+    // tick never holds up the sweep or settling runs. Each is logged by its
+    // own span.
     {
         let generation = Arc::clone(&generation);
-        let settling = Arc::clone(&feed);
-        let stop = lifecycle.stop_workers.clone();
-        let mut ready = generation_ready;
-        lifecycle.workers.spawn(async move {
-            tokio::select! {
-                biased;
-                _ = stop.cancelled() => return,
-                result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
-            }
-            let mut sweep = tokio::time::interval(GENERATION_SWEEP_INTERVAL);
-            sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            let mut nightly = tokio::time::interval(NIGHTLY_INTERVAL);
-            nightly.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            let mut runs = tokio::time::interval(SUGGESTION_RUN_SETTLE_INTERVAL);
-            runs.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            loop {
-                // Each is logged by its own span.
-                tokio::select! {
-                    biased;
-                    _ = stop.cancelled() => return,
-                    _ = sweep.tick() => { let _ = generation.sweep().await; }
-                    _ = nightly.tick() => { let _ = generation.nightly().await; }
-                    _ = runs.tick() => {
-                        let _ = suggestions::domain::ports::SuggestionApi::settle_runs(settling.as_ref()).await;
-                    }
+        spawn_ticker(
+            &lifecycle,
+            generation_ready.clone(),
+            GENERATION_SWEEP_INTERVAL,
+            move || {
+                let generation = Arc::clone(&generation);
+                async move {
+                    let _ = generation.sweep().await;
                 }
-            }
-        });
+            },
+        );
+    }
+    {
+        let generation = Arc::clone(&generation);
+        spawn_ticker(
+            &lifecycle,
+            generation_ready.clone(),
+            NIGHTLY_INTERVAL,
+            move || {
+                let generation = Arc::clone(&generation);
+                async move {
+                    let _ = generation.nightly().await;
+                }
+            },
+        );
+    }
+    {
+        let settling = Arc::clone(&feed);
+        spawn_ticker(
+            &lifecycle,
+            generation_ready,
+            SUGGESTION_RUN_SETTLE_INTERVAL,
+            move || {
+                let settling = Arc::clone(&settling);
+                async move {
+                    let _ =
+                        suggestions::domain::ports::SuggestionApi::settle_runs(settling.as_ref())
+                            .await;
+                }
+            },
+        );
     }
     let suggestion_state = RoutineSuggestionRouterState {
         service: suggestions,
@@ -1014,6 +1058,36 @@ impl ServiceLifecycle {
         tokio::join!(self.consumers.wait(), self.workers.wait());
         self.executions.wait().await;
     }
+}
+
+/// Run `tick` every `every` on the workers once the harness is `ready`,
+/// until they stop.
+fn spawn_ticker<F, Fut>(
+    lifecycle: &ServiceLifecycle,
+    mut ready: tokio::sync::watch::Receiver<bool>,
+    every: Duration,
+    mut tick: F,
+) where
+    F: FnMut() -> Fut + Send + 'static,
+    Fut: Future<Output = ()> + Send,
+{
+    let stop = lifecycle.stop_workers.clone();
+    lifecycle.workers.spawn(async move {
+        tokio::select! {
+            biased;
+            _ = stop.cancelled() => return,
+            result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
+        }
+        let mut ticks = tokio::time::interval(every);
+        ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                _ = ticks.tick() => tick().await,
+            }
+        }
+    });
 }
 
 fn start_event_tasks<C, F>(

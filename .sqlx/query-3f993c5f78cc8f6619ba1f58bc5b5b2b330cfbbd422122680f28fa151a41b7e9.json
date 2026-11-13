@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.user_id, a.timezone, a.seen_at FROM suggestion_audience a\n               WHERE a.next_run_at <= $1\n                 AND NOT EXISTS (\n                     SELECT 1 FROM suggestion_generation g\n                     WHERE g.user_id = a.user_id AND g.status = 'generating'\n                       AND g.started_at >= $2)\n               ORDER BY a.next_run_at\n               LIMIT $3",
+  "query": "SELECT a.user_id, a.timezone, a.seen_at FROM suggestion_audience AS a\n               WHERE a.next_run_at <= $1\n                 AND NOT EXISTS (\n                     SELECT 1 FROM suggestion_generation AS g\n                     WHERE g.user_id = a.user_id AND g.status = 'generating')\n               ORDER BY a.next_run_at\n               LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -22,7 +22,6 @@
     "parameters": {
       "Left": [
         "Timestamptz",
-        "Timestamptz",
         "Int8"
       ]
     },
@@ -32,5 +31,5 @@
       false
     ]
   },
-  "hash": "b6be3f34cc45761b9e80a34486852262298ca213b9eb1b8248f81058133ec82c"
+  "hash": "3f993c5f78cc8f6619ba1f58bc5b5b2b330cfbbd422122680f28fa151a41b7e9"
 }

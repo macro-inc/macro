@@ -1,5 +1,5 @@
 // Routine suggestions in agent-harness-service: the routines sessions of a
-// person's generations (at onboarding and nightly, run by
+// person's generations (at onboarding, nightly and on request, run by
 // `crates/suggestion_generation`), and what people save and dismiss from them.
 //
 // Every metric below is built from INFO logs that
@@ -9,7 +9,7 @@
 // missing data:
 //
 // - `routine_suggestions.generated`, once per generation with routines
-//   sessions: `trigger` (`onboarding` | `nightly`), `outcome` (`ready` |
+//   sessions: `trigger` (`onboarding` | `nightly` | `manual`), `outcome` (`ready` |
 //   `partial` | `failed` | `cancelled`), `sessions`, `kept`, `retries`,
 //   `surfaces_filled` (of 9), `first_ms` (absent when nothing was kept),
 //   `duration_ms`. `failed` means no session kept a suggestion (onboarding

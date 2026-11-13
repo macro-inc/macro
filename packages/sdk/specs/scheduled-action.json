@@ -2091,6 +2091,135 @@
         }
       }
     },
+    "/suggestions/generation": {
+      "get": {
+        "tags": ["suggestions"],
+        "summary": "The caller's suggestion generations now.",
+        "operationId": "get_suggestion_generation",
+        "responses": {
+          "200": {
+            "description": "The caller's generations now: whether one is running (poll while it is), how the last one ended, and when they may next ask for fresh suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationOverview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/regenerate": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Start fresh suggestions for the caller: at most once an hour, and not\nwhile one of their generations runs.",
+        "operationId": "regenerate_suggestions",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Fresh suggestions started in the background: the caller's whole workspace researched again and their feed brought up to date, with routine suggestions when the week's are due. Poll `GET /suggestions/generation` until it is idle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationStarted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "One of the caller's generations is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegenerationRunning"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller asked within the hour; `Retry-After` says in how many seconds they may ask again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegenerationCooldown"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions/review": {
       "get": {
         "tags": ["suggestions"],
@@ -2172,6 +2301,58 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/viewed": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller opened their feed: what it showed as new no longer is. The app\nsends it once the feed is on screen.",
+        "operationId": "record_suggestions_viewed",
+        "responses": {
+          "204": {
+            "description": "Recorded: suggestions proposed until now are no longer new in the feed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not record a visit",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
             "content": {
               "text/plain": {
                 "schema": {
@@ -4067,6 +4248,54 @@
           }
         }
       },
+      "GenerationOverview": {
+        "type": "object",
+        "description": "The person's generations now, for the web app to show and poll.",
+        "required": ["state"],
+        "properties": {
+          "lastFinishedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the latest one that ended ended."
+          },
+          "lastOutcome": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SuggestionGenerationStatus",
+                "description": "How the latest one that ended ended."
+              }
+            ]
+          },
+          "regenerateAvailableAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the person may next ask for fresh suggestions, while they may\nnot; absent when they may (or must wait only for the running one)."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the running one started."
+          },
+          "state": {
+            "$ref": "#/components/schemas/GenerationState",
+            "description": "Whether one is running."
+          },
+          "trigger": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GenerationTrigger",
+                "description": "The running one's trigger."
+              }
+            ]
+          }
+        }
+      },
       "GenerationStarted": {
         "type": "object",
         "description": "What starting a generation did.",
@@ -4078,10 +4307,20 @@
           }
         }
       },
+      "GenerationState": {
+        "type": "string",
+        "description": "Whether one of the person's generations is running.",
+        "enum": ["idle", "running"]
+      },
       "GenerationStatus": {
         "type": "string",
         "description": "Where a person's suggestions are in being generated.",
         "enum": ["none", "generating", "ready", "failed"]
+      },
+      "GenerationTrigger": {
+        "type": "string",
+        "description": "What starts a generation: a person finishing onboarding, their night, or\nthe person asking for fresh suggestions. Shared by everything a\ngeneration's sessions write.",
+        "enum": ["onboarding", "nightly", "manual"]
       },
       "GithubSelector": {
         "type": "object",
@@ -4316,6 +4555,34 @@
           }
         },
         "additionalProperties": false
+      },
+      "RegenerationCooldown": {
+        "type": "object",
+        "description": "Fresh suggestions weren't started: the person asked within the hour.",
+        "required": ["availableAt"],
+        "properties": {
+          "availableAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When they may ask again."
+          }
+        }
+      },
+      "RegenerationRefusal": {
+        "type": "string",
+        "description": "Why fresh suggestions weren't started.",
+        "enum": ["running"]
+      },
+      "RegenerationRunning": {
+        "type": "object",
+        "description": "Fresh suggestions weren't started: a generation is running.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/RegenerationRefusal",
+            "description": "Why."
+          }
+        }
       },
       "RetireSuggestion": {
         "type": "object",
@@ -5559,7 +5826,8 @@
               "produced",
               "createdAt",
               "updatedAt",
-              "stateChangedAt"
+              "stateChangedAt",
+              "isNew"
             ],
             "properties": {
               "about": {
@@ -5595,6 +5863,10 @@
                 "format": "int32",
                 "description": "0 to 100, for ordering.",
                 "minimum": 0
+              },
+              "isNew": {
+                "type": "boolean",
+                "description": "Proposed since the person last opened their feed. Only the feed sets\nit; false everywhere else."
               },
               "produced": {
                 "type": "array",
@@ -5685,6 +5957,18 @@
         "type": "string",
         "description": "Who suggests a routine.",
         "enum": ["for_you", "macro"]
+      },
+      "SuggestionGenerationStatus": {
+        "type": "string",
+        "description": "Where a generation is.",
+        "enum": [
+          "generating",
+          "ready",
+          "partial",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ]
       },
       "SuggestionKind": {
         "oneOf": [
