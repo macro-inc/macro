@@ -10,10 +10,10 @@ use model_owner::CreationPrincipal;
 
 use super::model::{
     Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion,
-    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RunStartError,
-    SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller, SuggestionContent,
-    SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
-    Target, Waiting,
+    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RoutineText,
+    RunStartError, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller,
+    SuggestionContent, SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome,
+    SuggestionsReview, Target, Waiting,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 use super::run::{Advanced, RunState, SessionEvent};
@@ -363,7 +363,7 @@ pub trait SuggestionAudience: Send + Sync + 'static {
 /// Routine suggestions, which a routine suggestion shows. Object-safe: the
 /// harness hands in the routine suggestions service.
 #[async_trait::async_trait]
-pub trait RoutineSuggestionDismissal: Send + Sync + 'static {
+pub trait RoutineSuggestions: Send + Sync + 'static {
     /// The person isn't interested in routine suggestion `suggestion`: it
     /// and its routine suggestion are dismissed together. Whether it was theirs.
     async fn dismiss_suggestion(
@@ -371,6 +371,16 @@ pub trait RoutineSuggestionDismissal: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         suggestion: Uuid,
     ) -> Result<bool, rootcause::Report>;
+
+    /// How the person's routine suggestions `suggestions` read on their
+    /// cards, with one-off times in `timezone`; those that aren't theirs or
+    /// drafted no routine are left out.
+    async fn texts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        suggestions: &[Uuid],
+        timezone: chrono_tz::Tz,
+    ) -> Result<Vec<(Uuid, RoutineText)>, rootcause::Report>;
 }
 
 /// The hidden agent sessions that run background prompt suggestions. Object-safe:
@@ -427,7 +437,9 @@ pub trait SuggestionApi: Send + Sync + 'static {
     /// The person, or someone acting for them, acts on a suggestion. A
     /// background prompt suggestion starts a run (one whose last run failed runs
     /// again) only when the person themself accepts it in the app as they
-    /// saw it; anyone acting for them only takes it on. Any other is done.
+    /// saw it; anyone acting for them only takes it on. A routine suggestion
+    /// is refused (`RoutineNotAccepted`): saving its routine makes it done.
+    /// Any other is done.
     fn accept(
         &self,
         user: &MacroUserIdStr<'static>,

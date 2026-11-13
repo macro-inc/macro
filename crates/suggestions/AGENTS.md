@@ -58,7 +58,7 @@ scheduler's spec.
   only manage the feed through their own tools. The harness refuses to start
   without validating requests' attribution. An agent accepting a background
   prompt suggestion only takes it on (the person runs it from the app); any
-  other suggestion becomes done either way.
+  other suggestion but a routine one becomes done either way.
 - New since the last visit: the app sends `POST /suggestions/viewed` once the
   feed is on screen, which stores the time in `suggestion_feed_view` (one row
   per person; a time never goes back). The feed marks an open suggestion
@@ -135,11 +135,21 @@ scheduler's spec.
   written with it by `macro.routines.suggest` through `crates/suggestions_db_utils`
   in one transaction; catalog picks never have one. One a replica on the
   previous release drafts during a deploy has none: every path that closes
-  a routine suggestion tolerates a missing one. Dismissing a routine suggestion
-  dismisses its suggestion through `RoutineSuggestionDismissal`; retiring its
-  suggestion retires it; saving a routine from the suggestion makes it done
-  with the routine as `produced`. Suggestions sessions never add, rewrite or retire
-  routine suggestions.
+  a routine suggestion tolerates a missing one. That suggestion follows the
+  routine suggestion's state and moves only with it, through
+  `RoutineSuggestionState::on` in `crates/scheduled_action`: `proposed` while
+  open, then `dismissed`, `retired`, or `done` with the saved routine as
+  `produced`. Dismissing it in the feed dismisses the routine suggestion
+  through `RoutineSuggestions` (the harness's `RoutineCards`). The feed
+  words each drafted routine through the same port as `kind.routine`:
+  `sentence`, its first code step's sentence as parts with the knob values
+  `picked` (else its description or name), and `when`, its first trigger in
+  words, a one-off time in the feed's `timezone`. English, like the rest of
+  the card. A failed read leaves `routine` out and counts
+  `suggestions.routines_unread` on the feed's span. Accepting it is refused (400
+  `RoutineNotAccepted`): the person saves its routine in the app, switched
+  off until they turn it on, and that save is what makes it done. Suggestions
+  sessions never add, rewrite or retire routine suggestions.
 
 - Background runs: the person accepting a `prompt` suggestion with `runMode`
   `background` in the app (their own session, not a program: `Accept`'s
@@ -194,13 +204,17 @@ scheduler's spec.
   also stop its session at once, resolve leaves that to the sweep. A cancelled
   run that finishes never makes its suggestion done, even one restored and
   taken on again since; it records what it made. Accepting any other
-  suggestion makes it done (`done` in the feed); accepting a done suggestion
-  again changes nothing.
+  suggestion except a routine suggestion makes it done (`done` in the feed);
+  accepting a done suggestion again changes nothing.
 - Every state write follows the suggestion lifecycle table
   (`domain/lifecycle.rs`): the service asks it where an event moves a
   suggestion, and each SQL guard allows exactly its sources
   (`pg_suggestion_repo/test/lifecycle.rs` tries every write from every state
-  against it).
+  against it). A routine suggestion is the exception: it moves with its
+  routine suggestion (`RoutineSuggestionState::card`, above) through
+  `suggestions_db_utils::move_routine_card` and `add_produced_routine`, which
+  also move a retired one to dismissed, and a dismissed or retired one to
+  done when the person saves its routine.
 
 ## Gotchas
 

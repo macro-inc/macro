@@ -62,10 +62,10 @@ fn card(suggestion: Uuid, generation: Uuid) -> NewRoutineSuggestionCard<'static>
     }
 }
 
-/// A closed routine suggestion stays closed: a later dismiss, retire or save
-/// changes nothing.
+/// A card moves only from the state its routine suggestion's transition
+/// read it in, so a card that moved meanwhile is left alone.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_routine_card_closes_once(pool: PgPool) {
+async fn a_routine_card_moves_only_from_the_state_it_is_in(pool: PgPool) {
     let (generation, suggestion) = setup(&pool).await;
     let mut tx = pool.begin().await.unwrap();
     assert_eq!(
@@ -74,27 +74,35 @@ async fn a_routine_card_closes_once(pool: PgPool) {
             .unwrap(),
         Room::Fits
     );
-    assert!(
-        close_routine_card(&mut tx, suggestion, "dismissed", None, Utc::now())
+    let moved = move_routine_card(&mut tx, suggestion, "proposed", "dismissed", Utc::now())
+        .await
+        .unwrap();
+    assert!(moved.is_some());
+    assert_eq!(
+        move_routine_card(&mut tx, suggestion, "proposed", "retired", Utc::now())
             .await
-            .unwrap()
+            .unwrap(),
+        None
     );
-    assert!(
-        !close_routine_card(&mut tx, suggestion, "retired", None, Utc::now())
+    assert_eq!(
+        move_routine_card(&mut tx, suggestion, "dismissed", "done", Utc::now())
             .await
-            .unwrap()
+            .unwrap(),
+        moved
     );
-    assert!(
-        !complete_routine_card(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
+    // A routine suggestion with no card moves none.
+    assert_eq!(
+        move_routine_card(&mut tx, Uuid::now_v7(), "proposed", "done", Utc::now())
             .await
-            .unwrap()
+            .unwrap(),
+        None
     );
     tx.commit().await.unwrap();
     let state = sqlx::query_scalar!("SELECT state FROM suggestion WHERE user_id = $1", OWNER)
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(state, "dismissed");
+    assert_eq!(state, "done");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -115,29 +123,40 @@ async fn a_routine_card_waits_for_room(pool: PgPool) {
     );
 }
 
-/// Saving a routine from someone else's suggestion leaves their suggestion open.
+/// Each routine saved from a suggestion is one more thing its card produced.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn only_the_owner_saving_a_routine_finishes_its_suggestion(pool: PgPool) {
+async fn a_saved_routine_is_what_its_card_produced(pool: PgPool) {
     let (generation, suggestion) = setup(&pool).await;
     let mut tx = pool.begin().await.unwrap();
     add_routine_card(&mut tx, &card(suggestion, generation), 30, 10)
         .await
         .unwrap();
-    assert!(
-        !complete_routine_card(
-            &mut tx,
-            "macro|someone-else@macro.com",
-            suggestion,
-            Uuid::now_v7(),
-            Utc::now()
-        )
+    let card = move_routine_card(&mut tx, suggestion, "proposed", "done", Utc::now())
         .await
         .unwrap()
-    );
-    assert!(
-        complete_routine_card(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
-            .await
-            .unwrap()
-    );
+        .unwrap();
+    let routines = [Uuid::now_v7(), Uuid::now_v7()];
+    for routine in routines {
+        add_produced_routine(&mut tx, card, routine).await.unwrap();
+    }
     tx.commit().await.unwrap();
+    let produced = sqlx::query!(
+        r#"SELECT position, entity_type, entity_id FROM suggestion_target
+           WHERE suggestion_id = $1 AND role = 'produced' ORDER BY position"#,
+        card,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let produced: Vec<(i16, String, String)> = produced
+        .into_iter()
+        .map(|row| (row.position, row.entity_type, row.entity_id))
+        .collect();
+    assert_eq!(
+        produced,
+        [
+            (0, "scheduled_action".to_owned(), routines[0].to_string()),
+            (1, "scheduled_action".to_owned(), routines[1].to_string()),
+        ]
+    );
 }

@@ -237,6 +237,15 @@ impl RoutineSuggestionApi for FakeRoutines {
         Ok(format!("routines {} {surfaces:?}", trigger.as_ref()))
     }
 
+    async fn texts(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &[Uuid],
+        _: chrono_tz::Tz,
+    ) -> anyhow::Result<Vec<(Uuid, suggestions::domain::model::RoutineText)>> {
+        Ok(Vec::new())
+    }
+
     async fn suggested(&self, _: &MacroUserIdStr<'static>, session: Uuid) -> anyhow::Result<u32> {
         Ok(self.counts.count(&self.repo, session))
     }

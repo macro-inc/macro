@@ -7,6 +7,7 @@
 //! problems the session can read and fix. Every accepted write is logged in
 //! the change log with the values before and after and the session's reason.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -22,14 +23,13 @@ use super::lifecycle::{self, LifecycleEvent};
 use super::model::{
     Accept, AttachDraft, Change, ChangeAction, EntityAction, FeedCounts, GenerationSession,
     GenerationTrigger, KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
-    RunMode, SessionKind, Suggestion, SuggestionCaller, SuggestionContent, SuggestionError,
-    SuggestionFeed, SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
-    Target, Waiting,
+    RoutineText, RunMode, SessionKind, Suggestion, SuggestionCaller, SuggestionContent,
+    SuggestionError, SuggestionFeed, SuggestionKind, SuggestionState, SuggestionWriteOutcome,
+    SuggestionsReview, Target, Waiting,
 };
 use super::ports::{
-    GenerationSessions, Limits, ReplyWaits, RequestSessions, RoutineSuggestionDismissal,
-    RunSessions, SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts,
-    SuggestionRepo, Written,
+    GenerationSessions, Limits, ReplyWaits, RequestSessions, RoutineSuggestions, RunSessions,
+    SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
 };
 use super::prompt;
 use recent::Recent;
@@ -85,7 +85,7 @@ pub struct SuggestionService<Repo, Access, Drafts, Flags> {
     request_sessions: Arc<dyn RequestSessions>,
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
-    routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
+    routine_suggestions: Arc<dyn RoutineSuggestions>,
     runs: Option<Runs>,
     reply_waits: Option<Arc<dyn ReplyWaits>>,
     flags: Option<Flags>,
@@ -121,7 +121,7 @@ where
         request_sessions: Arc<dyn RequestSessions>,
         generation_sessions: Arc<dyn GenerationSessions>,
         audience: Arc<dyn SuggestionAudience>,
-        routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
+        routine_suggestions: Arc<dyn RoutineSuggestions>,
         flags: Option<Flags>,
     ) -> Self {
         Self {
@@ -194,6 +194,47 @@ where
                 tracing::warn!(?error, "could not read who a reply suggestion waits on");
             })
             .unwrap_or(known)
+    }
+
+    /// Attach how each routine suggestion's drafted routine reads, with
+    /// one-off times in `timezone`. A failed read leaves them without it:
+    /// each card still has its title and summary. How many are left without.
+    async fn attach_routine_texts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+        suggestions: impl IntoIterator<Item = &mut Suggestion>,
+    ) -> usize {
+        let routines: Vec<(Uuid, &mut Option<RoutineText>)> = suggestions
+            .into_iter()
+            .filter_map(|suggestion| match &mut suggestion.kind {
+                SuggestionKind::Routine {
+                    routine_suggestion_id,
+                    routine,
+                } => Some((*routine_suggestion_id, routine)),
+                _ => None,
+            })
+            .collect();
+        if routines.is_empty() {
+            return 0;
+        }
+        let ids: Vec<Uuid> = routines.iter().map(|(id, _)| *id).collect();
+        let mut texts: HashMap<Uuid, RoutineText> = self
+            .routine_suggestions
+            .texts(user, &ids, timezone)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "could not read routine suggestions' routines")
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        let mut without = 0;
+        for (id, routine) in routines {
+            *routine = texts.remove(&id);
+            without += usize::from(routine.is_none());
+        }
+        without
     }
 
     /// Move `suggestion` from one of `from` to `to` if it is still as `accept`
@@ -549,6 +590,7 @@ where
         suggestions.hidden = tracing::field::Empty,
         suggestions.unchecked = tracing::field::Empty,
         suggestions.new = tracing::field::Empty,
+        suggestions.routines_unread = tracing::field::Empty,
     ), err)]
     async fn feed(
         &self,
@@ -597,10 +639,19 @@ where
         span.record("suggestions.new", new);
         let counts = FeedCounts::of(open.shown.iter().chain(&done.shown));
         // A limited read is a glance at the best open ones: no done list.
-        let (suggestions, done) = match limit {
+        let (mut suggestions, mut done): (Vec<Suggestion>, _) = match limit {
             Some(limit) => (open.shown.into_iter().take(limit).collect(), None),
             None => (open.shown, Some(done.shown)),
         };
+        // Only the cards the feed returns are worded.
+        let routines_unread = self
+            .attach_routine_texts(
+                user,
+                timezone.unwrap_or(chrono_tz::UTC),
+                suggestions.iter_mut().chain(done.iter_mut().flatten()),
+            )
+            .await;
+        span.record("suggestions.routines_unread", routines_unread);
         Ok(SuggestionFeed {
             suggestions,
             done,
@@ -660,6 +711,13 @@ where
             .await
             .map_err(SuggestionError::internal)?
             .ok_or(SuggestionError::NotFound)?;
+        // A routine card follows its routine suggestion, which only saving the
+        // routine in the app moves to saved (its card to done, with the routine
+        // it produced). Turning it on here would be a second save path, and a
+        // routine is the person's to switch on.
+        if suggestion.kind.name() == KindName::Routine {
+            return Err(SuggestionError::RoutineNotAccepted);
+        }
         if let SuggestionKind::Prompt {
             prompt,
             run_mode: RunMode::Background,
@@ -693,8 +751,8 @@ where
                 )
                 .await;
         }
-        // Anything else the person acts on themself (opens the item, the
-        // composer, the routine) is done when they do; accepting a done suggestion
+        // Anything else the person acts on themself (opens the item or the
+        // composer) is done when they do; accepting a done suggestion
         // again changes nothing.
         if suggestion.state == SuggestionState::Done {
             return Ok(());
@@ -737,6 +795,7 @@ where
         // the suggestion is kept.
         if let SuggestionKind::Routine {
             routine_suggestion_id,
+            ..
         } = suggestion.kind
         {
             let dismissed = self
