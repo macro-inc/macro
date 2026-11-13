@@ -5,6 +5,7 @@ mod config;
 mod env;
 mod model;
 mod notification;
+mod stack_flags;
 
 use utoipa::OpenApi;
 

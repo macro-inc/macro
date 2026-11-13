@@ -14244,6 +14244,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "notification_routing"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "feature_flags",
+ "futures",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model-error-response",
+ "model_notifications",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "system_properties",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "notification_sandbox"
 version = "0.1.0"
 dependencies = [
@@ -14287,6 +14315,7 @@ dependencies = [
  "database_env_vars",
  "doppler-config",
  "email_formatting",
+ "feature_flags",
  "hmac 0.12.1",
  "http-body-util",
  "itertools 0.14.0",
@@ -14312,14 +14341,17 @@ dependencies = [
  "models_pagination",
  "notification",
  "notification_db_client",
+ "notification_routing",
  "rate_limit",
  "redis",
+ "rootcause",
  "secretsmanager_client",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sns_client",
  "sqlx",
+ "system_properties",
  "tokio",
  "tower 0.5.3",
  "tower-http",

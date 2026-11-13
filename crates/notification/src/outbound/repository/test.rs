@@ -88,9 +88,15 @@ async fn create_message_notification(
         recipient_ids: std::collections::HashSet::from([recipient.clone()]),
     };
 
-    pool.create_notification(request, notification_id, "test_service", None)
-        .await
-        .unwrap();
+    pool.create_notification(
+        request,
+        notification_id,
+        "test_service",
+        None,
+        &Default::default(),
+    )
+    .await
+    .unwrap();
 }
 
 #[sqlx::test(
@@ -202,7 +208,13 @@ async fn test_create_notification(pool: Pool<Postgres>) {
     };
 
     let result = pool
-        .create_notification(request, notification_id, "test_service", None)
+        .create_notification(
+            request,
+            notification_id,
+            "test_service",
+            None,
+            &Default::default(),
+        )
         .await
         .unwrap();
 
@@ -238,10 +250,16 @@ async fn a_join_request_for_an_event_that_has_gone_is_nothing_to_deliver(pool: P
     };
 
     assert!(
-        pool.create_notification(request, Uuid::now_v7(), "test_service", None)
-            .await
-            .unwrap()
-            .is_none()
+        pool.create_notification(
+            request,
+            Uuid::now_v7(),
+            "test_service",
+            None,
+            &Default::default()
+        )
+        .await
+        .unwrap()
+        .is_none()
     );
 }
 
@@ -260,9 +278,15 @@ async fn test_create_notification_stores_secondary_entity(pool: Pool<Postgres>) 
         recipient_ids: std::collections::HashSet::from([recipient]),
     };
 
-    pool.create_notification(request, notification_id, "test_service", None)
-        .await
-        .unwrap();
+    pool.create_notification(
+        request,
+        notification_id,
+        "test_service",
+        None,
+        &Default::default(),
+    )
+    .await
+    .unwrap();
 
     let row = sqlx::query!(
         r#"
@@ -302,7 +326,13 @@ async fn test_create_notification_returns_timestamps(pool: Pool<Postgres>) {
     };
 
     let rows = pool
-        .create_notification(request, notification_id, "test_service", None)
+        .create_notification(
+            request,
+            notification_id,
+            "test_service",
+            None,
+            &Default::default(),
+        )
         .await
         .unwrap()
         .expect("should return Some for new notification");
@@ -470,6 +500,7 @@ async fn test_get_notification_ids_for_entities_matches_multiple_primary_and_sec
             notification_id,
             "test_service",
             None,
+            &Default::default(),
         )
         .await
         .unwrap();
@@ -520,6 +551,7 @@ async fn test_get_notification_ids_for_entities_matches_task_entity(pool: Pool<P
         task_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -588,6 +620,7 @@ async fn test_get_notification_ids_for_entities_matches_foreign_entities_includi
         github_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -606,6 +639,7 @@ async fn test_get_notification_ids_for_entities_matches_foreign_entities_includi
         generic_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -644,9 +678,15 @@ async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool
         sender_id: None,
         recipient_ids: std::collections::HashSet::from([other_user]),
     };
-    pool.create_notification(request, other_only, "test_service", None)
-        .await
-        .unwrap();
+    pool.create_notification(
+        request,
+        other_only,
+        "test_service",
+        None,
+        &Default::default(),
+    )
+    .await
+    .unwrap();
 
     let rows = pool
         .mark_notifications_done(&user, &[second, other_only, first], true)
@@ -1029,6 +1069,7 @@ async fn test_get_entity_notifications_batch_preserves_canonical_entity_identity
         task_notification_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -1046,6 +1087,7 @@ async fn test_get_entity_notifications_batch_preserves_canonical_entity_identity
         github_notification_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -1063,6 +1105,7 @@ async fn test_get_entity_notifications_batch_preserves_canonical_entity_identity
         generic_foreign_notification_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -1111,9 +1154,15 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
         sender_id: None,
         recipient_ids: std::collections::HashSet::from([user.clone()]),
     };
-    pool.create_notification(github_request, github_notification_id, "test_service", None)
-        .await
-        .unwrap();
+    pool.create_notification(
+        github_request,
+        github_notification_id,
+        "test_service",
+        None,
+        &Default::default(),
+    )
+    .await
+    .unwrap();
 
     let check_run_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
@@ -1130,6 +1179,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
         check_run_notification_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -1149,6 +1199,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
         non_github_notification_id,
         "test_service",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -1378,7 +1429,13 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     };
 
     let result = pool
-        .create_notification(request, notification_id, "test_service", None)
+        .create_notification(
+            request,
+            notification_id,
+            "test_service",
+            None,
+            &Default::default(),
+        )
         .await
         .unwrap();
     assert!(result.is_some());
@@ -1389,7 +1446,13 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
 
     // Second creation with same ID should return None
     let result = pool
-        .create_notification(request2, notification_id, "test_service", None)
+        .create_notification(
+            request2,
+            notification_id,
+            "test_service",
+            None,
+            &Default::default(),
+        )
         .await
         .unwrap();
     assert!(result.is_none());
@@ -1432,9 +1495,15 @@ async fn test_create_notification_stores_bare_metadata(pool: Pool<Postgres>) {
         recipient_ids: std::collections::HashSet::from([recipient.clone()]),
     };
 
-    pool.create_notification(request, notification_id, "test_service", None)
-        .await
-        .unwrap();
+    pool.create_notification(
+        request,
+        notification_id,
+        "test_service",
+        None,
+        &Default::default(),
+    )
+    .await
+    .unwrap();
 
     // Read the raw metadata JSON from the DB
     let row = sqlx::query!(

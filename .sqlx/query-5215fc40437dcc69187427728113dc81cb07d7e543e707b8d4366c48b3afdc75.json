@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE folders AS (\n                SELECT folder.id, folder.\"parentId\", 1 AS depth\n                FROM \"Document\" document\n                JOIN \"Project\" folder ON folder.id = document.\"projectId\"\n                WHERE document.id = $1\n              UNION ALL\n                SELECT parent.id, parent.\"parentId\", folders.depth + 1\n                FROM folders\n                JOIN \"Project\" parent ON parent.id = folders.\"parentId\"\n                WHERE folders.depth < $2\n            )\n            SELECT id AS \"id!\" FROM folders\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5215fc40437dcc69187427728113dc81cb07d7e543e707b8d4366c48b3afdc75"
+}

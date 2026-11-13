@@ -40,21 +40,18 @@ impl<B: MacroEventBroker> RealtimeSender for KafkaRealtimeSender<B> {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         recipients: &[MacroUserIdStr<'a>],
-        notification: &T,
+        notification: &RealtimeNotif<T>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         let notifications = if recipients.is_empty() {
             Vec::new()
         } else {
-            let notification: RealtimeNotif<serde_json::Value> = serde_json::from_value(
-                serde_json::to_value(notification)
-                    .context("failed to serialize realtime notification for Kafka")?,
-            )
-            .context("failed to decode realtime notification for Kafka")?;
+            let metadata = serde_json::to_value(&notification.notification_metadata)
+                .context("failed to serialize realtime notification for Kafka")?;
 
             recipients
                 .iter()
                 .map(|recipient| {
-                    user_notification_row(recipient.clone().into_owned(), &notification)
+                    user_notification_row(recipient.clone().into_owned(), notification, &metadata)
                 })
                 .collect()
         };
@@ -74,9 +71,10 @@ impl<B: MacroEventBroker> RealtimeSender for KafkaRealtimeSender<B> {
     }
 }
 
-fn user_notification_row(
+fn user_notification_row<T>(
     owner_id: MacroUserIdStr<'static>,
-    notification: &RealtimeNotif<serde_json::Value>,
+    notification: &RealtimeNotif<T>,
+    metadata: &serde_json::Value,
 ) -> UserNotificationRow<serde_json::Value> {
     UserNotificationRow {
         owner_id,
@@ -90,7 +88,7 @@ fn user_notification_row(
         viewed_at: notification.viewed_at,
         updated_at: notification.updated_at,
         deleted_at: notification.deleted_at,
-        notification_metadata: notification.notification_metadata.clone(),
+        notification_metadata: metadata.clone(),
         sender_id: notification.sender_id.clone(),
     }
 }

@@ -63,6 +63,13 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 }
 
 fn notification() -> RealtimeNotif<serde_json::Value> {
+    notification_with(serde_json::json!({
+        "tag": "channel_mention",
+        "content": { "message": "test" }
+    }))
+}
+
+fn notification_with<T>(notification_metadata: T) -> RealtimeNotif<T> {
     RealtimeNotif {
         notification_id: Uuid::parse_str("01952f4d-6890-7df2-8598-89d4e18c07db")
             .expect("valid notification ID"),
@@ -75,10 +82,7 @@ fn notification() -> RealtimeNotif<serde_json::Value> {
         viewed_at: None,
         updated_at: Utc::now(),
         deleted_at: None,
-        notification_metadata: serde_json::json!({
-            "tag": "channel_mention",
-            "content": { "message": "test" }
-        }),
+        notification_metadata,
         sender_id: None,
     }
 }
@@ -114,7 +118,13 @@ async fn publishes_one_event_per_call_with_all_recipients() {
         notifications: recipients
             .iter()
             .cloned()
-            .map(|recipient| user_notification_row(recipient, &notification))
+            .map(|recipient| {
+                user_notification_row(
+                    recipient,
+                    &notification,
+                    &notification.notification_metadata,
+                )
+            })
             .collect(),
     };
 
@@ -219,7 +229,7 @@ async fn propagates_serialization_failures_without_publishing() {
     sender
         .send_notifications(
             &[user("macro|recipient@example.com")],
-            &SerializationFailure,
+            &notification_with(SerializationFailure),
         )
         .await
         .expect_err("serialization failure propagates");

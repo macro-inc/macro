@@ -44,6 +44,7 @@ macro_authorization = { path = "../../crates/macro_authorization", features = [
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
 doppler-config = { workspace = true }
+feature_flags = { path = "../../crates/feature_flags" }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
@@ -62,14 +63,20 @@ models_pagination = { path = "../../crates/models_pagination", features = [
 ] }
 notification = { path = "../../crates/notification", features = ["axum"] }
 notification_db_client = { path = "../../crates/notification_db_client" }
+notification_routing = { path = "../../crates/notification_routing", features = [
+  "inbound",
+  "postgres",
+] }
 rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true }
+rootcause = { workspace = true }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sns_client = { path = "../../crates/sns_client" }
 sqlx = { workspace = true }
+system_properties = { path = "../../crates/system_properties" }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["compression-gzip"] }

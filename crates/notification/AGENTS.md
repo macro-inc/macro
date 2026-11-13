@@ -9,7 +9,8 @@ manages per-item preferences, snoozing, and muting.
 ## How it works
 
 A domain event arrives via HTTP, the queue worker, or the Kafka listener;
-the domain service applies per-user preferences/mute/snooze state, then
+the domain service applies per-user preferences/mute/snooze state, asks the
+`NotificationRouter` port which lane each remaining recipient lands in, then
 dispatches to whichever outbound adapters apply (realtime fan-out, push,
 digest email). State transitions and device registration are read back
 through the same service.
@@ -78,7 +79,18 @@ through the same service.
   migration that rewrites those `notification` columns must update
   `user_notification` too.
 - Every recipient row has a `lane` (`NotificationLane`, signal by default),
-  decided once at ingress. Noise is stored but never pushed, digested or counted
+  decided once at ingress by the `NotificationRouter` port (`NoRouting` unless
+  the composition root calls `with_router`; `notification_routing` implements
+  it). `create_notification` stores each route in its transaction, and a retry
+  keeps the stored routing, whatever the router says by then. Delivery follows
+  the stored lane: a noise recipient gets the live row only, with no push,
+  direct email or digest ingest, and a router error delivers to everyone as
+  signal.
+- The realtime queue message is one per lane. The connection gateway
+  `notification` message carries signal only (`SignalOnlyRealtimeSender` in the
+  service wiring): its clients alert on every message. Noise reaches clients
+  through the notifications topic.
+- Noise is stored but never pushed, digested or counted
   as unread. A reader of active rows names one lane: list filters and the entity
   edge (`EntityNotificationQuery`) default to signal, and digest eligibility is
   signal only. Marking an entity's notifications seen or done reads both lanes,

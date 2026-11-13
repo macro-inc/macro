@@ -9,6 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde::Serialize;
 
+use crate::domain::models::queue_message::RealtimeNotif;
 use crate::domain::ports::RealtimeSender;
 
 /// Realtime sender that delivers through two underlying senders.
@@ -32,7 +33,7 @@ impl<A: RealtimeSender, B: RealtimeSender> RealtimeSender for FanoutRealtimeSend
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         recipients: &[MacroUserIdStr<'a>],
-        notification: &T,
+        notification: &RealtimeNotif<T>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         let (first, second) = futures::future::join(
             self.first.send_notifications(recipients, notification),

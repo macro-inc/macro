@@ -20,7 +20,9 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
+use crate::domain::models::queue_message::RealtimeNotif;
 use crate::domain::models::request::{NotificationListFilters, NotificationStatus};
+use crate::domain::models::routing::{RecipientRoutes, RoutedNotification};
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NativeCallPushResult, NotificationExtEmail,
     NotificationIdAndCollapseKey, SendNotificationRequestBuilder, UserNotificationRow,
@@ -72,14 +74,19 @@ pub trait NotificationRepository: Send + Sync + 'static {
 
     /// Create a notification and user notification records.
     ///
+    /// Each new recipient row is stored with its route from `routes`, in the
+    /// same transaction; a recipient without one gets the natural row.
+    ///
     /// Returns new or unpublished recipient rows, or None after publication or withdrawal.
-    /// Retried publication preserves the original recipients and their lifecycle state.
+    /// Retried publication preserves the original recipients, their lifecycle
+    /// state and their stored routing; `routes` is not applied again.
     fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
         request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
+        routes: &RecipientRoutes,
     ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
 
     /// Whether a resolved workflow has withdrawn this notification before delivery.
@@ -292,6 +299,46 @@ pub trait NotificationRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+/// Port for routing a notification before it is stored and delivered.
+pub trait NotificationRouter: Send + Sync + 'static {
+    /// Decide where each recipient's notification lands. A recipient left out
+    /// gets the natural row. An error routes nobody: ingress then delivers
+    /// the notification to everyone as usual.
+    fn route<T: Serialize + Send + Sync>(
+        &self,
+        notification: RoutedNotification<'_, T>,
+    ) -> impl Future<Output = Result<RecipientRoutes, Report>> + Send;
+}
+
+/// Router for consumers without notification stacks: every recipient gets the
+/// natural row.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoRouting;
+
+impl NotificationRouter for NoRouting {
+    async fn route<T: Serialize + Send + Sync>(
+        &self,
+        _: RoutedNotification<'_, T>,
+    ) -> Result<RecipientRoutes, Report> {
+        Ok(RecipientRoutes::new())
+    }
+}
+
+/// A router a consumer may leave out, such as while its feature is off for
+/// everyone: without one, every recipient gets the natural row and nothing is
+/// looked up.
+impl<R: NotificationRouter> NotificationRouter for Option<R> {
+    async fn route<T: Serialize + Send + Sync>(
+        &self,
+        notification: RoutedNotification<'_, T>,
+    ) -> Result<RecipientRoutes, Report> {
+        match self {
+            Some(router) => router.route(notification).await,
+            None => Ok(RecipientRoutes::new()),
+        }
+    }
+}
+
 /// Port for receiving realtime notification database events.
 pub trait NotificationEventsReceiver: Send + 'static {
     /// Receive the next raw notification database event payload.
@@ -319,14 +366,15 @@ impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
 
 /// Port for realtime notification delivery.
 pub trait RealtimeSender: Send + Sync + 'static {
-    /// Send notifications to users in realtime.
+    /// Send notifications to users in realtime. Every recipient was routed
+    /// into the payload's lane.
     ///
     /// Returns the set of users who successfully received the notification
     /// (i.e., they were online and the message was delivered).
     fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         recipients: &[MacroUserIdStr<'a>],
-        notification: &T,
+        notification: &RealtimeNotif<T>,
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 }
 

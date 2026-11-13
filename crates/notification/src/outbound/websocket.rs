@@ -8,6 +8,7 @@ use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use serde::Serialize;
 
+use crate::domain::models::queue_message::RealtimeNotif;
 use crate::domain::models::{
     NotificationDelete, NotificationStatusPayload, NotificationStatusUpdate, PatchDelete,
 };
@@ -202,7 +203,7 @@ impl<W: WebSocketGatewayOps + Send + Sync + 'static> RealtimeSender for WebSocke
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         recipients: &[MacroUserIdStr<'a>],
-        notification: &T,
+        notification: &RealtimeNotif<T>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         self.gateway.send_to_users(recipients, notification).await
     }

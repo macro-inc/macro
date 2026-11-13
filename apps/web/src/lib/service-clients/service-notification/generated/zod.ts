@@ -16,6 +16,1045 @@ export const healthHandlerResponse = zod
   );
 
 /**
+ * @summary List the caller's notification stacks.
+ */
+export const listNotificationStacksResponse = zod
+  .object({
+    stacks: zod
+      .array(
+        zod
+          .object({
+            capture: zod
+              .array(
+                zod
+                  .object({
+                    channelTypes: zod
+                      .array(
+                        zod.enum(['public', 'private', 'directMessage', 'team'])
+                      )
+                      .optional()
+                      .describe('The type of the channel it happened in.'),
+                    kinds: zod
+                      .array(
+                        zod
+                          .enum([
+                            'mention',
+                            'reply',
+                            'newMessage',
+                            'reaction',
+                            'documentMention',
+                            'comment',
+                          ])
+                          .describe(
+                            'What kind of notification a rule matches, whichever place it happened in.'
+                          )
+                      )
+                      .optional()
+                      .describe('What kind of notification it is.'),
+                    senders: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe(
+                        'The person who caused it. A bot or an agent is never a sender.'
+                      ),
+                    sources: zod
+                      .array(
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                id: zod.string().describe("The channel's id."),
+                                type: zod.enum(['channel']),
+                              })
+                              .describe('One channel.'),
+                            zod
+                              .object({
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    "The text to find in the channel's name."
+                                  ),
+                                type: zod.enum(['channelNameContains']),
+                              })
+                              .describe(
+                                'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The document's id."),
+                                type: zod.enum(['document']),
+                              })
+                              .describe(
+                                'One document or task: the comments on it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The folder's id."),
+                                type: zod.enum(['folder']),
+                              })
+                              .describe(
+                                'Every document and task filed in a folder or in a folder below it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The project's id."),
+                                type: zod.enum(['project']),
+                              })
+                              .describe(
+                                'A task project: its discussion and the tasks in it.'
+                              ),
+                          ])
+                          .describe(
+                            'A place a rule matches notifications from.'
+                          )
+                      )
+                      .optional()
+                      .describe('Where the notification happened.'),
+                  })
+                  .describe(
+                    'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+                  )
+              )
+              .describe(
+                'A notification any of these rules matches is captured.'
+              ),
+            createdAt: zod.iso.datetime({}).describe('When it was created.'),
+            enabled: zod
+              .boolean()
+              .describe('Whether the stack routes anything.'),
+            id: zod.uuid().describe("The stack's id."),
+            lane: zod
+              .enum(['signal', 'noise'])
+              .describe(
+                "Where a notification was routed for its recipient, decided once at ingress.\n\nReaders of a user's notifications ask for one lane. `Signal` is the default\neverywhere, so a reader that says nothing never sees noise."
+              ),
+            name: zod.string().describe('The name its owner gave it.'),
+            position: zod
+              .number()
+              .describe(
+                "Where it sits among its owner's stacks. Stacks are tried in this\norder and the first whose capture rules match takes the notification."
+              ),
+            release: zod
+              .array(
+                zod
+                  .object({
+                    channelTypes: zod
+                      .array(
+                        zod.enum(['public', 'private', 'directMessage', 'team'])
+                      )
+                      .optional()
+                      .describe('The type of the channel it happened in.'),
+                    kinds: zod
+                      .array(
+                        zod
+                          .enum([
+                            'mention',
+                            'reply',
+                            'newMessage',
+                            'reaction',
+                            'documentMention',
+                            'comment',
+                          ])
+                          .describe(
+                            'What kind of notification a rule matches, whichever place it happened in.'
+                          )
+                      )
+                      .optional()
+                      .describe('What kind of notification it is.'),
+                    senders: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe(
+                        'The person who caused it. A bot or an agent is never a sender.'
+                      ),
+                    sources: zod
+                      .array(
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                id: zod.string().describe("The channel's id."),
+                                type: zod.enum(['channel']),
+                              })
+                              .describe('One channel.'),
+                            zod
+                              .object({
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    "The text to find in the channel's name."
+                                  ),
+                                type: zod.enum(['channelNameContains']),
+                              })
+                              .describe(
+                                'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The document's id."),
+                                type: zod.enum(['document']),
+                              })
+                              .describe(
+                                'One document or task: the comments on it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The folder's id."),
+                                type: zod.enum(['folder']),
+                              })
+                              .describe(
+                                'Every document and task filed in a folder or in a folder below it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The project's id."),
+                                type: zod.enum(['project']),
+                              })
+                              .describe(
+                                'A task project: its discussion and the tasks in it.'
+                              ),
+                          ])
+                          .describe(
+                            'A place a rule matches notifications from.'
+                          )
+                      )
+                      .optional()
+                      .describe('Where the notification happened.'),
+                  })
+                  .describe(
+                    'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+                  )
+              )
+              .describe(
+                'A captured notification any of these rules matches is let through\nand delivered as usual.'
+              ),
+            revision: zod
+              .number()
+              .describe(
+                'Counts its edits. A routed notification records the revision that\nrouted it.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When it was last edited.'),
+          })
+          .describe(
+            "A person's stack: it captures the notifications its capture rules match\nand files them in its lane, except those its release rules let through."
+          )
+      )
+      .describe('The stacks, first tried first.'),
+  })
+  .describe("The caller's stacks in the order they are tried.");
+
+/**
+ * @summary Create a notification stack for the caller.
+ */
+export const createNotificationStackBody = zod
+  .object({
+    capture: zod
+      .array(
+        zod
+          .object({
+            channelTypes: zod
+              .array(zod.enum(['public', 'private', 'directMessage', 'team']))
+              .optional()
+              .describe('The type of the channel it happened in.'),
+            kinds: zod
+              .array(
+                zod
+                  .enum([
+                    'mention',
+                    'reply',
+                    'newMessage',
+                    'reaction',
+                    'documentMention',
+                    'comment',
+                  ])
+                  .describe(
+                    'What kind of notification a rule matches, whichever place it happened in.'
+                  )
+              )
+              .optional()
+              .describe('What kind of notification it is.'),
+            senders: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'The person who caused it. A bot or an agent is never a sender.'
+              ),
+            sources: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod.string().describe("The channel's id."),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('One channel.'),
+                    zod
+                      .object({
+                        text: zod
+                          .string()
+                          .describe("The text to find in the channel's name."),
+                        type: zod.enum(['channelNameContains']),
+                      })
+                      .describe(
+                        'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The document's id."),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('One document or task: the comments on it.'),
+                    zod
+                      .object({
+                        id: zod.string().describe("The folder's id."),
+                        type: zod.enum(['folder']),
+                      })
+                      .describe(
+                        'Every document and task filed in a folder or in a folder below it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The project's id."),
+                        type: zod.enum(['project']),
+                      })
+                      .describe(
+                        'A task project: its discussion and the tasks in it.'
+                      ),
+                  ])
+                  .describe('A place a rule matches notifications from.')
+              )
+              .optional()
+              .describe('Where the notification happened.'),
+          })
+          .describe(
+            'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+          )
+      )
+      .describe('The capture rules. At least one.'),
+    name: zod.string().describe("The stack's name."),
+    release: zod
+      .array(
+        zod
+          .object({
+            channelTypes: zod
+              .array(zod.enum(['public', 'private', 'directMessage', 'team']))
+              .optional()
+              .describe('The type of the channel it happened in.'),
+            kinds: zod
+              .array(
+                zod
+                  .enum([
+                    'mention',
+                    'reply',
+                    'newMessage',
+                    'reaction',
+                    'documentMention',
+                    'comment',
+                  ])
+                  .describe(
+                    'What kind of notification a rule matches, whichever place it happened in.'
+                  )
+              )
+              .optional()
+              .describe('What kind of notification it is.'),
+            senders: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'The person who caused it. A bot or an agent is never a sender.'
+              ),
+            sources: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod.string().describe("The channel's id."),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('One channel.'),
+                    zod
+                      .object({
+                        text: zod
+                          .string()
+                          .describe("The text to find in the channel's name."),
+                        type: zod.enum(['channelNameContains']),
+                      })
+                      .describe(
+                        'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The document's id."),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('One document or task: the comments on it.'),
+                    zod
+                      .object({
+                        id: zod.string().describe("The folder's id."),
+                        type: zod.enum(['folder']),
+                      })
+                      .describe(
+                        'Every document and task filed in a folder or in a folder below it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The project's id."),
+                        type: zod.enum(['project']),
+                      })
+                      .describe(
+                        'A task project: its discussion and the tasks in it.'
+                      ),
+                  ])
+                  .describe('A place a rule matches notifications from.')
+              )
+              .optional()
+              .describe('Where the notification happened.'),
+          })
+          .describe(
+            'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+          )
+      )
+      .optional()
+      .describe('The release rules.'),
+  })
+  .describe(
+    'A new stack as its owner writes it. It captures into the noise lane.'
+  );
+
+/**
+ * @summary Put the caller's notification stacks in a new order.
+ */
+export const reorderNotificationStacksBody = zod
+  .object({
+    ids: zod
+      .array(zod.uuid())
+      .describe("Every one of the caller's stack ids, first tried first."),
+  })
+  .describe("A new order for the caller's stacks.");
+
+export const reorderNotificationStacksResponse = zod
+  .object({
+    stacks: zod
+      .array(
+        zod
+          .object({
+            capture: zod
+              .array(
+                zod
+                  .object({
+                    channelTypes: zod
+                      .array(
+                        zod.enum(['public', 'private', 'directMessage', 'team'])
+                      )
+                      .optional()
+                      .describe('The type of the channel it happened in.'),
+                    kinds: zod
+                      .array(
+                        zod
+                          .enum([
+                            'mention',
+                            'reply',
+                            'newMessage',
+                            'reaction',
+                            'documentMention',
+                            'comment',
+                          ])
+                          .describe(
+                            'What kind of notification a rule matches, whichever place it happened in.'
+                          )
+                      )
+                      .optional()
+                      .describe('What kind of notification it is.'),
+                    senders: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe(
+                        'The person who caused it. A bot or an agent is never a sender.'
+                      ),
+                    sources: zod
+                      .array(
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                id: zod.string().describe("The channel's id."),
+                                type: zod.enum(['channel']),
+                              })
+                              .describe('One channel.'),
+                            zod
+                              .object({
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    "The text to find in the channel's name."
+                                  ),
+                                type: zod.enum(['channelNameContains']),
+                              })
+                              .describe(
+                                'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The document's id."),
+                                type: zod.enum(['document']),
+                              })
+                              .describe(
+                                'One document or task: the comments on it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The folder's id."),
+                                type: zod.enum(['folder']),
+                              })
+                              .describe(
+                                'Every document and task filed in a folder or in a folder below it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The project's id."),
+                                type: zod.enum(['project']),
+                              })
+                              .describe(
+                                'A task project: its discussion and the tasks in it.'
+                              ),
+                          ])
+                          .describe(
+                            'A place a rule matches notifications from.'
+                          )
+                      )
+                      .optional()
+                      .describe('Where the notification happened.'),
+                  })
+                  .describe(
+                    'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+                  )
+              )
+              .describe(
+                'A notification any of these rules matches is captured.'
+              ),
+            createdAt: zod.iso.datetime({}).describe('When it was created.'),
+            enabled: zod
+              .boolean()
+              .describe('Whether the stack routes anything.'),
+            id: zod.uuid().describe("The stack's id."),
+            lane: zod
+              .enum(['signal', 'noise'])
+              .describe(
+                "Where a notification was routed for its recipient, decided once at ingress.\n\nReaders of a user's notifications ask for one lane. `Signal` is the default\neverywhere, so a reader that says nothing never sees noise."
+              ),
+            name: zod.string().describe('The name its owner gave it.'),
+            position: zod
+              .number()
+              .describe(
+                "Where it sits among its owner's stacks. Stacks are tried in this\norder and the first whose capture rules match takes the notification."
+              ),
+            release: zod
+              .array(
+                zod
+                  .object({
+                    channelTypes: zod
+                      .array(
+                        zod.enum(['public', 'private', 'directMessage', 'team'])
+                      )
+                      .optional()
+                      .describe('The type of the channel it happened in.'),
+                    kinds: zod
+                      .array(
+                        zod
+                          .enum([
+                            'mention',
+                            'reply',
+                            'newMessage',
+                            'reaction',
+                            'documentMention',
+                            'comment',
+                          ])
+                          .describe(
+                            'What kind of notification a rule matches, whichever place it happened in.'
+                          )
+                      )
+                      .optional()
+                      .describe('What kind of notification it is.'),
+                    senders: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe(
+                        'The person who caused it. A bot or an agent is never a sender.'
+                      ),
+                    sources: zod
+                      .array(
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                id: zod.string().describe("The channel's id."),
+                                type: zod.enum(['channel']),
+                              })
+                              .describe('One channel.'),
+                            zod
+                              .object({
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    "The text to find in the channel's name."
+                                  ),
+                                type: zod.enum(['channelNameContains']),
+                              })
+                              .describe(
+                                'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The document's id."),
+                                type: zod.enum(['document']),
+                              })
+                              .describe(
+                                'One document or task: the comments on it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The folder's id."),
+                                type: zod.enum(['folder']),
+                              })
+                              .describe(
+                                'Every document and task filed in a folder or in a folder below it.'
+                              ),
+                            zod
+                              .object({
+                                id: zod.string().describe("The project's id."),
+                                type: zod.enum(['project']),
+                              })
+                              .describe(
+                                'A task project: its discussion and the tasks in it.'
+                              ),
+                          ])
+                          .describe(
+                            'A place a rule matches notifications from.'
+                          )
+                      )
+                      .optional()
+                      .describe('Where the notification happened.'),
+                  })
+                  .describe(
+                    'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+                  )
+              )
+              .describe(
+                'A captured notification any of these rules matches is let through\nand delivered as usual.'
+              ),
+            revision: zod
+              .number()
+              .describe(
+                'Counts its edits. A routed notification records the revision that\nrouted it.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When it was last edited.'),
+          })
+          .describe(
+            "A person's stack: it captures the notifications its capture rules match\nand files them in its lane, except those its release rules let through."
+          )
+      )
+      .describe('The stacks, first tried first.'),
+  })
+  .describe("The caller's stacks in the order they are tried.");
+
+/**
+ * @summary Delete one of the caller's notification stacks.
+ */
+export const deleteNotificationStackParams = zod.object({
+  id: zod.uuid().describe("The stack's id."),
+});
+
+/**
+ * @summary Change one of the caller's notification stacks.
+ */
+export const updateNotificationStackParams = zod.object({
+  id: zod.uuid().describe("The stack's id."),
+});
+
+export const updateNotificationStackBody = zod
+  .object({
+    capture: zod
+      .array(
+        zod
+          .object({
+            channelTypes: zod
+              .array(zod.enum(['public', 'private', 'directMessage', 'team']))
+              .optional()
+              .describe('The type of the channel it happened in.'),
+            kinds: zod
+              .array(
+                zod
+                  .enum([
+                    'mention',
+                    'reply',
+                    'newMessage',
+                    'reaction',
+                    'documentMention',
+                    'comment',
+                  ])
+                  .describe(
+                    'What kind of notification a rule matches, whichever place it happened in.'
+                  )
+              )
+              .optional()
+              .describe('What kind of notification it is.'),
+            senders: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'The person who caused it. A bot or an agent is never a sender.'
+              ),
+            sources: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod.string().describe("The channel's id."),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('One channel.'),
+                    zod
+                      .object({
+                        text: zod
+                          .string()
+                          .describe("The text to find in the channel's name."),
+                        type: zod.enum(['channelNameContains']),
+                      })
+                      .describe(
+                        'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The document's id."),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('One document or task: the comments on it.'),
+                    zod
+                      .object({
+                        id: zod.string().describe("The folder's id."),
+                        type: zod.enum(['folder']),
+                      })
+                      .describe(
+                        'Every document and task filed in a folder or in a folder below it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The project's id."),
+                        type: zod.enum(['project']),
+                      })
+                      .describe(
+                        'A task project: its discussion and the tasks in it.'
+                      ),
+                  ])
+                  .describe('A place a rule matches notifications from.')
+              )
+              .optional()
+              .describe('Where the notification happened.'),
+          })
+          .describe(
+            'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+          )
+      )
+      .nullish()
+      .describe('New capture rules, replacing the old ones.'),
+    enabled: zod
+      .boolean()
+      .nullish()
+      .describe('Whether the stack routes anything.'),
+    name: zod.string().nullish().describe('A new name.'),
+    release: zod
+      .array(
+        zod
+          .object({
+            channelTypes: zod
+              .array(zod.enum(['public', 'private', 'directMessage', 'team']))
+              .optional()
+              .describe('The type of the channel it happened in.'),
+            kinds: zod
+              .array(
+                zod
+                  .enum([
+                    'mention',
+                    'reply',
+                    'newMessage',
+                    'reaction',
+                    'documentMention',
+                    'comment',
+                  ])
+                  .describe(
+                    'What kind of notification a rule matches, whichever place it happened in.'
+                  )
+              )
+              .optional()
+              .describe('What kind of notification it is.'),
+            senders: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'The person who caused it. A bot or an agent is never a sender.'
+              ),
+            sources: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod.string().describe("The channel's id."),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('One channel.'),
+                    zod
+                      .object({
+                        text: zod
+                          .string()
+                          .describe("The text to find in the channel's name."),
+                        type: zod.enum(['channelNameContains']),
+                      })
+                      .describe(
+                        'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The document's id."),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('One document or task: the comments on it.'),
+                    zod
+                      .object({
+                        id: zod.string().describe("The folder's id."),
+                        type: zod.enum(['folder']),
+                      })
+                      .describe(
+                        'Every document and task filed in a folder or in a folder below it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The project's id."),
+                        type: zod.enum(['project']),
+                      })
+                      .describe(
+                        'A task project: its discussion and the tasks in it.'
+                      ),
+                  ])
+                  .describe('A place a rule matches notifications from.')
+              )
+              .optional()
+              .describe('Where the notification happened.'),
+          })
+          .describe(
+            'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+          )
+      )
+      .nullish()
+      .describe('New release rules, replacing the old ones.'),
+  })
+  .describe('Changes to a stack. A field left out keeps its value.');
+
+export const updateNotificationStackResponse = zod
+  .object({
+    capture: zod
+      .array(
+        zod
+          .object({
+            channelTypes: zod
+              .array(zod.enum(['public', 'private', 'directMessage', 'team']))
+              .optional()
+              .describe('The type of the channel it happened in.'),
+            kinds: zod
+              .array(
+                zod
+                  .enum([
+                    'mention',
+                    'reply',
+                    'newMessage',
+                    'reaction',
+                    'documentMention',
+                    'comment',
+                  ])
+                  .describe(
+                    'What kind of notification a rule matches, whichever place it happened in.'
+                  )
+              )
+              .optional()
+              .describe('What kind of notification it is.'),
+            senders: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'The person who caused it. A bot or an agent is never a sender.'
+              ),
+            sources: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod.string().describe("The channel's id."),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('One channel.'),
+                    zod
+                      .object({
+                        text: zod
+                          .string()
+                          .describe("The text to find in the channel's name."),
+                        type: zod.enum(['channelNameContains']),
+                      })
+                      .describe(
+                        'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The document's id."),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('One document or task: the comments on it.'),
+                    zod
+                      .object({
+                        id: zod.string().describe("The folder's id."),
+                        type: zod.enum(['folder']),
+                      })
+                      .describe(
+                        'Every document and task filed in a folder or in a folder below it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The project's id."),
+                        type: zod.enum(['project']),
+                      })
+                      .describe(
+                        'A task project: its discussion and the tasks in it.'
+                      ),
+                  ])
+                  .describe('A place a rule matches notifications from.')
+              )
+              .optional()
+              .describe('Where the notification happened.'),
+          })
+          .describe(
+            'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+          )
+      )
+      .describe('A notification any of these rules matches is captured.'),
+    createdAt: zod.iso.datetime({}).describe('When it was created.'),
+    enabled: zod.boolean().describe('Whether the stack routes anything.'),
+    id: zod.uuid().describe("The stack's id."),
+    lane: zod
+      .enum(['signal', 'noise'])
+      .describe(
+        "Where a notification was routed for its recipient, decided once at ingress.\n\nReaders of a user's notifications ask for one lane. `Signal` is the default\neverywhere, so a reader that says nothing never sees noise."
+      ),
+    name: zod.string().describe('The name its owner gave it.'),
+    position: zod
+      .number()
+      .describe(
+        "Where it sits among its owner's stacks. Stacks are tried in this\norder and the first whose capture rules match takes the notification."
+      ),
+    release: zod
+      .array(
+        zod
+          .object({
+            channelTypes: zod
+              .array(zod.enum(['public', 'private', 'directMessage', 'team']))
+              .optional()
+              .describe('The type of the channel it happened in.'),
+            kinds: zod
+              .array(
+                zod
+                  .enum([
+                    'mention',
+                    'reply',
+                    'newMessage',
+                    'reaction',
+                    'documentMention',
+                    'comment',
+                  ])
+                  .describe(
+                    'What kind of notification a rule matches, whichever place it happened in.'
+                  )
+              )
+              .optional()
+              .describe('What kind of notification it is.'),
+            senders: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'The person who caused it. A bot or an agent is never a sender.'
+              ),
+            sources: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod.string().describe("The channel's id."),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('One channel.'),
+                    zod
+                      .object({
+                        text: zod
+                          .string()
+                          .describe("The text to find in the channel's name."),
+                        type: zod.enum(['channelNameContains']),
+                      })
+                      .describe(
+                        'Every channel whose name contains the text, ignoring case. A direct\nmessage never matches: its name depends on who reads it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The document's id."),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('One document or task: the comments on it.'),
+                    zod
+                      .object({
+                        id: zod.string().describe("The folder's id."),
+                        type: zod.enum(['folder']),
+                      })
+                      .describe(
+                        'Every document and task filed in a folder or in a folder below it.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.string().describe("The project's id."),
+                        type: zod.enum(['project']),
+                      })
+                      .describe(
+                        'A task project: its discussion and the tasks in it.'
+                      ),
+                  ])
+                  .describe('A place a rule matches notifications from.')
+              )
+              .optional()
+              .describe('Where the notification happened.'),
+          })
+          .describe(
+            'One rule. It matches a notification when every condition it sets holds.\nA condition is set when its list has a value, and holds when any of its\nvalues matches.'
+          )
+      )
+      .describe(
+        'A captured notification any of these rules matches is let through\nand delivered as usual.'
+      ),
+    revision: zod
+      .number()
+      .describe(
+        'Counts its edits. A routed notification records the revision that\nrouted it.'
+      ),
+    updatedAt: zod.iso.datetime({}).describe('When it was last edited.'),
+  })
+  .describe(
+    "A person's stack: it captures the notifications its capture rules match\nand files them in its lane, except those its release rules let through."
+  );
+
+/**
  * @summary Gets the users unsubscribe items.
  */
 export const getUnsubscribesResponseItem = zod.object({

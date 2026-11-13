@@ -13,6 +13,7 @@ use ::notification::outbound::kafka_realtime::KafkaRealtimeSender;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
+use ::notification::outbound::signal_only_realtime::SignalOnlyRealtimeSender;
 use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
@@ -38,6 +39,7 @@ mod config;
 mod env;
 mod model;
 mod notification;
+mod stack_flags;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
@@ -215,13 +217,15 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
+    // Clients alert on every connection gateway `notification` message, so
+    // that path carries signal only. Noise reaches clients through Kafka.
     let realtime_adapter = FanoutRealtimeSender::new(
-        WebSocketGatewayAdapter {
+        SignalOnlyRealtimeSender::new(WebSocketGatewayAdapter {
             gateway: ConnectionGatewayClient::new(
                 config.internal_api_key.as_ref().to_string(),
                 connection_gateway_url,
             ),
-        },
+        }),
         KafkaRealtimeSender::new(realtime_event_broker),
     );
 
@@ -338,11 +342,43 @@ pub async fn main() -> anyhow::Result<()> {
         aws_sdk_sqs::Client::new(&aws_config),
         macro_queues::NotificationQueue::new().to_string(),
     );
+    // Notification stacks: each recipient's own rules route a notification
+    // into a lane before it is stored and delivered.
+    let stack_flags = stack_flags::StackFlags::new(
+        config.environment,
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let stack_repository =
+        notification_routing::outbound::pg_stack_repo::PgStackRepository::new(db.clone());
+    // While stacks are off for everyone, ingress has no router: it reads no
+    // stacks and stores and delivers every notification as it always has.
+    let stack_router = (!stack_flags.off_for_everyone()).then(|| {
+        notification_routing::domain::router::StackRouter::new(
+            stack_repository.clone(),
+            notification_routing::outbound::pg_document_placements::PgDocumentPlacements::new(
+                db.clone(),
+                system_properties::SystemPropertiesServiceImpl::new(
+                    system_properties::PgSystemPropertiesRepository::new(db.clone()),
+                ),
+            ),
+            stack_flags.clone(),
+        )
+    });
+    let stacks = Arc::new(
+        notification_routing::domain::service::NotificationStackServiceImpl::new(
+            stack_repository,
+            stack_flags,
+        ),
+    );
+
     let ingress_service = ::notification::domain::service::NotificationIngressService::new(
         ingress_repository,
         ingress_delivery_queue,
         ingress_state_machine,
-    );
+    )
+    .with_router(stack_router);
 
     let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
@@ -363,6 +399,10 @@ pub async fn main() -> anyhow::Result<()> {
                 ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
             ),
             internal_api_key: config.internal_api_key.clone(),
+            stacks: notification_routing::inbound::axum_router::NotificationStackRouterState::new(
+                stacks,
+                authorization_state.clone(),
+            ),
             db,
             sns_client: Arc::new(sns_client),
             config: Arc::new(config),

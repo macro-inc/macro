@@ -9,7 +9,9 @@ mutations, and the realtime subscription.
 ## Start here
 
 - `src/objects.rs`: `GraphqlNotification`, `load_entity_notifications` — the
-  edge most other GraphQL object types embed.
+  edge most other GraphQL object types embed. Its `lane` lets the client cache
+  keep a noise notification, which only the Noise inbox returns, out of its
+  parent's unread state.
 - `src/notification_event.rs` + `src/notification_event/*.rs`: typed
   `GraphqlNotifEvent` payloads per source (CRM discussion, initiative
   discussion, ...) — add a new file here per event kind.

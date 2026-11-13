@@ -74,7 +74,7 @@ fn swagger_ui() -> Router {
 }
 
 fn api_router<S: ::notification::domain::service::NotificationReader>(
-    _state: ApiContext,
+    state: ApiContext,
     ingress_state: NotificationRouterState<S, AuthorizationService>,
 ) -> Router<ApiContext> {
     let middleware = {
@@ -91,6 +91,10 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
         .nest("/user_notifications", user_notification::router())
         .with_state(ingress_state)
         .nest("/unsubscribe", unsubscribe::router())
+        .nest(
+            "/notification_stacks",
+            notification_routing::inbound::axum_router::notification_stack_router(state.stacks),
+        )
         .layer(middleware);
     Router::new()
         .nest("/{version}", internal_router.clone())

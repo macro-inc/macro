@@ -17,14 +17,15 @@ use crate::domain::models::request::{
     NotificationStatus, SendNotificationRequest, UpdateNotificationsForEntitiesRequest,
     UpdateNotificationsRequest,
 };
+use crate::domain::models::routing::{RecipientRoutes, RoutedNotification};
 use crate::domain::models::{
-    DeviceEndpoint, DisabledNotificationType, MobilePushRecipients, Notification,
+    DeviceEndpoint, DisabledNotificationType, MobilePushRecipients, Notification, NotificationLane,
     NotificationResult, NotificationStatusPayload, NotificationTypeName, PatchDelete,
     UserNotificationRow,
 };
 use crate::domain::ports::{
-    NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
-    NotificationRealtimePublisher, NotificationRepository, SnsEndpointManager,
+    NoRouting, NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
+    NotificationRealtimePublisher, NotificationRepository, NotificationRouter, SnsEndpointManager,
 };
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
@@ -174,20 +175,22 @@ pub trait NotificationReader: Send + Sync + 'static {
 
 /// Service for sending notifications (ingress side).
 ///
-/// Handles recipient filtering, DB persistence, and queue publishing.
+/// Handles recipient filtering, routing, DB persistence, and queue publishing.
 /// Does NOT handle delivery - that's done by [`super::NotificationEgressService`].
-pub struct NotificationIngressService<N, Q, S> {
+pub struct NotificationIngressService<N, Q, S, R = NoRouting> {
     repository: N,
     queue: Q,
     state_machine_driver: S,
+    router: R,
     service_name: &'static str,
 }
 
-impl<N, Q, S> NotificationIngress for NotificationIngressService<N, Q, S>
+impl<N, Q, S, R> NotificationIngress for NotificationIngressService<N, Q, S, R>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
+    R: NotificationRouter,
 {
     fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync + 'static>(
         &'a self,
@@ -198,29 +201,52 @@ where
     }
 }
 
-impl<N, Q, S> NotificationIngressService<N, Q, S>
-where
-    N: NotificationRepository,
-    Q: NotificationQueue,
-    S: BulkDigestStateMachine,
-{
-    /// Create a new ingress service.
+impl<N, Q, S> NotificationIngressService<N, Q, S> {
+    /// Create a new ingress service that routes nothing: every recipient
+    /// gets the natural row.
     pub fn new(repository: N, queue: Q, state_machine_driver: S) -> Self {
         Self {
             repository,
             queue,
             state_machine_driver,
+            router: NoRouting,
             service_name: std::env!("CARGO_PKG_NAME"),
         }
     }
+}
 
+impl<N, Q, S, R> NotificationIngressService<N, Q, S, R> {
+    /// Route every notification through `router` before it is stored.
+    pub fn with_router<R2: NotificationRouter>(
+        self,
+        router: R2,
+    ) -> NotificationIngressService<N, Q, S, R2> {
+        NotificationIngressService {
+            repository: self.repository,
+            queue: self.queue,
+            state_machine_driver: self.state_machine_driver,
+            router,
+            service_name: self.service_name,
+        }
+    }
+}
+
+impl<N, Q, S, R> NotificationIngressService<N, Q, S, R>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+    S: BulkDigestStateMachine,
+    R: NotificationRouter,
+{
     /// Send a notification to the specified recipients.
     ///
     /// This method performs the following steps:
     /// 1. Filter recipients (remove sender, muted users, unsubscribed users)
-    /// 2. Create notification in the database
-    /// 3. Build and publish QueueMessage to SQS
-    /// 4. Return result (delivery happens async via worker)
+    /// 2. Route each recipient into a lane
+    /// 3. Create notification in the database, with each recipient's route
+    /// 4. Build and publish QueueMessage to SQS. Noise is stored and shown
+    ///    live, but never pushed, emailed or digested.
+    /// 5. Return result (delivery happens async via worker)
     async fn send_notification_impl<
         'a,
         T: Clone + Serialize + Send + Sync + 'static,
@@ -235,6 +261,8 @@ where
             .await
             .context(SendNotificationError::Other)?;
 
+        let routes = self.route(notification_id, &request).await;
+
         let apns_collapse_key = request
             .build_apns
             .as_ref()
@@ -248,6 +276,7 @@ where
                 notification_id,
                 self.service_name,
                 apns_collapse_key,
+                &routes,
             )
             .await
             .context(SendNotificationError::Other)?;
@@ -284,8 +313,15 @@ where
         // A retry uses the original recipients, including when current filters changed.
         request.req.recipient_ids = n.iter().map(|row| row.owner_id.clone()).collect();
         let notified_recipients = request.req.recipient_ids.clone();
+
+        // The stored lane decides delivery, so a retry delivers as first routed.
+        let noise_recipients: HashSet<MacroUserIdStr<'static>> = n
+            .iter()
+            .filter(|row| row.lane == NotificationLane::Noise)
+            .map(|row| row.owner_id.clone())
+            .collect();
         let (queue_messages, _) = self
-            .build_queue_message(notification_id, &mut request)
+            .build_queue_message(notification_id, &mut request, &noise_recipients)
             .await?;
 
         // get the timestamp info back out of the db created values
@@ -295,8 +331,10 @@ where
             .context(SendNotificationError::Other)?;
         let (created_at, updated_at) = (first.created_at, first.updated_at);
 
+        // Noise never reaches an email digest.
         let results = join_all(
             n.into_iter()
+                .filter(|user_notif| user_notif.lane == NotificationLane::Signal)
                 .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
         )
         .await;
@@ -348,12 +386,74 @@ where
         Ok(out)
     }
 
+    /// Ask the router where each recipient's notification lands.
+    ///
+    /// Routing never blocks delivery: when the router fails, everyone gets
+    /// the natural row, so a failure costs noise and never a missed signal.
+    #[tracing::instrument(
+        name = "notification.route",
+        skip_all,
+        fields(
+            notification_id = %notification_id,
+            notification_type = request.req.notification.tag.as_ref(),
+            recipients = request.req.recipient_ids.len(),
+            captured = tracing::field::Empty,
+            released = tracing::field::Empty,
+            stacks = tracing::field::Empty,
+            failed = tracing::field::Empty,
+        )
+    )]
+    async fn route<T: Serialize + Send + Sync, U>(
+        &self,
+        notification_id: Uuid,
+        request: &SendNotificationRequest<'_, T, U>,
+    ) -> RecipientRoutes {
+        if request.req.recipient_ids.is_empty() {
+            return RecipientRoutes::new();
+        }
+
+        let routed = self
+            .router
+            .route(RoutedNotification {
+                notification_id,
+                notification_type: request.req.notification.tag.as_ref(),
+                notification: &request.req.notification,
+                entity: &request.req.notification_entity,
+                sender_id: request.req.sender_id.as_ref(),
+                recipients: &request.req.recipient_ids,
+            })
+            .await;
+
+        let span = tracing::Span::current();
+        match routed {
+            Ok(routes) => {
+                let captured = routes
+                    .values()
+                    .filter(|route| route.stack_id.is_some())
+                    .count();
+                let stacks: HashSet<Uuid> =
+                    routes.values().filter_map(|route| route.stack_id).collect();
+                span.record("captured", captured);
+                span.record("released", routes.len() - captured);
+                span.record("stacks", stacks.len());
+                routes
+            }
+            Err(error) => {
+                span.record("failed", true);
+                tracing::warn!(error = ?error, "notification routing failed; delivering as signal");
+                RecipientRoutes::new()
+            }
+        }
+    }
+
     /// Build queue messages for each delivery channel.
     ///
-    /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
+    /// - `send_conn_gateway`: Creates one message per lane for its recipients (1:M)
     /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
     /// - `build_email`: Creates one message per recipient (1:1)
-    ///   Returns `(queue_messages, apns_collapse_key)`.
+    ///
+    /// `noise_recipients` get the live row only: no push and no email.
+    /// Returns `(queue_messages, apns_collapse_key)`.
     async fn build_queue_message<
         'a,
         T: Clone + Serialize + Send + Sync,
@@ -362,6 +462,7 @@ where
         &self,
         notification_id: Uuid,
         notification: &mut SendNotificationRequest<'a, T, U>,
+        noise_recipients: &HashSet<MacroUserIdStr<'static>>,
     ) -> Result<
         (QueueMessageNeedsStateMachine<'a, T, U>, Option<String>),
         Report<SendNotificationError>,
@@ -369,20 +470,41 @@ where
         let mut messages = Vec::new();
         let mut apns_collapse_key = None;
         let typename = &notification.req.notification.tag;
+        let (noise, signal): (Vec<_>, Vec<_>) = notification
+            .req
+            .recipient_ids
+            .iter()
+            .cloned()
+            .partition(|recipient| noise_recipients.contains(recipient));
 
-        // Connection gateway: 1:M (single message for all recipients)
+        // Connection gateway: 1:M, one message per lane, so every recipient
+        // of a payload was routed into the lane it names.
         if notification.send_conn_gateway {
-            messages.push(QueueMessage::new_from_conn_gateway(
-                ConnGatewayNotification::clone_from_request(notification_id, notification),
-            ));
+            let by_lane = [
+                (NotificationLane::Signal, signal.clone()),
+                (NotificationLane::Noise, noise),
+            ];
+            for (lane, recipients) in by_lane {
+                if recipients.is_empty() {
+                    continue;
+                }
+                messages.push(QueueMessage::new_from_conn_gateway(
+                    ConnGatewayNotification::clone_from_request(
+                        notification_id,
+                        notification,
+                        lane,
+                        recipients,
+                    ),
+                ));
+            }
         }
 
         // Mobile push: one message with all platforms grouped by recipient.
-        if let Some(build_apns) = notification.build_apns.take() {
-            let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
+        let build_apns = notification.build_apns.take();
+        if let Some(build_apns) = build_apns.filter(|_| !signal.is_empty()) {
             let device_endpoints = self
                 .repository
-                .get_device_endpoints(&recipients_vec)
+                .get_device_endpoints(&signal)
                 .await
                 .context(SendNotificationError::Other)?;
 
@@ -405,7 +527,7 @@ where
 
         // Email: 1:1 (one message per recipient)
         if let Some(ref build_email) = notification.build_email {
-            for recipient in &notification.req.recipient_ids {
+            for recipient in &signal {
                 let email_content = build_email.clone();
                 messages.push(QueueMessage::new_from_email(
                     email_content.with_recipient(recipient.clone()),

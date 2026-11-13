@@ -29,7 +29,7 @@ async fn withdrawal_prevents_delayed_notification_creation(pool: PgPool) {
         notification: TaggedContent::new(PendingAccess),
     };
     assert!(
-        pool.create_notification(request, id, "access_requests", None)
+        pool.create_notification(request, id, "access_requests", None, &Default::default())
             .await
             .unwrap()
             .is_none()

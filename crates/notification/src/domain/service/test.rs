@@ -3,6 +3,7 @@
 mod access_request_delivery;
 mod android;
 mod ios_navigation;
+mod routing;
 mod status_updates;
 
 use crate::domain::models::apple::APNSPushNotification;
@@ -18,6 +19,7 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::request::{
     NotificationStatus, UpdateNotificationsForEntitiesRequest, UpdateNotificationsRequest,
 };
+use crate::domain::models::routing::RecipientRoutes;
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
     NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
@@ -277,6 +279,7 @@ impl NotificationRepository for MockRepository {
         notification_id: Uuid,
         _service_sender: &str,
         apns_collapse_key: Option<&str>,
+        routes: &RecipientRoutes,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         if request.recipient_ids.is_empty() {
             return Ok(None);
@@ -302,7 +305,10 @@ impl NotificationRepository for MockRepository {
                 entity: entity.clone(),
                 sent: false,
                 state: crate::domain::models::NotificationState::Unseen,
-                lane: crate::domain::models::NotificationLane::Signal,
+                lane: routes
+                    .get(recipient)
+                    .map(|route| route.lane)
+                    .unwrap_or_default(),
                 created_at: Utc::now(),
                 viewed_at: None,
                 updated_at: Utc::now(),
@@ -603,9 +609,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
+        routes: &RecipientRoutes,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         (**self)
-            .create_notification(request, notification_id, service_sender, apns_collapse_key)
+            .create_notification(
+                request,
+                notification_id,
+                service_sender,
+                apns_collapse_key,
+                routes,
+            )
             .await
     }
 
@@ -1381,7 +1394,7 @@ impl RealtimeSender for MockRealtimeSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
-        _notification: &T,
+        _notification: &RealtimeNotif<T>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         Ok(HashSet::new())
     }
@@ -2705,7 +2718,7 @@ impl RealtimeSender for HangingRealtimeSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
-        _notification: &T,
+        _notification: &RealtimeNotif<T>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         // Sleep longer than DELIVERY_TIMEOUT to guarantee the timeout fires.
         tokio::time::sleep(super::egress::DELIVERY_TIMEOUT + Duration::from_secs(1)).await;

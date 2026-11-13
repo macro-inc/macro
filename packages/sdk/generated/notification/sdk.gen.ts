@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses } from './types.gen';
+import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, CreateNotificationStackData, CreateNotificationStackErrors, CreateNotificationStackResponses, DeleteNotificationStackData, DeleteNotificationStackErrors, DeleteNotificationStackResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListNotificationStacksData, ListNotificationStacksErrors, ListNotificationStacksResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, ReorderNotificationStacksData, ReorderNotificationStacksErrors, ReorderNotificationStacksResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses, UpdateNotificationStackData, UpdateNotificationStackErrors, UpdateNotificationStackResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -62,6 +62,62 @@ export class Sdk extends HeyApiClient {
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+    }
+
+    /**
+     * List the caller's notification stacks.
+     */
+    public listNotificationStacks<ThrowOnError extends boolean = false>(options?: Options<ListNotificationStacksData, ThrowOnError>): RequestResult<ListNotificationStacksResponses, ListNotificationStacksErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListNotificationStacksResponses, ListNotificationStacksErrors, ThrowOnError>({ url: '/notification_stacks', ...options });
+    }
+
+    /**
+     * Create a notification stack for the caller.
+     */
+    public createNotificationStack<ThrowOnError extends boolean = false>(options: Options<CreateNotificationStackData, ThrowOnError>): RequestResult<CreateNotificationStackResponses, CreateNotificationStackErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateNotificationStackResponses, CreateNotificationStackErrors, ThrowOnError>({
+            url: '/notification_stacks',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Put the caller's notification stacks in a new order.
+     */
+    public reorderNotificationStacks<ThrowOnError extends boolean = false>(options: Options<ReorderNotificationStacksData, ThrowOnError>): RequestResult<ReorderNotificationStacksResponses, ReorderNotificationStacksErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<ReorderNotificationStacksResponses, ReorderNotificationStacksErrors, ThrowOnError>({
+            url: '/notification_stacks/order',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Delete one of the caller's notification stacks.
+     */
+    public deleteNotificationStack<ThrowOnError extends boolean = false>(options: Options<DeleteNotificationStackData, ThrowOnError>): RequestResult<DeleteNotificationStackResponses, DeleteNotificationStackErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteNotificationStackResponses, DeleteNotificationStackErrors, ThrowOnError>({ url: '/notification_stacks/{id}', ...options });
+    }
+
+    /**
+     * Change one of the caller's notification stacks.
+     */
+    public updateNotificationStack<ThrowOnError extends boolean = false>(options: Options<UpdateNotificationStackData, ThrowOnError>): RequestResult<UpdateNotificationStackResponses, UpdateNotificationStackErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateNotificationStackResponses, UpdateNotificationStackErrors, ThrowOnError>({
+            url: '/notification_stacks/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**

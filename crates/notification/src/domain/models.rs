@@ -11,6 +11,7 @@ pub mod queue_message;
 pub mod rate_limit;
 pub mod recipient;
 pub mod request;
+pub mod routing;
 /// Cryptographic URL signing and verification.
 pub mod signing;
 /// Broker event models for WebSocket notification delivery.

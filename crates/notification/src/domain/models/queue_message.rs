@@ -205,7 +205,13 @@ pub(crate) struct ConnGatewayNotification<'a, T> {
 }
 
 impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
-    pub(crate) fn clone_from_request<U>(id: Uuid, req: &SendNotificationRequest<'a, T, U>) -> Self {
+    /// The realtime payload for the `recipients` of `req` routed into `lane`.
+    pub(crate) fn clone_from_request<U>(
+        id: Uuid,
+        req: &SendNotificationRequest<'a, T, U>,
+        lane: super::NotificationLane,
+        recipients: Vec<MacroUserIdStr<'a>>,
+    ) -> Self {
         ConnGatewayNotification {
             notif: RealtimeNotif {
                 notification_id: id,
@@ -213,7 +219,7 @@ impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
                 entity: req.req.notification_entity.clone().into_owned(),
                 sent: true,
                 state: super::NotificationState::Unseen,
-                lane: super::NotificationLane::Signal,
+                lane,
                 created_at: Utc::now(),
                 viewed_at: None,
                 updated_at: Utc::now(),
@@ -221,7 +227,7 @@ impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
                 notification_metadata: req.req.notification.clone(),
                 sender_id: req.req.sender_id.as_ref().map(|x| x.clone().into_owned()),
             },
-            recipients: req.req.recipient_ids.iter().cloned().collect(),
+            recipients,
         }
     }
 }

@@ -86,6 +86,7 @@ impl NotificationRepository for MockNotifRepo {
         _: uuid::Uuid,
         _: &str,
         _: Option<&str>,
+        _: &crate::domain::models::routing::RecipientRoutes,
     ) -> Result<Option<Vec<crate::domain::models::UserNotificationRow<std::sync::Arc<T>>>>, Report>
     {
         unimplemented!()
