@@ -29,7 +29,11 @@ impl ServiceProcess {
         env: &BTreeMap<String, String>,
         log_dir: &Path,
     ) -> Result<Self, Report> {
-        let binary = binary_dir()?.join(name);
+        // Absolute: the child starts in another directory.
+        let binary = binary_dir()?
+            .join(name)
+            .canonicalize()
+            .context("could not resolve the service binary")?;
 
         let log_path = log_dir.join(format!("{name}.log"));
         // Appended, so a restarted service keeps what it logged before.
