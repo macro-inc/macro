@@ -16,24 +16,34 @@ export const ACTIVITY_FEED_PAGE_LIMIT = 50;
 
 /**
  * One page request for a feed. The viewer's own feed leaves `scope` out, so
- * it reads the same against servers that predate the team scope.
+ * it reads the same against servers that predate the team scope. A team feed
+ * narrowed to one teammate names it as `actorId`.
  */
 function feedInput(
   scope: ActivityScope,
-  cursor: string | null
+  cursor: string | null,
+  actorId: string | undefined
 ): ActivityFeedInput {
   const page = { limit: ACTIVITY_FEED_PAGE_LIMIT, cursor };
-  return scope === 'team' ? { ...page, scope: 'TEAM' } : page;
+  if (scope !== 'team') return page;
+  return actorId
+    ? { ...page, scope: 'TEAM', actorId }
+    : { ...page, scope: 'TEAM' };
 }
 
 /**
  * Infinite query over one activity feed, newest first: the authenticated
- * user's own, or their teammates' on items shared with the user. Pages chase
- * the server's opaque keyset cursor until it comes back null.
+ * user's own, or their teammates' on items shared with the user (with
+ * `actorId`, one teammate's). Pages chase the server's opaque keyset cursor
+ * until it comes back null.
  */
 export function createMyActivityQuery(
   context: Pick<ActivityContext, 'graphql'>,
-  options: { scope: ActivityScope; enabled: Accessor<boolean> }
+  options: {
+    scope: ActivityScope;
+    enabled: Accessor<boolean>;
+    actorId?: Accessor<string | undefined>;
+  }
 ) {
   const client = createMemo(context.graphql);
   const result = createUrqlInfiniteQuery<
@@ -45,7 +55,9 @@ export function createMyActivityQuery(
     query: MyActivityDocument,
     client: client(),
     initialPageParam: null,
-    variables: (cursor) => ({ input: feedInput(options.scope, cursor) }),
+    variables: (cursor) => ({
+      input: feedInput(options.scope, cursor, options.actorId?.()),
+    }),
     getNextPageParam: (lastPage) =>
       lastPage.user.activity.nextCursor ?? undefined,
     enabled: options.enabled(),

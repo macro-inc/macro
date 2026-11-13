@@ -6,6 +6,12 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
 /** Page request for the authenticated user's activity feed. */
 export type ActivityFeedInput = {
   /**
+   * With the `TEAM` scope, only this teammate's activity: still only on
+   * entities shared with the user, and none for someone who is not a
+   * teammate. Not allowed with `MINE`.
+   */
+  actorId?: string | null | undefined;
+  /**
    * Opaque cursor from the previous page's `nextCursor`; absent for the
    * first page. Pass it back with the same `scope`.
    */

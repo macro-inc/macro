@@ -63,3 +63,36 @@ async fn team_activity_pages_the_teammate_feed_of_the_authenticated_user() {
     );
     assert!(last["nextCursor"].is_null());
 }
+
+async fn actor_page(harness: &TestHarness, scope: &str, actor: &str) -> async_graphql::Response {
+    harness
+        .execute(&format!(
+            r#"{{ user {{ activity(input: {{scope: {scope}, actorId: "{actor}"}}) {{ items {{ id actorId }} nextCursor }} }} }}"#
+        ))
+        .await
+}
+
+#[tokio::test]
+async fn team_activity_reads_one_teammate_when_asked() {
+    let harness = harness();
+    let other = "macro|other@example.com";
+    let mut others_edit = teammates_edit(3);
+    others_edit.subject_id = other.to_owned();
+    harness
+        .activity_reader
+        .set_records(vec![others_edit, teammates_edit(2), teammates_edit(1)]);
+
+    let response = actor_page(&harness, "TEAM", TEAMMATE_ID).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let page = response.data.into_json().unwrap()["user"]["activity"].clone();
+    assert_eq!(
+        page["items"],
+        serde_json::json!([
+            { "id": Uuid::from_u128(2).to_string(), "actorId": TEAMMATE_ID },
+            { "id": Uuid::from_u128(1).to_string(), "actorId": TEAMMATE_ID },
+        ])
+    );
+
+    let mine = actor_page(&harness, "MINE", TEAMMATE_ID).await;
+    assert_eq!(mine.errors.len(), 1, "an actor needs the TEAM scope");
+}

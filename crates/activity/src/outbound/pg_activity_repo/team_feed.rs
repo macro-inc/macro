@@ -75,12 +75,13 @@ impl TeamFeedRow {
 #[tracing::instrument(
     name = "activity.team_feed",
     skip_all,
-    fields(limit = limit.get(), row_count, short_page),
+    fields(limit = limit.get(), one_teammate = teammate.is_some(), row_count, short_page),
     err
 )]
 pub(super) async fn teammate_feed(
     pool: &PgPool,
     viewer_id: &str,
+    teammate: Option<&str>,
     cursor: Option<(DateTime<Utc>, Uuid)>,
     limit: NonZeroU32,
     scan: TeamScan,
@@ -97,6 +98,7 @@ pub(super) async fn teammate_feed(
         fetch,
         scan.min_per_teammate,
         scan.page_budget,
+        teammate,
     )
     .fetch_all(pool)
     .await?;

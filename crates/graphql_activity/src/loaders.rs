@@ -81,10 +81,11 @@ pub trait ActivityFeedReader: Send + Sync + 'static {
     /// One page of the activity of the viewer's teammates on entities
     /// shared with the viewer, paginated like
     /// [`subject_feed`](Self::subject_feed). A page may come up short, or
-    /// empty, while `next` is set.
+    /// empty, while `next` is set. With `teammate`, only that teammate's.
     fn teammate_feed<'a>(
         &'a self,
         viewer_id: &'a str,
+        teammate: Option<&'a str>,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
@@ -134,6 +135,7 @@ impl ActivityFeedReader for NoOpActivityReader {
     async fn teammate_feed(
         &self,
         _viewer_id: &str,
+        _teammate: Option<&str>,
         _cursor: Option<(DateTime<Utc>, Uuid)>,
         _limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, ActivityReadFailed> {
@@ -245,11 +247,12 @@ where
     async fn teammate_feed(
         &self,
         viewer_id: &str,
+        teammate: Option<&str>,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, ActivityReadFailed> {
         self.reads
-            .teammate_feed(viewer_id, cursor, limit)
+            .teammate_feed(viewer_id, teammate, cursor, limit)
             .await
             .map_err(|error| {
                 tracing::error!(?error, "team activity feed load failed");

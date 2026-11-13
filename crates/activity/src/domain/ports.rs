@@ -191,9 +191,12 @@ pub trait ActivityReads {
     /// Each page reads a bounded number of rows, so it may hold fewer than
     /// `limit` rows, or none, while `next` is set; callers keep paging
     /// until `next` is `None`. No visible row is skipped between pages.
+    /// With `teammate`, only that teammate's rows; someone who is not the
+    /// viewer's teammate has none.
     fn teammate_feed(
         &self,
         viewer_id: &str,
+        teammate: Option<&str>,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;

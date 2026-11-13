@@ -276,7 +276,10 @@ async fn teammate_feed_shows_teammates_rows_on_entities_shared_with_the_viewer(p
     .await
     .unwrap();
 
-    let page = repo.teammate_feed(VIEWER, None, nz(50)).await.unwrap();
+    let page = repo
+        .teammate_feed(VIEWER, None, None, nz(50))
+        .await
+        .unwrap();
 
     assert_eq!(
         entity_ids(&page),
@@ -295,9 +298,30 @@ async fn teammate_feed_shows_teammates_rows_on_entities_shared_with_the_viewer(p
     );
     assert_eq!(page.next, None, "exhausted feed carries no cursor");
 
-    let alone = repo.teammate_feed(OUTSIDER, None, nz(10)).await.unwrap();
+    // One teammate's rows, still only on entities shared with the viewer.
+    let bobs = repo
+        .teammate_feed(VIEWER, Some(BOB), None, nz(50))
+        .await
+        .unwrap();
+    assert_eq!(
+        entity_ids(&bobs),
+        [direct_call, team_project, team_doc].map(|id| id.to_string())
+    );
+    // Someone outside the viewer's teams, or the viewer, has no rows here.
+    for other in [OUTSIDER, VIEWER] {
+        let page = repo
+            .teammate_feed(VIEWER, Some(other), None, nz(50))
+            .await
+            .unwrap();
+        assert!(page.records.is_empty(), "{other}");
+    }
+
+    let alone = repo
+        .teammate_feed(OUTSIDER, None, None, nz(10))
+        .await
+        .unwrap();
     assert!(alone.records.is_empty(), "a team of one has no teammates");
-    let teamless = repo.teammate_feed(LONER, None, nz(10)).await.unwrap();
+    let teamless = repo.teammate_feed(LONER, None, None, nz(10)).await.unwrap();
     assert!(teamless.records.is_empty());
     assert_eq!(teamless.next, None);
 }
@@ -367,7 +391,7 @@ async fn teammate_feed_pages_past_capped_scans_without_skipping_rows(pool: PgPoo
     let mut short_pages = 0;
     let mut cursor = None;
     for _ in 0..pattern.len() {
-        let page = teammate_feed(&pool, VIEWER, cursor, nz(2), scan)
+        let page = teammate_feed(&pool, VIEWER, None, cursor, nz(2), scan)
             .await
             .unwrap();
         if page.records.len() < 2 && page.next.is_some() {

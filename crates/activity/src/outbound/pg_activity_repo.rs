@@ -282,10 +282,19 @@ impl ActivityReads for PgActivityRepo {
     async fn teammate_feed(
         &self,
         viewer_id: &str,
+        teammate: Option<&str>,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, Self::Err> {
-        team_feed::teammate_feed(&self.pool, viewer_id, cursor, limit, team_feed::TEAM_SCAN).await
+        team_feed::teammate_feed(
+            &self.pool,
+            viewer_id,
+            teammate,
+            cursor,
+            limit,
+            team_feed::TEAM_SCAN,
+        )
+        .await
     }
 
     async fn entity_activity(

@@ -1005,6 +1005,7 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
     async fn teammate_feed(
         &self,
         viewer_id: &str,
+        teammate: Option<&str>,
         cursor: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
         limit: std::num::NonZeroU32,
     ) -> Result<activity::ActivityFeedPage, graphql_activity::ActivityReadFailed> {
@@ -1015,6 +1016,7 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
         let mut page: Vec<activity::ActivityRecord> = records
             .into_iter()
             .filter(|record| record.subject_id != viewer_id)
+            .filter(|record| teammate.is_none_or(|teammate| record.subject_id == teammate))
             .filter(|record| {
                 cursor.is_none_or(|(occurred_at, id)| {
                     (record.occurred_at, record.id) < (occurred_at, id)

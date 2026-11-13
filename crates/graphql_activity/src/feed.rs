@@ -53,6 +53,10 @@ pub struct ActivityFeedInput {
     /// Whose activity to read; defaults to the user's own.
     #[graphql(default)]
     pub scope: ActivityFeedScope,
+    /// With the `TEAM` scope, only this teammate's activity: still only on
+    /// entities shared with the user, and none for someone who is not a
+    /// teammate. Not allowed with `MINE`.
+    pub actor_id: Option<String>,
 }
 
 /// One page of activity, newest first.
@@ -114,9 +118,20 @@ where
     let limit = parse_feed_limit(input.limit)?;
     let cursor = input.cursor.map(decode_cursor).transpose()?;
 
-    let page = match input.scope {
-        ActivityFeedScope::Mine => reader.subject_feed(user_id.as_ref(), cursor, limit).await,
-        ActivityFeedScope::Team => reader.teammate_feed(user_id.as_ref(), cursor, limit).await,
+    let page = match (input.scope, input.actor_id.as_deref()) {
+        (ActivityFeedScope::Mine, None) => {
+            reader.subject_feed(user_id.as_ref(), cursor, limit).await
+        }
+        (ActivityFeedScope::Mine, Some(_)) => {
+            return Err(async_graphql::Error::new(
+                "actorId is only allowed with the TEAM scope",
+            ));
+        }
+        (ActivityFeedScope::Team, actor) => {
+            reader
+                .teammate_feed(user_id.as_ref(), actor, cursor, limit)
+                .await
+        }
     }
     .map_err(|_| async_graphql::Error::new("activity feed is unavailable"))?;
 

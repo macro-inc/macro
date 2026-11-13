@@ -113,13 +113,14 @@ impl<R: ActivityReads + Send + Sync, A: EntityAccessService> ActivityReads
     async fn teammate_feed(
         &self,
         viewer_id: &str,
+        teammate: Option<&str>,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, Self::Err> {
         // Storage keeps only rows on entities shared with the viewer,
         // initiatives included, so there is nothing to filter here.
         self.reads
-            .teammate_feed(viewer_id, cursor, limit)
+            .teammate_feed(viewer_id, teammate, cursor, limit)
             .await
             .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
     }
