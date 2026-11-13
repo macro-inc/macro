@@ -1,4 +1,4 @@
-import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { openOwnedBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
@@ -78,16 +78,20 @@ export function useRoutineRowMenuActions(
       (await operations.createdCount(row.id)) ??
       source.subRoutines().filter((routine) => routine.parent?.id === row.id)
         .length;
-    openBulkEditModal({
-      view: 'delete',
-      entities: [entity],
-      note:
-        created > 0
-          ? t('subRoutines.deleteNote', { count: created })
-          : undefined,
-      onFinish: () => toast.success(t('entityActions.toastDeleted')),
-      onError: () => toast.failure(t('entityActions.toastDeleteFailed')),
-    });
+    // Under the list's owner: in Settings the list is in a sheet.
+    openOwnedBulkEditModal(
+      {
+        view: 'delete',
+        entities: [entity],
+        note:
+          created > 0
+            ? t('subRoutines.deleteNote', { count: created })
+            : undefined,
+        onFinish: () => toast.success(t('entityActions.toastDeleted')),
+        onError: () => toast.failure(t('entityActions.toastDeleteFailed')),
+      },
+      owner
+    );
   };
   const openInNewSplit = host.openInNewSplit;
   const openInNewTab = host.openInNewTab;
