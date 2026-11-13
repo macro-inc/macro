@@ -66,18 +66,18 @@ import { ResultAsync } from 'neverthrow';
 import { type Component, onCleanup, Show } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
 
-// `keyword` is the English name, kept as a search term in every language;
+// `keywords` are English names, kept as search terms in every language;
 // `label` is the displayed (translated) name.
 const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   category: CategoryFilter;
   hotkey: ValidHotkey;
-  keyword: string;
+  keywords: string[];
   label: string;
 }> = [
   {
     category: 'all',
     hotkey: 'l',
-    keyword: 'All',
+    keywords: ['All'],
     get label() {
       return t('commandMenu.categoryAll');
     },
@@ -85,7 +85,7 @@ const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   {
     category: 'commands',
     hotkey: 'm',
-    keyword: 'Command',
+    keywords: ['Command'],
     get label() {
       return t('commandMenu.categoryCommands');
     },
@@ -93,7 +93,7 @@ const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   {
     category: 'chats',
     hotkey: 'a',
-    keyword: 'Agents',
+    keywords: ['Agents'],
     get label() {
       return t('commandMenu.categoryAgents');
     },
@@ -101,7 +101,7 @@ const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   {
     category: 'documents',
     hotkey: 'f',
-    keyword: 'Files',
+    keywords: ['Files'],
     get label() {
       return t('commandMenu.categoryFiles');
     },
@@ -109,7 +109,7 @@ const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   {
     category: 'tasks',
     hotkey: 't',
-    keyword: 'Tasks',
+    keywords: ['Tasks'],
     get label() {
       return t('commandMenu.categoryTasks');
     },
@@ -117,7 +117,7 @@ const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   {
     category: 'channels',
     hotkey: 'c',
-    keyword: 'Channels',
+    keywords: ['Channels', 'Chat'],
     get label() {
       return t('commandMenu.categoryChannels');
     },
@@ -125,7 +125,7 @@ const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   {
     category: 'dms',
     hotkey: 'p',
-    keyword: 'People',
+    keywords: ['People'],
     get label() {
       return t('commandMenu.categoryPeople');
     },
@@ -365,7 +365,7 @@ export default function GlobalShortcuts() {
         CommandState.open();
         return true;
       },
-      keywords: ['command menu', 'palette', 'category', item.keyword],
+      keywords: ['command menu', 'palette', 'category', ...item.keywords],
       runWithInputFocused: true,
     });
   }
