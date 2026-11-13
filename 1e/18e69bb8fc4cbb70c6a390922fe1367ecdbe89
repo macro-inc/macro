@@ -1,0 +1,25 @@
+apps/web/src/features/block-canvas/core/transitions/transitions.test.ts
+  s_8f21b33cafdf96::t_da208da2d0296a 105-108
+  s_8f21b33cafdf96::t_d09bd000839d71 93-104,109-125
+apps/web/src/features/block-canvas/core/transitions/classic-keyframes.ts
+  s_8f21b33cafdf96::t_4b4731b79fb2ab 174-176,184
+apps/web/src/features/block-canvas/views/transitions/slide-stage.tsx
+  s_8f21b33cafdf96::t_da208da2d0296a 192
+  s_8f21b33cafdf96::t_4b4731b79fb2ab 191,226,271-275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1e18e69bb8fc4cbb70c6a390922fe1367ecdbe89",
+  "prompts": {},
+  "sessions": {
+    "s_8f21b33cafdf96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f5299b3b-d200-41ba-896b-a454e6bdbc17",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
