@@ -113,7 +113,9 @@ function foundMilestone(
     if (!found) return { label: 'Read your request' };
     return {
       label:
-        found === 1 ? 'Found what it names' : `Found the ${found} things it names`,
+        found === 1
+          ? 'Found what it names'
+          : `Found the ${found} things it names`,
     };
   }
   const phrases = names.found.map(foundPhrase);
@@ -121,12 +123,15 @@ function foundMilestone(
   const detail = leftDetail(names.left);
   if (!first) {
     return {
-      label: names.left.length ? 'Looked up what it names' : 'Read your request',
+      label: names.left.length
+        ? 'Looked up what it names'
+        : 'Read your request',
       detail,
     };
   }
   if (!second) return { label: `Found ${first}`, detail };
-  if (rest.length === 0) return { label: `Found ${first} and ${second}`, detail };
+  if (rest.length === 0)
+    return { label: `Found ${first} and ${second}`, detail };
   return {
     label: `Found ${first}, ${second} and ${rest.length} more`,
     detail: detail ?? `Also ${rest.join(', ')}`,
@@ -162,7 +167,8 @@ function writeMilestone(
       if (steps.length === 0) return { label: 'Wrote the steps' };
       const titles = steps.map((step) => step.title).filter(Boolean);
       return {
-        label: steps.length === 1 ? 'Wrote 1 step' : `Wrote ${steps.length} steps`,
+        label:
+          steps.length === 1 ? 'Wrote 1 step' : `Wrote ${steps.length} steps`,
         detail: titles.length ? titles.join(' · ') : undefined,
       };
     })

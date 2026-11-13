@@ -589,7 +589,8 @@ fn area_reference(areas: &[String]) -> String {
         let Some(reference) = AREAS.get(area.trim()) else {
             continue;
         };
-        if shown.contains(&area.trim()) || output.len() + reference.text.len() > AREA_REFERENCE_BYTES
+        if shown.contains(&area.trim())
+            || output.len() + reference.text.len() > AREA_REFERENCE_BYTES
         {
             continue;
         }
@@ -662,7 +663,11 @@ fn area(name: &str, index: &str, guide: Option<&str>) -> AreaReference {
             continue;
         }
         declarations.push_str(&kept);
-        imports.extend(names.into_iter().filter(|name| symbol_reference(name).is_some()));
+        imports.extend(
+            names
+                .into_iter()
+                .filter(|name| symbol_reference(name).is_some()),
+        );
     }
     if !declarations.is_empty() {
         text.push_str("\n\nIts declarations:\n```ts\n");
@@ -690,7 +695,8 @@ fn area_declarations(name: &str, index: &str) -> Vec<(&'static str, &'static str
         .chars()
         .flat_map(|c| {
             let dash = c.is_ascii_uppercase().then_some('-');
-            dash.into_iter().chain(std::iter::once(c.to_ascii_lowercase()))
+            dash.into_iter()
+                .chain(std::iter::once(c.to_ascii_lowercase()))
         })
         .collect();
     let guessed = sdk_declaration_files(&format!("{ENTITY_DECLARATIONS}{kebab}/"));

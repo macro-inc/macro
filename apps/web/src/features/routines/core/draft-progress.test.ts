@@ -108,7 +108,9 @@ describe('draft milestones', () => {
           ],
         },
       })[0]
-    ).toBe("done: Looked up what it names (3 items are called Board, so you'll pick which)");
+    ).toBe(
+      "done: Looked up what it names (3 items are called Board, so you'll pick which)"
+    );
   });
 
   it('counts what was found from a server that reports only a count', () => {
