@@ -1,6 +1,6 @@
 //! Linking an inbox and its first sync.
 
-use email_e2e::{Mail, Provider, Report, Stack};
+use email_e2e::{DEFAULT_TIMEOUT, Mail, Provider, Report, Stack, eventually};
 
 /// Linking an inbox brings in the mail that was already in the mailbox:
 /// Gmail through the backfill, Outlook through the first import.
@@ -46,4 +46,42 @@ async fn gmail_first_sync_brings_existing_mail() -> Result<(), Report> {
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_first_sync_brings_existing_mail() -> Result<(), Report> {
     first_sync_brings_existing_mail(Provider::Outlook).await
+}
+
+/// More mail than one page of a folder's first listing holds.
+const LARGE_FOLDER: usize = 130;
+
+/// The first import of an Outlook folder brings every message, not only the
+/// newest page. When this fails the user sees a mailbox that stops at its
+/// most recent hundred messages and is reported as fully synced.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_first_sync_imports_a_folder_past_one_page() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let mail: Vec<Mail> = (1..=LARGE_FOLDER)
+        .map(|number| {
+            Mail::new(
+                "Reports <reports@example.com>",
+                &format!("Report {number:03}"),
+                "Attached.",
+            )
+        })
+        .collect();
+    stack.seed_mailbox(Provider::Outlook, ada.email(), &mail)?;
+
+    let inbox = ada.link_outlook().await?;
+
+    // The oldest message is the one a capped import leaves out.
+    inbox.wait_for_preview("inbox", "Report 001").await?;
+    eventually(
+        "every seeded thread to be listed",
+        DEFAULT_TIMEOUT,
+        async || {
+            let listed = inbox.previews("inbox").await?.len();
+            Ok((listed == LARGE_FOLDER).then_some(()))
+        },
+    )
+    .await?;
+
+    stack.finish().await
 }
