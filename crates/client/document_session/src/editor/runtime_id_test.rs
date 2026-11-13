@@ -249,3 +249,66 @@ fn transform_scope_is_the_source_supported_node_types() {
     assert_eq!(scope, source);
     assert_eq!(SOURCE_ID_TYPES.len(), 57);
 }
+
+/// The paragraph the fixture stores as "existing".
+fn existing(editor: &Editor) -> Result<NodeKey, Box<dyn std::error::Error>> {
+    Ok(editor.state().view().children_keys(NodeKey::ROOT)?[0])
+}
+
+/// Source keeps a node's OLD id in idToNodeKeyMap when its id changes in place (only destroyed
+/// nodes are deleted, nodeIdPlugin.ts:142-148), so another node carrying that old id in the same
+/// update still regenerates.
+#[test]
+fn an_id_changed_in_place_stays_reserved_for_the_rest_of_the_update() -> TestResult {
+    let mut editor = editor_from(&config(), 77, None)?;
+    let paragraph = existing(&editor)?;
+    let (incoming, _) = editor.update(|tx| {
+        tx.set_state(paragraph, &ID_STATE, Some("renamed0".into()))?;
+        let incoming = tx.create(Paragraph::default())?;
+        tx.set_state(incoming, &ID_STATE, Some("existing".into()))?;
+        tx.append(NodeKey::ROOT, &[incoming.key()])?;
+        Ok(incoming.key())
+    })?;
+    assert_eq!(id(&editor, paragraph)?.as_deref(), Some("renamed0"));
+    let fresh = assert_source_shaped(id(&editor, incoming)?);
+    assert_ne!(fresh, "existing");
+    Ok(())
+}
+
+/// A node this update destroys keeps its id reserved until commit (Source's destroyed listener
+/// runs after the commit), so a new node carrying it regenerates.
+#[test]
+fn a_destroyed_nodes_id_stays_reserved_until_commit() -> TestResult {
+    let mut editor = editor_from(&config(), 77, None)?;
+    let paragraph = existing(&editor)?;
+    let (incoming, _) = editor.update(|tx| {
+        tx.remove_from_parent(paragraph)?;
+        let incoming = tx.create(Paragraph::default())?;
+        tx.set_state(incoming, &ID_STATE, Some("existing".into()))?;
+        tx.append(NodeKey::ROOT, &[incoming.key()])?;
+        Ok(incoming.key())
+    })?;
+    let fresh = assert_source_shaped(id(&editor, incoming)?);
+    assert_ne!(fresh, "existing");
+    Ok(())
+}
+
+/// Source's map.set by a later writer (Doc.assignRef's $updateAllNodeIds) overrides the earlier
+/// owner: with a claim for the copy, the dirty original regenerates and the copy keeps the id.
+#[test]
+fn a_claim_overrides_the_index_so_the_claimant_keeps_the_id() -> TestResult {
+    let mut editor = editor_from(&config(), 77, None)?;
+    let paragraph = existing(&editor)?;
+    let (copy, _) = editor.update(|tx| {
+        let copy = tx.create(Paragraph::default())?;
+        tx.set_state(copy, &ID_STATE, Some("existing".into()))?;
+        tx.append(NodeKey::ROOT, &[copy.key()])?;
+        macro_document_model::node_ids::claim_id(tx, "existing", copy.key())?;
+        tx.mark_dirty(paragraph)?;
+        Ok(copy.key())
+    })?;
+    assert_eq!(id(&editor, copy)?.as_deref(), Some("existing"));
+    let fresh = assert_source_shaped(id(&editor, paragraph)?);
+    assert_ne!(fresh, "existing");
+    Ok(())
+}
