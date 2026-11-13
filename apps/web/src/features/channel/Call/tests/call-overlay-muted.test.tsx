@@ -16,6 +16,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
 import { CallParticipantsList } from '../CallParticipantsList';
+import { LK_TRACK_SOURCE } from '../livekit-loader';
+import { createCallPin } from '../primitives/create-call-pin';
 
 const mocks = vi.hoisted(() => ({
   callContext: undefined as unknown,
@@ -187,6 +189,24 @@ function setUpCallState(
   mocks.callContext = {
     activeChannelId: channelId,
     activeCallId: () => 'call-id',
+    pin: createCallPin({
+      callId: () => 'call-id',
+      participants: () => Array.from(participants().values()),
+      screens: () => {
+        trackVersion();
+        return Array.from(participants().values()).filter((participant) => {
+          const publication = participant.getTrackPublication(
+            LK_TRACK_SOURCE.ScreenShare
+          );
+          return (
+            !!publication?.track &&
+            publication.isSubscribed &&
+            !publication.isMuted
+          );
+        });
+      },
+      screenSharing,
+    }),
     connectionState: () => 'connected',
     isAudioMuted: audioMuted,
     isInCall: () => true,

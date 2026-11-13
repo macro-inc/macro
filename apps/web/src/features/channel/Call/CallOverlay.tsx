@@ -287,6 +287,7 @@ export function CallOverlay(props: {
     stripTargets,
     tilePosition,
   } = createCallStage({
+    pin: callCtx.pin,
     participants,
     screens: remoteScreenShares,
     screenSharing: callCtx.isScreenSharing,

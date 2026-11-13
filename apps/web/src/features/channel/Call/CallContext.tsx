@@ -65,6 +65,7 @@ import {
   useMaybeNativeCallState,
 } from './native-call-state';
 import { createCallMediaPermissions } from './primitives/call-media-permissions';
+import { createCallPin } from './primitives/create-call-pin';
 import { ScreenShareError } from './screen-share-error';
 import {
   isNativeCallEnabled,
@@ -412,6 +413,8 @@ export type CallState = {
   activeChannelId: () => string | null;
   /** Call ID of the active call (from CallTokenResponse) */
   activeCallId: () => string | null;
+  /** Call-owned focus shared by the stage and mini-player. */
+  pin: ReturnType<typeof createCallPin<RemoteParticipant>>;
   /** Remote participants in the call */
   remoteParticipants: () => Map<string, RemoteParticipant>;
   /** Incremented when track subscription/mute state changes */
@@ -1883,6 +1886,26 @@ function createCallState() {
     isInCall: currentIsInCall,
     activeChannelId: currentActiveChannelId,
     activeCallId: currentActiveCallId,
+    pin: createCallPin({
+      callId: currentActiveCallId,
+      participants: () =>
+        Array.from(store.remoteParticipants.values()).filter((p) => !p.isAgent),
+      screens: () => {
+        store.trackVersion;
+        return Array.from(store.remoteParticipants.values()).filter((p) => {
+          if (p.isAgent) return false;
+          const publication = p.getTrackPublication(
+            LK_TRACK_SOURCE.ScreenShare
+          );
+          return (
+            !!publication?.track &&
+            publication.isSubscribed &&
+            !publication.isMuted
+          );
+        });
+      },
+      screenSharing: () => store.isScreenSharing,
+    }),
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
