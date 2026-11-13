@@ -113,6 +113,7 @@ afterEach(() => {
 
 function setup() {
   const [visible, setVisible] = createSignal(true);
+  const complete = vi.fn(() => setVisible(false));
   render(() => (
     <>
       <Show when={visible()}>
@@ -127,7 +128,7 @@ function setup() {
                 ownerId: 'owner',
                 fileType: 'md',
               }}
-              onActionComplete={() => setVisible(false)}
+              onActionComplete={complete}
             />
           </Dropdown.Content>
         </Dropdown>
@@ -135,7 +136,7 @@ function setup() {
       <ImperativeDialogHost />
     </>
   ));
-  return { closeParent: () => setVisible(false) };
+  return { closeParent: () => setVisible(false), complete };
 }
 
 async function openTags() {
@@ -178,4 +179,21 @@ it('keeps tag editing alive after the parent menu unmounts', async () => {
   );
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
+it('does not report completion or close the parent after a rejected tag write', async () => {
+  const failure = new Error('Tag update rejected');
+  mocks.save.mockRejectedValueOnce(failure);
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { complete } = setup();
+  const search = await openTags();
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await waitFor(() =>
+    expect(error).toHaveBeenCalledWith(
+      'Failed to persist tag selection',
+      failure
+    )
+  );
+  expect(complete).not.toHaveBeenCalled();
+  expect(screen.getByRole('menuitem', { name: 'Add tag' })).toBeTruthy();
 });

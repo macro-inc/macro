@@ -8,7 +8,7 @@ snippets, task projects (initiatives), forms, and databases.
 ## Start here
 
 - `entity-appearance.tsx`: lazy editor launcher and header-only trigger.
-- `appearance-menu.tsx`: desktop submenu composition with the existing mobile sheet fallback.
+- `appearance-menu.tsx`: device entry for desktop `views/appearance-menu.tsx` and touch `views/mobile/appearance-menu.tsx`.
 - `core/appearance.ts`: eligibility and appearance comparisons.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
