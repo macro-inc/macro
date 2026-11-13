@@ -1,0 +1,134 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Viewed sorts, threads the caller has opened, a page per link. The history\n-- index orders by view time alone, so a page also holds the threads tied with\n-- its last row and the sort below breaks ties by id. Keep thread_id out of\n-- that index: with it the planner answers every per-thread history lookup by\n-- scanning the link's history.\n--\n-- A link is read one of two ways. Normally its newest views (four pages'\n-- worth, at least 200) are checked against the inbox, newest first, until the\n-- page is full. A link that opens mail and archives it can have far more\n-- views than inbox threads, and that walk would cross its whole history; when\n-- those views neither fill the page nor end the history, the link's inbox\n-- threads are read instead and sorted by their view time, which costs one\n-- inbox.\nWITH viewed AS MATERIALIZED (\n    SELECT per_link.*\n    FROM unnest($1::uuid[]) AS links(link_id)\n    CROSS JOIN LATERAL (\n        -- The newest views, in view order, stopping once the page is full. The\n        -- view-time bound is a subquery so the planner cannot see that it is\n        -- 'infinity' on a first page: seeing that, it prices the link at the\n        -- table's average handful of views and may read the link's whole\n        -- history through the primary key and sort it. OFFSET 0 keeps the\n        -- inbox check one index probe per view.\n        WITH from_recent_views AS MATERIALIZED (\n            SELECT t.*, recent_views.updated_at AS effective_ts\n            FROM (\n                SELECT uh.thread_id, uh.updated_at\n                FROM email_user_history uh\n                WHERE\n                    uh.link_id = links.link_id\n                  AND uh.updated_at <= (SELECT COALESCE($3::timestamptz, 'infinity'))\n                  AND (uh.updated_at, uh.thread_id) < (\n                      COALESCE($3::timestamptz, 'infinity'),\n                      COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')\n                  )\n                ORDER BY uh.updated_at DESC\n                FETCH FIRST (GREATEST(4 * $2::bigint, 200)) ROWS WITH TIES\n            ) AS recent_views\n            CROSS JOIN LATERAL (\n                SELECT\n                    t.id,\n                    t.provider_id,\n                    t.link_id,\n                    t.is_read,\n                    t.is_signal,\n                    t.project_id,\n                    COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,\n                    GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at\n                FROM email_threads t\n                WHERE\n                    t.id = recent_views.thread_id\n                  AND t.link_id = links.link_id\n                  AND t.inbox_visible = TRUE\n                  AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL\n                OFFSET 0\n            ) AS t\n            ORDER BY recent_views.updated_at DESC\n            FETCH FIRST ($2) ROWS WITH TIES\n        ),\n        -- The newest views answer for the link when they fill the page or when\n        -- they are all of its views from the cursor on. The count leaves out\n        -- the cursor's id, so it can only err towards reading the inbox.\n        recent_views_suffice AS (\n            SELECT\n                (SELECT count(*) FROM from_recent_views) >= $2\n                OR (\n                    SELECT count(*)\n                    FROM (\n                        SELECT 1\n                        FROM email_user_history uh\n                        WHERE\n                            uh.link_id = links.link_id\n                          AND uh.updated_at <= (SELECT COALESCE($3::timestamptz, 'infinity'))\n                        LIMIT GREATEST(4 * $2::bigint, 200)\n                    ) AS views_within_cap\n                ) < GREATEST(4 * $2::bigint, 200) AS suffice\n        )\n        SELECT from_recent_views.*\n        FROM from_recent_views\n        WHERE (SELECT suffice FROM recent_views_suffice)\n\n        UNION ALL\n\n        -- Both OFFSET 0 fences keep this driven by the inbox: left to itself the\n        -- planner walks the history in view order again.\n        SELECT from_inbox.*\n        FROM (\n            SELECT t.*, uh.updated_at AS effective_ts\n            FROM (\n                SELECT\n                    t.id,\n                    t.provider_id,\n                    t.link_id,\n                    t.is_read,\n                    t.is_signal,\n                    t.project_id,\n                    COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,\n                    GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at\n                FROM email_threads t\n                WHERE\n                    t.link_id = links.link_id\n                  AND t.inbox_visible = TRUE\n                  AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL\n                OFFSET 0\n            ) AS t\n            CROSS JOIN LATERAL (\n                SELECT uh.updated_at\n                FROM email_user_history uh\n                WHERE uh.link_id = t.link_id AND uh.thread_id = t.id\n                OFFSET 0\n            ) AS uh\n            WHERE (uh.updated_at, t.id) < (\n                COALESCE($3::timestamptz, 'infinity'),\n                COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')\n            )\n            ORDER BY uh.updated_at DESC\n            FETCH FIRST ($2) ROWS WITH TIES\n        ) AS from_inbox\n        WHERE NOT (SELECT suffice FROM recent_views_suffice)\n    ) AS per_link\n    WHERE $5 IN ('viewed_at', 'viewed_updated')\n),\n-- The view time of the page's last row when opened threads alone fill the\n-- page, and no row otherwise. A never-opened thread that sorts below it\n-- cannot be on the page.\nviewed_page_end AS (\n    SELECT effective_ts\n    FROM viewed\n    ORDER BY effective_ts DESC, id DESC\n    OFFSET GREATEST($2 - 1, 0)\n    LIMIT 1\n)\nSELECT\n    t.id AS \"id!\",\n    t.provider_id,\n    TRUE AS \"inbox_visible!\",\n    t.is_read AS \"is_read!\",\n    t.is_signal AS \"is_signal!\",\n    t.effective_ts AS \"sort_ts!\",\n    t.created_at AS \"created_at!\",\n    t.updated_at AS \"updated_at!\",\n    t.project_id,\n    uh.updated_at AS \"viewed_at?\",\n    lmp.subject AS \"name?\",\n    lmp.snippet AS \"snippet?\",\n    lmp.is_draft,\n    EXISTS (\n        SELECT 1\n        FROM email_messages m_imp\n            JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id\n            WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important\n    ) AS \"is_important!\",\n    c.email_address AS \"sender_email?\",\n    COALESCE(lmp.from_name, c.name) AS \"sender_name?\",\n    c.sfs_photo_url as \"sender_photo_url?\",\n    el.macro_id AS \"owner_id!\",\n    el.id AS \"link_id!\"\nFROM (\n    -- Step 1: Find the top N+1 candidate threads. $5 picks the branches that run.\n    SELECT *\n    FROM (\n        -- Recency sorts: each link walks idx_email_threads_inbox_reminder_sort\n        -- in order and stops at LIMIT. Before Postgres 17, `link_id = ANY(...)`\n        -- cannot return index order, so it would read and sort every inbox\n        -- thread of every link.\n        SELECT per_link.*\n        FROM unnest($1::uuid[]) AS links(link_id)\n        CROSS JOIN LATERAL (\n            SELECT\n                t.id,\n                t.provider_id,\n                t.link_id,\n                t.is_read,\n                t.is_signal,\n                t.project_id,\n                COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,\n                GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at,\n                GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS effective_ts\n            FROM email_threads t\n            WHERE\n                t.link_id = links.link_id\n              AND t.inbox_visible = TRUE\n              AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL\n              AND (($3::timestamptz IS NULL) OR (\n                  GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at), t.id\n              ) < ($3::timestamptz, $4::uuid))\n            ORDER BY GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) DESC, t.id DESC\n            LIMIT $2\n        ) AS per_link\n        WHERE $5 NOT IN ('viewed_at', 'viewed_updated')\n\n        UNION ALL\n\n        SELECT * FROM viewed\n\n        UNION ALL\n\n        -- viewed_updated, threads never opened: they sort by inbox recency, so\n        -- each link walks the same index as the recency sorts and skips the\n        -- opened threads. OFFSET 0 keeps the history check a per-thread probe;\n        -- as a join the planner reads the link's whole inbox and sorts it.\n        SELECT per_link.*\n        FROM unnest($1::uuid[]) AS links(link_id)\n        CROSS JOIN LATERAL (\n            SELECT\n                t.id,\n                t.provider_id,\n                t.link_id,\n                t.is_read,\n                t.is_signal,\n                t.project_id,\n                COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,\n                GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at,\n                GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS effective_ts\n            FROM email_threads t\n            WHERE\n                t.link_id = links.link_id\n              AND t.inbox_visible = TRUE\n              AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM email_user_history uh\n                  WHERE uh.link_id = t.link_id AND uh.thread_id = t.id\n                  OFFSET 0\n              )\n              AND (GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at), t.id) < (\n                  COALESCE($3::timestamptz, 'infinity'),\n                  COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')\n              )\n              AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) >= COALESCE(\n                  (SELECT effective_ts FROM viewed_page_end),\n                  '-infinity'\n              )\n            ORDER BY GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) DESC, t.id DESC\n            LIMIT $2\n        ) AS per_link\n        WHERE $5 = 'viewed_updated'\n\n        UNION ALL\n\n        -- viewed_at, threads never opened: they all sort at the epoch, so they\n        -- are read only when opened threads do not fill the page, and each link\n        -- walks idx_email_threads_inbox_id in id order. The cursor is among\n        -- them only when its timestamp is the epoch.\n        SELECT per_link.*\n        FROM unnest($1::uuid[]) AS links(link_id)\n        CROSS JOIN LATERAL (\n            SELECT\n                t.id,\n                t.provider_id,\n                t.link_id,\n                t.is_read,\n                t.is_signal,\n                t.project_id,\n                COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,\n                GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at,\n                '1970-01-01 00:00:00+00'::timestamptz AS effective_ts\n            FROM email_threads t\n            WHERE\n                t.link_id = links.link_id\n              AND t.inbox_visible = TRUE\n              AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM email_user_history uh\n                  WHERE uh.link_id = t.link_id AND uh.thread_id = t.id\n                  OFFSET 0\n              )\n              AND t.id < CASE\n                  WHEN $3::timestamptz = '1970-01-01 00:00:00+00' THEN $4::uuid\n                  ELSE 'ffffffff-ffff-ffff-ffff-ffffffffffff'\n              END\n            ORDER BY t.id DESC\n            LIMIT $2\n        ) AS per_link\n        WHERE $5 = 'viewed_at'\n          AND COALESCE($3::timestamptz, 'infinity') >= '1970-01-01 00:00:00+00'\n          AND '1970-01-01 00:00:00+00' >= COALESCE(\n              (SELECT effective_ts FROM viewed_page_end),\n              '-infinity'\n          )\n    ) AS candidates\n    ORDER BY effective_ts DESC, id DESC\n    LIMIT $2\n) AS t\n-- Step 2: For EACH of the limited threads from above, find its latest non-trashed message.\nCROSS JOIN LATERAL (\n    SELECT\n           m.subject,\n           m.snippet,\n           m.from_contact_id,\n           m.from_name,\n           m.is_draft\n    FROM email_messages m\n    WHERE m.thread_id = t.id\n      AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)\n    ORDER BY m.internal_date_ts DESC\n    LIMIT 1\n) AS lmp\n-- Step 3: Join to get the sender's details for the final result set.\nLEFT JOIN email_contacts c ON lmp.from_contact_id = c.id\nLEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id\nJOIN email_links el ON t.link_id = el.id\n-- Final ordering is preserved because the input `t` is already sorted.\nORDER BY t.effective_ts DESC, t.id DESC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "inbox_visible!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_read!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_signal!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "sort_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "snippet?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "is_important!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "sender_email?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "sender_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "sender_photo_url?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      null,
+      false,
+      null,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b10b9ad0240aa9954e68f9018b2078763f0499fb55cc0a2bbe91402c6c9626d5"
+}

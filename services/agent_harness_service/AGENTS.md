@@ -190,9 +190,23 @@ Pulumi stacks; they do not host extra agent processes.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected
-  Pipedream apps; their hidden sessions run on the free tier's model, gated
-  on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
-  sessions a stopped process left open every minute.
+  Pipedream apps. Generations (`crates/suggestion_generation`) run their
+  suggestions and routines sessions hidden on the free tier's model, each kind
+  gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
+  `scheduling.rs` sweeps generation sessions a stopped process left open
+  every minute and starts nightly generations every five minutes, once the
+  process is ready.
+  Accepted background prompt suggestions run in hidden, billable sessions of the
+  in-process Macro agent (`SuggestionRunSessions` in `scheduling.rs`, which reads
+  every page of a session's activity for what it created, each item once). Runs
+  move from their sessions' lifecycle events and a reconcile sweep every five
+  minutes. Reply suggestions read who they wait on from their email thread or
+  channel message through `ItemReplyWaits` (`crates/suggestions`), built over
+  the email repository and the shared pool. The suggestions routes are served
+  here too, and `scheduling.rs` runs
+  suggestions' resolution consumer (group `suggestions-resolution`) and runs
+  consumer (group `suggestions-runs`, both `crates/suggestions`) beside the
+  event intake, under the same readiness gate and shutdown.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).

@@ -487,6 +487,13 @@ export interface NormalizedCacheExchangeOptions {
   ) => boolean;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
+  /**
+   * True for a subscription whose payloads no reader takes from the cache,
+   * such as a signal that only tells queries to refetch. Its results are
+   * delivered without a cache write: every write advances the revision, and
+   * open lists and broadly registered live queries then read again.
+   */
+  isUncachedSubscription?: (operation: Operation) => boolean;
 }
 
 export function normalizedCacheExchange(
@@ -1488,7 +1495,11 @@ export function normalizedCacheExchange(
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
             : result;
-        if (op.kind === 'subscription' && result.data != null) {
+        if (
+          op.kind === 'subscription' &&
+          result.data != null &&
+          options.isUncachedSubscription?.(op) !== true
+        ) {
           // Serialize effects across every emission for this operation, as
           // well as within buffered payloads, so a slower earlier write cannot
           // overtake a later delete. Subscribers still receive each original

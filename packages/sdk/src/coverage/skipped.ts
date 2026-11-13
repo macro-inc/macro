@@ -298,7 +298,11 @@ export const scheduledActionExcluded = [
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
-  'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
+  'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
+  'recordSuggestionsSeen', // The app records each load; agents have no use for it.
+  'getSuggestionGeneration', // The app polls it while fresh suggestions generate.
+  'regenerateSuggestions', // The app's refresh button, at most hourly; generation sessions may not call it.
+  'recordSuggestionsViewed', // The app records the person opening the feed; an agent's read is not a visit.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];

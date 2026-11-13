@@ -115,6 +115,7 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { isActivityUpdatesSubscription } from './graphql-activity-updates';
 import {
   isGraphqlMutationBackPressure,
   shouldRetryGraphqlMutation,
@@ -945,6 +946,7 @@ export function getGraphqlSoupClient(): Client {
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
+            isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_prompt SET prompt = $2, sends = $3 WHERE suggestion_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "309938ad92227fc0f669873e1388eb1bf181b52c35c1b3ed00382aa51da2adf4"
+}

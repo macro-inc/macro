@@ -211,6 +211,14 @@ One Rust core engine, two hosts:
   free, with native Turso filesystem storage instead of webview storage. The
   wasm/worker path is **browser-only**.
 
+Each tab return starts a new engine worker. The owner page keeps the engine's
+compiled `WebAssembly.Module` and passes it to the next worker, which then skips
+the download and, more importantly, the browser's lazy recompilation of every
+function on first call. The module is keyed by the asset URL it was compiled
+from and travels on a port of its own (`worker/compiled-engine.ts`); it cannot
+pass through the coordinator, which is a different agent cluster. If the module
+cannot be passed or instantiated, the worker loads the engine as before.
+
 ### 4.2 Multi-consumer strategy (browser only)
 
 **Decision: Turso-backed persistence over OPFS, with one coordinated engine
@@ -278,14 +286,25 @@ query) reaches a new engine first and, inside the engine worker, runs ahead of
 list rereads and past generation checks and operation teardowns. It registers
 nothing and writes nothing, so those fences do not order it; it never passes
 `init` or `clear`. It can run before a write queued ahead of it, returning rows
-that are only older; that write's cache change then refreshes the list. A visible consumer starts a one-second read budget
+that are only older; that write's cache change then refreshes the list.
+The engine worker does not start a request the moment it arrives. The browser
+delivers one message per task and engine calls run to completion, so a request
+started on arrival usually finishes before the next is seen: the queue would
+rarely hold two and its priorities would rarely apply. The worker instead yields
+to its event loop before starting (and again after each request), repeating
+while requests keep arriving (up to a bound), and then picks by priority. A
+typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
 Only read callers are canceled, not admitted engine work or writes. A typed
 search already sent is the exception: it has no network fallback, so it stays
-queued and the replacement engine answers it. One issued while reads are
-blocked is refused like any read, and Quick Access replays it. Readiness
+queued and the replacement engine answers it. It gets the ordinary read
+timeout from the moment reads are blocked, so an owner change that never
+completes still ends the wait with the same refusal. One issued while reads are
+blocked is refused like any read, and Quick Access replays it. `search` takes an
+`AbortSignal`: a caller that has moved on to another query aborts it and the
+host stops waiting, though the coordinator may still run its copy. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
 
@@ -312,6 +331,13 @@ subscription effects) and `graphql.subscription.cache_apply` (cache application,
 including parked-storage waits) to that receipt, even after its immediate span
 ends. Cache failures mark the application phase without recording payloads or
 replaying delivery. This context never enters GraphQL extensions or the wire.
+
+A subscription whose payloads no reader takes from the cache opts out of these
+effects with the exchange's `isUncachedSubscription` option; its results are
+delivered unchanged. `ActivityUpdates` is one: a push only tells mounted
+activity queries to refetch, and a bulk upload or delete sends one push per
+item to everyone with access. Writing each would advance the revision and make
+open lists and broadly registered live queries read again.
 
 Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
 or defer requests wait for storage and retain their position ahead of later
