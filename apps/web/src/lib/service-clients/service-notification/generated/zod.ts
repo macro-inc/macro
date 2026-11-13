@@ -1198,7 +1198,7 @@ export const listTypedNotificationsResponse = zod
                               'Stable message id; retries use it as their notification id.'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -1222,7 +1222,7 @@ export const listTypedNotificationsResponse = zod
                               'What the account is called (a workspace or phone number).'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -3446,7 +3446,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                               'Stable message id; retries use it as their notification id.'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -3470,7 +3470,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                               'What the account is called (a workspace or phone number).'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -5644,7 +5644,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                               'Stable message id; retries use it as their notification id.'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -5668,7 +5668,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                               'What the account is called (a workspace or phone number).'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -7767,7 +7767,7 @@ export const getTypedNotificationByIdResponse = zod
                       'Stable message id; retries use it as their notification id.'
                     ),
                   provider: zod
-                    .enum(['whatsapp'])
+                    .enum(['whatsapp', 'slack'])
                     .describe(
                       'The messaging service an external chat lives in.'
                     ),
@@ -7789,7 +7789,7 @@ export const getTypedNotificationByIdResponse = zod
                       'What the account is called (a workspace or phone number).'
                     ),
                   provider: zod
-                    .enum(['whatsapp'])
+                    .enum(['whatsapp', 'slack'])
                     .describe(
                       'The messaging service an external chat lives in.'
                     ),
