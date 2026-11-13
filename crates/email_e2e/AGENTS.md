@@ -60,7 +60,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   `email_scheduled_handler` once. Work of the other crons is enqueued by the
   scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`.
 - One file per area in `tests/` (`gmail.rs`, `outlook.rs`, …); each file is a
-  test binary, so keep shared helpers in the harness, not in `tests/`.
+  test binary, so keep shared helpers in the harness, not in `tests/`. Helpers
+  only one area's files use sit in `tests/<area>_support/`, which is not a
+  binary, and each file includes them with `#[path]` (`send_support`).
 - Every scenario is `#[tokio::test(flavor = "multi_thread")]`: the stack's
   cleanup after a failure needs a second runtime thread.
 - Name the test for the behaviour, and say in its doc comment what goes wrong
