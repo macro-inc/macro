@@ -110,7 +110,12 @@ pub fn render_transcript(entries: &[TranscriptEntry<'_>], agents: &[BotId]) -> S
                 let _ = writeln!(rendered, "({count} earlier message{plural} hidden)");
             }
             TranscriptEntry::Message(message) => {
-                let _ = writeln!(rendered, "[{}] {}", speaker(message, agents), message.content);
+                let _ = writeln!(
+                    rendered,
+                    "[{}] {}",
+                    speaker(message, agents),
+                    message.content
+                );
             }
         }
     }

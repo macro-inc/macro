@@ -373,6 +373,7 @@ const triggerContextSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('follow_up'),
     addressed_by: z.enum(['mention', 'explicit_reply', 'inferred']),
+    confidence: z.number().int().min(0).max(100).optional(),
     discussion: discussionContext,
   }),
   z.object({
@@ -426,6 +427,13 @@ export const agentContextRequest = z
   .object({
     promptMarkdown: z.string(),
     instructions: z.string().optional(),
+    agent: z
+      .object({
+        id: z.string().min(1),
+        name: z.string(),
+        handle: z.string(),
+      })
+      .optional(),
     owner: person.optional(),
     sender: person.optional(),
     currentTime: z

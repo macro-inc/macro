@@ -422,6 +422,25 @@ describe('composeAgentContextPrompt', () => {
     expect(text).toContain('has no requester account');
   });
 
+  it('tells the agent its own name before the session block', () => {
+    const text = composedContext({
+      promptMarkdown: 'pickle, can you take this?',
+      agent: {
+        id: 'bot|00000000-0000-0000-0000-00000000c5c5',
+        name: 'pickle',
+        handle: 'pickle',
+      },
+      owner: { id: 'macro|wolf@macro.com', name: 'wolf@macro.com' },
+    });
+    expect(text).toContain(
+      '<you name="pickle" handle="pickle" id="bot|00000000-0000-0000-0000-00000000c5c5">'
+    );
+    expect(text).toContain(
+      'You are pickle, an agent in Macro. People address you as pickle or @pickle.'
+    );
+    expect(text?.indexOf('<you')).toBeLessThan(text?.indexOf('<session') ?? 0);
+  });
+
   it('escapes owner and sender names', () => {
     const text = composedContext({
       promptMarkdown: 'x',

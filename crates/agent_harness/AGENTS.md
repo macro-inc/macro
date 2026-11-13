@@ -190,6 +190,9 @@ disconnect's `other_live_connections` above 0 is a stale close that changed noth
   Background channel messages are not attached. `trigger_router` fills each
   context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
   lists them per message; ACP `resource_link`s are what vision models fetch.
+- Every composed prompt's `<m-agent-context>` opens with `<you>`, the
+  session bot's name and handle, so the agent can tell a message naming it
+  from one naming someone else.
 - Every composed prompt's `<m-agent-context>` states `<current_time>` in the
   sender's (else owner's) primary calendar time zone, via the
   `UserTimeZones` port, or UTC when unknown. Models have no other source

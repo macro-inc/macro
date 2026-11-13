@@ -643,7 +643,13 @@ where
             Addressee::One(index) => Some(candidates[index].bot_id),
             Addressee::None | Addressee::Several => None,
         };
-        record_judgement(posted, &probabilities, &addressee, candidates.len(), routed_to);
+        record_judgement(
+            posted,
+            &probabilities,
+            &addressee,
+            candidates.len(),
+            routed_to,
+        );
 
         match addressee {
             Addressee::One(index) => Ok(Some(thread_event(
@@ -823,9 +829,12 @@ fn record_judgement(
         .map(|probability| format!("{probability:.2}"))
         .collect::<Vec<_>>()
         .join(",");
-    let top = probabilities.iter().copied().fold(None, |top: Option<f32>, probability| {
-        Some(top.map_or(probability, |top| top.max(probability)))
-    });
+    let top = probabilities
+        .iter()
+        .copied()
+        .fold(None, |top: Option<f32>, probability| {
+            Some(top.map_or(probability, |top| top.max(probability)))
+        });
 
     let span = tracing::Span::current();
     span.record("agent.trigger.inferred.outcome", addressee.outcome());
@@ -836,7 +845,10 @@ fn record_judgement(
         span.record("agent.trigger.inferred.top_probability", top);
     }
     if let Some(bot_id) = routed_to {
-        span.record("agent.trigger.inferred.bot_id", tracing::field::display(bot_id));
+        span.record(
+            "agent.trigger.inferred.bot_id",
+            tracing::field::display(bot_id),
+        );
     }
 
     tracing::info!(

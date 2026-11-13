@@ -319,6 +319,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
       trigger: {
         kind: 'follow_up',
         addressed_by: 'inferred',
+        confidence: 72,
         discussion: {
           surface: {
             type: 'channel',
@@ -387,8 +388,8 @@ describe('composeAgentContextPrompt with a trigger', () => {
     expect(context).toContain('Choose acting_as explicitly');
     expect(context?.slice(context.indexOf('<trigger'))).toBe(
       [
-        '<trigger kind="follow_up" addressed_by="inferred">',
-        '  <note>This session was already running when Julia posted this message in its discussion. It neither mentions you nor quote-replies to you: a model judged from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it. The message is the prompt.</note>',
+        '<trigger kind="follow_up" addressed_by="inferred" confidence="72">',
+        '  <note>This session was already running when Julia posted this message in its discussion. It neither mentions you nor quote-replies to you: a model judged, 72% confident, from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it. The message is the prompt.</note>',
         '  <discussion>',
         '    <channel id="c1" name="eng" type="public"/>',
         '    <origin>This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>',
