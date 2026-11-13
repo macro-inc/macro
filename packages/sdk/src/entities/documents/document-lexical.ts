@@ -70,9 +70,9 @@ export interface DocumentLexicalCommitResult {
 }
 
 /**
- * Someone changed, removed or moved a block the commit also changed (HTTP
- * 409); nothing was applied. Read again with `document.lexical()` and redo
- * the edit on the fresh state.
+ * A concurrent edit hit a block the commit changed (409); redo on a fresh `lexical()`.
+ *
+ * Someone changed, removed or moved that block, and nothing was applied.
  */
 export class DocumentEditConflictError extends MacroApiError {
   /** Each node the commit could not merge, and why. */
@@ -92,9 +92,10 @@ export class DocumentEditConflictError extends MacroApiError {
 }
 
 /**
- * The server rejected the committed state (HTTP 422): an unknown node type,
- * malformed node JSON or duplicate ids.
- * Nothing changed; `reason` names the problem.
+ * The server refused the committed nodes (422); nothing changed.
+ *
+ * `reason` names the problem: an unknown node type, malformed node JSON or
+ * duplicate ids.
  */
 export class DocumentEditInvalidError extends MacroApiError {
   /** What is wrong with the commit. */
@@ -127,9 +128,11 @@ async function loadLexical(): Promise<LexicalModules> {
 }
 
 /**
- * A markdown document or task body loaded into a headless Lexical editor,
- * edited with the ordinary Lexical API and committed as a merge. Get one from
- * `document.lexical()`.
+ * A document or task body in a headless Lexical editor.
+ *
+ * Commits merge with concurrent edits.
+ *
+ * Edit it with the ordinary Lexical API. Get one from `document.lexical()`.
  *
  * @mcp-exclude A live editor edited through callbacks; MCP calls carry JSON only.
  */
@@ -192,21 +195,28 @@ export class DocumentLexical {
   }
 
   /**
-   * Change the state with Lexical's `$` functions; the change is in the state
-   * when `update` returns. Nothing is sent until `commit()`.
+   * Change the state with Lexical's `$` functions.
+   *
+   * The change is in the state when `update` returns. Nothing is sent until
+   * `commit()`.
    */
   update(fn: () => void): void {
     this.editor.update(fn, { discrete: true });
   }
 
-  /** Read the state with Lexical's `$` functions and return what `fn` returns. */
+  /**
+   * Read the state with Lexical's `$` functions.
+   *
+   * Returns what `fn` returns.
+   */
   read<Result>(fn: () => Result): Result {
     return this.editor.read(fn);
   }
 
   /**
-   * Send the blocks changed since the base state; a commit merges with
-   * concurrent edits by block and resolves with the new revision.
+   * Send the changed blocks.
+   *
+   * They merge with concurrent edits by block; resolves with the new revision.
    *
    * The SDK diffs top-level blocks by node id and sends each new, changed or
    * moved block whole; blocks left alone are never written, so collaborators

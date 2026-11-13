@@ -651,7 +651,7 @@ export class Document
   }
 
   /**
-   * Open a markdown document or task body as a headless Lexical editor for exact edits with no AI; change it in `update`, then `commit()`.
+   * Open as a headless Lexical editor for exact edits: `update`, then `commit()`.
    *
    * The handle's `editor` holds the document with every Macro node
    * registered. Edit it with the ordinary Lexical API: import `lexical` for
