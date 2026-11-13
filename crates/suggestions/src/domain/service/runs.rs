@@ -139,22 +139,21 @@ where
             }
         };
         span.record("suggestion.run.outcome", outcome);
-        let session = run.session;
         // A failed write leaves the run starting; the sweep reads its session.
         let advanced = self
-            .advance(runs, run, Evidence::Event(event))
+            .advance(runs, run.clone(), Evidence::Event(event))
             .await
             .inspect_err(|error| tracing::warn!(?error, "could not record a run's start"));
         // A move lets go of the run; anything else lets go here.
         if !matches!(advanced, Ok(Advanced::Moved(_))) {
             let _ = self
                 .repo
-                .release_run(session, hold_until)
+                .release_run(run.session, hold_until)
                 .await
                 .inspect_err(|error| tracing::warn!(?error, "could not let go of a run"));
         }
         if event == RunEvent::Started && matches!(advanced, Ok(Advanced::Refused)) {
-            self.stop_orphaned_session(runs, session).await;
+            self.stop_orphaned_session(runs, &run).await;
         }
         if result.is_ok() {
             tracing::info!(event = "suggestions.run_started");
@@ -162,26 +161,28 @@ where
         result
     }
 
-    /// Delete run `session`'s session when it took its prompt after the run
-    /// had settled without finishing (its hold ran out while it started), so
-    /// nothing runs that no one watches. Best effort.
-    async fn stop_orphaned_session(&self, runs: &Runs, session: Uuid) {
-        let run = match self.repo.run(session).await {
-            Ok(Some(run)) => run,
-            Ok(None) => return,
+    /// Delete `started`'s session when it took its prompt after its run had
+    /// settled without finishing (its hold ran out while it started), or
+    /// after the run's row went with its suggestion, so nothing runs that no
+    /// one watches. Best effort.
+    async fn stop_orphaned_session(&self, runs: &Runs, started: &StoredRun) {
+        let state = match self.repo.run(started.session).await {
+            Ok(Some(now)) => Some(now.state),
+            Ok(None) => None,
             Err(error) => {
                 tracing::warn!(?error, "could not read a run that settled while starting");
                 return;
             }
         };
-        if !run.state.is_settled() || run.state == RunState::Finished {
+        if state.is_some_and(|state| !state.is_settled() || state == RunState::Finished) {
             return;
         }
+        let name = state.map(RunState::name);
         tracing::warn!(
-            state = run.state.name().as_ref(),
+            state = name.as_ref().map_or("deleted", AsRef::as_ref),
             "a run's session started after it settled"
         );
-        let _ = runs.sessions.delete(&run).await.inspect_err(|error| {
+        let _ = runs.sessions.delete(started).await.inspect_err(|error| {
             tracing::warn!(?error, "could not delete an orphaned run session")
         });
     }

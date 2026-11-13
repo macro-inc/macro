@@ -1055,6 +1055,42 @@ async fn a_run_dismissed_while_starting_is_stopped_by_its_start(pool: PgPool) {
     );
 }
 
+/// A start that outlives its hold and its start window may find its run
+/// settled when its session opens: that session is deleted, so none runs
+/// unwatched.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_session_opened_after_its_run_settled_is_deleted(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    let (entered, began) = tokio::sync::oneshot::channel();
+    let (proceed, held) = tokio::sync::oneshot::channel();
+    *runs.start_gate.lock().unwrap() = Some(StartGate {
+        entered,
+        proceed: held,
+    });
+    let dismiss = async {
+        began.await.unwrap();
+        age_runs(&h.pool, chrono::Duration::minutes(10)).await;
+        sqlx::query!("UPDATE suggestion_run SET claimed_until = NULL")
+            .execute(&h.pool)
+            .await
+            .unwrap();
+        h.service
+            .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+            .await
+            .unwrap();
+        let settled = h.stored(suggestion.id).await.run.unwrap();
+        assert_eq!(settled.state, RunStateName::Cancelled);
+        proceed.send(()).unwrap();
+    };
+    let owner = user(OWNER);
+    let (accepted, ()) = tokio::join!(h.accept(&owner, suggestion.id), dismiss);
+    accepted.unwrap();
+    let run = runs.last().session;
+    assert_eq!(*runs.deleted.lock().unwrap(), [run]);
+    assert_eq!(h.run_state(run).await, RunStateName::Cancelled);
+}
+
 /// A missing session settles no run that was cancelled while starting
 /// until its start window is over: one may still open and take its prompt.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
