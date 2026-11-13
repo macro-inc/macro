@@ -3,7 +3,6 @@ import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 import { adAttributionForCapture } from '@app/lib/analytics/signupAttribution';
 import { GOOGLE_GMAIL_IDP, MICROSOFT_IDP } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
-import { deriveIsAuthenticated } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
@@ -15,6 +14,7 @@ import { queryReadyGate } from '@queries/gate';
 import { detect } from 'detect-browser';
 import { match } from 'ts-pattern';
 import type { AuthContext, AuthSession } from './context/auth-context';
+import { authSession } from './core/auth-session';
 import {
   exchangeSessionCode,
   sendEmailCode,
@@ -32,27 +32,14 @@ export function createAppAuthContext(): AuthContext {
   const agentSignupSso = useSsoLogin({ signupMode: true, isAgent: true });
   const sendWelcomeEmail = useSendMobileWelcomeEmail();
 
-  const session = (): AuthSession => {
-    const data = queryReadyGate(userInfo) ? userInfo.data : undefined;
+  const session = (): AuthSession =>
     // A signed-out visitor's request 401s rather than answering unauthenticated.
-    const authenticated = deriveIsAuthenticated({
+    authSession({
       isLoading: userInfo.isLoading,
       isError: userInfo.isError,
       error: userInfo.error,
-      data,
+      data: queryReadyGate(userInfo) ? userInfo.data : undefined,
     });
-    if (authenticated === false) return { t: 'signed-out' };
-    if (!data?.userId) return { t: 'loading' };
-    return {
-      t: 'signed-in',
-      user: {
-        id: data.userId,
-        email: data.email ?? undefined,
-        tutorialComplete: data.tutorialComplete === true,
-        isAgent: data.isAgent === true,
-      },
-    };
-  };
 
   const completeLogin = async () => {
     // Reset token state only after the session cookies have changed; resetting
