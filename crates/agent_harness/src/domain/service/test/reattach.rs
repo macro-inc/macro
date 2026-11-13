@@ -918,6 +918,7 @@ async fn a_redial_restores_every_session_with_waiting_work_past_its_cap() {
             actor: Some(sender()),
             announce: None,
             context: None,
+            client: None,
             announced: None,
             created_at: chrono::Utc::now(),
         };
