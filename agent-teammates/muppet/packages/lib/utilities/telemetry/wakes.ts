@@ -91,14 +91,18 @@ export type WakeTraces = {
 	readonly secrets: () => Promise<readonly string[]>;
 	/** How often a running wake's trace is sent again, if it changed. 60 seconds unless said. */
 	readonly intervalMs?: number;
+	/** How often it is sent again even if it didn't, so Macro hears the wake is alive through a long silent step. 10 minutes unless said. */
+	readonly heartbeatMs?: number;
 	/** The most bytes of JSON a trace may be. Macro's 10 MiB unless said. */
 	readonly limit?: number;
 };
 
 type Watch = {
 	stopped: boolean;
-	/** The JSON last sent, so an unchanged trace isn't sent again. */
+	/** The JSON last sent, so an unchanged trace isn't sent again before the heartbeat. */
 	last?: string;
+	/** Intervals since the trace was last sent. */
+	quiet: number;
 	/** The upload under way, if any, settling when its request does (not when the sink stopped waiting on it). */
 	inflight: Promise<void>;
 };
@@ -106,13 +110,15 @@ type Watch = {
 /**
  * A sink that sends every record to Macro through `client`, unchanged, and,
  * given `traces`, the wake's trace: from its `session` record every
- * `intervalMs` while it runs (only when it changed), and once more, no longer
- * live, at its `end`. No call to Macro is waited on longer than `timeoutMs`
- * (10 seconds unless said): past it, the call's signal aborts. A live upload
- * still running at the end is waited on, again no longer than the timeout,
- * before the final one, so it can't land after it. A slow Macro holds up no
- * other sink for long, nothing it does ever throws out of the sink, and once
- * the client throws `WakesUnavailable` the sink does nothing more.
+ * `intervalMs` while it runs (when it changed, or every `heartbeatMs` anyway),
+ * and once more, no longer live, after its `end`. A record's error message and
+ * summaries are redacted like the trace. No call to Macro is waited on longer
+ * than `timeoutMs` (10 seconds unless said): past it, the call's signal
+ * aborts. The final trace is sent in the background, so the end of a wake
+ * waits only on its record; it first waits (no longer than the timeout) for a
+ * live upload still running, so it can't land after it. A slow Macro holds up
+ * no other sink for long, nothing it does ever throws out of the sink, and
+ * once the client throws `WakesUnavailable` the sink does nothing more.
  */
 export const macroSink = ({
 	client,
@@ -161,6 +167,41 @@ export const macroSink = ({
 	const within = (work: (signal: AbortSignal) => Promise<void>) =>
 		start(work).waited;
 
+	/**
+	 * The record with its free text (error message, summaries) redacted with
+	 * the trace's secrets. If they can't be read, that text is dropped.
+	 */
+	const redacted = async (record: WakeRecord): Promise<WakeRecord> => {
+		if (traces === undefined) return record;
+		const error = record.phase === "end" ? record.error : undefined;
+		const outcome = record.phase === "end" ? record.outcome : undefined;
+		if (
+			error === undefined &&
+			outcome?.summary === undefined &&
+			record.trigger.summary === undefined
+		)
+			return record;
+		const text = await traces.secrets().then(
+			(secrets) => redactor(secrets).text,
+			() => () => "[secret]",
+		);
+		const trigger =
+			record.trigger.summary === undefined
+				? record.trigger
+				: { ...record.trigger, summary: text(record.trigger.summary) };
+		if (record.phase !== "end") return { ...record, trigger };
+		return {
+			...record,
+			trigger,
+			...(error === undefined
+				? {}
+				: { error: { ...error, message: text(error.message) } }),
+			...(outcome?.summary === undefined
+				? {}
+				: { outcome: { ...outcome, summary: text(outcome.summary) } }),
+		};
+	};
+
 	const upload = async (
 		sources: WakeTraces,
 		wake: string,
@@ -178,10 +219,17 @@ export const macroSink = ({
 		const limit = sources.limit ?? traceLimit;
 		const fitted = fitTrace(trace, limit);
 		const json = JSON.stringify(fitted);
-		if (json === watch.last || traceBytes(fitted) > limit) return;
+		const interval = sources.intervalMs ?? 60_000;
+		const heartbeat = Math.max(
+			1,
+			Math.round((sources.heartbeatMs ?? 600_000) / interval),
+		);
+		const due = !live || json !== watch.last || watch.quiet >= heartbeat;
+		if (!due || traceBytes(fitted) > limit) return;
 		if (signal.aborted || unavailable) return;
 		await client.uploadTrace(wake, fitted, signal);
 		watch.last = json;
+		watch.quiet = 0;
 	};
 
 	const follow = async (
@@ -198,18 +246,24 @@ export const macroSink = ({
 			await call.waited;
 			if (watch.stopped) return;
 			await clock.sleep(sources.intervalMs ?? 60_000);
+			watch.quiet += 1;
 		}
 	};
 
 	return async (record) => {
 		if (unavailable) return;
-		await within((signal) => client.recordWake(record, signal));
+		const sent = await redacted(record);
+		await within((signal) => client.recordWake(sent, signal));
 		if (unavailable) return;
 		if (traces === undefined || record.session === undefined) return;
 		const { session } = record;
 		if (record.phase === "session") {
 			if (watches.has(record.wake)) return;
-			const watch: Watch = { stopped: false, inflight: Promise.resolve() };
+			const watch: Watch = {
+				stopped: false,
+				quiet: 0,
+				inflight: Promise.resolve(),
+			};
 			watches.set(record.wake, watch);
 			void follow(traces, record.wake, session, watch);
 			return;
@@ -217,14 +271,18 @@ export const macroSink = ({
 		if (record.phase !== "end") return;
 		const watch = watches.get(record.wake) ?? {
 			stopped: true,
+			quiet: 0,
 			inflight: Promise.resolve(),
 		};
 		watches.delete(record.wake);
 		watch.stopped = true;
-		// A live upload still under way would otherwise land after the last one.
-		await Promise.race([watch.inflight, clock.sleep(timeoutMs)]);
-		await within((signal) =>
-			upload(traces, record.wake, session, false, watch, signal),
-		);
+		// In the background: the wake's end doesn't wait on its trace.
+		void (async () => {
+			// A live upload still under way would otherwise land after the last one.
+			await Promise.race([watch.inflight, clock.sleep(timeoutMs)]);
+			await within((signal) =>
+				upload(traces, record.wake, session, false, watch, signal),
+			);
+		})();
 	};
 };

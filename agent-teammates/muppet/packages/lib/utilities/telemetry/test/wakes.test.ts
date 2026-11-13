@@ -22,6 +22,10 @@ const transcript = async (): Promise<unknown[]> =>
 
 /** Lets every promise that can settle, settle. */
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/** Lets background work (a file read, then an upload) finish. */
+const flush = async () => {
+	for (let turn = 0; turn < 20; turn += 1) await settle();
+};
 
 /** A clock whose time moves only when the test says. */
 const fakeClock = () => {
@@ -181,6 +185,7 @@ describe("macroSink", () => {
 		expect(traces[1]?.trace.endedAt).toBe("2026-11-11T09:00:30.000Z");
 
 		await sink(ended);
+		await flush();
 		expect(traces).toHaveLength(3);
 		expect(traces[2]?.trace.live).toBe(false);
 		expect(records.map((record) => record.phase)).toEqual([
@@ -209,6 +214,7 @@ describe("macroSink", () => {
 			traces: { transcript, secrets: async () => [] },
 		});
 		await sink(ended);
+		await flush();
 		expect(traces.map(({ trace }) => trace.live)).toEqual([false]);
 	});
 
@@ -221,6 +227,7 @@ describe("macroSink", () => {
 			traces: { transcript, secrets: async () => [], limit },
 		});
 		await sink(ended);
+		await flush();
 		const [uploaded] = traces;
 		expect(uploaded).toBeDefined();
 		if (uploaded !== undefined)
@@ -263,6 +270,7 @@ describe("macroSink", () => {
 		expect(traces.map(({ trace }) => trace.live)).toEqual([true]);
 		readable = false;
 		await sink(ended);
+		await flush();
 		expect(traces).toHaveLength(1); // no final upload without the credentials
 	});
 
@@ -292,16 +300,13 @@ describe("macroSink", () => {
 		});
 		await sink(session);
 		await clock.advance(1_000); // the live upload is under way
-		let ended_ = false;
-		const ending = sink(ended).then(() => {
-			ended_ = true;
-		});
+		await sink(ended); // returns without waiting on the trace
 		await clock.advance(1_000);
-		expect(ended_).toBe(false);
-		expect(landed).toEqual([]);
+		await flush();
+		expect(landed).toEqual([]); // the final one waits for the live one
 		release();
-		await ending;
-		expect(landed).toEqual([true, false]); // the final one lands last
+		await flush();
+		expect(landed).toEqual([true, false]); // and lands last
 	});
 
 	test("aborts a live upload that outlasts the timeout, and waits on it no longer than that at the end", async () => {
@@ -330,9 +335,9 @@ describe("macroSink", () => {
 		expect(signals.map((signal) => signal.aborted)).toEqual([false]);
 		await clock.advance(5_000);
 		expect(signals.map((signal) => signal.aborted)).toEqual([true]);
-		const ending = sink(ended);
+		await sink(ended);
 		await clock.advance(5_000);
-		await ending;
+		await flush();
 		expect(finals.map((trace) => trace.live)).toEqual([false]);
 	});
 
@@ -357,5 +362,69 @@ describe("macroSink", () => {
 		await clock.advance(600_000);
 		await sink(ended);
 		expect(calls).toBe(1);
+	});
+
+	test("sends an unchanged trace again at the heartbeat", async () => {
+		const clock = fakeClock();
+		const { traces, client } = recording();
+		const sink = macroSink({
+			client,
+			clock,
+			traces: {
+				transcript,
+				secrets: async () => [],
+				intervalMs: 60_000,
+				heartbeatMs: 180_000,
+			},
+		});
+		await sink(session);
+		await clock.advance(0);
+		expect(traces).toHaveLength(1);
+		await clock.advance(120_000);
+		expect(traces).toHaveLength(1);
+		await clock.advance(60_000);
+		expect(traces).toHaveLength(2);
+		expect(traces[1]?.trace).toEqual(traces[0]?.trace);
+	});
+
+	test("redacts a record's error and summaries, and drops them if secrets can't be read", async () => {
+		const failed: Ended = {
+			...ended,
+			status: "failed",
+			error: {
+				type: "error",
+				message:
+					"GET https://x.test/?token=abc failed with fake-deploy-key-123456",
+			},
+			outcome: { ...ended.outcome, summary: "used fake-deploy-key-123456" },
+			trigger: {
+				...ended.trigger,
+				summary: "asked about fake-deploy-key-123456",
+			},
+		};
+		const { records, client } = recording();
+		await macroSink({
+			client,
+			clock: fakeClock(),
+			traces: { transcript, secrets: async () => ["fake-deploy-key-123456"] },
+		})(failed);
+		expect(JSON.stringify(records)).not.toContain("fake-deploy-key-123456");
+		expect(JSON.stringify(records)).not.toContain("token=abc");
+		expect(records[0]?.trigger.summary).toBe("asked about [secret]");
+
+		const locked = recording();
+		await macroSink({
+			client: locked.client,
+			clock: fakeClock(),
+			traces: {
+				transcript,
+				secrets: async () => {
+					throw new Error("keychain locked");
+				},
+			},
+		})(failed);
+		const [sent] = locked.records;
+		expect(sent?.phase === "end" && sent.error?.message).toBe("[secret]");
+		expect(sent?.trigger.summary).toBe("[secret]");
 	});
 });

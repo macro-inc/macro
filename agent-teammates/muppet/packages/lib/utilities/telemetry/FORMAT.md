@@ -163,15 +163,19 @@ off for this account) stops the sink for the rest of the run.
 - `POST /agents/{agent}/wakes`: the record, as above, at each phase.
 - `PUT /agents/{agent}/wakes/{wake}/trace`: the trace, at most 10 MiB of
   JSON; each replaces the last. Sent from the `session` record on, every
-  `intervalMs` (60 seconds) while it changed, and once more at `end`, with
-  `live: false`; nothing after that.
+  `intervalMs` (60 seconds) while it changed and every `heartbeatMs` (10
+  minutes) even if it didn't, so a reader can tell a long silent step from a
+  dead wake; and once more after `end`, with `live: false`, in the background
+  so the wake's end waits only on its record; nothing after that.
 
 No call is waited on longer than `timeoutMs` (10 seconds): past it, the
 signal the client was handed aborts. A live upload still running at `end` is
 waited on (again at most `timeoutMs`) before the final one, so it can't land
 after it. Failures are dropped: a slow or down Macro costs records and traces,
 never the wake or the other sinks. A trace is redacted with every credential's
-value (`secrets`); if one can't be read, that upload is skipped.
+value (`secrets`); if one can't be read, that upload is skipped. A record's
+error message and summaries are redacted the same way (dropped if the secrets
+can't be read).
 
 ### The trace
 
