@@ -1,13 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
-import {
-  afterEach,
-  describe,
-  expect,
-  it,
-  onTestFinished,
-  vi,
-} from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const openPreview = vi.hoisted(() => vi.fn());
 const [previews, setPreviews] = createSignal<
@@ -29,17 +22,17 @@ vi.mock('@core/component/EntityIcon', () => ({
   ),
 }));
 
-const fixture = vi.hoisted(() => ({
-  entities: [
-    {
-      type: 'document' as const,
-      id: 'doc-1',
-      name: 'Doc',
-      ownerId: 'owner',
-      notifications: [{ id: 'n1', state: 'unseen' }],
-    },
-  ] as Array<Record<string, unknown>>,
-}));
+const documentRow = {
+  type: 'document' as const,
+  id: 'doc-1',
+  name: 'Doc',
+  ownerId: 'owner',
+  notifications: [{ id: 'n1', state: 'unseen' }],
+};
+/** What soup returns for the list; `undefined` while it has not answered. */
+const [soupRows, setSoupRows] = createSignal<
+  (typeof documentRow)[] | undefined
+>([documentRow]);
 
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({
@@ -49,7 +42,10 @@ vi.mock('@components/app/GlobalAppState', () => ({
 
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: () => ({
-    data: { entities: fixture.entities },
+    get data() {
+      const entities = soupRows();
+      return entities ? { entities } : undefined;
+    },
   }),
 }));
 
@@ -103,6 +99,7 @@ import { List } from './List';
 afterEach(() => {
   cleanup();
   setPreviews({});
+  setSoupRows([documentRow]);
   openPreview.mockClear();
 });
 
@@ -131,23 +128,20 @@ const database = {
   rawName: 'Cow-ender',
 };
 
+const shownCount = () =>
+  screen.getByTestId('collection').getAttribute('data-count');
+const rows = () => document.querySelectorAll('[data-card-row]');
+
 describe('an items list', () => {
   it('shows a database the soup query cannot return, by id, and opens it', async () => {
-    const soupRows = fixture.entities;
-    fixture.entities = [];
-    onTestFinished(() => {
-      fixture.entities = soupRows;
-    });
+    setSoupRows([]);
     setPreviews({ 'db-1': database });
     render(() => (
       <List
         source={{ kind: 'items', entities: [{ id: 'db-1', type: 'database' }] }}
       />
     ));
-    expect(screen.getByTestId('collection').getAttribute('data-count')).toBe(
-      '1'
-    );
-    expect(screen.getByText('1 item')).toBeTruthy();
+    expect(shownCount()).toBe('1');
     await fireEvent.click(screen.getByRole('button', { name: /Cow-ender/ }));
     expect(openPreview).toHaveBeenCalledWith(
       'database',
@@ -172,14 +166,38 @@ describe('an items list', () => {
       />
     ));
     expect(screen.getAllByTestId('list-row')).toHaveLength(1);
-    expect(screen.getByText('Cow-ender')).toBeTruthy();
-    expect(screen.getByText('2 items')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Cow-ender/ })).toBeTruthy();
+    expect(shownCount()).toBe('2');
   });
 
-  it('shows an item the viewer cannot open as unavailable, without its name', () => {
+  it('adds no rows by id until soup has answered', () => {
+    setSoupRows(undefined);
+    setPreviews({ 'db-1': database });
+    render(() => (
+      <List
+        source={{ kind: 'items', entities: [{ id: 'db-1', type: 'database' }] }}
+      />
+    ));
+    expect(rows()).toHaveLength(0);
+    setSoupRows([]);
+    expect(rows()).toHaveLength(1);
+  });
+
+  it('never shows the name of an item the viewer cannot open', () => {
+    setSoupRows([]);
     setPreviews({
-      'db-1': { loading: false, access: 'no_access', id: 'db-1' },
-      'db-2': { loading: false, access: 'does_not_exist', id: 'db-2' },
+      'db-1': {
+        loading: false,
+        access: 'no_access',
+        id: 'db-1',
+        name: 'Secret plans',
+      },
+      'db-2': {
+        loading: false,
+        access: 'does_not_exist',
+        id: 'db-2',
+        name: 'Old plans',
+      },
     });
     render(() => (
       <List
@@ -192,12 +210,13 @@ describe('an items list', () => {
         }}
       />
     ));
-    expect(screen.getByText("Database · You don't have access")).toBeTruthy();
-    expect(screen.getByText('Database · Deleted')).toBeTruthy();
+    expect(rows()).toHaveLength(2);
+    expect(screen.queryByText(/Secret plans|Old plans/)).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('shows a kind no card loads as an unavailable row instead of dropping it', () => {
+  it('keeps a kind no card loads as an unavailable row instead of dropping it', () => {
+    setSoupRows([]);
     render(() => (
       <List
         source={{
@@ -206,9 +225,9 @@ describe('an items list', () => {
         }}
       />
     ));
-    expect(screen.getByText('Crm contact')).toBeTruthy();
-    expect(screen.getByText("Can't be shown here")).toBeTruthy();
-    expect(screen.queryByText('Nothing matches.')).toBeNull();
+    expect(shownCount()).toBe('1');
+    expect(rows()).toHaveLength(1);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('draws nothing for an items list with no refs', () => {

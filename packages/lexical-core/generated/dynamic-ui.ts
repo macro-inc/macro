@@ -433,8 +433,8 @@ export type ListSource_Deserialize =
   /**  The items a filter matches, fetched by the list itself. */
   | ({ kind: 'query'; query: Query_Deserialize } & { entities?: never })
   /**
-   *  A fixed set of items. Each one shows, even a kind the list cannot
-   *  look up, as a card for that item.
+   *  A fixed set of items. Each one shows, even one the list's query
+   *  cannot return; a kind no card loads shows as an unavailable row.
    */
   | ({ kind: 'items'; entities: EntityRef[] } & { query?: never });
 
@@ -443,8 +443,8 @@ export type ListSource_Serialize =
   /**  The items a filter matches, fetched by the list itself. */
   | ({ kind: 'query'; query: Query_Serialize } & { entities?: never })
   /**
-   *  A fixed set of items. Each one shows, even a kind the list cannot
-   *  look up, as a card for that item.
+   *  A fixed set of items. Each one shows, even one the list's query
+   *  cannot return; a kind no card loads shows as an unavailable row.
    */
   | ({ kind: 'items'; entities: EntityRef[] } & { query?: never });
 

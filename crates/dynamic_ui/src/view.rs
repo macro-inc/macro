@@ -244,8 +244,8 @@ pub struct TagNode {
 pub enum ListSource {
     /// The items a filter matches, fetched by the list itself.
     Query { query: Box<Query> },
-    /// A fixed set of items. Each one shows, even a kind the list cannot
-    /// look up, as a card for that item.
+    /// A fixed set of items. Each one shows, even one the list's query
+    /// cannot return; a kind no card loads shows as an unavailable row.
     Items { entities: Vec<EntityRef> },
 }
 

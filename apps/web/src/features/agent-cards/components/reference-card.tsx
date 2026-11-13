@@ -130,7 +130,11 @@ export function useReferenceItem(
     const owner = isEmail ? accessible()?.owner : undefined;
     const updatedAt = accessible()?.updatedAt;
     const updated = updatedAt ? formatDate(updatedAt) : undefined;
-    return [kind(), owner, updated && (isEmail ? updated : `Updated ${updated}`)]
+    return [
+      kind(),
+      owner,
+      updated && (isEmail ? updated : `Updated ${updated}`),
+    ]
       .filter(Boolean)
       .join(' · ');
   };

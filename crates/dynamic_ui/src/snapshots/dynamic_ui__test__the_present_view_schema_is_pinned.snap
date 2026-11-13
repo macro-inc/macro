@@ -1075,7 +1075,7 @@ expression: schema
           "type": "object"
         },
         {
-          "description": "A fixed set of items. Each one shows, even a kind the list cannot\nlook up, as a card for that item.",
+          "description": "A fixed set of items. Each one shows, even one the list's query\ncannot return; a kind no card loads shows as an unavailable row.",
           "properties": {
             "entities": {
               "items": {

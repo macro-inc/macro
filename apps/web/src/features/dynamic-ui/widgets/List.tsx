@@ -218,6 +218,7 @@ function PlainRow(props: {
               rowClass,
               'w-full text-left touch:min-h-[44px] not-touch:hover:bg-list-hover focus-visible:bg-list-hover'
             )}
+            aria-label={`Open ${props.title}`}
             onClick={(event) => onOpen()(event)}
           >
             {body()}
@@ -341,24 +342,24 @@ function Rows(props: ListProps) {
   });
   // Every ref an items list names shows: the ones soup did not return load
   // by id instead of going missing.
+  // Until soup answers, nothing is known to be missing.
   const unresolved = createMemo(() => {
-    const src = props.source;
-    if (src.kind !== 'items') return [];
-    const returned = new Set(
-      (itemsQuery.data?.entities ?? []).map((entity) => entity.id)
-    );
-    const seen = new Set<string>();
-    const rest = src.entities.filter((ref) => {
+    const source = props.source;
+    const soupEntities = itemsQuery.data?.entities;
+    if (source.kind !== 'items' || !soupEntities) return [];
+    const returnedIds = new Set(soupEntities.map((entity) => entity.id));
+    const seenRefs = new Set<string>();
+    const missing = source.entities.filter((ref) => {
       const key = `${ref.type}:${ref.id}`;
-      if (returned.has(ref.id) || seen.has(key)) return false;
-      seen.add(key);
+      if (returnedIds.has(ref.id) || seenRefs.has(key)) return false;
+      seenRefs.add(key);
       return true;
     });
-    const room =
+    const rowsLeft =
       props.limit != null
         ? Math.max(0, props.limit - entities().length)
-        : rest.length;
-    return rest.slice(0, room);
+        : missing.length;
+    return missing.slice(0, rowsLeft);
   });
   const count = () => entities().length + unresolved().length;
   const counted = () => `${count()} ${count() === 1 ? 'item' : 'items'}`;
@@ -408,23 +409,23 @@ export function List(props: ListProps) {
     props.source.kind === 'items' && props.source.entities.length === 0;
   return (
     <Show when={!empty()}>
-    <ListEntityMetadataQueryProvider>
-      <ListLayoutProvider ref={() => undefined}>
-        {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
-        <Suspense
-          fallback={
-            <CollectionCard
-              title={props.title ?? 'Items'}
-              count={0}
-              live={props.source.kind === 'query'}
-              state="loading"
-            />
-          }
-        >
-          <Rows {...props} />
-        </Suspense>
-      </ListLayoutProvider>
-    </ListEntityMetadataQueryProvider>
+      <ListEntityMetadataQueryProvider>
+        <ListLayoutProvider ref={() => undefined}>
+          {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
+          <Suspense
+            fallback={
+              <CollectionCard
+                title={props.title ?? 'Items'}
+                count={0}
+                live={props.source.kind === 'query'}
+                state="loading"
+              />
+            }
+          >
+            <Rows {...props} />
+          </Suspense>
+        </ListLayoutProvider>
+      </ListEntityMetadataQueryProvider>
     </Show>
   );
 }
