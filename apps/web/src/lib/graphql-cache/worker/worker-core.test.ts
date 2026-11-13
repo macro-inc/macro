@@ -2226,6 +2226,15 @@ describe('CacheWorkerCore', () => {
       kind: 'read',
       query: 'query Read { value }',
     });
+    // The read is only picked up a task later; it must still be held then.
+    await new Promise<void>((resolve) => {
+      const { port1, port2 } = new MessageChannel();
+      port1.onmessage = () => {
+        port1.close();
+        resolve();
+      };
+      port2.postMessage(undefined);
+    });
     expect(readQuery).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(20);
     await read;

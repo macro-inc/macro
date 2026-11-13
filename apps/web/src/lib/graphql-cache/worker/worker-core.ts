@@ -101,7 +101,10 @@ export interface CacheWorkerCoreOptions {
   afterArrivedMessages?: (resume: () => void) => void;
 }
 
-/** Runs `resume` in a later task, after at least one waiting message. */
+// A burst that keeps arriving must not hold back the requests already here.
+const MAX_ARRIVAL_YIELDS = 256;
+
+/** Runs `resume` in a later task, after a message that was already waiting. */
 function afterArrivedMessages(resume: () => void): void {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = () => {
@@ -529,16 +532,16 @@ export class CacheWorkerCore {
    * run to completion, so a request started the moment it arrives always
    * finishes before the next is even seen: the queue never holds two, and
    * its priorities never apply. Each yield lets waiting messages in; it
-   * repeats while they keep coming.
+   * repeats while they keep coming, up to a bound.
    */
-  private collectArrivalsThenDrain(): void {
+  private collectArrivalsThenDrain(yieldsLeft = MAX_ARRIVAL_YIELDS): void {
     if (this.running || this.yielding || this.queue.length === 0) return;
 
     const seen = this.queue.length;
     const resume = () => {
       this.yielding = false;
-      if (this.queue.length > seen) {
-        this.collectArrivalsThenDrain();
+      if (this.queue.length > seen && yieldsLeft > 1) {
+        this.collectArrivalsThenDrain(yieldsLeft - 1);
         return;
       }
 
