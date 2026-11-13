@@ -111,6 +111,42 @@ export class Stack {
     return call('GET', this.path('/service-requests'));
   }
 
+  /** Makes a Macro service stand-in answer an error once. */
+  failNextServiceRequest(failure: {
+    service: 'static-files' | 'document-storage' | 'connection-gateway';
+    method: string;
+    pathPrefix?: string;
+    status?: number;
+    body?: unknown;
+  }): Promise<void> {
+    return call('POST', this.path('/service-failures'), failure);
+  }
+
+  /** Refuses the email services' next sends to one of their queues. */
+  refuseQueueSends(queue: string, times = 1): Promise<void> {
+    return call('POST', this.path('/queue-refusals'), { queue, times });
+  }
+
+  /** What the services stored in object storage. */
+  storedObjects(): Promise<
+    { bucket: string; key: string; contentType: string; base64: string }[]
+  > {
+    return call('GET', this.path('/stored-objects'));
+  }
+
+  /** Puts mail in a mailbox before anyone links it: what a backfill finds. */
+  seed(provider: Provider, address: string, mail: Mail[]): Promise<void> {
+    return call('POST', this.path('/seed'), { provider, address, mail });
+  }
+
+  /**
+   * Runs a row-returning query on the stack's database. The last resort,
+   * for state no API or page shows.
+   */
+  sql<Row = Record<string, unknown>>(query: string): Promise<Row[]> {
+    return call('POST', this.path('/sql'), { query });
+  }
+
   runScheduledSweep(): Promise<void> {
     return call('POST', this.path('/scheduled-sweep'));
   }

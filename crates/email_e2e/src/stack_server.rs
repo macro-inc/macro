@@ -62,6 +62,17 @@ impl IntoResponse for Failed {
 ///   the provider holds.
 /// - `GET /stacks/{id}/service-requests` lists what the email services asked
 ///   the other Macro services.
+/// - `POST /stacks/{id}/service-failures` (`{"service", "method",
+///   "pathPrefix", "status", "body"}`) makes a Macro service stand-in answer
+///   an error once; `POST /stacks/{id}/queue-refusals` (`{"queue", "times"}`)
+///   refuses the services' next sends to a queue.
+/// - `GET /stacks/{id}/stored-objects` lists what the services stored
+///   (`bucket`, `key`, `contentType`, `base64`).
+/// - `POST /stacks/{id}/seed` (`{"provider", "address", "mail": [..]}`) puts
+///   mail in a mailbox before anyone links it.
+/// - `POST /stacks/{id}/sql` (`{"query"}`) runs a query that returns rows on
+///   the stack's database and answers them as JSON objects: the last resort
+///   for what no API shows.
 /// - `POST /stacks/{id}/scheduled-sweep` runs the scheduled-send sweep once.
 /// - `DELETE /stacks/{id}` ends the stack; it fails when a service died or
 ///   panicked.
@@ -76,6 +87,11 @@ pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
             get(provider_messages).post(deliver),
         )
         .route("/stacks/{id}/service-requests", get(service_requests))
+        .route("/stacks/{id}/service-failures", post(fail_service_request))
+        .route("/stacks/{id}/queue-refusals", post(refuse_queue_sends))
+        .route("/stacks/{id}/stored-objects", get(stored_objects))
+        .route("/stacks/{id}/seed", post(seed_mailbox))
+        .route("/stacks/{id}/sql", post(sql))
         .route("/stacks/{id}/scheduled-sweep", post(scheduled_sweep))
         .with_state(Stacks::default());
     axum::serve(listener, app)
@@ -188,16 +204,7 @@ async fn link_inbox(
             .cloned()
             .ok_or_else(|| Failed(StatusCode::NOT_FOUND, format!("no user {email}")))?
     };
-    let provider = match text(&body, "provider")? {
-        "GMAIL" => Provider::Gmail,
-        "OUTLOOK" => Provider::Outlook,
-        other => {
-            return Err(Failed(
-                StatusCode::BAD_REQUEST,
-                format!("unknown provider {other}"),
-            ));
-        }
-    };
+    let provider = provider(&body)?;
     let address = body["address"].as_str().unwrap_or(user.email()).to_owned();
     let inbox = on_thread(move || async move { Ok(user.link(provider, &address).await?) }).await?;
     let answer = json!({
@@ -291,16 +298,21 @@ async fn deliver(
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, Failed> {
     let inbox = inbox(&stacks, &id, &address).await?;
+    Ok(Json(provider_message(inbox.deliver(&mail_from(&body)?)?)))
+}
+
+/// The message a request describes.
+fn mail_from(body: &Value) -> Result<Mail, Failed> {
     let mut mail = Mail::new(
-        text(&body, "from")?,
-        text(&body, "subject")?,
+        text(body, "from")?,
+        text(body, "subject")?,
         body["text"].as_str().unwrap_or_default(),
     );
-    mail.to = optional(&body, "to");
-    mail.cc = optional(&body, "cc");
-    mail.html = optional(&body, "html");
-    mail.message_id = optional(&body, "messageId");
-    mail.in_reply_to = optional(&body, "inReplyTo");
+    mail.to = optional(body, "to");
+    mail.cc = optional(body, "cc");
+    mail.html = optional(body, "html");
+    mail.message_id = optional(body, "messageId");
+    mail.in_reply_to = optional(body, "inReplyTo");
     for attachment in body["attachments"].as_array().into_iter().flatten() {
         let bytes = STANDARD
             .decode(text(attachment, "base64")?)
@@ -311,7 +323,7 @@ async fn deliver(
             bytes,
         });
     }
-    Ok(Json(provider_message(inbox.deliver(&mail)?)))
+    Ok(mail)
 }
 
 async fn provider_messages(
@@ -323,4 +335,114 @@ async fn provider_messages(
     Ok(Json(Value::Array(
         messages.into_iter().map(provider_message).collect(),
     )))
+}
+
+fn provider(body: &Value) -> Result<Provider, Failed> {
+    match text(body, "provider")? {
+        "GMAIL" => Ok(Provider::Gmail),
+        "OUTLOOK" => Ok(Provider::Outlook),
+        other => Err(Failed(
+            StatusCode::BAD_REQUEST,
+            format!("unknown provider {other}"),
+        )),
+    }
+}
+
+async fn fail_service_request(
+    State(stacks): State<Stacks>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<StatusCode, Failed> {
+    let running = find(&stacks, &id).await?;
+    let status = body["status"]
+        .as_u64()
+        .and_then(|status| u16::try_from(status).ok())
+        .unwrap_or(500);
+    running.lock().await.stack.fail_next_service_request_with(
+        text(&body, "service")?,
+        text(&body, "method")?,
+        body["pathPrefix"].as_str().unwrap_or("/"),
+        status,
+        &body["body"],
+    )?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn refuse_queue_sends(
+    State(stacks): State<Stacks>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<StatusCode, Failed> {
+    let running = find(&stacks, &id).await?;
+    let times = body["times"]
+        .as_u64()
+        .and_then(|times| usize::try_from(times).ok())
+        .unwrap_or(1);
+    running
+        .lock()
+        .await
+        .stack
+        .refuse_queue_sends(text(&body, "queue")?, times)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn stored_objects(
+    State(stacks): State<Stacks>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, Failed> {
+    let running = find(&stacks, &id).await?;
+    let objects = running.lock().await.stack.stored_objects();
+    Ok(Json(Value::Array(
+        objects
+            .into_iter()
+            .map(|object| {
+                json!({
+                    "bucket": object.bucket,
+                    "key": object.key,
+                    "contentType": object.content_type,
+                    "base64": STANDARD.encode(&object.bytes),
+                })
+            })
+            .collect(),
+    )))
+}
+
+async fn seed_mailbox(
+    State(stacks): State<Stacks>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<StatusCode, Failed> {
+    let running = find(&stacks, &id).await?;
+    let mail = body["mail"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(mail_from)
+        .collect::<Result<Vec<_>, _>>()?;
+    running
+        .lock()
+        .await
+        .stack
+        .seed_mailbox(provider(&body)?, text(&body, "address")?, &mail)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn sql(
+    State(stacks): State<Stacks>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, Failed> {
+    let running = find(&stacks, &id).await?;
+    let pool = running.lock().await.stack.db().clone();
+    let query = format!(
+        "WITH rows AS ({}) SELECT coalesce(jsonb_agg(to_jsonb(rows)), '[]')::text FROM rows",
+        text(&body, "query")?
+    );
+    let rows: String = sqlx::query_scalar(&query)
+        .fetch_one(&pool)
+        .await
+        .map_err(|error| Failed(StatusCode::BAD_REQUEST, error.to_string()))?;
+    serde_json::from_str(&rows)
+        .map(Json)
+        .map_err(|error| Failed(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))
 }
