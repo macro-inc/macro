@@ -198,6 +198,38 @@ it('o toggles the focused message open and closed, defaulting to the latest', ()
   }
 });
 
+it('Escape closes an open reply, then leaves without collapsing the message', () => {
+  const state = navigationWithList(['first', 'last']);
+  const handlers = state.handlers();
+  try {
+    state.context.messages.setFocused('last');
+    state.context.messages.setReplyingToMessageId('last');
+    expect(handlers?.cancel()).toBe(true);
+    expect(state.context.messages.replyingToMessageId()).toBeUndefined();
+
+    expect(handlers?.cancel()).toBe(false);
+    expect(state.context.messages.focusedId()).toBeUndefined();
+    expect(state.context.messages.expandedBodyIds.last).toBeUndefined();
+  } finally {
+    state.dispose();
+  }
+});
+
+it('Escape after keyboard navigation leaves in the same press', () => {
+  const state = navigationWithList(['first', 'middle', 'last']);
+  const handlers = state.handlers();
+  try {
+    state.context.messages.setFocused('first');
+    expect(handlers?.navigateToNextMessage()).toBe(true);
+    expect(state.context.messages.focusedId()).toBe('middle');
+
+    expect(handlers?.cancel()).toBe(false);
+    expect(state.context.messages.focusedId()).toBeUndefined();
+  } finally {
+    state.dispose();
+  }
+});
+
 it('shift+o opens every message, including the collapsed middle run', () => {
   const ids = ['a', 'b', 'c', 'd', 'e'];
   const state = navigationWithList(ids);
