@@ -33,7 +33,14 @@ export async function refreshProjectQueries(
   ]);
 }
 
-/** Fields update locally; permissions and membership still need authorized reads. */
+/**
+ * Reads a mounted project again whenever the activity registry revalidates:
+ * an activity push, the Soup websocket reconnecting, its first connection
+ * going live when the read did not wait for it (`followsLiveUpdates`), or one
+ * of the app's own project writes (`refreshProjectQueries`). Nothing reads it
+ * on a timer or on focus, so a share, unshare or membership change reaches an
+ * open project only with one of those or a reopen.
+ */
 export function registerProjectRevalidation(
   client: () => Client,
   enabled: () => boolean,
@@ -42,19 +49,10 @@ export function registerProjectRevalidation(
 ) {
   let disposed = false;
   const refresh = createTrailingRefetch(() => !disposed && enabled(), refetch);
-  const backgroundRefresh = () => {
-    void refresh().catch((error) => {
-      console.warn('Project query revalidation failed', error);
-    });
-  };
-  const timer = setInterval(backgroundRefresh, 30_000);
-  window.addEventListener('focus', backgroundRefresh);
   onCleanup(
     registerActivityRevalidator({ client, refresh, followsLiveUpdates })
   );
   onCleanup(() => {
     disposed = true;
-    clearInterval(timer);
-    window.removeEventListener('focus', backgroundRefresh);
   });
 }

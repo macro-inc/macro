@@ -2,11 +2,11 @@
 .page-outline-content { min-width: 0; }
 .page-outline { display: none; }
 @media (min-width: 1440px) {
-  .page-outline-layout { box-sizing: border-box; padding-right: calc(256px / var(--site-scale, 1)); }
-  .page-outline { display: block; position: fixed; top: 156px; right: 0; width: 256px; box-sizing: border-box; padding: 0 32px 24px; max-height: calc(100dvh - 196px); overflow-y: auto; scrollbar-width: none; zoom: calc(1 / var(--site-scale, 1)); color: color-mix(in srgb, var(--color-ink, var(--c0)) 60%, transparent); font: 370 14px/20px 'Inter Variable', Inter, sans-serif; }
+  .page-outline-layout { box-sizing: border-box; padding-right: calc(241px / var(--site-scale, 1)); }
+  .page-outline { display: block; position: fixed; top: 156px; right: 0; width: 241px; box-sizing: border-box; padding: 0 32px 24px; max-height: calc(100dvh - 196px); overflow-y: auto; scrollbar-width: none; zoom: calc(1 / var(--site-scale, 1)); color: color-mix(in srgb, var(--color-ink, var(--c0)) 60%, transparent); font: 370 14px/20px 'Inter Variable', Inter, sans-serif; }
   #app-scroll-root:has(.page-outline-layout) .site-header { right: 32px; }
-  #app-scroll-root:has(.page-outline-layout) .site-header-actions { flex-direction: column-reverse; align-items: stretch; gap: 10px; width: 192px; }
-  #app-scroll-root:has(.page-outline-layout) .site-header a.site-nav-start { width: 192px; }
+  #app-scroll-root:has(.page-outline-layout) .site-header-actions { flex-direction: column-reverse; align-items: stretch; gap: 10px; width: 177px; }
+  #app-scroll-root:has(.page-outline-layout) .site-header a.site-nav-start { width: 177px; }
   .page-outline::-webkit-scrollbar { display: none; }
   .page-outline p { margin: 0 0 8px; font-size: 12px; line-height: 1.6; font-weight: 370; color: color-mix(in srgb, var(--color-ink, var(--c0)) 70%, transparent); }
   .page-outline-layout .page-outline a { display: block; padding: 6px 12px 6px 16px; border-left: 1px solid color-mix(in srgb, currentColor 14%, transparent); color: color-mix(in srgb, var(--color-ink, var(--c0)) 60%, transparent); text-decoration: none; }

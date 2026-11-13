@@ -361,7 +361,7 @@ export function NorthwindSession(props: {
           <Switch>
             <Match when={item() === 'northwind-call'}>
               <ViewShell.TopBar>
-                <span class="text-sm font-semibold">
+                <span class="text-sm font-medium">
                   Northwind rollout decision
                 </span>
               </ViewShell.TopBar>

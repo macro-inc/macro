@@ -13,7 +13,7 @@
 .mail-view-inboxes { gap: 0 !important; padding: 0 8px; }
 .mail-view-inboxes img, .mail-view-inboxes i { width: 18px; height: 18px; border-radius: 50%; }
 .mail-view-inboxes img { object-fit: cover; }
-.mail-view-inboxes i { display: grid; place-items: center; margin-left: -5px; background: var(--color-ink-muted); color: var(--color-surface, #000); font-size: 10px; font-style: normal; font-weight: 600; }
+.mail-view-inboxes i { display: grid; place-items: center; margin-left: -5px; background: var(--color-ink-muted); color: var(--color-surface, #000); font-size: 10px; font-style: normal; font-weight: 500; }
 
 /* A narrow inbox keeps the tabs and search. */
 @container mail-list (max-width: 540px) {

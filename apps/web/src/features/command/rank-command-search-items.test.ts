@@ -216,6 +216,62 @@ describe('command menu search ranking', () => {
     );
   });
 
+  it.each([
+    {
+      query: 'settings',
+      label: 'Go to Settings',
+      names: [
+        'Settings: Edit theme button does nothing',
+        'Settings page crashes',
+        'Make Settings into Modal',
+      ],
+    },
+    {
+      query: 'email',
+      label: 'Go to Email',
+      names: ['Email digest', 'Email campaigns'],
+    },
+    { query: 'split', label: 'Create new split', names: ['Split screen'] },
+  ])(
+    'ranks an unused command named $query above recent names that start with it',
+    ({ query, label, names }) => {
+      const items = [
+        ...names.map((name, index) => note(`note-${index}`, name)),
+        command('command', label, 0),
+      ];
+      expect(ids(items, query)[0]).toBe('command');
+      expect(ids([...items].reverse(), query)[0]).toBe('command');
+    }
+  );
+
+  it('keeps an old exact entity name ahead of a recently used command named after it', () => {
+    const items = [
+      note('starts', 'Settings page crashes'),
+      command('tab', 'Go to settings tab 1', 0),
+      command('go', 'Go to Settings', NOW),
+      note('exact', 'Settings', NOW - 60 * DAY),
+    ];
+    expect(ids(items, 'settings')).toEqual(['exact', 'go', 'starts', 'tab']);
+  });
+
+  it('orders commands named after the query by where the match falls in their label', () => {
+    const items = [
+      command('create', 'Create event from email', 0),
+      command('go', 'Go to Email', 0),
+      command('open', 'Open Email', 0),
+    ];
+    expect(ids(items, 'email')).toEqual(['open', 'go', 'create']);
+  });
+
+  it('ranks a command whose word starts with a partial query among names starting with it', () => {
+    const items = [
+      note('contains', 'Make Settings into Modal'),
+      command('go', 'Go to Settings', 0),
+      note('starts', 'Settings page crashes', NOW - DAY),
+    ];
+    expect(ids(items, 'sett')).toEqual(['starts', 'go', 'contains']);
+  });
+
   it('ranks an exact project name above a recently viewed channel that starts with it', () => {
     const items = [
       channel('channel', 'Launch plan rollout'),

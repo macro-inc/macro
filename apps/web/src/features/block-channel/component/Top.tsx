@@ -71,6 +71,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           {(isCollapsed) => (
             <Tabs
               aria-label="Channel sections"
+              size="sm"
               options={
                 isCollapsed()
                   ? withChannelTabIcons(props.tabs ?? [])

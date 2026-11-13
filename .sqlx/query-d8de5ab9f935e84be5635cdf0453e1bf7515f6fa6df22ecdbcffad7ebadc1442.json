@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n        source_id,\n        source_type as \"source_type:EntityAccessSourceType\",\n        access_level as \"access_level:AccessLevel\"\n        FROM entity_access\n        WHERE entity_id = ANY($1) AND entity_type = 'project'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_type:EntityAccessSourceType",
+        "type_info": {
+          "Custom": {
+            "name": "entity_access_source_type",
+            "kind": {
+              "Enum": [
+                "channel",
+                "team",
+                "user",
+                "bot"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "access_level:AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d8de5ab9f935e84be5635cdf0453e1bf7515f6fa6df22ecdbcffad7ebadc1442"
+}

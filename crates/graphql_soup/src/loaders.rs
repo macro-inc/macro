@@ -56,6 +56,7 @@ use soup::domain::{
     models::{SoupProjectionHydration, SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
+use tracing::Instrument;
 use uuid::Uuid;
 
 /// Maximum number of entity keys folded into one user-scoped Soup request.
@@ -434,7 +435,10 @@ impl SoupItemDataLoader {
         S: SoupService,
         R: SoupEmailThreadReader,
     {
-        let loader = Arc::new(DataLoader::new(loader, tokio::spawn).max_batch_size(MAX_BATCH_SIZE));
+        let loader = Arc::new(
+            DataLoader::new(loader, |batch| tokio::spawn(batch.in_current_span()))
+                .max_batch_size(MAX_BATCH_SIZE),
+        );
         // A WebSocket may receive repeated updates for the same entity. Only
         // coalesce concurrent loads; never retain an item across updates.
         loader.enable_all_cache(false);

@@ -16,6 +16,7 @@ function toolColumn(column: ResultColumn): AnswerColumn {
     kind: column.kind,
     source: {
       markdown: false,
+      link: false,
       options: options.map((option) => ({ ...option, color: null })),
       tag: false,
       target,

@@ -304,9 +304,9 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
-  // Select up - 'shift+arrowup', 'shift+k'
+  // Select up - 'shift+arrowup'; Shift+K moves to the split above.
   registerHotkey({
-    hotkey: ['shift+arrowup', 'shift+k'],
+    hotkey: ['shift+arrowup'],
     scopeId,
     description: 'Select up',
     hotkeyToken: TOKENS.entity.select.start,
@@ -316,9 +316,9 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
-  // Select down - 'shift+arrowdown', 'shift+j'
+  // Select down - 'shift+arrowdown'; Shift+J moves to the split below.
   registerHotkey({
-    hotkey: ['shift+arrowdown', 'shift+j'],
+    hotkey: ['shift+arrowdown'],
     scopeId,
     description: 'Select down',
     hotkeyToken: TOKENS.entity.select.end,

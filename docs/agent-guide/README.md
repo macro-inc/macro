@@ -66,9 +66,13 @@ Standalone marketing dev/preview servers hand `/app/*` navigation to
 `VITE_APP_BASE_URL` (`https://macro.com` by default); verify that signup leaves the local website instead of
 showing an empty header. Use an `apps/web` preview for local signup testing.
 
-For the homepage, verify the centered hero copy and signup action sit above the
-Home demo video on desktop and mobile. Play the video and check that native
-controls appear. Below it, check the deployed site's centered slab headings,
+For the homepage, verify one opening section on desktop and mobile: the Macro
+logo surrounded by the 12 decorative app logos from the production welcome
+constellation, the unified-workspace H1 and supporting H2, signup action, and
+backing/security badges. Check visible keyboard focus on signup, sidebar, and
+Learn about links; the decorative constellation is hidden from assistive technology.
+Scroll down and back with regular and reduced motion: there is no separate GitHub
+section, and the hero stays readable. Below it, check the centered slab headings,
 small Inter descriptions, and side rules across all five product chapters.
 The email illustration must reveal its draft and show the completed result
 with reduced motion; it sends no email. Check the page has no horizontal overflow
@@ -79,7 +83,7 @@ and Home navigation preserves the sidebar.
 ## Public website documentation
 
 For the public website preview, open `/docs` to read the integrated guides. Navigate Home → Chat → Home and use browser Back/Forward: the desktop sidebar must stay mounted and visible without a document reload.
-Desktop navigation is always open with a search icon at the left of the pinned search field. Command/Control+K or Command/Control+F focuses search (and opens the drawer on phones). Search matches titles and content across feature pages, setup guides, comparisons, and customer stories, with at most eight results. Check that changelogs, Tool Reference, engineering posts, legal pages, and company pages are excluded, and each feature appears only once. Check a typo such as `calednar`, a blog such as `Linear`, and a guide such as `MCP Setup`; results show an icon, title, and location. Use arrow keys and Enter to open a result. The clear button or Escape clears the query; a second Escape closes the mobile drawer and restores focus. Use Top features and More features to open a product page. The current guide is highlighted. The desktop sidebar stays at a fixed 217px width with no collapse or resize controls. On phones, use the top-left menu button and close the full-screen drawer before reading. Escape closes the mobile drawer. Content is authored in `apps/docs`; rendering and navigation belong to `apps/marketing/src/features/documentation`.
+Desktop navigation is always open with a search icon at the left of the pinned search field. Command/Control+K or Command/Control+F focuses search (and opens the drawer on phones). Search matches titles and content across feature pages, setup guides, comparisons, and customer stories, with at most eight results. Check that changelogs, Tool Reference, engineering posts, legal pages, and company pages are excluded, and each feature appears only once. Check a typo such as `calednar`, a blog such as `Linear`, and a guide such as `MCP Setup`; results show an icon, title, and location. Use arrow keys and Enter to open a result. The clear button or Escape clears the query; a second Escape closes the mobile drawer and restores focus. Use Top features and More features to open a product page. The current guide is highlighted. The desktop sidebar stays at a fixed 241px width with no collapse or resize controls. On phones, use the top-left menu button and close the full-screen drawer before reading. Escape closes the mobile drawer. Content is authored in `apps/docs`; rendering and navigation belong to `apps/marketing/src/features/documentation`.
 
 Feature links in the public website sidebar open the visual product overviews.
 Use the labeled documentation sections for standalone reference, or open Setup and reference
