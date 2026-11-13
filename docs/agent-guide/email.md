@@ -724,8 +724,10 @@ On desktop a new email opens inside the Email view at `/app/mail/new`, from
 Email's **New**, the app's New menu, a `mailto:` link, a calendar event's
 guest email, or the agent's send-email card: the composer takes the list's
 place beside the Email sidebar, and the reading pane folds away while it is
-open. Its Back arrow returns to the list. Replies stay in their thread. Touch
-keeps the full-screen composer. Check with the reading pane on and off that
+open. Its Back arrow returns to the list. Replies stay in their thread. On
+touch away from phone width it opens at the same URL in the preview pane
+beside the list, with the phone composer's header actions; narrow panes add
+Back. Phones keep the full-screen composer. Check with the reading pane on and off that
 the sidebar stays usable while composing, that Back and sidebar tabs return
 to the list without the draft in its URL, that reloading keeps the draft, and
 that a second **New** starts an empty composer.
