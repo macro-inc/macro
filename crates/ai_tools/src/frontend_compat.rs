@@ -65,9 +65,9 @@ impl ToolSchemaGenerator for LegacyConversationSchemas {
 
 /// The code tools' frontend schemas. Chat runs the user-scoped `ExecuteCode`,
 /// whose arguments and receipt differ from an agent session's under the same
-/// tool name, so the frontend's `ExecuteCode` tool types accept either. The
-/// session's own `ExecuteCode` and `ExecutionReceipt` definitions stay as they
-/// are, since agent-session views parse receipts with them.
+/// tool name, so the frontend's `ExecuteCode` tool types are new unions of the
+/// two. The shared `ExecuteCode` and `ExecutionReceipt` definitions keep the
+/// session shapes, so nothing else that references them is widened.
 pub(super) struct CodeModeSchemas;
 
 impl ToolSchemaGenerator for CodeModeSchemas {

@@ -1158,7 +1158,7 @@ fn frontend_execute_code_types_accept_chat_and_session_calls() {
             "{side}: {definition}"
         );
     }
-    // Agent-session views parse receipts with the session's own definitions.
+    // The shared definitions keep the session shapes.
     for name in ["ExecuteCode", "ExecutionReceipt"] {
         assert!(schemas["$defs"][name]["anyOf"].is_null(), "{name}");
     }

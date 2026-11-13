@@ -11,7 +11,7 @@ Saved execution retries must match both actor selection and original
 turn, so a later requester cannot inherit an earlier execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
-MCP, SDK documentation selection, saved execution records, and durable review
+MCP and the in-app chat, SDK documentation selection, saved execution records, and durable review
 stacks. Process isolation belongs to
 `crates/code_execution`; session presentation belongs to `crates/agent_session`.
 
@@ -86,7 +86,7 @@ stacks. Process isolation belongs to
   The one hand-written symbol is `AboutMacro` (`src/domain/about_macro.md`),
   the about-page `SelfKnowledge` also returns.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
-  public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+  public MCP and the in-app chat. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
 

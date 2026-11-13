@@ -1,4 +1,5 @@
-//! Authenticated MCP code execution, optionally attributed to a managed session.
+//! User-scoped code execution for the public MCP and the in-app chat,
+//! optionally attributed to a managed session.
 use super::{
     CodeModeError, ExecutionActivity, ExecutionStatus,
     service::{Reviews, settle, validate_request},
