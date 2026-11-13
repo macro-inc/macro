@@ -8,6 +8,9 @@ members = [
   "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
+  "crates/agent_credentials",
+  "crates/agent_git",
+  "crates/team_agents",
   "crates/routines",
   "crates/routine_program",
   "crates/shown_text",
@@ -327,6 +330,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }

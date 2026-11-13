@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE in_progress_user_link SET email_provider = 'GMAIL' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "932581c88c746c4d4bb7bd6339707360b5191ff997a44f6ac8c934f909e595f1"
+}

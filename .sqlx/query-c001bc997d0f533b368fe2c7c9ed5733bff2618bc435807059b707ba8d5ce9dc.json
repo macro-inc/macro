@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at) VALUES ($1, 'restart_due', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c001bc997d0f533b368fe2c7c9ed5733bff2618bc435807059b707ba8d5ce9dc"
+}
