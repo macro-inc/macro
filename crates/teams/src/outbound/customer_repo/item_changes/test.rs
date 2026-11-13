@@ -1,5 +1,5 @@
 use super::*;
-use crate::outbound::customer_repo::test::{computer, mount, repo, subscription};
+use crate::outbound::customer_repo::test::{computer, mount, repo, subscription, subscription_update};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde_json::json;
 use wiremock::{
@@ -301,7 +301,8 @@ async fn settling_an_unsent_change_fences_a_later_send(pool: sqlx::PgPool) {
 
 /// Review 2, NS3: a change sent moments ago may still be in flight at
 /// Stripe even though its sender gave up the guard (a dropped request), so it
-/// is not abandoned yet: the next mutation waits instead of settling it.
+/// is not abandoned: its own key is sent again, and Stripe answering that
+/// the first request is still running makes the next mutation wait.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_change_still_in_flight_is_not_settled(pool: sqlx::PgPool) {
     let server = MockServer::start().await;
@@ -312,6 +313,16 @@ async fn a_change_still_in_flight_is_not_settled(pool: sqlx::PgPool) {
     .execute(&pool)
     .await
     .unwrap();
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    Mock::given(method("POST"))
+        .and(path("/v1/subscriptions/sub_team"))
+        .respond_with(ResponseTemplate::new(409).set_body_json(json!({"error": {
+            "type": "idempotency_error",
+            "message": "There is currently another in-progress request using this Stripe-Idempotency-Key",
+        }})))
+        .expect(1)
+        .mount(&server)
+        .await;
     let repo = repo(&server, pool.clone());
 
     let result = repo
@@ -329,5 +340,65 @@ async fn a_change_still_in_flight_is_not_settled(pool: sqlx::PgPool) {
     );
     let outcome = sqlx::query_scalar!(r#"SELECT outcome::text AS "outcome!" FROM subscription_item_change WHERE idempotency_key = 'computer-add:in-flight'"#).fetch_one(&pool).await.unwrap();
     assert_eq!(outcome, "pending");
-    assert!(server.received_requests().await.unwrap().is_empty());
+    let posts = server.received_requests().await.unwrap();
+    let post = posts
+        .iter()
+        .find(|request| request.method.as_str() == "POST")
+        .unwrap();
+    assert_eq!(
+        post.headers.get("Idempotency-Key").unwrap(),
+        "computer-add:in-flight"
+    );
+}
+
+/// The incident: a removal's sender died moments after opening its change,
+/// and a purchase right after it was refused for five minutes. Now the
+/// purchase finishes the removal under the removal's own key (Stripe runs a
+/// key at most once) and goes ahead at once.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_whose_sender_died_is_finished_under_its_own_key(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    let removal = json!({"items": [{"id": "si_pro", "deleted": true}], "metadata": {"macro_item_change": "computer-remove:2:0"}});
+    sqlx::query!(
+        "INSERT INTO subscription_item_change (idempotency_key, subscription_id, path, request) VALUES ('computer-remove:2:0', 'sub_team', '/subscriptions/sub_team', $1)",
+        removal,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // One read checks the dead change's marker, one is the purchase's own.
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    let repo = repo(&server, pool.clone());
+
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(1)],
+        ItemProration::InvoiceNow,
+        "computer-add:next",
+    )
+    .await
+    .unwrap();
+
+    let outcomes: Vec<(String, String)> = sqlx::query!(r#"SELECT idempotency_key, outcome::text AS "outcome!" FROM subscription_item_change ORDER BY created_at, idempotency_key"#)
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.idempotency_key, row.outcome))
+        .collect();
+    assert_eq!(
+        outcomes,
+        vec![
+            ("computer-remove:2:0".to_owned(), "succeeded".to_owned()),
+            ("computer-add:next".to_owned(), "succeeded".to_owned()),
+        ]
+    );
+    let requests = server.received_requests().await.unwrap();
+    let keys: Vec<&str> = subscription_update(&requests)
+        .into_iter()
+        .map(|request| request.headers.get("Idempotency-Key").unwrap().to_str().unwrap())
+        .collect();
+    assert_eq!(keys, vec!["computer-remove:2:0", "computer-add:next"]);
 }
