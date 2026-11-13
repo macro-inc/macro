@@ -1,0 +1,30 @@
+services/gitai_service/Cargo.toml
+  s_6dd028f21c9ecc::t_41fe27036dc7b8 27
+crates/gitai/src/inbound/http/read/test.rs
+  s_6dd028f21c9ecc::t_468b1b0c64a0ff 1-5,7-144
+  s_6dd028f21c9ecc::t_41fe27036dc7b8 6
+crates/gitai/src/inbound/http/read.rs
+  s_6dd028f21c9ecc::t_8d82d39156957e 1-6,8-174
+  s_6dd028f21c9ecc::t_135c2a87470118 7
+services/gitai_service/src/main.rs
+  s_6dd028f21c9ecc::t_41fe27036dc7b8 8-9,11-13,17
+  s_6dd028f21c9ecc::t_0d0bfbc40aa6d7 42-44,46,49-53,58-72
+crates/gitai/src/inbound/http.rs
+  s_6dd028f21c9ecc::t_135c2a87470118 16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7299091aeca7d1d8905c9b501cbdf10245eceb4e",
+  "prompts": {},
+  "sessions": {
+    "s_6dd028f21c9ecc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12ca901f-69ea-43d0-ba06-391ff7d83e32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
