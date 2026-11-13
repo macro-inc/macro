@@ -54,6 +54,28 @@ fn mentions_name_people_seen_in_the_group_else_their_number() {
 }
 
 #[test]
+fn a_mention_by_a_bare_id_names_the_person() {
+    let mut people = People::new(|_| None, UNKNOWN_PERSON);
+    people.learn("U0PARTNER1", person("Ben Partner", None));
+
+    let mentions = mentions_view(&["U0PARTNER1".to_owned(), "U0UNKNOWN1".to_owned()], &people);
+
+    assert_eq!(
+        mentions,
+        vec![
+            ExternalChatMention {
+                token: "U0PARTNER1".to_owned(),
+                person: person("Ben Partner", None),
+            },
+            ExternalChatMention {
+                token: "U0UNKNOWN1".to_owned(),
+                person: person(UNKNOWN_PERSON, None),
+            },
+        ]
+    );
+}
+
+#[test]
 fn a_poll_tallies_current_votes_per_option_and_marks_the_viewers() {
     let poll = RichContent::Poll(Poll {
         question: "Lunch?".to_owned(),

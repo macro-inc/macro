@@ -85,12 +85,13 @@ pub struct StoredVote {
 pub fn mentions_view(mentions: &[String], people: &People) -> Vec<ExternalChatMention> {
     mentions
         .iter()
-        .filter_map(|jid| {
-            let (token, _) = jid.split_once('@')?;
-            Some(ExternalChatMention {
-                token: token.to_owned(),
-                person: people.get(jid),
-            })
+        .map(|id| ExternalChatMention {
+            // WhatsApp ids are `<token>@<server>`; Slack's are the token.
+            token: id
+                .split_once('@')
+                .map_or(id.as_str(), |(token, _)| token)
+                .to_owned(),
+            person: people.get(id),
         })
         .collect()
 }

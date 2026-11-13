@@ -210,3 +210,30 @@ fn housekeeping_messages_become_system_lines_from_their_fields() {
     .unwrap();
     assert_eq!(inbound_message(&archived).system, None);
 }
+
+#[test]
+fn a_slackbot_notice_is_from_slackbot_and_keeps_its_mentions() {
+    let message: Message = serde_json::from_value(serde_json::json!({
+        "type": "message",
+        "subtype": "bot_message",
+        "user": "USLACKBOT",
+        "text": "*<@U0PARTNER1>* from *Partner* was added to this channel by <@U0OWNER12>.",
+        "ts": "1700000100.000200"
+    }))
+    .unwrap();
+
+    let stored = inbound_message(&message);
+
+    assert_eq!(
+        stored.sender,
+        Sender::User {
+            slack_user_id: "USLACKBOT".to_owned(),
+            team_id: None,
+            display_name: Some("Slackbot".to_owned()),
+        }
+    );
+    assert_eq!(
+        stored.mentions,
+        vec!["U0PARTNER1".to_owned(), "U0OWNER12".to_owned()]
+    );
+}

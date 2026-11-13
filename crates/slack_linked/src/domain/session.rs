@@ -495,6 +495,9 @@ pub fn changes_catalogue(event: &SlackEvent) -> bool {
     )
 }
 
+/// The user id Slackbot posts as.
+const SLACKBOT_USER_ID: &str = "USLACKBOT";
+
 /// One Slack message as Macro stores it.
 pub fn inbound_message(message: &Message) -> InboundMessage {
     let sender = match (&message.user, &message.bot_id) {
@@ -515,7 +518,9 @@ pub fn inbound_message(message: &Message) -> InboundMessage {
                         profile.display_name.clone()
                     }
                 })
-                .filter(|name| !name.is_empty()),
+                .filter(|name| !name.is_empty())
+                // Slackbot posts as a user Slack's directory doesn't list.
+                .or_else(|| (user.as_str() == SLACKBOT_USER_ID).then(|| "Slackbot".to_owned())),
         },
         (None, Some(bot)) => Sender::Bot {
             bot_id: bot.to_string(),
