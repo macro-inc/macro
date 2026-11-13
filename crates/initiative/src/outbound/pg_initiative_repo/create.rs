@@ -1,7 +1,8 @@
 use entity_access_db_utils::{
-    AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows,
+    AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows, entity_users,
     insert_entity_access_row,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
@@ -152,13 +153,23 @@ pub(super) async fn update(
     require_detail(pool, args.id).await
 }
 
-pub(super) async fn delete(pool: &PgPool, id: InitiativeId) -> Result<(), InitiativeError> {
+pub(super) async fn delete(
+    pool: &PgPool,
+    id: InitiativeId,
+) -> Result<Vec<MacroUserIdStr<'static>>, InitiativeError> {
     let mut tx = pool
         .begin()
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
     let uuid = id.as_uuid();
+
+    // Snapshot the audience before its access rows go: the purge event is the
+    // initiative's only delete signal and must still reach these users.
+    let audience = entity_users(tx.as_mut(), &uuid, EntityType::Initiative)
+        .await
+        .map_err(AdapterError::Sqlx)
+        .map_err(map_sqlx)?;
 
     delete_entity_access_rows(&mut tx, &uuid, EntityType::Initiative)
         .await
@@ -196,7 +207,7 @@ pub(super) async fn delete(pool: &PgPool, id: InitiativeId) -> Result<(), Initia
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
 
-    Ok(())
+    Ok(audience)
 }
 
 /// Returns the initiative's share permission id.

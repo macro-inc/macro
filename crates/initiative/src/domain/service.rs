@@ -193,17 +193,17 @@ where
         )
         .await
         {
-            if self
-                .repo
-                .delete(id)
-                .await
-                .inspect_err(|cleanup| {
-                    tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
-                })
-                .is_ok()
-            {
-                self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
-                    .await;
+            if let Ok(audience_user_ids) = self.repo.delete(id).await.inspect_err(|cleanup| {
+                tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
+            }) {
+                self.publish(
+                    id,
+                    InitiativeTopicEvent::Purged {
+                        initiative_id: id,
+                        audience_user_ids,
+                    },
+                )
+                .await;
                 self.retire_description(id).await;
             }
             return Err(error);
@@ -543,9 +543,15 @@ where
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        self.repo.delete(id).await.map_err(Into::into)?;
-        self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
-            .await;
+        let audience_user_ids = self.repo.delete(id).await.map_err(Into::into)?;
+        self.publish(
+            id,
+            InitiativeTopicEvent::Purged {
+                initiative_id: id,
+                audience_user_ids,
+            },
+        )
+        .await;
         // Cleanup follows an authorized deletion and is not a fresh user edit.
         // Unattributed property cleanup cannot recreate history after the purge event.
         let cleanup_receipt = EntityAccessReceipt::try_new(

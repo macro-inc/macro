@@ -822,6 +822,45 @@ async fn delete_leaves_no_initiative_rows(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_returns_the_explicit_accessors_read_before_their_rows_go(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = seed_owner_with_team(&pool).await?;
+    for id in [MEMBER, TEAMMATE, CHANNEL_USER, STRANGER] {
+        insert_user(&pool, id).await?;
+    }
+    add_team_user(&pool, team_id, TEAMMATE, "member").await?;
+    let channel_id = Uuid::now_v7();
+    insert_channel(&pool, channel_id, OWNER, CHANNEL_USER).await?;
+
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(OWNER, "To delete", &[MEMBER]),
+            share_link(LinkShare::Public),
+            TeamShareCreation::Initiative,
+        )
+        .await?;
+    repo.update(UpdateInitiativeRepoArgs {
+        share_permission: Some(add_channel(channel_id)),
+        ..update_args(created.id)
+    })
+    .await?;
+
+    let audience = repo.delete(created.id).await?;
+
+    // Direct grants, the granted team's members and the granted channel's
+    // participants, sorted; a link viewer such as STRANGER is never listed.
+    let mut expected = vec![OWNER, MEMBER, TEAMMATE, CHANNEL_USER];
+    expected.sort_unstable();
+    assert_eq!(
+        audience.iter().map(|id| id.as_ref()).collect::<Vec<_>>(),
+        expected
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn appearance_survives_identity_reads_without_touching_timestamps(
     pool: PgPool,
 ) -> anyhow::Result<()> {

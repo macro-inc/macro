@@ -397,6 +397,7 @@ fn initiative_purge_cleanup_cannot_replace_the_deletion_in_either_event_order() 
     let id = Uuid::now_v7();
     let purged = InitiativeTopicEvent::Purged {
         initiative_id: initiative::domain::models::InitiativeId::from_uuid(id),
+        audience_user_ids: Vec::new(),
     };
     let cleanup = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
         entity_id: id.to_string(),
@@ -1026,7 +1027,10 @@ fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
         vec![update(EntityType::Initiative, id)]
     );
     assert_eq!(
-        patches_from_initiative_event(&InitiativeTopicEvent::Purged { initiative_id: id }),
+        patches_from_initiative_event(&InitiativeTopicEvent::Purged {
+            initiative_id: id,
+            audience_user_ids: Vec::new(),
+        }),
         vec![delete(EntityType::Initiative, id)]
     );
 }

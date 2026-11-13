@@ -1,5 +1,8 @@
 //! Initiative lifecycle facts carried by the shared event broker.
 
+#[cfg(test)]
+mod test;
+
 use std::{future::Future, pin::Pin};
 
 use activity::{Actor, Attribution};
@@ -63,6 +66,13 @@ pub enum InitiativeTopicEvent {
     Purged {
         /// Deleted initiative.
         initiative_id: InitiativeId,
+        /// Routing: users with explicit access (direct, channel and team
+        /// grants; no link viewers) just before the delete. Access rows are
+        /// gone by publish time, so this snapshot is the only way to reach
+        /// them. Not part of the public payload; events published before it
+        /// existed decode as empty.
+        #[serde(default)]
+        audience_user_ids: Vec<MacroUserIdStr<'static>>,
     },
 }
 
