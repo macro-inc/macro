@@ -8,7 +8,7 @@ mod team_roster;
 
 use crate::domain::{
     models::{
-        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AgentStoppedReason,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AgentMemory, AgentStoppedReason,
         AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner,
         BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
         CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessFacts,
@@ -1189,6 +1189,62 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to read harness access")?;
         Ok(may_use)
+    }
+
+    async fn get_agent_memory(&self, bot_id: BotId) -> Result<Option<AgentMemory>, Self::Err> {
+        let memory = sqlx::query_as!(
+            AgentMemory,
+            r#"
+            SELECT content, revision, updated_at AS "updated_at?"
+            FROM agent_memory
+            WHERE bot_id = $1
+            "#,
+            bot_id.as_uuid()
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(memory)
+    }
+
+    async fn save_agent_memory(
+        &self,
+        bot_id: BotId,
+        expected_revision: i64,
+        content: &str,
+    ) -> Result<Option<AgentMemory>, Self::Err> {
+        // The first write inserts, every later one compare-and-swaps; a
+        // writer that lost the race to either matches no row.
+        let memory = if expected_revision == 0 {
+            sqlx::query_as!(
+                AgentMemory,
+                r#"
+                INSERT INTO agent_memory (bot_id, content, revision)
+                VALUES ($1, $2, 1)
+                ON CONFLICT (bot_id) DO NOTHING
+                RETURNING content, revision, updated_at AS "updated_at?"
+                "#,
+                bot_id.as_uuid(),
+                content
+            )
+            .fetch_optional(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as!(
+                AgentMemory,
+                r#"
+                UPDATE agent_memory
+                SET content = $2, revision = revision + 1, updated_at = now()
+                WHERE bot_id = $1 AND revision = $3
+                RETURNING content, revision, updated_at AS "updated_at?"
+                "#,
+                bot_id.as_uuid(),
+                content,
+                expected_revision
+            )
+            .fetch_optional(&self.pool)
+            .await?
+        };
+        Ok(memory)
     }
 
     async fn get_harness_facts(

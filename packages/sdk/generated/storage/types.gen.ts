@@ -459,6 +459,25 @@ export type AgentMcpServers = {
 };
 
 /**
+ * What an agent remembers across its sessions: one markdown document shared
+ * by every session it runs, whoever starts them.
+ */
+export type AgentMemory = {
+    /**
+     * The remembered markdown; empty before anything is remembered.
+     */
+    content: string;
+    /**
+     * The revision to name in the next write; 0 before the first.
+     */
+    revision: number;
+    /**
+     * When the memory last changed; absent before the first write.
+     */
+    updated_at?: string | null;
+};
+
+/**
  * Last synchronized state of a session's linked GitHub pull request.
  */
 export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
@@ -22069,6 +22088,21 @@ export type UnlockedBooking = {
 };
 
 /**
+ * Request to replace an agent's memory, whole.
+ */
+export type UpdateAgentMemoryRequest = {
+    /**
+     * The whole new memory, at most [`AGENT_MEMORY_MAX_BYTES`] bytes.
+     */
+    content: string;
+    /**
+     * The revision the edit was made against. A write against any other
+     * revision changes nothing and fails with a conflict.
+     */
+    revision: number;
+};
+
+/**
  * Request to replace the editable configuration of a persisted AI agent.
  */
 export type UpdateAgentRequest = {
@@ -23712,6 +23746,61 @@ export type UpdateAgentResponses = {
 };
 
 export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
+
+export type GetAgentMemoryData = {
+    body?: never;
+    path: {
+        /**
+         * Agent bot ID
+         */
+        agent_id: BotId;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/memory';
+};
+
+export type GetAgentMemoryErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetAgentMemoryError = GetAgentMemoryErrors[keyof GetAgentMemoryErrors];
+
+export type GetAgentMemoryResponses = {
+    200: AgentMemory;
+};
+
+export type GetAgentMemoryResponse = GetAgentMemoryResponses[keyof GetAgentMemoryResponses];
+
+export type UpdateAgentMemoryData = {
+    body: UpdateAgentMemoryRequest;
+    path: {
+        /**
+         * Agent bot ID
+         */
+        agent_id: BotId;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/memory';
+};
+
+export type UpdateAgentMemoryErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateAgentMemoryError = UpdateAgentMemoryErrors[keyof UpdateAgentMemoryErrors];
+
+export type UpdateAgentMemoryResponses = {
+    200: AgentMemory;
+};
+
+export type UpdateAgentMemoryResponse = UpdateAgentMemoryResponses[keyof UpdateAgentMemoryResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;

@@ -384,6 +384,7 @@ export type { SessionView } from './entities/agent-sessions/view';
 export {
   Agent,
   type AgentApps,
+  type AgentMemory,
   type AgentOptions,
   type AgentPatch,
 } from './entities/agents/agent';

@@ -16,6 +16,7 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
+use bots::inbound::toolset::{AgentMemoryToolContext, OwnAgentMemory, agent_memory_toolset};
 use cognition::domain::Cognition;
 use rmcp::{
     ServerHandler,
@@ -81,6 +82,25 @@ pub(super) fn router<A: AgentSessionRepo + 'static>(
         .layer(middleware::from_fn_with_state(authority, authenticate))
 }
 
+/// MCP definitions of every tool in `tools`, annotated as the toolset declares.
+fn tool_definitions<Context>(tools: &AsyncToolCollection<Context>) -> impl Iterator<Item = Tool> {
+    tools.tools.iter().map(|(name, tool)| {
+        Tool::new(
+            name.clone(),
+            tool.description.clone(),
+            Arc::new(tool.input_schema.clone()),
+        )
+        .with_title(tool.annotations.title)
+        .annotate(
+            ToolAnnotations::with_title(tool.annotations.title)
+                .read_only(tool.annotations.kind.read_only_hint())
+                .destructive(tool.annotations.kind.destructive_hint())
+                .idempotent(tool.annotations.idempotent)
+                .open_world(tool.annotations.open_world),
+        )
+    })
+}
+
 async fn authenticate(session: AuthenticatedSession, mut request: Request, next: Next) -> Response {
     request.extensions_mut().insert(session);
     next.run(request).await
@@ -94,6 +114,8 @@ pub(super) struct InternalTools {
     pub(super) cognition: Option<Arc<dyn Cognition>>,
     pub(super) reviews: Arc<OnceLock<ReviewService>>,
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
+    /// What each persona remembers, read and changed by its own sessions.
+    pub(super) agent_memory: Arc<dyn OwnAgentMemory>,
     /// Macro app origin, for links back to the calling session.
     pub(super) app_url: Arc<str>,
 }
@@ -121,69 +143,26 @@ impl ServerHandler for InternalTools {
     async fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        _: rmcp::service::RequestContext<rmcp::RoleServer>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        let mut definitions: Vec<_> = toolset()
-            .tools
-            .iter()
-            .map(|(name, tool)| {
-                Tool::new(
-                    name.clone(),
-                    tool.description.clone(),
-                    Arc::new(tool.input_schema.clone()),
-                )
-                .with_title(tool.annotations.title)
-                .annotate(
-                    ToolAnnotations::with_title(tool.annotations.title)
-                        .read_only(tool.annotations.kind.read_only_hint())
-                        .destructive(tool.annotations.kind.destructive_hint())
-                        .idempotent(tool.annotations.idempotent)
-                        .open_world(tool.annotations.open_world),
-                )
-            })
-            .collect();
+        let mut definitions: Vec<_> = tool_definitions(&toolset()).collect();
         if self.code_mode.is_some() {
-            definitions.extend(
-                agent_code_mode::inbound::toolset::toolset()
-                    .tools
-                    .iter()
-                    .map(|(name, tool)| {
-                        Tool::new(
-                            name.clone(),
-                            tool.description.clone(),
-                            Arc::new(tool.input_schema.clone()),
-                        )
-                        .with_title(tool.annotations.title)
-                        .annotate(
-                            ToolAnnotations::with_title(tool.annotations.title)
-                                .read_only(tool.annotations.kind.read_only_hint())
-                                .destructive(tool.annotations.kind.destructive_hint())
-                                .idempotent(tool.annotations.idempotent)
-                                .open_world(tool.annotations.open_world),
-                        )
-                    }),
-            );
+            definitions.extend(tool_definitions(
+                &agent_code_mode::inbound::toolset::toolset(),
+            ));
         }
-        definitions.extend(
-            agent_code_mode::inbound::reviews::toolset()
-                .tools
-                .iter()
-                .map(|(name, tool)| {
-                    Tool::new(
-                        name.clone(),
-                        tool.description.clone(),
-                        Arc::new(tool.input_schema.clone()),
-                    )
-                    .with_title(tool.annotations.title)
-                    .annotate(
-                        ToolAnnotations::with_title(tool.annotations.title)
-                            .read_only(tool.annotations.kind.read_only_hint())
-                            .destructive(tool.annotations.kind.destructive_hint())
-                            .idempotent(tool.annotations.idempotent)
-                            .open_world(tool.annotations.open_world),
-                    )
-                }),
-        );
+        definitions.extend(tool_definitions(
+            &agent_code_mode::inbound::reviews::toolset(),
+        ));
+        // Only a persona remembers; a fixed system bot has none to read.
+        let bot = context
+            .extensions
+            .get::<axum::http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+            .map(|AuthenticatedSession(grant)| grant.bot_id);
+        if bot.is_some_and(|bot| !bot_id::is_system_bot(bot)) {
+            definitions.extend(tool_definitions(&agent_memory_toolset()));
+        }
         for tool in &mut definitions {
             if !matches!(
                 tool.name.as_ref(),
@@ -242,6 +221,27 @@ impl ServerHandler for InternalTools {
                 NativeToolVerdict::Run => {}
             }
             request.arguments = cleaned.as_object().cloned();
+        }
+        let memory_tools = agent_memory_toolset();
+        if memory_tools.tools.contains_key(request.name.as_ref()) {
+            // The memory is the session's own agent's, never one the model names.
+            let result = memory_tools
+                .try_tool_call(
+                    AgentMemoryToolContext {
+                        memory: self.agent_memory.clone(),
+                        bot: grant.bot_id,
+                    },
+                    RequestContext::new(acting_user.clone()),
+                    &request.name,
+                    &serde_json::Value::Object(request.arguments.unwrap_or_default()),
+                )
+                .await
+                .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+            let result = match result {
+                Ok(value) => CallToolResult::structured(value),
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+            };
+            return Ok(result.into());
         }
         let review_tools = agent_code_mode::inbound::reviews::toolset();
         if review_tools.tools.contains_key(request.name.as_ref()) {

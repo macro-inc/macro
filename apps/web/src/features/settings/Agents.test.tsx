@@ -56,11 +56,12 @@ vi.mock('./computers/views/agent-computer-entry', () => ({
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {
     markdown: string;
+    label: string;
     disabled?: boolean;
     onChange: (markdown: string) => void;
   }) => (
     <textarea
-      aria-label="Instructions"
+      aria-label={props.label}
       disabled={props.disabled}
       value={props.markdown}
       onInput={(event) => props.onChange(event.currentTarget.value)}
@@ -139,6 +140,23 @@ vi.mock('@queries/agents/agent-api-key', () => ({
   useAgentApiKeyQuery: () => apiKeyMocks.query,
   saveAgentApiKey: apiKeyMocks.save,
   removeAgentApiKey: apiKeyMocks.remove,
+}));
+
+const memoryMocks = vi.hoisted(() => ({
+  query: {
+    isSuccess: true,
+    isError: false,
+    data: { content: '', revision: 0, updated_at: null } as {
+      content: string;
+      revision: number;
+      updated_at: string | null;
+    },
+  },
+  save: vi.fn(),
+}));
+vi.mock('@queries/agents/agent-memory', () => ({
+  useAgentMemoryQuery: () => memoryMocks.query,
+  saveAgentMemory: memoryMocks.save,
 }));
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
@@ -335,6 +353,8 @@ beforeEach(() => {
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
   apiKeyMocks.remove.mockReset();
+  memoryMocks.query.data = { content: '', revision: 0, updated_at: null };
+  memoryMocks.save.mockReset();
   avatarMocks.upload.mockResolvedValue('https://static.example/avatar.png');
   updateSearchParams({ createAgent: undefined });
   setSearchParams.mockClear();
@@ -928,6 +948,135 @@ describe('Agents', () => {
       expect(agentMocks.toastSuccess).toHaveBeenCalledWith('Agent updated');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it("edits an agent's memory against the revision it was loaded at", async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    memoryMocks.query.data = {
+      content: '- The team ships on Thursdays.',
+      revision: 3,
+      updated_at: '2026-11-05T12:00:00Z',
+    };
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const memory = within(dialog).getByLabelText('Memory');
+    expect(memory).toHaveProperty('value', '- The team ships on Thursdays.');
+
+    fireEvent.input(memory, {
+      target: { value: '- The team ships on Fridays.\n' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() => {
+      expect(memoryMocks.save).toHaveBeenCalledWith(
+        'agent-1',
+        3,
+        '- The team ships on Fridays.'
+      );
+    });
+  });
+
+  it('keeps the revision a memory edit started from when the memory reloads meanwhile', async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    memoryMocks.query.data = {
+      content: '- The team ships on Thursdays.',
+      revision: 3,
+      updated_at: '2026-11-05T12:00:00Z',
+    };
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.input(within(dialog).getByLabelText('Memory'), {
+      target: { value: '- The team ships on Fridays.\n' },
+    });
+    memoryMocks.query.data = {
+      content: '- Releases need a changelog.',
+      revision: 4,
+      updated_at: '2026-11-05T12:05:00Z',
+    };
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() => {
+      expect(memoryMocks.save).toHaveBeenCalledWith(
+        'agent-1',
+        3,
+        '- The team ships on Fridays.'
+      );
+    });
+  });
+
+  it('saves no memory when it was not edited', async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() => {
+      expect(agentMocks.update).toHaveBeenCalled();
+    });
+    expect(memoryMocks.save).not.toHaveBeenCalled();
   });
 
   it("opens an agent's editor when asked to from its user card", () => {

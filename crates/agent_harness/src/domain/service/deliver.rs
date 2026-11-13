@@ -2,6 +2,7 @@
 //! channel, compose it with channel context, and prompt the runtime.
 
 use super::*;
+use crate::domain::model::with_persona_memory;
 
 /// How long a session goes without user-visible activity before a runtime's
 /// dial stops restoring it.
@@ -458,7 +459,8 @@ where
     /// still write there. Why the agent was called arrives with the prompt,
     /// read by whatever triggered it; nothing here reads the conversation. The
     /// prompt that opens a session's first turn also carries the session's
-    /// instructions, unless its runtime already reads them as a system prompt.
+    /// instructions, unless its runtime already reads them as a system prompt,
+    /// and what its persona remembers.
     pub(super) async fn compose_action(
         &self,
         session_id: AgentSessionId,
@@ -487,7 +489,19 @@ where
             })
             .and_then(|session| session.instructions.as_deref())
             .filter(|instructions| !instructions.trim().is_empty());
-        let instructions = instructions.into_iter().collect::<Vec<_>>().join("\n\n");
+        // What the persona remembers opens every runtime's first turn, read
+        // now so the session starts from the memory its last one left.
+        let memory = if first_turn {
+            self.personas
+                .memory(session.bot_id)
+                .await
+                .map_err(|error| {
+                    HarnessError::PromptComposition(rootcause::report!(error).into())
+                })?
+        } else {
+            None
+        };
+        let instructions = with_persona_memory(instructions, memory.as_deref()).unwrap_or_default();
         if let Some(origin) = announce {
             self.authorize_prompt_origin(origin, actor).await?;
         }

@@ -21,7 +21,11 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Scope
 
-- Owns: bot CRUD, ownership (user or team), and bot lifecycle events.
+- Owns: bot CRUD, ownership (user or team), bot lifecycle events, and each
+  agent's memory (`agent_memory`): read and replaced against its revision by
+  the agent's managers over HTTP and by its own sessions through
+  `ReadAgentMemory`/`UpdateAgentMemory` (`src/inbound/toolset/agent_memory.rs`,
+  served on the harness's `macro_internal` MCP).
 - Not here: agent sessions, channel message triggers, or trigger detection →
   `crates/agent_session`, `crates/channel_bots`.
 

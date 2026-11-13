@@ -1,11 +1,11 @@
 //! Bot ports.
 
 use super::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
+    Agent, AgentMemory, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
     BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
     CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
-    UpdateAgentRequest,
+    UpdateAgentMemoryRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -107,6 +107,22 @@ pub trait BotRepo: Send + Sync + 'static {
         &self,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
+
+    /// An agent's memory; `None` before it first remembers anything.
+    fn get_agent_memory(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentMemory>, Self::Err>> + Send;
+
+    /// Replace an agent's memory if it is still at `expected_revision` (0 for
+    /// one never written), bumping the revision. `None` when it was not: a
+    /// concurrent write won, and nothing changed.
+    fn save_agent_memory(
+        &self,
+        bot_id: BotId,
+        expected_revision: i64,
+        content: &str,
+    ) -> impl Future<Output = Result<Option<AgentMemory>, Self::Err>> + Send;
 
     /// Check team membership.
     fn user_has_team(
@@ -349,6 +365,36 @@ pub trait BotService: Send + Sync + 'static {
         ids: &[BotId],
     ) -> impl Future<Output = Result<Vec<BotOwnerProfile>, BotError>> + Send;
 
+    /// What a live agent the caller may change remembers.
+    fn agent_memory(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<AgentMemory, BotError>> + Send;
+
+    /// Replace what a live agent the caller may change remembers.
+    fn update_agent_memory(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: UpdateAgentMemoryRequest,
+    ) -> impl Future<Output = Result<AgentMemory, BotError>> + Send;
+
+    /// What a live agent remembers, read by one of its own sessions. The
+    /// caller vouches that the session is the agent's.
+    fn own_memory(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<AgentMemory, BotError>> + Send;
+
+    /// Replace what a live agent remembers, from one of its own sessions. The
+    /// caller vouches that the session is the agent's.
+    fn update_own_memory(
+        &self,
+        bot_id: BotId,
+        req: UpdateAgentMemoryRequest,
+    ) -> impl Future<Output = Result<AgentMemory, BotError>> + Send;
+
     /// Get the authenticated bot's own record.
     fn get_self(&self, bot_id: BotId) -> impl Future<Output = Result<Bot, BotError>> + Send;
 
@@ -497,6 +543,9 @@ pub enum BotError {
     /// The MCP app directory could not answer, so a slug was not stored.
     #[error("{0}")]
     Unavailable(String),
+    /// The write named a revision that is no longer current.
+    #[error("{0}")]
+    Conflict(String),
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

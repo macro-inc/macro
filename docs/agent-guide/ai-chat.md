@@ -796,7 +796,8 @@ the shimmer.
   On your machine · model · channels" subtitle, plus Edit / Delete actions.
   **Add agent**, the setup strips, and Edit replace the list with full pages,
   not dialogs; Back/Cancel returns to the list. Use **Create → Agent** to open a new composer.
-  The agent editor has Profile, Instructions, **Where it runs** (In Macro, In
+  The agent editor has Profile, Instructions, **Memory** (editing an existing
+  agent only; see [agent memory](#agent-memory)), **Where it runs** (In Macro, In
   Cursor, On your machine) and **Who can use it** (Private / Team). The selected
   place opens its Model picker inside its card; On your machine adds a Machine
   picker beside it. In Macro on an Anthropic or OpenAI model also shows an
@@ -1269,6 +1270,26 @@ provider. The key is saved after the agent (`PUT /auth/agents/{id}/api-key`).
 - A key stops counting while the agent no longer fits it (moved to another
   provider's model or another harness); the editor says the saved key isn't
   used, and offers **Remove key** under Where it runs.
+
+### Agent memory
+
+Every custom agent (not Macro, Cursor, Codex, or Macro Coder) has one markdown
+memory shared by all of its sessions, whoever opens them. It is stored per
+agent (`agent_memory`, keyed by bot) with a revision that guards each write.
+
+- Its sessions get two tools on `macro_internal`: `ReadAgentMemory` and
+  `UpdateAgentMemory` (whole replacement against the read revision; a stale
+  revision changes nothing). The memory is always the calling session's own
+  agent's; the model cannot name another. Ask the agent to "remember that…" to
+  exercise it.
+- The memory is read when a session's first prompt is composed and rides in
+  that prompt's hidden context after the agent's instructions, under
+  **Your memory**, for every runtime. Later prompts do not repeat it.
+- The agent editor shows **Memory** (existing agents only) under Instructions.
+  Whoever may edit the agent may change it; it is saved after the agent
+  (`PUT /agents/{id}/memory`) against the revision it was loaded at, so an
+  agent that remembered something meanwhile fails the save with a toast instead
+  of being overwritten. At most 16,000 bytes.
 
 ### Quota manual checks
 

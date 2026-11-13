@@ -5,9 +5,10 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Agent, Bot, BotChannel, BotChannelListCaller, BotId, BotOwnerProfile,
-        BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+        AddChannelBotRequest, Agent, AgentMemory, Bot, BotChannel, BotChannelListCaller, BotId,
+        BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentMemoryRequest,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotService},
 };
@@ -153,6 +154,14 @@ where
         .route(
             "/agents/{agent_id}",
             put(update_agent_handler::<S, Svc, Auth>).patch(patch_agent_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/agents/{agent_id}/memory",
+            get(get_agent_memory_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/agents/{agent_id}/memory",
+            put(update_agent_memory_handler::<S, Svc, Auth>),
         )
         .route("/bots", get(list_bots_handler::<S, Svc, Auth>))
         .route("/bots", post(create_bot_handler::<S, Svc, Auth>))
@@ -330,6 +339,84 @@ pub async fn patch_agent_handler<
         state
             .service
             .patch_agent(
+                authorization.authorization.user.macro_user_id,
+                path.agent_id,
+                req,
+            )
+            .await?,
+    ))
+}
+
+/// Handler for `GET /agents/{agent_id}/memory`.
+#[utoipa::path(
+    get,
+    tag = "agents",
+    operation_id = "get_agent_memory",
+    path = "/agents/{agent_id}/memory",
+    params(
+        ("agent_id" = BotId, Path, description = "Agent bot ID")
+    ),
+    responses(
+        (status = 200, body = AgentMemory),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn get_agent_memory_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<AgentPath>,
+) -> Result<Json<AgentMemory>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .agent_memory(
+                authorization.authorization.user.macro_user_id,
+                path.agent_id,
+            )
+            .await?,
+    ))
+}
+
+/// Handler for `PUT /agents/{agent_id}/memory`.
+#[utoipa::path(
+    put,
+    tag = "agents",
+    operation_id = "update_agent_memory",
+    path = "/agents/{agent_id}/memory",
+    params(
+        ("agent_id" = BotId, Path, description = "Agent bot ID")
+    ),
+    request_body = UpdateAgentMemoryRequest,
+    responses(
+        (status = 200, body = AgentMemory),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn update_agent_memory_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<AgentPath>,
+    Json(req): Json<UpdateAgentMemoryRequest>,
+) -> Result<Json<AgentMemory>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .update_agent_memory(
                 authorization.authorization.user.macro_user_id,
                 path.agent_id,
                 req,
@@ -853,6 +940,7 @@ impl IntoResponse for BotsHandlerErr {
             Self::Bot(BotError::NotFound(_)) => StatusCode::NOT_FOUND,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
             Self::Bot(BotError::Unavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Bot(BotError::Conflict(_)) => StatusCode::CONFLICT,
             Self::Bot(BotError::Repo(_)) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if matches!(

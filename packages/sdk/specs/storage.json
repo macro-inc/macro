@@ -705,6 +705,164 @@
         }
       }
     },
+    "/agents/{agent_id}/memory": {
+      "get": {
+        "tags": ["agents"],
+        "summary": "Handler for `GET /agents/{agent_id}/memory`.",
+        "operationId": "get_agent_memory",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "Agent bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agents"],
+        "summary": "Handler for `PUT /agents/{agent_id}/memory`.",
+        "operationId": "update_agent_memory",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "Agent bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentMemoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -29424,6 +29582,27 @@
           }
         ],
         "description": "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      },
+      "AgentMemory": {
+        "type": "object",
+        "description": "What an agent remembers across its sessions: one markdown document shared\nby every session it runs, whoever starts them.",
+        "required": ["content", "revision"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The remembered markdown; empty before anything is remembered."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The revision to name in the next write; 0 before the first."
+          },
+          "updated_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the memory last changed; absent before the first write."
+          }
+        }
       },
       "AgentPullRequestState": {
         "type": "string",
@@ -63352,6 +63531,22 @@
           "title": {
             "type": "string",
             "description": "Its title."
+          }
+        }
+      },
+      "UpdateAgentMemoryRequest": {
+        "type": "object",
+        "description": "Request to replace an agent's memory, whole.",
+        "required": ["revision", "content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The whole new memory, at most [`AGENT_MEMORY_MAX_BYTES`] bytes."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The revision the edit was made against. A write against any other\nrevision changes nothing and fails with a conflict."
           }
         }
       },

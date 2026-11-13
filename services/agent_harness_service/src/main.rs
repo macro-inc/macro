@@ -13,7 +13,6 @@ mod anthropic_gateway;
 mod api;
 mod bots_directory;
 mod code_mode;
-mod coding_agent;
 mod coding_agents;
 mod computers;
 mod config;
@@ -24,6 +23,7 @@ mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
 mod permission_policy;
+mod persona_source;
 mod preview;
 mod public_mcp;
 mod pull_request_archive;
@@ -125,7 +125,6 @@ use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
 use channels::outbound::notification_sender::NotificationChannelSender;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
-use coding_agent::PgCodingAgentSource;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
@@ -168,6 +167,7 @@ use model_providers::{
     CursorModels, InMemoryModels, MacrodModels, PgKnownModels, VisibleHarnessAccess,
 };
 use permission_policy::PgPermissionPolicySource;
+use persona_source::PgPersonaSource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
@@ -991,6 +991,10 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
+            agent_memory: Arc::new(bots::domain::service::BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                macro_event_broker::NoopMacroEventBroker,
+            )),
             app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },
     );
@@ -1582,7 +1586,7 @@ async fn run() -> anyhow::Result<()> {
             .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
-            PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
+            PgPersonaSource::new(PgBotsRepo::new(pool.clone())),
             defaults,
             // A turn that ends, stops, or is deleted leaves no one waiting on
             // its held tool calls.

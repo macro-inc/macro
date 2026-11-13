@@ -136,19 +136,23 @@ pub trait PermissionPolicySource: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<PermissionPolicyConfig>> + Send;
 }
 
-/// Loads a persona's choice of whether it is a coding agent.
+/// Loads what a persona chose and what it remembers.
 ///
 /// Read when a turn is announced or its reply resolved, like
 /// [`PermissionPolicySource`] is read before each turn, so changing the
-/// agent's setting takes effect on its next turn. The domain applies the choice
-/// with [`crate::domain::model::is_coding_agent`].
-pub trait CodingAgentSource: Send + Sync + 'static {
+/// agent's setting takes effect on its next turn. The domain applies the
+/// coding choice with [`crate::domain::model::is_coding_agent`].
+pub trait PersonaSource: Send + Sync + 'static {
     /// The persona's setting for `bot`; `None` only for a fixed system bot,
     /// which has no persona.
     fn coding_agent_choice(
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<bool>>> + Send;
+
+    /// What `bot`'s persona remembers across its sessions; `None` when it has
+    /// remembered nothing, or is a fixed system bot, which has no persona.
+    fn memory(&self, bot: BotId) -> impl Future<Output = anyhow::Result<Option<String>>> + Send;
 }
 
 /// One dial of a harness's runtime; a redial is a new connection.

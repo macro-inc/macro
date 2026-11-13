@@ -6,11 +6,12 @@ mod harness_agents;
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
-        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
-        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+        AGENT_MEMORY_MAX_BYTES, Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers,
+        AgentMemory, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotKind,
+        BotOwner, BotOwnerProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        CreateChannelScopedBotResponse, HarnessFacts, HarnessId, MAX_BOT_OWNER_PROFILE_IDS,
+        PatchAgentRequest, PatchBotRequest, UpdateAgentMemoryRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
@@ -377,6 +378,59 @@ where
         }
     }
 
+    /// A live agent's memory. Only agents remember: a fixed system bot has no
+    /// persona, and a plain bot no sessions.
+    async fn live_agent_memory(&self, bot_id: BotId) -> Result<AgentMemory, BotError> {
+        if bot_id::is_system_bot(bot_id) {
+            return Err(BotError::BadRequest(
+                "only custom agents have a memory of their own".to_string(),
+            ));
+        }
+        self.repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        Ok(self
+            .repo
+            .get_agent_memory(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .unwrap_or_else(AgentMemory::empty))
+    }
+
+    /// Replace a live agent's memory if `req` was made against its current
+    /// revision.
+    #[tracing::instrument(skip(self, req), fields(revision = req.revision), err)]
+    async fn save_live_agent_memory(
+        &self,
+        bot_id: BotId,
+        req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        let content = req.content.trim();
+        if content.len() > AGENT_MEMORY_MAX_BYTES {
+            return Err(BotError::BadRequest(format!(
+                "agent memory must fit in {AGENT_MEMORY_MAX_BYTES} bytes; keep durable facts, not a record"
+            )));
+        }
+        if req.revision < 0 {
+            return Err(BotError::BadRequest(
+                "revision must be one an earlier read returned".to_string(),
+            ));
+        }
+        self.live_agent_memory(bot_id).await?;
+        self.repo
+            .save_agent_memory(bot_id, req.revision, content)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| {
+                BotError::Conflict(
+                    "the agent's memory changed since it was read; read it again and reconcile"
+                        .to_string(),
+                )
+            })
+    }
+
     async fn ensure_manageable(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -725,6 +779,37 @@ where
             .filter(|id| seen.insert(**id))
             .filter_map(|id| found.get(id).cloned())
             .collect())
+    }
+
+    async fn agent_memory(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<AgentMemory, BotError> {
+        self.ensure_manageable(caller, bot_id).await?;
+        self.live_agent_memory(bot_id).await
+    }
+
+    async fn update_agent_memory(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        self.ensure_manageable(caller, bot_id).await?;
+        self.save_live_agent_memory(bot_id, req).await
+    }
+
+    async fn own_memory(&self, bot_id: BotId) -> Result<AgentMemory, BotError> {
+        self.live_agent_memory(bot_id).await
+    }
+
+    async fn update_own_memory(
+        &self,
+        bot_id: BotId,
+        req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        self.save_live_agent_memory(bot_id, req).await
     }
 
     async fn get_self(&self, bot_id: BotId) -> Result<Bot, BotError> {
