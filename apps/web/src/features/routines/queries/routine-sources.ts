@@ -99,6 +99,19 @@ export function createRoutineDetailSource(
         ? list.data?.find((item) => item.id === id())
         : undefined)
   );
+  // A refetch with no data puts the query back to pending, so the refusal is
+  // kept for this routine until a read settles otherwise; the page doesn't
+  // swap views on every refocus.
+  const refusedId = createMemo<string | undefined>((previous) => {
+    if (detail.isSuccess) return undefined;
+    if (detail.isError) {
+      const refused = REFUSED_READ_CODES.some((code) =>
+        thrownResultErrorHasCode(detail.error, code)
+      );
+      return refused ? id() : undefined;
+    }
+    return previous === id() ? previous : undefined;
+  });
   const routine = createMemo(() => {
     const current = raw();
     return current?.id ? toRoutine(current) : undefined;
@@ -175,12 +188,7 @@ export function createRoutineDetailSource(
     loading: () => detail.isPending,
     error: () => detail.isError,
     // A refusal says nothing about a routine the viewer's own lists hold.
-    readRefused: () =>
-      !raw() &&
-      detail.isError &&
-      REFUSED_READ_CODES.some((code) =>
-        thrownResultErrorHasCode(detail.error, code)
-      ),
+    readRefused: () => !raw() && refusedId() === id(),
     update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,

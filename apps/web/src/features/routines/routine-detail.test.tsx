@@ -1053,6 +1053,18 @@ describe('routine editor triggers', () => {
     }
   );
 
+  it('keeps the template while a refused read refetches', () => {
+    mocks.readErrorCode = () => 'UNAUTHORIZED';
+    setStatus('error');
+    setSchedules([]);
+    render(() => <Routine />);
+    const template = screen.getByText('Template for routine-id');
+    setStatus('pending');
+    expect(screen.getByText('Template for routine-id')).toBe(template);
+    setStatus('error');
+    expect(screen.getByText('Template for routine-id')).toBe(template);
+  });
+
   it('keeps the owner view for a refused read of a routine the viewer’s list holds', () => {
     mocks.readErrorCode = () => 'UNAUTHORIZED';
     setStatus('error');
