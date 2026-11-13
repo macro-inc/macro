@@ -1,0 +1,53 @@
+apps/web/src/features/agent-dashboards/dashboard-navigation.ts
+  s_699e95788b47ad::t_9771d822493175 1-2,4-30,32-79
+  s_699e95788b47ad::t_2b92fd0df15eab 3,31
+apps/web/src/components/app/split-layout/componentRegistry.tsx
+  s_699e95788b47ad::t_fe6b32e320e729 43-50,351-360
+apps/web/src/routes/routes.ts
+  s_699e95788b47ad::t_2b92fd0df15eab 1-4,637,647
+apps/web/src/components/app/split-layout/split-router/legacy-route.ts
+  s_699e95788b47ad::t_6c72ac97f8f889 2-4
+  s_699e95788b47ad::t_2b92fd0df15eab 285-287,429-430
+  s_699e95788b47ad::t_33eb04b98f750c 1,431
+apps/web/src/features/agent-dashboards/dashboard-navigation.test.ts
+  s_699e95788b47ad::t_61ada03d8fee67 1-91,93-132,151-167
+  s_699e95788b47ad::t_9fcdb3098b639a 92,133-150
+agent-teammates/starter-agent/behavior/capabilities/dashboard/index.ts
+  s_3c8bdfdb266f32::t_cd2da28ddf8423 26
+crates/dynamic_ui/AGENTS.md
+  s_c6fe7b7c1d36f7::t_357f8b19c38856 19-21,28-29,33-35
+.github/workspace-dep-closures.json
+  s_c6fe7b7c1d36f7::t_f55ca5d7a85d71 5212-5252,5786
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "438817e9ac13b4e0c80cddcfb7f7ad48e0ed61fc",
+  "prompts": {},
+  "sessions": {
+    "s_3c8bdfdb266f32": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "047d61f4-a7d4-4fc1-a6a7-ed748e55fd32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

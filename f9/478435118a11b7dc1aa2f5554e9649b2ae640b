@@ -1,0 +1,49 @@
+apps/web/src/lib/queries/notification/notification-soup.ts
+  s_699e95788b47ad::t_cd95a2373f40d4 44-46
+apps/web/src/lib/service-clients/service-storage/graphql-favorites.ts
+  s_699e95788b47ad::t_cd95a2373f40d4 53-54,86-91,105-107,177-178
+crates/macro_db_client/migrations/20261113041230_dashboard_entities.up.sql
+  s_c6fe7b7c1d36f7::t_cda29609c78b14 3-5
+agent-teammates/starter-agent/behavior/capabilities/dashboard/index.ts
+  s_c6fe7b7c1d36f7::t_73e120f28fb1a9 79-87,112
+agent-teammates/starter-agent/behavior/capabilities/dashboard/test/dashboard.test.ts
+  s_c6fe7b7c1d36f7::t_73e120f28fb1a9 2,83
+crates/dashboards/src/inbound/axum_router.rs
+  s_c6fe7b7c1d36f7::t_264c132a4567bd 101,105,190-191,198,448,473,484,512
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_699e95788b47ad::t_3e7871edb14a8c 16718,16722,16724,16749,16753,16755
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_699e95788b47ad::t_55337575c9d1ac 11885,11902,11957,11974
+packages/sdk/generated/storage/sdk.gen.ts
+  s_699e95788b47ad::t_072b2850497669 2200,2207
+packages/sdk/generated/storage/types.gen.ts
+  s_699e95788b47ad::t_ad2c4c84cb5c7a 28532,28535,28562,28565
+packages/sdk/specs/storage.json
+  s_699e95788b47ad::t_1cfdc3cc08602e 11885,11902,11957,11974
+packages/sdk/src/entities/dashboards/dashboard.ts
+  s_699e95788b47ad::t_632858e3eacc29 169,184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f9478435118a11b7dc1aa2f5554e9649b2ae640b",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
