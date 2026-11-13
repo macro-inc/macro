@@ -283,6 +283,7 @@ fn action_owned_by(owner: Owner) -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,

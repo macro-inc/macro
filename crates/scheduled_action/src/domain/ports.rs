@@ -1,3 +1,4 @@
+use super::appearance::ChangeAppearance;
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
@@ -16,6 +17,7 @@ use entity_access::domain::models::{
 use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
 use std::collections::HashMap;
@@ -71,8 +73,14 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// Atomically replace presentation and record the actual change in entity history.
+    fn set_appearance(
+        &self,
+        change: ChangeAppearance,
+    ) -> impl Future<Output = Result<Option<EntityAppearance>>> + Send;
+
     /// Deletes the action row, its `entity_access` rows (`entity_type =
-    /// 'scheduled_action'`) and the `entity` row in one transaction. A missing
+    /// 'scheduled_action'`), history, and the `entity` row in one transaction. A missing
     /// row is `Ok(())`.
     fn delete_action(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
@@ -263,6 +271,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         template_id: Uuid,
+        appearance: EntityAppearance,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// `create_action` for a routine saved from routine suggestion
@@ -290,6 +299,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         input: ActionConfigurationUpdate,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// Change the owner's routine presentation without changing its execution revision.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        appearance: EntityAppearance,
+    ) -> impl Future<Output = Result<EntityAppearance>> + Send;
 
     /// Change activation without touching configuration. Requesting the
     /// current state returns the stored action unchanged.
@@ -410,8 +426,138 @@ pub trait DraftHandBacks: Send + Sync + 'static {
     /// Forget the draft.
     async fn finish(&self, session: Uuid) -> Result<()>;
 
-    /// Drafts started before `before`, oldest first, at most `limit`.
+    /// Drafts started before `before`, oldest first, at most `limit`. Only
+    /// drafts a waiting request runs; background drafts have their own
+    /// lifecycle ([`DraftJobStore`]).
     async fn stale(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
+}
+
+/// Background drafts' rows: the same rows [`DraftHandBacks`] keeps checks
+/// on, with a state, what was asked, the progress and, once finished, the
+/// result. Any replica reads and changes them. Object-safe: the drafting
+/// job holds it erased, as it does the hand-backs.
+#[async_trait::async_trait]
+pub trait DraftJobStore: Send + Sync + 'static {
+    /// Start `job`, drafting, unless its owner has a live job (drafting,
+    /// ready or failed) with its client id, or `limit` jobs drafting that
+    /// started after `since`. One owner's starts are serialized, so starts
+    /// sent together never pass the limit together.
+    async fn begin_job(
+        &self,
+        job: &super::drafts::jobs::NewDraftJob,
+        limit: u32,
+        since: DateTime<Utc>,
+    ) -> Result<super::drafts::jobs::Begun>;
+
+    /// `owner`'s live job that the start with `client_id` began.
+    async fn started(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        client_id: Uuid,
+    ) -> Result<Option<super::drafts::jobs::DraftJob>>;
+
+    /// Keep `progress` on a job still drafting. Whether it was.
+    async fn progress(
+        &self,
+        session: Uuid,
+        progress: &super::drafts::progress::DraftJobProgress,
+    ) -> Result<bool>;
+
+    /// Finish a job still drafting with `draft`, ready or failed as it says.
+    async fn finish_job(
+        &self,
+        session: Uuid,
+        draft: &super::drafts::Draft,
+    ) -> Result<super::drafts::jobs::Finished>;
+
+    /// `owner`'s jobs that are drafting or finished, newest first, at most
+    /// `limit`. Cancelled ones aren't.
+    async fn jobs(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        limit: u16,
+    ) -> Result<Vec<super::drafts::jobs::DraftJob>>;
+
+    /// `owner`'s job `session`, unless it was cancelled.
+    async fn job(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> Result<Option<super::drafts::jobs::DraftJob>>;
+
+    /// Cancel `owner`'s job `session`, drafting or finished: no one reads it
+    /// again. What it was, unless it is someone else's, missing or cancelled
+    /// already.
+    async fn cancel_job(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> Result<Option<super::drafts::jobs::CancelledJob>>;
+
+    /// Fail jobs still drafting that started before `before`, whose drafter
+    /// is gone, with `draft`. Those it failed, oldest first, at most `limit`;
+    /// one replica fails each.
+    async fn interrupt(
+        &self,
+        before: DateTime<Utc>,
+        draft: &super::drafts::Draft,
+        limit: u16,
+    ) -> Result<Vec<super::drafts::jobs::InterruptedJob>>;
+
+    /// Jobs cancelled before `before`, whose drafter never cleaned up.
+    async fn abandoned(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
+
+    /// Jobs that finished before `before` and were never discarded.
+    async fn expired(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
+}
+
+/// Pushes how a background draft is going to its owner's open apps.
+pub trait RoutineDraftUpdates: Send + Sync + 'static {
+    fn publish_draft(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        update: super::drafts::jobs::DraftUpdate,
+    ) -> impl Future<Output = ()> + Send;
+}
+
+/// Drafts that run in the background: a person starts one and reads its
+/// result later, from any replica.
+pub trait RoutineDraftJobService: Send + Sync + 'static {
+    /// Start drafting `request` for `owner`, once it is valid and its usage
+    /// admitted, which the blocking draft's errors say otherwise.
+    /// `client_id` is the id the client gave the start: sent again, it
+    /// answers with the job it started while that job is live, starting
+    /// nothing. `traceparent` is the starting request's trace context.
+    fn start(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        client_id: Uuid,
+        request: super::drafts::DraftRequest,
+        context: super::drafts::DraftContext,
+        traceparent: Option<String>,
+    ) -> impl Future<Output = Result<super::drafts::jobs::DraftJob>> + Send;
+
+    /// `owner`'s jobs drafting, and those finished but not discarded.
+    fn jobs(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<super::drafts::jobs::DraftJob>>> + Send;
+
+    /// `owner`'s job `id`; [`super::drafts::jobs::DraftJobError::NotFound`]
+    /// for anyone else's.
+    fn job(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<super::drafts::jobs::DraftJob>> + Send;
+
+    /// Cancel `owner`'s job `id` while it drafts, or discard it once
+    /// finished.
+    fn discard(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// What a draft's session handed back so far.
@@ -425,6 +571,8 @@ pub struct HandedBack {
     pub checks: u32,
     /// What it said it created for the routine, across its checks.
     pub created: Vec<super::models::CreatedItem>,
+    /// Whether its owner cancelled it: a background draft's drafter stops.
+    pub cancelled: bool,
 }
 
 /// A draft left behind, for the sweep.

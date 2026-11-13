@@ -2,17 +2,34 @@ import {
   registerActivityRevalidator,
   revalidateActivityQueries,
 } from '@queries/activity/push-registry';
+import { queryClient } from '@queries/client';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
+import { soupKeys } from '@queries/soup/keys';
 import { createTrailingRefetch } from '@queries/trailing-refetch';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
+import type { QueryClient } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
 import { onCleanup } from 'solid-js';
 
-/** Refresh live project details and collections after UI or agent-tool writes. */
-export async function refreshProjectQueries(client = getGraphqlSoupClient()) {
+/** Refresh live project details and collections after UI or agent-tool writes.
+ * Search is always a plain Soup query, and without the normalized cache so are
+ * the other shared lists that show projects as rows (Home), so those are read
+ * again too. */
+export async function refreshProjectQueries(
+  client = getGraphqlSoupClient(),
+  cache: QueryClient = queryClient,
+  cacheHost = getGraphqlSoupCacheHost
+) {
+  const host = cacheHost();
   await Promise.all([
     refreshActiveGraphqlSoupQueries(),
     revalidateActivityQueries(client, null),
+    !host || host.disabled
+      ? cache.invalidateQueries({ queryKey: soupKeys._def })
+      : cache.invalidateQueries({ queryKey: soupKeys.search._def }),
   ]);
 }
 

@@ -107,6 +107,8 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 - Channel change-log rows and their counters are read in one snapshot; retention
   removes a prefix, so the first retained sequence minus one is the resume floor.
   Keep counters after pruning so sequence numbers are never reused.
+- A call chat's first message is a normal `MessageKind::Message` root; deleting it tombstones only
+  that message and keeps the thread and replies available for later posts.
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check

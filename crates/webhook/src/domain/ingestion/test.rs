@@ -574,6 +574,7 @@ fn document_event_cases() -> Vec<EventCase> {
         EventCase::new(
             TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                    appearance_change: None,
                     document_id: DOCUMENT_ID.to_string(),
                     owner: Owner::User(user_id("macro|owner@example.com")),
                     actor_user_id: Some(user_id("macro|editor@example.com")),
@@ -1497,6 +1498,7 @@ fn agent_trigger_requested_event()
             ),
             owner: "macro|asker@example.com".to_owned(),
             context: None,
+            runtime_user: None,
         }),
     ))
 }

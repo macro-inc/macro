@@ -8,11 +8,13 @@
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
 mod agent_runtime_directory;
+mod anthropic_gateway;
 mod api;
 mod bots_directory;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
+mod computers;
 mod config;
 mod containers;
 mod conversation_admission;
@@ -159,7 +161,9 @@ use macro_service_urls::{
 use mcp_client::domain::models::AesKey;
 use mcp_client::outbound::NativeServerStore;
 use mcp_client::outbound::pg_server_repo::PgServerRepo;
-use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
+use model_providers::{
+    CursorModels, InMemoryModels, MacrodModels, PgKnownModels, VisibleHarnessAccess,
+};
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
@@ -227,6 +231,8 @@ async fn main() -> anyhow::Result<()> {
     result
 }
 
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
 fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
     // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
     url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
@@ -265,6 +271,7 @@ async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
         .await
         .context("failed to resolve agent harness service secrets")?;
+    let computer_fleet = config.computer_fleet()?;
     let non_user_owners = config.non_user_owners()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     let enable_dev_commands = matches!(
@@ -645,6 +652,14 @@ async fn run() -> anyhow::Result<()> {
         config.ai_pricing(),
         recorder.clone(),
         linked_github,
+        // Lets agent sessions' `SendEmail` name a verified send-as alias in `from`.
+        email::outbound::GmailSenderProvider::new(
+            gmail_client::GmailClient::without_watch(),
+            email::outbound::GmailTokenProviderImpl::lazy(
+                redis.clone(),
+                Arc::new(config.auth_service_client()?),
+            ),
+        ),
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
@@ -763,10 +778,7 @@ async fn run() -> anyhow::Result<()> {
         .value()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
                 config.environment,
@@ -774,6 +786,19 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
+    // Suggestion generation sessions' code and tools are limited to reads
+    // and their own writes, and background runs that send nothing to what
+    // reaches nobody, wherever their credential is used.
+    let session_scopes: Arc<dyn code_mode::SessionScopes> = Arc::new(code_mode::HarnessScopes {
+        generations: Arc::new(
+            suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo::new(
+                pool.clone(),
+            ),
+        ),
+        runs: Arc::new(
+            suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo::new(pool.clone()),
+        ),
+    });
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
@@ -788,6 +813,7 @@ async fn run() -> anyhow::Result<()> {
                         config.macro_api_token_private_secret_key.as_ref(),
                     ),
                     endpoints: code_mode::sdk_endpoints()?,
+                    scopes: Arc::clone(&session_scopes),
                 }),
             )),
         }),
@@ -818,12 +844,16 @@ async fn run() -> anyhow::Result<()> {
             .entity_access_service
             .clone(),
     );
-    let owner_tool_gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate> = Arc::new(
-        agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
-            session_repo.clone(),
-            Arc::clone(&tool_approvals),
-        ),
-    );
+    let owner_tool_gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate> =
+        Arc::new(code_mode::ScopedToolGate {
+            inner: Arc::new(
+                agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
+                    session_repo.clone(),
+                    Arc::clone(&tool_approvals),
+                ),
+            ),
+            scopes: Arc::clone(&session_scopes),
+        });
     let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
@@ -888,6 +918,7 @@ async fn run() -> anyhow::Result<()> {
                 ),
                 gate: owner_tool_gate.clone(),
                 endpoints: code_mode::sdk_endpoints()?,
+                scopes: Arc::clone(&session_scopes),
             }),
             execution_store,
             execution_turns,
@@ -940,10 +971,12 @@ async fn run() -> anyhow::Result<()> {
     let reviews_cell = Arc::new(std::sync::OnceLock::new());
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
-        url::Url::parse(&egress_base_url)?
-            .host_str()
-            .context("egress URL needs a host")?
-            .to_owned(),
+        {
+            // The egress URL already carries any computer-facing override.
+            let mut urls = vec![egress_base_url.as_str()];
+            urls.extend(config.external_egress_base_url.as_deref());
+            internal_mcp::configured_hosts(&urls)?
+        },
         internal_mcp::InternalTools {
             service: session_pull_requests.clone(),
             tasks: session_tasks.clone(),
@@ -960,6 +993,7 @@ async fn run() -> anyhow::Result<()> {
     // a second set of clients and dropping them when the listing ends.
     let mcp_connector = Arc::new(AcpMcpConnector::new(
         EgressMcpClient::new(Arc::clone(&egress), &egress_base_url)
+            .with_external_base_url(config.external_egress_base_url.as_deref())
             .with_internal_mcp(internal_mcp_handler(internal_mcp.clone())),
     ));
     let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
@@ -978,11 +1012,6 @@ async fn run() -> anyhow::Result<()> {
             ))
             .with_entity_routing(Arc::new(
                 agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
-            ))
-            // `ai-session-code-mode-only` stops a user's turns falling back
-            // to the direct tools.
-            .with_code_mode_only(Arc::new(
-                agent_inmem::domain::tool_mode::FlaggedCodeModeOnly::new(flags.clone()),
             ));
     }
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);
@@ -1350,10 +1379,78 @@ async fn run() -> anyhow::Result<()> {
     // Each dial also reports which sessions its runtime still serves, which
     // the harness loads once it exists below.
     let (live_sessions, mut live_session_reports) = tokio::sync::mpsc::unbounded_channel();
+    // Macro computers: the fleet operator (when this deployment drives a
+    // fleet) and presence that turns macrod connects into lifecycle events.
+    let computer_operator = computers::operator(
+        &config,
+        computer_fleet,
+        &pool,
+        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(pool.clone()),
+        )),
+        Arc::new(computers::default_agent::BotDefaultAgents::new(
+            bots::domain::service::BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                broker.clone(),
+            ),
+            PgBotsRepo::new(pool.clone()),
+            pool.clone(),
+        )),
+        Arc::clone(&notifications),
+    )
+    .await?;
+    let anthropic_gateway = anthropic_gateway::router(anthropic_gateway::GatewayState::new(
+        Arc::new(session_repo.clone()),
+        PgHarnessRepo::new(pool.clone()),
+        admission.clone(),
+        recorder.clone(),
+        anthropic_gateway::ANTHROPIC_API_URL,
+        &config.anthropic_api_key,
+    )?);
+    let computer_tasks = tokio_util::task::TaskTracker::new();
+    let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
-        Arc::new(PgHarnessPresence::new(pool.clone(), replica)),
+        Arc::new(computers::ComputerPresence::new(
+            Arc::new(PgHarnessPresence::new(pool.clone(), replica)),
+            computer_operator.clone(),
+            pool.clone(),
+            Arc::clone(&sign_in_ahead),
+            computer_tasks.clone(),
+        )),
         live_sessions,
     );
+    let harnessd: computers::HostedHarnessd = computers::harnessd::Harnessd::new(
+        match &computer_operator {
+            Some(operator) => Arc::new(computers::FleetTransport::new(Arc::clone(operator))),
+            None => Arc::new(computers::harnessd::NoFleet),
+        },
+        Arc::new(computers::harnessd::PgComputerLocks::new(&pool)),
+        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(pool.clone()),
+        )),
+    );
+    if let Some(operator) = &computer_operator {
+        // Only fails if set twice, which this one startup never does.
+        let _ = sign_in_ahead.set(Arc::new(computers::sign_in_ahead::SignInAhead {
+            harnessd: harnessd.clone(),
+            operator: Arc::clone(operator),
+        }));
+        computers::spawn_loops(
+            Arc::clone(operator),
+            computers::ClaudeSignInWatch {
+                sign_ins: hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns::new(
+                    pool.clone(),
+                ),
+                notices: computers::claude_expiry::IngressClaudeSignInNotices::new(
+                    Arc::clone(&notifications),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+                ),
+                harnessd: harnessd.clone(),
+            },
+            &computer_tasks,
+            service_shutdown.clone(),
+        );
+    }
     let presence_runtimes = Arc::clone(&runtimes);
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
@@ -1684,6 +1781,7 @@ async fn run() -> anyhow::Result<()> {
         ),
         CursorModels::new(cursor_keys, cursor_api_base_url()),
         macrod_models,
+        PgKnownModels::new(pool.clone()),
         model_probe_timeout,
     ));
     let model_state = AgentModelsRouterState::new(
@@ -1732,8 +1830,10 @@ async fn run() -> anyhow::Result<()> {
             external_session_requests::BrokerExternalSessionRequests::new(
                 broker.clone(),
                 session_repo.clone(),
+                PgHarnessRepo::new(pool.clone()),
             ),
         ),
+        harness.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         non_user_owners,
     );
@@ -1741,8 +1841,11 @@ async fn run() -> anyhow::Result<()> {
         (*bots_directory).clone(),
         (*harness).clone(),
         draining_sessions.clone(),
-        broker.clone(),
-        session_repo.clone(),
+        external_session_requests::BrokerExternalSessionRequests::new(
+            broker.clone(),
+            session_repo.clone(),
+            PgHarnessRepo::new(pool.clone()),
+        ),
         PgConnectionRepo::new(pool.clone()),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
@@ -1762,6 +1865,7 @@ async fn run() -> anyhow::Result<()> {
             external_session_requests::BrokerExternalSessionRequests::new(
                 broker.clone(),
                 session_repo.clone(),
+                PgHarnessRepo::new(pool.clone()),
             ),
             draining_sessions.clone(),
             (*harness).clone(),
@@ -1769,6 +1873,21 @@ async fn run() -> anyhow::Result<()> {
         ),
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    let computer_claude = computers::claude::router(
+        harnessd.clone(),
+        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(pool.clone()),
+        )),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        feature_flags
+            .clone()
+            .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+            .unwrap_or_default(),
+        hosted_runtimes::domain::models::FleetAttachment::from_operator_present(
+            computer_operator.is_some(),
+        ),
+        &computer_tasks,
     );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
@@ -1792,10 +1911,7 @@ async fn run() -> anyhow::Result<()> {
         .value()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
                 config.environment,
@@ -1962,6 +2078,7 @@ async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
+            .with_claude_access(computer_claude)
             .with_capabilities(capabilities)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
@@ -2195,6 +2312,7 @@ async fn run() -> anyhow::Result<()> {
         if let Err(error) = api::serve_egress(
             egress,
             internal_mcp,
+            anthropic_gateway,
             egress_port,
             egress_shutdown.clone().cancelled_owned(),
         )
@@ -2440,6 +2558,8 @@ async fn run() -> anyhow::Result<()> {
     }
 
     service_shutdown.cancel();
+    computer_tasks.close();
+    computer_tasks.wait().await;
     scheduling_runtime.stop();
     cognition_runtime.stop();
     notification_cancel.cancel();

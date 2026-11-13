@@ -210,6 +210,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             vec![messages::domain::models::CountedReaction {
                 emoji: emoji.clone(),
                 users: vec![TEST_USER_ID.to_string()],
+                names: None,
             }]
         } else {
             vec![]

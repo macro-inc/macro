@@ -159,6 +159,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
                         name: folder.display_name,
                         role,
                         has_children: folder.child_folder_count > 0,
+                        total_items: folder.total_item_count,
                     });
                 }
                 match page.next {
@@ -335,12 +336,16 @@ fn reference_url(web_link: Option<&str>) -> String {
         .unwrap_or_else(|| "https://outlook.office.com/mail/".into())
 }
 
-fn contact(recipient: wire::Recipient) -> ContactInfo {
-    ContactInfo {
-        email: recipient.email_address.address,
-        name: recipient.email_address.name,
+/// A sender or recipient without an address can't be written to or matched to
+/// a contact, so it is left out, as an address header without an address is
+/// for Gmail.
+fn contact(recipient: wire::Recipient) -> Option<ContactInfo> {
+    let wire::Address { address, name } = recipient.email_address?;
+    Some(ContactInfo {
+        email: address.filter(|address| !address.trim().is_empty())?,
+        name,
         photo_url: None,
-    }
+    })
 }
 
 pub(super) fn normalize(
@@ -419,10 +424,22 @@ pub(super) fn normalize(
         is_draft: state.is_draft,
         scheduled_send_time: None,
         has_attachments: !attachments.is_empty(),
-        from: source.from.map(contact),
-        to: source.to_recipients.into_iter().map(contact).collect(),
-        cc: source.cc_recipients.into_iter().map(contact).collect(),
-        bcc: source.bcc_recipients.into_iter().map(contact).collect(),
+        from: source.from.and_then(contact),
+        to: source
+            .to_recipients
+            .into_iter()
+            .filter_map(contact)
+            .collect(),
+        cc: source
+            .cc_recipients
+            .into_iter()
+            .filter_map(contact)
+            .collect(),
+        bcc: source
+            .bcc_recipients
+            .into_iter()
+            .filter_map(contact)
+            .collect(),
         labels: Vec::new(),
         body_text,
         body_html_sanitized,

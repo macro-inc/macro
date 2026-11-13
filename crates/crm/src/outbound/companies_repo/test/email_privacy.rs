@@ -1,3 +1,4 @@
+mod interaction_parity;
 mod linked_personal;
 
 #[cfg(feature = "inbound")]
