@@ -73,7 +73,11 @@ export function UserMention(props: UserMentionDecoratorProps) {
     <UserCardTrigger
       placement="top"
       triggerAs="span"
-      profileSurface="mention"
+      // Read at click time: in an editable editor a click places the caret,
+      // so only a read-only rendering opens an agent's profile.
+      profileSurface={
+        lexicalWrapper?.editor?.isEditable() ? undefined : 'mention'
+      }
       user={{
         displayName: tooltipDisplayName() || email() || propEmail(),
         email: email() || propEmail(),
