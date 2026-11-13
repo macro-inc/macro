@@ -16,7 +16,7 @@ import {
 } from '@macro-inc/lexical-wasm-view';
 import { NOOP_SPAN, Telemetry } from '@macro-inc/observability';
 import { TextNode } from 'lexical';
-import { createSignal, Show } from 'solid-js';
+import { createRoot, createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
@@ -26,6 +26,7 @@ import { createMenuOperations } from '../shared/inlineMenu';
 import { installNativeMarkdownOverlays } from './installNativeMarkdownOverlays';
 import * as actions from './NativeActionsOverlay';
 import { createNativeActionMenuHost } from './overlay-hosts/native-actions';
+import { createNativeGifContext } from './overlay-hosts/native-gif';
 import * as search from './overlay-hosts/native-inline-search';
 import { registerNativeMentionSearch } from './overlay-hosts/native-mention-search';
 
@@ -543,6 +544,64 @@ test('an unbound request cannot remove the live search before returning', async 
     expect(runtime.executor.session.serializedState()).toBe(before);
   } finally {
     host.dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+// App composition contract: RustMarkdownEditor passes
+// requestGif: () => gifContext.requestOpen() to the native action menu.
+test('the slash GIF row is offered and opens the bound picker only with the app request', async () => {
+  const runtime = mount();
+  const gif = createNativeGifContext();
+  gif.bindView(runtime.view);
+  const onOpen = vi.fn();
+  const gifItem = ACTIONS.find((item) => item.id === 'gif');
+  if (!gifItem) throw new Error('Missing source GIF catalog item');
+  const disposeRoot = createRoot((dispose) => {
+    gif.host.registerPicker(() => true, onOpen);
+    return dispose;
+  });
+  const without = createNativeActionMenuHost(
+    runtime.view,
+    { requestTable() {} },
+    () => true
+  );
+  const requestGif = vi.fn(() => gif.requestOpen());
+  const host = createNativeActionMenuHost(
+    runtime.view,
+    { requestTable() {}, requestGif },
+    () => true
+  );
+  try {
+    expect(without.supports(gifItem)).toBe(false);
+    expect(host.supports(gifItem)).toBe(true);
+    const trigger = await dispatchApplicationCommandSettled(
+      runtime.view,
+      'group-a.search-trigger',
+      { kind: 'actions' }
+    );
+    expect(trigger).toMatchObject({ status: 'success', handled: true });
+    const generation = runtime.view.mirror.keyGeneration;
+    await host.select(gifItem, 'keyboard');
+    expect({
+      searchGone: !runtime.executor.session
+        .serializedState()
+        .includes('inline-search'),
+      sameGeneration: runtime.view.mirror.keyGeneration === generation,
+    }).toEqual({ searchGone: true, sameGeneration: true });
+    // The request runs after a microtask, inside its captured span context.
+    await vi.waitFor(() => expect(requestGif).toHaveBeenCalledTimes(1));
+    expect(requestGif.mock.results).toEqual([{ type: 'return', value: true }]);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(runtime.executor.session.serializedState()).not.toContain(
+      'inline-search'
+    );
+  } finally {
+    without.dispose();
+    host.dispose();
+    disposeRoot();
+    gif.dispose();
     await runtime.close();
     runtime.root.remove();
   }

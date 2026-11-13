@@ -5,6 +5,7 @@ import { URL_PARAMS } from '@block-md/constants';
 import { NativeLocationHighlight } from '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight';
 import { NodeAccessoryLayer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
+import { HostedFloatingGifMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingGifMenu';
 import {
   NativeChecklistFacts,
   NativeChecklistOverlay,
@@ -58,6 +59,7 @@ import {
 } from '@core/component/LexicalMarkdown/decorator-host/native-video-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { createNativeCreationComposerController } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-creation';
+import { createNativeGifContext } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-gif';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import { registerNativeTitleHandoffKeys } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-title-handoff';
 import {
@@ -179,8 +181,10 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => snapshotContext.dispose());
   const equationContext = createNativeEquationContext(theme);
   overlayLifecycle.add(() => equationContext.dispose());
-  const [equationMenuActive, setEquationMenuActive] = createSignal(true);
-  overlayLifecycle.add(() => setEquationMenuActive(false));
+  const gifContext = createNativeGifContext();
+  overlayLifecycle.add(() => gifContext.dispose());
+  const [floatingMenusActive, setFloatingMenusActive] = createSignal(true);
+  overlayLifecycle.add(() => setFloatingMenusActive(false));
   const imageUploads = createNativeImageUploadController();
   overlayLifecycle.add(() => imageUploads.dispose());
   const canInteractWithMedia = () =>
@@ -455,6 +459,7 @@ export default function RustMarkdownEditor(props: {
                           imageUploads.openFileDialog(kind),
                         requestEquation: () => equationContext.requestCreate(),
                         requestLink: () => formatting.requestLink(),
+                        requestGif: () => gifContext.requestOpen(),
                         requestCreation: creation.requestCreation,
                       },
                     },
@@ -635,6 +640,9 @@ export default function RustMarkdownEditor(props: {
               equationContext.bindView(mounted.view);
               if (abort.signal.aborted) return;
               if (lastError) throw lastError;
+              gifContext.bindView(mounted.view);
+              if (abort.signal.aborted) return;
+              if (lastError) throw lastError;
               setReady(true);
               accessories.refreshEditable();
               if (abort.signal.aborted) return;
@@ -727,10 +735,15 @@ export default function RustMarkdownEditor(props: {
           </Show>
         )}
       </Show>
-      <Show when={equationMenuActive() && runtime()}>
+      <Show when={floatingMenusActive() && runtime()}>
         <DecoratorHostContext.Provider value={equationContext.host}>
           <FloatingMenuGroup>
             <FloatingEquationMenu canEdit={canEdit} />
+            <HostedFloatingGifMenu
+              canEdit={canEdit}
+              host={gifContext.host}
+              portalScope="global"
+            />
           </FloatingMenuGroup>
         </DecoratorHostContext.Provider>
       </Show>

@@ -31,8 +31,9 @@ popover. Submit each kind, exercise Create More and failure, and check that the
 Await placeholder appears only for its originating peer before the created
 mention replaces it. Reopen the document and compare the saved mention. Close
 the document while creation is pending and confirm retained callbacks cannot
-write into a newly opened editor. GIF, Link, Query and Database stay hidden
-until their document-owned request callbacks are installed. Verify that closing
+write into a newly opened editor. GIF opens the shared search picker; choose a
+result and verify its uploaded image appears at the captured insertion point.
+Link, Query and Database require their document-owned request callbacks. Verify that closing
 the document retires its menu registrations without affecting a newly opened
 editor.
 
