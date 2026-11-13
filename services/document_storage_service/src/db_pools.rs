@@ -11,7 +11,10 @@ use opentelemetry::{
     KeyValue,
     metrics::{Gauge, Histogram},
 };
-use sqlx::{PgPool, postgres::PgConnectOptions};
+use sqlx::{
+    ConnectOptions, Connection, PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
 use tokio_util::sync::CancellationToken;
 
 const PROBE_INTERVAL: Duration = Duration::from_secs(1);
@@ -43,6 +46,12 @@ const APPLICATION_NAME: &str = "document_storage_service";
 /// sqlx's default, written out.
 const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(30);
 
+const READONLY_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long a starting task waits for the replica before it reads the
+/// primary instead: what the pool's own thirty-second timeout allowed before.
+const READONLY_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub(crate) fn connect_options(database_url: &str) -> Result<PgConnectOptions, sqlx::Error> {
     Ok(PgConnectOptions::from_str(database_url)?.application_name(APPLICATION_NAME))
 }
@@ -63,11 +72,17 @@ pub(crate) fn primary_limits(environment: Environment) -> PoolLimits {
     }
 }
 
-/// Per task, against the read replica, set apart from the primary because the
-/// replica is shared and its sessions add up across every task.
+/// Per task, against the read replica. The replica is shared, so the cap is
+/// what keeps this service inside its replica session budget however many
+/// tasks run (checked in `db_pools/test.rs`): reads past the cap queue in the
+/// task instead of adding sessions to a replica that is already slow.
+///
+/// A queued read fails after ten seconds, before the web app gives up on a
+/// Soup request at twelve, and is never retried on the primary.
 pub(crate) fn readonly_limits(environment: Environment) -> PoolLimits {
     let (min_connections, max_connections) = match environment {
-        Environment::Production => (10, 50),
+        // 7 tasks hold at most 175 sessions, 14 tasks in a rolling deployment 350.
+        Environment::Production => (5, 25),
         // 3 tasks hold at most 60 sessions, 6 tasks in a rolling deployment 120.
         Environment::Develop => (2, 20),
         Environment::Local => (15, 50),
@@ -76,8 +91,33 @@ pub(crate) fn readonly_limits(environment: Environment) -> PoolLimits {
     PoolLimits {
         min_connections,
         max_connections,
-        acquire_timeout: ACQUIRE_TIMEOUT,
+        acquire_timeout: READONLY_ACQUIRE_TIMEOUT,
     }
+}
+
+/// Open the readonly pool once one connection to the replica succeeds.
+///
+/// sqlx opens a pool's minimum connections one after another inside a single
+/// acquire timeout, so a slow replica could fail the ten-second timeout at
+/// startup while every connection worked. Reachability is checked with one
+/// connection instead, and the pool fills its minimum in the background.
+pub(crate) async fn connect_readonly(
+    database_url: &str,
+    limits: PoolLimits,
+) -> Result<PgPool, sqlx::Error> {
+    let options = connect_options(database_url)?;
+
+    tokio::time::timeout(READONLY_STARTUP_TIMEOUT, options.connect())
+        .await
+        .map_err(|_| sqlx::Error::PoolTimedOut)??
+        .close()
+        .await?;
+
+    Ok(PgPoolOptions::new()
+        .min_connections(limits.min_connections)
+        .max_connections(limits.max_connections)
+        .acquire_timeout(limits.acquire_timeout)
+        .connect_lazy_with(options))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
