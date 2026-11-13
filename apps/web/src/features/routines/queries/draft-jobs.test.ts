@@ -1,12 +1,14 @@
 import { queryClient } from '@queries/client';
 import type { DraftJob } from '@service-scheduled-action/generated/schemas';
-import { QueryObserver } from '@tanstack/solid-query';
+import { QueryClientProvider, QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
+import { createComponent, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   discardDraftJob,
   routineDraftJobsQueryOptions,
   startDraftJob,
+  useDraftJobs,
 } from './draft-jobs';
 import { applyDraftUpdate } from './draft-jobs-sync';
 import { scheduledActionKeys } from './keys';
@@ -223,6 +225,50 @@ describe('background draft updates', () => {
     applyDraftUpdate('{not json');
     applyDraftUpdate({ draftId: 'b', state: 'exploded', progress: {} });
     expect(listed()?.map((each) => each.id)).toEqual(['b']);
+  });
+});
+
+/** `useDraftJobs` mounted as the app mounts it, until `dispose` runs. */
+function mountDraftJobs() {
+  return createRoot((dispose) => {
+    let drafts: ReturnType<typeof useDraftJobs> | undefined;
+    createComponent(QueryClientProvider, {
+      client: queryClient,
+      get children() {
+        drafts = useDraftJobs(() => true);
+        return null;
+      },
+    });
+    if (!drafts) throw new Error('useDraftJobs did not mount');
+    return { drafts, dispose };
+  });
+}
+
+const BAD_GATEWAY = err([{ code: 'HTTP_ERROR', message: 'Bad gateway' }]);
+
+describe('useDraftJobs', () => {
+  it('keeps listing its drafts when reading them again fails', async () => {
+    vi.useFakeTimers();
+    queryClient.setQueryData(KEY, [drafting('a')]);
+    client.listRoutineDraftJobs.mockResolvedValue(BAD_GATEWAY);
+    const { drafts, dispose } = mountDraftJobs();
+    queryClient.invalidateQueries({ queryKey: KEY });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(queryClient.getQueryState(KEY)?.status).toBe('error');
+    expect(drafts.jobs().map((job) => job.id)).toEqual(['a']);
+    expect(drafts.loaded()).toBe(true);
+    dispose();
+  });
+
+  it('lists nothing, and hasn’t read them, while the first read fails', async () => {
+    vi.useFakeTimers();
+    client.listRoutineDraftJobs.mockResolvedValue(BAD_GATEWAY);
+    const { drafts, dispose } = mountDraftJobs();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(queryClient.getQueryState(KEY)?.status).toBe('error');
+    expect(drafts.jobs()).toEqual([]);
+    expect(drafts.loaded()).toBe(false);
+    dispose();
   });
 });
 

@@ -74,15 +74,19 @@ async function fetchDraftJobs(): Promise<DraftJob[]> {
   );
 }
 
-/** The caller's routine drafts; empty until they're read or while `enabled` is false. */
+/**
+ * The caller's routine drafts; empty until they're read or while `enabled`
+ * is false. A read again that fails keeps the list it had.
+ */
 export function useDraftJobs(enabled: Accessor<boolean>) {
   const query = useQuery(() => ({
     ...routineDraftJobsQueryOptions(),
     enabled: enabled(),
   }));
   return {
-    jobs: (): DraftJob[] => (query.isSuccess ? query.data : []),
-    loaded: () => query.isSuccess,
+    jobs: (): DraftJob[] => (query.isPending ? [] : (query.data ?? [])),
+    /** Whether a read succeeded: a first read that failed listed nothing. */
+    loaded: () => !query.isPending && query.data !== undefined,
   };
 }
 
