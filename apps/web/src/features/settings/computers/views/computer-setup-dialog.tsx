@@ -38,7 +38,11 @@ import {
   computerFailureMessage,
   isProvisioning,
 } from '../core/computer-display';
-import { setupSettled, setupStages } from '../core/setup-progress';
+import {
+  type SignInPlan,
+  setupSettled,
+  setupStages,
+} from '../core/setup-progress';
 import { useSetupElapsed } from '../primitives/setup-elapsed';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
@@ -131,6 +135,15 @@ export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
         }}
       </For>
     </ol>
+  );
+}
+
+/** Why the footer's primary action is disabled, beside it. */
+export function DisabledReason(props: { children: JSX.Element }) {
+  return (
+    <p class="basis-full text-right text-xs text-ink-muted text-pretty">
+      {props.children}
+    </p>
   );
 }
 
@@ -233,6 +246,13 @@ export function ComputerSetupSteps(props: {
     props.onStep('ready');
   };
 
+  // A disabled Continue always says what it waits for.
+  const continueBlockedBy = (): string | undefined => {
+    if (!agentName().trim()) return t('computers.nameAgentToContinue');
+    if (!props.choice) return t('computers.chooseClaudeToContinue');
+    return undefined;
+  };
+
   const continueFromAgent = () => {
     props.onStep(props.choice === 'own_account' ? 'claude' : 'ready');
   };
@@ -258,6 +278,13 @@ export function ComputerSetupSteps(props: {
   const showProgress = () =>
     !setupSettled(props.computer) ||
     (props.choice === 'own_account' && !done());
+  const signInPlan = (): SignInPlan =>
+    match(props.choice)
+      .returnType<SignInPlan>()
+      .with('own_account', () => 'needed')
+      .with('macro_credits', () => 'skipped')
+      .with(undefined, () => 'undecided')
+      .exhaustive();
   const header = (): JSX.Element => (
     <div class="flex flex-col gap-4">
       <StepHeader
@@ -267,7 +294,7 @@ export function ComputerSetupSteps(props: {
       <Show when={showProgress()}>
         <SetupProgressList
           computer={props.computer}
-          signsIn={props.choice === 'own_account'}
+          signIn={signInPlan()}
           connected={props.connected}
           signedIn={done()}
           onRetry={() => fireAndForget(retrySetup(), 'computer-setup')}
@@ -281,7 +308,7 @@ export function ComputerSetupSteps(props: {
   const elapsed = useSetupElapsed(() => props.computer);
   const currentStage = () =>
     setupStages(props.computer, {
-      signsIn: true,
+      signIn: 'needed',
       connected: props.connected,
       signedIn: done(),
     }).find((stage) => stage.state === 'current' || stage.state === 'failed');
@@ -339,11 +366,14 @@ export function ComputerSetupSteps(props: {
           <Button
             type="button"
             variant="primary"
-            disabled={!props.choice || !agentName().trim()}
+            disabled={!!continueBlockedBy()}
             onClick={continueFromAgent}
           >
             {t('computers.continue')}
           </Button>
+          <Show when={continueBlockedBy()}>
+            {(reason) => <DisabledReason>{reason()}</DisabledReason>}
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
       <Match when={props.step === 'claude' && up() && harnessId()}>
@@ -434,6 +464,9 @@ export function ComputerSetupSteps(props: {
           >
             {t('computers.tryIt')}
           </Button>
+          <Show when={!done()}>
+            <DisabledReason>{t('computers.tryItAfterSetup')}</DisabledReason>
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
     </Switch>

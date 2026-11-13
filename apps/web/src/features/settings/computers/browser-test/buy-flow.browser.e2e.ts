@@ -208,7 +208,15 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
     /Creating the computer\s*\d+:\d\d/,
     'Starting up',
     'Connecting to Macro',
+    'Sign in to Claude',
   ]);
+  // Continue is disabled until a Claude is chosen, and says so.
+  await expect(
+    dialog(page).getByRole('button', { name: 'Continue' })
+  ).toBeDisabled();
+  await expect(dialog(page)).toContainText(
+    'Choose which Claude it should use to continue.'
+  );
   await expect(
     page.locator('[data-runtime-row="Maya\'s Agent Box"]')
   ).toContainText(/Setting up · Creating the computer \(1 of 3\) · \d+:\d\d/);
@@ -278,6 +286,7 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
   await expect(
     dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
   ).toBeVisible({ timeout: 10_000 });
+  await expect(progress).toHaveCount(0);
   await expect(
     steps.getByRole('listitem').filter({ hasText: 'Ready' })
   ).toHaveAttribute('aria-current', 'step');

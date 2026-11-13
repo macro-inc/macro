@@ -132,6 +132,12 @@ export default {
     'The computer could not be set up. Retry sets it up again at no extra charge; contact support if it fails again.',
   retrySetup: 'Retry setup',
   setupFailedTitle: 'Setup failed',
+  signInSkipped: "Not needed: the agent runs on Macro's Claude.",
+  nameAgentToContinue: 'Name the agent to continue.',
+  chooseClaudeToContinue: 'Choose which Claude it should use to continue.',
+  tryItAfterSetup: 'Try it unlocks once setup finishes.',
+  pasteCodeToContinue: 'Paste the code from claude.ai to complete sign-in.',
+  buyAfterSizesLoad: 'Buy unlocks once the sizes have loaded.',
   setupContinuesInBackground:
     'You can close this; setup carries on and the computer’s row shows its progress.',
   signInWaitingBody:

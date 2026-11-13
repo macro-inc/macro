@@ -921,12 +921,16 @@ To buy one as a team admin:
 
 While the computer provisions, a **Setup progress** list under the step bar
 follows the same phases the row shows (Creating the computer, Starting up,
-Connecting to Macro, then Sign in to Claude when the agent uses the team's
-own account): done stages carry a check, the current one a spinner and how
+Connecting to Macro, Sign in to Claude; the same four on every step, the
+sign-in struck through "Not needed" once Macro's Claude is chosen): done
+stages carry a check, the current one a spinner and how
 long it has taken (`0:42`, counted from when the step was first seen, the
 first from the purchase), and a stuck one says why (waiting for capacity, or
 `failed` with "The computer could not be set up…" and **Retry setup**, which is
-`POST .../retry`). The row in Machines shows the same live line, `Setting up ·
+`POST .../retry`; a server `failureReason`, once the API sends one, is shown
+before that copy). No control in the flow is disabled without a line beside it
+saying why (**Continue**: name the agent / choose which Claude; **Buy**: sizes
+loading; **Complete sign-in**: paste the code; **Try it**: setup finishing). The row in Machines shows the same live line, `Setting up ·
 Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
 carries on; the row's **Finish setup** reopens the same dialog where it left
 off. **Let's set up an agent on it** names the agent Macro

@@ -44,7 +44,7 @@ describe('formatElapsed', () => {
 describe('setupStages', () => {
   it('marks the phases before the current one done and the sign-in as a later stage', () => {
     const stages = setupStages(computer, {
-      signsIn: true,
+      signIn: 'needed',
       connected: false,
       signedIn: false,
     });
@@ -57,9 +57,9 @@ describe('setupStages', () => {
     expect(stages[1].detail).toBeUndefined();
   });
 
-  it('leaves the sign-in out for an agent on Macro credits', () => {
+  it('keeps the sign-in in the list for an agent on Macro credits, struck through', () => {
     const stages = setupStages(computer, {
-      signsIn: false,
+      signIn: 'skipped',
       connected: false,
       signedIn: false,
     });
@@ -67,7 +67,24 @@ describe('setupStages', () => {
       'creating',
       'booting',
       'connecting',
+      'sign_in',
     ]);
+    expect(stages[3]).toMatchObject({
+      state: 'skipped',
+      detail: "Not needed: the agent runs on Macro's Claude.",
+    });
+  });
+
+  it('puts the server reason, when there is one, before the generic failed copy', () => {
+    const withReason = { ...computer, status: 'failed' as const };
+    Reflect.set(withReason, 'failureReason', 'The host ran out of disk.');
+    expect(
+      setupStages(withReason, {
+        signIn: 'undecided',
+        connected: false,
+        signedIn: false,
+      })[1].detail
+    ).toMatch(/^The host ran out of disk\. The computer could not be set up/);
   });
 
   it('makes the sign-in current once the computer is up, saying why it waits until connected', () => {
@@ -77,7 +94,7 @@ describe('setupStages', () => {
       setup: undefined,
     };
     const waiting = setupStages(up, {
-      signsIn: true,
+      signIn: 'needed',
       connected: false,
       signedIn: false,
     });
@@ -87,13 +104,13 @@ describe('setupStages', () => {
       detail: expect.stringContaining('unlocks by itself'),
     });
     const connected = setupStages(up, {
-      signsIn: true,
+      signIn: 'needed',
       connected: true,
       signedIn: false,
     });
     expect(connected[3].detail).toBeUndefined();
     const done = setupStages(up, {
-      signsIn: true,
+      signIn: 'needed',
       connected: true,
       signedIn: true,
     });
@@ -103,7 +120,7 @@ describe('setupStages', () => {
   it('fails the current phase with the reason, and explains a capacity wait', () => {
     const failed = setupStages(
       { ...computer, status: 'failed' },
-      { signsIn: false, connected: false, signedIn: false }
+      { signIn: 'undecided', connected: false, signedIn: false }
     );
     expect(failed[1]).toMatchObject({
       state: 'failed',
@@ -111,7 +128,7 @@ describe('setupStages', () => {
     });
     const waiting = setupStages(
       { ...computer, status: 'waiting_for_capacity', setup: undefined },
-      { signsIn: false, connected: false, signedIn: false }
+      { signIn: 'undecided', connected: false, signedIn: false }
     );
     expect(waiting[0]).toMatchObject({
       state: 'current',

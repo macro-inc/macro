@@ -6,7 +6,13 @@ import { SETUP_PHASES, setupPhaseIndex } from './computer-display';
 /** A stage of getting a bought computer to a working agent. */
 export type SetupStageId = SetupStep | 'sign_in';
 
-export type SetupStageState = 'done' | 'current' | 'upcoming' | 'failed';
+export type SetupStageState =
+  | 'done'
+  | 'current'
+  | 'upcoming'
+  | 'failed'
+  /** Not needed: the agent runs on Macro's Claude. */
+  | 'skipped';
 
 export type SetupStage = {
   id: SetupStageId;
@@ -84,40 +90,54 @@ export function setupStageLabel(stage: SetupStageId): string {
     .exhaustive();
 }
 
+/**
+ * The server's reason for a failed setup, once the API carries one on the
+ * status (a fail-fast Failed state is being added); absent until then.
+ */
+export function setupFailureReason(
+  computer: ComputerStatus
+): string | undefined {
+  const reason: unknown = Reflect.get(computer, 'failureReason');
+  return typeof reason === 'string' && reason.trim() ? reason : undefined;
+}
+
 /** Why a computer is not moving, when the API says so. */
 export function setupProblem(computer: ComputerStatus): string | undefined {
   return match(computer.status)
-    .with('failed', () => t('computers.setupFailedReason'))
+    .with('failed', () =>
+      [setupFailureReason(computer), t('computers.setupFailedReason')]
+        .filter(Boolean)
+        .join(' ')
+    )
     .with('needs_attention', () => t('computers.needsAttention'))
     .with('waiting_for_capacity', () => t('computers.waitingForCapacityHint'))
     .otherwise(() => undefined);
 }
 
+/** Whether the agent signs in to the team's own Claude account. */
+export type SignInPlan = 'needed' | 'skipped' | 'undecided';
+
 /**
- * The stages from purchase to a working agent, as the dialog and the row
- * show them: the three provisioning phases the API reports, then the
- * Claude sign-in when the agent runs on the team's own account.
+ * The stages from purchase to a working agent, the same list on every
+ * step: the three provisioning phases the API reports, then the Claude
+ * sign-in, struck through when the agent runs on Macro's Claude.
  */
 export function setupStages(
   computer: ComputerStatus,
   options: {
-    /** The agent signs in to the team's own Claude account. */
-    signsIn: boolean;
+    signIn: SignInPlan;
     /** The computer's runtime is connected, so sign-in can start. */
     connected: boolean;
     /** Claude is signed in (or credits chosen), so setup is complete. */
     signedIn: boolean;
   }
 ): SetupStage[] {
-  const ids: SetupStageId[] = [
-    ...SETUP_PHASES,
-    ...(options.signsIn ? (['sign_in'] as const) : []),
-  ];
+  const ids: SetupStageId[] = [...SETUP_PHASES, 'sign_in'];
   const settled = setupSettled(computer);
   const failed =
     computer.status === 'failed' || computer.status === 'needs_attention';
   const current = settled
-    ? options.signsIn && !options.signedIn
+    ? options.signIn === 'needed' && !options.signedIn
       ? ids.indexOf('sign_in')
       : ids.length
     : setupPhaseIndex(computer);
@@ -125,24 +145,28 @@ export function setupStages(
 
   return ids.map((id, index) => {
     const state: SetupStageState =
-      index < current
-        ? 'done'
-        : index === current
-          ? failed
-            ? 'failed'
-            : 'current'
-          : 'upcoming';
+      id === 'sign_in' && options.signIn === 'skipped'
+        ? 'skipped'
+        : index < current
+          ? 'done'
+          : index === current
+            ? failed
+              ? 'failed'
+              : 'current'
+            : 'upcoming';
     const stuck = index === current && (failed || !!problem);
     return {
       id,
       label: setupStageLabel(id),
       state,
       detail:
-        id === 'sign_in' && state === 'current' && !options.connected
-          ? t('computers.signInUnlocksLater')
-          : stuck
-            ? problem
-            : undefined,
+        state === 'skipped'
+          ? t('computers.signInSkipped')
+          : id === 'sign_in' && state === 'current' && !options.connected
+            ? t('computers.signInUnlocksLater')
+            : stuck
+              ? problem
+              : undefined,
     };
   });
 }

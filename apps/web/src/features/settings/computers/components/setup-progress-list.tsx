@@ -4,7 +4,11 @@ import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import type { ComputerStatus } from '@service-auth/computers';
 import { Button, cn, Spinner } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
-import { type SetupStage, setupStages } from '../core/setup-progress';
+import {
+  type SetupStage,
+  type SignInPlan,
+  setupStages,
+} from '../core/setup-progress';
 import { useSetupElapsed } from '../primitives/setup-elapsed';
 
 /**
@@ -15,7 +19,7 @@ import { useSetupElapsed } from '../primitives/setup-elapsed';
  */
 export function SetupProgressList(props: {
   computer: ComputerStatus;
-  signsIn: boolean;
+  signIn: SignInPlan;
   connected: boolean;
   signedIn: boolean;
   /** Sets a failed computer up again; shown on the failed stage. */
@@ -25,7 +29,7 @@ export function SetupProgressList(props: {
   const elapsed = useSetupElapsed(() => props.computer);
   const stages = () =>
     setupStages(props.computer, {
-      signsIn: props.signsIn,
+      signIn: props.signIn,
       connected: props.connected,
       signedIn: props.signedIn,
     });
@@ -71,6 +75,7 @@ export function SetupProgressList(props: {
               stage.state === 'current' && 'text-ink',
               stage.state === 'done' && 'text-ink-muted',
               stage.state === 'upcoming' && 'text-ink-extra-muted',
+              stage.state === 'skipped' && 'text-ink-extra-muted',
               stage.state === 'failed' && 'text-ink'
             )}
             aria-current={stage.state === 'current' ? 'step' : undefined}
@@ -79,7 +84,14 @@ export function SetupProgressList(props: {
               <span class="flex size-3.5 shrink-0 items-center justify-center">
                 {marker(stage)}
               </span>
-              <span class="min-w-0 flex-1">{stage.label}</span>
+              <span
+                class={cn(
+                  'min-w-0 flex-1',
+                  stage.state === 'skipped' && 'line-through'
+                )}
+              >
+                {stage.label}
+              </span>
               <Show when={stage.state === 'current' && elapsed()}>
                 {(time) => (
                   <span class="shrink-0 text-xs tabular-nums text-ink-muted">

@@ -187,7 +187,9 @@ export function ComputerPurchaseStep(props: {
         </Switch>
         <Show when={!props.failure}>
           <p class="basis-full text-right text-xs text-ink-muted text-pretty">
-            {t('computers.buyHeadsUp')}
+            {props.offers
+              ? t('computers.buyHeadsUp')
+              : t('computers.buyAfterSizesLoad')}
           </p>
         </Show>
       </ActionDialogShell.Footer>
