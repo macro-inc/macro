@@ -11,6 +11,7 @@ axum = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 constant_time_eq = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
 lazy-regex = { workspace = true }
 macro_tower_layers = { path = "../macro_tower_layers" }
