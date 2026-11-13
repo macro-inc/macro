@@ -1,0 +1,49 @@
+crates/webhook/src/domain/ingestion.rs
+  s_9d302c2d5b35f4::t_8767ecde8cb044 24,126,129,466-470,474,484,777,779
+crates/webhook/src/domain/events/test.rs
+  s_9d302c2d5b35f4::t_ab39b4b0dcc6fc 329-330,336,340,342-343,346-348,353-365
+crates/webhook/AGENTS.md
+  s_9d302c2d5b35f4::t_a39700a6adb746 18
+crates/webhook/README.md
+  s_9d302c2d5b35f4::t_a39700a6adb746 81,143-151,158-159,399-402
+crates/webhook/src/domain/events.rs
+  s_9d302c2d5b35f4::t_8767ecde8cb044 205-206
+crates/webhook/src/domain/stream/test.rs
+  s_9d302c2d5b35f4::t_ab39b4b0dcc6fc 611-612,618,680,694,725-726,730
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 626,688,702,738
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_9d302c2d5b35f4::t_8767ecde8cb044 44,121
+crates/webhook/src/topics.rs
+  s_9d302c2d5b35f4::t_8767ecde8cb044 14,23
+crates/webhook/src/domain/ingestion/test.rs
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 2150-2153,2165-2182
+  s_9d302c2d5b35f4::t_75f31dd2ac1ced 2114,2116,2136-2137,2140-2148,2154,2161-2162
+  s_9d302c2d5b35f4::t_8fbed4d1681ea7 2138
+crates/webhook/src/inbound/kafka_stream_consumer.rs
+  s_9d302c2d5b35f4::t_8bd4ac37a5a184 16,20-23,49-69,72-73
+  s_9d302c2d5b35f4::t_8767ecde8cb044 96-97
+  s_9d302c2d5b35f4::t_31ad9ce495b774 98
+crates/webhook/src/domain/ingestion/stream.rs
+  s_9d302c2d5b35f4::t_8767ecde8cb044 19,83-91
+services/document_storage_service/src/api/swagger.rs
+  s_9d302c2d5b35f4::t_8767ecde8cb044 1187
+crates/webhook/src/inbound/kafka_consumer/test.rs
+  s_9d302c2d5b35f4::t_8373e28729a688 74,193,302-303,306,315
+  s_9d302c2d5b35f4::t_7d932add2c3dfe 318-320
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7294734f8af0614f0bdb4bd6768ac70078f94454",
+  "prompts": {},
+  "sessions": {
+    "s_9d302c2d5b35f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eba92134-fcdc-4053-be03-fafeb9be5fc3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
