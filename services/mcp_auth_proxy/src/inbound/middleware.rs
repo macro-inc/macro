@@ -148,6 +148,17 @@ pub async fn validate_bearer(
         }
     };
 
+    // A code-mode credential signed with its session's scope is checked per
+    // request path; MCP calls tools at one path and has no session to scope
+    // their own credentials to, so it accepts none of them.
+    if let JwtToken::MacroApiToken(api) = &jwt_token
+        && api.agent_scope.is_some()
+    {
+        tracing::warn!("refused a scoped code-mode credential at the MCP endpoint");
+        let mut response = Response::new(Body::empty());
+        *response.status_mut() = StatusCode::FORBIDDEN;
+        return response;
+    }
     if let JwtToken::MacroApiToken(api) = &jwt_token
         && api.agent_id.is_some()
         && let Some(session) = api.agent_session_id

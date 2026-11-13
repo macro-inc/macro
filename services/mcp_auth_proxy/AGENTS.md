@@ -125,3 +125,4 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 - Skill: `new-service` (for how this is wired as a dependency, not a deploy)
 
 - Only verified Macro JWT session provenance becomes `ManagedAgentSession`; external MCP callers remain uncorrelated.
+- `validate_bearer` refuses (403) a Macro API token that signs `agent_scope`: a scoped code-mode session reaches no MCP tools, whose own credentials would carry no scope.
