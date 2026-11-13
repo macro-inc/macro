@@ -107,7 +107,9 @@ feature flag. Live streams (`GET /events/stream`) live in
 - Messages, on channels and document discussions alike: `message.posted`,
   `message.patched`, `message.deleted`, `message.attachment_created`,
   `message.attachment_removed`, and `message.mentioned`. Each payload carries
-  the message's `parent` (`{"type": "channel" | "document", "id": ...}`).
+  the message's `parent` (`{"type": "channel" | "document" | "initiative" |
+  "crm_company" | "crm_contact" | "call", "id": ...}`), which is also the
+  event's `entity_type`.
 - Webhooks: `webhook.created`, `webhook.updated`, `webhook.deleted`, and
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.

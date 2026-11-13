@@ -315,3 +315,43 @@ fn the_registry_matches_every_producers_exposure() {
         }
     }
 }
+
+/// A message's entity is its parent: every parent kind is a registered
+/// entity type of every message event, so `entity_types` filters match.
+#[test]
+fn message_events_register_every_parent_entity_type() {
+    use messages::domain::models::MessageParent;
+
+    const ID: &str = "0193b3a0-0000-7000-8000-000000000001";
+    let parents = [
+        "channel",
+        "document",
+        "initiative",
+        "crm_company",
+        "crm_contact",
+        "call",
+    ]
+    .map(|kind| MessageParent::parse(kind, ID).unwrap());
+    for parent in &parents {
+        // Exhaustive: a new parent kind fails here until it is registered.
+        match parent {
+            MessageParent::Channel(_)
+            | MessageParent::Document(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_)
+            | MessageParent::Call(_) => {}
+        }
+        let wire = event_exposure::PublicEntityType::from(parent.access_entity_type()).as_str();
+        for entry in CATALOG
+            .iter()
+            .filter(|entry| entry.name.starts_with("message."))
+        {
+            assert!(
+                entry.entity_types.contains(&wire),
+                "{} does not register {wire}",
+                entry.name
+            );
+        }
+    }
+}

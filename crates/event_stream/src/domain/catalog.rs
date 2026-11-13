@@ -203,12 +203,12 @@ public_event_registry! {
         }
         /// Message facts for channels and documents from the `macro.messages` topic.
         Message(MessageTopicEvent => MessageTopicEvent) {
-            "message.posted": ["channel", "document"], [Entity], Stable;
-            "message.patched": ["channel", "document"], [Entity], Stable;
-            "message.deleted": ["channel", "document"], [Entity], Stable;
-            "message.mentioned": ["channel", "document"], [Entity], Stable;
-            "message.attachment_created": ["channel", "document"], [Entity], Stable;
-            "message.attachment_removed": ["channel", "document"], [Entity], Stable;
+            "message.posted": ["channel", "document", "initiative", "crm_company", "crm_contact", "call"], [Entity], Stable;
+            "message.patched": ["channel", "document", "initiative", "crm_company", "crm_contact", "call"], [Entity], Stable;
+            "message.deleted": ["channel", "document", "initiative", "crm_company", "crm_contact", "call"], [Entity], Stable;
+            "message.mentioned": ["channel", "document", "initiative", "crm_company", "crm_contact", "call"], [Entity], Stable;
+            "message.attachment_created": ["channel", "document", "initiative", "crm_company", "crm_contact", "call"], [Entity], Stable;
+            "message.attachment_removed": ["channel", "document", "initiative", "crm_company", "crm_contact", "call"], [Entity], Stable;
         }
         /// Agent session lifecycle events from the
         /// `macro.agent_session_lifecycle` topic.
