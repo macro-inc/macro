@@ -29,6 +29,7 @@ import {
   $createTextNode,
   $getRoot,
   $getSelection,
+  $isParagraphNode,
   $isTextNode,
   $setSelection,
   CLEAR_HISTORY_COMMAND,
@@ -323,8 +324,8 @@ describe('Source applyAiOps controls', () => {
           fired = true;
           editor.update(() => {
             const last = $getRoot().getLastChild();
-            if (last && 'append' in last)
-              (last as ParagraphNode).append($createTextNode(' [listener]'));
+            if ($isParagraphNode(last))
+              last.append($createTextNode(' [listener]'));
           });
         });
       }
@@ -336,5 +337,72 @@ describe('Source applyAiOps controls', () => {
     }
     expect(fired).toBe(true);
     expect(result.threw).toBeNull();
+    const seed = 'Alpha beta gamma\n\nSecond line';
+    // Commit 0 is applyAiOps' discrete $setSelection(null): selection only, no
+    // dirty nodes, so history discards it. The listener's non-discrete update
+    // is flushed into the next op's discrete commit, not a commit of its own.
+    expect(
+      result.commitsDuringApply.map(({ text, dirtyElements, selection }) => ({
+        text,
+        dirtyElements,
+        selection,
+      }))
+    ).toEqual([
+      { text: seed, dirtyElements: 0, selection: 'null' },
+      { text: 'Omega\n\nSecond line', dirtyElements: 2, selection: 'null' },
+      {
+        text: 'Omega (AI)\n\nSecond line [listener]',
+        dirtyElements: 3,
+        selection: 'null',
+      },
+    ]);
+    expect(result.textAfter).toBe('Omega (AI)\n\nSecond line [listener]');
+    // One undo inside registerLoroHistory's 300 ms merge window reverts all.
+    expect(result.undo1).toBe(seed);
+  });
+
+  it('records undo steps for two AI edits more than 300 ms apart', async () => {
+    // Grouping is registerLoroHistory's time rule (getMergeAction plus Loro's
+    // mergeInterval, both 300 ms), not a structural group per AI edit.
+    const rows = [];
+    for (const gap of [0, 400]) {
+      const r = await rig(SEED);
+      selectAlpha(r.editor);
+      const [a, b] = blockIds(r.editor);
+      if (!a || !b) throw new Error('expected two blocks');
+      applyAiOps(r.editor, r.mappings, [
+        { kind: 'appendText', node: a, text: ' [one]' },
+      ]);
+      await r.settle();
+      await new Promise((done) => setTimeout(done, gap));
+      applyAiOps(r.editor, r.mappings, [
+        { kind: 'appendText', node: b, text: ' [two]' },
+      ]);
+      await r.settle();
+      const text = () => r.editor.read(() => $getRoot().getTextContent());
+      const after = text();
+      r.editor.dispatchCommand(UNDO_COMMAND, undefined);
+      await r.settle();
+      const undo1 = text();
+      r.editor.dispatchCommand(UNDO_COMMAND, undefined);
+      await r.settle();
+      rows.push({ gap, after, undo1, undo2: text() });
+    }
+    const out = process.env.AI_EDIT_SOURCE_UNDO_GAP_OUT;
+    if (out) {
+      const { writeFileSync } = await import('node:fs');
+      writeFileSync(out, `${JSON.stringify(rows, null, 2)}\n`);
+    }
+    console.log(JSON.stringify(rows, null, 2));
+    for (const row of rows)
+      expect(row.after).toBe('Alpha beta gamma [one]\n\nSecond line [two]');
+    const seed = 'Alpha beta gamma\n\nSecond line';
+    // Within the window both edits are one undo step; past it, two.
+    expect(
+      rows.map(({ gap, undo1, undo2 }) => ({ gap, undo1, undo2 }))
+    ).toEqual([
+      { gap: 0, undo1: seed, undo2: seed },
+      { gap: 400, undo1: 'Alpha beta gamma [one]\n\nSecond line', undo2: seed },
+    ]);
   });
 });
