@@ -742,6 +742,24 @@ async fn clean_up(
     }
 }
 
+/// Stop a background draft's session unless it was `stopped` already, or
+/// delete it when it won't stop, so it works on no further. Its row stays.
+async fn stop_or_delete(
+    sessions: &impl RoutineSessions,
+    action: RoutineSessionAction,
+    stopped: bool,
+) {
+    if stopped || stop(sessions, &action).await {
+        return;
+    }
+    if let Err(error) = sessions.delete(action).await {
+        tracing::warn!(
+            error = ?error,
+            "could not delete a routine draft's session that won't stop"
+        );
+    }
+}
+
 /// Cleans up a draft's session: now, when the draft is done, or on drop,
 /// when its request was dropped first. A background draft's session is only
 /// stopped: it and its row go when its owner discards the draft. One that
@@ -768,17 +786,7 @@ impl<Sessions: RoutineSessions> Cleanup<Sessions> {
     async fn now(&mut self) {
         if let Some(action) = self.action.take() {
             if self.keeps {
-                if !self.stopped {
-                    self.stopped = stop(self.sessions.as_ref(), &action).await;
-                }
-                if !self.stopped
-                    && let Err(error) = self.sessions.delete(action).await
-                {
-                    tracing::warn!(
-                        error = ?error,
-                        "could not delete a routine draft's session that won't stop"
-                    );
-                }
+                stop_or_delete(self.sessions.as_ref(), action, self.stopped).await;
                 return;
             }
             clean_up(
@@ -811,9 +819,7 @@ impl<Sessions: RoutineSessions> Drop for Cleanup<Sessions> {
             async move {
                 if keeps {
                     // Its row stays drafting, and the sweep fails it.
-                    if !stopped {
-                        stop(sessions.as_ref(), &action).await;
-                    }
+                    stop_or_delete(sessions.as_ref(), action, stopped).await;
                     return;
                 }
                 clean_up(sessions.as_ref(), hand_backs.as_ref(), &action, stopped).await

@@ -852,6 +852,34 @@ async fn a_drafter_that_never_ends_is_failed_at_its_limit() {
     assert!(sessions.deleted.lock().unwrap().is_empty());
 }
 
+/// A drafter cut off at [`JOB_LIMIT`] whose session won't stop deletes the
+/// session, so it works on no further, and its job still fails as timed out.
+#[tokio::test(start_paused = true)]
+async fn a_drafter_cut_off_whose_session_wont_stop_deletes_it() {
+    let rows = Arc::new(Rows {
+        stalls: true.into(),
+        ..Rows::default()
+    });
+    let mut sessions = hangs(&rows);
+    Arc::get_mut(&mut sessions).unwrap().unstoppable = true;
+    let replica = Replica::new(&rows, &sessions);
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    replica.settled().await;
+
+    // The cut-off drafter cleans up on a task of its own.
+    tokio::time::timeout(POLL, sessions.deletes.notified())
+        .await
+        .expect("the session that won't stop was never deleted");
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert!(sessions.cancelled.lock().unwrap().is_empty());
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    let timed_out = replica.jobs.job(owner(), job.id).await.unwrap();
+    assert!(
+        matches!(&timed_out.state, DraftJobState::Failed { message, .. } if message == TIMED_OUT),
+        "{timed_out:?}"
+    );
+}
+
 /// A host that stops ends its drafts within the shutdown's time, failed as
 /// interrupted, which its owner reads from any replica.
 #[tokio::test(start_paused = true)]
