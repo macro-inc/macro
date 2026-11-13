@@ -30143,22 +30143,12 @@
       "AccessRequestResolvedMetadata": {
         "type": "object",
         "description": "Metadata for [`PasswordTopicEvent::AccessRequestResolved`].",
-        "required": [
-          "recipientUserId",
-          "teamId",
-          "itemId",
-          "requestId",
-          "status"
-        ],
+        "required": ["teamId", "itemId", "requestId", "status"],
         "properties": {
           "itemId": {
             "type": "string",
             "format": "uuid",
             "description": "Requested item."
-          },
-          "recipientUserId": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
-            "description": "Agent account the event is addressed to; routing only, removed\nbefore delivery."
           },
           "requestId": {
             "type": "string",

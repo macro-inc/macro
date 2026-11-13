@@ -30,7 +30,8 @@ pub enum AccessRequestResolution {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct AccessRequestResolvedMetadata {
     /// Agent account the event is addressed to; routing only, removed
-    /// before delivery.
+    /// before delivery, so it is not part of the published schema.
+    #[cfg_attr(feature = "schema", schema(ignore))]
     pub recipient_user_id: MacroUserIdStr<'static>,
     /// Team owning the item.
     pub team_id: Uuid,

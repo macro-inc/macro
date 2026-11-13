@@ -4,9 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
 import type { AccessRequestResolution } from './accessRequestResolution';
-import type { MacroUserIdStr } from './macroUserIdStr';
 
 /**
  * Metadata for [`PasswordTopicEvent::AccessRequestResolved`].
@@ -14,9 +12,6 @@ import type { MacroUserIdStr } from './macroUserIdStr';
 export interface AccessRequestResolvedMetadata {
   /** Requested item. */
   itemId: string;
-  /** Agent account the event is addressed to; routing only, removed
-before delivery. */
-  recipientUserId: MacroUserIdStr;
   /** Resolved request. */
   requestId: string;
   /** Resolution. */

@@ -76,11 +76,6 @@ export type AccessRequestResolvedMetadata = {
      */
     itemId: string;
     /**
-     * Agent account the event is addressed to; routing only, removed
-     * before delivery.
-     */
-    recipientUserId: MacroUserIdStr;
-    /**
      * Resolved request.
      */
     requestId: string;
