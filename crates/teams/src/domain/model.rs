@@ -119,7 +119,7 @@ pub(crate) fn team_slug_from_name(team_name: &str) -> String {
     serde::Serialize,
     serde::Deserialize,
 )]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(any(feature = "axum", feature = "schema"), derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
