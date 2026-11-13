@@ -1,0 +1,144 @@
+// Forwards this machine's local stacks' telemetry to the hosted Grafana.
+//
+// The lgtm collector (docker/docker-compose.yml) copies every trace, log and
+// metric it receives here while the local telemetry settings say
+// `services = true`; `just run_local` then starts this container with this file
+// and the token in a private directory. Everything is tagged with the machine's
+// name and forced to deployment.environment=local, which keeps it out of dev's
+// dashboards and alerts, and traces are sampled: the ingest route's request and
+// byte limits are shared with dev. See docs/development/running-locally.md.
+
+logging { level = "warn" }
+
+local.file "token" {
+  filename = "/etc/macro-forwarder/token"
+  is_secret = true
+}
+
+otelcol.receiver.otlp "lgtm" {
+  http { endpoint = "0.0.0.0:4318" }
+  output {
+    logs = [otelcol.processor.memory_limiter.forwarder.input]
+    metrics = [otelcol.processor.memory_limiter.forwarder.input]
+    traces = [otelcol.processor.memory_limiter.forwarder.input]
+  }
+}
+
+otelcol.processor.memory_limiter "forwarder" {
+  check_interval = "1s"
+  limit = "384MiB"
+  spike_limit = "64MiB"
+  output {
+    logs = [otelcol.processor.filter.forwarder.input]
+    metrics = [otelcol.processor.filter.forwarder.input]
+    traces = [otelcol.processor.filter.forwarder.input]
+  }
+}
+
+// The lgtm container's own components: its collector scrapes its own metrics
+// every second (most of the metric volume), and its Tempo and Pyroscope trace
+// themselves.
+otelcol.processor.filter "forwarder" {
+  error_mode = "ignore"
+  traces {
+    span = [`IsMatch(resource.attributes["service.name"], "^(otelcol-contrib|opentelemetry-collector|grafana|loki.*|tempo.*|pyroscope.*|prometheus)$")`]
+  }
+  metrics {
+    metric = [`IsMatch(resource.attributes["service.name"], "^(otelcol-contrib|opentelemetry-collector|grafana|loki.*|tempo.*|pyroscope.*|prometheus)$")`]
+  }
+  logs {
+    log_record = [`IsMatch(resource.attributes["service.name"], "^(otelcol-contrib|opentelemetry-collector|grafana|loki.*|tempo.*|pyroscope.*|prometheus)$")`]
+  }
+  output {
+    logs = [otelcol.processor.transform.forwarder.input]
+    metrics = [otelcol.processor.transform.forwarder.input]
+    traces = [otelcol.processor.tail_sampling.forwarder.input]
+  }
+}
+
+// Every trace with an error, and a tenth of the rest. The decision hashes the
+// trace id, so spans that arrive late follow their trace.
+otelcol.processor.tail_sampling "forwarder" {
+  decision_wait = "10s"
+  num_traces = 20000
+  policy {
+    name = "errors"
+    type = "status_code"
+    status_code { status_codes = ["ERROR"] }
+  }
+  policy {
+    name = "a-tenth"
+    type = "probabilistic"
+    probabilistic { sampling_percentage = 10 }
+  }
+  output { traces = [otelcol.processor.transform.forwarder.input] }
+}
+
+otelcol.processor.transform "forwarder" {
+  error_mode = "ignore"
+  trace_statements {
+    context = "resource"
+    statements = [
+      `set(attributes["host.name"], "` + sys.env("MACRO_MACHINE_NAME") + `")`,
+      `set(attributes["deployment.environment.name"], "local")`,
+      `set(attributes["deployment.environment"], "local")`,
+    ]
+  }
+  log_statements {
+    context = "resource"
+    statements = [
+      `set(attributes["host.name"], "` + sys.env("MACRO_MACHINE_NAME") + `")`,
+      `set(attributes["deployment.environment.name"], "local")`,
+      `set(attributes["deployment.environment"], "local")`,
+    ]
+  }
+  metric_statements {
+    context = "resource"
+    statements = [
+      `set(attributes["host.name"], "` + sys.env("MACRO_MACHINE_NAME") + `")`,
+      `set(attributes["deployment.environment.name"], "local")`,
+      `set(attributes["deployment.environment"], "local")`,
+    ]
+  }
+  // The hosted Prometheus keeps datapoint attributes, not resource ones, as
+  // series labels: without these, a local series and dev's series of the same
+  // service would be one series.
+  metric_statements {
+    context = "datapoint"
+    statements = [
+      `set(attributes["deployment.environment"], "local")`,
+      `set(attributes["host.name"], "` + sys.env("MACRO_MACHINE_NAME") + `")`,
+    ]
+  }
+  output {
+    logs = [otelcol.processor.batch.forwarder.input]
+    metrics = [otelcol.processor.batch.forwarder.input]
+    traces = [otelcol.processor.batch.forwarder.input]
+  }
+}
+
+// A request per signal every 5 s at most, unless a batch fills first.
+otelcol.processor.batch "forwarder" {
+  timeout = "5s"
+  send_batch_size = 512
+  send_batch_max_size = 1024
+  output {
+    logs = [otelcol.exporter.otlphttp.grafana.input]
+    metrics = [otelcol.exporter.otlphttp.grafana.input]
+    traces = [otelcol.exporter.otlphttp.grafana.input]
+  }
+}
+
+otelcol.auth.bearer "grafana" {
+  token = local.file.token.content
+}
+
+otelcol.exporter.otlphttp "grafana" {
+  client {
+    endpoint = sys.env("MACRO_FORWARD_ENDPOINT")
+    auth = otelcol.auth.bearer.grafana.handler
+    timeout = "10s"
+  }
+  sending_queue { queue_size = 128 }
+  retry_on_failure { max_elapsed_time = "60s" }
+}
