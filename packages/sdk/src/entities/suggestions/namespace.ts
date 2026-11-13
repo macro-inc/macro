@@ -70,6 +70,7 @@ export type SuggestionInput =
  * - Read every suggestion first with `macro.suggestions.review()`. Then add with `suggest`, change with `suggestion.rewrite`, and retire with `suggestion.retire` what no longer matters.
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
+ * - A reply suggestion may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `suggestion.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
  *
  * @mcp-exclude Suggestions are written by hidden generation sessions and acted on in the app, not over MCP.
  */

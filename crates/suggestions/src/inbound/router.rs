@@ -7,7 +7,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRef, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{
@@ -18,10 +18,13 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    Accept, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError,
-    SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
+    Accept, AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
+    SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 use crate::domain::ports::SuggestionApi;
+
+#[cfg(test)]
+mod test;
 
 /// What the suggestions routes share.
 pub struct SuggestionRouterState<S, Auth> {
@@ -74,6 +77,10 @@ where
         .route(
             "/suggestions/{id}/retire",
             post(retire_suggestion::<S, Auth>),
+        )
+        .route(
+            "/suggestions/{id}/draft",
+            put(attach_suggestion_draft::<S, Auth>),
         )
         .route(
             "/suggestions/{id}/accept",
@@ -410,6 +417,44 @@ where
         state
             .service
             .retire(&principal, correlation, id, request)
+            .await?,
+    ))
+}
+
+#[utoipa::path(
+    put,
+    path = "/suggestions/{id}/draft",
+    tag = "suggestions",
+    operation_id = "attach_suggestion_draft",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    request_body = AttachDraft,
+    responses(
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the draft is now the suggestion's, replacing its old one, and what to fix when it isn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a suggestions generation session may attach a draft"),
+        (status = 404, body = String, description = "No such suggestion for the user, or suggestions are off"),
+        (status = 500, body = String),
+    )
+)]
+/// Make a reply draft a suggestions generation session wrote the draft of an
+/// open reply suggestion. Nothing is sent.
+pub async fn attach_suggestion_draft<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    Path(id): Path<Uuid>,
+    body: Result<Json<AttachDraft>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .attach_draft(&principal, correlation, id, request)
             .await?,
     ))
 }

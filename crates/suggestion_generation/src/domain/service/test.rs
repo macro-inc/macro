@@ -12,8 +12,8 @@ use scheduled_action::domain::suggestions::model::{
     RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
 use suggestions::domain::model::{
-    NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError, SuggestionFeed,
-    SuggestionWriteOutcome, SuggestionsReview,
+    AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError,
+    SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 
 use super::*;
@@ -253,6 +253,16 @@ impl SuggestionApi for FakeSuggestions {
         _: Option<Uuid>,
         _: Uuid,
         _: RetireSuggestionRequest,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        unreachable!()
+    }
+
+    async fn attach_draft(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: Uuid,
+        _: AttachDraft,
     ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         unreachable!()
     }

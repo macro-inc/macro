@@ -14,24 +14,25 @@ use feature_flags::FeatureFlags;
 use futures::{StreamExt as _, TryStreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    Accept, Change, ChangeAction, GenerationSession, GenerationTrigger, KindName, NewSuggestion,
-    RetireSuggestionRequest, RewriteSuggestion, RunMode, RunProgress, RunSettled, RunStartError,
-    SessionKind, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionContent,
-    SuggestionError, SuggestionFeed, SuggestionKind, SuggestionRun, SuggestionState,
-    SuggestionWriteOutcome, SuggestionsReview, Target,
+    Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger,
+    KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, RunProgress,
+    RunSettled, RunStartError, SessionKind, SessionReadError, SessionState, StoredRun, Suggestion,
+    SuggestionContent, SuggestionError, SuggestionFeed, SuggestionKind, SuggestionRun,
+    SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 use super::ports::{
     GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, RunSessions,
-    SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionRepo, Written,
+    SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
 };
 use super::prompt;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// The PostHog flag that turns suggestions on for a person.
 pub const SUGGESTIONS_FLAG: &str = "enable-suggestions";
@@ -56,10 +57,12 @@ const LIMITS: Limits = Limits {
     new_per_generation: NEW_PER_GENERATION,
 };
 
-/// Serves suggestions from `Repo`, checking items with `Access`.
-pub struct SuggestionService<Repo, Access, Flags> {
+/// Serves suggestions from `Repo`, checking items with `Access` and drafts with
+/// `Drafts`.
+pub struct SuggestionService<Repo, Access, Drafts, Flags> {
     repo: Arc<Repo>,
     access: Arc<Access>,
+    drafts: Arc<Drafts>,
     request_sessions: Arc<dyn RequestSessions>,
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
@@ -86,16 +89,19 @@ const SETTLE_BATCH: u16 = 50;
 /// and one whose in-process runtime went away (a restart) won't resume.
 const START_WINDOW: chrono::Duration = chrono::Duration::minutes(10);
 
-impl<Repo, Access, Flags> SuggestionService<Repo, Access, Flags>
+impl<Repo, Access, Drafts, Flags> SuggestionService<Repo, Access, Drafts, Flags>
 where
     Repo: SuggestionRepo,
     Access: SuggestionAccess,
+    Drafts: SuggestionDrafts,
     Flags: FeatureFlags + 'static,
 {
     /// Without `flags`, suggestions are off for everyone.
+    #[expect(clippy::too_many_arguments, reason = "each port is its own adapter")]
     pub fn new(
         repo: Arc<Repo>,
         access: Arc<Access>,
+        drafts: Arc<Drafts>,
         request_sessions: Arc<dyn RequestSessions>,
         generation_sessions: Arc<dyn GenerationSessions>,
         audience: Arc<dyn SuggestionAudience>,
@@ -105,6 +111,7 @@ where
         Self {
             repo,
             access,
+            drafts,
             request_sessions,
             generation_sessions,
             audience,
@@ -465,10 +472,18 @@ fn snapshot(content: &SuggestionContent) -> Option<serde_json::Value> {
     serde_json::to_value(content).ok()
 }
 
-impl<Repo, Access, Flags> SuggestionApi for SuggestionService<Repo, Access, Flags>
+/// A suggestion's draft, as the change log keeps it: `{"draft": target or null}`.
+fn draft_snapshot(draft: Option<&Target>) -> Option<serde_json::Value> {
+    let mut value = serde_json::Map::new();
+    value.insert("draft".to_owned(), serde_json::to_value(draft).ok()?);
+    Some(serde_json::Value::Object(value))
+}
+
+impl<Repo, Access, Drafts, Flags> SuggestionApi for SuggestionService<Repo, Access, Drafts, Flags>
 where
     Repo: SuggestionRepo,
     Access: SuggestionAccess,
+    Drafts: SuggestionDrafts,
     Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(name = "suggestions.feed", skip_all, fields(
@@ -944,6 +959,10 @@ where
                 )],
             ));
         }
+        check::keeps_draft(&existing.kind, &content.about, &mut problems);
+        if !problems.is_empty() {
+            return Ok(rejected(&span, problems));
+        }
         let (action, to) = match existing.state {
             SuggestionState::Proposed | SuggestionState::Accepted => {
                 (ChangeAction::Rewritten, existing.state)
@@ -1081,6 +1100,7 @@ where
             }
             if let Some(about) = check::targets(about, &mut problems) {
                 self.inaccessible(&user, &about, &mut problems).await?;
+                check::keeps_draft(&existing.kind, &about, &mut problems);
                 content.about = about;
             }
         }
@@ -1202,6 +1222,116 @@ where
             ));
         }
         span.record("suggestion.outcome", "retired");
+        self.reread(&user, id).await
+    }
+
+    #[tracing::instrument(name = "suggestions.attach_draft", skip_all, fields(
+        agent.session.id = tracing::field::Empty,
+        suggestion.generation.id = tracing::field::Empty,
+        suggestion.id = %id,
+        email.draft.id = %request.email_draft_id,
+        suggestion.outcome = tracing::field::Empty,
+        suggestion.problems = tracing::field::Empty,
+    ), err)]
+    async fn attach_draft(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        id: Uuid,
+        request: AttachDraft,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        let session = self.session(principal, correlation).await?;
+        let span = tracing::Span::current();
+        let user = session.user.clone();
+        let Some(existing) = self
+            .repo
+            .suggestion(&user, id)
+            .await
+            .map_err(SuggestionError::internal)?
+        else {
+            return Err(SuggestionError::NotFound);
+        };
+        let mut problems = Vec::new();
+        let reason = check::text(
+            &request.reason,
+            "`reason`",
+            check::MAX_REASON_CHARS,
+            &mut problems,
+        );
+        if !existing.state.is_open() {
+            problems.push(format!(
+                "this suggestion is {}; a draft is only attached to an open suggestion",
+                existing.state.as_ref()
+            ));
+        }
+        let SuggestionKind::Entity {
+            action: EntityAction::Reply,
+            draft: old,
+        } = &existing.kind
+        else {
+            problems
+                .push("a draft is only for an entity suggestion with action `reply`".to_owned());
+            return Ok(rejected(&span, problems));
+        };
+        let thread = self
+            .drafts
+            .email_draft_thread(&user, request.email_draft_id)
+            .await
+            .map_err(SuggestionError::internal)?;
+        let draft = thread.map(|thread| Target {
+            entity_type: EntityType::EmailThread,
+            entity_id: thread.to_string(),
+            part_id: Some(request.email_draft_id.to_string()),
+        });
+        match &draft {
+            None => problems.push(
+                "`emailDraftId` names no unsent draft in the user's own inboxes; write the reply \
+                 with `macro.email.createDraft` first, and never send it"
+                    .to_owned(),
+            ),
+            Some(draft) if !check::draft_is_about(draft, &existing.about) => problems.push(
+                "the draft is in another thread than the one this suggestion is about; write it in that \
+                 thread, from its inbox: `macro.email.createDraft({thread, replyingTo, ...}, \
+                 await thread.link())`"
+                    .to_owned(),
+            ),
+            Some(_) => {}
+        }
+        let Some(draft) = draft.filter(|_| problems.is_empty()) else {
+            return Ok(rejected(&span, problems));
+        };
+        if old.as_ref() == Some(&draft) {
+            span.record("suggestion.outcome", "unchanged");
+            return Ok(SuggestionWriteOutcome::applied(existing));
+        }
+        let change = Change {
+            session: session.session,
+            generation: session.generation,
+            action: ChangeAction::Rewritten,
+            old: draft_snapshot(old.as_ref()),
+            new: draft_snapshot(Some(&draft)),
+            reason,
+            at: Utc::now(),
+        };
+        let attached = self
+            .repo
+            .set_draft(&user, id, &draft, &change)
+            .await
+            .map_err(SuggestionError::internal)?;
+        if !attached {
+            return Ok(rejected(
+                &span,
+                written_problem(Written::Conflict).into_iter().collect(),
+            ));
+        }
+        span.record(
+            "suggestion.outcome",
+            if old.is_some() {
+                "draft_replaced"
+            } else {
+                "draft_attached"
+            },
+        );
         self.reread(&user, id).await
     }
 }

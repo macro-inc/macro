@@ -82,6 +82,7 @@ use suggestions::domain::resolution::SuggestionResolution;
 use suggestions::domain::service::SuggestionService;
 use suggestions::inbound::kafka_consumer::run_suggestion_resolution_consumer;
 use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::outbound::email_drafts::EmailSuggestionDrafts;
 use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -769,10 +770,15 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         access: access.as_ref().clone(),
         pool: db.clone(),
     });
+    // Reply suggestions' drafts are the person's own unsent email drafts, as the
+    // email domain's repository keeps them.
     let feed = Arc::new(
         SuggestionService::new(
             Arc::clone(&feed_repo),
             Arc::clone(&suggestion_access),
+            Arc::new(EmailSuggestionDrafts(email::outbound::EmailPgRepo::new(
+                db.clone(),
+            ))),
             correlation_sessions,
             generations.clone(),
             // Reading the feed counts paid readers in for nightly runs.

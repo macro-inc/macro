@@ -10,6 +10,7 @@ import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
   AiAdmissionErrorBody,
+  AttachDraft,
   CatalogEntry,
   CheckRoutineRequest,
   CodeUpgrade,
@@ -2543,6 +2544,86 @@ export const dismissSuggestion = async (
     status: res.status,
     headers: res.headers,
   } as dismissSuggestionResponse;
+};
+
+/**
+ * @summary Make a reply draft a suggestions generation session wrote the draft of an
+open reply suggestion. Nothing is sent.
+ */
+export type attachSuggestionDraftResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type attachSuggestionDraftResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type attachSuggestionDraftResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type attachSuggestionDraftResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type attachSuggestionDraftResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type attachSuggestionDraftResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type attachSuggestionDraftResponseSuccess =
+  attachSuggestionDraftResponse200 & {
+    headers: Headers;
+  };
+export type attachSuggestionDraftResponseError = (
+  | attachSuggestionDraftResponse400
+  | attachSuggestionDraftResponse401
+  | attachSuggestionDraftResponse403
+  | attachSuggestionDraftResponse404
+  | attachSuggestionDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type attachSuggestionDraftResponse =
+  | attachSuggestionDraftResponseSuccess
+  | attachSuggestionDraftResponseError;
+
+export const getAttachSuggestionDraftUrl = (id: string) => {
+  return `/suggestions/${id}/draft`;
+};
+
+export const attachSuggestionDraft = async (
+  id: string,
+  attachDraft: AttachDraft,
+  options?: RequestInit
+): Promise<attachSuggestionDraftResponse> => {
+  const res = await fetch(getAttachSuggestionDraftUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attachDraft),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: attachSuggestionDraftResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as attachSuggestionDraftResponse;
 };
 
 /**

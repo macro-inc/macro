@@ -804,6 +804,43 @@ impl SuggestionRepo for PgSuggestionRepo {
         Ok(moved)
     }
 
+    async fn set_draft(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        draft: &Target,
+        change: &Change,
+    ) -> Result<bool, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        let open = sqlx::query!(
+            r#"UPDATE suggestion SET session_id = $4, updated_at = $5
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3)"#,
+            user.as_ref(),
+            id,
+            &open_states(),
+            change.session,
+            change.at,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1;
+        if !open {
+            return Ok(false);
+        }
+        sqlx::query!(
+            "DELETE FROM suggestion_target WHERE suggestion_id = $1 AND role = $2",
+            id,
+            TargetRole::Draft.as_ref(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        insert_targets(&mut tx, id, TargetRole::Draft, std::slice::from_ref(draft)).await?;
+        log(&mut tx, user, id, change).await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
     async fn set_state_as_shown(
         &self,
         user: &MacroUserIdStr<'_>,

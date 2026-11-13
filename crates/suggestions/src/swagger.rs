@@ -14,6 +14,7 @@ use utoipa::OpenApi;
         crate::inbound::router::add_suggestion,
         crate::inbound::router::rewrite_suggestion,
         crate::inbound::router::retire_suggestion,
+        crate::inbound::router::attach_suggestion_draft,
     ),
     components(schemas(
         crate::domain::model::Suggestion,
@@ -31,6 +32,7 @@ use utoipa::OpenApi;
         crate::inbound::router::AcceptSuggestionRequest,
         crate::inbound::router::SuggestionChanged,
         crate::domain::model::RetireSuggestionRequest,
+        crate::domain::model::AttachDraft,
         crate::domain::model::SuggestionWriteOutcome,
     )),
     tags((name = "suggestions", description = "Each person's suggestions, and the tools generation sessions manage them with")),
