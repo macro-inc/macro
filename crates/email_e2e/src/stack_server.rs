@@ -126,10 +126,13 @@ async fn start(
         })
         .unwrap_or_default();
     let stack = on_thread(move || async move {
-        let options = StackOptions {
-            env,
+        // Two steps, so that a field added to the options later takes its
+        // default here and neither step names every field.
+        let web_app = StackOptions {
             document_storage: true,
+            ..StackOptions::default()
         };
+        let options = StackOptions { env, ..web_app };
         Ok(Stack::start_with(options).await?)
     })
     .await?;

@@ -14,7 +14,9 @@ test.describe('the thread view', () => {
     mailbox,
   }) => {
     const thread = await deliverThread(mailbox, 'Offsite plan', FIVE);
-    await mailbox.open(`/app/mail/${thread.id}`);
+    await mailbox.open('/app/mail');
+    const row = page.getByText('Point number 5 of the plan.');
+    await row.click();
     await page.getByText('Reply...').waitFor();
     // Unread messages are open; read ones collapse on the next visit.
     await expect
@@ -24,7 +26,12 @@ test.describe('the thread view', () => {
         )
       )
       .toBe(true);
-    await page.reload();
+    // The next visit is made inside the app. A reload here can leave the
+    // request that marked the thread seen claimed by the page that is gone,
+    // and the new page then holds its draft saves back behind it for minutes.
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/\/app\/mail$/);
+    await row.click();
     await page.getByRole('button', { name: 'Show 2 hidden messages' }).click();
     const third = messageCard(page, 'Point number 3');
     await third.click();
