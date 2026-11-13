@@ -116,6 +116,18 @@ export function setupStageLabel(stage: SetupStageId): string {
     .exhaustive();
 }
 
+/** A stage that is behind the computer, in words that say it is done. */
+export function setupStageDoneLabel(stage: SetupStageId): string {
+  return match(stage)
+    .with(BILLING_STEP, () => t('computers.stageBillingDone'))
+    .with('creating', () => t('computers.stepCreatingDone'))
+    .with('booting', () => t('computers.stepBootingDone'))
+    .with('connecting', () => t('computers.stepConnectingDone'))
+    .with('sign_in', () => t('computers.stageSignInDone'))
+    .with('ready', () => t('computers.ready'))
+    .exhaustive();
+}
+
 /**
  * The server's reason for a failed setup (`failureReason`, null until the
  * fail-fast Failed state lands in the API).
@@ -186,7 +198,12 @@ export function setupStages(
     const stuck = index === current && (failed || !!problem);
     return {
       id,
-      label: setupStageLabel(id),
+      label:
+        state === 'done'
+          ? setupStageDoneLabel(id)
+          : state === 'skipped'
+            ? t('computers.stageSkipped', { stage: setupStageLabel(id) })
+            : setupStageLabel(id),
       state,
       detail:
         state === 'skipped'
