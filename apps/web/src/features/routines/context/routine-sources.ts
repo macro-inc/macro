@@ -10,6 +10,11 @@ export type RoutineDetailSource = {
   entity: Accessor<RoutineEntity | undefined>;
   loading: Accessor<boolean>;
   error: Accessor<boolean>;
+  /**
+   * The server won't read this routine to the viewer, which it does only for
+   * its owner: it is someone else's routine (or gone).
+   */
+  readRefused: Accessor<boolean>;
   update(draft: ScheduleDraft): Promise<RoutineSnapshot>;
   run(): void;
   runPending: Accessor<boolean>;

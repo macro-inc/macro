@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, onMount } from 'solid-js';
@@ -70,6 +71,12 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
       : undefined,
   };
 }
+
+/**
+ * How the server refuses a routine to anyone but its owner: 401 without a
+ * grant, 404 with a grant but no ownership.
+ */
+const REFUSED_READ_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'];
 
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
@@ -167,6 +174,13 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
+    // A refusal says nothing about a routine the viewer's own lists hold.
+    readRefused: () =>
+      !raw() &&
+      detail.isError &&
+      REFUSED_READ_CODES.some((code) =>
+        thrownResultErrorHasCode(detail.error, code)
+      ),
     update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
