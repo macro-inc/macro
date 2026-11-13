@@ -9,7 +9,7 @@ jobs:
   build-image:
     name: Build observability image
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=observability-image
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

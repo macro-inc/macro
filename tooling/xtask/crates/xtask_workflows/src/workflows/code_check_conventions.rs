@@ -101,14 +101,16 @@ fn check_job_results() -> Step<Run> {
         echo "path-check: ${{ needs.path-check.result }}"
         echo "ast-grep: ${{ needs.ast-grep.result }}"
 
-        # Fail if any job failed, or ast-grep was cancelled (skipped and
-        # success are both OK; cancelled means it started and didn't finish)
-        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ast-grep.result }}" == "failure" ]] || \
-           [[ "${{ needs.ast-grep.result }}" == "cancelled" ]]; then
-          echo "❌ One or more jobs failed"
-          exit 1
-        fi
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose checks never ran.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.ast-grep.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "❌ One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "✅ All jobs passed or were skipped"
     "#})

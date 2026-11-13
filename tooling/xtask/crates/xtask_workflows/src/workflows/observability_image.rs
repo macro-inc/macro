@@ -34,7 +34,9 @@ fn build_image_job() -> Job {
         Job::default()
             .name("Build observability image")
             .runs_on(runners::Runner::Mid.with_cache_tag(CACHE_TAG))
-            .timeout_minutes(15u32),
+            // Measured builds took under 6 minutes, but none bumped nixpkgs or
+            // GoAlert, which rebuild GoAlert and its web UI from source.
+            .timeout_minutes(30u32),
     )
     .add_step(build_image())
     .add_step(steps::teardown_nix())

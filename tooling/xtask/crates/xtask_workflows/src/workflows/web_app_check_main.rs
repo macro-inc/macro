@@ -281,7 +281,7 @@ fn biome_check() -> Job {
 
 fn test() -> Job {
     gated_web_job("Test (${{ matrix.shard }}/6)")
-        .timeout_minutes(15u32)
+        .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .strategy(
             Strategy::default()
@@ -322,7 +322,7 @@ fn functional() -> Job {
 /// neither waits for them.
 fn browser() -> Job {
     gated_web_job("Browser Tests")
-        .timeout_minutes(15u32)
+        .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
@@ -758,25 +758,29 @@ fn check_job_results() -> Step<Run> {
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
-        # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either. The same
-        # goes for generated code: a job that hits its timeout reports cancelled.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
-           [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.functional.result }}" == "failure" ]] || \
-           [[ "${{ needs.browser.result }}" == "failure" ]] || \
-           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-           [[ "${{ needs.build.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
-          echo "One or more jobs failed"
+        # The Android check always runs, so it must succeed. For the rest only
+        # success and skipped are OK: a job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose checks never ran.
+        if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
+          echo "Android Native Check did not succeed"
           exit 1
         fi
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.typescript.result }}" \
+          "${{ needs.generated-code.result }}" \
+          "${{ needs.biome-check.result }}" \
+          "${{ needs.test.result }}" \
+          "${{ needs.functional.result }}" \
+          "${{ needs.browser.result }}" \
+          "${{ needs.cycles.result }}" \
+          "${{ needs.build.result }}" \
+          "${{ needs.ios-native-check.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "All jobs passed or were skipped"
     "#})
