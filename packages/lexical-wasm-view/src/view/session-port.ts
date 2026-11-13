@@ -275,13 +275,37 @@ export class SessionPort implements EditorPort {
       facts
     );
   }
-  textFromView(input: TextFromView): void {
+  /**
+   * DOM-origin admission. A live demotion reaches the session before the UI
+   * editability effect, so a DOM caller passes `refused` and current authority
+   * is checked inside the queued entry. A refusal makes no session call, runs
+   * no completion and reports only through `refused`, so callers neither
+   * acknowledge DOM text nor run fallback listeners that could write.
+   */
+  private sessionEditEntry<T>(
+    call: () => T,
+    refused: (() => void) | undefined
+  ): { call: () => T | 0; refused: () => boolean } {
+    if (!refused) return { call, refused: () => false };
+    let entryRefused = false;
+    return {
+      call: () => {
+        if (this.effectiveAccess() !== Access.Edit) {
+          entryRefused = true;
+          refused();
+          return 0;
+        }
+        return call();
+      },
+      refused: () => entryRefused,
+    };
+  }
+  textFromView(input: TextFromView, refused?: () => void): void {
     this.assertRootAdmission();
     const session = this.executor.session;
     let acknowledgement: object | undefined;
-    this.executor.run(
-      () => {
-        const flags = session.textFromView(
+    const entry = this.sessionEditEntry(() => {
+      const flags = session.textFromView(
           input.key,
           input.text,
           input.anchorOffset,
@@ -295,10 +319,13 @@ export class SessionPort implements EditorPort {
           input.compositionData,
           this.executor.now()
         );
-        acknowledgement = this.commands?.output.captureAcknowledgement(flags);
-        return flags;
-      },
+      acknowledgement = this.commands?.output.captureAcknowledgement(flags);
+      return flags;
+    }, refused);
+    this.executor.run(
+      entry.call,
       (flags) => {
+        if (entry.refused()) return;
         const accepted =
           this.commands?.output.consumeAcknowledgement(
             acknowledgement,
@@ -384,16 +411,24 @@ export class SessionPort implements EditorPort {
     }
   }
 
-  command(code: number, a = 0, b = 0, text?: string): boolean | undefined {
+  command(
+    code: number,
+    a = 0,
+    b = 0,
+    text?: string,
+    refused?: () => void
+  ): boolean | undefined {
     this.assertRootAdmission();
     let handled: boolean | undefined;
-    this.executor.run(
+    const entry = this.sessionEditEntry(
       () =>
         this.executor.session.command(code, a, b, text, this.executor.now()),
-      (flags) => {
-        handled = Boolean(flags & FLAG_HANDLED);
-      }
+      refused
     );
+    this.executor.run(entry.call, (flags) => {
+      if (entry.refused()) return;
+      handled = Boolean(flags & FLAG_HANDLED);
+    });
     return handled;
   }
   keyDown(
@@ -402,7 +437,8 @@ export class SessionPort implements EditorPort {
     routed: number,
     key: string,
     selection: ViewSelection,
-    event?: KeyboardEvent
+    event?: KeyboardEvent,
+    refused?: () => void
   ): boolean | undefined {
     this.assertRootAdmission();
     let handled: boolean | undefined;
@@ -426,7 +462,9 @@ export class SessionPort implements EditorPort {
         selection.kind === 'range' ? 0 : selection.kind === 'none' ? 2 : 1,
         this.executor.now()
       );
+    let entry = this.sessionEditEntry(call, refused);
     const after = (flags: number) => {
+      if (entry.refused()) return;
       handled = Boolean(flags & FLAG_HANDLED);
     };
     if (
@@ -442,12 +480,13 @@ export class SessionPort implements EditorPort {
       if (!run)
         throw new Error('Synchronous executor admission is unavailable');
       const { dispatcher, owner } = this.commands;
-      run.call(
-        this.executor,
+      // Authority is checked before the keyboard scope is entered.
+      entry = this.sessionEditEntry(
         () => dispatcher.withKeyboardEvent(owner, event, call),
-        after
+        refused
       );
-    } else this.executor.run(call, after);
+      run.call(this.executor, entry.call, after);
+    } else this.executor.run(entry.call, after);
     return handled;
   }
   private prepareInput(editor: EditorInputMsg, event?: KeyboardEvent) {
@@ -475,17 +514,22 @@ export class SessionPort implements EditorPort {
   input(
     editor: EditorInputMsg,
     after?: (handled: boolean) => void,
-    event?: KeyboardEvent
+    event?: KeyboardEvent,
+    refused?: () => void
   ): void {
     this.assertRootAdmission();
     const operation = this.prepareInput(editor, event);
-    const complete = (flags: number) => after?.(Boolean(flags & FLAG_HANDLED));
+    const entry = this.sessionEditEntry(operation.call, refused);
+    const complete = (flags: number) => {
+      if (entry.refused()) return;
+      after?.(Boolean(flags & FLAG_HANDLED));
+    };
     if (operation.synchronous) {
       const run = this.executor.runSync;
       if (!run)
         throw new Error('Synchronous executor admission is unavailable');
-      run.call(this.executor, operation.call, complete);
-    } else this.executor.run(operation.call, complete);
+      run.call(this.executor, entry.call, complete);
+    } else this.executor.run(entry.call, complete);
   }
   inputApplicationSync<Proof>(
     factory: () => ProgrammaticApplicationInput,
@@ -1072,19 +1116,24 @@ export class SessionPort implements EditorPort {
     text: string,
     anchor: number,
     focus: number,
-    data: string
+    data: string,
+    refused?: () => void
   ): void {
     this.assertRootAdmission();
-    this.executor.run(() =>
-      this.executor.session.composition(
-        kind,
-        key,
-        text,
-        anchor,
-        focus,
-        data,
-        this.executor.now()
-      )
+    this.executor.run(
+      this.sessionEditEntry(
+        () =>
+          this.executor.session.composition(
+            kind,
+            key,
+            text,
+            anchor,
+            focus,
+            data,
+            this.executor.now()
+          ),
+        refused
+      ).call
     );
   }
 }

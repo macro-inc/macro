@@ -149,7 +149,8 @@ export interface EditorPort {
   /** Pure JS full-table lookup; unknown freshness admits every generic key. */
   listenerLevels?(command: string, key?: string): number | undefined;
   needsKeyDown?(key: string): boolean | undefined;
-  textFromView(input: TextFromView): void;
+  /** `refused` marks DOM-origin input: current Edit authority is checked at entry. */
+  textFromView(input: TextFromView, refused?: () => void): void;
   debugInsertion(
     selection: ViewSelection,
     format: number,
@@ -165,7 +166,8 @@ export interface EditorPort {
     code: number,
     a?: number,
     b?: number,
-    text?: string
+    text?: string,
+    refused?: () => void
   ): boolean | undefined;
   keyDown(
     code: number,
@@ -173,12 +175,14 @@ export interface EditorPort {
     routed: number,
     key: string,
     selection: ViewSelection,
-    event?: KeyboardEvent
+    event?: KeyboardEvent,
+    refused?: () => void
   ): boolean | undefined;
   input(
     input: EditorInputMsg,
     after?: (handled: boolean) => void,
-    event?: KeyboardEvent
+    event?: KeyboardEvent,
+    refused?: () => void
   ): void;
   inputApplicationSync?<Proof>(
     factory: () => ProgrammaticApplicationInput,
@@ -220,7 +224,8 @@ export interface EditorPort {
     text: string,
     anchor: number,
     focus: number,
-    data: string
+    data: string,
+    refused?: () => void
   ): void;
 }
 /** Implemented by the shim worker; production never loads the shim. */

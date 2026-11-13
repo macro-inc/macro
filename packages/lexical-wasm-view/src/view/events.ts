@@ -283,6 +283,8 @@ export function registerEvents(view: EditorView): {
       ? { kind: 'keep' }
       : readSelection(view);
   }
+  // DOM-origin submissions are admitted only under current Edit authority.
+  const domRefused = () => {};
   function command(
     command: number,
     text = '',
@@ -311,7 +313,9 @@ export function registerEvents(view: EditorView): {
         target,
         characterTarget: target,
       }),
-      completion?.after
+      completion?.after,
+      undefined,
+      domRefused
     );
   }
   listen('keydown', (event) => {
@@ -328,7 +332,8 @@ export function registerEvents(view: EditorView): {
         textLeaf(view.getElementByKey(pending.key))?.nodeValue ?? '',
         selection.kind === 'range' ? selection.anchor.offset : 0,
         selection.kind === 'range' ? selection.focus.offset : 0,
-        pending.data
+        pending.data,
+        domRefused
       );
       rememberSelection();
       if (event.key === 'Backspace') event.preventDefault();
@@ -398,7 +403,8 @@ export function registerEvents(view: EditorView): {
           )
             event.preventDefault();
         },
-        event
+        event,
+        domRefused
       );
       return;
     }
@@ -483,7 +489,9 @@ export function registerEvents(view: EditorView): {
             if (view.runViewCommand('KeyDown', event, 'after')) return;
             if (keyCommand) view.runViewCommand(keyCommand, event, 'after');
           }
-        }
+        },
+        undefined,
+        domRefused
       );
       return;
     }
@@ -548,14 +556,23 @@ export function registerEvents(view: EditorView): {
       (Number(event.ctrlKey) << 2) |
       (Number(event.metaKey) << 3) |
       (Number(event.repeat) << 4);
+    let refused = false;
     const handled = view.port.keyDown(
       event.keyCode,
       mods,
       routed,
       event.key,
       selection,
-      event
+      event,
+      () => {
+        refused = true;
+      }
     );
+    // A refused key leaves no browser edit behind in a still-editable root.
+    if (refused) {
+      event.preventDefault();
+      return;
+    }
     if (handled === false) {
       if (
         view.runViewCommand('KeyDown', event, 'after') ||
@@ -578,7 +595,15 @@ export function registerEvents(view: EditorView): {
       const sameNode = selected.anchor.key === selected.focus.key;
       const key = selected.anchor.key;
       const clear = () =>
-        view.port.composition(2, key, '', 0xffffffff, 0xffffffff, '');
+        view.port.composition(
+          2,
+          key,
+          '',
+          0xffffffff,
+          0xffffffff,
+          '',
+          domRefused
+        );
       if (
         sameNode &&
         (composing || event.isComposing) &&
@@ -663,7 +688,10 @@ export function registerEvents(view: EditorView): {
           selection: selectionMessage(selection),
           target: selectedTarget,
           characterTarget: { ...selectedTarget, kind: 0 },
-        })
+        }),
+        undefined,
+        undefined,
+        domRefused
       );
       if (android) {
         const after = view.selection().selection;
@@ -732,7 +760,8 @@ export function registerEvents(view: EditorView): {
         textLeaf(view.getElementByKey(pending.key))?.nodeValue ?? '',
         selection.kind === 'range' ? selection.anchor.offset : 0,
         selection.kind === 'range' ? selection.focus.offset : 0,
-        pending.data
+        pending.data,
+        domRefused
       );
     } else view.submitText(selection.anchor.key);
     // This selection was admitted with TextFromView even when unrelated
@@ -750,7 +779,8 @@ export function registerEvents(view: EditorView): {
       '',
       selection.anchor.offset,
       selection.focus.offset,
-      event.data
+      event.data,
+      domRefused
     );
   });
   listen('compositionend', (event) => {
@@ -773,7 +803,8 @@ export function registerEvents(view: EditorView): {
       dom?.nodeValue ?? '',
       selection.kind === 'range' ? selection.anchor.offset : 0,
       selection.kind === 'range' ? selection.focus.offset : 0,
-      event.data
+      event.data,
+      domRefused
     );
   });
   let selectionChangeFromMouseDown = false;
@@ -871,7 +902,8 @@ export function registerEvents(view: EditorView): {
       event.clipboardData.setData('text/plain', data.plain);
       event.clipboardData.setData('application/x-lexical-editor', data.lexical);
       event.preventDefault();
-      if (name === 'cut') view.port.command(CommandCode.RemoveText);
+      if (name === 'cut')
+        view.port.command(CommandCode.RemoveText, 0, 0, undefined, domRefused);
     });
   listen('paste', (event) => {
     if (view.runViewCommand('Paste', event, 'before')) return;

@@ -1046,15 +1046,19 @@ export class EditorView implements ViewSink {
       dom = textLeaf(this.dom.get(key));
     if (node?.kind !== 'text' || dom?.nodeType !== 3) return;
     const selection = readSelection(this);
-    this.port.textFromView({
+    this.port.textFromView(
+      {
       key,
       text: dom.nodeValue ?? '',
       anchorOffset: selection.kind === 'range' ? selection.anchor.offset : 0,
       focusOffset: selection.kind === 'range' ? selection.focus.offset : 0,
       selectionKind: selection.kind === 'range' ? 'range' : 'keep',
       compositionEnd,
-      compositionData,
-    });
+        compositionData,
+      },
+      // DOM text is DOM-origin input; a refusal is never acknowledged.
+      () => {}
+    );
   }
   private scheduleRemoveEmptyText(key: NodeKey, delay: number): void {
     const expected = this.node(key);

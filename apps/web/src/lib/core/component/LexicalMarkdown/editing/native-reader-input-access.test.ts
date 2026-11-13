@@ -133,7 +133,7 @@ function mount() {
       focus: { key: textKey(), offset: 4, type: 'text' },
     });
     runtime.port.command(CommandCode.InsertText, 0, 0, '!');
-    expect(runtime.errors).toEqual([]);
+    expect(errors).toEqual([]);
     expect(root.textContent).toBe('body!');
   };
   return {
