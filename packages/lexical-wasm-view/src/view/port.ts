@@ -163,7 +163,7 @@ export interface EditorPort {
     options?: ProgrammaticApplicationAdmissionOptions
   ): Promise<InputSettlement>;
   /** Like inputSettledIfSessionEdit, settled before return; throws when busy. */
-  inputNowIfSessionEdit?(
+  inputNowIfSessionEdit(
     factory: () => ProgrammaticApplicationInput,
     options?: ProgrammaticApplicationAdmissionOptions
   ): InputSettlement;

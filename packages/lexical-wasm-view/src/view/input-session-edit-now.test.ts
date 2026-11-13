@@ -76,22 +76,11 @@ function missingEquation(runtime: ReturnType<typeof mount>) {
   };
 }
 
-type NowPort = {
-  inputNowIfSessionEdit(
-    factory: () => ReturnType<typeof missingEquation>,
-    options?: { readonly admit: () => boolean }
-  ): unknown;
-};
-/** The synchronous seam under test; absent until the extraction lands. */
-function now(runtime: ReturnType<typeof mount>): NowPort {
-  return runtime.port as unknown as NowPort;
-}
-
 test('settles a real application before returning, in the caller task', async () => {
   const runtime = mount();
   let calls = 0;
   try {
-    const settled = now(runtime).inputNowIfSessionEdit(() => {
+    const settled = runtime.port.inputNowIfSessionEdit(() => {
       calls++;
       return missingEquation(runtime);
     });
@@ -110,7 +99,7 @@ test('matches the queued method for the same application', async () => {
     const queued = await runtime.port.inputSettledIfSessionEdit(() =>
       missingEquation(runtime)
     );
-    const immediate = now(runtime).inputNowIfSessionEdit(() =>
+    const immediate = runtime.port.inputNowIfSessionEdit(() =>
       missingEquation(runtime)
     );
     expect(immediate).toEqual(queued);
@@ -128,7 +117,7 @@ test('a busy executor throws before the factory runs and queues nothing', async 
   try {
     runtime.executor.run(() => {
       try {
-        now(runtime).inputNowIfSessionEdit(() => {
+        runtime.port.inputNowIfSessionEdit(() => {
           calls++;
           return missingEquation(runtime);
         });
@@ -148,6 +137,92 @@ test('a busy executor throws before the factory runs and queues nothing', async 
   }
 });
 
+test('a reentrant call throws busy and the outer call rethrows that same error', async () => {
+  const runtime = mount();
+  let inner: unknown;
+  let outer: unknown;
+  let innerCalls = 0;
+  try {
+    try {
+      runtime.port.inputNowIfSessionEdit(() => {
+        try {
+          runtime.port.inputNowIfSessionEdit(() => {
+            innerCalls++;
+            return missingEquation(runtime);
+          });
+        } catch (error) {
+          inner = error;
+        }
+        throw inner;
+      });
+    } catch (error) {
+      outer = error;
+    }
+    expect(inner).toBeInstanceOf(Error);
+    expect(String(inner)).toMatch(/busy/);
+    expect(outer).toBe(inner);
+    expect(innerCalls).toBe(0);
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('queued work ahead throws busy before the factory and queues nothing', async () => {
+  const runtime = mount();
+  const { executor } = runtime;
+  const tick = () => executor.session.tick(executor.now(), Date.now());
+  const first = new Error('first entry failed');
+  let calls = 0;
+  try {
+    // A failed drain leaves later entries queued with the executor idle.
+    expect(() =>
+      executor.run(() => {
+        executor.run(tick);
+        throw first;
+      })
+    ).toThrow(first);
+    expect(() =>
+      runtime.port.inputNowIfSessionEdit(() => {
+        calls++;
+        return missingEquation(runtime);
+      })
+    ).toThrow('Session executor is busy');
+    executor.run(tick);
+    expect(calls).toBe(0);
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('work queued behind an applied entry rethrows its own error from the call', async () => {
+  const runtime = mount();
+  const { executor } = runtime;
+  const later = new Error('queued behind');
+  let calls = 0;
+  let caught: unknown;
+  try {
+    try {
+      runtime.port.inputNowIfSessionEdit(() => {
+        calls++;
+        executor.run(() => {
+          throw later;
+        });
+        return missingEquation(runtime);
+      });
+    } catch (error) {
+      caught = error;
+    }
+    // The entry ran; the throw is the later work's, not "did not settle".
+    expect(calls).toBe(1);
+    expect(caught).toBe(later);
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
 test('lost Edit authority cancels before the factory', async () => {
   const runtime = mount();
   const session = runtime.executor.session;
@@ -162,7 +237,7 @@ test('lost Edit authority cancels before the factory', async () => {
         Date.now()
       )
     );
-    const settled = now(runtime).inputNowIfSessionEdit(() => {
+    const settled = runtime.port.inputNowIfSessionEdit(() => {
       calls++;
       return missingEquation(runtime);
     });
@@ -178,7 +253,7 @@ test('entry admission false cancels before the factory', async () => {
   const runtime = mount();
   let calls = 0;
   try {
-    const settled = now(runtime).inputNowIfSessionEdit(
+    const settled = runtime.port.inputNowIfSessionEdit(
       () => {
         calls++;
         return missingEquation(runtime);
@@ -203,7 +278,7 @@ test('a closing unbound session cancels before the factory, like the queued meth
   try {
     const closing = runtime.close();
     const queued = await runtime.port.inputSettledIfSessionEdit(factory);
-    const settled = now(runtime).inputNowIfSessionEdit(factory);
+    const settled = runtime.port.inputNowIfSessionEdit(factory);
     expect(queued).toEqual({ status: 'cancelled', reason: 'closing' });
     expect(settled).toEqual(queued);
     expect(calls).toBe(0);
@@ -226,7 +301,7 @@ test('a closing view with native Enter refuses admission, like the queued method
     expect(() => runtime.port.inputSettledIfSessionEdit(factory)).toThrow(
       'Native editor view is closing'
     );
-    expect(() => now(runtime).inputNowIfSessionEdit(factory)).toThrow(
+    expect(() => runtime.port.inputNowIfSessionEdit(factory)).toThrow(
       'Native editor view is closing'
     );
     expect(calls).toBe(0);
@@ -244,7 +319,7 @@ for (const cause of [undefined, null, { kind: 'factory failure' }]) {
     let settled: unknown;
     try {
       try {
-        settled = now(runtime).inputNowIfSessionEdit(() => {
+        settled = runtime.port.inputNowIfSessionEdit(() => {
           throw cause;
         });
       } catch (error) {
@@ -253,7 +328,7 @@ for (const cause of [undefined, null, { kind: 'factory failure' }]) {
       // Same contract as the queued method: the drain rethrows the original value.
       expect(caught).toEqual({ error: cause });
       expect(settled).toBeUndefined();
-      const later = now(runtime).inputNowIfSessionEdit(() =>
+      const later = runtime.port.inputNowIfSessionEdit(() =>
         missingEquation(runtime)
       );
       expect(later).toEqual({ status: 'success', handled: false });
@@ -268,7 +343,7 @@ test('rejects a non-function admission option before any work', async () => {
   const runtime = mount();
   try {
     expect(() =>
-      now(runtime).inputNowIfSessionEdit(() => missingEquation(runtime), {
+      runtime.port.inputNowIfSessionEdit(() => missingEquation(runtime), {
         admit: 1 as unknown as () => boolean,
       })
     ).toThrow(new TypeError('Entry admission requires a callback'));

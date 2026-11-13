@@ -515,8 +515,12 @@ export class SessionPort implements EditorPort {
     );
   }
   /** Synchronous Edit-admitted application for callers that must settle in
-   *  their own task (AI edit onOps). A busy, closed or unauthorized session
-   *  settles or throws before the factory runs; nothing is queued. */
+   *  their own task (AI edit onOps). The entry runs in this call's drain;
+   *  throws before the factory when the executor is busy or has queued work
+   *  (executor runSettled `synchronous`). A closed, closing or unauthorized
+   *  session settles cancelled before the factory runs. A throw after the
+   *  drain started can follow an applied input: work queued behind this entry
+   *  (listeners) rethrows its own error after this entry settled. */
   inputNowIfSessionEdit(
     factory: () => ProgrammaticApplicationInput,
     options?: ProgrammaticApplicationAdmissionOptions
@@ -537,7 +541,9 @@ export class SessionPort implements EditorPort {
       }
     );
     if (settled === undefined)
-      throw new Error('Synchronous application input did not settle');
+      throw new Error(
+        'Synchronous application input did not settle in its drain; it may have been applied'
+      );
     return settled;
   }
   private settleInput(
