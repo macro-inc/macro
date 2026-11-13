@@ -16,17 +16,23 @@ and the web's TypeScript through specta.
 - `src/query.rs`: the list widget's filter, the web's Next Soup `Query`.
 - `src/decode.rs`: `decode_view` and `deserialize_view`. A field the types do
   not name is ignored.
+- `src/pane.rs`: panes, the widgets a saved view (a `dashboards` dashboard)
+  addresses by their optional `id`: `View::replace_pane` and
+  `View::duplicate_pane_id`.
 
 ## Boundaries
 
 - Depends on: `serde`, `serde_path_to_error`, `schemars`, `specta`, `nutype`.
 - Used by: `agent_code_mode` (`execution.views.present`, ExecuteCode's
   description), `ai_tools` (`DisplayResults`), `agent_fold` (view tool
-  details and activity cards, built for wasm too).
+  details and activity cards, built for wasm too), `dashboards` (saved
+  views).
 
 ## Recipes
 
-- Add a widget: add a `Widget` variant with its doc comment, run
+- Add a widget: add a `Widget` variant with its doc comment and an `id`
+  field like its siblings, give it arms in `src/pane.rs` (its children, if it
+  nests widgets), run
   `just gen-dynamic-ui-types` in `apps/web`, and add its arm to `Render` in
   `apps/web/src/features/dynamic-ui/render.tsx`; the exhaustive `match` fails
   to compile until you do.

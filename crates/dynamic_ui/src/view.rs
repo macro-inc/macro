@@ -23,9 +23,19 @@ pub struct View {
 pub enum Widget {
     /// Markdown text: the narrative between the other widgets. Its type is
     /// "md", never "markdown".
-    Md { markdown: String },
+    Md {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
+        markdown: String,
+    },
     /// A chronological sequence of events. Great for "what happened" answers.
     Timeline {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[specta(optional, type = String)]
         title: Option<String>,
@@ -35,6 +45,10 @@ pub enum Widget {
     /// fixed set of entity references.
     #[serde(rename_all = "camelCase")]
     List {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[specta(optional, type = String)]
         title: Option<String>,
@@ -51,6 +65,10 @@ pub enum Widget {
     /// A single channel message with surrounding context.
     #[serde(rename_all = "camelCase")]
     ChannelMessage {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
         /// The channel the message belongs to.
         channel_id: String,
         /// The message to render.
@@ -60,6 +78,10 @@ pub enum Widget {
     /// and attendees, loaded live from the user's calendars. Use it whenever
     /// an answer is about calendar events instead of listing them in text.
     Events {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[specta(optional, type = String)]
         title: Option<String>,
@@ -72,6 +94,10 @@ pub enum Widget {
     /// widget for longer sets.
     Cards {
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         #[specta(optional, type = String)]
         title: Option<String>,
         items: Vec<CardItem>,
@@ -82,6 +108,10 @@ pub enum Widget {
     /// table or a list in markdown.
     Tags {
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         #[specta(optional, type = String)]
         title: Option<String>,
         tags: Vec<TagNode>,
@@ -90,9 +120,19 @@ pub enum Widget {
     /// permission requests and questions, and sees stalled sessions. Pass the
     /// items macro.agentSessions.updates() returned, unchanged, whenever it
     /// returns any: these cards are the only place the user can answer them.
-    AgentUpdates { items: Vec<AgentUpdateItem> },
+    AgentUpdates {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
+        items: Vec<AgentUpdateItem>,
+    },
     /// A nestable flex container of widgets.
     Container {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<String>", length(min = 1, max = 64))]
+        #[specta(optional, type = String)]
+        id: Option<PaneId>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[specta(optional, type = Direction)]
         direction: Option<Direction>,
@@ -116,6 +156,13 @@ pub enum Widget {
         children: Vec<Widget>,
     },
 }
+
+/// A widget's stable id, so a saved view can address one pane of it.
+#[nutype(
+    validate(not_empty, len_char_max = 64),
+    derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsRef, Display)
+)]
+pub struct PaneId(String);
 
 /// The space between a container's children, as a Tailwind-ish step.
 #[nutype(

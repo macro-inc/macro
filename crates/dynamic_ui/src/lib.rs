@@ -5,6 +5,7 @@
 #![deny(missing_docs)]
 
 mod decode;
+mod pane;
 // A doc comment on a field or variant becomes a description in the schema the
 // model reads on every turn; these name what they are.
 #[expect(missing_docs, reason = "doc comments grow the model's schema")]

@@ -541,6 +541,7 @@ fn a_presented_view_is_its_steps_card() {
     let view = dynamic_ui::View {
         title: Some("Launch notes".to_owned()),
         widgets: vec![dynamic_ui::Widget::Md {
+            id: None,
             markdown: "Shipped.".to_owned(),
         }],
     };

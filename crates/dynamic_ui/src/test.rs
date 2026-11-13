@@ -1,4 +1,4 @@
-use crate::{View, Widget, decode_view, present_view_schema};
+use crate::{PaneId, View, Widget, decode_view, present_view_schema};
 use serde_json::json;
 
 /// One of every widget, with every field the types name.
@@ -7,7 +7,7 @@ fn a_view_of_every_widget_decodes() {
     let view = json!({
         "title": "Everything",
         "widgets": [
-            { "type": "md", "markdown": "**Shipped** the agenda." },
+            { "type": "md", "id": "intro", "markdown": "**Shipped** the agenda." },
             {
                 "type": "timeline",
                 "title": "Today",
@@ -153,6 +153,7 @@ fn fields_the_types_do_not_name_are_dropped() {
         Ok(View {
             title: Some("Notes".to_owned()),
             widgets: vec![Widget::Md {
+                id: None,
                 markdown: "Hi".to_owned()
             }],
         })
@@ -206,6 +207,10 @@ fn what_the_renderer_cannot_draw_is_named_by_its_place() {
             json!({ "widgets": [{ "type": "tags", "tags": [{ "label": "Type", "children": [{ "color": "red" }] }] }] }),
             r#"view.widgets[0] is missing "label""#.to_owned(),
         ),
+        (
+            json!({ "widgets": [{ "type": "md", "id": "", "markdown": "Hi" }] }),
+            "view.widgets[0] is not valid".to_owned(),
+        ),
         (json!({}), r#"view is missing "widgets""#.to_owned()),
     ];
     for (view, problem) in cases {
@@ -242,4 +247,53 @@ fn the_present_view_schema_is_pinned() {
     insta::with_settings!({ sort_maps => true }, {
         insta::assert_json_snapshot!(schema);
     });
+}
+
+#[test]
+fn a_pane_is_replaced_at_any_depth() {
+    let mut view = decode_view(&json!({
+        "widgets": [
+            { "type": "md", "id": "intro", "markdown": "Hi" },
+            { "type": "container", "children": [{ "type": "md", "id": "inner", "markdown": "Old" }] }
+        ]
+    }))
+    .expect("decodes");
+    let pane = PaneId::try_new("inner").expect("a pane id");
+    let widget = decode_view(&json!({ "widgets": [{ "type": "md", "id": "inner", "markdown": "New" }] }))
+        .expect("decodes")
+        .widgets
+        .remove(0);
+
+    assert!(view.replace_pane(&pane, widget));
+    assert_eq!(
+        serde_json::to_value(&view).unwrap(),
+        json!({
+            "widgets": [
+                { "type": "md", "id": "intro", "markdown": "Hi" },
+                { "type": "container", "children": [{ "type": "md", "id": "inner", "markdown": "New" }] }
+            ]
+        })
+    );
+
+    let missing = PaneId::try_new("missing").expect("a pane id");
+    let widget = Widget::Md { id: None, markdown: "x".to_owned() };
+    assert!(!view.replace_pane(&missing, widget));
+}
+
+#[test]
+fn a_pane_id_used_twice_is_found() {
+    let view = decode_view(&json!({
+        "widgets": [
+            { "type": "md", "id": "a", "markdown": "Hi" },
+            { "type": "container", "children": [{ "type": "md", "id": "a", "markdown": "Again" }] }
+        ]
+    }))
+    .expect("decodes");
+    assert_eq!(view.duplicate_pane_id().map(AsRef::as_ref), Some("a"));
+
+    let unique = decode_view(&json!({
+        "widgets": [{ "type": "md", "id": "a", "markdown": "Hi" }, { "type": "md", "markdown": "No id" }]
+    }))
+    .expect("decodes");
+    assert_eq!(unique.duplicate_pane_id(), None);
 }

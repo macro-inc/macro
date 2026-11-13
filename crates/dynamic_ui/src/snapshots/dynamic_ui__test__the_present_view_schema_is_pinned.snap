@@ -1289,6 +1289,14 @@ expression: schema
         {
           "description": "Markdown text: the narrative between the other widgets. Its type is\n\"md\", never \"markdown\".",
           "properties": {
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "markdown": {
               "type": "string"
             },
@@ -1311,6 +1319,14 @@ expression: schema
                 "$ref": "#/$defs/TimelineEvent"
               },
               "type": "array"
+            },
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "title": {
               "type": [
@@ -1342,6 +1358,14 @@ expression: schema
                 }
               ],
               "description": "Group rows by a facet."
+            },
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "limit": {
               "description": "Cap the number of rows shown.",
@@ -1379,6 +1403,14 @@ expression: schema
               "description": "The channel the message belongs to.",
               "type": "string"
             },
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "messageId": {
               "description": "The message to render.",
               "type": "string"
@@ -1404,6 +1436,14 @@ expression: schema
               },
               "type": "array"
             },
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "title": {
               "type": [
                 "string",
@@ -1424,6 +1464,14 @@ expression: schema
         {
           "description": "Rich cards for the one to four specific items the answer is about: a\ndocument or spreadsheet, an email thread, a calendar event, a project,\na channel, a routine, a form or an initiative. Each card opens its\nitem, and a routine's card can pause it or run it now. Use a list\nwidget for longer sets.",
           "properties": {
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "items": {
               "items": {
                 "$ref": "#/$defs/CardItem"
@@ -1450,6 +1498,14 @@ expression: schema
         {
           "description": "Tags as coloured pills, nested to any depth: the user's tags, a\ntaxonomy the answer proposes, or any other ontology of tags, each with\nwhat it is for. Use it whenever an answer is about tags, instead of a\ntable or a list in markdown.",
           "properties": {
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "tags": {
               "items": {
                 "$ref": "#/$defs/TagNode"
@@ -1476,6 +1532,14 @@ expression: schema
         {
           "description": "Live cards on which the user answers coding agents' waiting\npermission requests and questions, and sees stalled sessions. Pass the\nitems macro.agentSessions.updates() returned, unchanged, whenever it\nreturns any: these cards are the only place the user can answer them.",
           "properties": {
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "items": {
               "items": {
                 "$ref": "#/$defs/AgentUpdateItem"
@@ -1529,6 +1593,14 @@ expression: schema
               "minimum": 0,
               "type": [
                 "integer",
+                "null"
+              ]
+            },
+            "id": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": [
+                "string",
                 "null"
               ]
             },

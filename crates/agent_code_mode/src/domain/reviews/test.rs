@@ -1232,6 +1232,7 @@ async fn a_view_is_presented_to_the_session_and_nothing_is_saved() {
         dynamic_ui::View {
             title: Some("Launch".to_owned()),
             widgets: vec![dynamic_ui::Widget::Md {
+                id: None,
                 markdown: "Shipped.".to_owned()
             }],
         }
