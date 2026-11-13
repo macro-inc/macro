@@ -1,4 +1,4 @@
-//! Add the missing email field of an authorized CRM contact.
+//! Choose the primary email of an authorized CRM contact.
 
 use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 use crate::{
@@ -16,11 +16,12 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-/// Add a missing contact email. Existing addresses are read-only.
+/// Choose a contact's primary email.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetContactEmailRequest {
-    /// The address to add. An identical retry is accepted.
+    /// The address to make primary. It is added when the contact does not
+    /// hold it yet. An identical retry is accepted.
     pub email: String,
 }
 

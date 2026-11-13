@@ -19,6 +19,7 @@ pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
 pub mod cli;
+pub mod computers;
 pub mod content_key;
 pub mod db;
 pub mod docker;
@@ -28,6 +29,7 @@ pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
 pub mod gen_compose;
+pub mod google_emulator;
 mod grafana_forwarder;
 pub mod identity;
 pub mod instance;
@@ -37,6 +39,7 @@ pub mod kickstart;
 pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
+pub mod microsoft_emulator;
 pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
@@ -227,6 +230,8 @@ pub(crate) struct BringUp {
     /// Stop after infra and init: no app services, proxy, or frontend.
     pub infra_only: bool,
     pub start: Start,
+    /// The computers fleet this stack runs.
+    pub computers: computers::Fleet,
 }
 
 /// What a finished [`bring_up`] leaves for its caller.
@@ -236,6 +241,8 @@ pub(crate) struct StackUp {
     /// Dropping these closes the tunnels, so they live as long as the stack does.
     pub tunnels: Vec<cf_tunnel::QuickTunnel>,
     pub shared_app_url: Option<String>,
+    /// The computers setup on the instance's final port window.
+    pub computers: computers::Computers,
 }
 
 /// The one bring-up every flow shares (`run_local` attached and detached, `run_dev`,
@@ -404,6 +411,7 @@ pub(crate) fn bring_up(
             egress: egress_url.as_deref(),
             preview_ssh: preview_ssh_tunnel_host.as_deref(),
         },
+        plan.computers,
         pinned_base,
     )?;
 
@@ -480,6 +488,7 @@ pub(crate) fn bring_up(
             target,
             tunnels,
             shared_app_url,
+            computers: computers::Computers::new(mode, plan.computers, instance),
         });
     }
 
@@ -538,11 +547,13 @@ pub(crate) fn bring_up(
         target,
         tunnels,
         shared_app_url,
+        computers: computers::Computers::new(mode, plan.computers, instance),
     })
 }
 
 /// Print the ready summary for a finished [`bring_up`].
 pub(crate) fn print_stack_summary(
+    stage: &Stage,
     mode: Mode,
     instance: &Instance,
     up: &StackUp,
@@ -571,6 +582,7 @@ pub(crate) fn print_stack_summary(
         &mailpit_url,
         up.shared_app_url.as_deref(),
     );
+    up.computers.print_hint(stage);
     Ok(())
 }
 
@@ -641,7 +653,7 @@ fn run_attached(mut stage: Stage, mode: Mode, run: &cli::RunLocalArgs) -> Result
             None
         };
         stage.print_timings("bring-up");
-        print_stack_summary(mode, &instance, &up, &plan)?;
+        print_stack_summary(stage, mode, &instance, &up, &plan)?;
         Ok((up, frontend))
     })();
     let (up, frontend) = match &attached_run {
@@ -935,18 +947,25 @@ fn prepare(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    computers: &computers::Computers,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
         instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-        static_frontend,
-        tunnels,
-        args.traces.enabled(),
+        env_layer::ResolveOptions {
+            no_doppler: args.env.no_doppler,
+            env_file: args.env.env_file.as_deref(),
+            static_frontend,
+            tunnels,
+            wire_otel: args.traces.enabled(),
+            computers,
+        },
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
+    if !infra_only {
+        computers.ensure_image(stage, args.build.no_build)?;
+    }
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;
@@ -979,19 +998,29 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    let gmail_forwarder = env
-        .merged
-        .get("GMAIL_FORWARDER_SA_KEY")
-        .is_some_and(|key| !key.trim().is_empty());
-    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
+    let sidecars = gen_compose::Sidecars::from_env(mode, &env.merged);
+    gen_compose::generate(
+        mode,
+        instance,
+        &binaries,
+        static_frontend,
+        sidecars,
+        computers,
+    )?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode == Mode::Local {
         portmap::write(instance)?;
     }
     if mode.spec().runs_local_infra {
-        let google = kickstart::GoogleIdp::from_env(&env.merged);
+        // Without a real Google client the stack's Gmail emulator is Google.
+        let google = kickstart::GoogleIdp::from_env(&env.merged)
+            .unwrap_or_else(|| google_emulator::idp(instance));
         let github = kickstart::GithubIdp::from_env(&env.merged);
-        fusionauth::write_kickstart(instance, google.as_ref(), github.as_ref())?;
+        // Without a real Microsoft client the stack's Outlook emulator is
+        // Microsoft.
+        let microsoft =
+            microsoft_emulator::stands_in(mode, &env.merged).then(microsoft_emulator::idp);
+        fusionauth::write_kickstart(instance, Some(&google), github.as_ref(), microsoft.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -1020,6 +1049,7 @@ fn prepare_on_free_window(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    fleet: computers::Fleet,
     pinned_base: Option<u16>,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     loop {
@@ -1032,6 +1062,7 @@ fn prepare_on_free_window(
             pull_app_images,
             infra_only,
             tunnels,
+            &computers::Computers::new(mode, fleet, instance),
         )?;
         let current = allocator::allocate(stage, mode, Some(instance.name()), pinned_base)?;
         if current.port_base() == instance.port_base() {
@@ -1132,7 +1163,15 @@ fn bring_up_infra(
     // of the infra instead of after it: its JVM start is the longest wait here.
     let fusionauth_start = spec.runs_local_infra.then(|| {
         let mut fa = compose_cmd(instance, env);
-        fa.arg("up").arg("-d").arg("fusionauth");
+        fa.arg("up").arg("-d");
+        // FusionAuth refuses to create the `microsoft` identity provider
+        // unless it can read the discovery document at its issuer, so the
+        // emulator that serves it starts first. It listens within a second;
+        // the kickstart runs after FusionAuth's JVM has booted.
+        if microsoft_emulator::stands_in(mode, &env.merged) {
+            fa.arg(microsoft_emulator::SERVICE);
+        }
+        fa.arg("fusionauth");
         let stage = stage.background();
         std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
     });
@@ -1196,6 +1235,9 @@ fn bring_up_infra(
         // already in the restored volumes, so this is just JVM boot.
         fusionauth::wait_ready(stage, instance)?;
         fusionauth::apply_redirect_urls(stage, instance)?;
+        if google_emulator::stands_in(mode, &env.merged) {
+            fusionauth::apply_google_authorization_endpoint(stage, instance)?;
+        }
 
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box
@@ -1667,6 +1709,7 @@ pub(crate) fn instance_has_volumes(instance: &Instance) -> Result<bool> {
 /// (best-effort and noisy); absent containers and volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
+    computers::remove_containers(instance);
     // Detach the global trace collector first or `down` can't remove the
     // instance's `services` network (foreign container = active endpoint).
     disconnect_tracing_network(instance);
@@ -1824,11 +1867,27 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 }
 
 /// `cargo x gen-compose`.
-pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
-    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
+pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let computers = computers::Computers::new(
+        Mode::Local,
+        args.computers.fleet(computers::Fleet::Docker),
+        &instance,
+    );
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
+    // No env is resolved here, so the sidecars are those of a stack without
+    // integration secrets: the Gmail and Outlook emulators, and no Gmail
+    // forwarder.
+    let sidecars = gen_compose::Sidecars::from_env(Mode::Local, &std::collections::BTreeMap::new());
+    let path = gen_compose::generate(
+        Mode::Local,
+        &instance,
+        &binaries,
+        false,
+        sidecars,
+        &computers,
+    )?;
     println!("{}", path.display());
     Ok(())
 }

@@ -975,6 +975,99 @@ describe('CacheWorkerCore', () => {
     expect(order).toEqual(['blocker', 'hydrate', 'generation', 'visible']);
   });
 
+  it('runs a typed search ahead of the backlog replayed after a restart, but never past a clear', async () => {
+    const order: string[] = [];
+    const blocker = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          if (opId === 'blocker') {
+            started.resolve();
+            await blocker.promise;
+          }
+          return { kind: 'miss' };
+        },
+        hydrateQuery: async () => {
+          order.push('hydrate');
+          return { changed: [], affectedOps: [], reset: false, data: null };
+        },
+        currentStorageGeneration: async () => {
+          order.push('generation');
+          return '00000000-0000-4000-8000-000000000001';
+        },
+        teardownOperation: async () => {
+          order.push('teardown');
+        },
+        search: async (request: { query: string }) => {
+          order.push(`search:${request.query}`);
+          return { documents: [], nextCursor: null };
+        },
+        clear: async () => {
+          order.push('clear');
+          return { changed: [], affectedOps: [], reset: true };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const search = (id: number, query: string) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'search',
+        request: {
+          profile: 'quick-access-v1',
+          buckets: ['document'],
+          query,
+          limit: 20,
+          nowMs: 1,
+        },
+      });
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await started.promise;
+    const queued = [
+      core.handleRequest(port, {
+        id: 3,
+        kind: 'hydrate',
+        query: 'query Backfill { backfill }',
+        data: { backfill: true },
+      }),
+      core.handleRequest(port, { id: 4, kind: 'current-storage-generation' }),
+      core.handleRequest(port, {
+        id: 5,
+        kind: 'read',
+        opId: 'visible',
+        query: 'query Visible { visible }',
+        priority: 'user-visible',
+      }),
+      core.handleRequest(port, { id: 6, kind: 'teardown', opId: 'visible' }),
+      search(7, ''),
+      search(8, 'todo'),
+      core.handleRequest(port, { id: 9, kind: 'clear' }),
+      search(10, 'after clear'),
+    ];
+    blocker.resolve();
+    await Promise.all([running, ...queued]);
+    expect(order).toEqual([
+      'read:blocker',
+      'search:todo',
+      'hydrate',
+      'generation',
+      'read:visible',
+      'teardown',
+      'search:',
+      'clear',
+      'search:after clear',
+    ]);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;

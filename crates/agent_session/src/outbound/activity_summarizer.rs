@@ -44,7 +44,6 @@ impl ActivitySummarizer for NemotronActivitySummarizer {
     ) -> Result<Option<String>, rootcause::Report> {
         let input = serde_json::json!({
             "previous": previous,
-            "total_steps": digest.total_steps,
             "steps": digest.steps,
         });
         let response = complete_with_history_and_params(
@@ -68,9 +67,14 @@ impl ActivitySummarizer for NemotronActivitySummarizer {
 fn clean_summary(raw: &str) -> Option<String> {
     let line = raw.lines().find(|line| !line.trim().is_empty())?;
     let line = line.trim().trim_matches(['"', '\'']).trim();
-    if line.is_empty() {
+    // The line is a status, not a tally: a trailing count the model adds goes.
+    let line = lazy_regex::regex_replace!(r"\s*\(\d+\)\s*(…|\.\.\.)?$", line, "$1");
+    if !line.chars().any(char::is_alphanumeric) {
         return None;
     }
 
     Some(line.chars().take(MAX_SUMMARY_CHARS).collect())
 }
+
+#[cfg(test)]
+mod test;

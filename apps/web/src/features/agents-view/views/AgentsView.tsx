@@ -12,6 +12,7 @@ import {
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
+import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -75,6 +76,9 @@ type SelectedConversation = {
   activeConversationId: string;
 };
 
+/** Entry-state slice holding the composer request whose draft was seeded. */
+const SEEDED_COMPOSER_REQUEST = 'agents.seededComposerRequest';
+
 function LoadingComposer() {
   return (
     <div class="grid size-full place-items-center text-ink-muted">
@@ -98,6 +102,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const mode = (): AgentsMode => props.route?.mode ?? 'chat';
   // The composer's Auto/Chat/Code choice; an open conversation keeps its own mode.
   const workspace = createWorkspaceMode();
+  // A coding agent another surface asked the composer to start with.
+  const [requestedAgentId, setRequestedAgentId] = createSignal<string>();
   const listView = createConversationListView(userId());
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
@@ -198,6 +204,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     // The preflight page stays mounted when navigating through management.
     composerFocus?.();
   };
+  // A composer request's draft seeds the composer once. Its entry keeps the
+  // request, so Back, Forward and resuming this view deliver it again; the
+  // entry records the seeded request so a sent draft does not come back.
+  const [, setSeededRequest] = useEntryState<string | undefined>(
+    SEEDED_COMPOSER_REQUEST,
+    { default: undefined }
+  );
   // A launcher navigation can target this already-mounted workspace.
   createEffect(
     on(
@@ -207,15 +220,27 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           ? content.params?.focusComposer
           : undefined;
       },
-      (request) => {
-        if (!request) return;
+      (request, previous) => {
+        if (typeof request !== 'string' || !request || request === previous)
+          return;
         const content = panel.handle.content();
+        const draft =
+          content.type === 'component' ? content.params?.draft : undefined;
+        const seeded =
+          panel.handle.currentEntryState()?.[SEEDED_COMPOSER_REQUEST];
+        // The workspace stays mounted across entries, so the captured slice
+        // must follow the request of the entry now shown.
+        setSeededRequest(request);
         if (
-          content.type === 'component' &&
-          typeof content.params?.draft === 'string' &&
-          content.params.draft.length > 0
-        )
-          persistedDraft.setDraft(content.params.draft);
+          request !== seeded &&
+          typeof draft === 'string' &&
+          draft.length > 0
+        ) {
+          persistedDraft.setDraft(draft);
+          // Record it now: a stacked phone pane can unmount without leaving
+          // this entry, which is when entry state is otherwise captured.
+          panel.handle.captureEntryState();
+        }
         showComposer();
       }
     )
@@ -256,10 +281,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       },
       () => {
         const content = panel.handle.content();
-        const next =
-          content.type === 'component'
-            ? parseAgentsPage(content.params?.agentPage)
-            : undefined;
+        if (content.type !== 'component') return;
+        const next = parseAgentsPage(content.params?.agentPage);
+        const agent = content.params?.composerAgentId;
+        if (next === 'new' && typeof agent === 'string') {
+          workspace.setMode('code');
+          setRequestedAgentId(agent);
+        }
         if (next) openPage(next);
       }
     )
@@ -474,6 +502,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                 }}
                                 mode={workspace.mode()}
                                 onModeChange={workspace.setMode}
+                                requestedAgentId={requestedAgentId()}
                                 active={
                                   !isTouchDevice() ||
                                   (!mobileList() && page() === 'new')
