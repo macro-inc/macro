@@ -300,21 +300,6 @@ describe('email events', () => {
         },
         ['inbox', 'owner', 'thread', 'actor'],
       ],
-      [
-        { event_type: 'email.thread_backfilled', metadata: thread },
-        ['inbox', 'owner', 'thread'],
-      ],
-      [
-        {
-          event_type: 'email.threads_reindex_requested',
-          metadata: {
-            ...common,
-            thread_ids: [threadId],
-            reason: 'contacts_changed',
-          },
-        },
-        ['inbox', 'owner', 'threads'],
-      ],
     ] as const satisfies ReadonlyArray<
       readonly [EmailEvent, readonly string[]]
     >;
@@ -347,9 +332,6 @@ describe('email events', () => {
       }
       if (event && 'actor' in event) {
         expect(event.actor?.id).toBe(actor);
-      }
-      if (event && 'threads' in event) {
-        expect(event.threads.map((thread) => thread.id)).toEqual([threadId]);
       }
     }
   });

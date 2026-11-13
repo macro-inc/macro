@@ -190,13 +190,22 @@ payload change must be readable by both the deployed code and the new code.
 
 `WebhookEvent` (`crates/webhook/src/domain/events.rs`) embeds the topic enums
 from `macro.documents`, `macro.channels`, `macro.call_notifications`,
-`macro.messages`, `macro.agent_session_lifecycle`, and `macro.email`. It is part
-of the storage OpenAPI spec. The union includes variants that ingestion does not
-deliver, such as `document.purged`.
+`macro.messages`, `macro.agent_session_lifecycle`, and
+`macro.email_notifications`. It is part of the storage OpenAPI spec. The union
+includes variants that ingestion does not deliver, such as `document.purged`.
 
-For `macro.email`, deliver every variant except `email.thread_backfilled` and
-`email.threads_reindex_requested`. Also silently skip `email.message_received`
-when `is_spam_or_trash` is true. The three `email.link_*` events use
+When a topic mixes internal signals with public facts, give the public facts
+their own topic and enum, as `macro.call_notifications` and
+`macro.email_notifications` do, instead of filtering in every consumer.
+Webhooks read email from `macro.email_notifications` (`EmailNotificationEvent`
+in `crates/email/src/domain/notification_events.rs`), never `macro.email`.
+Producers send each `EmailMacroEvent` through `EmailEventBroker`
+(`send_email_event` or `publish_email_event`), which also publishes its public
+form there; a raw `send_event` would skip webhooks and streams. A new
+`EmailTopicEvent` variant must be decided in
+`EmailNotificationEvent::from_topic_event`: `email.thread_backfilled`,
+`email.threads_reindex_requested` and an `email.message_received` with
+`is_spam_or_trash` stay internal. The three `email.link_*` events use
 `entity_type = "email_link"` with `link_id` as webhook entity and ordering key;
 every other delivered email event uses `entity_type = "email_thread"` with
 `thread_id` for both. Filter `ids` select links or threads, never messages.
@@ -224,8 +233,8 @@ patch or revalidate a webhook whose stored filters name an `email.*` event. Filt
   `message: EmailMessage` when `message_id` exists, except for
   `email.message_deleted` (no message handle) and `email.message_draft_synced`
   (`draft: EmailDraft` instead). Metadata with `actor` adds
-  `actor: User | undefined`. Type `email.threads_reindex_requested` with
-  `threads: EmailThread[]` from `thread_ids`, even though it is not delivered.
+  `actor: User | undefined`. Internal email signals are not in the union, so
+  the SDK does not type them.
 
 ## Verify locally
 

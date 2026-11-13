@@ -155,8 +155,9 @@ enforced by the ordinary backend APIs.
   `src/macro.ts` and its dependency graph; LiveKit runtimes stay optional peers.
 - `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
 - `src/events/hydrate/email.ts`: email events hydrate inbox, owner and related
-  handles. The generated union includes internal sync signals, but delivery
-  skips those and spam or trash `email.message_received` events. Delivery goes
+  handles. The generated union is the server's public `EmailNotificationEvent`,
+  which leaves out internal sync signals and spam or trash
+  `email.message_received` events. Delivery goes
   only to the owner's `scope=user` stream or personal-workspace webhook;
   subscribing, setting email filters, or changing a webhook that has them
   requires a `UserOrInternal` credential. Bot and harness credentials receive

@@ -134,21 +134,6 @@ export function hydrateEmailEvent(client: MacroClient, event: EmailEvent) {
       ...thread(metadata),
       ...actor(metadata),
     }))
-    .with({ event_type: 'email.thread_backfilled' }, ({ metadata }) => ({
-      event_type: 'email.thread_backfilled' as const,
-      metadata,
-      ...common(metadata),
-      ...thread(metadata),
-    }))
-    .with(
-      { event_type: 'email.threads_reindex_requested' },
-      ({ metadata }) => ({
-        event_type: 'email.threads_reindex_requested' as const,
-        metadata,
-        ...common(metadata),
-        threads: metadata.thread_ids.map((id) => EmailThread.byId(client, id)),
-      }),
-    )
     .exhaustive((unknown) => {
       console.warn('macro sdk: unknown email event', unknown);
       return undefined;

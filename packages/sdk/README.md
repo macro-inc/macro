@@ -917,9 +917,8 @@ have `thread`; events with a message id have `message`, except
 Events whose metadata has `actor` carry a `User` handle or `undefined`.
 Where present, `metadata.origin` is `user_action` or `provider_sync`.
 An event filter's `ids` selects thread ids; for `email.link_*`, it selects inbox
-ids. `email.thread_backfilled` and `email.threads_reindex_requested` exist in
-the types but are never delivered; the latter hydrates `threads` from
-`metadata.thread_ids`.
+ids. Internal email sync signals are not public events, so they are neither
+typed nor delivered.
 
 ### Persisted webhooks
 
