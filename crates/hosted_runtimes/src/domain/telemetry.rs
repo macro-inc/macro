@@ -139,6 +139,12 @@ pub fn setup_waits<T: Tracer>(
         .with_unit("s")
         .build();
     for timing in finished {
+        tracing::info!(
+            computer_id = %attributes.computer_id,
+            phase = <&'static str>::from(timing.phase),
+            seconds = seconds(timing.started_at, timing.ended_at),
+            "computer setup phase finished"
+        );
         emit(
             timing.phase.span_name(),
             timing.phase.into(),

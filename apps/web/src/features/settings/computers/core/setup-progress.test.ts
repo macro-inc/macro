@@ -84,7 +84,7 @@ describe('setupStages', () => {
     ).toBe('current');
   });
 
-  it('keeps the sign-in in the list for an agent on Macro credits, struck through', () => {
+  it('keeps the sign-in in the list for an agent on Macro credits, marked skipped', () => {
     const stages = setupStages(computer, {
       signIn: 'skipped',
       connected: false,
@@ -99,8 +99,23 @@ describe('setupStages', () => {
     ]);
     expect(stages[4]).toMatchObject({
       state: 'skipped',
+      label: 'Sign in to Claude · skipped',
       detail: "Not needed: the agent runs on Macro's Claude.",
     });
+  });
+
+  it('words every stage behind the computer as done', () => {
+    const stages = setupStages(
+      { ...computer, status: 'ready', setup: undefined },
+      { signIn: 'needed', connected: true, signedIn: true }
+    );
+    expect(stages.map((stage) => [stage.label, stage.state])).toEqual([
+      ['Billing updated', 'done'],
+      ['Computer created', 'done'],
+      ['Started up', 'done'],
+      ['Connected to Macro', 'done'],
+      ['Signed in to Claude', 'done'],
+    ]);
   });
 
   it('puts the server reason, when there is one, before the generic failed copy', () => {

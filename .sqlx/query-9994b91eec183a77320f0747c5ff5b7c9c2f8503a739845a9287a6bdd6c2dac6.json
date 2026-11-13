@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                EXISTS (\n                    SELECT FROM scheduled_action_draft\n                    WHERE owner_id = $1 AND client_id = $2\n                      AND state IN ('drafting', 'ready', 'failed')\n                ) AS \"repeated!\",\n                (\n                    SELECT count(*) FILTER (WHERE state = 'drafting')\n                    FROM scheduled_action_draft\n                    WHERE owner_id = $1 AND state IS NOT NULL AND created_at > $3\n                ) AS \"drafting!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "repeated!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "drafting!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "9994b91eec183a77320f0747c5ff5b7c9c2f8503a739845a9287a6bdd6c2dac6"
+}

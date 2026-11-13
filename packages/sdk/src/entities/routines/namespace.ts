@@ -1,5 +1,6 @@
 import type {
   RoutineCheck,
+  RoutineSuggestionCard,
   SuggestOutcome,
   Surface,
 } from '../../../generated/scheduled-action/types.gen';
@@ -7,6 +8,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
 import { Routine, type RoutineOptions, routineBody } from './routine';
+import { RoutineSuggestion } from './suggestion';
 
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
 export interface CreatedEntity {
@@ -173,15 +175,16 @@ export class RoutineNamespace {
   }
 
   /**
-   * Suggest a routine to the user. Only a routine suggestion session may
+   * Suggest a routine to the user. Only a routines generation session may
    * call this; any other session gets a 403. Suggest a catalog routine by
    * `key` with `knobs`, or a `routine` the catalog lacks, written as `check`
    * takes it and checked the same way. `surfaces` are the parts of the app
    * whose sidebar shows it, best fit first; `reason` is one line, shown to
    * the user, naming no one's email address; `keepProbability` is the
-   * chance, from 0 to 1, that the user keeps it on. Returns whether it was
-   * kept (`ok`) and, when not, the `problems` to fix before suggesting it
-   * again.
+   * chance, from 0 to 1, that the user keeps it on. A drafted `routine`
+   * also shows in the user's Suggestions feed, as its `card` says; a catalog
+   * routine takes no `card`. Returns whether it was kept (`ok`) and, when
+   * not, the `problems` to fix before suggesting it again.
    *
    * @example
    * const outcome = await macro.routines.suggest({
@@ -213,6 +216,8 @@ export class RoutineNamespace {
           reason: string;
           surfaces: Surface[];
           keepProbability: number;
+          /** How it shows in the user's Suggestions feed: a short title, an importance from 0 to 100, and fitting categories. */
+          card: RoutineSuggestionCard;
         },
   ): Promise<SuggestOutcome> {
     const body =
@@ -231,8 +236,32 @@ export class RoutineNamespace {
             reason: suggestion.reason,
             surfaces: suggestion.surfaces,
             keepProbability: suggestion.keepProbability,
+            card: suggestion.card,
           };
     return unwrap(await this.client.scheduledAction.suggestRoutine({ body }));
+  }
+
+  /**
+   * Every routine suggestion AI made for the user, open or not, and how
+   * many more this session may hand back. Only a routines generation
+   * session may call this. Retire with `suggestion.retire(reason)` what no
+   * longer fits; suggestions are never rewritten.
+   *
+   * @mcp-exclude only a routines generation session may call it
+   */
+  async review(): Promise<{
+    suggestions: RoutineSuggestion[];
+    keptLeft: number;
+  }> {
+    const review = unwrap(
+      await this.client.scheduledAction.reviewRoutineSuggestions(),
+    );
+    return {
+      suggestions: review.suggestions.map((record) =>
+        RoutineSuggestion.from(this.client, record),
+      ),
+      keptLeft: review.keptLeft,
+    };
   }
 
   /**

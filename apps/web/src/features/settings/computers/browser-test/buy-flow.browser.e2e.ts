@@ -108,6 +108,13 @@ async function shoot(page: Page, name: string) {
 
 const dialog = (page: Page) => page.getByRole('dialog');
 
+// The fixture's service clients point at the hosted dev gateway; anything a
+// test does not answer itself is refused, so nothing reaches a real backend.
+test.beforeEach(async ({ page }) => {
+  await page.route(/\.macro\.com\//, (route) => route.abort());
+  page.on('pageerror', (error) => console.log('pageerror', error.stack));
+});
+
 /**
  * A Machines page whose team has no computers, with Get a computer pressed
  * while the sizes are still loading. Only then does `answer` reply: a refusal
@@ -136,184 +143,247 @@ async function openBuyFlow(
   opened();
 }
 
-test('shows a skeleton while sizes load, then the sizes, and buys through to Ready', async ({
-  page,
-}) => {
-  let releaseOffers = () => {};
-  const offersReady = new Promise<void>((resolve) => {
-    releaseOffers = resolve;
-  });
-  let computers: ComputerStatus[] = [];
-  let chargeConfirmedAt = Number.POSITIVE_INFINITY;
-  await page.route('**/auth/team/computers', async (route) => {
-    if (route.request().method() === 'GET') {
-      // The charge is confirmed a few seconds after the purchase.
-      if (
-        computers[0]?.status === 'purchasing' &&
-        Date.now() >= chargeConfirmedAt
-      )
-        computers = [computer];
-      return json(route, 200, computers);
+for (const ending of ['Try it', 'Create an agent on this computer'] as const)
+  test(`shows a skeleton while sizes load, then the sizes, and buys through to ${ending}`, async ({
+    page,
+  }) => {
+    // The composer and Agents settings are large graphs on a cold server.
+    test.setTimeout(120_000);
+    let releaseOffers = () => {};
+    const offersReady = new Promise<void>((resolve) => {
+      releaseOffers = resolve;
+    });
+    let computers: ComputerStatus[] = [];
+    let chargeConfirmedAt = Number.POSITIVE_INFINITY;
+    await page.route('**/auth/team/computers', async (route) => {
+      if (route.request().method() === 'GET') {
+        // The charge is confirmed a few seconds after the purchase.
+        if (
+          computers[0]?.status === 'purchasing' &&
+          Date.now() >= chargeConfirmedAt
+        )
+          computers = [computer];
+        return json(route, 200, computers);
+      }
+      computers = [
+        { ...computer, status: 'purchasing', billing: 'purchasing' },
+      ];
+      chargeConfirmedAt = Date.now() + 4_000;
+      return json(route, 202, {
+        computerId: 'computer-1',
+        state: 'confirming',
+      });
+    });
+    await page.route('**/auth/team/computers/offers', async (route) => {
+      await offersReady;
+      return json(route, 200, offers);
+    });
+    await page.route('**/auth/team/computers/*/setup-complete', (route) => {
+      computers = computers.map((current) => ({
+        ...current,
+        setupCompletedAt: '2026-01-02T00:00:00Z',
+      }));
+      return json(route, 200, computers[0]);
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Get a computer' }).click();
+    await expect(dialog(page)).toBeVisible();
+    await expect(
+      dialog(page).getByRole('status', { name: 'Loading computer sizes' })
+    ).toBeVisible();
+    await shoot(page, 'buy-loading');
+
+    releaseOffers();
+    const steps = dialog(page).getByRole('list', { name: 'Setup steps' });
+    const phone = test.info().project.name === 'phone';
+    await expect(steps.getByRole('listitem')).toHaveText(
+      phone
+        ? ['Buy', 'Agent', 'Your AI', 'Create']
+        : ['Buy computer', 'Configure agent', 'Bring your AI', 'Create agent']
+    );
+    // One line on a phone: every step shares the first step's top edge.
+    const tops = await steps
+      .getByRole('listitem')
+      .evaluateAll((items) =>
+        items.map((item) => item.getBoundingClientRect().top)
+      );
+    expect(new Set(tops).size).toBe(1);
+    await expect(
+      dialog(page).getByRole('radio', { name: 'Large' })
+    ).toBeVisible();
+    await expect(
+      dialog(page).getByRole('radio', { name: 'XL' })
+    ).toBeDisabled();
+    await shoot(page, 'buy-sizes');
+
+    await dialog(page).getByRole('radio', { name: 'Large' }).check();
+    await dialog(page)
+      .getByRole('button', { name: 'Buy · $80.00/month' })
+      .click();
+    await expect(
+      dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
+    ).toBeVisible();
+    await expect(steps.getByRole('listitem').nth(1)).toHaveAttribute(
+      'aria-current',
+      'step'
+    );
+    await shoot(page, 'buy-agent');
+
+    // Billing comes first, then setup carries on behind the step, with the
+    // stage and its elapsed time.
+    const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
+    await expect(progress.getByRole('listitem').first()).toHaveText(
+      /Updating billing…\s*\d+:\d\d/
+    );
+    await expect(
+      page.locator('[data-runtime-row="Maya\'s Agent Box"]')
+    ).toContainText(/Setting up · Updating billing… · \d+:\d\d/);
+    await shoot(page, 'buy-billing');
+    await expect(progress.getByRole('listitem')).toHaveText(
+      [
+        'Billing updated',
+        /Creating the computer\s*\d+:\d\d/,
+        'Starting up',
+        'Connecting to Macro',
+        'Sign in to Claude',
+      ],
+      { timeout: 10_000 }
+    );
+    // Continue is disabled until a Claude is chosen, and says so.
+    await expect(
+      dialog(page).getByRole('button', { name: 'Continue' })
+    ).toBeDisabled();
+    await expect(dialog(page)).toContainText(
+      'Choose which Claude it should use to continue.'
+    );
+    await expect(
+      page.locator('[data-runtime-row="Maya\'s Agent Box"]')
+    ).toContainText(/Setting up · Creating the computer \(1 of 3\) · \d+:\d\d/);
+
+    await dialog(page)
+      .getByRole('radio', { name: 'Your Claude account' })
+      .check();
+    await dialog(page).getByRole('button', { name: 'Continue' }).click();
+    await expect(
+      dialog(page).getByRole('heading', { name: 'Sign in to Claude' })
+    ).toBeVisible();
+    // Nothing greyed out: the step says what it waits for, and the sign-in
+    // stage is listed as a later one that unlocks by itself.
+    await expect(dialog(page).getByRole('status')).toHaveText(
+      /Preparing sign-in… Creating the computer · \d+:\d\d/
+    );
+    await expect(
+      dialog(page).getByRole('button', { disabled: true })
+    ).toHaveCount(0);
+    await expect(progress.getByRole('listitem').nth(4)).toContainText(
+      'Sign in to Claude'
+    );
+    await shoot(page, 'buy-claude-waiting');
+
+    // The computer connects: the row behind refreshes, and the link is ready.
+    computers = [
+      {
+        ...computer,
+        status: 'ready',
+        poweredOn: true,
+        setup: undefined,
+        harnessId: 'harness-1',
+        defaultAgentId: 'bot-1',
+      },
+    ];
+    await page.evaluate(
+      ([registered]) => {
+        window.computerFixture.setHarnesses([registered]);
+        window.computerFixture.setAgents([
+          {
+            bot: { id: 'bot-1', name: "Maya's Agent" },
+            harness_id: 'harness-1',
+          },
+        ]);
+      },
+      [harness] as const
+    );
+    await expect(
+      dialog(page).getByRole('link', { name: 'Open claude.ai' })
+    ).toBeVisible({ timeout: 10_000 });
+    await shoot(page, 'buy-claude-ready');
+
+    // The link opens claude.ai in a new tab; the test never reaches it.
+    await page
+      .context()
+      .route('https://claude.ai/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'text/html', body: '' })
+      );
+    const claudeTab = page.context().waitForEvent('page');
+    await dialog(page).getByRole('link', { name: 'Open claude.ai' }).click();
+    await (await claudeTab).close();
+    await expect(
+      dialog(page).getByLabel('Paste the code Claude showed you')
+    ).toBeVisible();
+    await shoot(page, 'buy-claude-code');
+
+    await dialog(page)
+      .getByRole('button', { name: 'Use Macro credits instead' })
+      .click();
+    await expect(
+      dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(progress).toHaveCount(0);
+    await expect(steps.getByRole('listitem').last()).toHaveAttribute(
+      'aria-current',
+      'step'
+    );
+    await expect(
+      dialog(page).getByRole('button', { name: 'Try it' })
+    ).toBeEnabled();
+    await expect(
+      dialog(page).getByRole('button', {
+        name: 'Create an agent on this computer',
+      })
+    ).toBeEnabled();
+    await shoot(page, 'buy-ready');
+
+    await dialog(page).getByRole('button', { name: ending }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    if (ending === 'Try it') {
+      // A phone composer shows its agent once it is tapped.
+      if (phone)
+        await page.locator('[contenteditable="true"]').first().click({
+          timeout: 60_000,
+        });
+      // The composer starts in Code with the agent the flow configured.
+      await expect(page.getByRole('button', { name: 'Agent' })).toHaveAttribute(
+        'title',
+        /Maya's Agent/,
+        { timeout: 60_000 }
+      );
+      await expect(page.getByRole('radio', { name: 'Code' })).toBeChecked();
+      // A phone shows the agent as an icon; its sheet names the selection.
+      if (phone) {
+        await page.getByRole('button', { name: 'Agent' }).click();
+        await expect(page.getByText("Maya's Agent").first()).toBeVisible();
+      }
+      await shoot(page, 'try-it-composer');
+      return;
     }
-    computers = [{ ...computer, status: 'purchasing', billing: 'purchasing' }];
-    chargeConfirmedAt = Date.now() + 4_000;
-    return json(route, 202, { computerId: 'computer-1', state: 'confirming' });
+    // The create form, with this computer chosen under Where it runs.
+    const form = page.getByRole('region', { name: 'New agent' });
+    await expect(form).toBeVisible({ timeout: 60_000 });
+    const where = form.getByRole('group', { name: 'Where it runs' });
+    await expect(
+      where.getByRole('radio', { name: /On a Macro computer/ })
+    ).toBeChecked();
+    await expect(
+      where.getByRole('radio', { name: 'In Macro' })
+    ).not.toBeChecked();
+    await where.getByText('On a Macro computer').evaluate((label) => {
+      label.scrollIntoView({ block: 'center' });
+      for (const element of document.querySelectorAll('*'))
+        element.scrollLeft = 0;
+    });
+    await shoot(page, 'create-agent-form');
   });
-  await page.route('**/auth/team/computers/offers', async (route) => {
-    await offersReady;
-    return json(route, 200, offers);
-  });
-  await page.route('**/auth/team/computers/*/setup-complete', (route) => {
-    computers = computers.map((current) => ({
-      ...current,
-      setupCompletedAt: '2026-01-02T00:00:00Z',
-    }));
-    return json(route, 200, computers[0]);
-  });
-
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Get a computer' }).click();
-  await expect(dialog(page)).toBeVisible();
-  await expect(
-    dialog(page).getByRole('status', { name: 'Loading computer sizes' })
-  ).toBeVisible();
-  await shoot(page, 'buy-loading');
-
-  releaseOffers();
-  const steps = dialog(page).getByRole('list', { name: 'Setup steps' });
-  const phone = test.info().project.name === 'phone';
-  await expect(steps.getByRole('listitem')).toHaveText(
-    phone
-      ? ['Buy', 'Agent', 'Your AI', 'Ready']
-      : ['Buy computer', 'Configure agent', 'Bring your AI', 'Ready']
-  );
-  // One line on a phone: every step shares the first step's top edge.
-  const tops = await steps
-    .getByRole('listitem')
-    .evaluateAll((items) =>
-      items.map((item) => item.getBoundingClientRect().top)
-    );
-  expect(new Set(tops).size).toBe(1);
-  await expect(
-    dialog(page).getByRole('radio', { name: 'Large' })
-  ).toBeVisible();
-  await expect(dialog(page).getByRole('radio', { name: 'XL' })).toBeDisabled();
-  await shoot(page, 'buy-sizes');
-
-  await dialog(page).getByRole('radio', { name: 'Large' }).check();
-  await dialog(page)
-    .getByRole('button', { name: 'Buy · $80.00/month' })
-    .click();
-  await expect(
-    dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
-  ).toBeVisible();
-  await expect(
-    steps.getByRole('listitem').filter({ hasText: 'Agent' })
-  ).toHaveAttribute('aria-current', 'step');
-  await shoot(page, 'buy-agent');
-
-  // Billing comes first, then setup carries on behind the step, with the
-  // stage and its elapsed time.
-  const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
-  await expect(progress.getByRole('listitem').first()).toHaveText(
-    /Updating billing…\s*\d+:\d\d/
-  );
-  await expect(
-    page.locator('[data-runtime-row="Maya\'s Agent Box"]')
-  ).toContainText(/Setting up · Updating billing… · \d+:\d\d/);
-  await shoot(page, 'buy-billing');
-  await expect(progress.getByRole('listitem')).toHaveText(
-    [
-      'Updating billing…',
-      /Creating the computer\s*\d+:\d\d/,
-      'Starting up',
-      'Connecting to Macro',
-      'Sign in to Claude',
-    ],
-    { timeout: 10_000 }
-  );
-  // Continue is disabled until a Claude is chosen, and says so.
-  await expect(
-    dialog(page).getByRole('button', { name: 'Continue' })
-  ).toBeDisabled();
-  await expect(dialog(page)).toContainText(
-    'Choose which Claude it should use to continue.'
-  );
-  await expect(
-    page.locator('[data-runtime-row="Maya\'s Agent Box"]')
-  ).toContainText(/Setting up · Creating the computer \(1 of 3\) · \d+:\d\d/);
-
-  await dialog(page)
-    .getByRole('radio', { name: 'Your Claude account' })
-    .check();
-  await dialog(page).getByRole('button', { name: 'Continue' }).click();
-  await expect(
-    dialog(page).getByRole('heading', { name: 'Sign in to Claude' })
-  ).toBeVisible();
-  // Nothing greyed out: the step says what it waits for, and the sign-in
-  // stage is listed as a later one that unlocks by itself.
-  await expect(dialog(page).getByRole('status')).toHaveText(
-    /Preparing sign-in… Creating the computer · \d+:\d\d/
-  );
-  await expect(
-    dialog(page).getByRole('button', { disabled: true })
-  ).toHaveCount(0);
-  await expect(progress.getByRole('listitem').nth(4)).toContainText(
-    'Sign in to Claude'
-  );
-  await shoot(page, 'buy-claude-waiting');
-
-  // The computer connects: the row behind refreshes, and the link is ready.
-  computers = [
-    {
-      ...computer,
-      status: 'ready',
-      poweredOn: true,
-      setup: undefined,
-      harnessId: 'harness-1',
-      defaultAgentId: 'bot-1',
-    },
-  ];
-  await page.evaluate(
-    ([registered]) => {
-      window.computerFixture.setHarnesses([registered]);
-      window.computerFixture.setAgents([
-        { bot: { id: 'bot-1', name: "Maya's Agent" }, harness_id: 'harness-1' },
-      ]);
-    },
-    [harness] as const
-  );
-  await expect(
-    dialog(page).getByRole('link', { name: 'Open claude.ai' })
-  ).toBeVisible({ timeout: 10_000 });
-  await shoot(page, 'buy-claude-ready');
-
-  // The link opens claude.ai in a new tab; the test never reaches it.
-  await page
-    .context()
-    .route('https://claude.ai/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'text/html', body: '' })
-    );
-  const claudeTab = page.context().waitForEvent('page');
-  await dialog(page).getByRole('link', { name: 'Open claude.ai' }).click();
-  await (await claudeTab).close();
-  await expect(
-    dialog(page).getByLabel('Paste the code Claude showed you')
-  ).toBeVisible();
-  await shoot(page, 'buy-claude-code');
-
-  await dialog(page)
-    .getByRole('button', { name: 'Use Macro credits instead' })
-    .click();
-  await expect(
-    dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
-  ).toBeVisible({ timeout: 10_000 });
-  await expect(progress).toHaveCount(0);
-  await expect(
-    steps.getByRole('listitem').filter({ hasText: 'Ready' })
-  ).toHaveAttribute('aria-current', 'step');
-  await shoot(page, 'buy-ready');
-});
 
 test('a failed setup says why, offers Retry, and carries on after it', async ({
   page,

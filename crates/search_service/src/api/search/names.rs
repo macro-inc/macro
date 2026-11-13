@@ -21,7 +21,7 @@ use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, 
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use models_search::{
-    MatchType, SearchOn,
+    MatchType, SearchOn, TermMatching,
     names::{NameKind, NameSearchRequest, NameSearchResponse, NamedItem},
     unified::UnifiedSearchRequest,
 };
@@ -239,6 +239,8 @@ impl IndexedDocuments {
             search_on: SearchOn::Name,
             include_crm: false,
             calendar_event_scope: Default::default(),
+            // A name is a strict AND of its terms, never a passage match.
+            term_matching: TermMatching::All,
             collapse: Some(true),
         };
         let filters = &mut request.filters;

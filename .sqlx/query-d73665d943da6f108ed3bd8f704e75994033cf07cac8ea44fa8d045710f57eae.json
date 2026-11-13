@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_run SET claimed_until = NULL\n               WHERE session_id = $1 AND claimed_until = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d73665d943da6f108ed3bd8f704e75994033cf07cac8ea44fa8d045710f57eae"
+}

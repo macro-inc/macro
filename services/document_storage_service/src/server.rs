@@ -957,6 +957,11 @@ async fn run_server() -> anyhow::Result<()> {
             call_root_poster.clone(),
         ),
     ));
+    let search_term_matching: Arc<dyn search_service::TermMatchingRollout> =
+        match config.environment {
+            Environment::Local => Arc::new(search_service::LocalTermMatching),
+            _ => Arc::new(search_service::FlaggedTermMatching::new(flags.clone())),
+        };
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
         call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
     );
@@ -2474,6 +2479,7 @@ async fn run_server() -> anyhow::Result<()> {
     ];
     let api_context = ApiContext {
         name_sources,
+        search_term_matching,
         saved_views,
         sync_sessions,
         dictation_state,

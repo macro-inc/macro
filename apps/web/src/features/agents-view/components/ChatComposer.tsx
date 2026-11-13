@@ -261,6 +261,7 @@ export function ChatComposer(props: {
 
   const editorRow = () => (
     <div
+      data-composer-scroll
       classList={{
         'max-h-6 overflow-hidden': !!collapsed(),
         'max-h-[min(15rem,30dvh)]': !collapsed(),

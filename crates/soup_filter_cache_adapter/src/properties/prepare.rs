@@ -1,6 +1,7 @@
 use super::*;
+use crate::parsed_document::parsed_document;
 use cache_core::{
-    document::{Document, OperationKind, resolve_args},
+    document::{OperationKind, resolve_args},
     normalize::normalize,
     predicate::PredicateIndexStorage,
     value::{CacheValue, EntityKey, Record},
@@ -216,7 +217,7 @@ fn mutation_owners(
     variables: &Map<String, Value>,
     data: &Value,
 ) -> Result<BTreeMap<EntityKey<'static>, RecordKey>, SoupFilterCacheAdapterError> {
-    let doc = Document::parse(query).map_err(error)?;
+    let doc = parsed_document(query).map_err(error)?;
     let op = doc.operation(operation).map_err(error)?;
     let mut owners = BTreeMap::new();
     if op.kind != OperationKind::Mutation {
@@ -337,7 +338,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
     data: &Value,
     reuse: bool,
 ) -> Result<BTreeMap<RecordKey, Changes>, ProjectionError<S::Error>> {
-    let document = Document::parse(query).map_err(error)?;
+    let document = parsed_document(query).map_err(error)?;
     let op = document.operation(operation).map_err(error)?;
     let updates: BTreeMap<_, _> = normalize(schema, op, variables, data)
         .map_err(error)?

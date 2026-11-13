@@ -105,6 +105,44 @@ pub fn symbol_reference(symbol: &str) -> Option<&'static str> {
     GENERATED.symbols.get(symbol).map(String::as_str)
 }
 
+/// A compact reference for a prompt that always needs the same methods:
+/// from each entity index, the header of every class or namespace that
+/// declares one of `methods` (such as `EmailThread.messages`) with those
+/// method lines, and the `Fields:` line of each class in `fields_of`. A
+/// session given it needs no `ReadCodeDocs` call for these. Names the SDK
+/// doesn't have are left out.
+pub fn index_digest(methods: &[&str], fields_of: &[&str]) -> String {
+    let mut digest = Vec::new();
+    for index in sdk_documentation()
+        .iter()
+        .filter_map(|doc| doc.index.as_deref())
+    {
+        for section in index.split("\n### ").skip(1) {
+            let mut lines = section.lines();
+            let Some(header) = lines.next() else {
+                continue;
+            };
+            let class = header.split(' ').next().unwrap_or(header);
+            let mut kept = Vec::new();
+            for line in lines {
+                let symbol = line
+                    .strip_prefix("- `")
+                    .and_then(|rest| rest.split('`').next());
+                if symbol.is_some_and(|symbol| methods.contains(&symbol))
+                    || (line.starts_with("Fields:") && fields_of.contains(&class))
+                {
+                    kept.push(line);
+                }
+            }
+            if !kept.is_empty() {
+                digest.push(format!("### {header}"));
+                digest.extend(kept.into_iter().map(str::to_owned));
+            }
+        }
+    }
+    digest.join("\n")
+}
+
 /// One entity's `@agent` guidance as the SDK declares it, without an attached
 /// skill, for hosts that carry a single area whole.
 pub fn entity_guide(name: &str) -> Option<&'static str> {

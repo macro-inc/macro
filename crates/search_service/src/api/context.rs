@@ -44,6 +44,8 @@ pub struct SearchHandlerState {
     /// initiatives, databases, agents, labels, tags, channel labels), beside
     /// the channel and document sources this crate reads itself.
     pub name_sources: Vec<Arc<dyn crate::domain::names::NameSource>>,
+    /// Which callers get dynamic multi-term matching on document content.
+    pub term_matching_rollout: Arc<dyn crate::TermMatchingRollout>,
 }
 
 impl SearchHandlerState {
