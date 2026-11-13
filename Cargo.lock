@@ -19773,6 +19773,7 @@ dependencies = [
 name = "static_file_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -19801,6 +19802,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
  "utoipa",
