@@ -108,9 +108,16 @@ drawn once into a layer whose single transform follows a camera path from
 follows the connector bound to both slides, else flies). Masks letterbox its
 first and last frames exactly as present mode shows each slide. A key during a
 transition finishes it at once and starts the next; nothing queues. With
-`prefers-reduced-motion` every kind plays as a 200 ms fade. Each transition is
-one `canvas.artifact.transition` interaction span with its kind, timing,
-outcome (`completed`, `skipped`, `cancelled`) and frame counts.
+`prefers-reduced-motion` every kind plays as a 200 ms fade. Canvas kinds hold
+the flight's last frame until the live slide has loaded (at most 400 ms). Each
+transition is one `canvas.artifact.transition` interaction whose join window
+closes at once; `Interaction.hold()` keeps its span open for the animation, with
+its kind, timing, outcome (`completed`, `skipped`, `cancelled`) and frame counts.
+The stage also exposes the last transition's counts as
+`data-canvas-transition-frames` and `data-canvas-transition-dropped-frames`,
+which the browser suite checks for every kind. Most kinds animate only
+transform and opacity; wipe, split and iris animate `clip-path`, and dissolve
+and cube animate `filter`.
 
 The inspector's **Transition** section picks a kind from live thumbnails (hover
 or focus plays them; a tap selects and plays once), then duration, easing and,

@@ -177,7 +177,9 @@ whole-string register: concurrent edits to the same artifact keep one version.
 An artifact's slide transition is a JSON `transition` register; null or absent
 inherits the deck default. It is written only when an edit changes it, so clients
 that predate it, or cannot read a stored value, keep it when they rewrite the node;
-an invalid value reads as absent. The deck default is the `transition` key of the
+an invalid value reads as absent. Clearing such a slide is a no-op for that
+client, since it already reads as having no transition, so its value stays until
+a client that can read it clears or replaces it. The deck default is the `transition` key of the
 `presentation` root map (`backend.presentation`), and `commit` takes a presentation
 edit so that it lands in the same update as a scene change.
 Their source bytes, resolved URLs, loading state and playback are host concerns.

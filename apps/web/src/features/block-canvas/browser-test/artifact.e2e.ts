@@ -203,6 +203,40 @@ test('plays every transition kind forward and back to the right slide', async ({
   }
 });
 
+test('keeps every kind playing at frame rate', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const counter = await presentDeck(page);
+  const stage = page.locator('[data-canvas-slide-stage]');
+  const dropped: Record<string, number> = {};
+  const framesByKind: Record<string, number> = {};
+  let position = 1;
+  let step = 1;
+  for (const kind of KINDS.filter((each) => each !== 'none')) {
+    await setTransitions(page, { kind, durationMs: 1000 });
+    if (position + step < 1 || position + step > 4) step = -step;
+    position += step;
+    await page.keyboard.press(step > 0 ? 'ArrowRight' : 'ArrowLeft');
+    await expect(counter).toHaveText(`${position} / 4`);
+    await expect(stage).toHaveAttribute('data-canvas-transition-state', 'idle');
+    const frames = Number(
+      await stage.getAttribute('data-canvas-transition-frames')
+    );
+    dropped[kind] = Number(
+      await stage.getAttribute('data-canvas-transition-dropped-frames')
+    );
+    framesByKind[kind] = frames;
+    // About 60 frames paint in a second; an animation the main thread stalls
+    // paints a handful. Headless software rendering keeps this bound loose.
+    expect(frames, kind).toBeGreaterThan(20);
+  }
+  info.annotations.push({
+    type: 'dropped frames',
+    description: JSON.stringify(dropped),
+  });
+  console.log('dropped frames per kind', JSON.stringify(dropped));
+  console.log('frames per kind', JSON.stringify(framesByKind));
+});
+
 test('a key during a transition skips to the next slide without queueing', async ({
   page,
 }) => {
@@ -275,11 +309,19 @@ test('picks, times and previews a transition from the inspector', async ({
     'data-transition-tile',
     'default'
   );
-  await section.getByRole('radio', { name: 'Push' }).click();
-  await expect(section.getByRole('radio', { name: 'Push' })).toHaveAttribute(
-    'aria-checked',
-    'true'
+
+  // A new deck has no transitions; Apply to all must not write a resolved cut.
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await section.getByRole('button', { name: 'Apply to all' }).click();
+  await expect(section.getByTestId('canvas-transition-source')).toHaveText(
+    'Uses the deck default: Cut'
   );
+  expect(errors).toEqual([]);
+  await section.getByRole('radio', { name: 'Push', exact: true }).click();
+  await expect(
+    section.getByRole('radio', { name: 'Push', exact: true })
+  ).toHaveAttribute('aria-checked', 'true');
   // The segment's label covers its input.
   await section.getByRole('radio', { name: 'Up' }).locator('..').click();
   await expect(section.getByRole('radio', { name: 'Up' })).toBeChecked();
@@ -293,10 +335,9 @@ test('picks, times and previews a transition from the inspector', async ({
   // Undo takes back one edit at a time.
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(duration).toHaveValue('0.5');
-  await expect(section.getByRole('radio', { name: 'Push' })).toHaveAttribute(
-    'aria-checked',
-    'true'
-  );
+  await expect(
+    section.getByRole('radio', { name: 'Push', exact: true })
+  ).toHaveAttribute('aria-checked', 'true');
 
   await section.getByRole('button', { name: 'Preview' }).click();
   const preview = section.locator('[data-canvas-transition-preview]');
@@ -313,8 +354,26 @@ test('picks, times and previews a transition from the inspector', async ({
     '2'
   );
 
+  const easing = section.getByRole('button', { name: 'Transition easing' });
+  await easing.click();
+  await page.getByRole('option', { name: 'Linear' }).click();
+  await expect(easing).toHaveText('Linear');
+
   await section.getByRole('button', { name: 'Set default' }).click();
   await expect(section.getByTestId('canvas-transition-source')).toHaveText(
     'Deck default: Push'
   );
+
+  // A slide that inherits starts its edits from the deck default's fields.
+  await section
+    .getByRole('radio', { name: 'Use the deck default: Push' })
+    .click();
+  await expect(duration).toHaveValue('0.5');
+  await section.getByRole('radio', { name: 'Down' }).locator('..').click();
+  await expect(
+    section.getByRole('radio', { name: 'Push', exact: true })
+  ).toHaveAttribute('aria-checked', 'true');
+  await expect(duration).toHaveValue('0.5');
+  await expect(easing).toHaveText('Linear');
+  expect(errors).toEqual([]);
 });
