@@ -1,0 +1,160 @@
+crates/properties/src/domain/events/public.rs
+  s_800cdee5095ae4::t_16bbe2d9d523ae 2-3,10,46-48,65-70,94
+crates/properties/src/domain/events/test.rs
+  s_800cdee5095ae4::t_16bbe2d9d523ae 468,489-490
+crates/properties/src/domain/events.rs
+  s_800cdee5095ae4::t_16bbe2d9d523ae 290-291
+crates/call/src/domain/events.rs
+  s_800cdee5095ae4::t_7e32cef6b057ca 155-218,224,232-235,237-241,245-268,270-298,300-307
+crates/call/src/domain/events/test.rs
+  s_800cdee5095ae4::t_132b0592a5db12 293-417
+crates/documents/src/domain/events/test.rs
+  s_471e2069ef160b::t_d749a54f80ee7e 494-514
+packages/sdk/src/events/hydrate/document.ts
+  s_1656893481611a::t_7bf0fef0ece4a8 85-97
+packages/sdk/tests/events-subscribe.test.ts
+  s_1656893481611a::t_ddd06f84b87314 30
+  s_1656893481611a::t_97524923241d91 1-29,31-286
+packages/sdk/specs/storage.json
+  s_1656893481611a::t_a1cca40905501b 18429-18585,28212-28213,28227-28236,28245,28264-28273,28284-28303,31129-31145,33630-33658,38721-38755,39479-39491,43890-43903,55525-55594,64546,64549-64555,64561,64568,65127,65144,65151,65155,65158-65164,65170,65177,65184
+packages/sdk/src/events/hydrate/initiative.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-40
+packages/sdk/src/events/subscribe.ts
+  s_1656893481611a::t_39970fc3162e14 295-302
+  s_1656893481611a::t_bdaa7c1b335652 1-5,7-90,95-125,128-188,191-197,199-232,240,250-254,259,267-294,303-310,314-326,331-343
+  s_1656893481611a::t_e7569584a78f1f 6,189-190,198,237-239,241-249,255-258,260-266
+  s_1656893481611a::t_d37271e0e97481 126-127,311-313,327-330
+  s_1656893481611a::t_ddd06f84b87314 91-94,233-236
+packages/sdk/src/utils/verbs.ts
+  s_1656893481611a::t_7cfd171f9aea50 234,238
+packages/sdk/generated/storage/types.gen.ts
+  s_1656893481611a::t_a1cca40905501b 1453-1457,3228-3249,6746-6763,7196-7200,9666-9676,16842-16888,22719-22726,22730-22731,23084-23088,23090,23093-23094,23098-23105,23109-23110,23116-23118,31507-31600,35604,35613-35614,35617-35622,35627,35632-35635,35640-35647,35654,35656,35658,35663
+packages/sdk/src/events/hydrate/callRecord.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-47
+packages/sdk/src/events/receiver.ts
+  s_1656893481611a::t_ddd06f84b87314 83-84,216
+  s_1656893481611a::t_dd8785782f0e3e 3,7,22,28,30,56-82,85-89,144,176-215,217-231,287-290,292-293,295-296,298-299,303-304,308,380-383
+  s_1656893481611a::t_7bf0fef0ece4a8 11,13-14,16-18,20,98-101,119-143
+  s_1656893481611a::t_948fdd2323db1d 264-268
+  s_1656893481611a::t_215fd8d67990b5 232
+packages/sdk/src/macro.ts
+  s_1656893481611a::t_41643da514208a 125-142
+packages/sdk/README.md
+  s_1656893481611a::t_e698249321f029 846-847,850-867,869-903,1048-1053
+  s_1656893481611a::t_b09d52ddf74d27 868
+packages/sdk/generated/storage/sdk.gen.ts
+  s_1656893481611a::t_a1cca40905501b 5,3274-3287,4857-4858,4860-4861
+packages/sdk/generated/storage/index.ts
+  s_1656893481611a::t_a1cca40905501b 4
+packages/sdk/src/events/hydrate/project.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-49
+packages/sdk/package.json
+  s_1656893481611a::t_43bbe23d22bddb 3
+packages/sdk/src/events/hydrate/chat.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-61
+packages/sdk/src/events/hydrate/form.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-11,16-50
+  s_1656893481611a::t_ddd06f84b87314 12-15
+packages/sdk/src/events/hydrate/database.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-53
+packages/sdk/src/events/types.ts
+  s_1656893481611a::t_2bfd447fd152d7 64,66,69-73,83-84
+  s_1656893481611a::t_7bf0fef0ece4a8 9,11-12,14-16,18,44-50
+  s_1656893481611a::t_6b04da27601e6d 74-82
+  s_1656893481611a::t_47cb0d3e864bae 57-58,65,85-101
+  s_1656893481611a::t_b33065fd2ea9c2 102
+packages/sdk/src/events/hydrate/entityProperty.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-27,32-43
+  s_1656893481611a::t_ddd06f84b87314 28-31
+packages/sdk/tests/events.test.ts
+  s_1656893481611a::t_b95ca224015e79 115-151
+  s_1656893481611a::t_30477b2a6c697d 78
+apps/web/src/lib/service-clients/service-storage/generated/schemas/audienceClass.ts
+  s_1656893481611a::t_e0959e0706acff 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/catalogEntry.ts
+  s_1656893481611a::t_e395743cceb889 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEvent.ts
+  s_1656893481611a::t_58452e1bfa4c86 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOf.ts
+  s_1656893481611a::t_65edb753cab215 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOfEventType.ts
+  s_1656893481611a::t_47e4cc53427905 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOfThree.ts
+  s_1656893481611a::t_5d14b1b102ea26 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_dc3811d434dcaa 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentPublicEvent.ts
+  s_1656893481611a::t_5d19292378118d 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/eventCatalog.ts
+  s_1656893481611a::t_0b823a9c8aedab 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_1656893481611a::t_1b9f9a74e274d8 205,451,904-908,970,1407,2430-2436,3074,3325,3373
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentAppearanceChanged.ts
+  s_1656893481611a::t_e004aef5ed6b5c 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentAppearanceChangedActor.ts
+  s_1656893481611a::t_914bb52afebc24 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentAppearanceChangedOnBehalfOf.ts
+  s_1656893481611a::t_086b6b642386a7 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentContentChanged.ts
+  s_1656893481611a::t_2f526da52b059b 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentContentChangedDocumentVersionId.ts
+  s_1656893481611a::t_9c1f20dc665ad5 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentEditor.ts
+  s_1656893481611a::t_1db844b4492926 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentEditorOnBehalfOf.ts
+  s_1656893481611a::t_8cec3c818f968c 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/streamEventsAliasParams.ts
+  s_1656893481611a::t_f78d44e45e95b5 1-25
+apps/web/src/lib/service-clients/service-storage/generated/schemas/streamEventsParams.ts
+  s_1656893481611a::t_16c938bdff1430 15-16,19-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItem.ts
+  s_1656893481611a::t_3de8ca14e021e1 7,11-12,15-20,22-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItemEntityTypes.ts
+  s_1656893481611a::t_77cdf9e9ef01b7 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItemIds.ts
+  s_1656893481611a::t_6d2a6daf08e414 9-10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilter.ts
+  s_1656893481611a::t_b3048220de3242 7,11-12,15-20,22-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilterEntityTypes.ts
+  s_1656893481611a::t_872cccf2330b8f 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilterIds.ts
+  s_1656893481611a::t_32e7259dafb867 9-10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookScope.ts
+  s_1656893481611a::t_632618fd2cbd57 9-11
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_1656893481611a::t_263862415230ce 39522-39592,83902-83903,83905,83915-83921,83950-83955,83958-83960,83965,83969,84014-84019,84022-84024,84029,84033,84048,84076-84081,84084-84086,84091,84095,84147-84152,84155-84157,84162,84166,84202-84207,84210-84212,84217,84221
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_1656893481611a::t_9beaec695a4ed7 18429-18585,28212-28213,28227-28236,28245,28264-28273,28284-28303,31129-31145,33630-33658,38721-38755,39479-39491,43890-43903,55525-55594,64546,64549-64555,64561,64568,65127,65144,65151,65155,65158-65164,65170,65177,65184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c1e4a260a317dbf305cf7b05eb6ea66ddd82ec27",
+  "prompts": {},
+  "sessions": {
+    "s_1656893481611a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b222a84f-15df-400c-9f06-1a0c64e2aa0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_471e2069ef160b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae591ca2-a46b-438d-9342-5bfaf81ffb1e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
