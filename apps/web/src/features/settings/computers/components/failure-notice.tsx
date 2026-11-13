@@ -29,7 +29,12 @@ export function FailureNotice(props: {
       />
       <div class="flex min-w-0 flex-1 flex-col gap-1">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <p role="alert" class="min-w-0 flex-1 text-sm text-ink text-pretty">
+          {/* Narrow sheets put the actions under the message, never beside a
+              squeezed column of words. */}
+          <p
+            role="alert"
+            class="min-w-[min(100%,18rem)] flex-1 text-sm text-ink text-pretty"
+          >
             {props.children}
           </p>
           <Show when={props.actions}>

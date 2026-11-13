@@ -973,8 +973,7 @@ To buy one as a team admin:
    would cover the sheet's footer; the progress list says the same. Either way the modal moves
    straight to **Configure agent**.
 
-While the computer provisions, one progress line sits beside the step bar
-(below it on phones): the current stage and how long it has taken, "Starting
+While the computer provisions, one progress line sits under the step bar: the current stage and how long it has taken, "Starting
 up · 0:24" (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
 else from when the step was first seen here, the billing wait from the
 purchase; "Waiting for space on the host" while it waits for capacity; "Sign

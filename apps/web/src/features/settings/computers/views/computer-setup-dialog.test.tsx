@@ -308,7 +308,7 @@ const booting: ComputerStatus = {
   setupCompletedAt: null,
 };
 
-it('shows setup as one line beside the steps, expanding to every stage', () => {
+it('shows setup as one line under the steps, expanding to every stage', () => {
   agentStep(booting);
 
   const line = screen.getByRole('button', { name: /^Starting up · \d+:\d\d$/ });

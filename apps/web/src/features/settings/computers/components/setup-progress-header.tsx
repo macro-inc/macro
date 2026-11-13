@@ -115,7 +115,7 @@ function SetupProgressList(props: {
 }
 
 /**
- * The setup dialog's header: the step bar, and beside it one line for the
+ * The setup dialog's header: the step bar, and under it one line for the
  * setup carrying on behind every step ("Starting up · 0:24") that expands to
  * the full list. A setup that stopped replaces the line with one banner:
  * why, Retry setup, and what a retry costs behind Details.
@@ -154,7 +154,7 @@ export function SetupProgressHeader(props: {
 
   return (
     <div class="flex flex-col gap-3">
-      <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div class="flex flex-col items-start gap-1">
         {props.steps}
         <Show when={line()}>
           {(text) => (
@@ -162,7 +162,7 @@ export function SetupProgressHeader(props: {
               type="button"
               variant="ghost"
               size="sm"
-              class="-mr-2"
+              class="-ml-2"
               aria-expanded={props.expanded}
               aria-controls={listId}
               tooltip={t('computers.showSetupProgress')}

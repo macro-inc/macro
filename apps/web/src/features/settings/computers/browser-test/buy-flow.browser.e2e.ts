@@ -236,7 +236,7 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     await shoot(page, 'buy-agent');
 
     // Billing comes first, then setup carries on behind the step: one line
-    // beside the step bar names the stage and its elapsed time.
+    // under the step bar names the stage and its elapsed time.
     const progressLine = dialog(page).getByRole('button', {
       name: /^(Updating billing…|Creating the computer) · \d+:\d\d$/,
     });
