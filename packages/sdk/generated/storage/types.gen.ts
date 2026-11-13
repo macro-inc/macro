@@ -15293,6 +15293,163 @@ export type PasswordGrant = {
 export type PasswordGranteeKind = 'user' | 'team';
 
 /**
+ * At most 25 credentials and 200 source folders in a request bounded to 4 MiB.
+ */
+export type PasswordImportBatch = {
+    /**
+     * Source folder tree, parents first; resend with each batch.
+     */
+    folders: Array<PasswordImportFolder>;
+    /**
+     * Source category recorded in the batch audit.
+     */
+    format: PasswordImportFormat;
+    /**
+     * Independently validated credentials.
+     */
+    items: Array<PasswordImportItem>;
+    /**
+     * Omit the default team Edit grant on newly created items.
+     */
+    private: boolean;
+    /**
+     * Root for source folders and otherwise unfiled items.
+     */
+    target: PasswordImportTarget;
+};
+
+/**
+ * Partial batch success without credential values or display metadata.
+ */
+export type PasswordImportBatchResult = {
+    /**
+     * Ensured source folders, in request order.
+     */
+    folders: Array<PasswordImportFolderResult>;
+    /**
+     * One result per input item, in request order.
+     */
+    items: Array<PasswordImportItemResult>;
+    /**
+     * Destination folder; null for the vault root.
+     */
+    targetFolderId?: string | null;
+};
+
+/**
+ * Closed, sanitized per-item failure categories.
+ */
+export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable';
+
+/**
+ * Source folder; parents must precede children in every batch.
+ */
+export type PasswordImportFolder = {
+    /**
+     * Opaque identity from the client parser.
+     */
+    key: PasswordImportKey;
+    /**
+     * Validated using ordinary vault folder rules.
+     */
+    name: string;
+    parentKey?: null | PasswordImportKey;
+};
+
+/**
+ * Source-to-vault folder identity without display names.
+ */
+export type PasswordImportFolderResult = {
+    /**
+     * Existing or ensured folder identity.
+     */
+    folderId: string;
+    /**
+     * Opaque source identity.
+     */
+    key: PasswordImportKey;
+};
+
+/**
+ * Recognized client-side source parser; contains no export contents.
+ */
+export type PasswordImportFormat = 'one_password_pux' | 'one_password_csv' | 'bitwarden_json' | 'bitwarden_csv';
+
+/**
+ * One normalized credential; intentionally has no Debug implementation.
+ */
+export type PasswordImportItem = {
+    /**
+     * Favorite state from the export.
+     */
+    favorite: boolean;
+    folderKey?: null | PasswordImportKey;
+    /**
+     * Ordinary vault template.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Display name, validated by the ordinary create path.
+     */
+    name: string;
+    /**
+     * Stable source identity for idempotent retries.
+     */
+    sourceKey: PasswordImportKey;
+    totp?: null | PasswordSecretString;
+    url?: null | PasswordLoginUrl;
+    /**
+     * Zeroizing confidential values sent only to the provider.
+     */
+    values: PasswordSecretValues;
+};
+
+/**
+ * Result for a single item; failed TOTP enrollment can still return the created item id.
+ */
+export type PasswordImportItemResult = {
+    errorCode?: null | PasswordImportErrorCode;
+    itemId?: null | PasswordItemId;
+    /**
+     * Whether the item was newly created, retained, or failed.
+     */
+    outcome: PasswordImportOutcome;
+    /**
+     * Opaque identity matching the request.
+     */
+    sourceKey: PasswordImportKey;
+};
+
+/**
+ * Opaque source identity, bounded before hashing or returning it to a caller.
+ */
+export type PasswordImportKey = string;
+
+/**
+ * Fixed per-item outcome.
+ */
+export type PasswordImportOutcome = 'created' | 'already_present' | 'failed';
+
+/**
+ * Destination under which source folders are nested.
+ */
+export type PasswordImportTarget = {
+    /**
+     * Destination folder identity.
+     */
+    folderId: string;
+    kind: 'existing';
+} | {
+    kind: 'new';
+    /**
+     * Validated using ordinary vault folder rules.
+     */
+    name: string;
+} | {
+    kind: 'root';
+};
+
+/**
  * Searchable display fields, without any credential values.
  */
 export type PasswordItemFields = {
@@ -33322,6 +33479,39 @@ export type PasswordsMoveFolderResponses = {
 };
 
 export type PasswordsMoveFolderResponse = PasswordsMoveFolderResponses[keyof PasswordsMoveFolderResponses];
+
+export type PasswordsImportBatchData = {
+    body: PasswordImportBatch;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        import_id: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/imports/{import_id}/items';
+};
+
+export type PasswordsImportBatchErrors = {
+    400: PasswordFailure;
+    403: PasswordFailure;
+    404: PasswordFailure;
+    409: PasswordFailure;
+    413: unknown;
+    503: PasswordFailure;
+};
+
+export type PasswordsImportBatchError = PasswordsImportBatchErrors[keyof PasswordsImportBatchErrors];
+
+export type PasswordsImportBatchResponses = {
+    200: PasswordImportBatchResult;
+};
+
+export type PasswordsImportBatchResponse = PasswordsImportBatchResponses[keyof PasswordsImportBatchResponses];
 
 export type PasswordsListData = {
     body?: never;

@@ -23464,6 +23464,117 @@
         }
       }
     },
+    "/passwords/teams/{team}/imports/{import_id}/items": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Import normalized credentials with independently retryable per-item outcomes.",
+        "operationId": "passwords_import_batch",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordImportBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordImportBatchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": ""
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/passwords/teams/{team}/items": {
       "get": {
         "tags": ["passwords"],
@@ -51981,6 +52092,286 @@
         "type": "string",
         "description": "Future principals can extend this without exposing agent controls in v1.",
         "enum": ["user", "team"]
+      },
+      "PasswordImportBatch": {
+        "type": "object",
+        "description": "At most 25 credentials and 200 source folders in a request bounded to 4 MiB.",
+        "required": ["format", "target", "private", "folders", "items"],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportFolder"
+            },
+            "description": "Source folder tree, parents first; resend with each batch."
+          },
+          "format": {
+            "$ref": "#/components/schemas/PasswordImportFormat",
+            "description": "Source category recorded in the batch audit."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportItem"
+            },
+            "description": "Independently validated credentials."
+          },
+          "private": {
+            "type": "boolean",
+            "description": "Omit the default team Edit grant on newly created items."
+          },
+          "target": {
+            "$ref": "#/components/schemas/PasswordImportTarget",
+            "description": "Root for source folders and otherwise unfiled items."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordImportBatchResult": {
+        "type": "object",
+        "description": "Partial batch success without credential values or display metadata.",
+        "required": ["folders", "items"],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportFolderResult"
+            },
+            "description": "Ensured source folders, in request order."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportItemResult"
+            },
+            "description": "One result per input item, in request order."
+          },
+          "targetFolderId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Destination folder; null for the vault root."
+          }
+        }
+      },
+      "PasswordImportErrorCode": {
+        "type": "string",
+        "description": "Closed, sanitized per-item failure categories.",
+        "enum": [
+          "not_found",
+          "forbidden",
+          "invalid_request",
+          "version_conflict",
+          "folder_missing",
+          "busy",
+          "vault_unavailable"
+        ]
+      },
+      "PasswordImportFolder": {
+        "type": "object",
+        "description": "Source folder; parents must precede children in every batch.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Opaque identity from the client parser."
+          },
+          "name": {
+            "type": "string",
+            "description": "Validated using ordinary vault folder rules."
+          },
+          "parentKey": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordImportKey",
+                "description": "Source parent; absent means the chosen target."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordImportFolderResult": {
+        "type": "object",
+        "description": "Source-to-vault folder identity without display names.",
+        "required": ["key", "folderId"],
+        "properties": {
+          "folderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Existing or ensured folder identity."
+          },
+          "key": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Opaque source identity."
+          }
+        }
+      },
+      "PasswordImportFormat": {
+        "type": "string",
+        "description": "Recognized client-side source parser; contains no export contents.",
+        "enum": [
+          "one_password_pux",
+          "one_password_csv",
+          "bitwarden_json",
+          "bitwarden_csv"
+        ]
+      },
+      "PasswordImportItem": {
+        "type": "object",
+        "description": "One normalized credential; intentionally has no Debug implementation.",
+        "required": ["sourceKey", "name", "kind", "favorite", "values"],
+        "properties": {
+          "favorite": {
+            "type": "boolean",
+            "description": "Favorite state from the export."
+          },
+          "folderKey": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordImportKey",
+                "description": "Source folder; absent means the chosen target."
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PasswordItemKind",
+            "description": "Ordinary vault template."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, validated by the ordinary create path."
+          },
+          "sourceKey": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Stable source identity for idempotent retries."
+          },
+          "totp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordSecretString",
+                "description": "Optional zeroizing TOTP seed, enrolled only when missing."
+              }
+            ]
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordLoginUrl",
+                "description": "Public website, validated before metadata persistence."
+              }
+            ]
+          },
+          "values": {
+            "$ref": "#/components/schemas/PasswordSecretValues",
+            "description": "Zeroizing confidential values sent only to the provider."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordImportItemResult": {
+        "type": "object",
+        "description": "Result for a single item; failed TOTP enrollment can still return the created item id.",
+        "required": ["sourceKey", "outcome"],
+        "properties": {
+          "errorCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordImportErrorCode",
+                "description": "Sanitized failure category, present only when failed."
+              }
+            ]
+          },
+          "itemId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordItemId",
+                "description": "Created or recovered identity, including when only TOTP failed."
+              }
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/PasswordImportOutcome",
+            "description": "Whether the item was newly created, retained, or failed."
+          },
+          "sourceKey": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Opaque identity matching the request."
+          }
+        }
+      },
+      "PasswordImportKey": {
+        "type": "string",
+        "description": "Opaque source identity, bounded before hashing or returning it to a caller."
+      },
+      "PasswordImportOutcome": {
+        "type": "string",
+        "description": "Fixed per-item outcome.",
+        "enum": ["created", "already_present", "failed"]
+      },
+      "PasswordImportTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Validate and use a folder already in this team.",
+            "required": ["folderId", "kind"],
+            "properties": {
+              "folderId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Destination folder identity."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["existing"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Idempotently create a top-level destination folder.",
+            "required": ["name", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["new"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Validated using ordinary vault folder rules."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Import directly into the team vault root.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["root"]
+              }
+            }
+          }
+        ],
+        "description": "Destination under which source folders are nested."
       },
       "PasswordItemFields": {
         "type": "object",
