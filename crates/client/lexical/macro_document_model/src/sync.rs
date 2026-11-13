@@ -58,6 +58,91 @@ impl SyncPolicy for MacroSyncPolicy {
         }
     }
 
+    fn stored_normalized_fields(&self, node_type: &str) -> &'static [&'static str] {
+        // Inventory 2d0e8174, class column: the only own fields Source's import changes are
+        // computed at export, cleared by `|| undefined` on import, or never imported.
+        // Source control: storedFieldSync.test.ts (fixture provenance in
+        // document_session/tests/testdata/source-stored-field-sync).
+        match node_type {
+            "table" => &["frozenColumnCount", "frozenRowCount", "rowStriping"],
+            "tablecell" => &["width"],
+            "listitem" => &["checked"],
+            "code" | "custom-code" => &["language", "theme"],
+            "code-highlight" => &["highlightType"],
+            "pr-mention" => &["id", "url"],
+            "classed-block" => &["attributes"],
+            _ => &[],
+        }
+    }
+    fn normalize_stored(
+        &self,
+        node: &mut SerializedNode,
+        parent: &mut dyn FnMut() -> std::result::Result<
+            Option<SerializedNode>,
+            lexical_loro::ProjectionError,
+        >,
+    ) -> std::result::Result<(), lexical_loro::ProjectionError> {
+        use serde_json::Value;
+        let falsy = |value: &Value| match value {
+            Value::Null => true,
+            Value::Bool(value) => !value,
+            Value::Number(number) => number.as_f64() == Some(0.0),
+            Value::String(text) => text.is_empty(),
+            _ => false,
+        };
+        let clear = |node: &mut SerializedNode, field: &str, when: &dyn Fn(&Value) -> bool| {
+            if node.get(field).is_some_and(when) {
+                node.remove(field);
+            }
+        };
+        match node.get("type").and_then(Value::as_str) {
+            // `x ? x : undefined` at export.
+            Some("table") => {
+                for field in ["frozenColumnCount", "frozenRowCount", "rowStriping"] {
+                    clear(node, field, &falsy);
+                }
+            }
+            // `setWidth(width || undefined)`, setLanguage/setTheme/highlight `|| undefined`.
+            Some("tablecell") => clear(node, "width", &falsy),
+            Some("code" | "custom-code") => {
+                clear(node, "language", &falsy);
+                clear(node, "theme", &falsy);
+            }
+            Some("code-highlight") => clear(node, "highlightType", &falsy),
+            // The constructor: a GitHub PR URL id moves into a falsy url (nodes/wire.rs).
+            Some("pr-mention") => {
+                let id = node
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_owned();
+                if crate::nodes::is_github_pull_request_url(&id) {
+                    node.insert("id".into(), Value::String(String::new()));
+                    if node.get("url").is_none_or(&falsy) {
+                        node.insert("url".into(), Value::String(id));
+                    }
+                } else {
+                    clear(node, "url", &falsy);
+                }
+            }
+            // importJSON never restores attributes.
+            Some("classed-block") => clear(node, "attributes", &|_| true),
+            // getChecked: Boolean(checked) in a check list, undefined otherwise.
+            Some("listitem") => {
+                let Some(parent) = parent()? else {
+                    return Ok(());
+                };
+                if parent.get("listType").and_then(Value::as_str) == Some("check") {
+                    let checked = node.get("checked").is_some_and(|value| !falsy(value));
+                    node.insert("checked".into(), Value::Bool(checked));
+                } else {
+                    node.remove("checked");
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
     fn own_undefined_fields(&self, node_type: &str) -> &[String] {
         crate::policy::own_undefined_fields(node_type)
     }

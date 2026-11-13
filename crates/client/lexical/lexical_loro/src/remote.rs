@@ -29,6 +29,9 @@ impl PendingBatch {
 pub struct RemoteChanges {
     /// Ordered core model edits.
     pub changes: Vec<NodeChange>,
+    /// Existing nodes whose own Loro maps the import changed, even when the change
+    /// canonicalizes away (a stored null replacing an unset field).
+    pub touched: Vec<NodeKey>,
     pending: Vec<(LocalNode, LoroMap)>,
     search_text_updates: Vec<(NodeKey, ContainerID)>,
     observed_remote: bool,
@@ -153,6 +156,7 @@ impl LoroProjection {
             fields.swap_remove(&key);
             text.swap_remove(&key);
         }
+        let touched: Vec<NodeKey> = fields.iter().copied().collect();
         let mut building = Building {
             doc,
             state,
@@ -231,8 +235,11 @@ impl LoroProjection {
                 continue;
             }
             building.stats.nodes_visited += 1;
-            let mut incoming = schema::own_map(&map, self.policy)?;
-            mask_local(&mut incoming, self.policy);
+            let parent = self
+                .index
+                .synced_parent_map(doc, state.view(), key, self.policy)?;
+            let mut incoming =
+                comparison::stored_own_normalized(&map, parent.as_ref(), self.policy)?;
             let mut current = comparison::model_own(state.view(), key, self.policy)?;
             // Compare against the locally authored storage value until an actual
             // incoming own update imports it. This also detects a history
@@ -251,7 +258,7 @@ impl LoroProjection {
             if current.get("type") != incoming.get("type") {
                 return Err(diverged(format!("remote type changed at {key}")));
             }
-            let mut compare = comparison::loro_own(&map, self.policy)?;
+            let mut compare = comparison::loro_own(&map, parent.as_ref(), self.policy)?;
             for field in self.policy.ignore_in_remote_compare(&kind, &incoming) {
                 compare.remove(*field);
                 current.remove(*field);
@@ -369,6 +376,7 @@ impl LoroProjection {
             .drain(..count);
         Ok(RemoteChanges {
             changes,
+            touched,
             pending: building.pending,
             search_text_updates,
             observed_remote: count > 0,
@@ -415,7 +423,7 @@ impl LoroProjection {
         b.lists.push((parent, Vec::new()));
         let mut result = Vec::new();
         for child in projected_children(map, self.policy)? {
-            result.push(self.resolve(b, &child)?);
+            result.push(self.resolve(b, &child, map)?);
         }
         if let NodeTarget::Key(key) = parent {
             let old = synced_children(b.state.view(), key, self.policy);
@@ -435,12 +443,16 @@ impl LoroProjection {
         entry.1 = result;
         Ok(())
     }
-    fn resolve(&mut self, b: &mut Building<'_>, map: &LoroMap) -> Result<NodeTarget> {
+    fn resolve(
+        &mut self,
+        b: &mut Building<'_>,
+        map: &LoroMap,
+        parent: &LoroMap,
+    ) -> Result<NodeTarget> {
         if let Some((key, Slot::Node)) = self.index.owner.get(&map.id()).copied() {
             return Ok(NodeTarget::Key(key));
         }
-        let mut incoming = schema::own_map(map, self.policy)?;
-        mask_local(&mut incoming, self.policy);
+        let mut incoming = comparison::stored_own_normalized(map, Some(parent), self.policy)?;
         let id = incoming
             .get("$")
             .and_then(Value::as_object)

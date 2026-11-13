@@ -6,6 +6,9 @@ static LOCAL: StateKey<std::sync::Arc<serde_json::Value>> = StateKey::new("local
 struct Filter;
 static FILTER: Filter = Filter;
 impl SyncPolicy for Filter {
+    fn stored_normalized_fields(&self, _: &str) -> &'static [&'static str] {
+        &[]
+    }
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool {
         view.get_state(key, &ID).is_ok_and(|id| id == "drop")
     }

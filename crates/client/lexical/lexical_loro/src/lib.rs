@@ -90,7 +90,8 @@ mod index;
 mod schema;
 mod search_text;
 pub use index::{
-    InitialEditorState, fork_doc, new_doc, reconstruct_initial_state, reconstruct_state,
+    InitialEditorState, StoredDriftScan, fork_doc, new_doc, reconstruct_initial_state,
+    reconstruct_state,
 };
 use index::{NodeIndex, projected_children};
 mod child_index;
@@ -110,6 +111,9 @@ pub struct LoroProjection {
     indexed_state: EditorState,
     indexed_vv: loro::VersionVector,
     indexed_frontiers: loro::Frontiers,
+    /// Synced nodes whose stored own fields differ from Source's import normalization; the
+    /// next local projection writes the normalized values (Source's Mirror diff).
+    stored_drift: OrderedSet<NodeKey>,
     /// Fail the projection after this many more own-field writes (simulation only).
     #[cfg(feature = "test-faults")]
     fail_after_writes: Option<usize>,

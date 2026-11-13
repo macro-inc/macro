@@ -275,7 +275,12 @@ impl EditorSurface {
         let interval = i64::try_from(self.config.delay_ms)
             .map_err(|_| SessionError::Configuration("history delay exceeds i64 milliseconds"))?;
         self.history_clock.store(now.wall.0, Ordering::Relaxed);
-        let load = tracing::info_span!("state.load", peer = doc.peer_id());
+        let load = tracing::info_span!(
+            "state.load",
+            peer = doc.peer_id(),
+            stored_drift.rescanned = tracing::field::Empty,
+            stored_drift.drifted = tracing::field::Empty
+        );
         let load_guard = load.enter();
         self.projection = None;
         self.undo = None;
@@ -345,6 +350,11 @@ impl EditorSurface {
 
             view.extend(output.effects.into_iter().map(ViewEffect::Editor));
         }
+        // Source's setEditorState is not synced: stored values its import normalizes are
+        // rewritten by the first later local projection (the load refresh on writable opens).
+        let scan = projection.note_stored_drift(doc, self.core.state())?;
+        load.record("stored_drift.rescanned", scan.rescanned);
+        load.record("stored_drift.drifted", scan.drifted);
         self.projection = Some(projection);
         self.refresh_cursor(doc);
         let undo = UndoManager::new(doc.inner());
@@ -672,6 +682,7 @@ impl EditorSurface {
         };
         let projection = self.projection.as_mut().ok_or(SessionError::NotReady)?;
         let changes = projection.take_remote(doc, self.core.state())?;
+
         let mut tags = TagSet::from_tags([
             UpdateTag::Collaboration,
             UpdateTag::Custom("from-loro".into()),
@@ -727,7 +738,25 @@ impl EditorSurface {
                 }
             })
             .unwrap_or(&[]);
+        // The import's own-map diffs include stored values that normalize away; created
+        // nodes get theirs from the incoming maps.
+        let touched: Vec<NodeKey> = changes
+            .touched
+            .iter()
+            .copied()
+            .chain(created.iter().map(|(_, key)| *key))
+            .collect();
         projection.bind_created(changes, created)?;
+        let rescan = tracing::debug_span!(
+            "doc.stored_drift.rescan",
+            touched = touched.len(),
+            rescanned = tracing::field::Empty,
+            drifted = tracing::field::Empty
+        );
+        let scan = rescan
+            .in_scope(|| projection.note_stored_drift_for(doc, self.core.state(), touched))?;
+        rescan.record("rescanned", scan.rescanned);
+        rescan.record("drifted", scan.drifted);
         let changed = if access == Access::Edit {
             projection
                 .local_commit(doc, &output.commits, FIXUP_ORIGIN, now.wall.0 / 1000)?

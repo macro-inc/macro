@@ -233,20 +233,24 @@ pub(crate) fn open_map(map: &LoroMap) -> Result<SerializedNode> {
     Ok(result)
 }
 pub(crate) fn read_node(map: &LoroMap, policy: &dyn SyncPolicy) -> Result<SerializedNode> {
-    read_node_for_init(map, policy, &mut false)
+    read_node_for_init(map, None, policy, &mut false)
 }
+/// Read a stored subtree with Source's import normalization; `parent` is the stored
+/// parent's normalized own fields.
 pub(crate) fn read_node_for_init(
     map: &LoroMap,
+    parent: Option<&SerializedNode>,
     policy: &dyn SyncPolicy,
     transparent: &mut bool,
 ) -> Result<SerializedNode> {
     let mut node = own_map(map, policy)?;
     mask_local(&mut node, policy);
+    crate::policy::normalize_stored(&mut node, policy, || Ok(parent.cloned()))?;
     if let Some(list) = children(map)? {
         let mut result = Vec::new();
         for i in 0..list.len() {
             let child = map_at(list.get(i), "children item")?;
-            let json = read_node_for_init(&child, policy, transparent)?;
+            let json = read_node_for_init(&child, Some(&node), policy, transparent)?;
             if policy.is_dropped_json(&json) {
                 continue;
             }

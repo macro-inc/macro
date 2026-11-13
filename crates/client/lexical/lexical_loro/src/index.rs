@@ -109,6 +109,25 @@ impl NodeIndex {
             }
         }
     }
+    /// The indexed map of `key`'s synced parent, for parent-dependent stored normalization.
+    pub fn synced_parent_map(
+        &self,
+        doc: &LoroDoc,
+        view: StateRef<'_>,
+        key: NodeKey,
+        policy: &dyn SyncPolicy,
+    ) -> Result<Option<LoroMap>> {
+        let Some(parent) = view
+            .parent(key)
+            .and_then(|parent| synced_owner(view, parent, policy))
+        else {
+            return Ok(None);
+        };
+        if !self.nodes.contains_key(&parent) {
+            return Ok(None);
+        }
+        self.map(doc, parent).map(Some)
+    }
     pub fn map(&self, doc: &LoroDoc, key: NodeKey) -> Result<LoroMap> {
         let id = self
             .nodes
@@ -158,6 +177,14 @@ pub(crate) fn projected_children(map: &LoroMap, policy: &dyn SyncPolicy) -> Resu
     }
     Ok(result)
 }
+/// Counts from one stored-drift scan, for the caller's span.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StoredDriftScan {
+    /// Nodes whose type declares normalized fields and were reread.
+    pub rescanned: usize,
+    /// Nodes left pending a normalized rewrite.
+    pub drifted: usize,
+}
 /// Reconstruct the synced editor JSON, validating native children containers and JSON values.
 pub fn reconstruct_state(doc: &LoroDoc, policy: &dyn SyncPolicy) -> Result<SerializedEditorState> {
     Ok(SerializedEditorState {
@@ -177,8 +204,12 @@ pub fn reconstruct_initial_state(
     policy: &dyn SyncPolicy,
 ) -> Result<InitialEditorState> {
     let mut has_transparent_wrappers = false;
-    let root =
-        schema::read_node_for_init(&doc.get_map("root"), policy, &mut has_transparent_wrappers)?;
+    let root = schema::read_node_for_init(
+        &doc.get_map("root"),
+        None,
+        policy,
+        &mut has_transparent_wrappers,
+    )?;
     Ok(InitialEditorState {
         state: SerializedEditorState { root },
         has_transparent_wrappers,
@@ -263,6 +294,7 @@ impl LoroProjection {
             indexed_state: state.clone(),
             indexed_vv: doc.oplog_vv(),
             indexed_frontiers: doc.state_frontiers(),
+            stored_drift: OrderedSet::default(),
             #[cfg(feature = "test-faults")]
             fail_after_writes: None,
             policy,
@@ -275,6 +307,49 @@ impl LoroProjection {
     #[cfg(feature = "test-faults")]
     pub fn fail_after_writes(&mut self, writes: usize) {
         self.fail_after_writes = Some(writes);
+    }
+    /// Record every synced node whose stored own fields differ from Source's import
+    /// normalization, so the next local projection rewrites them. A full scan, run at attach.
+    pub fn note_stored_drift(
+        &mut self,
+        doc: &LoroDoc,
+        state: &EditorState,
+    ) -> Result<StoredDriftScan> {
+        let keys: Vec<NodeKey> = self.index.nodes.keys().copied().collect();
+        self.note_stored_drift_for(doc, state, keys)
+    }
+    /// Re-check `keys` after Loro changed them (remote import, undo or redo).
+    pub fn note_stored_drift_for(
+        &mut self,
+        doc: &LoroDoc,
+        state: &EditorState,
+        keys: impl IntoIterator<Item = NodeKey>,
+    ) -> Result<StoredDriftScan> {
+        let view = state.view();
+        let mut scan = StoredDriftScan::default();
+        for key in keys {
+            if !view.is_attached(key) || !self.index.nodes.contains_key(&key) {
+                self.stored_drift.shift_remove(&key);
+                continue;
+            }
+            if self
+                .policy
+                .stored_normalized_fields(view.type_name(key)?)
+                .is_empty()
+            {
+                continue;
+            }
+            scan.rescanned += 1;
+            let map = self.index.map(doc, key)?;
+            let parent = self.index.synced_parent_map(doc, view, key, self.policy)?;
+            if crate::local::stored_drift(&map, parent.as_ref(), self.policy)?.is_empty() {
+                self.stored_drift.shift_remove(&key);
+            } else {
+                scan.drifted += 1;
+                self.stored_drift.insert(key);
+            }
+        }
+        Ok(scan)
     }
     /// Native node-map container for undo bookkeeping and presence diagnostics.
     pub fn container_of(&self, key: NodeKey) -> Option<&ContainerID> {
@@ -356,7 +431,8 @@ impl LoroProjection {
                     {
                         return Err(diverged("cached slot identity changed"));
                     }
-                    let json = comparison::loro_own(&map, self.policy)?;
+                    let parent = self.index.synced_parent_map(doc, view, key, self.policy)?;
+                    let json = comparison::loro_own(&map, parent.as_ref(), self.policy)?;
                     let expected_children = synced_children(view, key, self.policy);
                     let maps = projected_children(&map, self.policy)?;
                     if expected_children.len() != maps.len()

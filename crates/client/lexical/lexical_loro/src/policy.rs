@@ -24,6 +24,19 @@ pub trait SyncPolicy: Send + Sync + 'static {
     fn comparison_kind(&self, _node_type: &str) -> ComparisonKind {
         ComparisonKind::Exact
     }
+    /// Own fields whose stored Loro value Source's import normalizes for this node type
+    /// (computed at export, cleared on import, or never imported). Exhaustive for
+    /// `normalize_stored`: it must change no other field.
+    fn stored_normalized_fields(&self, node_type: &str) -> &'static [&'static str];
+    /// Source's import normalization of a stored node's own fields, applied to Loro reads
+    /// only. `parent` reads the stored parent's own fields for rules that depend on them.
+    fn normalize_stored(
+        &self,
+        _node: &mut SerializedNode,
+        _parent: &mut dyn FnMut() -> Result<Option<SerializedNode>>,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// Drop the node and its entire subtree.
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool;
     /// Replace this local wrapper with its synced descendants.
@@ -54,6 +67,9 @@ pub trait SyncPolicy: Send + Sync + 'static {
 /// Unfiltered policy for portable editors and compatibility tests.
 pub struct PlainPolicy;
 impl SyncPolicy for PlainPolicy {
+    fn stored_normalized_fields(&self, _: &str) -> &'static [&'static str] {
+        &[]
+    }
     fn is_dropped(&self, _: StateRef<'_>, _: NodeKey) -> bool {
         false
     }
@@ -79,6 +95,33 @@ impl SyncPolicy for PlainPolicy {
 pub(crate) fn mask_local(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     policy.canonicalize_node_json(json);
     mask_local_state(json, policy);
+}
+/// Apply Source's import normalization to Loro-read own fields; `parent` is read lazily.
+pub(crate) fn normalize_stored(
+    json: &mut SerializedNode,
+    policy: &dyn SyncPolicy,
+    mut parent: impl FnMut() -> Result<Option<SerializedNode>>,
+) -> Result<()> {
+    let fields = match json.get("type").and_then(Value::as_str) {
+        Some(ty) => policy.stored_normalized_fields(ty),
+        None => return Ok(()),
+    };
+    if fields.is_empty() {
+        return Ok(());
+    }
+    let undeclared = |json: &SerializedNode| {
+        let mut rest = json.clone();
+        fields.iter().for_each(|field| {
+            rest.remove(*field);
+        });
+        rest
+    };
+    let before = undeclared(json);
+    policy.normalize_stored(json, &mut parent)?;
+    if undeclared(json) != before {
+        return Err(schema_error("normalize_stored changed an undeclared field"));
+    }
+    Ok(())
 }
 pub(crate) fn mask_local_state(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     if let Some(Value::Object(state)) = json.get_mut("$") {

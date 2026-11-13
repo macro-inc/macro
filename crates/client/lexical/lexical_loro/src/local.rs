@@ -125,7 +125,8 @@ impl LoroProjection {
         self.project_states(doc, pass, origin, now, suppress_events, exports)
     }
     /// Write the opt-in root search text derived from `state` as one local Loro commit,
-    /// with no model update, as Source's full-state sync does after the initial content.
+    /// with no model update, as Source's full-state sync does after the initial content. As
+    /// a local projection it also deletes the pending stored nulls.
     pub fn refresh_root_search_text(
         &mut self,
         doc: &LoroDoc,
@@ -167,10 +168,17 @@ impl LoroProjection {
             all,
             prev_state,
             next_state,
-            candidates,
+            mut candidates,
         } = pass;
         let prev = prev_state.view();
         let next = next_state.view();
+        if origin == LOCAL_ORIGIN {
+            for &key in &self.stored_drift {
+                if next.is_attached(key) {
+                    candidates.entry(key).or_insert(Mutation::Updated);
+                }
+            }
+        }
         let mut dirty = OrderedMap::default();
         let mut structure = OrderedSet::default();
         for (&key, &mutation) in &candidates {
@@ -430,7 +438,9 @@ impl LoroProjection {
                 self.index.bind(key, &map, self.policy)?;
             }
         }
+        let mut visited = OrderedSet::default();
         for (key, mutation) in dirty {
+            visited.insert(key);
             if handled.contains(&key)
                 || !self.index.nodes.contains_key(&key)
                 || mutation == Mutation::Destroyed
@@ -471,6 +481,30 @@ impl LoroProjection {
                 };
                 if !applied {
                     search.apply_expected(key, &self.index, exports.1.json_mut());
+                }
+            }
+            if origin == LOCAL_ORIGIN && prev.contains(key) {
+                // Strip both sides alike so an unchanged node is not rewritten.
+                strip_absent_normalized_nulls(prev, key, self.policy, &map, exports.0.json_mut())?;
+                strip_absent_normalized_nulls(next, key, self.policy, &map, exports.1.json_mut())?;
+                // Source's Mirror writes its export over a value it read from Loro (load,
+                // remote, history) at the next local sync: here, Source's import
+                // normalization of each drifted field, unless this commit changed it.
+                if self.stored_drift.contains(&key) {
+                    let parent = self.index.synced_parent_map(doc, next, key, self.policy)?;
+                    for drift in stored_drift(&map, parent.as_ref(), self.policy)? {
+                        if exports.0.json().get(drift.field) != exports.1.json().get(drift.field) {
+                            continue;
+                        }
+                        match drift.stored {
+                            Some(value) => exports.0.json_mut().insert(drift.field.into(), value),
+                            None => exports.0.json_mut().remove(drift.field),
+                        };
+                        match drift.normalized {
+                            Some(value) => exports.1.json_mut().insert(drift.field.into(), value),
+                            None => exports.1.json_mut().remove(drift.field),
+                        };
+                    }
                 }
             }
             let before = exports.0.json();
@@ -558,6 +592,9 @@ impl LoroProjection {
             suspended: events_suppressed,
         };
         doc.commit_with(loro::CommitOptions::new().origin(origin).timestamp(now));
+        if origin == LOCAL_ORIGIN {
+            self.stored_drift.retain(|key| !visited.contains(key));
+        }
         drop(recording);
         if let Some(search) = &mut self.search_text {
             if let Some(draft) = search_text {
@@ -758,4 +795,65 @@ impl Drop for LocalEventRecording<'_> {
             self.doc.with_state(|state| state.start_recording());
         }
     }
+}
+
+/// A stored own field Source's import normalizes, with its stored and normalized values.
+pub(crate) struct StoredDrift {
+    pub(crate) field: &'static str,
+    pub(crate) stored: Option<serde_json::Value>,
+    pub(crate) normalized: Option<serde_json::Value>,
+}
+
+/// The own fields of `map` that Source's import normalization changes. Only fields the
+/// policy declares can drift, so this never rewrites anything else.
+pub(crate) fn stored_drift(
+    map: &LoroMap,
+    parent: Option<&LoroMap>,
+    policy: &dyn SyncPolicy,
+) -> Result<Vec<StoredDrift>> {
+    let mut stored = schema::own_map(map, policy)?;
+    mask_local_state(&mut stored, policy);
+    let fields = match stored.get("type").and_then(serde_json::Value::as_str) {
+        Some(ty) => policy.stored_normalized_fields(ty),
+        None => return Ok(Vec::new()),
+    };
+    if fields.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut normalized = stored.clone();
+    policy::normalize_stored(&mut normalized, policy, || {
+        parent
+            .map(|parent| {
+                let mut json = schema::own_map(parent, policy)?;
+                mask_local_state(&mut json, policy);
+                Ok(json)
+            })
+            .transpose()
+    })?;
+    Ok(fields
+        .iter()
+        .filter(|field| stored.get(**field) != normalized.get(**field))
+        .map(|field| StoredDrift {
+            field,
+            stored: stored.get(*field).cloned(),
+            normalized: normalized.get(*field).cloned(),
+        })
+        .collect())
+}
+
+/// Never re-insert a normalized field as null where Loro lacks it: Source's export leaves
+/// it undefined, so only a container's own fresh insert writes that null.
+fn strip_absent_normalized_nulls(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+    map: &LoroMap,
+    json: &mut SerializedNode,
+) -> Result<()> {
+    for field in policy.stored_normalized_fields(view.type_name(key)?) {
+        if json.get(*field).is_some_and(serde_json::Value::is_null) && map.get(field).is_none() {
+            json.remove(*field);
+        }
+    }
+    Ok(())
 }

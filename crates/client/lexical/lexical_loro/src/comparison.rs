@@ -88,6 +88,25 @@ fn first_loro_text(parent: &LoroMap, policy: &dyn SyncPolicy) -> Result<Option<T
     }
     Ok(None)
 }
+/// A stored node's masked own fields after Source's import normalization.
+pub(crate) fn stored_own_normalized(
+    map: &LoroMap,
+    parent: Option<&LoroMap>,
+    policy: &dyn SyncPolicy,
+) -> Result<SerializedNode> {
+    let mut own = schema::own_map(map, policy)?;
+    mask_local(&mut own, policy);
+    crate::policy::normalize_stored(&mut own, policy, || {
+        parent
+            .map(|parent| {
+                let mut json = schema::own_map(parent, policy)?;
+                mask_local(&mut json, policy);
+                Ok(json)
+            })
+            .transpose()
+    })?;
+    Ok(own)
+}
 /// The iterator is consulted only for an opted-in paragraph and stops at its first text.
 pub(crate) fn model_own(
     view: StateRef<'_>,
@@ -100,9 +119,13 @@ pub(crate) fn model_own(
     }
     Ok(own)
 }
-pub(crate) fn loro_own(map: &LoroMap, policy: &dyn SyncPolicy) -> Result<SerializedNode> {
-    let mut own = schema::own_map(map, policy)?;
-    mask_local(&mut own, policy);
+/// `parent` is the stored synced parent map, read only for parent-dependent normalization.
+pub(crate) fn loro_own(
+    map: &LoroMap,
+    parent: Option<&LoroMap>,
+    policy: &dyn SyncPolicy,
+) -> Result<SerializedNode> {
+    let mut own = stored_own_normalized(map, parent, policy)?;
     if paragraph(&own, policy) {
         apply(&mut own, first_loro_text(map, policy)?);
     }

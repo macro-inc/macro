@@ -5,7 +5,7 @@ use macro_document_model::{Result, headless_builder, sync::MACRO_SYNC_POLICY};
 use serde_json::json;
 
 #[test]
-fn unchecked_source_listitems_reconstruct_without_changing_loro_or_hiding_booleans() -> Result<()> {
+fn unchecked_source_listitems_reconstruct_like_source_without_changing_loro() -> Result<()> {
     let editor = headless_builder()
         .initial_state(serde_json::from_value(json!({"root":{
             "type":"root","version":1,"$":{"id":"root"},"children":[{
@@ -72,9 +72,17 @@ fn unchecked_source_listitems_reconstruct_without_changing_loro_or_hiding_boolea
         item.insert("unknownNull", LoroValue::Null)
             .expect("unknown own field");
         doc.commit();
+        // Source's getChecked is undefined outside a check list, so its import drops a
+        // stored boolean there (storedFieldSync control: listitem/bullet.checked); the
+        // stored value itself is unchanged.
         let actual = reconstruct_state(&doc, &MACRO_SYNC_POLICY)?;
+        assert!(
+            actual.root["children"][0]["children"][0]
+                .get("checked")
+                .is_none()
+        );
         assert_eq!(
-            actual.root["children"][0]["children"][0]["checked"],
+            reconstruct_state(&doc, &PlainPolicy)?.root["children"][0]["children"][0]["checked"],
             json!(value)
         );
         assert!(

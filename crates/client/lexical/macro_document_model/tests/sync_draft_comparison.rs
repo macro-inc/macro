@@ -190,6 +190,19 @@ fn ordinary_typing_never_enters_comparison_canonicalization_on_small_or_large_do
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct CountingPolicy(AtomicUsize);
     impl SyncPolicy for CountingPolicy {
+        fn stored_normalized_fields(&self, ty: &str) -> &'static [&'static str] {
+            MACRO_SYNC_POLICY.stored_normalized_fields(ty)
+        }
+        fn normalize_stored(
+            &self,
+            node: &mut lexical_model::SerializedNode,
+            parent: &mut dyn FnMut() -> std::result::Result<
+                Option<lexical_model::SerializedNode>,
+                lexical_loro::ProjectionError,
+            >,
+        ) -> std::result::Result<(), lexical_loro::ProjectionError> {
+            MACRO_SYNC_POLICY.normalize_stored(node, parent)
+        }
         fn own_undefined_fields(&self, ty: &str) -> &[String] {
             MACRO_SYNC_POLICY.own_undefined_fields(ty)
         }

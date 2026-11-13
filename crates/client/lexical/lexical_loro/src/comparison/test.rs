@@ -4,6 +4,9 @@ use serde_json::json;
 
 struct DroppedText;
 impl SyncPolicy for DroppedText {
+    fn stored_normalized_fields(&self, _: &str) -> &'static [&'static str] {
+        &[]
+    }
     fn comparison_kind(&self, ty: &str) -> ComparisonKind {
         match ty {
             "paragraph" => ComparisonKind::Paragraph,
