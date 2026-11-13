@@ -43,7 +43,6 @@ import {
 } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import { ArtifactInspector } from '../components/artifact-inspector';
-import { ArtifactLibraryInspector } from '../components/artifact-library-inspector';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
@@ -51,7 +50,6 @@ import { MediaUploadPreviews } from '../components/media-upload-previews';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
-import { useArtifactLibrary } from '../context/artifact-library';
 import { setDocumentDisplayCommand } from '../core/document-display';
 import {
   selectionLayoutCommand,
@@ -124,7 +122,6 @@ export function CanvasView(props: {
     return item?.type === 'artifact' ? item : undefined;
   };
   const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
-  const artifacts = useArtifactLibrary();
   const [presenting, setPresenting] = createSignal<string>();
   const selectedImage = () => {
     const item = selectedItem();
@@ -508,14 +505,6 @@ export function CanvasView(props: {
                           editor={editor}
                           slide={artifact()}
                         />
-                        <Show when={artifacts.edit}>
-                          {(edit) => (
-                            <ArtifactLibraryInspector
-                              library={artifacts.library()}
-                              onEdit={edit()}
-                            />
-                          )}
-                        </Show>
                       </>
                     )}
                   </Show>
