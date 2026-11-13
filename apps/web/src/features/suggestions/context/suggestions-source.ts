@@ -53,7 +53,10 @@ export type SuggestionActions = {
   openItem(target: SuggestionTarget): void;
   /** Open a reply draft a session wrote. */
   openDraft(draft: SuggestionTarget): void;
-  /** Open a routine suggestion's drafted routine for review before saving it. */
+  /**
+   * Open a routine suggestion's drafted routine for review before saving it.
+   * Throws when the routine can't be found.
+   */
   reviewRoutine(routineSuggestionId: string): void;
   /** Save a routine suggestion's drafted routine as a routine, switched on. */
   turnOnRoutine(routineSuggestionId: string): Promise<void>;

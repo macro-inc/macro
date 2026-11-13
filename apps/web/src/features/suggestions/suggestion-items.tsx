@@ -5,7 +5,7 @@ import {
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { isAccessiblePreviewItem } from '@queries/preview/types';
 import { type ItemType, stringToItemType } from '@service-storage/client';
-import { Show } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import type { SuggestionItemParts } from './context/suggestions-source';
 import type { SuggestionTarget } from './core/suggestion';
 
@@ -52,11 +52,13 @@ function useItem(target: () => SuggestionTarget) {
   };
 }
 
-function Source(props: {
+type SourceProps = {
   target: SuggestionTarget;
   from?: string;
   onOpen(): void;
-}) {
+};
+
+function SourceLink(props: SourceProps) {
   const item = useItem(() => props.target);
 
   return (
@@ -94,4 +96,16 @@ function EmailSourceName(props: { from?: string; subject: string }) {
 }
 
 /** The card parts that read the app's items, for the For you page. */
+/**
+ * A source link behind its own boundary: its item is read on demand, and a
+ * pending read must not replace the feed around it with a fallback.
+ */
+function Source(props: SourceProps) {
+  return (
+    <Suspense>
+      <SourceLink {...props} />
+    </Suspense>
+  );
+}
+
 export const SUGGESTION_ITEM_PARTS: SuggestionItemParts = { Source };

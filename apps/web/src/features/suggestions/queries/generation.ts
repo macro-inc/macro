@@ -1,6 +1,7 @@
 import { useUserId } from '@core/context/user';
 import { getDefaultTimezone } from '@core/util/cron';
 import { throwOnErr } from '@core/util/result';
+import { queryReadyGate } from '@queries/gate';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { GenerationOverview } from '@service-scheduled-action/generated/schemas';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
@@ -55,23 +56,30 @@ export function useSuggestionGeneration(): GenerationSource {
   const options = () =>
     generationOptions(userId() ?? '', enabled() && userId() !== undefined);
   const status = useQuery(options);
-  const set = (change: (generation: Generation) => Generation) =>
-    queryClient.setQueryData(
-      options().queryKey,
-      (generation: Generation | undefined) =>
-        generation ? change(generation) : generation
+  const set = (
+    key: ReturnType<typeof options>['queryKey'],
+    change: (generation: Generation) => Generation
+  ) =>
+    queryClient.setQueryData(key, (generation: Generation | undefined) =>
+      generation ? change(generation) : generation
     );
 
   return {
-    generation: () => status.data,
+    generation: () => (queryReadyGate(status) ? status.data : undefined),
     async regenerate() {
+      // The answer belongs to whoever asked: if the account changes while
+      // the request is out, it is written to nobody.
+      const asker = userId();
+      const key = options().queryKey;
       const answer = await throwOnErr(() =>
         scheduledActionClient.regenerateSuggestions({
           timezone: getDefaultTimezone(),
         })
       );
+      if (userId() !== asker) return;
+
       if (answer.kind === 'cooldown') {
-        set((generation) => ({
+        set(key, (generation) => ({
           ...generation,
           regenerateAvailableAt: answer.availableAt,
         }));
@@ -80,7 +88,7 @@ export function useSuggestionGeneration(): GenerationSource {
 
       // Started, or one was already under way: show it running at once and
       // let the next read fill in the rest.
-      set((generation) => ({ ...generation, state: 'running' }));
+      set(key, (generation) => ({ ...generation, state: 'running' }));
       await status.refetch();
     },
   };

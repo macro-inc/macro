@@ -68,5 +68,6 @@ export default {
   allInForYou: 'All in For you',
   today: 'Today',
   todayEmpty: 'Nothing on your calendar today.',
+  todayFailed: 'Your calendar couldn’t be loaded.',
   openEvent: 'Open {{title}}',
 };

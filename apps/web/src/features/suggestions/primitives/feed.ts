@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { createMemo, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type {
   SuggestionActions,
   SuggestionsSource,
@@ -43,7 +43,14 @@ export type FeedView =
  */
 export function createSuggestionsFeed(
   source: SuggestionsSource,
-  actions: SuggestionActions
+  actions: SuggestionActions,
+  options: {
+    /**
+     * Who is signed in. What a card holds belongs to that account: if it
+     * changes while a request is out, the answer opens nothing.
+     */
+    viewer?: Accessor<string | undefined>;
+  } = {}
 ) {
   const [filter, setFilter] = createSignal<FeedFilter>('all');
   // Dismissed during this visit, as they were: the feed no longer lists them.
@@ -125,7 +132,11 @@ export function createSuggestionsFeed(
 
       // Accepted first: a suggestion rewritten under the card opens nothing,
       // and the card shows it as it is now.
-      if ((await source.accept(suggestion)) === 'changed') {
+      const viewer = options.viewer?.();
+      const answer = await source.accept(suggestion);
+      // The card's prompt and items are the earlier account's.
+      if (options.viewer?.() !== viewer) return;
+      if (answer === 'changed') {
         setChangedIds((ids) => [...ids, suggestion.id]);
         return;
       }
@@ -185,11 +196,13 @@ export function createSuggestionsFeed(
 
       fireAndForget(actions.openComposer(suggestion.prompt), 'suggestions');
     },
-    reviewRoutine(suggestion: Suggestion) {
-      if (suggestion.kind === 'routine') {
-        actions.reviewRoutine(suggestion.routineSuggestionId);
-      }
-    },
+    /** A routine that can't be opened for review marks the card failed. */
+    reviewRoutine: (suggestion: Suggestion) =>
+      act(suggestion, 'review', async () => {
+        if (suggestion.kind === 'routine') {
+          actions.reviewRoutine(suggestion.routineSuggestionId);
+        }
+      }),
     /** Sent at once; a refusal leaves the card, marked failed. */
     dismiss: (suggestion: Suggestion) =>
       act(suggestion, 'dismiss', async () => {

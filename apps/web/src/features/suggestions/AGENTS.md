@@ -98,4 +98,10 @@ only, behind `enable-suggestions`.
   AI picked.
 - The API has no due times; a reply's "waiting 2 days" is the feed's
   `waitingSince`. Without it a card shows when the suggestion arrived.
+- Rows are kept by suggestion id (`Key`), so a feed read updates a card in
+  place: don't key a branch on an object that is rebuilt on every read.
+- What a card holds belongs to the account that read it. Accept and
+  regenerate compare the signed-in account before acting on an answer.
+- Every change to the feed also invalidates Home's rows
+  (`suggestionsKeys.top`), which are a separate read.
 - Gate every entry point with `useSuggestionsFlag`, which is also false on touch.

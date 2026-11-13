@@ -286,3 +286,29 @@ test('dismissing a running suggestion says its run is stopped', async ({
     page.locator('[data-suggestion-dismissed="suggestion-running"]')
   ).toContainText('and stopped its run');
 });
+
+test('a card keeps its place and focus when the feed updates under it', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const action = card(page, 'suggestion-composer').getByRole('button', {
+    name: 'Open in chat',
+    exact: true,
+  });
+  await action.focus();
+
+  // The server's next answer finishes the running suggestion; nothing here
+  // touches the focused card.
+  await page.evaluate(() => {
+    const finish = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Finish runs'
+    );
+    finish?.click();
+  });
+  await expect(card(page, 'suggestion-running')).toHaveAttribute(
+    'data-suggestion-status',
+    'done'
+  );
+
+  await expect(action).toBeFocused();
+});

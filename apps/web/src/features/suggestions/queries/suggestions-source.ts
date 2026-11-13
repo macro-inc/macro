@@ -3,6 +3,7 @@ import { deepEqual } from '@core/util/compareUtils';
 import { getDefaultTimezone } from '@core/util/cron';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { queryReadyGate } from '@queries/gate';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { createEffect, createMemo } from 'solid-js';
@@ -52,7 +53,9 @@ export function useSuggestionsSource(): SuggestionsSource {
   const generation = useQuery(() =>
     generationOptions(userId() ?? '', enabled() && userId() !== undefined)
   );
-  const generating = () => generation.data?.state === 'running';
+  // Guarded: an unguarded read of a pending query suspends the page.
+  const generating = () =>
+    queryReadyGate(generation) && generation.data.state === 'running';
   const feed = useQuery(() =>
     feedOptions(
       userId() ?? '',
@@ -63,7 +66,11 @@ export function useSuggestionsSource(): SuggestionsSource {
   const queryClient = useQueryClient();
   const key = () => feedOptions(userId() ?? '', false, false).queryKey;
   const refresh = async () => {
-    await feed.refetch();
+    // Home's rows read their own entry: every reader follows a change.
+    await Promise.all([
+      feed.refetch(),
+      queryClient.invalidateQueries({ queryKey: suggestionsKeys.top._def }),
+    ]);
   };
 
   // A generation that just ended may have written its last cards after the
@@ -78,8 +85,8 @@ export function useSuggestionsSource(): SuggestionsSource {
   // FE-49: the feed is read again under open cards; a suggestion that didn't
   // change keeps its object, so its card isn't rebuilt.
   const shown = createMemo<SuggestionFeed | undefined>((previous) => {
+    if (!queryReadyGate(feed)) return undefined;
     const next = feed.data;
-    if (!next) return undefined;
 
     return {
       counts: next.counts,
@@ -98,6 +105,8 @@ export function useSuggestionsSource(): SuggestionsSource {
     retry: () => fireAndForget(refresh(), 'suggestions'),
     refresh,
     async accept(suggestion) {
+      // The answer belongs to the feed it was asked from.
+      const asked = key();
       const { changed } = await throwOnErr(() =>
         scheduledActionClient.acceptSuggestion({
           suggestionId: suggestion.id,
@@ -112,7 +121,7 @@ export function useSuggestionsSource(): SuggestionsSource {
         return changed ? 'changed' : 'accepted';
       }
 
-      queryClient.setQueryData(key(), (held: SuggestionFeed | undefined) =>
+      queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
         held
           ? {
               ...held,

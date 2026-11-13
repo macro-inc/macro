@@ -265,6 +265,40 @@ describe('suggestions feed', () => {
     );
   });
 
+  it('opens nothing when the account changed while the accept was out', async () => {
+    const deps = host([composerSuggestion]);
+    const [viewer, setViewer] = createSignal('user-1');
+    deps.source.accept.mockImplementationOnce(async () => {
+      setViewer('user-2');
+      return 'accepted';
+    });
+
+    await createRoot(async (dispose) => {
+      const feed = createSuggestionsFeed(deps.source, deps.actions, { viewer });
+      await feed.accept(composerSuggestion);
+      dispose();
+    });
+
+    expect(deps.actions.openComposer).not.toHaveBeenCalled();
+  });
+
+  it('marks the card failed when its routine can’t be opened for review', async () => {
+    const deps = host([routineSuggestion]);
+    deps.actions.reviewRoutine.mockImplementationOnce(() => {
+      throw new Error('Routine suggestion is not loaded');
+    });
+
+    await createRoot(async (dispose) => {
+      const feed = createSuggestionsFeed(deps.source, deps.actions);
+      await feed.reviewRoutine(routineSuggestion);
+
+      const view = feed.view();
+      if (view.kind !== 'suggestions') throw new Error('expected a feed');
+      expect(view.entries[0]?.failed).toBe(true);
+      dispose();
+    });
+  });
+
   it('turns a routine suggestion on by saving its drafted routine, not by accepting', async () => {
     await withFeed([routineSuggestion], async (feed, { source, actions }) => {
       await feed.accept(routineSuggestion);

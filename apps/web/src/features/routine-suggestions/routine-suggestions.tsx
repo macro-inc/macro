@@ -407,7 +407,9 @@ export function useForYouRoutineSuggestions() {
   return {
     review(suggestionId: string) {
       const item = find(suggestionId);
-      if (item) list.actions.customize(item);
+      if (!item) throw new Error('Routine suggestion is not loaded');
+
+      list.actions.customize(item);
     },
     async turnOn(suggestionId: string) {
       const item = find(suggestionId);

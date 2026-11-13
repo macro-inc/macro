@@ -2,8 +2,17 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, Card, Tabs } from '@ui';
-import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+  untrack,
+} from 'solid-js';
 import { RefreshSuggestions } from '../components/refresh-suggestions';
 import {
   DismissedSuggestion,
@@ -77,24 +86,27 @@ export function ForYouView(props: {
     ];
   };
 
-  /** The feed in three parts: what waits or runs, what is done, what was dismissed here. */
-  const sections = () => {
+  /**
+   * The feed in three parts: what waits or runs, what is done, what was
+   * dismissed here. Empty until the feed has cards.
+   */
+  const entries = () => {
     const view = props.feed.view();
-    if (view.kind !== 'suggestions') return undefined;
-
-    const kept = view.entries.filter((entry) => !entry.dismissed);
-
-    return {
-      open: kept.filter((entry) => entry.status !== 'done'),
-      done: kept.filter((entry) => entry.status === 'done'),
-      dismissed: view.entries.filter((entry) => entry.dismissed),
-    };
+    return view.kind === 'suggestions' ? view.entries : [];
   };
-  const card = (entry: FeedEntry) => (
+  const open = () =>
+    entries().filter((entry) => !entry.dismissed && entry.status !== 'done');
+  const done = () =>
+    entries().filter((entry) => !entry.dismissed && entry.status === 'done');
+  const dismissed = () => entries().filter((entry) => entry.dismissed);
+  const byId = (entry: FeedEntry) => entry.suggestion.id;
+  // Rows are kept by suggestion id, so a feed read or a busy flag updates a
+  // card in place: focus stays, and the scroll to the opened one runs once.
+  const card = (entry: Accessor<FeedEntry>) => (
     <li
       class="scroll-mt-4"
       ref={(element) => {
-        if (entry.suggestion.id !== props.focusedId) return;
+        if (untrack(entry).suggestion.id !== props.focusedId) return;
 
         onElementConnect(element, () =>
           element.scrollIntoView({ block: 'start' })
@@ -102,28 +114,28 @@ export function ForYouView(props: {
       }}
     >
       <Show
-        when={entry.status !== 'done'}
+        when={entry().status !== 'done'}
         fallback={
           <DoneSuggestionRow
-            suggestion={entry.suggestion}
-            onOpen={() => props.feed.open(entry.suggestion)}
+            suggestion={entry().suggestion}
+            onOpen={() => props.feed.open(entry().suggestion)}
           />
         }
       >
         <SuggestionCard
-          suggestion={entry.suggestion}
-          status={entry.status}
-          isNew={entry.isNew}
-          busy={entry.busy}
-          failed={entry.failed}
-          changed={entry.changed}
+          suggestion={entry().suggestion}
+          status={entry().status}
+          isNew={entry().isNew}
+          busy={entry().busy}
+          failed={entry().failed}
+          changed={entry().changed}
           parts={props.parts}
-          onAccept={() => props.feed.accept(entry.suggestion)}
-          onOpen={() => props.feed.open(entry.suggestion)}
-          onOpenInChat={() => props.feed.openInChat(entry.suggestion)}
+          onAccept={() => props.feed.accept(entry().suggestion)}
+          onOpen={() => props.feed.open(entry().suggestion)}
+          onOpenInChat={() => props.feed.openInChat(entry().suggestion)}
           onOpenSource={props.actions.openItem}
-          onReview={() => props.feed.reviewRoutine(entry.suggestion)}
-          onDismiss={() => props.feed.dismiss(entry.suggestion)}
+          onReview={() => props.feed.reviewRoutine(entry().suggestion)}
+          onDismiss={() => props.feed.dismiss(entry().suggestion)}
         />
       </Show>
     </li>
@@ -195,44 +207,46 @@ export function ForYouView(props: {
                 </Show>
               </div>
             </Match>
-            <Match when={sections()} keyed>
-              {(shown) => (
-                <div class="flex flex-col gap-3">
-                  <Show when={shown.open.length > 0}>
-                    <ul class="m-0 flex list-none flex-col gap-3 p-0">
-                      <For each={shown.open}>{(entry) => card(entry)}</For>
-                    </ul>
-                  </Show>
-                  <Show when={shown.done.length > 0}>
-                    <SectionLabel>{t('suggestions.doneToday')}</SectionLabel>
-                    <ul class="m-0 flex list-none flex-col gap-3 p-0">
-                      <For each={shown.done}>{(entry) => card(entry)}</For>
-                    </ul>
-                  </Show>
-                  <Show when={shown.dismissed.length > 0}>
-                    <SectionLabel>
-                      {t('suggestions.dismissedSection')}
-                    </SectionLabel>
-                    <ul class="m-0 flex list-none flex-col gap-3 p-0">
-                      <For each={shown.dismissed}>
-                        {(entry) => (
-                          <li>
-                            <DismissedSuggestion
-                              suggestion={entry.suggestion}
-                              wasRunning={entry.status === 'running'}
-                              busy={entry.busy}
-                              failed={entry.failed}
-                              onUndo={() =>
-                                props.feed.undoDismiss(entry.suggestion)
-                              }
-                            />
-                          </li>
-                        )}
-                      </For>
-                    </ul>
-                  </Show>
-                </div>
-              )}
+            <Match when={props.feed.view().kind === 'suggestions'}>
+              <div class="flex flex-col gap-3">
+                <Show when={open().length > 0}>
+                  <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                    <Key each={open()} by={byId}>
+                      {card}
+                    </Key>
+                  </ul>
+                </Show>
+                <Show when={done().length > 0}>
+                  <SectionLabel>{t('suggestions.doneToday')}</SectionLabel>
+                  <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                    <Key each={done()} by={byId}>
+                      {card}
+                    </Key>
+                  </ul>
+                </Show>
+                <Show when={dismissed().length > 0}>
+                  <SectionLabel>
+                    {t('suggestions.dismissedSection')}
+                  </SectionLabel>
+                  <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                    <Key each={dismissed()} by={byId}>
+                      {(entry) => (
+                        <li>
+                          <DismissedSuggestion
+                            suggestion={entry().suggestion}
+                            wasRunning={entry().status === 'running'}
+                            busy={entry().busy}
+                            failed={entry().failed}
+                            onUndo={() =>
+                              props.feed.undoDismiss(entry().suggestion)
+                            }
+                          />
+                        </li>
+                      )}
+                    </Key>
+                  </ul>
+                </Show>
+              </div>
             </Match>
           </Switch>
         </div>

@@ -1,6 +1,7 @@
 import { useUserId } from '@core/context/user';
 import { getDefaultTimezone } from '@core/util/cron';
 import { throwOnErr } from '@core/util/result';
+import { queryReadyGate } from '@queries/gate';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -36,5 +37,5 @@ export function useTopSuggestions(limit: number): Accessor<Suggestion[]> {
     topOptions(userId() ?? '', limit, enabled() && userId() !== undefined)
   );
 
-  return () => top.data ?? [];
+  return () => (queryReadyGate(top) ? top.data : []);
 }
