@@ -3,14 +3,7 @@ import { usePending } from '@app/observability/flow';
 import { useAgentWakeTraceQuery } from '@queries/agent-wakes/wakes';
 import type { WakeTraceSpan } from '@service-agent-harness/agent-wakes';
 import { cn } from '@ui';
-import {
-  createSignal,
-  For,
-  Match,
-  onCleanup,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js';
 import { TEXT } from '../../tokens';
 import {
   formatCost,

@@ -1,12 +1,12 @@
 import {
+  traceIsLive,
+  wakeState,
+} from '@app/features/dynamic-ui/widgets/wakes/format';
+import {
   type AgentWakesFilter,
   getAgentWakeTrace,
   listAgentWakes,
 } from '@service-agent-harness/agent-wakes';
-import {
-  traceIsLive,
-  wakeState,
-} from '@app/features/dynamic-ui/widgets/wakes/format';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentWakeKeys } from './keys';

@@ -36,9 +36,9 @@ describe('a wake', () => {
 
   it('is lost once unheard from too long with no end record', () => {
     const late = received + LOST_AFTER_MS + 1;
-    expect(wakeState(wake({ phase: 'session' }), received + LOST_AFTER_MS)).toBe(
-      'running'
-    );
+    expect(
+      wakeState(wake({ phase: 'session' }), received + LOST_AFTER_MS)
+    ).toBe('running');
     expect(wakeState(wake({ phase: 'session' }), late)).toBe('lost');
     // A recent trace upload is hearing from it too.
     expect(

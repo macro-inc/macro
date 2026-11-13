@@ -1,5 +1,5 @@
-import { t } from '@app/lib/i18n';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { enableAgentDashboards } from '@core/constant/featureFlags';
 import { type JSX, Match, Switch } from 'solid-js';
 import { Notice } from './Notice';
