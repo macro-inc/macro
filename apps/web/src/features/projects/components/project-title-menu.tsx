@@ -1,21 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import {
-  SplitTitleFileMenu,
-  titleFileMenuMount,
-} from '@components/app/split-layout/components/SplitLabel';
+import type { BlockTool } from '@components/app/block-tool';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { EntityIcon } from '@core/component/EntityIcon';
-import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PriorityIcon from '@icon/system/regular/chart-bar.svg';
 import StatusIcon from '@icon/system/regular/circle-dashed.svg';
 import RenameIcon from '@icon/system/regular/note-pencil.svg';
@@ -38,27 +27,33 @@ import {
   type ProjectSection,
 } from '../core/project';
 import { openProject } from '../open-project';
+import { MobileProjectTitleMenu } from '../views/mobile/project-title-menu';
+import { ProjectTitleMenuView } from '../views/project-title-menu';
 import { DeleteProjectsDialog } from './delete-projects-dialog';
 import { RenameProjectDialog } from './rename-project-dialog';
 
-const PROJECT_PERMISSIONS: Record<ProjectDetail['access'], Permissions> = {
-  owner: Permissions.OWNER,
-  edit: Permissions.CAN_EDIT,
-  comment: Permissions.CAN_COMMENT,
-  view: Permissions.CAN_VIEW,
-};
-
-export function ProjectTitleMenu(props: {
+type ProjectTitleMenuProps = {
   project: ProjectDetail;
   source: ProjectSource;
   commands: ReturnType<ProjectsContext['createCommands']>;
   section: ProjectSection;
   onShare(): void;
   onDelete(): void;
-}) {
+};
+
+export type ProjectTitleMenuActions = Record<
+  'openInNewSplit' | 'rename' | 'status' | 'priority' | 'share' | 'remove',
+  BlockTool
+>;
+
+export type ProjectTitleMenuViewProps = {
+  project: ProjectDetail;
+  actions: ProjectTitleMenuActions;
+};
+
+export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const layout = useSplitLayout();
-  const panel = useSplitPanelOrThrow();
   const [renaming, setRenaming] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -125,112 +120,59 @@ export function ProjectTitleMenu(props: {
       }));
     },
   });
-  const openTitleMenu = (event: MouseEvent) => {
-    if (!isTouchDevice()) return;
-    const trigger = panel.titleFileMenuTrigger();
-    if (!trigger) return;
-    event.preventDefault();
-    event.stopPropagation();
-    trigger();
+  const actions: ProjectTitleMenuActions = {
+    openInNewSplit: {
+      label: () => t('entityActions.openInNewSplit'),
+      icon: SquaresFourIcon,
+      action: () =>
+        openProject(layout, props.project.id, {
+          section: props.section,
+          newSplit: true,
+        }),
+      condition: () => globalSplitManager()?.canAppendSplit() ?? false,
+    },
+    rename: {
+      label: () => t('entityActions.rename'),
+      icon: RenameIcon,
+      group: 'file',
+      action: () => setRenaming(true),
+      condition: () => canEditProject(props.project),
+    },
+    status: optionTool(
+      SYSTEM_PROPERTY_IDS.STATUS,
+      t('entityActions.setStatus')
+    ),
+    priority: optionTool(
+      SYSTEM_PROPERTY_IDS.PRIORITY,
+      t('entityActions.setPriority')
+    ),
+    share: {
+      label: () => t('entityActions.share'),
+      icon: ShareIcon,
+      group: 'sharing',
+      action: props.onShare,
+    },
+    remove: {
+      label: () => t('entityActions.delete'),
+      icon: TrashIcon,
+      group: 'delete',
+      action: () => {
+        setError(undefined);
+        setDeleting(true);
+      },
+      condition: () => canDeleteProject(props.project),
+    },
   };
-
-  const titleContent = () => (
-    <>
-      <EntityIcon
-        targetType="initiative"
-        appearance={props.project.appearance}
-        size="xs"
-      />
-      <span class="truncate text-sm font-semibold">{props.project.name}</span>
-      <div class="flex shrink-0 items-center" ref={titleFileMenuMount(panel)} />
-    </>
-  );
   return (
     <>
-      <HeaderIsland class="shrink">
-        <Show
-          when={isTouchDevice()}
-          fallback={
-            <div class="relative flex min-w-0 items-center gap-1.5">
-              {titleContent()}
-            </div>
-          }
-        >
-          <button
-            type="button"
-            class="flex h-full min-w-0 max-w-[min(65vw,18rem)] items-center gap-1.5"
-            aria-label={`${props.project.name} actions`}
-            aria-haspopup="dialog"
-            onClick={openTitleMenu}
-          >
-            {titleContent()}
-            <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-          </button>
-        </Show>
-      </HeaderIsland>
-      <SplitTitleFileMenu>
-        <SplitFileMenu
-          id={props.project.id}
-          itemType="initiative"
-          entityKind="initiative"
-          name={props.project.name}
-          permissions={PROJECT_PERMISSIONS[props.project.access]}
-          entity={{
-            type: 'initiative',
-            id: props.project.id,
-            name: props.project.name,
-            ownerId: props.project.ownerId,
-            appearance: props.project.appearance,
-          }}
-          triggerLabel="Project actions"
-          ops={[]}
-          tools={[
-            {
-              label: () => t('entityActions.openInNewSplit'),
-              icon: SquaresFourIcon,
-              action: () =>
-                openProject(layout, props.project.id, {
-                  section: props.section,
-                  newSplit: true,
-                }),
-              condition: () =>
-                !isMobile() &&
-                (globalSplitManager()?.canAppendSplit() ?? false),
-            },
-            {
-              label: () => t('entityActions.rename'),
-              icon: RenameIcon,
-              group: 'file',
-              action: () => setRenaming(true),
-              condition: () => canEditProject(props.project),
-            },
-            optionTool(
-              SYSTEM_PROPERTY_IDS.STATUS,
-              t('entityActions.setStatus')
-            ),
-            optionTool(
-              SYSTEM_PROPERTY_IDS.PRIORITY,
-              t('entityActions.setPriority')
-            ),
-            {
-              label: () => t('entityActions.share'),
-              icon: ShareIcon,
-              group: 'sharing',
-              action: props.onShare,
-            },
-            {
-              label: () => t('entityActions.delete'),
-              icon: TrashIcon,
-              group: 'delete',
-              action: () => {
-                setError(undefined);
-                setDeleting(true);
-              },
-              condition: () => canDeleteProject(props.project),
-            },
-          ]}
-        />
-      </SplitTitleFileMenu>
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <ProjectTitleMenuView project={props.project} actions={actions} />
+        }
+      >
+        <MobileProjectTitleMenu project={props.project} actions={actions} />
+      </Show>
       <Show when={renaming()}>
         <RenameProjectDialog
           name={props.project.name}

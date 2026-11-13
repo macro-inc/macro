@@ -194,6 +194,7 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
             changed: vec![ProviderId::new("malformed").unwrap()],
             removed: Vec::new(),
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
+            reader_revision: 1,
         },
     )
     .await
@@ -322,6 +323,7 @@ async fn an_abandoned_import_message_does_not_hold_the_import_open(db: PgPool) {
         changed: Vec::new(),
         removed: Vec::new(),
         position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
+        reader_revision: 1,
     });
     let service = sync(&repo, provider);
 

@@ -171,6 +171,9 @@ export function createDatabaseViewQuery(
   ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> {
     const current = untrack(readStatement);
     if (!current?.view) return okAsync({ landed: false });
+    // A read that replaces the opening one before it shows anything still
+    // shows the cached page, so the view never waits on the network to open.
+    const showCached = cached || untrack(outcome) === undefined;
     const run = ++generation;
     active?.abort();
     const controller = new AbortController();
@@ -196,7 +199,7 @@ export function createDatabaseViewQuery(
         const fresh: DatabaseViewPage[] = [];
         let next: string | undefined;
         for (let index = 0; index < count; index += 1) {
-          const initial = cached && attempt === 0 && index === 0;
+          const initial = showCached && attempt === 0 && index === 0;
           const page = await capabilities.readPage({
             ...input,
             cursor: next,

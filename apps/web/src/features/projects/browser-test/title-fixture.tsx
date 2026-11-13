@@ -6,7 +6,7 @@ import {
 } from '@components/app/split-layout/context';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Tabs } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ProjectTitleMenu } from '../components/project-title-menu';
 import {
@@ -15,6 +15,7 @@ import {
   ProjectsProvider,
 } from '../context/projects-context';
 import type { ProjectDetail, ProjectSection } from '../core/project';
+import { MobileProjectDetailHeader } from '../views/mobile/project-detail-header';
 import { priority, status } from './collection-data';
 
 const unavailable = (): never => {
@@ -91,11 +92,14 @@ function Fixture() {
   };
   // The panel owns the real menu's mount and trigger, as SplitPanel does in the app.
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
+  const [headerLeft, setHeaderLeft] = createSignal<HTMLDivElement>();
+  const [headerRight, setHeaderRight] = createSignal<HTMLDivElement>();
   const panel: SplitPanelContextType = {
     get handle() {
       return unavailable();
     },
     splitHotkeyScope: 'project-title-fixture',
+    mobileHeaderOwner: createSignal<symbol>(),
     isPanelActive: () => true,
     panelRef: () => null,
     panelSize: { width: null, height: null },
@@ -103,7 +107,14 @@ function Fixture() {
     setContentOffsetTop,
     bottomPanel: () => undefined,
     registerBottomPanel: unavailable,
-    layoutRefs: {},
+    layoutRefs: {
+      get headerLeft() {
+        return headerLeft();
+      },
+      get headerRight() {
+        return headerRight();
+      },
+    },
     titleFileMenuRef,
     setTitleFileMenuRef,
     titleFileMenuTrigger,
@@ -122,23 +133,44 @@ function Fixture() {
     <ProjectsProvider context={context}>
       <SplitPanelContext.Provider value={panel}>
         <main class="min-h-screen bg-app p-6 text-ink">
-          <ProjectTitleMenu
-            project={project()}
-            source={source}
-            commands={commands}
-            section={section()}
-            onShare={() => setShared((count) => count + 1)}
-            onDelete={() => {}}
-          />
-          <Tabs<ProjectSection>
-            aria-label="Project sections"
-            value={section()}
-            onChange={setSection}
-            options={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'tasks', label: 'Tasks' },
-            ]}
-          />
+          <div class="flex items-center justify-between">
+            <div ref={setHeaderLeft} />
+            <div ref={setHeaderRight} />
+          </div>
+          <Show
+            when={isTouchDevice()}
+            fallback={
+              <>
+                <ProjectTitleMenu
+                  project={project()}
+                  source={source}
+                  commands={commands}
+                  section={section()}
+                  onShare={() => setShared((count) => count + 1)}
+                  onDelete={() => {}}
+                />
+                <Tabs<ProjectSection>
+                  aria-label="Project sections"
+                  value={section()}
+                  onChange={setSection}
+                  options={[
+                    { value: 'overview', label: 'Overview' },
+                    { value: 'tasks', label: 'Tasks' },
+                  ]}
+                />
+              </>
+            }
+          >
+            <MobileProjectDetailHeader
+              source={source}
+              commands={commands}
+              section={section()}
+              onSectionChange={setSection}
+              onShare={() => setShared((count) => count + 1)}
+              onDelete={() => {}}
+              hotkeyScope="project-title-fixture"
+            />
+          </Show>
           <output data-testid="section">{section()}</output>
           <output data-testid="name">{name()}</output>
           <output data-testid="shares">{shared()}</output>

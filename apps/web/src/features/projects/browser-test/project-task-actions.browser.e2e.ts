@@ -16,12 +16,12 @@ test('Add task opens choices without creating and supports keyboard selection', 
 }, info) => {
   await open(page);
   const add = page.getByRole('button', {
-    name: info.project.name === 'phone' ? 'Task' : 'Add task',
+    name: info.project.name !== 'desktop' ? 'Task' : 'Add task',
     exact: true,
   });
   await add.click();
   await expect(page.getByTestId('creates')).toHaveText('0');
-  if (info.project.name === 'phone') {
+  if (info.project.name !== 'desktop') {
     await expect(
       page.getByRole('dialog', { name: 'Create new', exact: true })
     ).toBeVisible();
@@ -40,12 +40,12 @@ test('Add task selects existing tasks and excludes linked tasks', async ({
   await open(page);
   await page
     .getByRole('button', {
-      name: info.project.name === 'phone' ? 'Task' : 'Add task',
+      name: info.project.name !== 'desktop' ? 'Task' : 'Add task',
       exact: true,
     })
     .click();
   await page
-    .getByRole(info.project.name === 'phone' ? 'button' : 'menuitem', {
+    .getByRole(info.project.name !== 'desktop' ? 'button' : 'menuitem', {
       name: 'Add existing tasks',
       exact: true,
     })
@@ -59,7 +59,7 @@ test('Add task selects existing tasks and excludes linked tasks', async ({
   await page.getByRole('button', { name: 'Add 2 tasks' }).click();
   await expect(page.getByTestId('assignments')).toHaveText('project: one,two');
   await expect(
-    page.getByRole(info.project.name === 'phone' ? 'dialog' : 'menu')
+    page.getByRole(info.project.name !== 'desktop' ? 'dialog' : 'menu')
   ).toHaveCount(0);
 });
 
@@ -76,7 +76,7 @@ test('empty state uses the Add task menu and opens documentation in a new tab', 
   await page.getByRole('button', { name: 'Add task', exact: true }).click();
   await expect(page.getByTestId('creates')).toHaveText('0');
   await page
-    .getByRole(info.project.name === 'phone' ? 'button' : 'menuitem', {
+    .getByRole(info.project.name !== 'desktop' ? 'button' : 'menuitem', {
       name: 'New task',
       exact: true,
     })

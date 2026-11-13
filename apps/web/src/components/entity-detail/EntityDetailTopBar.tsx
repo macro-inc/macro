@@ -1,5 +1,4 @@
 import { SidePanel } from '@components/app/side-panel';
-import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
@@ -22,7 +21,6 @@ export function EntityDetailTopBar(
     /** Collapses while `compact`, so the title keeps its room. */
     navigation?: (compact: Accessor<boolean>) => JSX.Element;
     titleMenu?: JSX.Element;
-    mobileTitle?: () => JSX.Element;
   }>
 ) {
   const [topBar, setTopBar] = createSignal<HTMLDivElement>();
@@ -30,35 +28,22 @@ export function EntityDetailTopBar(
   const compact = createMemo(
     () => (size.width ?? Infinity) < COMPACT_NAVIGATION_WIDTH
   );
-  const replacesPhoneNavigation = () =>
-    isMobile() && Boolean(props.mobileTitle);
   return (
     <ViewShell.TopBar
       ref={setTopBar}
       class={cn(
         'touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]',
-        props.navigation && 'gap-3 mobile:flex-wrap'
+        props.navigation && 'gap-3'
       )}
     >
-      <Show
-        when={replacesPhoneNavigation()}
-        fallback={
-          <ViewBreadcrumbs.Outlet
-            aria-label="Task location"
-            fallback={<EntityDetailBreadcrumbSkeleton />}
-          >
-            {props.titleMenu}
-          </ViewBreadcrumbs.Outlet>
-        }
+      <ViewBreadcrumbs.Outlet
+        aria-label="Task location"
+        fallback={<EntityDetailBreadcrumbSkeleton />}
       >
-        {props.mobileTitle?.()}
-      </Show>
+        {props.titleMenu}
+      </ViewBreadcrumbs.Outlet>
       <Show when={props.navigation}>
-        {(navigation) => (
-          <div class="shrink-0 mobile:order-last mobile:basis-full">
-            {navigation()(compact)}
-          </div>
-        )}
+        {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
       </Show>
       <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
         <SidePanel.HeaderActionsOutlet />

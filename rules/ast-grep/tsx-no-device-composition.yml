@@ -1,0 +1,296 @@
+id: tsx-no-device-composition
+language: tsx
+severity: error
+message: Only a view's entry decides by device what exists. Move this branch into the desktop view (views/<name>.tsx) or the mobile view (views/mobile/<name>.tsx).
+note: |-
+  Rule FE-70 in .agents/rules/web/mobile.md. A `Show` / `Match` on
+  `isTouchDevice()` / `isMobile()`, a device check that yields JSX, or a
+  `touch:hidden`-style class makes one component build both the desktop and
+  the mobile view, so a desktop change reaches mobile unnoticed. Give the view
+  a desktop and a mobile composition instead, switched once in its entry.
+  Size, spacing, hover and event handling may still adapt to touch.
+
+  The ignore list has two parts. "Entries" is permanent: the one file per
+  view that holds the device switch. "Not yet split" is a baseline of files
+  that predate the rule; delete a file's line when you split its view, and
+  never add one.
+files:
+  - apps/web/src/features/**
+ignores:
+  - '**/*.test.tsx'
+  - '**/browser-test/**'
+  # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
+  - apps/web/src/**/views/mobile/**
+  # Entries: the one device switch of each split view.
+  - apps/web/src/features/block-email/EmailBlockAdapter.tsx
+  - apps/web/src/features/task-composer/compose-task.tsx
+  - apps/web/src/features/projects/add-project-tasks.tsx
+  - apps/web/src/features/projects/components/project-title-menu.tsx
+  - apps/web/src/features/projects/components/project-row.tsx
+  - apps/web/src/features/projects/project-detail.tsx
+  # Not yet split.
+  - apps/web/src/features/activity/views/my-activity-view.tsx
+  - apps/web/src/features/agent-session-activity/components/activity-row.tsx
+  - apps/web/src/features/agents-view/components/AgentsSidebar.tsx
+  - apps/web/src/features/agents-view/components/ChatComposer.tsx
+  - apps/web/src/features/agents-view/route-views.tsx
+  - apps/web/src/features/agents-view/views/AgentPicker.tsx
+  - apps/web/src/features/agents-view/views/AgentsView.tsx
+  - apps/web/src/features/agents-view/views/RepositoryPicker.tsx
+  - apps/web/src/features/block-agent/component/AgentSplitHeader.tsx
+  - apps/web/src/features/block-agent/component/EffortSelector.tsx
+  - apps/web/src/features/block-agent/ui/AgentInput.tsx
+  - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx
+  - apps/web/src/features/block-ai/ai-block.tsx
+  - apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  - apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
+  - apps/web/src/features/block-call/component/CallRecording/CallRecordingSplitHeader.tsx
+  - apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
+  - apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
+  - apps/web/src/features/block-call/views/CallDetailView.tsx
+  - apps/web/src/features/block-canvas/component/TopBar.tsx
+  - apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
+  - apps/web/src/features/block-channel/component/Top.tsx
+  - apps/web/src/features/block-chat/component/TopBar.tsx
+  - apps/web/src/features/block-code/component/TopBar.tsx
+  - apps/web/src/features/block-company/component/CompanyBlockAdapter.tsx
+  - apps/web/src/features/block-contact/component/ContactBlockAdapter.tsx
+  - apps/web/src/features/block-database/component/TopBar.tsx
+  - apps/web/src/features/block-fig/fig-block.tsx
+  - apps/web/src/features/block-form/form-block.tsx
+  - apps/web/src/features/block-form/views/builder-view.tsx
+  - apps/web/src/features/block-image/component/ImageContent.tsx
+  - apps/web/src/features/block-image/component/TopBar.tsx
+  - apps/web/src/features/block-md/comments/CommentMargin.tsx
+  - apps/web/src/features/block-md/component/Block.tsx
+  - apps/web/src/features/block-md/component/MarkdownPopup.tsx
+  - apps/web/src/features/block-md/component/TopBar.tsx
+  - apps/web/src/features/block-md/component/sidepanel/MarkdownSidePanelSections.tsx
+  - apps/web/src/features/block-md/component/useMarkdownDocumentTools.tsx
+  - apps/web/src/features/block-pdf/component/TopBar.tsx
+  - apps/web/src/features/block-pptx/pptx-block.tsx
+  - apps/web/src/features/block-pr/component/Block.tsx
+  - apps/web/src/features/block-pr/hooks/usePrShare.tsx
+  - apps/web/src/features/block-pr/views/PrDetail.tsx
+  - apps/web/src/features/block-project/component/ProjectCreateMenu.tsx
+  - apps/web/src/features/block-project/component/TopBar.tsx
+  - apps/web/src/features/block-psd/psd-block.tsx
+  - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
+  - apps/web/src/features/block-spreadsheet/components/FormulaInput.tsx
+  - apps/web/src/features/block-spreadsheet/components/SpreadsheetSheetTabs.tsx
+  - apps/web/src/features/block-spreadsheet/components/SpreadsheetToolbar.tsx
+  - apps/web/src/features/block-spreadsheet/views/SpreadsheetDraftMenu.tsx
+  - apps/web/src/features/block-spreadsheet/views/SpreadsheetEditor.tsx
+  - apps/web/src/features/block-unknown/component/TopBar.tsx
+  - apps/web/src/features/block-video/component/TopBar.tsx
+  - apps/web/src/features/block-write/DocxBlock.tsx
+  - apps/web/src/features/calendar-view/components/CalendarSidebar.tsx
+  - apps/web/src/features/calendar-view/components/EventGuests.tsx
+  - apps/web/src/features/calendar-view/components/Header.tsx
+  - apps/web/src/features/calendar-view/components/SelectedEventDetails.tsx
+  - apps/web/src/features/calendar-view/components/Workspace.tsx
+  - apps/web/src/features/calendar/components/CalendarSettingsDropdown.tsx
+  - apps/web/src/features/calendar/components/EventDetails.tsx
+  - apps/web/src/features/calendar/components/EventRsvpScopeDialog.tsx
+  - apps/web/src/features/calendar/components/MonthDrawer.tsx
+  - apps/web/src/features/calls-view/views/calls-view.tsx
+  - apps/web/src/features/changes/views/ChangesPane.tsx
+  - apps/web/src/features/changes/views/ChangesSplit.tsx
+  - apps/web/src/features/channel/Call/CallControls/CallControlBar.tsx
+  - apps/web/src/features/channel/Call/CallControls/CallSettingsMenu.tsx
+  - apps/web/src/features/channel/Call/CallOverlay.tsx
+  - apps/web/src/features/channel/Call/ChannelCallButton.tsx
+  - apps/web/src/features/channel/Call/ChannelCallTab.tsx
+  - apps/web/src/features/channel/Call/chat/components/CallChatPanel.tsx
+  - apps/web/src/features/channel/Call/views/CallParticipantTiles.tsx
+  - apps/web/src/features/channel/Call/views/CallParticipantVolume.tsx
+  - apps/web/src/features/channel/Call/views/PhoneAudioOutput.tsx
+  - apps/web/src/features/channel/Channel/ChannelDetail.tsx
+  - apps/web/src/features/channel/Channel/ChannelTopBarLiveIndicators.tsx
+  - apps/web/src/features/channel/Channel/InlineMessageEditor.tsx
+  - apps/web/src/features/channel/Channel/ScrollToBottomOverlay.tsx
+  - apps/web/src/features/channel/Input/ComposerAddMenu.tsx
+  - apps/web/src/features/channel/Media/MediaGrid.tsx
+  - apps/web/src/features/channel/Media/MediaViewerDialog.tsx
+  - apps/web/src/features/channel/Message/ActionMenu.tsx
+  - apps/web/src/features/channel/Message/Reactions.tsx
+  - apps/web/src/features/channel/Message/SwipeToReplyRow.tsx
+  - apps/web/src/features/channel/Participants/ChannelBotsPanel.tsx
+  - apps/web/src/features/channel/Participants/ChannelParticipantsTab.tsx
+  - apps/web/src/features/channels-view/channels-view-skeleton.tsx
+  - apps/web/src/features/channels-view/components/rail/ChannelListViews.tsx
+  - apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
+  - apps/web/src/features/channels-view/components/rail/ExpandedChannelsRail.tsx
+  - apps/web/src/features/channels-view/components/rail/next/SectionDialog.tsx
+  - apps/web/src/features/command/Launcher.tsx
+  - apps/web/src/features/crm/activity-tasks-adapter.tsx
+  - apps/web/src/features/crm/components/activity-controls.tsx
+  - apps/web/src/features/crm/components/contact-company-property.tsx
+  - apps/web/src/features/crm/components/contact-email-property.tsx
+  - apps/web/src/features/crm/components/crm-create-menu.tsx
+  - apps/web/src/features/crm/components/crm-sidebar.tsx
+  - apps/web/src/features/crm/components/record-archived-status.tsx
+  - apps/web/src/features/crm/components/record-section.tsx
+  - apps/web/src/features/crm/components/record-tabs.tsx
+  - apps/web/src/features/crm/views/activity-section.tsx
+  - apps/web/src/features/crm/views/companies.tsx
+  - apps/web/src/features/crm/views/crm-workspace.tsx
+  - apps/web/src/features/crm/views/pipeline.tsx
+  - apps/web/src/features/crm/views/record-row.tsx
+  - apps/web/src/features/database/components/timeline-bar-text.tsx
+  - apps/web/src/features/database/views/timeline-context-menu.tsx
+  - apps/web/src/features/drive-view/drive-create-menu.tsx
+  - apps/web/src/features/drive-view/views/drive-header.tsx
+  - apps/web/src/features/email-compose/components/mobile-compose-actions.tsx
+  - apps/web/src/features/email-compose/components/mobile-reply-toolbar.tsx
+  - apps/web/src/features/email-compose/views/compose-layout.tsx
+  - apps/web/src/features/email-compose/views/compose-recipients.tsx
+  - apps/web/src/features/email-compose/views/compose-toolbar.tsx
+  - apps/web/src/features/email-compose/views/email-compose.tsx
+  - apps/web/src/features/email-message/components/calendar-file-preview.tsx
+  - apps/web/src/features/email-thread/views/bottom-reply-buttons.tsx
+  - apps/web/src/features/email-thread/views/email-thread.tsx
+  - apps/web/src/features/email-thread/views/message-container.tsx
+  - apps/web/src/features/email-thread/views/message-list.tsx
+  - apps/web/src/features/email-view/components/EmailControls.tsx
+  - apps/web/src/features/email-view/components/EmailFocusBadges.tsx
+  - apps/web/src/features/email-view/components/EmailInboxSelector.tsx
+  - apps/web/src/features/email-view/components/EmailList.tsx
+  - apps/web/src/features/email-view/components/EmailSidebar.tsx
+  - apps/web/src/features/email-view/email-view.tsx
+  - apps/web/src/features/entity-appearance/views/appearance-editor.tsx
+  - apps/web/src/features/entity/bulk-edit/BulkMoveToProjectView.tsx
+  - apps/web/src/features/entity/composed/ListEntity.tsx
+  - apps/web/src/features/external-chat/components/chat-header.tsx
+  - apps/web/src/features/external-view/external-view-skeleton.tsx
+  - apps/web/src/features/external-view/external-view.tsx
+  - apps/web/src/features/external-view/route-views.tsx
+  - apps/web/src/features/home/components/HomeList.tsx
+  - apps/web/src/features/home/components/HomeListLayout.tsx
+  - apps/web/src/features/home/components/HomeListSkeleton.tsx
+  - apps/web/src/features/home/components/HomeTabs.tsx
+  - apps/web/src/features/home/home-view.tsx
+  - apps/web/src/features/meetings/components/meeting-copy-button.tsx
+  - apps/web/src/features/meetings/views/meeting-page.tsx
+  - apps/web/src/features/next-soup/route-views.tsx
+  - apps/web/src/features/next-soup/soup-view/FolderDropZone.tsx
+  - apps/web/src/features/next-soup/soup-view/filters-bar/soup-filters-bar.tsx
+  - apps/web/src/features/next-soup/soup-view/soup-view.tsx
+  - apps/web/src/features/next-soup/soup-view/views/inbox/InboxCard.tsx
+  - apps/web/src/features/next-soup/soup-view/views/inbox/InboxListEntity.tsx
+  - apps/web/src/features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx
+  - apps/web/src/features/next-soup/soup-view/views/tasks/TaskListEntity.tsx
+  - apps/web/src/features/notifications-inbox/components/notification-row.tsx
+  - apps/web/src/features/notifications-inbox/components/notification-stack-item.tsx
+  - apps/web/src/features/notifications-inbox/views/notifications-view.tsx
+  - apps/web/src/features/notifications/components/SnoozePicker.tsx
+  - apps/web/src/features/onboarding/views/team-step.tsx
+  - apps/web/src/features/passwords/components/new-item-menu.tsx
+  - apps/web/src/features/passwords/views/vault-view.tsx
+  - apps/web/src/features/projects/components/project-row-menu.tsx
+  - apps/web/src/features/projects/components/project-skeletons.tsx
+  - apps/web/src/features/projects/projects.tsx
+  - apps/web/src/features/projects/views/project-picker.tsx
+  - apps/web/src/features/projects/views/projects-collection.tsx
+  - apps/web/src/features/reminders/components/email-reminder-form.tsx
+  - apps/web/src/features/reviews-view/components/ReviewsPrDetail.tsx
+  - apps/web/src/features/reviews-view/components/ReviewsSidebar.tsx
+  - apps/web/src/features/reviews-view/reviews-view.tsx
+  - apps/web/src/features/routine-suggestions/routine-suggestions.tsx
+  - apps/web/src/features/routines/components/routine-trigger-menu.tsx
+  - apps/web/src/features/routines/components/routine-triggers.tsx
+  - apps/web/src/features/routines/components/routines-list.tsx
+  - apps/web/src/features/routines/views/routine-detail.tsx
+  - apps/web/src/features/routines/views/share-template-dialog.tsx
+  - apps/web/src/features/runtime-sharing/views/AgentDmRuntimeStatus.tsx
+  - apps/web/src/features/scheduling/components/availability-panel.tsx
+  - apps/web/src/features/scheduling/components/booking-card.tsx
+  - apps/web/src/features/scheduling/components/event-types-panel.tsx
+  - apps/web/src/features/scheduling/components/scheduling-filters.tsx
+  - apps/web/src/features/scheduling/views/booking-workspace-view.tsx
+  - apps/web/src/features/scheduling/views/event-details-view.tsx
+  - apps/web/src/features/scheduling/views/scheduling-mobile-header.tsx
+  - apps/web/src/features/settings/MobileApp.tsx
+  - apps/web/src/features/settings/Settings.tsx
+  - apps/web/src/features/settings/components/runtime-options.tsx
+  - apps/web/src/features/settings/computers/components/computer-actions-menu.tsx
+  - apps/web/src/features/settings/primitives.tsx
+  - apps/web/src/features/sharing/share-delivery/views/bulk-share-view.tsx
+  - apps/web/src/features/soup/SoupEntityContextMenu.tsx
+  - apps/web/src/features/tasks-view/components/TasksControls.tsx
+  - apps/web/src/features/tasks-view/components/TasksHeader.tsx
+  - apps/web/src/features/tasks-view/components/TasksSidebar.tsx
+  - apps/web/src/features/tasks-view/components/task-list/TaskList.tsx
+  - apps/web/src/features/tasks-view/components/task-list/TaskListEntity.tsx
+  - apps/web/src/features/tutorial/InteractiveOnboardingModal.tsx
+  - apps/web/src/features/universal-input/views/universal-composer.tsx
+  - apps/web/src/features/whatsapp-linked/components/chat-list.tsx
+  - apps/web/src/features/whatsapp-linked/views/whatsapp-page.tsx
+utils:
+  device-check:
+    any:
+      - kind: call_expression
+        has:
+          field: function
+          regex: (^|\.)(isTouchDevice|isMobile|isMobileWidth|isTouch)$
+      - has:
+          stopBy: end
+          kind: call_expression
+          has:
+            field: function
+            regex: (^|\.)(isTouchDevice|isMobile|isMobileWidth|isTouch)$
+  jsx-value:
+    any:
+      - kind: jsx_element
+      - kind: jsx_self_closing_element
+      - kind: parenthesized_expression
+        has:
+          any:
+            - kind: jsx_element
+            - kind: jsx_self_closing_element
+rule:
+  any:
+    - kind: jsx_attribute
+      all:
+        - has:
+            kind: property_identifier
+            regex: ^when$
+        - has:
+            stopBy: end
+            kind: call_expression
+            has:
+              field: function
+              regex: (^|\.)(isTouchDevice|isMobile|isMobileWidth|isTouch)$
+        - inside:
+            any:
+              - kind: jsx_opening_element
+              - kind: jsx_self_closing_element
+            has:
+              field: name
+              regex: ^(Show|Match)$
+    - kind: binary_expression
+      all:
+        - has:
+            field: left
+            matches: device-check
+        - has:
+            field: right
+            matches: jsx-value
+    - kind: ternary_expression
+      all:
+        - has:
+            field: condition
+            matches: device-check
+        - has:
+            matches: jsx-value
+    - kind: string_fragment
+      any:
+        - regex: (^|\s)(not-touch|touch|mobile):hidden(\s|$)
+        - all:
+            - regex: (^|\s)hidden(\s|$)
+            - regex: (^|\s)(not-touch|touch|mobile):(block|flex|inline|inline-flex|inline-block|grid|contents)(\s|$)
+    - kind: string
+      regex: ^['"](.*/)?(ResponsiveBlockToolbar|split-layout/components/HeaderIsland)['"]$
+      inside:
+        kind: import_statement
+        field: source

@@ -12,12 +12,6 @@
 }
 .sheet-story svg { flex: none; width: 14px; height: 14px; }
 .sheet-avatar { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
-.sheet-mention { color: #85b9e8; }
-
-/* The ask, as it is sent in a channel. */
-.sheet-prompt { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.sheet-prompt .sheet-avatar { width: 26px; height: 26px; }
-.sheet-prompt p { margin: 0; padding: 7px 13px; border-radius: 16px; background: #ffffff0f; }
 
 /* The artboard clears backgrounds and radii two levels down; these name their parent to keep theirs. */
 .sheet-story > .sheet-frame { overflow: hidden; border: 1px solid #ffffff1a; border-radius: 12px; background: #000; }
@@ -102,24 +96,13 @@
 .sheet-comment p { margin: 6px 0 8px; }
 .sheet-comment-replies { display: flex; align-items: center; gap: 6px; color: #85b9e8; font-size: 12px; }
 
-/* Import: the workbook, the action, and the sheet it becomes. */
-.sheet-import { display: flex; align-items: center; justify-content: center; gap: 10px; }
-.sheet-import-file, .sheet-import-sheet { box-sizing: border-box; padding: 12px; border: 1px solid #ffffff1a; border-radius: 14px; background: #ffffff08; }
-.sheet-import-file { display: flex; align-items: center; gap: 12px; }
-.sheet-import-file, .sheet-import-sheet { flex: 0 1 auto; min-width: 0; }
-.sheet-import-file div { min-width: 0; }
-.sheet-import-file strong, .sheet-import-file span { white-space: nowrap; }
-.sheet-import-file strong, .sheet-import-name strong { display: block; font-weight: 600; }
-.sheet-import-file span:not(.sheet-import-badge) { color: #8f8f8f; font-size: 12px; }
-.sheet-import-badge { display: grid; flex: none; place-items: center; width: 38px; height: 44px; border-radius: 8px; background: #1f7a45; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .03em; }
-.sheet-import-action { display: flex; flex: none; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: #fff; color: #000; font-size: 12px; font-weight: 600; }
-.sheet-import-name { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.sheet-import-name svg { width: 16px; height: 16px; }
-.sheet-import-tabs { display: flex; gap: 4px; }
-.sheet-import-tabs span { padding: 2px 7px; border-radius: 6px; color: #a8a8a8; font-size: 11.5px; }
-.sheet-import-tabs span[data-active=true] { background: #ffffff1f; color: #fff; }
-.sheet-export { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px; color: #a8a8a8; font-size: 12px; }
-.sheet-export span { padding: 3px 10px; border: 1px solid #ffffff1f; border-radius: 999px; color: #e0e0e0; }
+/* Upload: the read-only notice with its convert action, and the workbook's sheet tabs. */
+.sheet-upload { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--sheet-line); color: #a8a8a8; font-size: 12px; line-height: 16px; }
+.sheet-upload-action { flex: none; padding: 5px 11px; border-radius: 999px; background: #fff; color: #000; font-weight: 500; white-space: nowrap; }
+.sheet-tabs { display: flex; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--sheet-line); }
+.sheet-tabs span { padding: 3px 10px; border-radius: 7px; color: #a8a8a8; font-size: 12px; }
+.sheet-tabs span[data-active=true] { background: #ffffff1f; color: #fff; font-weight: 500; }
+.sheet-story .sheet-frame > .sheet-grid { width: auto; }
 
 /* Phone artboard. */
 .paper-feature-art[data-compact=true] .sheet-story { margin: 10px; }
@@ -129,8 +112,6 @@
 .paper-feature-art[data-compact=true] .sheet-chart-bars { height: 96px; }
 .paper-feature-art[data-compact=true] .sheet-chart-bars i { height: calc(var(--bar) * 76px); }
 .paper-feature-art[data-compact=true] .sheet-comment { position: static; width: auto; margin: 0 12px 12px; }
-.paper-feature-art[data-compact=true] .sheet-import { flex-direction: column; align-items: stretch; }
-.paper-feature-art[data-compact=true] .sheet-import-action { align-self: center; }
 
 @media (prefers-reduced-motion: reduce) {
   .sheet-grid-cursor, .sheet-record { transition: none; }

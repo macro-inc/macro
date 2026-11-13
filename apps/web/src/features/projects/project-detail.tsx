@@ -1,7 +1,5 @@
-import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
-import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import {
@@ -14,18 +12,17 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { isMobile } from '@core/mobile/isMobile';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
-import { Tabs } from '@ui';
 import { Match, Show, Suspense, Switch } from 'solid-js';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { ProjectContentSkeleton } from './components/project-skeletons';
-import { ProjectTitleMenu } from './components/project-title-menu';
-import { useProjectsContext } from './context/projects-context';
+import {
+  type ProjectSource,
+  type ProjectsContext,
+  useProjectsContext,
+} from './context/projects-context';
 import {
   canDiscussProject,
   canEditProject,
@@ -37,6 +34,8 @@ import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
 import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
+import { MobileProjectDetailHeader } from './views/mobile/project-detail-header';
+import { ProjectDetailHeader } from './views/project-detail-header';
 import { ProjectWorkspace } from './views/project-workspace';
 
 type ProjectBreadcrumbProps = {
@@ -88,6 +87,16 @@ export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
   );
 }
 
+export type ProjectDetailHeaderProps = {
+  source: ProjectSource;
+  commands: ReturnType<ProjectsContext['createCommands']>;
+  section: ProjectSection;
+  onSectionChange(section: ProjectSection): void;
+  onShare(): void;
+  onDelete(): void;
+  hotkeyScope: string;
+};
+
 type ProjectDetailProps = {
   route: ProjectRoute;
   navigationRequest?: number;
@@ -128,80 +137,30 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
+  const header: ProjectDetailHeaderProps = {
+    source,
+    commands,
+    get section() {
+      return props.route.section;
+    },
+    onSectionChange: section,
+    onShare: openShare,
+    onDelete:
+      props.onDelete ??
+      (() => navigate({ route: tasksSplitRoute, params: {} })),
+    hotkeyScope: panel.splitHotkeyScope,
+  };
   return (
     <>
       <Show when={props.breadcrumb}>
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
-      <EntityDetailTopBar
-        mobileTitle={() => (
-          <Show when={source.project()}>
-            {(project) => (
-              <ProjectTitleMenu
-                project={project()}
-                source={source}
-                commands={commands}
-                section={props.route.section}
-                onShare={openShare}
-                onDelete={
-                  props.onDelete ??
-                  (() => navigate({ route: tasksSplitRoute, params: {} }))
-                }
-              />
-            )}
-          </Show>
-        )}
-        titleMenu={
-          <Show when={source.project()}>
-            {(project) => (
-              <ProjectTitleMenu
-                project={project()}
-                source={source}
-                commands={commands}
-                section={props.route.section}
-                onShare={openShare}
-                onDelete={
-                  props.onDelete ??
-                  (() => navigate({ route: tasksSplitRoute, params: {} }))
-                }
-              />
-            )}
-          </Show>
-        }
-        navigation={(compact) => (
-          <Tabs
-            aria-label={t('tabs.projectSections')}
-            touch="inset"
-            class="shrink-0"
-            options={[
-              {
-                value: 'overview',
-                label: t('tabs.project-overview'),
-                icon: compact() ? SquaresFourIcon : undefined,
-              },
-              {
-                value: 'tasks',
-                label: t('tabs.project-tasks'),
-                icon: compact() ? getIconConfig('task').icon : undefined,
-              },
-            ]}
-            iconOnly={compact()}
-            value={props.route.section}
-            onChange={section}
-          />
-        )}
+      <Show
+        when={isTouchDevice()}
+        fallback={<ProjectDetailHeader {...header} />}
       >
-        <Show when={!isMobile() && source.project()}>
-          {(project) => (
-            <ShareTrigger
-              onClick={openShare}
-              id={project().id}
-              blockType="initiative"
-              hotkeyScope={panel.splitHotkeyScope}
-            />
-          )}
-        </Show>
-      </EntityDetailTopBar>
+        <MobileProjectDetailHeader {...header} />
+      </Show>
       <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}

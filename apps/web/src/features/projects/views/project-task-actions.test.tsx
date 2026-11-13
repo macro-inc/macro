@@ -20,7 +20,9 @@ vi.mock('@ui', async () => ({
 vi.mock('@core/component/HoverCard', () => ({
   useIsInsideHoverCard: () => false,
 }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mock.mobile }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mock.mobile,
+}));
 vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegion: (props: { children: import('solid-js').JSX.Element }) =>
     props.children,

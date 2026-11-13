@@ -18,14 +18,20 @@ use super::identity;
 #[cfg(test)]
 mod test;
 
-/// The Google OAuth web client the local `google`/`google_gmail` OIDC identity
-/// providers authenticate against (the Internal client in the
-/// `macro-email-testing` GCP project — see the macro-2634 proposal). Optional:
-/// without it the kickstart is unchanged and the email connect flows stay
-/// unreachable locally, exactly as before.
+/// What the local `google`/`google_gmail` OIDC identity providers
+/// authenticate against: a real Google OAuth web client from the run env
+/// (the Internal client in the `macro-email-testing` GCP project — see the
+/// macro-2634 proposal), or without one the stack's Gmail emulator
+/// (`google_emulator::idp`).
 pub struct GoogleIdp {
     pub client_id: String,
     pub client_secret: String,
+    /// Where FusionAuth sends the browser to sign in.
+    pub authorization_endpoint: String,
+    /// Where FusionAuth exchanges the code, from inside its container.
+    pub token_endpoint: String,
+    /// Where FusionAuth reads the signed-in user, from inside its container.
+    pub userinfo_endpoint: String,
 }
 
 impl GoogleIdp {
@@ -47,6 +53,9 @@ impl GoogleIdp {
         Some(GoogleIdp {
             client_id,
             client_secret,
+            authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
+            token_endpoint: "https://oauth2.googleapis.com/token".to_string(),
+            userinfo_endpoint: "https://openidconnect.googleapis.com/v1/userinfo".to_string(),
         })
     }
 }
@@ -107,7 +116,7 @@ impl GithubIdp {
 
 /// The application's OAuth redirect URLs: the only part of the kickstart that
 /// depends on the instance's ports. The init snapshot key leaves them out (see
-/// [`without_redirect_urls`]), and every bring-up writes the instance's own
+/// [`without_instance_urls`]), and every bring-up writes the instance's own
 /// list into FusionAuth, so one snapshot serves every port window.
 pub fn redirect_urls(frontend_port: u16, auth_port: u16, proxy_origins: &[String]) -> Vec<String> {
     let mut redirect_urls = vec![
@@ -131,9 +140,18 @@ pub fn redirect_urls(frontend_port: u16, auth_port: u16, proxy_origins: &[String
     redirect_urls
 }
 
-/// The kickstart document without the application's redirect URLs, so that
-/// instances that differ only in their ports produce the same snapshot key.
-pub fn without_redirect_urls(mut doc: Value) -> Value {
+/// The authorization endpoint as the Google identity providers hold it: with
+/// the parameters that make every sign-in return a refresh token.
+pub fn authorization_endpoint(base: &str) -> String {
+    format!("{base}?prompt=consent&access_type=offline")
+}
+
+/// The kickstart document without the URLs that depend on the instance's
+/// ports (the application's redirect URLs, and the Google identity
+/// providers' authorization endpoint, which names the emulator's port on a
+/// stack that runs it), so that instances that differ only in their ports
+/// produce the same snapshot key.
+pub fn without_instance_urls(mut doc: Value) -> Value {
     let requests = doc
         .get_mut("requests")
         .and_then(Value::as_array_mut)
@@ -145,6 +163,12 @@ pub fn without_redirect_urls(mut doc: Value) -> Value {
             .and_then(Value::as_object_mut);
         if let Some(oauth) = oauth {
             oauth.remove("authorizedRedirectURLs");
+        }
+        let provider = request
+            .pointer_mut("/body/identityProvider/oauth2")
+            .and_then(Value::as_object_mut);
+        if let Some(provider) = provider {
+            provider.remove("authorization_endpoint");
         }
     }
     doc
@@ -363,9 +387,9 @@ pub fn build(
     if let Some(google) = google {
         let oauth2_base = |scope: &str| {
             json!({
-                "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline",
-                "token_endpoint": "https://oauth2.googleapis.com/token",
-                "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+                "authorization_endpoint": authorization_endpoint(&google.authorization_endpoint),
+                "token_endpoint": google.token_endpoint.as_str(),
+                "userinfo_endpoint": google.userinfo_endpoint.as_str(),
                 "client_id": google.client_id.as_str(),
                 "client_secret": google.client_secret.as_str(),
                 "clientAuthenticationMethod": "client_secret_basic",

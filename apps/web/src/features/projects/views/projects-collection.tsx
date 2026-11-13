@@ -918,9 +918,7 @@ export function ProjectsCollection(props: {
                         optionId={statusOptionId(entity()) ?? ''}
                         class="size-3.5 shrink-0"
                       />
-                      <span class="min-w-0 truncate">
-                        {entity().project.name}
-                      </span>
+                      <Gantt.BarTitle>{entity().project.name}</Gantt.BarTitle>
                     </Gantt.Bar>
                   </Gantt.Row>
                 </ProjectMenu>

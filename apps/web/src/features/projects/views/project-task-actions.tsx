@@ -2,8 +2,8 @@ import { PROJECTS_DOCS_URL } from '@app/constants/docs-links';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import BookOpenIcon from '@icon/system/regular/book-open.svg';
 import { EmptyStatePanel } from '@ui';
+import { AddProjectTasks } from '../add-project-tasks';
 import type { ProjectDetail } from '../core/project';
-import { AddProjectTasks } from './add-project-tasks';
 
 export function ProjectTaskActions(props: {
   project: ProjectDetail;

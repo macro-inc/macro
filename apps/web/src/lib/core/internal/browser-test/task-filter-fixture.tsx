@@ -101,6 +101,9 @@ export function TaskFilterFixture() {
         <button onClick={() => setTaskState('facets', 'priority', ['urgent'])}>
           Manual priority
         </button>
+        <button onClick={() => setTaskState('search', 'brief')}>
+          Search tasks
+        </button>
         <button onClick={() => setNavigation({ id: 'other-tasks' })}>
           Navigate away
         </button>
