@@ -1928,7 +1928,10 @@ agent account's wakes (status dot, trigger, duration, cost, outcome; a row
 opens its trace) and a trace widget draws one wake's turns and tool calls as a
 waterfall, a full-screen dialog at phone width; only the agent and the owners
 and admins of its teams see them, others see a no-access line, and with the
-flag off both say they aren't available. The dynamic UI gallery
+flag off both say they aren't available. Only an agent session whose owner
+has the flag is told about these two widgets. A wake with no end that hasn't
+been heard from for 30 minutes shows as stopped reporting and stops
+refreshing. The dynamic UI gallery
 (`/app/component/dynamic-ui`) shows each widget; the wakes and trace sections
 read their agent and wake from
 `localStorage['dynamic-ui-gallery-wakes'] = '{"agent":"…","wake":"…"}'`,
