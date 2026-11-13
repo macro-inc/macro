@@ -19,7 +19,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, Query, SimpleSortMethod};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -28,6 +28,11 @@ use super::thread::email_thread_ids_from_receipts;
 
 #[cfg(test)]
 mod test;
+
+/// Threads outside All Mail that one by-id read looks up in Spam and Trash.
+/// Each costs up to two sequential folder reads; a batch past the cap leaves
+/// the rest absent, as every thread outside All Mail was before the fallback.
+const MAX_FOLDER_LOOKUPS: usize = 20;
 
 async fn get_frecency_scores<U: FrecencyQueryService>(
     service: &U,
@@ -168,26 +173,114 @@ where
             return Ok(Vec::new());
         }
 
-        let mut link_ids: Vec<Uuid> = self
+        let threads: Vec<(Uuid, Uuid)> = self
             .email_repo
             .thread_metadata_by_ids(&thread_ids)
             .await
             .map_err(anyhow::Error::from)?
             .into_iter()
-            .map(|metadata| metadata.link_id)
+            .map(|metadata| (metadata.thread_id, metadata.link_id))
             .collect();
-        link_ids.sort_unstable();
-        link_ids.dedup();
-        if link_ids.is_empty() {
+        self.thread_previews_by_id(viewer, threads).await
+    }
+
+    /// The preview of one thread in the caller's own or delegated inboxes,
+    /// fresh from this service's pool. Ownership is checked here, never by
+    /// the caller.
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    pub(crate) async fn get_owned_email_thread_preview_impl(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
+        let Some(link) = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id.clone())
+            .await
+            .map_err(anyhow::Error::from)?
+        else {
+            return Ok(None);
+        };
+        Ok(self
+            .thread_previews_by_id(macro_id, vec![(thread_id, link.id)])
+            .await?
+            .into_iter()
+            .next())
+    }
+
+    /// Render already-authorized `(thread, inbox)` pairs, each in the view of
+    /// the inbox that owns it. A thread renders as All Mail shows it; one that
+    /// All Mail leaves out because every message is in spam or trash renders
+    /// as its Spam or Trash row does, so a thread opened from those folders,
+    /// or reloaded after a write moved it there, is still found. All Mail
+    /// lists themselves keep excluding both folders.
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(thread_count = threads.len(), outside_all_mail = tracing::field::Empty)
+    )]
+    async fn thread_previews_by_id(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        threads: Vec<(Uuid, Uuid)>,
+    ) -> Result<Vec<EnrichedEmailThreadPreview>, EmailErr> {
+        if threads.is_empty() {
             return Ok(Vec::new());
         }
 
-        Ok(self
+        let mut link_ids: Vec<Uuid> = threads.iter().map(|(_, link_id)| *link_id).collect();
+        link_ids.sort_unstable();
+        link_ids.dedup();
+        let thread_ids = threads.iter().map(|(thread_id, _)| *thread_id).collect();
+        let mut previews = self
             .get_email_thread_previews_impl(authorized_threads_request(
-                viewer, thread_ids, link_ids,
+                viewer.clone(),
+                PreviewViewStandardLabel::All,
+                thread_ids,
+                link_ids,
             ))
             .await?
-            .items)
+            .items;
+
+        // One thread per folder read: the folder scan narrows to a thread's
+        // own messages only through an equality on its id, so a batch would
+        // read every message in the inbox's folder.
+        let found: HashSet<Uuid> = previews.iter().map(|preview| preview.thread.id).collect();
+        let outside_all_mail: Vec<(Uuid, Uuid)> = threads
+            .into_iter()
+            .filter(|(thread_id, _)| !found.contains(thread_id))
+            .collect();
+        tracing::Span::current().record("outside_all_mail", outside_all_mail.len());
+        if outside_all_mail.len() > MAX_FOLDER_LOOKUPS {
+            tracing::warn!(
+                outside_all_mail = outside_all_mail.len(),
+                looked_up = MAX_FOLDER_LOOKUPS,
+                "too many threads outside All Mail to look up in Spam and Trash"
+            );
+        }
+        for (thread_id, link_id) in outside_all_mail.into_iter().take(MAX_FOLDER_LOOKUPS) {
+            for folder in [
+                PreviewViewStandardLabel::Spam,
+                PreviewViewStandardLabel::Trash,
+            ] {
+                let preview = self
+                    .get_email_thread_previews_impl(authorized_threads_request(
+                        viewer.clone(),
+                        folder,
+                        vec![thread_id],
+                        vec![link_id],
+                    ))
+                    .await?
+                    .items
+                    .into_iter()
+                    .next();
+                if let Some(preview) = preview {
+                    previews.push(preview);
+                    break;
+                }
+            }
+        }
+        Ok(previews)
     }
 
     pub(crate) async fn get_link_by_auth_id_and_macro_id_impl(
@@ -268,12 +361,13 @@ where
     }
 }
 
-/// The preview request for threads whose receipts already authorized the
-/// read. Each thread renders in the view of the inbox that owns it, as the
-/// CRM list renders teammates' threads, and the exact id filter keeps the
-/// widened inbox scope from admitting any other thread.
+/// The preview request for threads whose access was already authorized,
+/// rendered in `view`. Each thread renders in the view of the inbox that owns
+/// it, as the CRM list renders teammates' threads, and the exact id filter
+/// keeps the widened inbox scope from admitting any other thread.
 fn authorized_threads_request(
     viewer: MacroUserIdStr<'static>,
+    view: PreviewViewStandardLabel,
     thread_ids: Vec<Uuid>,
     link_ids: Vec<Uuid>,
 ) -> GetEmailsRequest {
@@ -284,7 +378,7 @@ fn authorized_threads_request(
         .reduce(Expr::or)
         .map(Arc::new);
     GetEmailsRequest {
-        view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+        view: PreviewView::StandardLabel(view),
         link_ids,
         macro_id: viewer,
         limit: Some(limit),
