@@ -852,3 +852,48 @@ async fn an_entity_at_least_event_reaches_only_accessors_at_that_level() {
     );
     assert_eq!(viewer_stream.next_event_name().await, None);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_recipient_nested_in_any_still_excludes_a_borrowed_bot() {
+    let harness = Harness::default();
+    let first = user("first@example.com");
+    let second = user("second@example.com");
+    let audience = Audience::Any(vec![
+        Audience::Recipient {
+            user_id: first.clone(),
+        },
+        Audience::Recipient {
+            user_id: second.clone(),
+        },
+    ]);
+    let names = &["notification.created"];
+    let mut person_stream = harness
+        .open(person(&first), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut owned_bot = harness
+        .open(bot(&second, true), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut borrowed_bot = harness
+        .open(bot(&first, false), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("notification.created", "notification", DOC),
+            audience,
+        ))
+        .await;
+
+    assert_eq!(
+        person_stream.next_event_name().await.as_deref(),
+        Some("notification.created")
+    );
+    assert_eq!(
+        owned_bot.next_event_name().await.as_deref(),
+        Some("notification.created")
+    );
+    assert_eq!(borrowed_bot.next_event_name().await, None);
+}
