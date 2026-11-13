@@ -7896,6 +7896,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -12696,6 +12697,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "system_properties",
  "thiserror 2.0.18",
@@ -15092,11 +15094,16 @@ dependencies = [
 name = "outlook_emulator"
 version = "0.1.0"
 dependencies = [
+ "askama",
  "axum",
  "base64 0.22.1",
+ "calendar_events",
  "chrono",
+ "chrono-tz",
  "clap",
  "email_api_client",
+ "fusionauth",
+ "jsonwebtoken 10.3.0",
  "macro_entrypoint",
  "macro_env",
  "macro_service_urls",
@@ -15105,10 +15112,12 @@ dependencies = [
  "models_email",
  "nom 8.0.0",
  "reqwest 0.13.4",
+ "rsa",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "serde_yaml",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -19052,6 +19061,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "single_flight"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19288,6 +19308,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
+ "bot_id",
  "call",
  "channels",
  "chrono",
@@ -23785,7 +23806,6 @@ dependencies = [
  "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-sqs",
- "base64 0.22.1",
  "bollard",
  "chrono",
  "clap",

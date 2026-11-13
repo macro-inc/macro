@@ -871,6 +871,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
+  A typed search held across an engine restart reaches the new engine first, and
+  one already sent is not refused when the read budget expires; it has no
+  network fallback.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
 - Snapshot cache generation subscribers before dispatch and skip removed listeners;
@@ -1482,6 +1485,14 @@ own account, never its email) from `claude-mode` for managers, and the harness l
 claude.ai control stays a plain `target="_blank"` link; never open it after an
 await. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
+
+Guided purchase (the Buy computer → Configure agent → Bring your AI → Ready
+dialog) has a backend-free browser regression that mounts the real section over
+the real computers client and answers `/auth/team/computers/*` from Playwright,
+covering the size skeleton, every step, and each offers failure (422, 403, 502,
+503, dropped connection, timeout) on desktop and phone:
+`bunx playwright test --config src/features/settings/computers/browser-test/playwright.config.ts`.
+Set `COMPUTERS_SCREENSHOT_DIR` to also save each step's screenshot there.
 
 Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
 computer, total and next-invoice amounts; never calculate a bill from catalog
