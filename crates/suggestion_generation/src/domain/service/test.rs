@@ -293,6 +293,7 @@ impl SuggestionApi for FakeSuggestions {
         _: &MacroUserIdStr<'static>,
         _: SuggestionCaller,
         _: Option<Tz>,
+        _: Option<usize>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         unused()
     }
@@ -324,7 +325,12 @@ impl SuggestionApi for FakeSuggestions {
         unused()
     }
 
-    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
+    async fn restore(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
+        _: Uuid,
+    ) -> Result<(), SuggestionError> {
         unused()
     }
 
