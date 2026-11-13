@@ -311,8 +311,10 @@ views/shared/<name>-parts.tsx  parts both views render
   outside `mobile/` and `shared/`.
 - **A mobile view composes its header with `MobileHeader`**
   (`components/app/mobile-header`). While it is mounted it owns the pane's
-  header: nothing else in the pane can add to it. A mobile view may branch on
-  `isMobile()` / `mobile:` for phone versus tablet.
+  header: nothing else in the pane can add to it. A file block's mobile header
+  uses `MobileBlockHeader` from the same directory: the file's title with its
+  menu, the permissions badge, the islands the view passes, and Info. A mobile
+  view may branch on `isMobile()` / `mobile:` for phone versus tablet.
 - **A block's desktop header uses `BlockToolbar`**
   (`components/app/block-toolbar`): its tools in one group, the side panel's
   header actions, trailing controls such as Share, and the title menu with the
@@ -334,7 +336,11 @@ A large view can be split in steps, header first. `features/block-md` is at
 that stage: `component/Block.tsx` switches between
 `views/markdown-header.tsx` and `views/mobile/markdown-header.tsx`, while the
 document body below them is still shared and its files are still in the
-baseline.
+baseline. The image, video, code, unknown file, PDF and canvas blocks are at
+the same stage, each with `views/<block>-header.tsx`,
+`views/mobile/<block>-header.tsx`, and a hook in
+`views/shared/<block>-header-parts.tsx` that returns the header's actions by
+name.
 
 ### `context/`: the feature's capability contract
 
