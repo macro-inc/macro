@@ -30,7 +30,10 @@ installs. `README.md` is the human guide: enrolment steps, credentials, testing.
 - Secrets reach curl only through `--config -` on stdin and reach config.json
   only through `jq --rawfile /dev/stdin` or `printf` redirection, never through argv; `change` prints
   its arguments under `--dry-run`.
-- `api_base_url` must be set before any credential is written. In managed mode
+- Never run `git-ai flush-metrics-db`: it uploads queued events without the
+  `allow_repositories` gate.
+- `api_base_url` and `notes_backend.kind git_notes` must be set before any
+  credential is written. In managed mode
   (read-only or symlinked config.json) the script cannot set it, so it writes the
   credential only to `~/.git-ai/api-key.env`, which git-ai never reads by itself.
 - The read API, credential endpoints and metric names are fixed by

@@ -20,11 +20,11 @@ It shows a plan and asks before changing anything (`--yes` skips the question, `
 
 1. Installs git-ai 1.7.6 from the project's GitHub release into `~/.git-ai/bin`, checked against the release's `SHA256SUMS`. If `git-ai --version` already reports 1.7.6 or 1.7.7 (a Nix-managed install, say), it uses that one and leaves it alone. 1.7.7 has no GitHub release; it is 1.7.6 plus a version bump, which is why both count as pinned.
 2. Sets `api_base_url` to `https://gateway.macro.com/gitai`, before any credential exists, so nothing is ever sent to the vendor.
-3. Sets `telemetry_oss` off, `disable_auto_updates` on, and `allow_repositories` to `https://github.com/macro-inc/macro` (the client matches that against both HTTPS and SSH remotes). On machines without git in a standard location (NixOS) it also sets `git_path`.
+3. Sets `telemetry_oss` off, `disable_auto_updates` and `disable_version_checks` on, `notes_backend.kind` to `git_notes` (with an `api_key` and no notes backend set, git-ai would send notes to the server and stop writing `refs/notes/ai`), and `allow_repositories` to `https://github.com/macro-inc/macro` (the client matches that against both HTTPS and SSH remotes). On machines without git in a standard location (NixOS) it also sets `git_path`.
 4. Mints a device credential: `POST /v1/credentials {email, hostname}` with the shared key, using your `git config user.email` and `uname -n`. The credential goes into `~/.git-ai/config.json` as `api_key` (file mode 600).
 5. Runs `git-ai install`, which hooks every agent it detects (Claude Code, Codex, ...) and restarts the daemon, then installs the upstream login-start unit (a systemd user unit on Linux, a LaunchAgent on macOS) so the daemon runs from login.
 6. Installs the `gitai-why` skill to `~/.claude/skills/` and `~/.codex/skills/`, and adds one instruction line, between `gitai-enroll` marker comments, to `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`: after opening a PR on `macro-inc/macro`, append `git-ai: https://gateway.macro.com/gitai/v1/prs/macro-inc/macro/<n>` to its description.
-7. Prints `git-ai whoami`; expect `API access: connected via API key`.
+7. Checks the credential with the server (`GET /v1/whoami`; a revoked one stops the script and asks for `--rotate`), then prints `git-ai whoami`, which reads only local state.
 
 Re-running is safe: it re-applies the settings and keeps the existing credential. `--rotate` mints a new one and revokes this machine's old ones (same email and hostname).
 
@@ -38,7 +38,7 @@ If `~/.git-ai/config.json` is a symlink or read-only (a Home Manager file in the
 
 - It changes no git-ai settings, hooks or login start; those stay with your Nix config.
 - It mints the credential into `~/.git-ai/api-key.env` (`GIT_AI_API_KEY=...`, mode 600). git-ai reads `GIT_AI_API_KEY` from its environment ahead of `api_key`; it has no other place for a key outside `config.json`.
-- It prints the exact non-secret keys for `config.json` (`api_base_url`, `telemetry_oss`, `disable_auto_updates`, `allow_repositories`, and `git_path` where needed).
+- It prints the exact non-secret keys for `config.json` (`api_base_url`, `telemetry_oss`, `disable_auto_updates`, `disable_version_checks`, `notes_backend`, `allow_repositories`, and `git_path` where needed).
 
 Then put those keys in the Home Manager config and switch, so the base URL is in place before the key is used. Export the key file to everything that runs git-ai, agents included: `set -a; . ~/.git-ai/api-key.env; set +a` in your shell rc, and `EnvironmentFile=%h/.git-ai/api-key.env` for systemd user units. Restart the daemon (`git-ai bg shutdown`; it starts again on next use) from a shell that has the key, then re-run the script: it keeps the credential and prints `git-ai whoami`.
 

@@ -53,7 +53,7 @@ Safe to re-run: an existing credential is kept unless --rotate is given.
 Environment:
   GITAI_SHARED_KEY      shared minting key (from Doppler); needed only to mint or rotate
   GITAI_BASE_URL        server base URL (default https://gateway.macro.com/gitai)
-  GITAI_CLIENT_VERSION  git-ai release to install (default 1.7.7)
+  GITAI_CLIENT_VERSION  git-ai release to install (default 1.7.6, the pin)
 USAGE
 }
 
@@ -150,8 +150,22 @@ RELEASE_URL="https://github.com/$RELEASE_REPO/releases/download/v$PINNED_VERSION
 
 # Download a release asset into WORK_DIR and check it against the release's
 # SHA256SUMS.
+# SHA256 of the pinned release's assets, so a replaced asset fails even if its
+# SHA256SUMS were replaced too. Other versions fall back to SHA256SUMS alone.
+pinned_sha256() {
+  [ "$PINNED_VERSION" = 1.7.6 ] || return 0
+  case "$1" in
+    git-ai-linux-x64) echo f6cda0cb43c1c9a3d68e7efe2d79577680ea6f382c31bf36a2162906f93f6c1c ;;
+    git-ai-linux-arm64) echo 1326abd5547636e6b6b297ad79afc955e57e82361efac320d4f860147b95a87a ;;
+    git-ai-macos-x64) echo bc1a504e9abb259519313954b0f57c5ca5b7192b8c1111282d6b5d95dfe19558 ;;
+    git-ai-macos-arm64) echo 1d44c44b54aac71708e9fce638047551587324d8d58ad15841bd517609748667 ;;
+    git-ai-login-start-linux.sh) echo 103008938742f03f67286058bf10ab5d0bee08d97fa93b7f519f8defbc797a0d ;;
+    git-ai-login-start-macos.sh) echo d7201100f01e121d2d8d64d4f7759d6ca21399d00c386357e2a7ac0d3fed422c ;;
+  esac
+}
+
 fetch_release_asset() {
-  local asset="$1" expected actual
+  local asset="$1" expected actual pinned
 
   if [ ! -f "$WORK_DIR/SHA256SUMS" ]; then
     curl --fail --location --silent --show-error -o "$WORK_DIR/SHA256SUMS" "$RELEASE_URL/SHA256SUMS" ||
@@ -165,6 +179,8 @@ fetch_release_asset() {
   [ -n "$expected" ] || die "$asset is not listed in the release's SHA256SUMS"
   actual="$(sha256_of "$WORK_DIR/$asset")"
   [ "$expected" = "$actual" ] || die "checksum mismatch for $asset"
+  pinned="$(pinned_sha256 "$asset")"
+  [ -z "$pinned" ] || [ "$pinned" = "$actual" ] || die "$asset does not match the checksum pinned in this script"
 }
 
 case "$(uname -s)" in
@@ -208,6 +224,14 @@ config_get() {
   fi
 }
 
+# git-ai finds git only in fixed locations (/usr/bin, Homebrew, ...). Elsewhere
+# (NixOS, say) tell it where git is.
+GIT_PATH_SETTING=""
+if [ -z "$(config_get git_path)" ] && [ ! -x /usr/bin/git ] && [ ! -x /usr/local/bin/git ] &&
+  [ ! -x /opt/homebrew/bin/git ]; then
+  GIT_PATH_SETTING="$(command -v git)"
+fi
+
 PREVIOUS_BASE="$(config_get api_base_url)"
 if [ "$MANAGED" -eq 1 ]; then
   EXISTING_KEY="$(sed -n 's/^GIT_AI_API_KEY=//p' "$KEY_ENV_FILE" 2>/dev/null || true)"
@@ -215,7 +239,7 @@ else
   EXISTING_KEY="$(config_get api_key)"
 fi
 MINT=1
-if [ "$ROTATE" -eq 0 ] && { [ "$PREVIOUS_BASE" = "$BASE_URL" ] || [ "$MANAGED" -eq 1 ]; }; then
+if [ "$ROTATE" -eq 0 ] && [ "$PREVIOUS_BASE" = "$BASE_URL" ]; then
   case "$EXISTING_KEY" in
     gitai_*) MINT=0 ;;
   esac
@@ -245,6 +269,20 @@ if [ "$MANAGED" -eq 1 ]; then
   note "agents:     $SKILL_NAME skill and PR line for Claude Code and Codex"
 else
   note "agents:     git-ai hooks, daemon login start, $SKILL_NAME skill and PR line for Claude Code and Codex"
+fi
+
+# Managed mode cannot set the base URL or the notes backend, and a credential
+# must not exist before both are in place. Until then, print what to set.
+if [ "$MANAGED" -eq 1 ] &&
+  { [ "$PREVIOUS_BASE" != "$BASE_URL" ] ||
+    [ "$(jq -r '.notes_backend.kind // empty' "$CONFIG" 2>/dev/null)" != git_notes ]; }; then
+  say "Settings for the tool that manages $CONFIG"
+  note "Put these keys in config.json (for Home Manager: home.file.\".git-ai/config.json\"); none is secret:"
+  jq -n --arg base "$BASE_URL" --argjson repos "$ALLOWED_REPOSITORIES" --arg git "$GIT_PATH_SETTING" \
+    '{api_base_url: $base, telemetry_oss: "off", disable_auto_updates: true, disable_version_checks: true,
+      notes_backend: {kind: "git_notes"}, allow_repositories: $repos}
+     + (if $git == "" then {} else {git_path: $git} end)' | sed 's/^/    /'
+  die "apply these settings (api_base_url and notes_backend must be in place before a credential exists), then re-run"
 fi
 
 if [ "$MINT" -eq 1 ] && [ "$DRY_RUN" -eq 0 ] && [ -z "$SHARED_KEY" ]; then
@@ -290,19 +328,15 @@ fi
 # The base URL goes first: with a credential and the default URL, the client
 # would upload to the vendor.
 
-# git-ai finds git only in fixed locations (/usr/bin, Homebrew, ...). Elsewhere
-# (NixOS, say) tell it where git is.
-GIT_PATH_SETTING=""
-if [ -z "$(config_get git_path)" ] && [ ! -x /usr/bin/git ] && [ ! -x /usr/local/bin/git ] &&
-  [ ! -x /opt/homebrew/bin/git ]; then
-  GIT_PATH_SETTING="$(command -v git)"
-fi
-
 if [ "$MANAGED" -eq 0 ]; then
   say "Configuring git-ai"
   change "$GITAI_BIN" config set api_base_url "$BASE_URL"
   change "$GITAI_BIN" config set telemetry_oss off
   change "$GITAI_BIN" config set disable_auto_updates true
+  change "$GITAI_BIN" config set disable_version_checks true
+  # With an api_key and no notes_backend, git-ai sends notes to the server and
+  # stops writing refs/notes/ai. Notes stay in git, so pin this before the key.
+  change "$GITAI_BIN" config set notes_backend.kind git_notes
   change "$GITAI_BIN" config set allow_repositories "$ALLOWED_REPOSITORIES"
   if [ -n "$GIT_PATH_SETTING" ]; then
     change "$GITAI_BIN" config set git_path "$GIT_PATH_SETTING"
@@ -318,21 +352,24 @@ curl_quote() {
   printf '"%s"' "$value"
 }
 
-# Call the credentials API with the shared key. The key travels to curl in a
-# config file on stdin, never on a command line. Prints the body, then the
-# HTTP status on the last line.
-shared_key_request() {
-  local method="$1" path="$2" body="${3:-}"
+# Call the server with a key (the shared key or a device credential). The key
+# travels to curl in a config file on stdin, never on a command line. Prints the
+# body, then the HTTP status on the last line.
+api_request() {
+  local key="$1" method="$2" path="$3" body="${4:-}"
   {
     printf 'url = %s\n' "$(curl_quote "$BASE_URL$path")"
     printf 'request = %s\n' "$(curl_quote "$method")"
-    printf 'header = %s\n' "$(curl_quote "X-API-Key: $SHARED_KEY")"
+    printf 'header = %s\n' "$(curl_quote "X-API-Key: $key")"
     if [ -n "$body" ]; then
       printf 'header = "Content-Type: application/json"\n'
-      printf 'data-binary = %s\n' "$(curl_quote "$body")"
+      printf '%s' "$body" >"$WORK_DIR/request.json"
+      printf 'data-binary = %s\n' "$(curl_quote "@$WORK_DIR/request.json")"
     fi
-  } | curl --silent --show-error --max-time 30 --config - --write-out '\n%{http_code}'
+  } | curl --silent --show-error --max-time 30 --config - --write-out '\n%{http_code}' || true
 }
+
+shared_key_request() { api_request "$SHARED_KEY" "$@"; }
 
 response_status() { printf '%s\n' "$1" | tail -n 1; }
 response_body() { printf '%s\n' "$1" | sed '$d'; }
@@ -370,6 +407,7 @@ else
   case "$status" in
     200 | 201) ;;
     401 | 403) die "the server rejected the shared key (HTTP $status)" ;;
+    000) die "could not reach $BASE_URL" ;;
     *) die "minting failed (HTTP $status): $(printf '%s' "$body" | head -c 300)" ;;
   esac
 
@@ -460,7 +498,12 @@ install_instruction() {
     return
   fi
 
-  if [ -f "$target" ] && grep -qF "$MARK_BEGIN" "$target"; then
+  if [ -f "$target" ] && grep -qxF "$MARK_BEGIN" "$target" && ! grep -qxF "$MARK_END" "$target"; then
+    warn "$target has $MARK_BEGIN but no $MARK_END; fix it by hand, then re-run"
+    return
+  fi
+
+  if [ -f "$target" ] && grep -qxF "$MARK_BEGIN" "$target"; then
     awk -v begin="$MARK_BEGIN" -v end="$MARK_END" -v line="$INSTRUCTION" '
       $0 == begin { print; print line; skipping = 1; next }
       $0 == end { skipping = 0 }
@@ -505,27 +548,41 @@ fi
 # --- (g) Status ------------------------------------------------------------------
 
 if [ "$MANAGED" -eq 1 ]; then
-  say "Settings for the tool that manages $CONFIG"
-  note "Put these keys in config.json (for Home Manager: home.file.\".git-ai/config.json\"); none is secret:"
-  jq -n --arg base "$BASE_URL" --argjson repos "$ALLOWED_REPOSITORIES" --arg git "$GIT_PATH_SETTING" \
-    '{api_base_url: $base, telemetry_oss: "off", disable_auto_updates: true, allow_repositories: $repos}
-     + (if $git == "" then {} else {git_path: $git} end)' | sed 's/^/    /'
-  note "Then export the credential from $KEY_ENV_FILE (mode 600, outside the store) to every"
-  note "process that runs git-ai, agents included. git-ai reads it as GIT_AI_API_KEY:"
+  say "Exporting the credential"
+  note "Export $KEY_ENV_FILE (mode 600, outside the store) to every process that runs"
+  note "git-ai, agents included; git-ai reads it as GIT_AI_API_KEY:"
   note "  shell rc:        set -a; . \"\$HOME/.git-ai/api-key.env\"; set +a"
   note "  systemd --user:  EnvironmentFile=%h/.git-ai/api-key.env"
-  note "Apply api_base_url first: with the key and the default URL, git-ai would upload to the vendor."
   note "Then restart the daemon (git-ai bg shutdown; it restarts on next use) from a shell that has the key."
-  if [ "$PREVIOUS_BASE" != "$BASE_URL" ]; then
-    warn "$CONFIG does not set api_base_url to $BASE_URL yet"
+fi
+
+# `git-ai whoami` reads only local state, so ask the server whether it accepts
+# this machine's credential.
+say "Checking the credential with the server"
+if [ "$DRY_RUN" -eq 1 ]; then
+  note "would GET $BASE_URL/v1/whoami with the device credential"
+else
+  if [ "$MANAGED" -eq 1 ]; then
+    device_key="$(sed -n 's/^GIT_AI_API_KEY=//p' "$KEY_ENV_FILE")"
+  else
+    device_key="$(config_get api_key)"
   fi
+  response="$(api_request "$device_key" GET /v1/whoami)"
+  unset device_key
+  status="$(response_status "$response")"
+  case "$status" in
+    200)
+      note "accepted: $(response_body "$response" | jq -r '"credential \(.id) for \(.email) on \(.hostname)"')"
+      ;;
+    401 | 403) die "the server rejects this machine's credential (HTTP $status); it may be revoked: re-run with --rotate" ;;
+    404) warn "the server has no /v1/whoami yet; credential not checked" ;;
+    *) warn "could not check the credential (HTTP $status)" ;;
+  esac
 fi
 
 say "git-ai whoami"
 if [ "$DRY_RUN" -eq 1 ]; then
   note "would run: $GITAI_BIN whoami"
-elif [ "$MANAGED" -eq 1 ] && [ "$PREVIOUS_BASE" != "$BASE_URL" ]; then
-  note "skipped until $CONFIG points at $BASE_URL"
 elif [ "$MANAGED" -eq 1 ]; then
   # The key reaches git-ai through its environment, never argv.
   (

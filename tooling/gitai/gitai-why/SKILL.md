@@ -9,17 +9,22 @@ Macro's gitai-service stores, for `github.com/macro-inc/macro`, which agent sess
 
 ## Setup
 
-Read the base URL and this machine's device credential from git-ai's config. `git-ai config api_key` prints a masked value, so read the file:
+Read the base URL and this machine's device credential. git-ai takes the key from `GIT_AI_API_KEY` first, then `~/.git-ai/config.json`; machines whose config is managed by Nix keep it in `~/.git-ai/api-key.env`. `git-ai config api_key` prints a masked value, so read the sources:
 
 ```sh
 BASE=$(jq -r '.api_base_url // "https://gateway.macro.com/gitai"' ~/.git-ai/config.json)
 ORIGIN=$(printf '%s' "$BASE" | sed -E 's#^(https?://[^/]+).*#\1#')
-gitai() { jq -r '"X-API-Key: " + .api_key' ~/.git-ai/config.json | curl -sS -H @- "$@"; }
+gitai_key() {
+  if [ -n "${GIT_AI_API_KEY:-}" ]; then printf '%s' "$GIT_AI_API_KEY"
+  elif [ -r ~/.git-ai/api-key.env ]; then sed -n 's/^GIT_AI_API_KEY=//p' ~/.git-ai/api-key.env
+  else jq -r '.api_key // empty' ~/.git-ai/config.json; fi
+}
+gitai() { printf 'X-API-Key: %s\n' "$(gitai_key)" | curl -sS -H @- "$@"; }
 ```
 
 `gitai` hands curl the `X-API-Key` header on stdin, so the credential stays off the command line and out of your output.
 
-No `api_key`, or every call returns 401: the machine is not enrolled. Tell the user to run `tooling/gitai/gitai-enroll` and stop.
+No key from any of those sources, or every call returns 401: the machine is not enrolled. Tell the user to run `tooling/gitai/gitai-enroll` and stop.
 
 ## Pick the entry point
 
