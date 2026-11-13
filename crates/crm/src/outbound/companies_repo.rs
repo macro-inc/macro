@@ -1954,8 +1954,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         // A claim walks every unmarked unclaimable entry ahead of its batch,
-        // so its cost follows how many are still unmarked.
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        // so its cost follows how many are still unmarked. A timeout also
+        // rolls back the marks that would make the next claim cheaper, so
+        // it sits well above the cost of walking a whole unmarked backlog.
+        sqlx::query!("SET LOCAL statement_timeout = '60s'")
             .execute(&mut *tx)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
