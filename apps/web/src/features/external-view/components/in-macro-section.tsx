@@ -78,6 +78,8 @@ export function InMacroChats(props: {
   /** The provider's name: "WhatsApp chats in Macro". */
   label: string;
   chats: ChatSummary[] | undefined;
+  /** The provider's section titles: Slack's group chats are "Channels". */
+  sectionLabels: { direct: string; groups: string };
   isPending: boolean;
   isError: boolean;
   activeChatId: string | undefined;
@@ -105,6 +107,7 @@ export function InMacroChats(props: {
             >
               <ConversationSectionList
                 sections={conversationSections(chats())}
+                labels={props.sectionLabels}
                 isOpen={props.isOpen}
                 onOpenChange={props.onOpenChange}
                 folded={(items) => (

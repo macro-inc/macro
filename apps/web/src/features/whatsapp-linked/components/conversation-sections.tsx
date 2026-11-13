@@ -53,6 +53,8 @@ export function ConversationSectionList<Item>(props: {
   list: (items: Item[], label: string) => JSX.Element;
   /** Beside a folded section's heading, e.g. its unread count. */
   folded?: (items: Item[]) => JSX.Element;
+  /** Titles for direct chats and groups; WhatsApp's words by default. */
+  labels?: { direct: string; groups: string };
 }) {
   const section = (id: string, title: string, items: Item[]) => (
     <Show when={items.length}>
@@ -68,8 +70,16 @@ export function ConversationSectionList<Item>(props: {
   );
   return (
     <>
-      {section(sectionId.direct, 'Direct messages', props.sections.direct)}
-      {section(sectionId.groups, 'Groups', props.sections.groups)}
+      {section(
+        sectionId.direct,
+        props.labels?.direct ?? 'Direct messages',
+        props.sections.direct
+      )}
+      {section(
+        sectionId.groups,
+        props.labels?.groups ?? 'Groups',
+        props.sections.groups
+      )}
       <Show when={props.sections.communities.length}>
         <ConversationSection
           title="Communities"

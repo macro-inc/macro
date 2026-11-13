@@ -13,6 +13,8 @@ export type ProviderIdentity = {
   label: string;
   icon: Icon;
   boldIcon: Icon;
+  /** Chat-list section titles: a provider's own word for its group chats. */
+  sectionLabels: { direct: string; groups: string };
 };
 
 /**
@@ -24,11 +26,13 @@ const IDENTITIES: Record<ExternalChatProvider, ProviderIdentity> = {
     label: 'WhatsApp',
     icon: WhatsappLogo,
     boldIcon: WhatsappLogoBold,
+    sectionLabels: { direct: 'Direct messages', groups: 'Groups' },
   },
   slack: {
     label: 'Slack',
     icon: SlackLogo,
     boldIcon: SlackLogoBold,
+    sectionLabels: { direct: 'Direct messages', groups: 'Channels' },
   },
 };
 
