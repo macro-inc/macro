@@ -34,11 +34,6 @@ export class AgentVault {
     private readonly wake: AgentWake,
   ) {}
 
-  /** A handle to a known item. */
-  item(id: string): PasswordItem {
-    return PasswordItem.byId(this.client, this.team, this.wake, id);
-  }
-
   /** Items the agent may use or request, newest first, metadata only. */
   search(query?: string): AsyncGenerator<PasswordItem> {
     return paginate(async (cursor) => {
