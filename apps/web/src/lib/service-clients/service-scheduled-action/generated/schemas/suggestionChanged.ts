@@ -8,7 +8,8 @@
 import type { Suggestion } from './suggestion';
 
 /**
- * The suggestion changed since the caller read it.
+ * The suggestion changed since the caller read it, or can't run until its
+last run settles.
  */
 export interface SuggestionChanged {
   /** What happened. */

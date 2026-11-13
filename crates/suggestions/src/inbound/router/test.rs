@@ -141,7 +141,11 @@ struct FakeSuggestions {
     callers: Mutex<Vec<(String, SuggestionCaller)>>,
     /// Whether each accept was the person's own.
     by_person: Mutex<Vec<bool>>,
+    /// The `limit` each feed read asked for.
+    limits: Mutex<Vec<Option<usize>>>,
     refused: Option<Uuid>,
+    /// A suggestion dismissed too long ago to restore.
+    stale: Option<Uuid>,
 }
 
 impl FakeSuggestions {
@@ -171,12 +175,23 @@ impl SuggestionApi for FakeSuggestions {
         user: &MacroUserIdStr<'static>,
         caller: SuggestionCaller,
         _: Option<chrono_tz::Tz>,
+        limit: Option<usize>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         self.reach(user, caller)?;
+        self.limits.lock().unwrap().push(limit);
         Ok(SuggestionFeed {
             suggestions: Vec::new(),
-            done: Vec::new(),
+            done: limit.is_none().then(Vec::new),
+            counts: crate::domain::model::FeedCounts::default(),
         })
+    }
+
+    async fn viewed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+    ) -> Result<(), SuggestionError> {
+        self.reach(user, caller)
     }
 
     async fn accept(
@@ -199,15 +214,24 @@ impl SuggestionApi for FakeSuggestions {
         self.reach(user, caller)
     }
 
+    async fn restore(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> Result<(), SuggestionError> {
+        self.reach(user, caller)?;
+        if self.stale == Some(id) {
+            return Err(SuggestionError::NotRestorable);
+        }
+        Ok(())
+    }
+
     fn brief(&self, _: GenerationTrigger, _: chrono_tz::Tz) -> String {
         unreachable!()
     }
 
-    async fn kept(&self, _: Uuid, _: Uuid) -> Result<u32, SuggestionError> {
-        unreachable!()
-    }
-
-    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
+    async fn feed_changes(&self, _: Uuid, _: Uuid) -> Result<u32, SuggestionError> {
         unreachable!()
     }
 
@@ -301,9 +325,11 @@ async fn the_persons_own_agent_reaches_their_feed_and_suggestions_as_an_agent() 
     let invocation = Uuid::now_v7();
     let accept = format!("/suggestions/{suggestion}/accept");
     let dismiss = format!("/suggestions/{suggestion}/dismiss");
+    let viewed = "/suggestions/viewed".to_owned();
     let cases = [
         // The person in the app.
         ("POST", &accept, SESSION_JWT, false, None),
+        ("POST", &viewed, SESSION_JWT, false, None),
         // Their chat agent's program: a code-mode credential.
         (
             "GET",
@@ -338,6 +364,7 @@ async fn the_persons_own_agent_reaches_their_feed_and_suggestions_as_an_agent() 
         callers,
         [
             SuggestionCaller::User,
+            SuggestionCaller::User,
             agent,
             agent,
             agent,
@@ -358,6 +385,8 @@ async fn a_refused_generation_session_gets_a_403() {
         ("GET", "/suggestions".to_owned()),
         ("POST", format!("/suggestions/{suggestion}/accept")),
         ("POST", format!("/suggestions/{suggestion}/dismiss")),
+        ("POST", format!("/suggestions/{suggestion}/restore")),
+        ("POST", "/suggestions/viewed".to_owned()),
     ] {
         let status = send(&service, method, &uri, AGENT_JWT, true, Some(generation)).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{method} {uri}");
@@ -412,4 +441,40 @@ async fn only_the_persons_own_session_accepts_as_the_person() {
         router.oneshot(bare).await.unwrap().status(),
         StatusCode::BAD_REQUEST
     );
+}
+
+/// `?limit` caps each list of the feed; zero, or anything not a count, is
+/// refused.
+#[tokio::test]
+async fn the_feed_takes_a_limit() {
+    let service = Arc::new(FakeSuggestions::default());
+    for (uri, expected) in [
+        ("/suggestions", StatusCode::OK),
+        ("/suggestions?limit=5", StatusCode::OK),
+        ("/suggestions?limit=0", StatusCode::BAD_REQUEST),
+        ("/suggestions?limit=many", StatusCode::BAD_REQUEST),
+    ] {
+        let status = send(&service, "GET", uri, SESSION_JWT, false, None).await;
+        assert_eq!(status, expected, "{uri}");
+    }
+    assert_eq!(*service.limits.lock().unwrap(), [None, Some(5)]);
+}
+
+#[tokio::test]
+async fn a_restore_too_late_is_a_conflict() {
+    let stale = Uuid::now_v7();
+    let service = Arc::new(FakeSuggestions {
+        stale: Some(stale),
+        ..FakeSuggestions::default()
+    });
+    let fresh = Uuid::now_v7();
+    for (id, expected) in [
+        (fresh, StatusCode::NO_CONTENT),
+        (stale, StatusCode::CONFLICT),
+    ] {
+        let uri = format!("/suggestions/{id}/restore");
+        let status = send(&service, "POST", &uri, SESSION_JWT, false, None).await;
+        assert_eq!(status, expected, "{uri}");
+    }
+    assert_eq!(service.callers.lock().unwrap()[0].1, SuggestionCaller::User);
 }

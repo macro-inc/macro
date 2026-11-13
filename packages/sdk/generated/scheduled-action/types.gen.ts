@@ -10,7 +10,8 @@ export type ClientOptions = {
 export type AcceptSuggestionRequest = {
     /**
      * The suggestion's `updatedAt` as the caller read it. A background suggestion runs
-     * only if it is unchanged since; otherwise the answer is 409.
+     * only if it is unchanged since and no run of it is still settling;
+     * otherwise the answer is 409.
      */
     updatedAt: string;
 };
@@ -796,6 +797,53 @@ export type ExecutionResult = {
 };
 
 /**
+ * How many of a person's shown suggestions have each status.
+ */
+export type FeedCounts = {
+    /**
+     * Done in the last 24 hours.
+     */
+    done: number;
+    /**
+     * Their last run failed.
+     */
+    failed: number;
+    /**
+     * Open, nothing under way.
+     */
+    open: number;
+    /**
+     * Their run is under way.
+     */
+    running: number;
+};
+
+/**
+ * The person's generations now, for the web app to show and poll.
+ */
+export type GenerationOverview = {
+    /**
+     * When the latest one that ended ended.
+     */
+    lastFinishedAt?: string | null;
+    lastOutcome?: null | SuggestionGenerationStatus;
+    /**
+     * When the person may next ask for fresh suggestions, while they may
+     * not; absent when they may (or must wait only for the running one).
+     */
+    regenerateAvailableAt?: string | null;
+    /**
+     * When the running one started.
+     */
+    startedAt?: string | null;
+    /**
+     * Whether one is running.
+     */
+    state: GenerationState;
+    trigger?: null | GenerationTrigger;
+};
+
+/**
  * What starting a generation did.
  */
 export type GenerationStarted = {
@@ -806,9 +854,21 @@ export type GenerationStarted = {
 };
 
 /**
+ * Whether one of the person's generations is running.
+ */
+export type GenerationState = 'idle' | 'running';
+
+/**
  * Where a person's suggestions are in being generated.
  */
 export type GenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
+
+/**
+ * What starts a generation: a person finishing onboarding, their night, or
+ * the person asking for fresh suggestions. Shared by everything a
+ * generation's sessions write.
+ */
+export type GenerationTrigger = 'onboarding' | 'nightly' | 'manual';
 
 /**
  * Which GitHub deliveries match.
@@ -964,6 +1024,31 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * Fresh suggestions weren't started: the person asked within the hour.
+ */
+export type RegenerationCooldown = {
+    /**
+     * When they may ask again.
+     */
+    availableAt: string;
+};
+
+/**
+ * Why fresh suggestions weren't started.
+ */
+export type RegenerationRefusal = 'running';
+
+/**
+ * Fresh suggestions weren't started: a generation is running.
+ */
+export type RegenerationRunning = {
+    /**
+     * Why.
+     */
+    reason: RegenerationRefusal;
 };
 
 /**
@@ -1374,11 +1459,6 @@ export type RunInfo = {
 export type RunMode = 'composer' | 'background';
 
 /**
- * How a run is going, as its session says.
- */
-export type RunProgress = 'running' | 'needs_approval' | 'needs_input' | 'finished' | 'failed' | 'unknown';
-
-/**
  * What started a run, for its page.
  */
 export type RunStart = {
@@ -1408,6 +1488,11 @@ export type RunStart = {
     by: string;
     kind: 'manual';
 };
+
+/**
+ * A run's state without its data: how it is stored and served.
+ */
+export type RunStateName = 'starting' | 'running' | 'waiting' | 'stopping' | 'cancelling' | 'finished' | 'failed' | 'cancelled';
 
 /**
  * Whether a routine's runs are listed in Home and the Agents list. Routines
@@ -1710,9 +1795,15 @@ export type Suggestion = SuggestionKind & {
      */
     importance: number;
     /**
+     * Proposed since the person last opened their feed. Only the feed sets
+     * it; false everywhere else.
+     */
+    isNew: boolean;
+    /**
      * What acting on it produced.
      */
     produced: Array<Target>;
+    result?: null | Target;
     run?: null | SuggestionRun;
     /**
      * Where it is for the person.
@@ -1726,6 +1817,10 @@ export type Suggestion = SuggestionKind & {
      * Why it was resolved; only on resolved suggestions.
      */
     stateReason?: string | null;
+    /**
+     * What the card shows: whether it is open, being run, failed or done.
+     */
+    status: SuggestionStatus;
     /**
      * Why, in a line or two.
      */
@@ -1741,7 +1836,8 @@ export type Suggestion = SuggestionKind & {
 };
 
 /**
- * The suggestion changed since the caller read it.
+ * The suggestion changed since the caller read it, or can't run until its
+ * last run settles.
  */
 export type SuggestionChanged = {
     /**
@@ -1755,16 +1851,33 @@ export type SuggestionChanged = {
 };
 
 /**
+ * A reply suggestion's draft.
+ */
+export type SuggestionDraft = Target & {
+    /**
+     * The start of its plain text, as it was when attached.
+     */
+    preview?: string | null;
+};
+
+/**
  * A person's feed: their open suggestions, best first, and the ones they
- * finished in the last day, newest first.
+ * finished in the last day, newest first. Both lists are in the order to
+ * show them.
  */
 export type SuggestionFeed = {
     /**
-     * Suggestions done in the last 24 hours, with what they produced.
+     * How many suggestions the whole feed holds of each status, whatever the
+     * `limit`.
      */
-    done: Array<Suggestion>;
+    counts: FeedCounts;
     /**
-     * The open suggestions.
+     * Suggestions done in the last 24 hours, with what they produced; left
+     * out when the feed was read with a `limit`.
+     */
+    done?: Array<Suggestion> | null;
+    /**
+     * The open suggestions, at most `limit` of them.
      */
     suggestions: Array<Suggestion>;
 };
@@ -1773,6 +1886,11 @@ export type SuggestionFeed = {
  * Who suggests a routine.
  */
 export type SuggestionFrom = 'for_you' | 'macro';
+
+/**
+ * Where a generation is.
+ */
+export type SuggestionGenerationStatus = 'generating' | 'ready' | 'partial' | 'failed' | 'cancelled' | 'interrupted';
 
 /**
  * What kind of suggestion it is, with that kind's data. A kind never changes.
@@ -1799,8 +1917,17 @@ export type SuggestionKind = {
      * What to do about the items.
      */
     action: EntityAction;
-    draft?: null | Target;
+    draft?: null | SuggestionDraft;
+    /**
+     * A reply suggestion's: that message's sender, by name.
+     */
+    from?: string | null;
     kind: 'entity';
+    /**
+     * A reply suggestion's: when the message the person hasn't answered
+     * came, as read from its item when the suggestion was last written.
+     */
+    waitingSince?: string | null;
 } | {
     kind: 'routine';
     /**
@@ -1826,24 +1953,32 @@ export type SuggestionReview = {
  */
 export type SuggestionRun = {
     /**
-     * How it is going, read from the session.
-     */
-    progress: RunProgress;
-    /**
-     * The agent session: open it to see the result or answer what it
-     * waits for.
+     * The agent session: open it to see the result.
      */
     sessionId: string;
     /**
      * When it started.
      */
     startedAt: string;
+    /**
+     * Where it is, as stored: reading it never asks the session.
+     */
+    state: RunStateName;
+    /**
+     * When it entered `state`.
+     */
+    stateChangedAt: string;
 };
 
 /**
  * Where a suggestion is for the person.
  */
 export type SuggestionState = 'proposed' | 'accepted' | 'done' | 'dismissed' | 'resolved' | 'retired';
+
+/**
+ * What a suggestion's card shows, from its state and its latest run.
+ */
+export type SuggestionStatus = 'open' | 'running' | 'failed' | 'done' | 'closed';
 
 /**
  * What became of a session's write.
@@ -2820,6 +2955,11 @@ export type ListSuggestionsData = {
          * the reader's night.
          */
         timezone?: string;
+        /**
+         * Most open suggestions to return, best first; all when unset. With a
+         * limit the feed leaves out `done`; `counts` always counts every one.
+         */
+        limit?: number;
     };
     url: '/suggestions';
 };
@@ -2841,7 +2981,7 @@ export type ListSuggestionsError = ListSuggestionsErrors[keyof ListSuggestionsEr
 
 export type ListSuggestionsResponses = {
     /**
-     * The caller's open suggestions they can open every item of, best first
+     * The caller's open suggestions, best first, and their done ones, latest first: only those they can open every item of
      */
     200: SuggestionFeed;
 };
@@ -2912,6 +3052,73 @@ export type StartSuggestionGenerationResponses = {
 
 export type StartSuggestionGenerationResponse = StartSuggestionGenerationResponses[keyof StartSuggestionGenerationResponses];
 
+export type GetSuggestionGenerationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/generation';
+};
+
+export type GetSuggestionGenerationErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type GetSuggestionGenerationError = GetSuggestionGenerationErrors[keyof GetSuggestionGenerationErrors];
+
+export type GetSuggestionGenerationResponses = {
+    /**
+     * The caller's generations now: whether one is running (poll while it is), how the last one ended, and when they may next ask for fresh suggestions
+     */
+    200: GenerationOverview;
+};
+
+export type GetSuggestionGenerationResponse = GetSuggestionGenerationResponses[keyof GetSuggestionGenerationResponses];
+
+export type RegenerateSuggestionsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/regenerate';
+};
+
+export type RegenerateSuggestionsErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    /**
+     * One of the caller's generations is running
+     */
+    409: RegenerationRunning;
+    /**
+     * The caller asked within the hour; `Retry-After` says in how many seconds they may ask again
+     */
+    429: RegenerationCooldown;
+    500: string;
+};
+
+export type RegenerateSuggestionsError = RegenerateSuggestionsErrors[keyof RegenerateSuggestionsErrors];
+
+export type RegenerateSuggestionsResponses = {
+    /**
+     * Fresh suggestions started in the background: the caller's whole workspace researched again and their feed brought up to date, with routine suggestions when the week's are due. Poll `GET /suggestions/generation` until it is idle
+     */
+    202: GenerationStarted;
+};
+
+export type RegenerateSuggestionsResponse = RegenerateSuggestionsResponses[keyof RegenerateSuggestionsResponses];
+
 export type ReviewSuggestionsData = {
     body?: never;
     path?: never;
@@ -2970,6 +3177,37 @@ export type RecordSuggestionsSeenResponses = {
 };
 
 export type RecordSuggestionsSeenResponse = RecordSuggestionsSeenResponses[keyof RecordSuggestionsSeenResponses];
+
+export type RecordSuggestionsViewedData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/viewed';
+};
+
+export type RecordSuggestionsViewedErrors = {
+    401: string;
+    /**
+     * A generation session may not record a visit
+     */
+    403: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type RecordSuggestionsViewedError = RecordSuggestionsViewedErrors[keyof RecordSuggestionsViewedErrors];
+
+export type RecordSuggestionsViewedResponses = {
+    /**
+     * Recorded: suggestions proposed until now are no longer new in the feed
+     */
+    204: void;
+};
+
+export type RecordSuggestionsViewedResponse = RecordSuggestionsViewedResponses[keyof RecordSuggestionsViewedResponses];
 
 export type RewriteSuggestionData = {
     body: RewriteSuggestion;
@@ -3032,7 +3270,7 @@ export type AcceptSuggestionErrors = {
      */
     404: string;
     /**
-     * The suggestion changed since the caller read it: the body has it as it is now
+     * The suggestion changed since the caller read it, or a run of it is still settling: the body has it as it is now
      */
     409: SuggestionChanged;
     500: string;
@@ -3121,6 +3359,46 @@ export type AttachSuggestionDraftResponses = {
 };
 
 export type AttachSuggestionDraftResponse = AttachSuggestionDraftResponses[keyof AttachSuggestionDraftResponses];
+
+export type RestoreSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/restore';
+};
+
+export type RestoreSuggestionErrors = {
+    401: string;
+    /**
+     * A generation session may not restore
+     */
+    403: string;
+    /**
+     * No suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    /**
+     * Not dismissed in the last five minutes, or a routine suggestion
+     */
+    409: string;
+    500: string;
+};
+
+export type RestoreSuggestionError = RestoreSuggestionErrors[keyof RestoreSuggestionErrors];
+
+export type RestoreSuggestionResponses = {
+    /**
+     * Open again, as proposed; a run the dismissal stopped stays stopped
+     */
+    204: void;
+};
+
+export type RestoreSuggestionResponse = RestoreSuggestionResponses[keyof RestoreSuggestionResponses];
 
 export type RetireSuggestionData = {
     body: RetireSuggestionRequest;

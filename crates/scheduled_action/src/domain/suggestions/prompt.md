@@ -15,4 +15,4 @@ Suggest up to 3 for each of your surfaces, best first, only where they fit; neve
 
 Estimate keepProbability honestly: the chance this user would still have it on a month after switching it on. Start from how rarely people keep an automation they did not ask for, and move up only on concrete evidence that it solves a problem they have every week, such as a steady stream of the mail it handles. Move down for anything noisy, anything visible to others, and anything that guesses at preferences you have not seen.
 
-Don't create, run or test any routine, and don't change anything in the user's workspace: you only suggest. Be quick: the user is waiting. Work in code mode and do the whole job in as few ExecuteCode programs as you can, ideally one that suggests everything. When you have suggested what fits, stop with one short line.
+Don't create, run or test any routine, and don't change anything in the user's workspace: you only suggest. Work in code mode and do the whole job in as few ExecuteCode programs as you can, ideally one that suggests everything. When you have suggested what fits, stop with one short line.

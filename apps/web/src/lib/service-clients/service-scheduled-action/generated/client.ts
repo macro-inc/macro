@@ -22,6 +22,7 @@ import type {
   EmptyResponse,
   EntityAppearance,
   ExecutionRecordResponse,
+  GenerationOverview,
   GenerationStarted,
   InProgressExecution,
   ListRoutineSuggestionsParams,
@@ -29,6 +30,9 @@ import type {
   ListSuggestionsParams,
   NewSuggestion,
   RecordSuggestionsSeenParams,
+  RegenerateSuggestionsParams,
+  RegenerationCooldown,
+  RegenerationRunning,
   RetireSuggestion,
   RetireSuggestionRequest,
   RewriteSuggestion,
@@ -2259,6 +2263,160 @@ export const startSuggestionGeneration = async (
 };
 
 /**
+ * @summary The caller's suggestion generations now.
+ */
+export type getSuggestionGenerationResponse200 = {
+  data: GenerationOverview;
+  status: 200;
+};
+
+export type getSuggestionGenerationResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getSuggestionGenerationResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getSuggestionGenerationResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getSuggestionGenerationResponseSuccess =
+  getSuggestionGenerationResponse200 & {
+    headers: Headers;
+  };
+export type getSuggestionGenerationResponseError = (
+  | getSuggestionGenerationResponse401
+  | getSuggestionGenerationResponse404
+  | getSuggestionGenerationResponse500
+) & {
+  headers: Headers;
+};
+
+export type getSuggestionGenerationResponse =
+  | getSuggestionGenerationResponseSuccess
+  | getSuggestionGenerationResponseError;
+
+export const getGetSuggestionGenerationUrl = () => {
+  return `/suggestions/generation`;
+};
+
+export const getSuggestionGeneration = async (
+  options?: RequestInit
+): Promise<getSuggestionGenerationResponse> => {
+  const res = await fetch(getGetSuggestionGenerationUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSuggestionGenerationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSuggestionGenerationResponse;
+};
+
+/**
+ * @summary Start fresh suggestions for the caller: at most once an hour, and not
+while one of their generations runs.
+ */
+export type regenerateSuggestionsResponse202 = {
+  data: GenerationStarted;
+  status: 202;
+};
+
+export type regenerateSuggestionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type regenerateSuggestionsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type regenerateSuggestionsResponse409 = {
+  data: RegenerationRunning;
+  status: 409;
+};
+
+export type regenerateSuggestionsResponse429 = {
+  data: RegenerationCooldown;
+  status: 429;
+};
+
+export type regenerateSuggestionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type regenerateSuggestionsResponseSuccess =
+  regenerateSuggestionsResponse202 & {
+    headers: Headers;
+  };
+export type regenerateSuggestionsResponseError = (
+  | regenerateSuggestionsResponse401
+  | regenerateSuggestionsResponse404
+  | regenerateSuggestionsResponse409
+  | regenerateSuggestionsResponse429
+  | regenerateSuggestionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type regenerateSuggestionsResponse =
+  | regenerateSuggestionsResponseSuccess
+  | regenerateSuggestionsResponseError;
+
+export const getRegenerateSuggestionsUrl = (
+  params: RegenerateSuggestionsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions/regenerate?${stringifiedParams}`
+    : `/suggestions/regenerate`;
+};
+
+export const regenerateSuggestions = async (
+  params: RegenerateSuggestionsParams,
+  options?: RequestInit
+): Promise<regenerateSuggestionsResponse> => {
+  const res = await fetch(getRegenerateSuggestionsUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: regenerateSuggestionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as regenerateSuggestionsResponse;
+};
+
+/**
  * @summary What a suggestions generation session reads before managing suggestions.
  */
 export type reviewSuggestionsResponse200 = {
@@ -2394,6 +2552,76 @@ export const recordSuggestionsSeen = async (
     status: res.status,
     headers: res.headers,
   } as recordSuggestionsSeenResponse;
+};
+
+/**
+ * @summary The caller opened their feed: what it showed as new no longer is. The app
+sends it once the feed is on screen.
+ */
+export type recordSuggestionsViewedResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type recordSuggestionsViewedResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recordSuggestionsViewedResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type recordSuggestionsViewedResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type recordSuggestionsViewedResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type recordSuggestionsViewedResponseSuccess =
+  recordSuggestionsViewedResponse204 & {
+    headers: Headers;
+  };
+export type recordSuggestionsViewedResponseError = (
+  | recordSuggestionsViewedResponse401
+  | recordSuggestionsViewedResponse403
+  | recordSuggestionsViewedResponse404
+  | recordSuggestionsViewedResponse500
+) & {
+  headers: Headers;
+};
+
+export type recordSuggestionsViewedResponse =
+  | recordSuggestionsViewedResponseSuccess
+  | recordSuggestionsViewedResponseError;
+
+export const getRecordSuggestionsViewedUrl = () => {
+  return `/suggestions/viewed`;
+};
+
+export const recordSuggestionsViewed = async (
+  options?: RequestInit
+): Promise<recordSuggestionsViewedResponse> => {
+  const res = await fetch(getRecordSuggestionsViewedUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recordSuggestionsViewedResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recordSuggestionsViewedResponse;
 };
 
 /**
@@ -2702,6 +2930,80 @@ export const attachSuggestionDraft = async (
     status: res.status,
     headers: res.headers,
   } as attachSuggestionDraftResponse;
+};
+
+/**
+ * @summary The caller, or their own agent, takes back dismissing a suggestion, within
+five minutes of it.
+ */
+export type restoreSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type restoreSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type restoreSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type restoreSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type restoreSuggestionResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type restoreSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type restoreSuggestionResponseSuccess = restoreSuggestionResponse204 & {
+  headers: Headers;
+};
+export type restoreSuggestionResponseError = (
+  | restoreSuggestionResponse401
+  | restoreSuggestionResponse403
+  | restoreSuggestionResponse404
+  | restoreSuggestionResponse409
+  | restoreSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type restoreSuggestionResponse =
+  | restoreSuggestionResponseSuccess
+  | restoreSuggestionResponseError;
+
+export const getRestoreSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/restore`;
+};
+
+export const restoreSuggestion = async (
+  id: string,
+  options?: RequestInit
+): Promise<restoreSuggestionResponse> => {
+  const res = await fetch(getRestoreSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: restoreSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as restoreSuggestionResponse;
 };
 
 /**

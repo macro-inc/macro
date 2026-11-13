@@ -282,7 +282,7 @@ pub struct RetireSuggestion {
 /// What a generation's routines sessions did, for its log events.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoutineGenerationReport {
-    /// `onboarding` or `nightly`.
+    /// `onboarding`, `nightly` or `manual`.
     pub trigger: &'static str,
     /// `ready` (every session kept one), `partial`, `failed` (none kept
     /// any) or `cancelled`.
