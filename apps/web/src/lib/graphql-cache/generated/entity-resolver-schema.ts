@@ -9,6 +9,20 @@ export const entityResolverSchema = {
         ['input', 'sharedTeamId'],
       ],
     },
+    deleteChannelMessage: {
+      targets: ['GraphqlChannelMessage'],
+      argumentPaths: [
+        ['input', 'channelId'],
+        ['input', 'id'],
+      ],
+    },
+    editChannelMessage: {
+      targets: ['GraphqlChannelMessage'],
+      argumentPaths: [
+        ['input', 'channelId'],
+        ['input', 'id'],
+      ],
+    },
     markEmailThreadSeen: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -17,6 +31,13 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
     },
+    reactToChannelMessage: {
+      targets: ['GraphqlChannelMessage'],
+      argumentPaths: [
+        ['input', 'channelId'],
+        ['input', 'id'],
+      ],
+    },
     recordChannelActivity: {
       targets: ['GraphqlChannelActivity'],
       argumentPaths: [['input', 'channelId']],
@@ -24,6 +45,14 @@ export const entityResolverSchema = {
     resolveEmailMessageOperation: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'messageId']],
+    },
+    sendChannelMessage: {
+      targets: ['GraphqlChannelMessage'],
+      argumentPaths: [
+        ['input', 'channelId'],
+        ['input', 'id'],
+        ['input', 'threadId'],
+      ],
     },
     setEmailThreadArchived: {
       targets: ['GraphqlSoupEmailThread'],

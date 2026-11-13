@@ -59,6 +59,10 @@ const policies = {
     'authoritative: form, database, and preview caches refresh after success',
   TrashForm: 'authoritative: form list membership refreshes after success',
   RecordChannelActivity: 'authoritative: server event identity and timestamps',
+  SendChannelMessage: 'custom: client message identity and timeline position',
+  EditChannelMessage: 'custom: message body patch',
+  DeleteChannelMessage: 'custom: message tombstone',
+  ReactToChannelMessage: 'custom: embedded reaction list',
   UpdateNotificationsForEntity:
     'authoritative: exact affected notification IDs required for undo',
   UndoWorkFeedItemsDone:

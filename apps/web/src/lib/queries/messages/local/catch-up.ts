@@ -167,7 +167,7 @@ function forgetPushed(state: ChannelSyncState, through: string): void {
 }
 
 /** Re-reads the channel's loaded pages and threads, now from the device. */
-function refreshChannelViews(channelId: string): void {
+export function refreshChannelViews(channelId: string): void {
   const parent = { type: 'channel' as const, id: channelId };
   queryClient.invalidateQueries({
     queryKey: [...messageKeys.messages._def, parent],

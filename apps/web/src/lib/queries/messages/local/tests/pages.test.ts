@@ -9,6 +9,7 @@ import {
   type ChannelServerPage,
   type FetchedChannelPage,
   loadChannelPage,
+  pageHasPendingWrites,
   resetPendingChannelPages,
   serverPageCoverage,
 } from '../pages';
@@ -351,6 +352,32 @@ describe('loadChannelPage', () => {
       throw new Error('expected a server page');
     }
     await first.stored;
+  });
+});
+
+describe('pageHasPendingWrites', () => {
+  const request = { channelId: CHANNEL_ID, limit: 50 };
+  const key = keyOf(graphqlMessage(1));
+
+  it('is true only for a held page that queued writes shape', async () => {
+    expect(
+      await pageHasPendingWrites(
+        fakeHost([devicePage([key], { optimistic: true })]),
+        request
+      )
+    ).toBe(true);
+    expect(
+      await pageHasPendingWrites(fakeHost([devicePage([key])]), request)
+    ).toBe(false);
+    expect(
+      await pageHasPendingWrites(
+        fakeHost([devicePage([key], { covered: false, optimistic: true })]),
+        request
+      )
+    ).toBe(false);
+    expect(
+      await pageHasPendingWrites(fakeHost([{ kind: 'unsupported' }]), request)
+    ).toBe(false);
   });
 });
 

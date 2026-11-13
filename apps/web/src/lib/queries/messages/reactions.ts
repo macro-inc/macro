@@ -10,6 +10,12 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
 import { MessageNonceKeys } from './keys';
+import { channelCacheHost } from './local/flag';
+import {
+  channelWriteNetworkMode,
+  reactToChannelMessage,
+  whenOnline,
+} from './local/writes';
 import {
   type MessageTarget,
   patchTargetMessage,
@@ -216,7 +222,24 @@ export function useAddReactionMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
+      const host =
+        vars.parent.type === 'channel' ? channelCacheHost() : undefined;
+      if (host) {
+        return reactToChannelMessage(host, {
+          channelId: vars.parent.id,
+          id: vars.messageId,
+          emoji: vars.emoji,
+          add: true,
+          reactions:
+            vars.currentReactions &&
+            addUserReaction(vars.currentReactions, vars.emoji, vars.userId)
+              .reactions,
+          nonce: addReactionNonce.use(vars),
+        });
+      }
+      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,
@@ -286,7 +309,24 @@ export function useRemoveReactionMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
+      const host =
+        vars.parent.type === 'channel' ? channelCacheHost() : undefined;
+      if (host) {
+        return reactToChannelMessage(host, {
+          channelId: vars.parent.id,
+          id: vars.messageId,
+          emoji: vars.emoji,
+          add: false,
+          reactions:
+            vars.currentReactions &&
+            removeUserReaction(vars.currentReactions, vars.emoji, vars.userId)
+              .reactions,
+          nonce: removeReactionNonce.use(vars),
+        });
+      }
+      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,

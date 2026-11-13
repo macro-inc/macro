@@ -40,6 +40,7 @@ export function ParentMessage(props: ParentMessageProps) {
                   <Message.AgentBadge />
                   <Message.Timestamp class="shrink-0" format="dateAndTime" />
                   <Message.EditedIndicator class="shrink-0" />
+                  <Message.UnsentIndicator class="shrink-0" />
                 </div>
                 <Message.FromPill />
               </Message.Slot>

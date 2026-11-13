@@ -5921,6 +5921,74 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
+    it.each([0, 9])(
+      'retries a busy answer without counting it after %i server failures',
+      async (failures) => {
+        vi.useFakeTimers();
+        try {
+          if (failures > 0) {
+            host.seedQueued(
+              {
+                uuid: crypto.randomUUID(),
+                query: stringifyDocument(MUTATION),
+                data: optimistic,
+              },
+              failures
+            );
+          }
+          const busy = () =>
+            new Response(
+              JSON.stringify({
+                data: null,
+                errors: [
+                  {
+                    message: 'busy',
+                    extensions: { code: 'SERVICE_UNAVAILABLE' },
+                  },
+                ],
+              }),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            );
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          const defer = vi.spyOn(host, 'deferOptimisticWrite');
+          const client = createClient({
+            url: 'http://test/graphql',
+            fetch: vi.fn(async () => busy()),
+            exchanges: [
+              normalizedCacheExchange(host, {
+                shouldRetryMutation: () => true,
+              }),
+              fetchExchange,
+            ],
+          });
+          const pending =
+            failures === 0
+              ? executeOptimisticMutation(
+                  client,
+                  MUTATION,
+                  { input: {} },
+                  optimistic,
+                  { uuid: crypto.randomUUID() }
+                ).toPromise()
+              : undefined;
+          await vi.advanceTimersByTimeAsync(10);
+          await pending;
+
+          expect(defer).toHaveBeenCalledExactlyOnceWith(
+            '1',
+            expect.any(Object),
+            expect.any(Number),
+            expect.any(String),
+            false
+          );
+          expect(rollback).not.toHaveBeenCalled();
+        } finally {
+          vi.clearAllTimers();
+          vi.useRealTimers();
+        }
+      }
+    );
+
     it.each([false, true])(
       'preserves success and explicit GraphQL rejection with fetchExchange (rejected=%s)',
       async (rejected) => {

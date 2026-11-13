@@ -1435,7 +1435,8 @@ async fn run_server() -> anyhow::Result<()> {
     let graphql_channel_context = graphql_channel::ChannelGraphqlContext::new(
         message_service.clone(),
         entity_access_service.clone(),
-    );
+    )
+    .with_commands(message_service.clone(), entity_access_service.clone());
     let messages_state = messages::inbound::axum_router::MessagesRouterState {
         service: message_service.clone(),
         access: entity_access_service.clone(),

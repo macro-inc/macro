@@ -7,12 +7,17 @@ import type {
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { onlineManager } from '@tanstack/solid-query';
-import { catchUpAndRefresh, catchUpChannel } from './catch-up';
+import {
+  catchUpAndRefresh,
+  catchUpChannel,
+  refreshChannelViews,
+} from './catch-up';
 import { channelCacheAnswered, channelCacheHost } from './flag';
 import {
   type ChannelPageRequest,
   type LoadedChannelPage,
   loadChannelPage,
+  pageHasPendingWrites,
 } from './pages';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
@@ -65,20 +70,26 @@ function reportFallback(error: unknown, signal?: AbortSignal): void {
 }
 
 /**
- * Once a server page is on the device: when the device already held the
- * channel at an older sequence, replays what changed since so the other
- * stretches it holds are current too.
+ * Once a server page is on the device: shows the person's writes still
+ * waiting in the device queue, which the server's page cannot carry (after a
+ * reload, the server usually answers first), and, when the device already
+ * held the channel at an older sequence, replays what changed since so the
+ * other stretches it holds are current too.
  */
-async function refreshIfBehind(
+async function settleServerPage(
   host: CacheHost,
-  channelId: string,
+  request: ChannelPageRequest,
   loaded: Extract<LoadedChannelPage, { source: 'server' }>,
   anchored: boolean
 ): Promise<void> {
   const storedSeq = await loaded.stored;
-  if (anchored || storedSeq === null) return;
+  if (storedSeq === null) return;
+  if (await pageHasPendingWrites(host, request)) {
+    refreshChannelViews(request.channelId);
+  }
+  if (anchored) return;
   if (BigInt(loaded.serverSeq) > BigInt(storedSeq)) {
-    await catchUpAndRefresh(host, channelId);
+    await catchUpAndRefresh(host, request.channelId);
   }
 }
 
@@ -124,7 +135,7 @@ export async function loadLocalChannelTimelinePage(
     }
     if (loaded.source === 'server') {
       fireAndForget(
-        refreshIfBehind(host, read.channelId, loaded, anchored),
+        settleServerPage(host, request, loaded, anchored),
         SYNC_SURFACE
       );
     } else if (!anchored && (!read.revalidate || !caughtUp)) {
