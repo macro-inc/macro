@@ -43,15 +43,20 @@ code, not in its prompt. The harness also signs the scope into the credential
   credential signs (`current_scope`)); capture before spawning,
   scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
-  on routine writes. `refuse_sharing` is the body check a path match can't
-  make: every edit route whose body can change sharing calls it and answers
-  `SharingRefused` with 403 (documents, call records, initiatives with their
-  members, projects, chats, DSS threads and saved views, CRM pipeline edits).
-  A new sharing field or edit route joins that check.
+  on routine writes. `may_share` says whether the request may change who can
+  see an item. `entity_access_db_utils::scoped_grants` checks it wherever
+  access grants are written, so creation, filing in a folder, assignment and
+  imports need no route check. `refuse_sharing` is the body check for sharing
+  that isn't a grant (link sharing) or that the grant writer can't see:
+  documents, call records, initiatives, projects, chats, DSS threads and saved
+  views, CRM pipeline edits. A new such field or edit route joins that check.
+  Both record the refusal for `propagate`.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
   (`propagate` checks the signed scope, then scopes the validated
-  correlation, its verb and the signed routine). `enforce_signed_scope` is the
+  correlation, its verb and the signed routine, and answers a request that
+  recorded a sharing refusal with 403 `SharingRefused`, whatever error the
+  handler mapped it to). `enforce_signed_scope` is the
   check alone, for a service with no database to look a correlation up in.
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 

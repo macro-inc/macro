@@ -7389,6 +7389,7 @@ dependencies = [
  "email_utils",
  "email_validator",
  "entity_access",
+ "entity_access_db_utils",
  "entity_access_management",
  "entity_mutation",
  "filter_ast",
@@ -7919,6 +7920,7 @@ dependencies = [
 name = "entity_access_db_utils"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "macro_db_migrator",
  "macro_user_id",
@@ -7936,6 +7938,7 @@ dependencies = [
 name = "entity_access_management"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "entity_access_db_utils",
  "macro_db_migrator",
@@ -13756,6 +13759,7 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "macro_user_id",
  "model-entity",
  "model_file_type",
@@ -13766,6 +13770,7 @@ dependencies = [
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
+ "tokio",
  "utoipa",
  "uuid",
  "workspace-hack",

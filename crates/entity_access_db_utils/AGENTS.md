@@ -19,6 +19,14 @@ top of it.
 - `src/project_grants.rs`: the grants an entity inherits from the folders it
   is filed in, written when it enters or leaves one; databases and forms call
   it in the same transaction as their `project_id` write.
+  `refuse_filing`/`refuse_filing_in` check, in the transaction that writes
+  the folder id, the grants a later inheritance step would write;
+  `refuse_unregistered_filing` checks a move of a document without a UUID,
+  which reads its folder chain's grants and owners instead of holding rows.
+- `src/scoped_grants.rs`: refuses, under an agent session scope that may not
+  share, a grant that adds access (a grantee without an equal or stronger row
+  on the entity); the helpers that revoke a direct user, team or channel grant
+  refuse to remove one.
 
 ## Scope
 
@@ -29,12 +37,12 @@ top of it.
 
 ## Boundaries
 
-- Depends on: `macro_user_id`, `model-entity`, `model_owner`,
-  `models_entity_access_management`, `models_permissions`.
+- Depends on: `agent_correlation`, `macro_user_id`, `model-entity`,
+  `model_owner`, `models_entity_access_management`, `models_permissions`.
 - Used by: `crates/entity_access_management`, `crates/entity_registry/entity_registry_db_utils`,
   and most domain crates that grant access as part of a write
   (`channels`, `projects`, `teams`, `crm`, `call`, `chat`, `documents`,
-  `databases`, `forms`, `macro_db_client`, `crates/scheduled_action`).
+  `databases`, `email`, `forms`, `macro_db_client`, `crates/scheduled_action`).
 
 ## Recipes
 
@@ -49,8 +57,17 @@ top of it.
 
 ## Gotchas
 
-- Helpers never commit; every function takes `&mut Transaction<'_, Postgres>`
-  and the caller commits once alongside its own row writes.
+- Helpers never commit; each takes the caller's `&mut Transaction<'_, Postgres>`
+  (or `&mut PgConnection` when it needs no guard) and the caller commits once
+  alongside its own row writes.
+- Every helper that writes or revokes a grant calls `scoped_grants`; a refusal
+  is `sqlx::Error::InvalidArgument(SharingRefused::MESSAGE)` and the caller's
+  transaction writes nothing. A new grant writer or revoker calls it too.
+  Deleting an entity's rows, membership cleanup (`source_grants`) and the
+  inherited rows a folder move removes are not checked, nor is a new row's
+  owner grant unless the owner is a team. A write that files an entity in a
+  folder and inherits the folder's grants after commit calls
+  `project_grants::refuse_filing` before it commits.
 - Folder direct-grant changes hold `team_share::acquire_guard` before entity/row
   locks, matching project topology propagation. Legacy non-UUID children inherit
   through their parent dynamically and do not get UUID grant rows.

@@ -932,3 +932,64 @@ async fn move_project_carries_inherited_access_to_its_databases_and_forms(pool: 
     assert_eq!(inherited(database).await, project_d_grants);
     assert_eq!(inherited(form).await, project_d_grants);
 }
+
+/// A session that may not share can't move a folder under one shared with
+/// people who don't see it yet, and the refused move writes nothing; moving
+/// it back where its grants already come from is allowed.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("move_project_test_data"))
+)]
+async fn a_scoped_session_cant_move_a_folder_under_a_shared_one(pool: Pool<Postgres>) {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let repo = PgRepository::new(pool.clone());
+    let project_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let project_b = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+    let project_d = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
+    let rows = || async {
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE granted_from_project_id IS NOT NULL"#
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let before = rows().await;
+    let no_send = || Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+
+    let refused = scope_attribution(
+        no_send(),
+        repo.move_project(&project_b, Some(&project_a), Some(&project_d)),
+    )
+    .await;
+    assert!(matches!(refused, Err(sqlx::Error::InvalidArgument(_))));
+    assert_eq!(rows().await, before);
+
+    // The fixture files a database and a form in C without the grants they
+    // inherit from A; give them those, as filing them there would have.
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+        SELECT filed.id, filed.kind, source.source_id, source.source_type, source.access_level, source.entity_id::text
+        FROM (VALUES ('e1111111-1111-1111-1111-111111111111'::uuid, 'database'), ('e3333333-3333-3333-3333-333333333333'::uuid, 'form')) AS filed(id, kind)
+        CROSS JOIN entity_access source
+        WHERE source.entity_id = $1 AND source.granted_from_project_id IS NULL"#,
+        project_a,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let before = rows().await;
+
+    scope_attribution(
+        no_send(),
+        repo.move_project(&project_b, Some(&project_a), Some(&project_a)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(rows().await, before);
+}

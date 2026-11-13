@@ -1,5 +1,8 @@
 //! Explicit async propagation, independent of trace sampling and subscribers.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::AgentVerb;
 use uuid::Uuid;
 
@@ -25,6 +28,8 @@ pub struct Attribution {
 
 tokio::task_local! {
     static ATTRIBUTION: Attribution;
+    /// Set once the request being handled refused a sharing change.
+    static SHARING_REFUSED: Arc<AtomicBool>;
 }
 
 fn attribution() -> Attribution {
@@ -61,15 +66,37 @@ impl SharingRefused {
     pub const MESSAGE: &str = "this session can't change who an item is shared with";
 }
 
-/// Refuses a request whose body changes sharing (`changes_sharing`) when the
-/// current request's scope may not share. A route that edits sharing among
-/// other fields calls this from its handler: the scope's path check can't
-/// see the body.
+/// Whether the current request may change who can see an item: false under
+/// a scope that may not share.
+pub fn may_share() -> bool {
+    current_scope().is_none_or(SessionScope::allows_sharing)
+}
+
+/// Refuses a change to who can see an item (`changes_sharing`) when the
+/// current request's scope may not share, and records the refusal for the
+/// request's boundary (see [`recording_sharing_refusals`]). The writes that
+/// grant access call this wherever they are reached from; a route whose
+/// sharing fields those writes can't see calls it from its handler.
 pub fn refuse_sharing(changes_sharing: bool) -> Result<(), SharingRefused> {
-    match current_scope() {
-        Some(scope) if changes_sharing && !scope.allows_sharing() => Err(SharingRefused),
-        _ => Ok(()),
+    if !changes_sharing || may_share() {
+        return Ok(());
     }
+    // Outside a recording request there is nothing to tell.
+    let _ = SHARING_REFUSED.try_with(|refused| refused.store(true, Ordering::Relaxed));
+    tracing::warn!(
+        scope = current_scope().map(SessionScope::as_str),
+        agent_session_id = ?current_session(),
+        "refused a change to who can see an item"
+    );
+    Err(SharingRefused)
+}
+
+/// Run a request's handling and say whether it refused a sharing change,
+/// whatever error the code between the refusal and the boundary made of it.
+pub async fn recording_sharing_refusals<F: Future>(future: F) -> (F::Output, bool) {
+    let refused = Arc::new(AtomicBool::new(false));
+    let output = SHARING_REFUSED.scope(Arc::clone(&refused), future).await;
+    (output, refused.load(Ordering::Relaxed))
 }
 
 /// Display verb accepted with the current correlation, if any.
@@ -120,9 +147,17 @@ pub async fn scope_attribution<F: Future>(attribution: Attribution, future: F) -
     ATTRIBUTION.scope(attribution, future).await
 }
 
-/// Capture attribution before handing a future to another task.
+/// Capture attribution before handing a future to another task. The task
+/// records its sharing refusals with the request that started it.
 pub fn capture<F: Future>(future: F) -> impl Future<Output = F::Output> {
-    scope_attribution(attribution(), future)
+    let attributed = scope_attribution(attribution(), future);
+    let refusals = SHARING_REFUSED.try_with(Arc::clone).ok();
+    async move {
+        match refusals {
+            Some(refusals) => SHARING_REFUSED.scope(refusals, attributed).await,
+            None => attributed.await,
+        }
+    }
 }
 
 #[cfg(test)]

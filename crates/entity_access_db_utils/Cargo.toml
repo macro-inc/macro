@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 # Core
+agent_correlation = { path = "../agent_correlation" }
 anyhow = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 sqlx = { workspace = true }

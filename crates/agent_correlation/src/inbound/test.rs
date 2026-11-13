@@ -459,3 +459,70 @@ async fn a_service_without_a_database_enforces_the_signed_scope() {
         assert_eq!(response.status(), expected, "{method} {query} {bearer:?}");
     }
 }
+
+/// A refused sharing change is answered 403 on every route, whatever error
+/// the code between the refusal and the route made of it; a request that
+/// refused a change and still succeeded keeps its answer.
+#[tokio::test]
+async fn a_refused_sharing_change_is_answered_as_a_refusal() {
+    use axum::http::StatusCode;
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let app = axum::Router::new()
+        .route(
+            "/share",
+            axum::routing::post(|| async {
+                match crate::context::refuse_sharing(true) {
+                    Ok(()) => StatusCode::OK,
+                    Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                }
+            }),
+        )
+        .route(
+            "/share-if-allowed",
+            axum::routing::post(|| async {
+                let _ = crate::context::refuse_sharing(true);
+                StatusCode::OK
+            }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    let no_send = mint(None, None, None, Some("no_send"));
+    let unscoped = mint(None, None, None, None);
+    for (path, bearer, expected, message) in [
+        (
+            "/share",
+            &no_send,
+            StatusCode::FORBIDDEN,
+            Some(SharingRefused::MESSAGE),
+        ),
+        ("/share", &unscoped, StatusCode::OK, None),
+        ("/share-if-allowed", &no_send, StatusCode::OK, None),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(path)
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{path}");
+        if let Some(message) = message {
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(body["message"], message);
+        }
+    }
+}
