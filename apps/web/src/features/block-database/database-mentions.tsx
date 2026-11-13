@@ -134,10 +134,11 @@ export function DatabaseTextEditor(props: DatabaseTextEditorProps) {
 }
 
 /**
- * A text cell's Markdown: its first paragraph on one line, as a grid shows
- * it. A `fit` is for a property list: `line` lets a cut value end in an
- * ellipsis, and `clamp` and `full` show every paragraph, cut to two lines or
- * in full.
+ * A text cell's Markdown on one line, as a grid shows it. One-line Markdown
+ * keeps only the first line, so a multi-line value shows its lines joined by
+ * spaces, as plain text would. A `fit` is for a property list: `line` lets a
+ * cut value end in an ellipsis, and `clamp` and `full` show every paragraph,
+ * cut to two lines or in full.
  */
 export function DatabaseTextValue(props: {
   value: string;
@@ -152,7 +153,11 @@ export function DatabaseTextValue(props: {
           classList={{ '[&_.markdown-content]:inline': props.fit === 'line' }}
           onPointerDown={stopLinkPointerDown}
         >
-          <StaticMarkdown markdown={props.value} singleLine target="internal" />
+          <StaticMarkdown
+            markdown={props.value.replace(/\s*\n\s*/g, ' ')}
+            singleLine
+            target="internal"
+          />
         </span>
       }
     >

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_draft SET progress = $2\n            WHERE session_id = $1 AND state = 'drafting'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35724a5db464882124e1747fb0deb2e55f664a7bf638c7142283ead7b4289984"
+}
