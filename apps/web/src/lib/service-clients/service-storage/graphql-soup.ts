@@ -544,7 +544,9 @@ function getUncachedRealtimeClient(): Client {
     exchanges: [
       captureTraceParentExchange,
       networkRevalidationExchange(),
-      liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates),
+      liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates, {
+        cached: false,
+      }),
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
       traceParentExchange,
@@ -894,6 +896,8 @@ export function getGraphqlSoupClient(): Client {
               if (!host || cachedCacheHost !== host) return;
               reportCacheError(error, 'operation', operation.kind);
             },
+            onCacheMiss: (operation) =>
+              subscriptionsLifecycle.liveUpdates.missed(operation.key),
             entityResolvers: {
               GraphqlUser: {
                 emailThread: entityFromArgument('GraphqlSoupEmailThread', [
@@ -917,7 +921,8 @@ export function getGraphqlSoupClient(): Client {
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
           }),
-          // After the cache, so cached results still show at once.
+          // After the cache, so cached results still show at once; it reports
+          // misses to the gate so their reads are not held.
           liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),

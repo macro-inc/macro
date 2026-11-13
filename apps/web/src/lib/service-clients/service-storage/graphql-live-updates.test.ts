@@ -10,7 +10,15 @@ import {
   type OperationResult,
 } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { filter, makeSubject, map, onPush, pipe, subscribe } from 'wonka';
+import {
+  filter,
+  makeSubject,
+  map,
+  merge,
+  onPush,
+  pipe,
+  subscribe,
+} from 'wonka';
 import { normalizedCacheExchange } from '../../graphql-cache/exchange/normalized-cache-exchange';
 import { createNoopCacheHost } from '../../graphql-cache/host/noop-host';
 import {
@@ -59,6 +67,7 @@ vi.mock('@macro-inc/observability', () => ({
         end: () => {
           span.ended = true;
         },
+        run: <T>(work: () => T): T => within(name, work),
       };
     },
     captureContext: () => {
@@ -230,26 +239,115 @@ describe('createLiveUpdatesGate', () => {
   it('releases held reads on dispose without going live', async () => {
     const { gate, onLive } = await pingedGate();
     const resume = vi.fn();
+    const settle = vi.fn();
     gate.hold(1, resume);
+    gate.sentEarly(2, settle);
     gate.dispose();
     gate.pong(true);
     expect(resume).toHaveBeenCalledExactlyOnceWith('disposed');
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
     expect(onLive).not.toHaveBeenCalled();
+  });
+
+  it('sends the held reads of a cache miss at once and reads them again once live', async () => {
+    const { gate, onLive } = await pingedGate();
+    const missed = vi.fn();
+    const waiting = vi.fn();
+    gate.hold(1, missed);
+    gate.hold(2, waiting);
+    gate.missed(1);
+    expect(missed).toHaveBeenCalledExactlyOnceWith('cache_miss');
+    expect(waiting).not.toHaveBeenCalled();
+
+    const settle = vi.fn();
+    gate.sentEarly(1, settle);
+    gate.pong(true);
+    expect(settle).toHaveBeenCalledExactlyOnceWith(true);
+    expect(waiting).toHaveBeenCalledExactlyOnceWith('live');
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(false, new Set([1, 2]));
+  });
+
+  it('does not read an early read again when a held read of its query went out live', async () => {
+    const { gate, onLive } = await pingedGate();
+    const settle = vi.fn();
+    gate.sentEarly(1, settle);
+    gate.hold(1, vi.fn());
+    gate.pong(true);
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(false, new Set([1]));
+  });
+
+  it('runs the bound only while a read waits', async () => {
+    const { gate, onLive } = await pingedGate();
+    gate.hold(1, vi.fn());
+    gate.missed(1);
+    const settle = vi.fn();
+    gate.sentEarly(1, settle);
+    await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS);
+    expect(gate.holding()).toBe(true);
+    expect(settle).not.toHaveBeenCalled();
+
+    gate.pong(true);
+    expect(settle).toHaveBeenCalledExactlyOnceWith(true);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(false, new Set([1]));
+  });
+
+  it('leaves early reads to the stale live once the bound ends', async () => {
+    const onLive = vi.fn();
+    const gate = createLiveUpdatesGate({ onLive });
+    const settle = vi.fn();
+    gate.sentEarly(1, settle);
+    gate.hold(2, vi.fn());
+    await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS);
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
+    // A miss reported after the bound changes nothing.
+    gate.missed(2);
+
+    gate.connected(() => true);
+    await vi.advanceTimersByTimeAsync(0);
+    gate.pong(true);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(true, new Set());
+  });
+
+  it('leaves early reads to the stale live when the socket cannot be pinged', async () => {
+    const onLive = vi.fn();
+    const gate = createLiveUpdatesGate({ onLive });
+    const settle = vi.fn();
+    gate.sentEarly(1, settle);
+    gate.connected(() => false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(true, new Set([1]));
   });
 });
 
-function gatedClient(gate: LiveUpdatesGate) {
+function gatedClient(
+  gate: LiveUpdatesGate,
+  options: { cached?: boolean; network?: Exchange } = {}
+) {
   const forwarded: Operation[] = [];
-  const network: Exchange = () => (operations$) =>
+  const answer: Exchange = () => (operations$) =>
     pipe(
       operations$,
-      onPush((operation) => forwarded.push(operation)),
       filter((operation) => operation.kind !== 'teardown'),
       map((operation) => makeResult(operation, { data: {} }))
     );
+  const record: Exchange =
+    ({ forward }) =>
+    (operations$) =>
+      forward(
+        pipe(
+          operations$,
+          onPush((operation) => forwarded.push(operation))
+        )
+      );
   const client = createClient({
     url: 'https://dss.test/graphql',
-    exchanges: [liveUpdatesGateExchange(gate), network],
+    exchanges: [
+      liveUpdatesGateExchange(gate, { cached: options.cached }),
+      record,
+      options.network ?? answer,
+    ],
   });
   const sent = () =>
     forwarded
@@ -530,5 +628,177 @@ describe('liveUpdatesGateExchange', () => {
     const ungated = await run(false);
     expect(ungated.stale).toEqual([false, false]);
     expect(await run(true)).toEqual(ungated);
+  });
+
+  it('sends a cache miss at once and again once live, and a hit once', async () => {
+    const { gate } = await pingedGate();
+    const host = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      readQuery: async ({ operationName }: { operationName?: string }) =>
+        operationName === 'Other'
+          ? { kind: 'hit' as const, data: { other: [{ id: 'cached' }] } }
+          : { kind: 'miss' as const },
+    };
+    const reads: (string | undefined)[] = [];
+    const network: Exchange = () => (operations$) =>
+      pipe(
+        operations$,
+        filter((operation) => operation.kind === 'query'),
+        onPush((operation) => reads.push(getOperationName(operation.query))),
+        map((operation) =>
+          makeResult(operation, {
+            data:
+              getOperationName(operation.query) === 'Feed'
+                ? { feed: [{ id: 'server' }] }
+                : { other: [{ id: 'server' }] },
+          })
+        )
+      );
+    const client = createClient({
+      url: 'https://dss.test/graphql',
+      exchanges: [
+        normalizedCacheExchange(host, {
+          onCacheMiss: (operation) => gate.missed(operation.key),
+        }),
+        liveUpdatesGateExchange(gate),
+        network,
+      ],
+    });
+    const observe = (query: typeof FEED) => {
+      const results: OperationResult[] = [];
+      pipe(
+        client.executeQuery(createRequest(query, {}), {
+          requestPolicy: 'cache-and-network',
+          ...FOLLOWS_LIVE_UPDATES,
+        }),
+        subscribe((result) => results.push(result))
+      );
+      return results;
+    };
+    const feed = observe(FEED);
+    const other = observe(OTHER);
+    await vi.advanceTimersByTimeAsync(0);
+    // The miss is answered from the server before the subscriptions are live;
+    // the hit shows its cached result and waits.
+    expect(reads).toEqual(['Feed']);
+    expect(feed.at(-1)?.data).toEqual({ feed: [{ id: 'server' }] });
+    expect(other.map(({ data }) => data)).toEqual([
+      { other: [{ id: 'cached' }] },
+    ]);
+
+    gate.pong(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reads).toEqual(['Feed', 'Other', 'Feed']);
+    expect(other.at(-1)?.data).toEqual({ other: [{ id: 'server' }] });
+    expect(telemetry.spans).toMatchObject([
+      {
+        name: 'graphql_soup.live_updates.wait',
+        attributes: {
+          'graphql.operation.name': 'Feed',
+          'live_updates.outcome': 'cache_miss',
+        },
+        ended: true,
+      },
+      {
+        name: 'graphql_soup.live_updates.wait',
+        attributes: {
+          'graphql.operation.name': 'Other',
+          'live_updates.outcome': 'live',
+        },
+        ended: true,
+      },
+      {
+        name: 'graphql_soup.live_updates.reread',
+        attributes: {
+          'graphql.operation.name': 'Feed',
+          'live_updates.answer_pending': false,
+        },
+        ended: true,
+      },
+    ]);
+  });
+
+  it('sends reads at once without a cache and reads them again once live', async () => {
+    const { gate } = await pingedGate();
+    const { client, forwarded, sent } = gatedClient(gate, { cached: false });
+    read(client, FEED, FOLLOWS_LIVE_UPDATES);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent()).toEqual(['Feed']);
+
+    gate.pong(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent()).toEqual(['Feed', 'Feed']);
+    const reread: Operation | undefined = forwarded.at(-1);
+    expect(reread?.context.requestPolicy).toBe('network-only');
+    // Its request runs in the reread's span.
+    expect(
+      reread?.context[TRACE_PARENT_CONTEXT_KEY].run(() =>
+        telemetry.active.at(-1)
+      )
+    ).toBe('graphql_soup.live_updates.reread');
+    expect(telemetry.spans).toMatchObject([
+      { name: 'graphql_soup.live_updates.reread', ended: true },
+    ]);
+
+    // Once live, a read goes once.
+    read(client, OTHER, FOLLOWS_LIVE_UPDATES);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent()).toEqual(['Feed', 'Feed', 'Other']);
+  });
+
+  it('reads an early read again only once it has answered', async () => {
+    const { gate } = await pingedGate();
+    const requests: Operation[] = [];
+    const { source: answers$, next: answer } = makeSubject<OperationResult>();
+    const network: Exchange = () => (operations$) =>
+      merge([
+        pipe(
+          operations$,
+          onPush((operation) => {
+            if (operation.kind === 'query') requests.push(operation);
+          }),
+          filter(() => false),
+          map((operation) => makeResult(operation, { data: {} }))
+        ),
+        answers$,
+      ]);
+    const { client, sent } = gatedClient(gate, { cached: false, network });
+    read(client, FEED, FOLLOWS_LIVE_UPDATES);
+    await vi.advanceTimersByTimeAsync(0);
+
+    gate.pong(true);
+    await vi.advanceTimersByTimeAsync(0);
+    // A second request now could answer before the first and be overwritten.
+    expect(sent()).toEqual(['Feed']);
+
+    const [first] = requests.splice(0);
+    if (first) answer(makeResult(first, { data: {} }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent()).toEqual(['Feed', 'Feed']);
+    expect(telemetry.spans).toMatchObject([
+      {
+        name: 'graphql_soup.live_updates.reread',
+        attributes: { 'live_updates.answer_pending': true },
+        ended: false,
+      },
+    ]);
+
+    const [again] = requests.splice(0);
+    if (again) answer(makeResult(again, { data: {} }));
+    expect(telemetry.spans).toMatchObject([{ ended: true }]);
+  });
+
+  it('does not read a query again once it is torn down', async () => {
+    const { gate } = await pingedGate();
+    const { client, sent } = gatedClient(gate, { cached: false });
+    const subscription = read(client, FEED, FOLLOWS_LIVE_UPDATES);
+    await vi.advanceTimersByTimeAsync(0);
+    subscription.unsubscribe();
+
+    gate.pong(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent()).toEqual(['Feed']);
+    expect(telemetry.spans).toEqual([]);
   });
 });

@@ -8,8 +8,9 @@ import {
   getOperationName,
   makeOperation,
   type Operation,
+  type OperationResult,
 } from '@urql/core';
-import { filter, makeSubject, merge, pipe } from 'wonka';
+import { filter, makeSubject, merge, onPush, pipe } from 'wonka';
 import {
   firstRequestIn,
   joinsCallerTrace,
@@ -27,18 +28,25 @@ declare module '@urql/core' {
  * Query context for a read that the Soup websocket's subscriptions keep
  * current: one whose view registers an activity revalidator or a channel
  * notification reader. Until the first connection's subscriptions are live,
- * such a read waits for them (at most {@link LIVE_UPDATES_HOLD_MS}), so
- * nothing published between its response and the subscriptions starting is
- * lost. Its registration then says `followsLiveUpdates: true`, and the first
- * connection does not read it again. Only a read that reaches the network on
- * mount qualifies: a `cache-first` hit has no read to wait.
+ * such a read behind a cached result waits for them (at most
+ * {@link LIVE_UPDATES_HOLD_MS}), so nothing published between its response
+ * and the subscriptions starting is lost. A read with nothing cached to show
+ * goes at once and is read again once they are live. Its registration then
+ * says `followsLiveUpdates: true`, and the first connection does not read it
+ * again. Only a read that reaches the network on mount qualifies: a
+ * `cache-first` hit has no read to wait.
  */
 export const FOLLOWS_LIVE_UPDATES = { followsLiveUpdates: true } as const;
 
 /** The longest a read waits for the first connection's subscriptions. */
 export const LIVE_UPDATES_HOLD_MS = 1_000;
 
-type HoldOutcome = 'live' | 'timed_out' | 'unverified' | 'disposed';
+type HoldOutcome =
+  | 'live'
+  | 'timed_out'
+  | 'unverified'
+  | 'disposed'
+  | 'cache_miss';
 
 type GateState = 'waiting' | 'released' | 'live' | 'disposed';
 
@@ -61,8 +69,9 @@ export function createLiveUpdatesGate(options: {
    * The subscriptions are live. `stale` when reads that follow them went out
    * earlier (the hold timed out, or the socket could not be pinged), so their
    * readers must read again. Otherwise `sent` holds the operation keys of the
-   * reads that waited and went out just now: every reader of those keys sees
-   * a read sent after the subscriptions started.
+   * reads that waited and went out just now, and of the reads that went out
+   * early and are read again now: every reader of those keys sees a read sent
+   * after the subscriptions started.
    */
   onLive: (stale: boolean, sent: ReadonlySet<number>) => void;
 }) {
@@ -73,20 +82,35 @@ export function createLiveUpdatesGate(options: {
   let bound: ReturnType<typeof setTimeout> | undefined;
   /** Each held read's resume, with its operation key. */
   const holds = new Map<(outcome: HoldOutcome) => void, number>();
+  /** Each read that went out before the subscriptions, with its key. */
+  const early = new Map<(again: boolean) => void, number>();
 
-  const release = (outcome: HoldOutcome): ReadonlySet<number> => {
+  const stopBound = () => {
     clearTimeout(bound);
     bound = undefined;
+  };
+  const release = (outcome: HoldOutcome): number[] => {
+    stopBound();
     const released = [...holds];
     holds.clear();
     for (const [resume] of released) resume(outcome);
-    return new Set(released.map(([, key]) => key));
+    return released.map(([, key]) => key);
+  };
+  const takeEarly = () => {
+    const taken = [...early];
+    early.clear();
+    return taken;
   };
   const live = (outcome: 'live' | 'unverified') => {
     if (state === 'live' || state === 'disposed') return;
     const stale = state === 'released' || outcome === 'unverified';
     state = 'live';
-    const sent = release(outcome);
+    const sent = new Set(release(outcome));
+    // A read of the same key that waited covers one that went out early.
+    for (const [settle, key] of takeEarly()) {
+      settle(!stale && !sent.has(key));
+      sent.add(key);
+    }
     options.onLive(stale, sent);
   };
 
@@ -96,9 +120,9 @@ export function createLiveUpdatesGate(options: {
     /** Whether the subscriptions have gone live (and `onLive` has run). */
     wentLive: () => state === 'live',
     /**
-     * Calls `resume` once the held read of operation `key` may go. The first
-     * held read starts the bound, after which every read goes and later ones
-     * are not held.
+     * Calls `resume` once the held read of operation `key` may go. The bound
+     * runs from the first read that waits while any does; when it ends every
+     * read goes, and later ones are not held.
      */
     hold(key: number, resume: (outcome: HoldOutcome) => void): () => void {
       holds.set(resume, key);
@@ -107,9 +131,41 @@ export function createLiveUpdatesGate(options: {
         if (state !== 'waiting') return;
         state = 'released';
         release('timed_out');
+        // The stale live reads everything again.
+        for (const [settle] of takeEarly()) settle(false);
       }, holdMs);
       return () => {
         holds.delete(resume);
+      };
+    },
+    /**
+     * The cache had nothing to show for operation `key`, so its held reads
+     * go now, with `cache_miss`: waiting would only delay the first answer.
+     */
+    missed(key: number) {
+      if (state !== 'waiting') return;
+      for (const [resume, heldKey] of [...holds]) {
+        if (heldKey !== key) continue;
+        holds.delete(resume);
+        resume('cache_miss');
+      }
+      if (holds.size === 0) stopBound();
+    },
+    /**
+     * A read of operation `key` went out before the subscriptions started.
+     * Once they are live, `settle(true)` asks for it to be read again;
+     * `settle(false)` says it need not be: a held read of `key` went out
+     * then, or every reader reads again (a stale live), or the gate was
+     * disposed.
+     */
+    sentEarly(key: number, settle: (again: boolean) => void): () => void {
+      if (state !== 'waiting') {
+        settle(false);
+        return () => undefined;
+      }
+      early.set(settle, key);
+      return () => {
+        early.delete(settle);
       };
     },
     /**
@@ -139,6 +195,7 @@ export function createLiveUpdatesGate(options: {
       state = 'disposed';
       connection += 1;
       release('disposed');
+      for (const [settle] of takeEarly()) settle(false);
     },
   };
 }
@@ -157,13 +214,32 @@ type HeldOperation = {
  */
 type HeldRead = { operations: HeldOperation[]; cancel: () => void };
 
-function waitSpan(operation: Operation): Span {
-  return Telemetry.span('graphql_soup.live_updates.wait', {
+/**
+ * A query whose read went out before the subscriptions started. Once they are
+ * live it is read again, after every request sent for it has answered, so the
+ * newer answer is the one that stays.
+ */
+type EarlyRead = {
+  operation: Operation;
+  /** Requests sent for it that have not answered. */
+  pending: number;
+  /** From the live that asked for the read again until it answers. */
+  reread?: Span;
+  rereadSent: boolean;
+  cancel: () => void;
+};
+
+function operationSpan(name: string, operation: Operation): Span {
+  return Telemetry.span(name, {
     sampling: 'perf',
     attributes: {
       'graphql.operation.name': getOperationName(operation.query) ?? 'unknown',
     },
   });
+}
+
+function waitSpan(operation: Operation): Span {
+  return operationSpan('graphql_soup.live_updates.wait', operation);
 }
 
 /**
@@ -195,14 +271,21 @@ function resumed({ operation, parent }: HeldOperation): Operation {
 /**
  * After the normalized cache, so a cached result still shows at once: holds
  * the network reads of queries marked {@link FOLLOWS_LIVE_UPDATES} while
- * `gate` waits, and sends them, in order, when it opens. It only delays: what
- * reaches the transport is what would have without it.
+ * `gate` waits, and sends them, in order, when it opens. A read the cache
+ * reports as a miss ({@link LiveUpdatesGate.missed}) goes at once instead,
+ * and is read again once the subscriptions are live. Without a cache
+ * (`cached: false`) every such read is a miss.
  */
-export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
-  return ({ forward }) =>
+export function liveUpdatesGateExchange(
+  gate: LiveUpdatesGate,
+  options: { cached?: boolean } = {}
+): Exchange {
+  const cached = options.cached ?? true;
+  return ({ client, forward }) =>
     (operations$) => {
       const { source: resumed$, next: send } = makeSubject<Operation>();
       const held = new Map<number, HeldRead>();
+      const early = new Map<number, EarlyRead>();
 
       const finish = (key: number, outcome: HoldOutcome | 'torn_down') => {
         const read = held.get(key);
@@ -215,6 +298,65 @@ export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
         }
         return read.operations;
       };
+      const forget = (key: number) => {
+        const read = early.get(key);
+        if (!read) return;
+        early.delete(key);
+        read.cancel();
+        read.reread?.end();
+      };
+      const rereadIfAnswered = (read: EarlyRead) => {
+        if (!read.reread || read.rereadSent || read.pending > 0) return;
+        read.rereadSent = true;
+        const { operation, reread } = read;
+        client.reexecuteOperation(
+          makeOperation('query', operation, {
+            ...operation.context,
+            requestPolicy: 'network-only',
+            [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(reread),
+          })
+        );
+      };
+      const sentEarly = (operation: Operation) => {
+        const { key } = operation;
+        const current = early.get(key);
+        if (current) {
+          current.operation = operation;
+          current.pending += 1;
+          return;
+        }
+        const read: EarlyRead = {
+          operation,
+          pending: 1,
+          rereadSent: false,
+          cancel: () => undefined,
+        };
+        early.set(key, read);
+        read.cancel = gate.sentEarly(key, (again) => {
+          read.cancel = () => undefined;
+          if (early.get(key) !== read) return;
+          if (!again) {
+            forget(key);
+            return;
+          }
+          read.reread = operationSpan(
+            'graphql_soup.live_updates.reread',
+            read.operation
+          );
+          read.reread.setAttr('live_updates.answer_pending', read.pending > 0);
+          rereadIfAnswered(read);
+        });
+      };
+      const answered = (result: OperationResult) => {
+        const read = early.get(result.operation.key);
+        if (!read || result.hasNext) return;
+        if (read.rereadSent) {
+          forget(result.operation.key);
+          return;
+        }
+        read.pending = Math.max(0, read.pending - 1);
+        rereadIfAnswered(read);
+      };
       const hold = (operation: Operation) => {
         const read: HeldRead = {
           operations: [startWait(operation)],
@@ -223,8 +365,10 @@ export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
         held.set(operation.key, read);
         read.cancel = gate.hold(operation.key, (outcome) => {
           read.cancel = () => undefined;
-          for (const released of finish(operation.key, outcome))
+          for (const released of finish(operation.key, outcome)) {
+            if (outcome === 'cache_miss') sentEarly(released.operation);
             send(resumed(released));
+          }
         });
       };
 
@@ -233,6 +377,7 @@ export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
         filter((operation) => {
           if (operation.kind === 'teardown') {
             finish(operation.key, 'torn_down');
+            forget(operation.key);
             return true;
           }
           if (
@@ -246,10 +391,14 @@ export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
             return false;
           }
           if (!gate.holding()) return true;
+          if (!cached) {
+            sentEarly(operation);
+            return true;
+          }
           hold(operation);
           return false;
         })
       );
-      return forward(merge([passed$, resumed$]));
+      return pipe(forward(merge([passed$, resumed$])), onPush(answered));
     };
 }

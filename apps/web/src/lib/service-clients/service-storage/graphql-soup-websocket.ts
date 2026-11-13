@@ -347,8 +347,9 @@ const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
  * A reconnect (every connection after the first) tells every follower to read
  * again what it may have missed while the socket was down. The first one has
  * nothing to make up for: reads marked `FOLLOWS_LIVE_UPDATES` waited for its
- * subscriptions to go live ({@link createLiveUpdatesGate}), so only readers that
- * did not wait read again, unless the wait gave up first.
+ * subscriptions to go live, or went out early and are read again then
+ * ({@link createLiveUpdatesGate}), so only readers that did neither read again,
+ * unless the wait gave up first.
  */
 export function createGraphqlSoupSubscriptionsLifecycle(
   options: { suspendOnPagehide?: boolean } = {}

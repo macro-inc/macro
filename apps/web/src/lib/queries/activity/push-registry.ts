@@ -8,8 +8,9 @@ type Revalidator = {
   /**
    * True when the query's reads carry `FOLLOWS_LIVE_UPDATES` and reach the
    * network on mount: its first read waits for the websocket's subscriptions,
-   * so the first connection need not refresh it. A `cache-first` query, whose
-   * cached result may predate them, leaves it unset.
+   * or goes out early and is read again once they are live, so the first
+   * connection need not refresh it. A `cache-first` query, whose cached
+   * result may predate them, leaves it unset.
    */
   followsLiveUpdates?: boolean;
 };

@@ -149,12 +149,18 @@ function createServer(timing: { acknowledgeAfterMs: number }) {
 const disposals: Array<() => void> = [];
 
 /**
- * The app's Soup client on its first connection, as `graphql-soup` builds the
- * uncached one: the real subscriptions lifecycle and websocket events over a
- * real graphql-ws client, with the live-updates gate before the transports,
- * or without it to show what it closes.
+ * The app's Soup client on its first connection: the real subscriptions
+ * lifecycle and websocket events over a real graphql-ws client, with the
+ * live-updates gate before the transports, or without it to show what it
+ * closes. The gate holds each read, as the cached client does behind a cached
+ * result, or with `cached: false` sends it at once and again once live, as
+ * the uncached client and a cache miss do.
  */
-function startApp(options: { gated: boolean; acknowledgeAfterMs: number }) {
+function startApp(options: {
+  gated: boolean;
+  cached?: boolean;
+  acknowledgeAfterMs: number;
+}) {
   const server = createServer(options);
   const lifecycle = soupWebsocket.createGraphqlSoupSubscriptionsLifecycle();
   const websocket = createWsClient({
@@ -185,7 +191,11 @@ function startApp(options: { gated: boolean; acknowledgeAfterMs: number }) {
     url: 'https://dss.test/items/soup/graphql',
     exchanges: [
       ...(options.gated
-        ? [liveUpdatesGateExchange(lifecycle.liveUpdates)]
+        ? [
+            liveUpdatesGateExchange(lifecycle.liveUpdates, {
+              cached: options.cached,
+            }),
+          ]
         : []),
       subscriptions,
       server.httpExchange,
@@ -240,6 +250,22 @@ describe('the first connection', () => {
     await vi.advanceTimersByTimeAsync(2_000);
     expect(app.feedIds()).toEqual(['in-the-window']);
     expect(app.server.reads()).toEqual(['MyActivity']);
+  });
+
+  it('shows that event with nothing cached, from a read sent at once and again once live', async () => {
+    const app = startApp({
+      gated: true,
+      cached: false,
+      acknowledgeAfterMs: ACKNOWLEDGE_AFTER_MS,
+    });
+    await vi.advanceTimersByTimeAsync(IN_THE_WINDOW_MS);
+    // Answered before the subscriptions start, as without the gate.
+    expect(app.server.reads()).toEqual(['MyActivity']);
+    app.server.publish(event('in-the-window'));
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(app.feedIds()).toEqual(['in-the-window']);
+    expect(app.server.reads()).toEqual(['MyActivity', 'MyActivity']);
   });
 
   it('loses that event without the gate, which is the window', async () => {

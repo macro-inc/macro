@@ -17,7 +17,8 @@ export type ChannelNotificationReader = {
   /**
    * True when the reader's own query carries `FOLLOWS_LIVE_UPDATES` and reaches
    * the network on mount: its first read waits for the websocket's
-   * subscriptions, so the first connection need not read its job again.
+   * subscriptions, or goes out early and is read again once they are live,
+   * so the first connection need not read its job again.
    */
   followsLiveUpdates?: boolean;
 };
@@ -184,7 +185,8 @@ export class ChannelNotificationRefresh {
 
   /**
    * The first connection's subscriptions are live, and `sent` holds the keys
-   * of the reads that waited for them and went out just now. A job whose
+   * of the reads that waited for them and went out just now, or that went
+   * out early and are read again now. A job whose
    * readers all follow them, or whose own read is one of those, reads after
    * this; any other may show an older read.
    */
