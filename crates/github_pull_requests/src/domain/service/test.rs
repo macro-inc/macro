@@ -388,6 +388,10 @@ fn pull_request(status: GithubPullRequestStatus) -> EnrichedGithubPullRequest {
         reviews: None,
         base: None,
         head: None,
+        merged_by: None,
+        closed_by: None,
+        closed_at: None,
+        merged_at: None,
     }
 }
 

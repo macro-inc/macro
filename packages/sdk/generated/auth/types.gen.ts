@@ -791,6 +791,11 @@ export type EnrichedGithubPullRequest = {
      */
     checks?: Array<GithubPullRequestCheckRun> | null;
     /**
+     * When GitHub closed the pull request, including merges.
+     */
+    closedAt?: string | null;
+    closedBy?: null | GithubPullRequestUser;
+    /**
      * Comments collected from the pull request, when enrichment includes them.
      */
     comments?: Array<GithubPullRequestComment> | null;
@@ -807,6 +812,10 @@ export type EnrichedGithubPullRequest = {
      */
     displayName: string;
     /**
+     * Whether the pull request is a draft, when known.
+     */
+    draft?: boolean | null;
+    /**
      * The stored GitHub association key, in `owner/repo/pull/number` format.
      */
     githubKey: string;
@@ -814,6 +823,11 @@ export type EnrichedGithubPullRequest = {
      * The pull request's labels, when known.
      */
     labels?: Array<GithubPullRequestLabel> | null;
+    /**
+     * When GitHub merged the pull request.
+     */
+    mergedAt?: string | null;
+    mergedBy?: null | GithubPullRequestUser;
     /**
      * The GitHub pull request title, when enrichment succeeds.
      */
@@ -836,6 +850,10 @@ export type EnrichedGithubPullRequest = {
      * The GitHub repository name.
      */
     repo: string;
+    /**
+     * Stable numeric GitHub user ids (as strings) of the users asked to review, when known.
+     */
+    requestedReviewerGithubUserIds?: Array<string> | null;
     /**
      * Each reviewer's latest submitted review, when known. Stored metadata merges this per
      * reviewer, so a write that knows one review keeps the others.

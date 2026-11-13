@@ -10,6 +10,7 @@ import type {
   GithubPullRequest,
   GithubPullRequestsResponse,
 } from '@service-storage/generated/schemas';
+import type { StoredGithubPullRequest } from '@service-storage/generated/schemas/storedGithubPullRequest';
 import {
   type QueryFunctionContext,
   type QueryKey,
@@ -51,13 +52,25 @@ function readEnabled(enabled: EnabledInput | undefined): boolean {
  * service doesn't expose body/author/labels yet, so they only arrive via the
  * live enrich merge or stored metadata and must stay optional.
  */
-export type GithubPullRequestWithDetails = GithubPullRequest & {
-  description?: string | null;
-  authorLogin?: string | null;
-  labels?: GithubPullRequestLabel[] | null;
-  /** Whether the pull request is a draft. Absent when the source did not say. */
-  draft?: boolean;
-};
+export type GithubPullRequestWithDetails = GithubPullRequest &
+  Partial<
+    Pick<
+      StoredGithubPullRequest,
+      | 'requestedReviewerGithubUserIds'
+      | 'reviews'
+      | 'reviewDecision'
+      | 'mergedBy'
+      | 'closedBy'
+      | 'mergedAt'
+      | 'closedAt'
+    >
+  > & {
+    description?: string | null;
+    authorLogin?: string | null;
+    labels?: GithubPullRequestLabel[] | null;
+    /** Whether the pull request is a draft. Absent when the source did not say. */
+    draft?: boolean;
+  };
 
 function toGithubPullRequestRef(
   pullRequest: GithubPullRequest

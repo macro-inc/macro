@@ -14,10 +14,14 @@ import type { StoredGithubPullRequestAdditions } from './storedGithubPullRequest
 import type { StoredGithubPullRequestAuthorGithubUserId } from './storedGithubPullRequestAuthorGithubUserId';
 import type { StoredGithubPullRequestAuthorLogin } from './storedGithubPullRequestAuthorLogin';
 import type { StoredGithubPullRequestBase } from './storedGithubPullRequestBase';
+import type { StoredGithubPullRequestClosedAt } from './storedGithubPullRequestClosedAt';
+import type { StoredGithubPullRequestClosedBy } from './storedGithubPullRequestClosedBy';
 import type { StoredGithubPullRequestDeletions } from './storedGithubPullRequestDeletions';
 import type { StoredGithubPullRequestDescription } from './storedGithubPullRequestDescription';
 import type { StoredGithubPullRequestGithubUpdatedAt } from './storedGithubPullRequestGithubUpdatedAt';
 import type { StoredGithubPullRequestHead } from './storedGithubPullRequestHead';
+import type { StoredGithubPullRequestMergedAt } from './storedGithubPullRequestMergedAt';
+import type { StoredGithubPullRequestMergedBy } from './storedGithubPullRequestMergedBy';
 import type { StoredGithubPullRequestReviewDecision } from './storedGithubPullRequestReviewDecision';
 import type { StoredGithubPullRequestStatus } from './storedGithubPullRequestStatus';
 import type { StoredGithubPullRequestTitle } from './storedGithubPullRequestTitle';
@@ -40,6 +44,9 @@ export interface StoredGithubPullRequest {
   base?: StoredGithubPullRequestBase;
   /** The latest check runs on the pull request's head commit. */
   checks: GithubPullRequestCheckRun[];
+  /** When GitHub closed the pull request, including merges. */
+  closedAt?: StoredGithubPullRequestClosedAt;
+  closedBy?: StoredGithubPullRequestClosedBy;
   /** Comments from the pull request's conversation, reviews, and review threads.
 Comment `authorId` intentionally retains the shared numeric GitHub comment contract;
 convert it to a decimal string before comparing it with `authorGithubUserId`. */
@@ -62,6 +69,9 @@ convert it to a decimal string before comparing it with `authorGithubUserId`. */
   id: string;
   /** The pull request's labels. */
   labels: GithubPullRequestLabel[];
+  /** When GitHub merged the pull request. */
+  mergedAt?: StoredGithubPullRequestMergedAt;
+  mergedBy?: StoredGithubPullRequestMergedBy;
   /** The pull request number within its repository. */
   number: number;
   /** The repository owner the pull request was last synced under. */

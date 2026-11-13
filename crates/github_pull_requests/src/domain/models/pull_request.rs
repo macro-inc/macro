@@ -317,6 +317,12 @@ pub struct GithubPullRequestDetails {
     pub repository_id: Option<u64>,
     /// The merge timestamp returned by GitHub, when the pull request was merged.
     pub merged_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The GitHub user who merged the pull request, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merged_by: Option<GithubPullRequestUser>,
+    /// When GitHub closed the pull request, including merges.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The number of added lines reported by GitHub.
     pub additions: u64,
     /// The number of deleted lines reported by GitHub.
@@ -457,11 +463,9 @@ pub struct EnrichedGithubPullRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub participant_github_user_ids: Option<Vec<String>>,
     /// Whether the pull request is a draft, when known.
-    #[cfg_attr(feature = "schema", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub draft: Option<bool>,
     /// Stable numeric GitHub user ids (as strings) of the users asked to review, when known.
-    #[cfg_attr(feature = "schema", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requested_reviewer_github_user_ids: Option<Vec<String>>,
     /// When GitHub last updated the pull request, when known.
@@ -486,6 +490,18 @@ pub struct EnrichedGithubPullRequest {
     #[cfg_attr(feature = "schema", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<GitRef>,
+    /// The GitHub user who merged the pull request, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merged_by: Option<GithubPullRequestUser>,
+    /// The sender of the closing webhook. Unknown for older pull requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_by: Option<GithubPullRequestUser>,
+    /// When GitHub closed the pull request, including merges.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When GitHub merged the pull request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merged_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl EnrichedGithubPullRequest {
@@ -517,6 +533,10 @@ impl EnrichedGithubPullRequest {
             reviews: None,
             base: None,
             head: None,
+            merged_by: None,
+            closed_by: None,
+            closed_at: None,
+            merged_at: None,
         }
     }
 
@@ -553,6 +573,10 @@ impl EnrichedGithubPullRequest {
             reviews: details.reviews,
             base: details.base,
             head: details.head,
+            merged_by: details.merged_by,
+            closed_by: None,
+            closed_at: details.closed_at,
+            merged_at: details.merged_at,
         }
     }
 
@@ -570,8 +594,21 @@ impl EnrichedGithubPullRequest {
         existing_metadata: Option<&serde_json::Value>,
     ) -> serde_json::Result<serde_json::Value> {
         let mut metadata = serde_json::to_value(self)?;
+        // Reopening is authoritative: do not resurrect closing details from a
+        // previous snapshot when a later sparse refresh omits those fields.
+        if self.status == Some(GithubPullRequestStatus::Open)
+            && let Some(object) = metadata.as_object_mut()
+        {
+            for field in ["mergedBy", "closedBy", "closedAt", "mergedAt"] {
+                let previously_known =
+                    existing_metadata.is_some_and(|value| value.get(field).is_some());
+                if object.contains_key(field) || previously_known {
+                    object.insert(field.to_string(), serde_json::Value::Null);
+                }
+            }
+        }
         let Some(existing_object) = existing_metadata.and_then(|value| value.as_object()) else {
-            return Ok(metadata);
+            return with_review_decision(metadata);
         };
         let Some(metadata_object) = metadata.as_object_mut() else {
             return Ok(metadata);
@@ -601,6 +638,10 @@ impl EnrichedGithubPullRequest {
             "labels",
             "base",
             "head",
+            "mergedBy",
+            "closedBy",
+            "closedAt",
+            "mergedAt",
         ] {
             if metadata_object.contains_key(field) {
                 continue;
@@ -649,10 +690,33 @@ impl EnrichedGithubPullRequest {
             );
         }
 
-        Ok(metadata)
+        with_review_decision(metadata)
     }
 }
 
+// Realtime messages carry stored metadata rather than the listing's typed-row
+// overlay, so keep their aggregate decision consistent with the same domain rule.
+fn with_review_decision(mut metadata: serde_json::Value) -> serde_json::Result<serde_json::Value> {
+    if metadata.get("reviews").is_none() && metadata.get("requestedReviewerGithubUserIds").is_none()
+    {
+        return Ok(metadata);
+    }
+    let reviews: Vec<GithubPullRequestReview> = metadata
+        .get("reviews")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()?
+        .unwrap_or_default();
+    let requests: Vec<String> = metadata
+        .get("requestedReviewerGithubUserIds")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()?
+        .unwrap_or_default();
+    metadata["reviewDecision"] =
+        serde_json::to_value(GithubPullRequestReviewDecision::derive(&reviews, &requests))?;
+    Ok(metadata)
+}
 /// Each reviewer's latest review across the stored and then the incoming metadata.
 fn merge_reviews(
     existing: Option<&serde_json::Value>,

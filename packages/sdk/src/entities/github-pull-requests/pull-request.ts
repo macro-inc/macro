@@ -29,6 +29,62 @@ export class GithubPullRequest extends MacroEntity<StoredGithubPullRequest> {
   readonly status = this.field('status');
 
   /**
+   * Whether the pull request is a draft.
+   * @readonly
+   */
+  readonly draft = this.field('draft');
+
+  /**
+   * Outstanding review requests, as stable GitHub user IDs.
+   * @readonly
+   */
+  readonly requestedReviewerGithubUserIds = this.field(
+    'requestedReviewerGithubUserIds',
+  );
+
+  /**
+   * Each reviewer's latest submitted review.
+   * @readonly
+   */
+  readonly reviews = this.field('reviews');
+
+  /**
+   * The aggregate review decision.
+   * @readonly
+   */
+  readonly reviewDecision = this.field('reviewDecision');
+
+  /**
+   * The latest checks on the head commit.
+   * @readonly
+   */
+  readonly checks = this.field('checks');
+
+  /**
+   * The GitHub user who merged the pull request, when known.
+   * @readonly
+   */
+  readonly mergedBy = this.field('mergedBy');
+
+  /**
+   * The sender of the closing webhook, when known.
+   * @readonly
+   */
+  readonly closedBy = this.field('closedBy');
+
+  /**
+   * When GitHub merged the pull request, when known.
+   * @readonly
+   */
+  readonly mergedAt = this.field('mergedAt');
+
+  /**
+   * When GitHub closed the pull request, when known.
+   * @readonly
+   */
+  readonly closedAt = this.field('closedAt');
+
+  /**
    * Captured change metadata, when available.
    *
    * @readonly

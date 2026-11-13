@@ -20856,6 +20856,11 @@ export type StoredGithubPullRequest = {
      */
     checks: Array<GithubPullRequestCheckRun>;
     /**
+     * When GitHub closed the pull request, including merges.
+     */
+    closedAt?: string | null;
+    closedBy?: null | GithubPullRequestUser;
+    /**
      * Comments from the pull request's conversation, reviews, and review threads.
      * Comment `authorId` intentionally retains the shared numeric GitHub comment contract;
      * convert it to a decimal string before comparing it with `authorGithubUserId`.
@@ -20890,6 +20895,11 @@ export type StoredGithubPullRequest = {
      * The pull request's labels.
      */
     labels: Array<GithubPullRequestLabel>;
+    /**
+     * When GitHub merged the pull request.
+     */
+    mergedAt?: string | null;
+    mergedBy?: null | GithubPullRequestUser;
     /**
      * The pull request number within its repository.
      */

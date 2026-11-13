@@ -62,6 +62,8 @@ pub(crate) async fn fetch_pull_request_metadata(
         title: pull_request.title,
         state: pull_request.state,
         merged_at: pull_request.merged_at,
+        merged_by: pull_request.merged_by.as_ref().and_then(pull_request_user),
+        closed_at: pull_request.closed_at,
         additions: pull_request.additions,
         deletions: pull_request.deletions,
         author_login,
@@ -222,6 +224,8 @@ struct GithubPullRequestResponse {
     title: String,
     state: String,
     merged_at: Option<chrono::DateTime<chrono::Utc>>,
+    merged_by: Option<GithubUserResponse>,
+    closed_at: Option<chrono::DateTime<chrono::Utc>>,
     additions: u64,
     deletions: u64,
     body: Option<String>,
@@ -309,16 +313,15 @@ struct GithubRepositoryIdResponse {
 }
 
 /// The users that have a stable numeric id, with their logins.
+fn pull_request_user(user: &GithubUserResponse) -> Option<GithubPullRequestUser> {
+    Some(GithubPullRequestUser {
+        github_user_id: user.id?.to_string(),
+        login: user.login.clone(),
+    })
+}
+
 fn pull_request_users(users: &[GithubUserResponse]) -> Vec<GithubPullRequestUser> {
-    users
-        .iter()
-        .filter_map(|user| {
-            Some(GithubPullRequestUser {
-                github_user_id: user.id?.to_string(),
-                login: user.login.clone(),
-            })
-        })
-        .collect()
+    users.iter().filter_map(pull_request_user).collect()
 }
 
 fn pull_request_labels(labels: &[GithubLabelResponse]) -> Vec<GithubPullRequestLabel> {
@@ -741,6 +744,10 @@ impl GithubOpenPullRequestResponse {
                 .head
                 .as_ref()
                 .map(GithubPullRequestHeadResponse::git_ref),
+            merged_by: None,
+            closed_by: None,
+            merged_at: None,
+            closed_at: None,
         }
     }
 }

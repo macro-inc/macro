@@ -79,6 +79,8 @@ link flow, following the hexagonal architecture pattern.
 - Webhook signature verification uses `hmac`/`subtle` for constant-time
   comparison — don't swap in a plain `==` when touching
   `github_sync_router.rs`.
+- Preserve merge/close actors and timestamps in PR metadata; take `closedBy` only from the closing webhook sender and clear closing details on reopen.
+- Keep webhook, PR-sync, and gateway-publish spans connected, with the PR record ID and outcome at publication.
 - A GitHub or sign-in outage is `GithubError::Upstream`, answered 502/503 by
   `inbound.rs`. Outbound adapters classify it (`github_oauth_client.rs`
   `throttling`/`unexpected_response`, `github_auth_client.rs`

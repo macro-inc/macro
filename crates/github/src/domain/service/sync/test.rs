@@ -1,3 +1,4 @@
+mod lifecycle;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -1438,6 +1439,10 @@ fn expected_pull_request_metadata(
             name: Some("feature/some-branch".to_string()),
             sha: None,
         }),
+        merged_by: None,
+        closed_by: None,
+        closed_at: None,
+        merged_at: None,
     })
     .unwrap()
 }
@@ -1624,6 +1629,10 @@ fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
         reviews: None,
         base: None,
         head: None,
+        merged_by: None,
+        closed_by: None,
+        closed_at: None,
+        merged_at: None,
     }
 }
 
@@ -1660,6 +1669,10 @@ fn expected_pull_request_metadata_from_details(
             name: Some("feature/some-branch".to_string()),
             sha: None,
         }),
+        merged_by: details.merged_by.clone(),
+        closed_by: None,
+        closed_at: details.closed_at,
+        merged_at: details.merged_at,
     })
     .unwrap()
 }
@@ -1709,6 +1722,8 @@ fn pull_request_details(
         state: "open".to_string(),
         repository_id: None,
         merged_at: None,
+        merged_by: None,
+        closed_at: None,
         additions,
         deletions,
         author_login: Some("octocat".to_string()),
@@ -3663,15 +3678,14 @@ async fn pr_closed_upserts_merged_pull_request_metadata() {
 
     let foreign_entities = foreign_entity_service.foreign_entities();
     assert_eq!(foreign_entities.len(), 1);
-    assert_eq!(
-        foreign_entities[0].metadata,
-        expected_pull_request_metadata(
-            "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
-            GithubPullRequestStatus::Merged,
-            Some(10),
-            Some(2),
-        )
+    let mut expected = expected_pull_request_metadata(
+        "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+        GithubPullRequestStatus::Merged,
+        Some(10),
+        Some(2),
     );
+    expected["mergedAt"] = serde_json::json!("2026-05-27T19:00:00Z");
+    assert_eq!(foreign_entities[0].metadata, expected);
 }
 
 #[tokio::test]

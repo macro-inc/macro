@@ -46794,6 +46794,28 @@ export const getGithubPullRequestResponse = zod
           .describe('A check run associated with a GitHub pull request.')
       )
       .describe("The latest check runs on the pull request's head commit."),
+    closedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When GitHub closed the pull request, including merges.'),
+    closedBy: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            githubUserId: zod
+              .string()
+              .describe('The stable numeric GitHub user id, as a string.'),
+            login: zod
+              .string()
+              .nullish()
+              .describe("The user's GitHub login, when known."),
+          })
+          .describe(
+            'A GitHub user named on a pull request, such as an assignee.'
+          ),
+      ])
+      .optional(),
     comments: zod
       .array(
         zod
@@ -46938,6 +46960,28 @@ export const getGithubPullRequestResponse = zod
           .describe('A label on a GitHub pull request.')
       )
       .describe("The pull request's labels."),
+    mergedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When GitHub merged the pull request.'),
+    mergedBy: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            githubUserId: zod
+              .string()
+              .describe('The stable numeric GitHub user id, as a string.'),
+            login: zod
+              .string()
+              .nullish()
+              .describe("The user's GitHub login, when known."),
+          })
+          .describe(
+            'A GitHub user named on a pull request, such as an assignee.'
+          ),
+      ])
+      .optional(),
     number: zod
       .number()
       .describe('The pull request number within its repository.'),

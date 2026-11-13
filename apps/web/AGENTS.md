@@ -1151,6 +1151,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
+- Keep Reviews list/card updates on Soup; patch only loaded REST PR rows from the gateway event, and revalidate only matching PR detail and mergeability queries. Read conflicts for the visible list window through the shared batched query, not per row.
 - Reconcile cached Mail pages with same-query server membership; missing local
   previews are unknown, not proof that a fetched email left the inbox. Keep
   local pagination cursors independent of retained server rows. Preserve live

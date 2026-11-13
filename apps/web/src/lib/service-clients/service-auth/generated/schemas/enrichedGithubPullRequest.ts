@@ -9,12 +9,18 @@ import type { EnrichedGithubPullRequestAssignees } from './enrichedGithubPullReq
 import type { EnrichedGithubPullRequestAuthorId } from './enrichedGithubPullRequestAuthorId';
 import type { EnrichedGithubPullRequestAuthorLogin } from './enrichedGithubPullRequestAuthorLogin';
 import type { EnrichedGithubPullRequestChecks } from './enrichedGithubPullRequestChecks';
+import type { EnrichedGithubPullRequestClosedAt } from './enrichedGithubPullRequestClosedAt';
+import type { EnrichedGithubPullRequestClosedBy } from './enrichedGithubPullRequestClosedBy';
 import type { EnrichedGithubPullRequestComments } from './enrichedGithubPullRequestComments';
 import type { EnrichedGithubPullRequestDeletions } from './enrichedGithubPullRequestDeletions';
 import type { EnrichedGithubPullRequestDescription } from './enrichedGithubPullRequestDescription';
+import type { EnrichedGithubPullRequestDraft } from './enrichedGithubPullRequestDraft';
 import type { EnrichedGithubPullRequestLabels } from './enrichedGithubPullRequestLabels';
+import type { EnrichedGithubPullRequestMergedAt } from './enrichedGithubPullRequestMergedAt';
+import type { EnrichedGithubPullRequestMergedBy } from './enrichedGithubPullRequestMergedBy';
 import type { EnrichedGithubPullRequestName } from './enrichedGithubPullRequestName';
 import type { EnrichedGithubPullRequestParticipantGithubUserIds } from './enrichedGithubPullRequestParticipantGithubUserIds';
+import type { EnrichedGithubPullRequestRequestedReviewerGithubUserIds } from './enrichedGithubPullRequestRequestedReviewerGithubUserIds';
 import type { EnrichedGithubPullRequestReviews } from './enrichedGithubPullRequestReviews';
 import type { EnrichedGithubPullRequestStatus } from './enrichedGithubPullRequestStatus';
 
@@ -38,6 +44,9 @@ export interface EnrichedGithubPullRequest {
   authorLogin?: EnrichedGithubPullRequestAuthorLogin;
   /** Check runs collected from the pull request head commit, when enrichment includes them. */
   checks?: EnrichedGithubPullRequestChecks;
+  /** When GitHub closed the pull request, including merges. */
+  closedAt?: EnrichedGithubPullRequestClosedAt;
+  closedBy?: EnrichedGithubPullRequestClosedBy;
   /** Comments collected from the pull request, when enrichment includes them. */
   comments?: EnrichedGithubPullRequestComments;
   /**
@@ -49,10 +58,15 @@ export interface EnrichedGithubPullRequest {
   description?: EnrichedGithubPullRequestDescription;
   /** A compact label suitable for display in the UI. */
   displayName: string;
+  /** Whether the pull request is a draft, when known. */
+  draft?: EnrichedGithubPullRequestDraft;
   /** The stored GitHub association key, in `owner/repo/pull/number` format. */
   githubKey: string;
   /** The pull request's labels, when known. */
   labels?: EnrichedGithubPullRequestLabels;
+  /** When GitHub merged the pull request. */
+  mergedAt?: EnrichedGithubPullRequestMergedAt;
+  mergedBy?: EnrichedGithubPullRequestMergedBy;
   /** The GitHub pull request title, when enrichment succeeds. */
   name?: EnrichedGithubPullRequestName;
   /**
@@ -68,6 +82,8 @@ union rather than replacing it (partial write paths must not drop known particip
   participantGithubUserIds?: EnrichedGithubPullRequestParticipantGithubUserIds;
   /** The GitHub repository name. */
   repo: string;
+  /** Stable numeric GitHub user ids (as strings) of the users asked to review, when known. */
+  requestedReviewerGithubUserIds?: EnrichedGithubPullRequestRequestedReviewerGithubUserIds;
   /** Each reviewer's latest submitted review, when known. Stored metadata merges this per
 reviewer, so a write that knows one review keeps the others. */
   reviews?: EnrichedGithubPullRequestReviews;

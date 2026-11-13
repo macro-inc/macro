@@ -1,3 +1,4 @@
+mod lifecycle;
 mod sparse;
 use super::*;
 
@@ -28,6 +29,8 @@ fn pull_request_details(
         state: state.to_string(),
         repository_id: None,
         merged_at,
+        merged_by: None,
+        closed_at: None,
         additions: 42,
         deletions: 12,
         author_login: Some("octocat".to_string()),
@@ -184,6 +187,10 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             reviews: None,
             base: None,
             head: None,
+            merged_by: None,
+            closed_by: None,
+            closed_at: None,
+            merged_at: None,
         }],
     };
 
@@ -306,6 +313,8 @@ fn pull_request_enrichment_copies_details_fields() {
         state: "closed".to_string(),
         repository_id: None,
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
+        merged_by: None,
+        closed_at: None,
         additions: 42,
         deletions: 12,
         author_login: Some("octocat".to_string()),
@@ -366,6 +375,8 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
         state: "closed".to_string(),
         repository_id: None,
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
+        merged_by: None,
+        closed_at: None,
         additions: 42,
         deletions: 12,
         author_login: Some("octocat".to_string()),
@@ -398,6 +409,7 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
             "displayName": "macro/app#7",
             "name": "Add pull request enrichment",
             "status": "merged",
+            "mergedAt": "2026-05-25T18:54:21Z",
             "additions": 42,
             "deletions": 12,
             "authorLogin": "octocat",
@@ -496,6 +508,8 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
         state: "open".to_string(),
         repository_id: None,
         merged_at: None,
+        merged_by: None,
+        closed_at: None,
         additions: 42,
         deletions: 12,
         author_login: None,

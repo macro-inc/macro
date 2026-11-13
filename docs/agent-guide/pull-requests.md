@@ -104,14 +104,29 @@ an error banner with a Retry button; pressing it refetches the PR in place.
 Description screenshots hosted on GitHub (including `blob/…?raw=true` links)
 render in the body; they must not show "This image could not be found."
 
-PR metadata changes should update an already loaded Reviews list row and the
-linked agent session's PR status without reloading the page. To verify, keep
-both rows visible and change the PR in GitHub; check the status after the
-webhook arrives. Include a team-owned PR and a PR also stored for your personal
-account. In the network panel, confirm the update arrives on the Soup GraphQL
-subscription without triggering a refetch of every Soup list. Replaying an
-unchanged webhook should not produce another Soup update. The PR detail's
-separate diff and discussion requests are outside this subscription behavior.
+PR metadata changes update loaded Reviews list rows, board cards, and linked
+agent-session PR status through the Soup GraphQL subscription, without refetching
+all lists. This includes check runs, submitted reviews, head pushes
+(`pull_request.synchronize`), merge, close, and reopen. When Reviews uses REST,
+the existing `github_pull_request_updated` gateway message patches only cached
+matching rows. The same message refreshes only matching open PR details and
+mergeability batches; unrelated lists and details stay untouched.
+
+Reviews items include the latest review per reviewer, the aggregate review
+decision, and requested reviewers' stable GitHub IDs (compare with the linked
+viewer's GitHub ID). Visible list rows share the board's batched live
+mergeability lookup. `hasConflicts` is unknown until GitHub answers; it has no
+conflicting-file list. Merge/close actors and times live in existing PR metadata;
+older PRs have no actor name until one is received, and reopening clears all
+four closing fields. There is no historical backfill.
+
+To verify, keep a list row, board card, and PR detail open and change the PR in
+GitHub. Include a team-owned PR and a PR also stored for your personal account.
+In the network panel, confirm a Soup subscription update and no blanket list
+refetch. Check a failing check run, review submission, new head commit, merge,
+close, and reopen. Replaying unchanged metadata should not produce another Soup
+update. Diff and discussion requests remain separate. Commit-status (`status`)
+events are not handled by this sync path.
 
 Opening a pull request from Home clears its loaded unread notifications immediately,
 including desktop previews, keyboard activation, j/k navigation, and phone taps.
