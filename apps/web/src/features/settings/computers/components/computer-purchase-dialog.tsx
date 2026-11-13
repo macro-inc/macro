@@ -68,6 +68,9 @@ export function ComputerPurchaseStep(props: {
   });
   const offer = () =>
     props.offers?.find((item) => item.size === size() && !item.soldOut);
+  // Sizes no host can run are left out, so the list can be empty: then there
+  // is nothing to name, price or buy.
+  const noSizes = () => props.offers?.length === 0;
 
   const buyLabel = () => {
     const chosen = offer();
@@ -99,6 +102,17 @@ export function ComputerPurchaseStep(props: {
         <Switch fallback={<ComputerSizeSkeleton />}>
           <Match when={props.failure}>
             {(failure) => <OffersFailureNotice failure={failure()} />}
+          </Match>
+          <Match when={noSizes()}>
+            <div
+              role="status"
+              class="flex flex-col gap-1 rounded-lg border border-edge-muted p-4"
+            >
+              <p class="text-sm text-ink">{t('computers.noSizes')}</p>
+              <p class="text-sm text-ink-muted text-pretty">
+                {t('computers.noSizesReason')}
+              </p>
+            </div>
           </Match>
           <Match when={props.offers}>
             {(offers) => (
@@ -151,7 +165,7 @@ export function ComputerPurchaseStep(props: {
           disabled={props.pending}
           onClick={props.onClose}
         >
-          {props.failure ? t('common.close') : t('common.cancel')}
+          {props.failure || noSizes() ? t('common.close') : t('common.cancel')}
         </Button>
         <Switch
           fallback={
@@ -184,8 +198,9 @@ export function ComputerPurchaseStep(props: {
             </Button>
           </Match>
           <Match when={props.failure?.remedy === 'none'}>{null}</Match>
+          <Match when={noSizes()}>{null}</Match>
         </Switch>
-        <Show when={!props.failure}>
+        <Show when={!props.failure && !noSizes()}>
           <p class="basis-full text-right text-xs text-ink-muted text-pretty">
             {props.offers
               ? t('computers.buyHeadsUp')

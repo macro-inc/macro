@@ -65,6 +65,7 @@ export default {
   stopping: 'Turning off',
   stopped: 'Powered off',
   failed: 'Failed',
+  failedBecause: 'Setup failed: {{reason}}',
   failedHint: 'Macro is looking into it. Contact support if it stays failed.',
   retry: 'Retry',
   retryFailed: "Couldn't retry. Try again.",
@@ -123,6 +124,8 @@ export default {
   stepCreateAgentShort: 'Create',
   loadingSizes: 'Loading computer sizes',
   noSizes: 'No computer sizes are available right now.',
+  noSizesReason:
+    "Macro's hosts have no room for a new computer. Try again later.",
   setupProgressLabel: 'Setup progress',
   stageBilling: 'Updating billing…',
   stageSignIn: 'Sign in to Claude',
@@ -133,6 +136,7 @@ export default {
   stageSignInDone: 'Signed in to Claude',
   stageSkipped: '{{stage}} · skipped',
   skippedStep: 'skipped',
+  creditsStep: 'Macro credits',
   signInWaitsForRetry:
     'Setup stopped before the computer came up, so there is no sign-in yet. Retry setup above; this step continues once the computer connects.',
   signInUnlocksLater:
@@ -185,6 +189,10 @@ export default {
   done: 'Done',
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',
+  getComputerValue: "A hosted computer where your team's agents run.",
+  getComputerValueShort: 'Hosted, always on',
+  factAlwaysOn: 'Always on, never sleeps',
+  factClaudePlans: 'Runs on your Claude plan or Macro credits',
   getComputerLine:
     'A full computer, with your Claude sub, and a Macro agent, ready to go',
   trialBlocked:

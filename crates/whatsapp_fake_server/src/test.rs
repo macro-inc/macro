@@ -658,3 +658,106 @@ async fn stickers_and_voice_notes_download_like_images() {
     assert_eq!(part.ptt, Some(true));
     assert_eq!(linked.client.download(part).await.unwrap(), voice);
 }
+
+#[tokio::test]
+async fn profile_pictures_answer_like_whatsapp_and_changes_are_notified() {
+    let server = FakeWhatsApp::start().await.unwrap();
+    let alice = server.add_user("15550000001", "Alice").await;
+    let bob = server.add_user("15550000002", "Bob").await;
+    let mut linked = link(&server, &alice).await;
+    let group = server.create_group("Team", &[&bob, &alice]);
+    let preview = whatsmeow::user::GetProfilePictureParams {
+        preview: true,
+        ..Default::default()
+    };
+
+    let unset = linked
+        .client
+        .get_profile_picture_info(&bob.lid(), &preview)
+        .await;
+    assert!(
+        unset
+            .unwrap_err()
+            .is(&whatsmeow::ClientError::ProfilePictureNotSet)
+    );
+
+    let id = server.set_picture(&bob.jid(), b"bob's face".to_vec(), "image/jpeg");
+    let Event::Picture(changed) = next_event(&mut linked.events, |event| {
+        matches!(event, Event::Picture(_))
+    })
+    .await
+    else {
+        unreachable!("matched a picture change");
+    };
+    assert_eq!(
+        (
+            changed.jid.clone(),
+            changed.picture_id.clone(),
+            changed.remove
+        ),
+        (bob.jid(), id.clone(), false)
+    );
+
+    let info = linked
+        .client
+        .get_profile_picture_info(&bob.lid(), &preview)
+        .await
+        .unwrap()
+        .expect("a picture is set");
+    assert_eq!(info.id, id);
+    let response = reqwest::get(&info.url).await.unwrap();
+    assert_eq!(response.headers()["content-type"], "image/jpeg");
+    assert_eq!(response.bytes().await.unwrap().as_ref(), b"bob's face");
+    let unchanged = whatsmeow::user::GetProfilePictureParams {
+        existing_id: id.clone(),
+        ..preview.clone()
+    };
+    assert!(
+        linked
+            .client
+            .get_profile_picture_info(&bob.lid(), &unchanged)
+            .await
+            .unwrap()
+            .is_none(),
+        "the id the client has is unchanged"
+    );
+
+    server.hide_picture(&bob.jid(), true);
+    let hidden = linked
+        .client
+        .get_profile_picture_info(&bob.lid(), &preview)
+        .await;
+    assert!(
+        hidden
+            .unwrap_err()
+            .is(&whatsmeow::ClientError::ProfilePictureUnauthorized)
+    );
+
+    server.set_picture(&group, b"team logo".to_vec(), "image/png");
+    let group_info = linked
+        .client
+        .get_profile_picture_info(&group, &preview)
+        .await
+        .unwrap()
+        .expect("the group has a picture");
+    assert!(!group_info.id.is_empty());
+
+    server.remove_picture(&group);
+    let Event::Picture(removed) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::Picture(picture) if picture.remove),
+    )
+    .await
+    else {
+        unreachable!("matched a picture removal");
+    };
+    assert_eq!(removed.jid, group);
+
+    server.rate_limit_pictures(true);
+    let limited = linked
+        .client
+        .get_profile_picture_info(&group, &preview)
+        .await;
+    assert!(limited.unwrap_err().is_iq_code(429));
+    assert_eq!(server.picture_queries(), 6);
+}

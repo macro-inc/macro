@@ -88,10 +88,29 @@ function stepLabel(step: SetupStepId): string {
 }
 
 /**
- * Buy computer → Configure agent → Bring your AI → Create agent: done steps carry a
- * check, the current one is in ink, and a step the choice skips is struck.
+ * How the step bar marks Bring your AI: as an ordinary step, skipped (Macro's
+ * Claude chosen up front), or done on Macro credits (the sign-in was opened,
+ * then Use Macro credits instead).
  */
-export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
+export type ClaudeStepMark = 'step' | 'skipped' | 'credits';
+
+export function claudeStepMark(
+  choice: ClaudeMode | undefined,
+  signInVisited: boolean
+): ClaudeStepMark {
+  if (choice !== 'macro_credits') return 'step';
+  return signInVisited ? 'credits' : 'skipped';
+}
+
+/**
+ * Buy computer → Configure agent → Bring your AI → Create agent: done steps
+ * carry a check, the current one is in ink, and a step the choice skips is
+ * muted with a dash.
+ */
+export function StepHeader(props: {
+  step: SetupStepId;
+  claude: ClaudeStepMark;
+}) {
   const current = () => STEP_ORDER.indexOf(props.step);
   return (
     <ol
@@ -101,7 +120,9 @@ export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
       <For each={STEP_ORDER}>
         {(step, index) => {
           // Skipped, not cancelled: muted with a dash, never struck through.
-          const skipped = () => step === 'claude' && props.skipsClaude;
+          const skipped = () => step === 'claude' && props.claude === 'skipped';
+          const onCredits = () =>
+            step === 'claude' && props.claude === 'credits';
           const done = () => index() < current() && !skipped();
           const active = () => index() === current();
           return (
@@ -147,9 +168,13 @@ export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
               <span>
                 {stepLabel(step)}
                 {/* Phones keep the short label; the word stays for assistive tech. */}
-                <Show when={skipped()}>
+                <Show when={skipped() || onCredits()}>
                   <span class={isMobile() ? 'sr-only' : undefined}>
-                    {` · ${t('computers.skippedStep')}`}
+                    {` · ${t(
+                      skipped()
+                        ? 'computers.skippedStep'
+                        : 'computers.creditsStep'
+                    )}`}
                   </span>
                 </Show>
               </span>
@@ -195,6 +220,8 @@ export function ComputerSetupSteps(props: {
    * that agent, so the last step offers that instead of a new agent.
    */
   selectsForAgent?: boolean;
+  /** Bring your AI was opened, so choosing credits there completes it. */
+  signInVisited?: boolean;
 }) {
   const nameId = createUniqueId();
   const agents = useAgentsQuery();
@@ -344,7 +371,7 @@ export function ComputerSetupSteps(props: {
     <div class="flex flex-col gap-4">
       <StepHeader
         step={props.step}
-        skipsClaude={props.choice === 'macro_credits'}
+        claude={claudeStepMark(props.choice, props.signInVisited ?? false)}
       />
       <Show when={showProgress()}>
         <SetupProgressList
@@ -477,10 +504,11 @@ export function ComputerSetupSteps(props: {
             <p class="text-sm text-ink-muted">
               {t('computers.setupContinuesInBackground')}
             </p>
+            {/* No sign-in can happen until setup is retried. */}
+            <p class="text-sm text-ink-muted">
+              {t('computers.claudeSharedAccount')}
+            </p>
           </Show>
-          <p class="text-sm text-ink-muted">
-            {t('computers.claudeSharedAccount')}
-          </p>
         </ActionDialogShell.Body>
         <ActionDialogShell.Footer>
           <Button type="button" variant="ghost" onClick={props.onClose}>

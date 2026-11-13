@@ -137,7 +137,7 @@ fn compute_next_cursor(
 
 use crate::api::search::terms::{
     drop_wordless_terms, record_term_counts, resolve_document_term_matching, split_search_terms,
-    trimmed_query,
+    term_matching_for_cursor, trimmed_query,
 };
 
 /// Per-request cap on whitespace-delimited search terms. Each term expands
@@ -220,6 +220,7 @@ fn unified_search_span(
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
         search.term_matching = tracing::field::Empty,
+        search.term_matching_from_cursor = tracing::field::Empty,
     )
 }
 
@@ -407,6 +408,14 @@ async fn search_unified_sources(
         TermMatching::All
     };
 
+    let first_page_term_matching = cursor
+        .as_ref()
+        .and_then(|cursor| cursor.document_term_matching);
+    tracing::Span::current().record(
+        "search.term_matching_from_cursor",
+        first_page_term_matching.is_some(),
+    );
+
     // Await all tasks in parallel
     let (filter_responses, document_term_matching) = tokio::join!(
         async {
@@ -460,6 +469,7 @@ async fn search_unified_sources(
             &user_context.user_id,
             requested_term_matching,
             search_terms.len(),
+            first_page_term_matching,
         ),
     );
     tracing::Span::current().record(
@@ -870,6 +880,11 @@ async fn search_unified_sources(
                 project_name_cursor: SearchCursorOption::Done,
                 crm_company_cursor: new_crm_cursor,
                 channel_name_cursor: new_channel_cursor,
+                document_term_matching: term_matching_for_cursor(
+                    requested_term_matching,
+                    search_terms.len(),
+                    document_term_matching,
+                ),
             };
             cursor.encode()
         } else {
