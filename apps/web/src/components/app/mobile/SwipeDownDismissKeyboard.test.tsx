@@ -87,6 +87,19 @@ it('dismisses once the draft reaches its top and the drag keeps going down', () 
   expect(document.activeElement).not.toBe(editor);
 });
 
+it('does not count the move that scrolled the draft to its top', () => {
+  const { editor, textScroll } = renderComposer(8);
+
+  touch(editor, 'touchstart', 400);
+  touch(editor, 'touchmove', 450);
+  textScroll.scrollTop = 0;
+  touch(editor, 'touchmove', 460);
+  expect(document.activeElement).toBe(editor);
+
+  touch(editor, 'touchmove', 467);
+  expect(document.activeElement).not.toBe(editor);
+});
+
 it('dismisses on a swipe down inside a draft that is already at its top', () => {
   const { editor } = renderComposer(0);
 

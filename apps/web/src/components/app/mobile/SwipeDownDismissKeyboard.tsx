@@ -55,10 +55,12 @@ export function SwipeDownDismissKeyboard() {
   let startY = 0;
   let startedOnInteractive = false;
   let composerScroll: Element | null = null;
+  let scrollingComposer = false;
 
   function handleTouchStart(e: TouchEvent) {
     startedOnInteractive = isInteractiveTarget(e.target);
     composerScroll = composerScrollOf(e.target);
+    scrollingComposer = false;
     const touch = e.touches[0];
     if (touch) startY = touch.clientY;
   }
@@ -73,6 +75,14 @@ export function SwipeDownDismissKeyboard() {
     // it. Measure the dismiss swipe from where the text reached its top, so
     // reading a long draft never closes the keyboard on the way.
     if (composerScroll && composerScroll.scrollTop > 0) {
+      scrollingComposer = true;
+      startY = touch.clientY;
+      return;
+    }
+    // The text reached its top during this move, so part of the move scrolled
+    // it; the dismiss swipe starts from here.
+    if (scrollingComposer) {
+      scrollingComposer = false;
       startY = touch.clientY;
       return;
     }
