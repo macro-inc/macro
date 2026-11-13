@@ -16,7 +16,8 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/api.rs`: the full agent-session HTTP API (durable metadata/log reads
   plus live in-memory transport operations), composed from each domain
   crate's own router (`agent_session`, `agent_changes`, `agent_egress`,
-  `agent_harness`).
+  `agent_harness`), plus agent accounts' wake telemetry (`agent_wakes`,
+  wired in `src/agent_wakes.rs`).
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
@@ -208,7 +209,7 @@ Pulumi stacks; they do not host extra agent processes.
 - Owns: the deployed process wiring every agent-session domain crate
   together — not the domain logic itself, which lives in `crates/agent_harness`,
   `crates/agent_session`, `crates/agent_changes`, `crates/agent_egress`,
-  `crates/folds/agent_fold`, `crates/agent_inmem`, `crates/agent_trigger`.
+  `crates/agent_wakes`, `crates/folds/agent_fold`, `crates/agent_inmem`, `crates/agent_trigger`.
 - Not here: coding-agent business logic for a specific runtime (e.g. Cursor
   API calls) → `crates/codex_connection`, `crates/codex_cloud_agents`.
 
