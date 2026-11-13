@@ -15,8 +15,9 @@ shape grants no access: the owning service still verifies hashes and ownership.
 `rollout` is the one place an agent's own calls check `enable-agent-teammates`:
 `agent_teammates_enabled` evaluates it for the agent's creator through the
 `AgentCreators` port (fail closed). Its only persistence is `PgAgentCreators`
-(`postgres` feature), one read of `team_agents.created_by`;
-`FakeAgentCreators` is for tests.
+(`postgres` feature), one read of `team_agents.created_by`, falling back to the
+team's `owner_id` when the creator's account is gone; `FakeAgentCreators` is
+for tests. Wired by agent_harness_service and authentication_service.
 
 ## Checks
 

@@ -2301,6 +2301,7 @@ dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
  "agent_correlation",
+ "agent_credentials",
  "agent_git",
  "ai_billing",
  "ai_usage",

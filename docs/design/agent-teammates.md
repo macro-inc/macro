@@ -148,6 +148,7 @@ The agent's account appears only as a hash.
   agent_git, the model and speech gateways, MCP keys) checks the agent's
   creator (`team_agents.created_by`, via `agent_credentials::rollout`), since
   PostHog targeting never matches an agent's own account. A creator who has
-  left the team still decides; a deleted creator account, a missing row, an
-  unreachable flag service, or the flag off all mean off.
+  left the team still decides; once the creator's account is deleted, the
+  team's owner decides. A missing row, an unreachable flag service, or the
+  flag off all mean off.
 - `enable-agent-vault`: the secrets capability.

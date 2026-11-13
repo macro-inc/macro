@@ -5,13 +5,14 @@
 //! its team's rollout as seen by the person who invited it: every surface an
 //! agent itself calls (its enrollment, git, model and speech gateways, MCP
 //! keys) evaluates [`AGENT_TEAMMATES_FLAG`] for the agent's creator
-//! (`team_agents.created_by`), through [`agent_teammates_enabled`].
+//! (`team_agents.created_by`), through [`agent_teammates_enabled`]. When the
+//! creator's account was deleted (`created_by` is cleared), the team's owner
+//! decides instead.
 //!
-//! Fails closed: no flag provider, no `team_agents` row, a creator whose
-//! account was deleted (`created_by` is cleared), or a failed lookup or load
-//! all mean off. A creator who later leaves the team still decides: the flag
-//! is a rollout gate, not authorization, and a team stops an agent by
-//! removing it.
+//! Fails closed: no flag provider, no `team_agents` row, no one to follow,
+//! or a failed lookup or load all mean off. A creator who later leaves the
+//! team still decides: the flag is a rollout gate, not authorization, and a
+//! team stops an agent by removing it.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -32,8 +33,9 @@ pub use postgres::PgAgentCreators;
 
 /// Who invited each agent teammate.
 pub trait AgentCreators: Send + Sync {
-    /// The person who invited `agent`. `None` when the account is no agent
-    /// teammate, or its creator's account is gone.
+    /// The person whose rollout `agent` follows: who invited it, or its
+    /// team's owner when that account is gone. `None` when the account is no
+    /// agent teammate, or there is no one to follow.
     fn creator_of(
         &self,
         agent: &MacroUserIdStr<'_>,
@@ -51,14 +53,20 @@ pub async fn agent_teammates_enabled<Creators: AgentCreators, Flags: FeatureFlag
         return false;
     };
 
+    let agent_id = crate::telemetry_id(agent.as_ref());
+
     let creator = match creators.creator_of(agent).await {
         Ok(Some(creator)) => creator,
         Ok(None) => {
-            tracing::warn!("this agent has no creator; agent teammates are off for it");
+            tracing::warn!(
+                agent = %agent_id,
+                "this agent has no creator or team owner; agent teammates are off for it"
+            );
             return false;
         }
         Err(error) => {
             tracing::warn!(
+                agent = %agent_id,
                 ?error,
                 "could not read this agent's creator; agent teammates are off for it"
             );
@@ -70,6 +78,7 @@ pub async fn agent_teammates_enabled<Creators: AgentCreators, Flags: FeatureFlag
         Ok(snapshot) => snapshot.is_enabled(AGENT_TEAMMATES_FLAG),
         Err(error) => {
             tracing::warn!(
+                agent = %agent_id,
                 ?error,
                 "could not load the feature flags of this agent's creator; agent teammates are off for it"
             );

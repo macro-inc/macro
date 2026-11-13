@@ -10,7 +10,8 @@ use super::AgentCreators;
 #[cfg(test)]
 mod test;
 
-/// Reads `team_agents.created_by`.
+/// Reads `team_agents.created_by`, or the team's `owner_id` when the
+/// creator's account is gone.
 #[derive(Clone)]
 pub struct PgAgentCreators {
     pool: PgPool,
@@ -28,20 +29,25 @@ impl AgentCreators for PgAgentCreators {
         &self,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<Option<MacroUserIdStr<'static>>, Report> {
-        let created_by = sqlx::query_scalar!(
-            "SELECT created_by FROM team_agents WHERE user_id = $1",
+        // A deleted creator clears `created_by`; the team's owner then decides.
+        let responsible = sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(ta.created_by, t.owner_id) AS "responsible!"
+            FROM team_agents ta
+            JOIN team t ON t.id = ta.team_id
+            WHERE ta.user_id = $1
+            "#,
             agent.as_ref(),
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| Report::new(error).into_dynamic())?
-        .flatten();
+        .map_err(|error| Report::new(error).into_dynamic())?;
 
-        let Some(created_by) = created_by else {
+        let Some(responsible) = responsible else {
             return Ok(None);
         };
 
-        let creator = MacroUserIdStr::parse_from_str(&created_by)
+        let creator = MacroUserIdStr::parse_from_str(&responsible)
             .map_err(|_| rootcause::report!("a stored creator id is malformed"))?
             .into_owned();
         Ok(Some(creator))

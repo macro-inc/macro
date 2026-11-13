@@ -276,6 +276,23 @@ impl Computers for FakeComputers {
     }
 }
 
+/// Each agent follows the admin who invited it; with no creator, the fake
+/// has no team owner to fall back on.
+impl agent_credentials::AgentCreators for FakeRepository {
+    async fn creator_of(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<MacroUserIdStr<'static>>, Report> {
+        Ok(self
+            .agents
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|record| record.user_id.as_ref() == agent.as_ref())
+            .and_then(|record| record.created_by.clone()))
+    }
+}
+
 /// The rollout for people, which a test can turn off after an invite. Like
 /// PostHog's targeting, it never matches an agent's own account.
 #[derive(Clone)]
@@ -314,6 +331,7 @@ type Service = TeamAgentServiceImpl<
     FakeApiKeys,
     FakeRepos,
     FakeComputers,
+    FakeRepository,
     Flags,
 >;
 
@@ -330,11 +348,12 @@ fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal
         agents: Arc::default(),
     };
     let service = TeamAgentServiceImpl::new(
-        repository,
+        repository.clone(),
         FakeMembership(journal.clone()),
         FakeApiKeys(journal.clone()),
         FakeRepos(journal.clone()),
         computers,
+        repository,
         Some(flags.clone()),
         Addresses,
     );
@@ -623,10 +642,10 @@ async fn with_the_rollout_off_for_its_creator_an_agents_computer_enrolls_without
 }
 
 #[tokio::test]
-async fn an_agent_whose_creator_is_gone_enrolls_without_its_credentials() {
+async fn an_agent_with_no_one_to_follow_enrolls_without_its_credentials() {
     let (service, journal) = service(true, FakeComputers::default());
     service.create(receipt(), request()).await.unwrap();
-    // Deleting the creator's account clears `created_by`.
+    // No creator, and no team owner to fall back on.
     service.repository.agents.lock().unwrap()[0].created_by = None;
     let before = journal.entries().len();
 

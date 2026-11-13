@@ -2,8 +2,8 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
 
-/// An admin, two agents they invited, and a third agent whose creator's
-/// account is deleted afterwards.
+/// The team owner, an agent they invited, and an agent invited by someone
+/// whose account is deleted afterwards.
 async fn insert_fixtures(pool: &PgPool) {
     sqlx::raw_sql(
         r#"
@@ -31,7 +31,7 @@ async fn insert_fixtures(pool: &PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_agents_creator_comes_from_its_team_agents_row(pool: PgPool) {
+async fn an_agent_follows_its_creator_then_its_team_owner(pool: PgPool) {
     insert_fixtures(&pool).await;
     let creators = PgAgentCreators::new(pool);
 
@@ -43,8 +43,45 @@ async fn an_agents_creator_comes_from_its_team_agents_row(pool: PgPool) {
         creators.creator_of(&sam).await.unwrap(),
         Some(admin.clone().into_owned())
     );
-    // The creator's account was deleted, clearing `created_by`.
-    assert_eq!(creators.creator_of(&kim).await.unwrap(), None);
+    // The creator's account was deleted, clearing `created_by`: the team's
+    // owner decides.
+    assert_eq!(
+        creators.creator_of(&kim).await.unwrap(),
+        Some(admin.clone().into_owned())
+    );
     // A person has no `team_agents` row.
     assert_eq!(creators.creator_of(&admin).await.unwrap(), None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn with_its_creator_gone_the_team_owners_rollout_decides(pool: PgPool) {
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    use feature_flags::{FlagSnapshot, FlagValue};
+
+    insert_fixtures(&pool).await;
+    let creators = PgAgentCreators::new(pool);
+    let kim = MacroUserIdStr::parse_from_str("macro|kim@agents.macro.invalid").unwrap();
+    let admin = MacroUserIdStr::parse_from_str("macro|admin@macro.com")
+        .unwrap()
+        .into_owned();
+
+    let mut on = FakeFeatureFlags::default();
+    on.set(
+        admin.clone(),
+        Ok(FlagSnapshot::new([(
+            crate::AGENT_TEAMMATES_FLAG.to_owned(),
+            FlagValue::Boolean(true),
+        )])),
+    );
+    assert!(crate::agent_teammates_enabled(&creators, Some(&on), &kim).await);
+
+    let mut off = FakeFeatureFlags::default();
+    off.set(
+        admin,
+        Ok(FlagSnapshot::new([(
+            crate::AGENT_TEAMMATES_FLAG.to_owned(),
+            FlagValue::Boolean(false),
+        )])),
+    );
+    assert!(!crate::agent_teammates_enabled(&creators, Some(&off), &kim).await);
 }

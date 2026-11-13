@@ -41,11 +41,7 @@ fn keys(creator_rollout_on: bool) -> AgentUserApiKeys<KeysOf> {
             feature_flags::FlagValue::Boolean(!creator_rollout_on),
         )])),
     );
-    AgentUserApiKeys::with_lookup(
-        KeysOf,
-        Arc::new(|user| Box::pin(async move { user.as_ref() == AGENT })),
-        BrainRollout::new(creators, flags),
-    )
+    AgentUserApiKeys::new(KeysOf, BrainRollout::new(creators, flags))
 }
 
 #[tokio::test]
@@ -55,13 +51,10 @@ async fn an_agent_with_the_rollout_on_for_its_creator_signs_in_with_its_own_key(
 
 #[tokio::test]
 async fn a_person_or_an_agent_with_the_rollout_off_for_its_creator_is_refused() {
+    // The rollout is on for the person, but they are no agent teammate.
     assert_eq!(keys(true).user(PERSON).await, None);
     assert_eq!(keys(false).user(AGENT).await, None);
     // No flag provider: closed.
-    let unflagged = AgentUserApiKeys::with_lookup(
-        KeysOf,
-        Arc::new(|_| Box::pin(async { true })),
-        BrainRollout::default(),
-    );
+    let unflagged = AgentUserApiKeys::new(KeysOf, BrainRollout::default());
     assert_eq!(unflagged.user(AGENT).await, None);
 }

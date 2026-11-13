@@ -58,7 +58,8 @@ Pulumi stacks; they do not host extra agent processes.
   and counts usage against the agent account, with no session entity. It
   serves only agents with `enable-agent-teammates` on for their creator
   (`BrainRollout` over `agent_credentials::rollout`; PostHog never targets an
-  agent's own account; no provider, no creator or a failed load refuses with
+  agent's own account; a deleted creator falls back to the team owner; no
+  provider, no one to follow or a failed load refuses with
   403). Agent git and agent MCP keys share the same check.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
