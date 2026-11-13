@@ -43,6 +43,12 @@ for (const provider of PROVIDERS) {
         return body.messages;
       };
       const tabs = page.getByRole('navigation', { name: 'Email tabs' });
+      // By its name: "Email scheduled for …" can show beside it when the
+      // composer reads the schedule back before its own request returns.
+      const scheduledNotice = page.getByRole('status', {
+        name: 'Email scheduled',
+        exact: true,
+      });
 
       await composeNew(page, mailbox, {
         to: grace,
@@ -53,7 +59,7 @@ for (const provider of PROVIDERS) {
       await page
         .getByRole('button', { name: 'Schedule send', exact: true })
         .click();
-      await expect(notice(page, 'Email scheduled')).toBeVisible();
+      await expect(scheduledNotice).toBeVisible();
 
       // Macro holds it for tomorrow; nothing has reached Grace.
       await expect.poll(async () => (await scheduled()).length).toBe(1);
@@ -96,7 +102,7 @@ for (const provider of PROVIDERS) {
       await page
         .getByRole('button', { name: 'Schedule send', exact: true })
         .click();
-      await expect(notice(page, 'Email scheduled')).toBeVisible();
+      await expect(scheduledNotice).toBeVisible();
       await expect.poll(async () => (await scheduled()).length).toBe(1);
       expect(await readMailbox(mailbox, grace)).toEqual([]);
 
