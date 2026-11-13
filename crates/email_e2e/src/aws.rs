@@ -152,6 +152,15 @@ impl Aws {
         refused.extend(std::iter::repeat_n(queue_url.to_owned(), times));
     }
 
+    /// How many refusals asked for at `queue_url` no send has met yet.
+    pub(crate) fn refusals_left(&self, queue_url: &str) -> usize {
+        let refused = self
+            .refused_sends
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        refused.iter().filter(|url| *url == queue_url).count()
+    }
+
     /// Stops the endpoint.
     pub(crate) async fn stop(self) {
         self.cancel.cancel();

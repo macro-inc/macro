@@ -470,6 +470,16 @@ impl Stack {
         Ok(())
     }
 
+    /// How many of the refusals asked for with [`Self::refuse_queue_sends`]
+    /// no send to the queue has met yet: zero once the services tried.
+    pub fn queue_send_refusals_left(&self, queue: &str) -> Result<usize, Report> {
+        let url = &self.queues().named(queue)?.url;
+        match &self.aws {
+            Some(aws) => Ok(aws.refusals_left(url)),
+            None => bail!("the stack was torn down"),
+        }
+    }
+
     /// A connection to the scenario's Redis database, the one the email
     /// services use: for reading or removing what they keep there.
     pub async fn redis(&self) -> Result<redis::aio::MultiplexedConnection, Report> {

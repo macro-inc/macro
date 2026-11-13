@@ -33,11 +33,17 @@ pub(crate) fn document_storage_env(service: &DocumentStorage<'_>) -> BTreeMap<St
         ("PORT", service.port.to_string()),
         ("DATABASE_URL", service.database_url.clone()),
         ("DATABASE_URL_READONLY", service.database_url.clone()),
-        ("DOCUMENT_STORAGE_SERVICE_AUTH_KEY", INTERNAL_API_KEY.to_owned()),
+        (
+            "DOCUMENT_STORAGE_SERVICE_AUTH_KEY",
+            INTERNAL_API_KEY.to_owned(),
+        ),
         ("SYNC_SERVICE_AUTH_KEY", INTERNAL_API_KEY.to_owned()),
         ("OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL", own_url),
         ("OPENSEARCH_URL", service.search_url.clone()),
-        ("CAL_EVENT_TYPE_CONTENT_NAMES_KEY", CAL_EVENT_TYPES.to_owned()),
+        (
+            "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
+            CAL_EVENT_TYPES.to_owned(),
+        ),
         ("DOCUMENT_LIMIT", "20".to_owned()),
         (
             "DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_EXPIRY_SECONDS",

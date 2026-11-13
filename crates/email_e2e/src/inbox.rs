@@ -497,7 +497,10 @@ impl Inbox {
             "mutation($input: SendEmailAttemptInput!) {{ \
              sendEmailAttempt(input: $input) {{ attempt {{ {SEND_ATTEMPT_FIELDS} }} }} }}"
         );
-        let data = self.user.graphql(&query, &json!({ "input": input })).await?;
+        let data = self
+            .user
+            .graphql(&query, &json!({ "input": input }))
+            .await?;
         Ok(data["sendEmailAttempt"]["attempt"].clone())
     }
 
