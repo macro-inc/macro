@@ -818,7 +818,8 @@ impl<Sessions: RoutineSessions> Drop for Cleanup<Sessions> {
         tokio::spawn(
             async move {
                 if keeps {
-                    // Its row stays drafting, and the sweep fails it.
+                    // Its row stays: a job cut off fails it as timed out, and the
+                    // sweep fails one dropped with its job.
                     stop_or_delete(sessions.as_ref(), action, stopped).await;
                     return;
                 }
