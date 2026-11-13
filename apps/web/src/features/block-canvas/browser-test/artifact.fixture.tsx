@@ -14,6 +14,9 @@ import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { render } from 'solid-js/web';
+import { macroDarkTheme } from '../../theme/themes/macro-dark';
+import { macroLightTheme } from '../../theme/themes/macro-light';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { CanvasNextEditor } from '../canvas-next';
 import { plainRichText } from '../core/text-codec';
 
@@ -98,10 +101,20 @@ const deck = createScene([
     type: 'connector',
     placement: { parentId: 'scene-root', sortKey: 'a0' },
     transform: translation(0, 0),
-    appearance: { fill: 'transparent', stroke: 'var(--color-ink)', strokeWidth: 4 },
+    appearance: {
+      fill: 'transparent',
+      stroke: 'var(--color-ink)',
+      strokeWidth: 4,
+    },
     geometry: {
-      start: { point: { x: 0, y: 0 }, binding: { targetId: '2', anchor: 'bottom' } },
-      end: { point: { x: 0, y: 0 }, binding: { targetId: '3', anchor: 'right' } },
+      start: {
+        point: { x: 0, y: 0 },
+        binding: { targetId: '2', anchor: 'bottom' },
+      },
+      end: {
+        point: { x: 0, y: 0 },
+        binding: { targetId: '3', anchor: 'right' },
+      },
       route: 'stepped',
       startHead: 'none',
       endHead: 'arrow',
@@ -120,6 +133,22 @@ const initial = {
       ]),
 } as const;
 const editable = params.has('edit');
+
+// `?theme=light` or `?theme=dark` applies that app theme; touch devices get
+// the app's touch styles, as boot sets them.
+const theme = params.get('theme');
+if (theme) {
+  const light = theme === 'light';
+  for (const [key, token] of Object.entries(
+    themeCssVars(light ? macroLightTheme : macroDarkTheme)
+  ))
+    document.documentElement.style.setProperty(key, token);
+  document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+  document.documentElement.dataset.themeLight = String(light);
+}
+document.documentElement.dataset.touchDevice = String(
+  matchMedia('(pointer: coarse)').matches
+);
 
 declare global {
   interface Window {

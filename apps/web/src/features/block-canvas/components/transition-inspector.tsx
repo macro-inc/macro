@@ -31,8 +31,14 @@ const KINDS: Record<SlideTransitionKind, { label: string; hint: string }> = {
   dissolve: { label: 'Dissolve', hint: 'Blur one slide into the next' },
   push: { label: 'Push', hint: 'The next slide pushes this one off' },
   cover: { label: 'Cover', hint: 'The next slide slides in over this one' },
-  uncover: { label: 'Uncover', hint: 'This slide slides away to reveal the next' },
-  wipe: { label: 'Wipe', hint: 'An edge sweeps across to reveal the next slide' },
+  uncover: {
+    label: 'Uncover',
+    hint: 'This slide slides away to reveal the next',
+  },
+  wipe: {
+    label: 'Wipe',
+    hint: 'An edge sweeps across to reveal the next slide',
+  },
   split: { label: 'Split', hint: 'Open from, or close onto, the center' },
   iris: { label: 'Iris', hint: 'A circle opens from the center' },
   zoom: { label: 'Zoom', hint: 'Zoom through to the next slide' },
@@ -40,11 +46,18 @@ const KINDS: Record<SlideTransitionKind, { label: string; hint: string }> = {
   cube: { label: 'Cube', hint: 'Turn to the next face of a cube' },
   pan: { label: 'Pan', hint: 'Glide across the canvas to the next slide' },
   fly: { label: 'Fly', hint: 'Pull back, travel and settle on the next slide' },
-  overview: { label: 'Overview', hint: 'Zoom out to the whole canvas, then in' },
+  overview: {
+    label: 'Overview',
+    hint: 'Zoom out to the whole canvas, then in',
+  },
   path: { label: 'Path', hint: 'Follow the arrow that connects the slides' },
 };
 
-const DIRECTIONS: { value: TransitionDirection; label: string; icon: typeof ArrowLeft }[] = [
+const DIRECTIONS: {
+  value: TransitionDirection;
+  label: string;
+  icon: typeof ArrowLeft;
+}[] = [
   { value: 'left', label: 'Left', icon: ArrowLeft },
   { value: 'right', label: 'Right', icon: ArrowRight },
   { value: 'up', label: 'Up', icon: ArrowUp },
@@ -52,7 +65,7 @@ const DIRECTIONS: { value: TransitionDirection; label: string; icon: typeof Arro
 ];
 
 const EASINGS: { value: TransitionEasing; label: string }[] = [
-  { value: 'easeInOut', label: 'Ease in and out' },
+  { value: 'easeInOut', label: 'Smooth' },
   { value: 'easeOut', label: 'Ease out' },
   { value: 'easeIn', label: 'Ease in' },
   { value: 'ease', label: 'Ease' },
@@ -93,14 +106,21 @@ export function TransitionInspector(props: {
   const [hovered, setHovered] = createSignal<TileValue>();
   const [tap, setTap] = createSignal<{ value: TileValue; count: number }>();
   const selected = (): TileValue => props.own?.kind ?? 'default';
-  const tiles: TileValue[] = ['default', ...CLASSIC_TRANSITION_KINDS, ...CANVAS_TRANSITION_KINDS];
+  const tiles: TileValue[] = [
+    'default',
+    ...CLASSIC_TRANSITION_KINDS,
+    ...CANVAS_TRANSITION_KINDS,
+  ];
   const tileButtons: HTMLButtonElement[] = [];
   const [focusIndex, setFocusIndex] = createSignal<number>();
 
   /** The slide's transition with one field changed; an inherited one is
    * copied first so the edit keeps what was playing. */
   const edit = (patch: Partial<SlideTransition>) =>
-    props.onChange({ ...(props.own ?? { kind: props.effective.kind }), ...patch });
+    props.onChange({
+      ...(props.own ?? { kind: props.effective.kind }),
+      ...patch,
+    });
 
   const choose = (value: TileValue) => {
     if (value === 'default') {
@@ -148,11 +168,14 @@ export function TransitionInspector(props: {
           aria-checked={selected() === value}
           aria-label={value === 'default' ? hint() : label()}
           data-transition-tile={value}
-          tabIndex={(focusIndex() ?? tiles.indexOf(selected())) === index ? 0 : -1}
+          tabIndex={
+            (focusIndex() ?? tiles.indexOf(selected())) === index ? 0 : -1
+          }
           class="flex w-full min-w-0 flex-col items-center gap-1 rounded-md border px-0.5 pt-1.5 pb-1 outline-none touch:min-h-[44px] focus-visible:ring-2 focus-visible:ring-edge-muted"
           classList={{
             'border-ink bg-hover': selected() === value,
-            'border-transparent not-touch:hover:bg-hover/60': selected() !== value,
+            'border-transparent not-touch:hover:bg-hover/60':
+              selected() !== value,
           }}
           onPointerEnter={(event) => {
             if (event.pointerType === 'mouse') setHovered(value);
@@ -190,11 +213,16 @@ export function TransitionInspector(props: {
     if (!props.deckDefault) return 'No deck default';
     return `Deck default: ${KINDS[props.deckDefault.kind].label}`;
   };
-  const directional = () => DIRECTIONAL_TRANSITION_KINDS.has(props.effective.kind);
+  const directional = () =>
+    DIRECTIONAL_TRANSITION_KINDS.has(props.effective.kind);
 
   return (
     <InspectorSection title="Transition">
-      <div role="radiogroup" aria-label="Transition into this slide" class="space-y-2">
+      <div
+        role="radiogroup"
+        aria-label="Transition into this slide"
+        class="space-y-2"
+      >
         <InspectorField label="Classic">
           <div class="grid grid-cols-4 gap-1">
             <For each={tiles.slice(0, CLASSIC_TRANSITION_KINDS.length + 1)}>
@@ -205,12 +233,17 @@ export function TransitionInspector(props: {
         <InspectorField label="Across the canvas">
           <div class="grid grid-cols-4 gap-1">
             <For each={tiles.slice(CLASSIC_TRANSITION_KINDS.length + 1)}>
-              {(value, index) => tile(value, index() + CLASSIC_TRANSITION_KINDS.length + 1)}
+              {(value, index) =>
+                tile(value, index() + CLASSIC_TRANSITION_KINDS.length + 1)
+              }
             </For>
           </div>
         </InspectorField>
       </div>
-      <p class="text-[10px] text-ink-muted" data-testid="canvas-transition-source">
+      <p
+        class="text-[10px] text-ink-muted"
+        data-testid="canvas-transition-source"
+      >
         {sourceNote()}
       </p>
       <Show when={props.effective.kind !== 'none'}>
@@ -244,7 +277,6 @@ export function TransitionInspector(props: {
               aria-label="Transition direction"
               size="sm"
               iconOnly
-              fullWidth
               options={DIRECTIONS}
               value={props.effective.direction}
               onChange={(direction) => edit({ direction })}
@@ -272,7 +304,7 @@ export function TransitionInspector(props: {
               disabled={!props.own}
               onClick={setDefault()}
             >
-              Make default
+              Set default
             </Button>
           )}
         </Show>

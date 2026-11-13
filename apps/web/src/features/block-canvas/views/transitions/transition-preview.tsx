@@ -32,10 +32,13 @@ export function TransitionPreview(props: {
 }) {
   const index = props.slides.findIndex((item) => item.id === props.slide.id);
   const from =
-    props.slides[index - 1] ?? props.slides[index + 1] ?? blankBefore(props.slide);
+    props.slides[index - 1] ??
+    props.slides[index + 1] ??
+    blankBefore(props.slide);
   const [current, setCurrent] = createSignal(from.id);
   const slides = () => {
-    const to = props.slides.find((item) => item.id === props.slide.id) ?? props.slide;
+    const to =
+      props.slides.find((item) => item.id === props.slide.id) ?? props.slide;
     const start = props.slides.find((item) => item.id === from.id) ?? from;
     return [start, to];
   };

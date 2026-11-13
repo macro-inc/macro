@@ -98,7 +98,11 @@ function forwardKeyframes(
         { opacity: 0, filter: 'blur(10px) saturate(1.4)' },
       ],
       incoming: [
-        { opacity: 0, filter: 'blur(10px) saturate(1.4)', transform: 'scale(1.02)' },
+        {
+          opacity: 0,
+          filter: 'blur(10px) saturate(1.4)',
+          transform: 'scale(1.02)',
+        },
         { opacity: 1, filter: 'blur(0px) saturate(1)', transform: 'scale(1)' },
       ],
       incomingOnTop: true,
@@ -132,14 +136,15 @@ function forwardKeyframes(
     }))
     .with('wipe', () => ({
       outgoing: [],
-      incoming: [{ clipPath: wipeStart(direction) }, { clipPath: 'inset(0% 0% 0% 0%)' }],
+      incoming: [
+        { clipPath: wipeStart(direction) },
+        { clipPath: 'inset(0% 0% 0% 0%)' },
+      ],
       incomingOnTop: true,
     }))
     .with('split', () => {
       // Left and up open from a center seam; right and down close onto it.
-      const seam = horizontal
-        ? 'inset(0% 50% 0% 50%)'
-        : 'inset(50% 0% 50% 0%)';
+      const seam = horizontal ? 'inset(0% 50% 0% 50%)' : 'inset(50% 0% 50% 0%)';
       const opens = direction === 'left' || direction === 'up';
       if (opens)
         return {

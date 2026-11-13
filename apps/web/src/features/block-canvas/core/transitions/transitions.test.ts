@@ -1,8 +1,4 @@
-import {
-  createScene,
-  type ShapeItem,
-  translation,
-} from '@macro-inc/graphics';
+import { createScene, type ShapeItem, translation } from '@macro-inc/graphics';
 import { describe, expect, it } from 'vitest';
 import {
   cameraTransform,
@@ -90,7 +86,9 @@ describe('camera paths', () => {
 
   it('fits a slide exactly to the stage', () => {
     expect(a).toEqual({ x: 800, y: 450, zoom: 1 });
-    expect(cameraTransform(a, { x: 0, y: 0 }, 1, STAGE)).toBe('translate(0px, 0px) scale(1)');
+    expect(cameraTransform(a, { x: 0, y: 0 }, 1, STAGE)).toBe(
+      'translate(0px, 0px) scale(1)'
+    );
   });
 
   it('pans at a constant zoom between equal slides', () => {
@@ -137,7 +135,16 @@ describe('camera paths', () => {
     expect(pointAlong(route, 0.5)).toEqual({ x: 100, y: 100 });
     expect(pointAlong(route, 1)).toEqual({ x: 100, y: 300 });
 
-    const path = routePath(a, b, [{ x: 1600, y: 450 }, { x: 4800, y: 3000 }, { x: 8000, y: 450 }], STAGE);
+    const path = routePath(
+      a,
+      b,
+      [
+        { x: 1600, y: 450 },
+        { x: 4800, y: 3000 },
+        { x: 8000, y: 450 },
+      ],
+      STAGE
+    );
     expect(path(0)).toEqual(a);
     expect(path(1).x).toBeCloseTo(b.x);
     expect(path(0.5).y).toBeGreaterThan(1000);
@@ -145,7 +152,12 @@ describe('camera paths', () => {
 });
 
 describe('camera plans', () => {
-  const artifact = (id: string, x: number, y: number, key: string): ShapeItem<'artifact'> => ({
+  const artifact = (
+    id: string,
+    x: number,
+    y: number,
+    key: string
+  ): ShapeItem<'artifact'> => ({
     id,
     type: 'artifact',
     placement: { parentId: 'scene-root', sortKey: key },
@@ -168,14 +180,24 @@ describe('camera plans', () => {
     transform: translation(0, 0),
     appearance: { fill: 'transparent', stroke: '#000' },
     geometry: {
-      start: { point: { x: 0, y: 0 }, binding: { targetId: 'b', anchor: 'bottom' } },
-      end: { point: { x: 0, y: 0 }, binding: { targetId: 'a', anchor: 'bottom' } },
+      start: {
+        point: { x: 0, y: 0 },
+        binding: { targetId: 'b', anchor: 'bottom' },
+      },
+      end: {
+        point: { x: 0, y: 0 },
+        binding: { targetId: 'a', anchor: 'bottom' },
+      },
       route: 'stepped',
       startHead: 'none',
       endHead: 'arrow',
     },
   };
-  const document = createScene([artifact('a', 0, 0, 'a0'), artifact('b', 1000, 0, 'a1'), connector]);
+  const document = createScene([
+    artifact('a', 0, 0, 'a0'),
+    artifact('b', 1000, 0, 'a1'),
+    connector,
+  ]);
   const a = document.items.a as ShapeItem<'artifact'>;
   const b = document.items.b as ShapeItem<'artifact'>;
 
@@ -203,6 +225,8 @@ describe('camera plans', () => {
     expect(plan.views.at(-1)?.x).toBeCloseTo(1160);
     // The elbow connector dips below the slides, so the camera does too.
     expect(Math.max(...plan.views.map((view) => view.y))).toBeGreaterThan(180);
-    expect(plan.baseScale).toBeLessThanOrEqual(Math.min(...plan.views.map((v) => v.zoom)));
+    expect(plan.baseScale).toBeLessThanOrEqual(
+      Math.min(...plan.views.map((v) => v.zoom))
+    );
   });
 });

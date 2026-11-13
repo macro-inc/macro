@@ -24,14 +24,18 @@ export function easingCss(easing: TransitionEasing): string {
  * functions of a curve parameter, so solve x(u) = t for u (Newton steps, then
  * bisection when the slope is too flat), and return y(u).
  */
-export function easingFunction(easing: TransitionEasing): (t: number) => number {
+export function easingFunction(
+  easing: TransitionEasing
+): (t: number) => number {
   const [x1, y1, x2, y2] = CURVES[easing];
   if (easing === 'linear') return (t) => clamp01(t);
 
   const coordinate = (u: number, p1: number, p2: number) =>
     3 * (1 - u) * (1 - u) * u * p1 + 3 * (1 - u) * u * u * p2 + u * u * u;
   const slope = (u: number, p1: number, p2: number) =>
-    3 * (1 - u) * (1 - u) * p1 + 6 * (1 - u) * u * (p2 - p1) + 3 * u * u * (1 - p2);
+    3 * (1 - u) * (1 - u) * p1 +
+    6 * (1 - u) * u * (p2 - p1) +
+    3 * u * u * (1 - p2);
 
   return (input) => {
     const t = clamp01(input);

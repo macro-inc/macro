@@ -20,7 +20,12 @@ export function slideContentRect(
 ): Bounds {
   const box = document.items[slide.id]
     ? enclosing(nodeCorners(document, slide.id))
-    : { x: 0, y: 0, width: slide.geometry.width, height: slide.geometry.height };
+    : {
+        x: 0,
+        y: 0,
+        width: slide.geometry.width,
+        height: slide.geometry.height,
+      };
   return artifactContentRect(box, {
     width: slide.geometry.designWidth,
     height: slide.geometry.designHeight,
@@ -31,7 +36,9 @@ export function slideContentRect(
 export function sceneBounds(document: GraphicsDocument): Bounds | undefined {
   const points = children(document).flatMap((id) => {
     const bounds = worldBounds(document, id);
-    if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite))
+    if (
+      ![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite)
+    )
       return [];
 
     return [
@@ -64,8 +71,11 @@ export function connectorRoute(
     if (projection.item?.type !== 'connector') continue;
 
     const geometry = projection.item.geometry;
-    const points = connectorPath(geometry.start, geometry.end, geometry.route)
-      .points.map((point) => transformPoint(projection.transform, point));
+    const points = connectorPath(
+      geometry.start,
+      geometry.end,
+      geometry.route
+    ).points.map((point) => transformPoint(projection.transform, point));
     return forward ? points : points.reverse();
   }
   return undefined;

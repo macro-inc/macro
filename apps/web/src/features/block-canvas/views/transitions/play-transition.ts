@@ -1,4 +1,7 @@
-import type { LayerKeyframe, LayerKeyframes } from '../../core/transitions/classic-keyframes';
+import type {
+  LayerKeyframe,
+  LayerKeyframes,
+} from '../../core/transitions/classic-keyframes';
 
 export type TransitionOutcome = 'completed' | 'skipped' | 'cancelled';
 
@@ -57,7 +60,9 @@ export function animateLayers(input: {
     fill: 'both',
   };
 
-  stage.style.perspective = keyframes.perspective ? `${keyframes.perspective}px` : '';
+  stage.style.perspective = keyframes.perspective
+    ? `${keyframes.perspective}px`
+    : '';
   incoming.style.zIndex = keyframes.incomingOnTop ? '2' : '1';
   if (outgoing) outgoing.style.zIndex = keyframes.incomingOnTop ? '1' : '2';
   const threeD = !!keyframes.perspective;

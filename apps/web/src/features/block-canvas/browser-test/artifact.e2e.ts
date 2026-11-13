@@ -166,7 +166,10 @@ const setTransitions = (
   page: Page,
   transition: { kind: string; durationMs?: number } | null
 ) =>
-  page.evaluate((value) => window.setSlideTransitions?.(value as never), transition);
+  page.evaluate(
+    (value) => window.setSlideTransitions?.(value as never),
+    transition
+  );
 
 /** The stage settled on one slide showing `id`. */
 async function expectSettledOn(page: Page, id: string) {
@@ -177,7 +180,10 @@ async function expectSettledOn(page: Page, id: string) {
   await expect(layers).toHaveAttribute('data-canvas-slide-layer', id);
   await expect(stage.locator('[data-canvas-transition-flight]')).toHaveCount(0);
   await expect(
-    layers.locator('iframe[data-canvas-artifact-frame]').contentFrame().locator('#target')
+    layers
+      .locator('iframe[data-canvas-artifact-frame]')
+      .contentFrame()
+      .locator('#target')
   ).toHaveText(id);
 }
 
@@ -218,7 +224,9 @@ test('a key during a transition skips to the next slide without queueing', async
     await expectSettledOn(page, '1');
   }
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-canvas-artifact-presentation]')).toHaveCount(0);
+  await expect(page.locator('[data-canvas-artifact-presentation]')).toHaveCount(
+    0
+  );
 });
 
 test('a canvas transition flies over the real canvas around the slides', async ({
@@ -233,7 +241,9 @@ test('a canvas transition flies over the real canvas around the slides', async (
   await expect(flight.getByText('Notes between slides')).toBeAttached();
   await expect(flight.locator('[data-graphics-item="arrow"]')).toBeAttached();
   await page.getByRole('button', { name: 'Next artifact' }).click();
-  await expect(page.getByTestId('canvas-artifact-presentation-counter')).toHaveText('4 / 4');
+  await expect(
+    page.getByTestId('canvas-artifact-presentation-counter')
+  ).toHaveText('4 / 4');
 });
 
 test('reduced motion plays every kind as a short fade', async ({ page }) => {
@@ -303,7 +313,7 @@ test('picks, times and previews a transition from the inspector', async ({
     '2'
   );
 
-  await section.getByRole('button', { name: 'Make default' }).click();
+  await section.getByRole('button', { name: 'Set default' }).click();
   await expect(section.getByTestId('canvas-transition-source')).toHaveText(
     'Deck default: Push'
   );

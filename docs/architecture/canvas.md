@@ -63,7 +63,9 @@ Each artifact may carry a slide `transition` that plays when present mode enters
 it; a slide without one uses the canvas's deck default, and without either it
 cuts. `@macro-inc/graphics` defines the kinds (classic screen-space ones and
 canvas camera moves: pan, fly, overview, path) and `resolveSlideTransition`, which
-fills per-kind default durations, easing and direction.
+fills per-kind default durations, easing and direction. Playback lives in Canvas Next
+(`views/transitions/`): classic kinds composite two slide layers; canvas kinds
+animate one transform over a read-only render of the scene.
 
 ## Layers
 

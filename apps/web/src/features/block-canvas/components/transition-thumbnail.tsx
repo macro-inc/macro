@@ -24,20 +24,26 @@ const STAGE = { width: WIDTH, height: HEIGHT };
 /** At rest a thumbnail holds this point of its animation, so it reads at a
  * glance without motion. */
 const REST_PROGRESS = 0.42;
+/** Kinds whose middle frame is empty rest earlier, where both slides show. */
+const REST_PROGRESS_BY_KIND: Partial<Record<SlideTransitionKind, number>> = {
+  fadeThroughBlack: 0.3,
+  flip: 0.3,
+  pan: 0.3,
+};
 const HOLD_MS = 500;
 
 /** A tiny map for canvas kinds: three slides and the arrow between the first
  * two, in thumbnail pixels at zoom 1. */
 const MAP_SLIDES = [
   { x: 0, y: 0 },
-  { x: 150, y: 50 },
-  { x: 40, y: 120 },
+  { x: 100, y: 34 },
+  { x: 24, y: 76 },
 ] as const;
 const MAP_ROUTE = [
   { x: 48, y: 15 },
-  { x: 100, y: 15 },
-  { x: 100, y: 65 },
-  { x: 150, y: 65 },
+  { x: 74, y: 15 },
+  { x: 74, y: 49 },
+  { x: 100, y: 49 },
 ];
 
 const center = (index: 0 | 1) => ({
@@ -56,7 +62,7 @@ function mapPath(kind: SlideTransitionKind): CameraPath {
     return overviewPath(
       from,
       to,
-      fitView({ x: 0, y: 0, width: 198, height: 150 }, STAGE, 0.06),
+      fitView({ x: 0, y: 0, width: 148, height: 106 }, STAGE, 0.06),
       STAGE
     );
   return flyPath(from, to, STAGE);
@@ -126,9 +132,18 @@ export function TransitionThumbnail(props: {
           { ...timing, easing: 'linear' }
         ),
       ];
-    } else if (incoming && outgoing && kind !== 'pan' && kind !== 'fly' && kind !== 'overview' && kind !== 'path') {
+    } else if (
+      incoming &&
+      outgoing &&
+      kind !== 'pan' &&
+      kind !== 'fly' &&
+      kind !== 'overview' &&
+      kind !== 'path'
+    ) {
       const keyframes = classicKeyframes(kind, props.direction, false, STAGE);
-      stage.style.perspective = keyframes.perspective ? `${keyframes.perspective}px` : '';
+      stage.style.perspective = keyframes.perspective
+        ? `${keyframes.perspective}px`
+        : '';
       incoming.style.zIndex = keyframes.incomingOnTop ? '2' : '1';
       outgoing.style.zIndex = keyframes.incomingOnTop ? '1' : '2';
       const backface = keyframes.perspective ? 'hidden' : '';
@@ -136,10 +151,16 @@ export function TransitionThumbnail(props: {
       outgoing.style.backfaceVisibility = backface;
       animations = [
         keyframes.incoming.length
-          ? incoming.animate(keyframes.incoming.map((frame) => ({ ...frame })), timing)
+          ? incoming.animate(
+              keyframes.incoming.map((frame) => ({ ...frame })),
+              timing
+            )
           : undefined,
         keyframes.outgoing.length
-          ? outgoing.animate(keyframes.outgoing.map((frame) => ({ ...frame })), timing)
+          ? outgoing.animate(
+              keyframes.outgoing.map((frame) => ({ ...frame })),
+              timing
+            )
           : undefined,
       ].filter((animation) => animation !== undefined);
     }
@@ -161,7 +182,9 @@ export function TransitionThumbnail(props: {
   };
 
   const pose = () => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
     for (const animation of animations) {
       const duration = Number(animation.effect?.getTiming().duration ?? 0);
       if ((props.playing || playingOnce) && !reduced) {
@@ -169,13 +192,16 @@ export function TransitionThumbnail(props: {
         animation.play();
       } else {
         animation.pause();
-        animation.currentTime = duration * REST_PROGRESS;
+        animation.currentTime =
+          duration * (REST_PROGRESS_BY_KIND[props.kind] ?? REST_PROGRESS);
       }
     }
   };
 
   onMount(build);
-  createEffect(on([() => props.kind, () => props.direction], build, { defer: true }));
+  createEffect(
+    on([() => props.kind, () => props.direction], build, { defer: true })
+  );
   createEffect(on(() => props.playing, pose, { defer: true }));
   createEffect(
     on(
@@ -227,8 +253,8 @@ export function TransitionThumbnail(props: {
         <div ref={world} class="absolute left-0 top-0 origin-top-left">
           <svg
             class="absolute left-0 top-0 overflow-visible text-ink-extra-muted"
-            width="200"
-            height="150"
+            width="150"
+            height="110"
             aria-hidden="true"
           >
             <polyline

@@ -38,8 +38,7 @@ export function SlideTransitionInspector(props: {
       }
       onApplyToAll={
         presentation.setDeckDefault
-          ? () =>
-              presentation.setDeckDefault?.(own() ?? effective(), true)
+          ? () => presentation.setDeckDefault?.(own() ?? effective(), true)
           : undefined
       }
       onSetDeckDefault={

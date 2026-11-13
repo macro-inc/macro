@@ -8,15 +8,8 @@ import {
   resolveSlideTransition,
   type SlideTransition,
 } from '@macro-inc/graphics';
-import {
-  createEffect,
-  createSignal,
-  For,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
 import { ResultAsync } from 'neverthrow';
+import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { cameraTransform } from '../../core/transitions/camera-path';
 import {
   type CameraPlan,
@@ -325,7 +318,8 @@ export function SlideStage(props: {
                 class="absolute inset-0"
                 style={{
                   opacity: hiddenId() === id ? 0 : undefined,
-                  'pointer-events': target() === id && !running() ? undefined : 'none',
+                  'pointer-events':
+                    target() === id && !running() ? undefined : 'none',
                 }}
               >
                 <ArtifactFrame

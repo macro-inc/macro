@@ -135,46 +135,48 @@ export function CanvasNextEditor(props: {
       value={{
         deckDefault,
         get setDeckDefault() {
-          return props.canEdit && !props.isEmbedded ? setDeckDefault : undefined;
-        },
-      }}
-    >
-    <ArtifactLibraryContext.Provider
-      value={{
-        library: artifactLibrary,
-        // Read when used, so a change of access while open takes effect.
-        get edit() {
-          return backend && props.canEdit && !props.isEmbedded
-            ? backend.artifactLibrary.edit
+          return props.canEdit && !props.isEmbedded
+            ? setDeckDefault
             : undefined;
         },
       }}
     >
-      <StaticMarkdownContext>
-        <Show
-          when={props.canEdit && !props.isEmbedded}
-          fallback={
-            <CanvasReadOnlyView
+      <ArtifactLibraryContext.Provider
+        value={{
+          library: artifactLibrary,
+          // Read when used, so a change of access while open takes effect.
+          get edit() {
+            return backend && props.canEdit && !props.isEmbedded
+              ? backend.artifactLibrary.edit
+              : undefined;
+          },
+        }}
+      >
+        <StaticMarkdownContext>
+          <Show
+            when={props.canEdit && !props.isEmbedded}
+            fallback={
+              <CanvasReadOnlyView
+                editor={editor}
+                fitOnLoad={props.fitOnLoad}
+                presence={presence}
+              />
+            }
+          >
+            <EditableCanvasNext
+              documentId={props.documentId}
               editor={editor}
-              fitOnLoad={props.fitOnLoad}
               presence={presence}
+              measureText={measurement.measure}
+              fitOnLoad={props.fitOnLoad}
+              canEdit={() => props.canEdit}
+              onFinishReady={(finish) => {
+                finishText = finish;
+              }}
             />
-          }
-        >
-          <EditableCanvasNext
-            documentId={props.documentId}
-            editor={editor}
-            presence={presence}
-            measureText={measurement.measure}
-            fitOnLoad={props.fitOnLoad}
-            canEdit={() => props.canEdit}
-            onFinishReady={(finish) => {
-              finishText = finish;
-            }}
-          />
-        </Show>
-      </StaticMarkdownContext>
-    </ArtifactLibraryContext.Provider>
+          </Show>
+        </StaticMarkdownContext>
+      </ArtifactLibraryContext.Provider>
     </PresentationContext.Provider>
   );
 }

@@ -97,6 +97,30 @@ that forwards these keys unless the artifact handled them or the user is typing.
 The host treats those messages only as navigation. Touch devices use the on-screen
 buttons.
 
+Each step plays the entered slide's transition, or the deck default; going back
+plays the slide being left in mirror, like Google Slides. `views/transitions/`
+holds the player: `SlideStage` keeps the outgoing and incoming slides mounted
+while classic kinds animate them with the Web Animations API (transform, opacity,
+clip-path, filter), using keyframes from `core/transitions/classic-keyframes.ts`.
+Canvas kinds (pan, fly, overview, path) mount `CanvasFlight`, a read-only scene
+drawn once into a layer whose single transform follows a camera path from
+`core/transitions/camera-path.ts` (van Wijk–Nuij smooth zoom for fly; `path`
+follows the connector bound to both slides, else flies). Masks letterbox its
+first and last frames exactly as present mode shows each slide. A key during a
+transition finishes it at once and starts the next; nothing queues. With
+`prefers-reduced-motion` every kind plays as a 200 ms fade. Each transition is
+one `canvas.artifact.transition` interaction span with its kind, timing,
+outcome (`completed`, `skipped`, `cancelled`) and frame counts.
+
+The inspector's **Transition** section picks a kind from live thumbnails (hover
+or focus plays them; a tap selects and plays once), then duration, easing and,
+for directional kinds, direction. **Default** clears the slide's own transition.
+**Apply to all** makes this transition the deck default and clears every slide's
+own in one undo step; **Set default** changes only the deck default. **Preview**
+plays the transition into the slide on a small stage. `context/presentation.ts`
+supplies the deck default from the canvas's Loro root map, or for the session
+on a canvas without one.
+
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing

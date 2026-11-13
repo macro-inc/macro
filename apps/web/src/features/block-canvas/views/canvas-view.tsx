@@ -68,7 +68,6 @@ import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
 import { useCanvasMediaSource } from '../queries/media';
 import { ArtifactPresentation } from './artifact-presentation';
-import { SlideTransitionInspector } from './transitions/slide-transition-inspector';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasContextMenu } from './canvas-context-menu';
 import {
@@ -81,6 +80,7 @@ import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
 import { CanvasInsertMenu } from './insert-menu';
 import { CanvasTextContent } from './text-content';
 import { TextEditingView } from './text-editing-view';
+import { SlideTransitionInspector } from './transitions/slide-transition-inspector';
 
 export function CanvasView(props: {
   state: CanvasState;

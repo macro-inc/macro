@@ -11,8 +11,8 @@ import { match } from 'ts-pattern';
 import {
   type CameraPath,
   coveredRect,
-  flyPath,
   fitView,
+  flyPath,
   overviewPath,
   panPath,
   routePath,
@@ -21,7 +21,11 @@ import {
   screenRect,
   type View,
 } from './camera-path';
-import { connectorRoute, sceneBounds, slideContentRect } from './scene-geometry';
+import {
+  connectorRoute,
+  sceneBounds,
+  slideContentRect,
+} from './scene-geometry';
 
 export type CanvasKind = (typeof CANVAS_TRANSITION_KINDS)[number];
 
@@ -67,10 +71,17 @@ export function cameraPlan(input: {
     .with('pan', () => panPath(start, end))
     .with('fly', () => flyPath(start, end, input.stage))
     .with('overview', () =>
-      overviewPath(start, end, overviewView(input.document, [fromRect, toRect], input.stage), input.stage)
+      overviewPath(
+        start,
+        end,
+        overviewView(input.document, [fromRect, toRect], input.stage),
+        input.stage
+      )
     )
     .with('path', () =>
-      route ? routePath(start, end, route, input.stage) : flyPath(start, end, input.stage)
+      route
+        ? routePath(start, end, route, input.stage)
+        : flyPath(start, end, input.stage)
     )
     .exhaustive();
 
@@ -89,7 +100,11 @@ export function cameraPlan(input: {
   // The editor drawing the layer clamps its camera to these scales.
   const baseScale = Math.max(
     MIN_SCALE,
-    Math.min(MAX_SCALE, minZoom, MAX_LAYER_PX / Math.max(region.width, region.height))
+    Math.min(
+      MAX_SCALE,
+      minZoom,
+      MAX_LAYER_PX / Math.max(region.width, region.height)
+    )
   );
 
   return {
@@ -117,5 +132,9 @@ function overviewView(
   const top = Math.min(...corners.map((p) => p.y));
   const right = Math.max(...corners.map((p) => p.x));
   const bottom = Math.max(...corners.map((p) => p.y));
-  return fitView({ x: left, y: top, width: right - left, height: bottom - top }, stage, 0.06);
+  return fitView(
+    { x: left, y: top, width: right - left, height: bottom - top },
+    stage,
+    0.06
+  );
 }

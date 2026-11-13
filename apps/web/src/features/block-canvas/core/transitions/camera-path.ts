@@ -71,7 +71,12 @@ export function panPath(from: View, to: View): CameraPath {
  * and `u` the distance travelled along the line between the centers; `rho`
  * trades zooming against panning (√2 is the paper's recommendation).
  */
-export function flyPath(from: View, to: View, stage: Size, rho = Math.SQRT2): CameraPath {
+export function flyPath(
+  from: View,
+  to: View,
+  stage: Size,
+  rho = Math.SQRT2
+): CameraPath {
   const w0 = stage.width / from.zoom;
   const w1 = stage.width / to.zoom;
   const dx = to.x - from.x;
@@ -162,12 +167,18 @@ export function routeLength(points: readonly Point[]): number {
 /**
  * Follows a route from one slide's center to the other's at an even speed.
  * The camera pulls back toward the middle so the route reads as a journey:
- * at most half the route's length, never closer than either slide.
+ * at the midpoint it shows about 80% of the route's length, and never comes
+ * closer than either slide.
  */
-export function routePath(from: View, to: View, route: readonly Point[], stage: Size): CameraPath {
+export function routePath(
+  from: View,
+  to: View,
+  route: readonly Point[],
+  stage: Size
+): CameraPath {
   const points = [{ x: from.x, y: from.y }, ...route, { x: to.x, y: to.y }];
   const widest = Math.max(stage.width / from.zoom, stage.width / to.zoom);
-  const pullBack = Math.max(1, routeLength(points) / 2 / widest);
+  const pullBack = Math.max(1, (routeLength(points) * 0.8) / widest);
   return (t) => {
     const center = pointAlong(points, t);
     const settled = logLerp(from.zoom, to.zoom, t);
@@ -181,7 +192,12 @@ export function routePath(from: View, to: View, route: readonly Point[], stage: 
 
 /** A CSS transform for an element that draws the world at `baseScale` with its
  * top-left at world `origin`, so the stage shows `view`. */
-export function cameraTransform(view: View, origin: Point, baseScale: number, stage: Size): string {
+export function cameraTransform(
+  view: View,
+  origin: Point,
+  baseScale: number,
+  stage: Size
+): string {
   const x = (origin.x - view.x) * view.zoom + stage.width / 2;
   const y = (origin.y - view.y) * view.zoom + stage.height / 2;
   return `translate(${x}px, ${y}px) scale(${view.zoom / baseScale})`;
@@ -189,7 +205,11 @@ export function cameraTransform(view: View, origin: Point, baseScale: number, st
 
 /** Samples an eased path into the views a keyframe animation interpolates
  * between linearly. */
-export function sampleViews(path: CameraPath, ease: (t: number) => number, samples: number): View[] {
+export function sampleViews(
+  path: CameraPath,
+  ease: (t: number) => number,
+  samples: number
+): View[] {
   const count = Math.max(2, Math.round(samples));
   return Array.from({ length: count }, (_, index) =>
     path(ease(index / (count - 1)))

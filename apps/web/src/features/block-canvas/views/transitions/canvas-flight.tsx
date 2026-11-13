@@ -106,7 +106,11 @@ export function CanvasFlight(props: {
           }}
         />
       </div>
-      <div ref={fromMask} class="absolute" style={mask(props.plan.fromScreen)} />
+      <div
+        ref={fromMask}
+        class="absolute"
+        style={mask(props.plan.fromScreen)}
+      />
       <div ref={toMask} class="absolute" style={mask(props.plan.toScreen)} />
     </div>
   );
