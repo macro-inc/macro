@@ -1208,57 +1208,6 @@ export type ColumnType =
  */
 export type SpelledColumnType = string;
 /**
- * Search by app name, then inspect a returned slug before recommending auth.
- */
-export type DiscoveryRequest =
-  | {
-      /**
-       * App name, e.g. "Notion" or "Linear", not a task description.
-       */
-      query: string;
-      operation: 'search';
-    }
-  | {
-      /**
-       * Exact app slug from search results.
-       */
-      app_slug: string;
-      operation: 'inspect';
-    };
-/**
- * Discovery results never execute tools or change connections.
- */
-export type DiscoveryResult =
-  | {
-      /**
-       * Matching apps.
-       */
-      apps: DiscoveredApp[];
-      /**
-       * Narrow the app name if this is true.
-       */
-      more_results: boolean;
-      operation: 'search';
-    }
-  | {
-      app: DiscoveredApp;
-      /**
-       * Whether this caller has an enabled connection. For an app that
-       * connects through its own MCP server, that connection is checked
-       * there, not in Pipedream.
-       */
-      connected: boolean;
-      /**
-       * Advertised tools. Use SearchTools after connecting to load them.
-       */
-      tools: ConnectorTool[];
-      /**
-       * True when some advertised tools were omitted.
-       */
-      tools_truncated: boolean;
-      operation: 'inspect';
-    };
-/**
  * The kind of item to duplicate.
  */
 export type DuplicableEntityType = 'document' | 'database' | 'chat';
@@ -5042,6 +4991,57 @@ export type ToolActivityAction =
         [k: string]: unknown;
       };
       type: 'unknown';
+    };
+/**
+ * Search by app name, then inspect a returned slug before recommending auth.
+ */
+export type DiscoveryRequest =
+  | {
+      /**
+       * App name, e.g. "Notion" or "Linear", not a task description.
+       */
+      query: string;
+      operation: 'search';
+    }
+  | {
+      /**
+       * Exact app slug from search results.
+       */
+      app_slug: string;
+      operation: 'inspect';
+    };
+/**
+ * Discovery results never execute tools or change connections.
+ */
+export type DiscoveryResult =
+  | {
+      /**
+       * Matching apps.
+       */
+      apps: DiscoveredApp[];
+      /**
+       * Narrow the app name if this is true.
+       */
+      more_results: boolean;
+      operation: 'search';
+    }
+  | {
+      app: DiscoveredApp;
+      /**
+       * Whether this caller has an enabled connection. For an app that
+       * connects through its own MCP server, that connection is checked
+       * there, not in Pipedream.
+       */
+      connected: boolean;
+      /**
+       * Advertised tools. Use SearchTools after connecting to load them.
+       */
+      tools: ConnectorTool[];
+      /**
+       * True when some advertised tools were omitted.
+       */
+      tools_truncated: boolean;
+      operation: 'inspect';
     };
 
 /**
@@ -9084,52 +9084,6 @@ export interface ToolRelation {
   tableId: string;
 }
 /**
- * Find an integration when an external app is missing or a workflow requires an unconnected account, including native import tools that need a connector. Use SearchTools for available actions. Search by app name, then inspect a returned app_slug to see its actual tools and connection status. Only recommend connecting if an advertised tool supports the task; an app's name alone is not evidence. Inspection does not load or execute tools. If suitable and unconnected, include the returned connect_markup in your reply and explain what connecting enables. After connection, use SearchTools again in the same agent session to load and call the new tools.
- */
-export interface DiscoverConnectors {
-  request: DiscoveryRequest;
-}
-/**
- * Discovery metadata and optional markup for a user-controlled auth flow.
- */
-export interface DiscoverConnectorsResponse {
-  result: DiscoveryResult;
-  /**
-   * Include verbatim only if an advertised tool supports the requested task.
-   */
-  connect_markup?: string | null;
-}
-/**
- * A verified app identity from the directory.
- */
-export interface DiscoveredApp {
-  /**
-   * Exact identity to inspect or connect.
-   */
-  app_slug: string;
-  /**
-   * Human-readable app name.
-   */
-  name: string;
-  /**
-   * Directory description; inspect tools to verify specific capabilities.
-   */
-  description?: string | null;
-}
-/**
- * An advertised action, not a tool loaded into the current turn.
- */
-export interface ConnectorTool {
-  /**
-   * Upstream tool name.
-   */
-  name: string;
-  /**
-   * What the action supports.
-   */
-  description: string;
-}
-/**
  * Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.
  */
 export interface DispatchCodingAgent {
@@ -11495,7 +11449,7 @@ export interface ImportPipelineCsvResponse {
  */
 export interface IssueBotCredential {
   /**
-   * Bot id from CreateBot or ListBots.
+   * Bot id from CreateBot or ListBots (macro.bots.list() in ExecuteCode).
    */
   botId: string;
   /**
@@ -15164,7 +15118,7 @@ export interface RenameItemResponse {
   name: string;
 }
 /**
- * See a read-only PNG photo of a Macro canvas using the actual Canvas shape/text renderer. Returns a native image plus an immutable revision, source clock, world crop bounds and object IDs. Use for visual/layout understanding and to review edits. Optional item_ids fit a selection; crop requests precise world bounds. No UI, cursors or ghosts are included. Referenced media not accessible to this scoped renderer is explicitly marked unavailable; this tool never fetches arbitrary URLs or expands reference permissions. Image pixels map linearly across crop bounds; use ReadCanvas for exact geometry.
+ * See a read-only PNG photo of a Macro canvas using the actual Canvas shape/text renderer. Returns a native image plus an immutable revision, source clock, world crop bounds and object IDs. Use for visual/layout understanding and to review edits. Optional item_ids fit a selection; crop requests precise world bounds. No UI, cursors or ghosts are included. Referenced media not accessible to this scoped renderer is explicitly marked unavailable; this tool never fetches arbitrary URLs or expands reference permissions. Image pixels map linearly across crop bounds; use ReadCanvas (canvas().scene() in ExecuteCode) for exact geometry.
  */
 export interface RenderCanvas {
   /**
@@ -15445,7 +15399,7 @@ export interface SearchToolsResponse {
   already_available?: string[];
 }
 /**
- * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
+ * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch (macro.web.fetch() in ExecuteCode) on the relevant page for details and cite it.
  */
 export type SelfKnowledge = {};
 /**
@@ -16859,4 +16813,50 @@ export interface ToolActivityEvent {
    * When the action occurred.
    */
   occurredAt: string;
+}
+/**
+ * Find an integration when an external app is missing or a workflow requires an unconnected account. Search by app name, then inspect a returned app_slug to see its actual tools and connection status.
+ */
+export interface DiscoverConnectors {
+  request: DiscoveryRequest;
+}
+/**
+ * Discovery metadata and optional markup for a user-controlled auth flow.
+ */
+export interface DiscoverConnectorsResponse {
+  result: DiscoveryResult;
+  /**
+   * Include verbatim only if an advertised tool supports the requested task.
+   */
+  connect_markup?: string | null;
+}
+/**
+ * A verified app identity from the directory.
+ */
+export interface DiscoveredApp {
+  /**
+   * Exact identity to inspect or connect.
+   */
+  app_slug: string;
+  /**
+   * Human-readable app name.
+   */
+  name: string;
+  /**
+   * Directory description; inspect tools to verify specific capabilities.
+   */
+  description?: string | null;
+}
+/**
+ * An advertised action, not a tool loaded into the current turn.
+ */
+export interface ConnectorTool {
+  /**
+   * Upstream tool name.
+   */
+  name: string;
+  /**
+   * What the action supports.
+   */
+  description: string;
 }
