@@ -61,6 +61,16 @@ pub async fn begin_purge_batch(
     Ok(tx)
 }
 
+/// Bytes of WAL the server has generated so far, for pacing the purge by WAL rate.
+pub async fn current_wal_position(pool: &PgPool) -> anyhow::Result<u64> {
+    let position = sqlx::query_scalar!(
+        r#"SELECT (pg_current_wal_lsn() - '0/0'::pg_lsn)::bigint AS "position!""#
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(u64::try_from(position)?)
+}
+
 /// Read a bounded batch in the existing thread order.
 pub async fn select_purge_messages(
     tx: &mut Transaction<'static, Postgres>,

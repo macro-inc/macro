@@ -11,6 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
+use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::field::{Field, Visit};
@@ -138,6 +139,9 @@ fn batch_sizes(messages: u32, threads: u32, contacts: u32) -> PurgePacing {
         threads: NonZeroU32::new(threads).expect("non-zero"),
         contacts: NonZeroU32::new(contacts).expect("non-zero"),
         pause: Duration::ZERO,
+        // Tests running alongside write WAL too; only the fixed pause should count here.
+        wal_budget: NonZeroU64::MAX,
+        max_pause: Duration::from_secs(1),
     }
 }
 
@@ -475,6 +479,18 @@ async fn purge_of_a_missing_link_is_a_no_op(pool: Pool<Postgres>) -> anyhow::Res
         purge_link(&pool, missing, PurgePacing::default()).await?,
         PurgeSummary::default()
     );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn wal_position_advances_with_writes(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repository = PgMailboxSync::new(pool.clone());
+    let before = repository.wal_position().await?;
+    sqlx::query("CREATE TABLE wal_probe AS SELECT generate_series(1, 10000) AS n")
+        .execute(&pool)
+        .await?;
+    assert!(repository.wal_position().await? > before);
 
     Ok(())
 }

@@ -27,6 +27,7 @@ pub(super) fn pacing(pause: Duration) -> PurgePacing {
         threads: limit(2),
         contacts: limit(2),
         pause,
+        ..PurgePacing::default()
     }
 }
 
@@ -54,6 +55,11 @@ pub(super) struct State {
     pub row_counts: HashMap<&'static str, u64>,
     pub counts: HashMap<&'static str, usize>,
     pub failure: Option<(&'static str, usize)>,
+    /// WAL positions returned by successive reads, `None` failing that read. Once empty,
+    /// reads repeat the last position returned, or 0.
+    pub wal: VecDeque<Option<u64>>,
+    pub wal_reads: usize,
+    last_wal: u64,
     calls: Vec<Call>,
 }
 #[derive(Clone, Default)]
@@ -107,6 +113,18 @@ impl LinkPurgeRepository for Fake {
             fake: self.clone(),
             settled: false,
         })
+    }
+    async fn wal_position(&self) -> anyhow::Result<u64> {
+        let mut state = self.0.lock().unwrap();
+        state.wal_reads += 1;
+        match state.wal.pop_front() {
+            Some(Some(position)) => {
+                state.last_wal = position;
+                Ok(position)
+            }
+            Some(None) => Err(Failure("wal", state.wal_reads).into()),
+            None => Ok(state.last_wal),
+        }
     }
 }
 impl LinkPurgeTransaction for Tx {

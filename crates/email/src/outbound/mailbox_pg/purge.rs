@@ -25,6 +25,9 @@ impl LinkPurgeRepository for PgMailboxSync {
             .await
             .map(PgLinkPurgeTransaction)
     }
+    async fn wal_position(&self) -> anyhow::Result<u64> {
+        delete::current_wal_position(&self.db).await
+    }
 }
 
 impl LinkPurgeTransaction for PgLinkPurgeTransaction {

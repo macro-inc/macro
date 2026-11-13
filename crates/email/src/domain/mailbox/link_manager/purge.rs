@@ -5,14 +5,21 @@ mod ports;
 mod test;
 pub use ports::*;
 
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroU64};
 use std::time::Duration;
+use tokio::time::Instant;
 use uuid::Uuid;
 
 /// How fast [`LinkPurgeService::purge_link`] removes a link's data. Every batch commits on its own, so no
-/// single transaction holds locks, WAL or the xmin horizon for a whole mailbox, and the
-/// pause between batches caps how much write I/O one purge generates, so several purges
-/// running at once can't saturate the database.
+/// single transaction holds locks, WAL or the xmin horizon for a whole mailbox.
+///
+/// Deleting a message costs the same page reads, dirtied pages and full-page WAL images
+/// however the batch is written: its heap row, its TOASTed bodies and one RI probe per
+/// referencing table. So pacing bounds the purge's write rate instead. After a full batch
+/// a purge waits [`pause`](Self::pause), then keeps waiting until the server's WAL rate
+/// since the batch started is within [`wal_budget`](Self::wal_budget). The rate is the
+/// whole server's, so purges running at once see each other's WAL and back off together,
+/// and the replica, which has to apply all of it, keeps a bounded write load.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PurgePacing {
     /// Messages per transaction, deleted together with their labels, recipients,
@@ -22,10 +29,17 @@ pub struct PurgePacing {
     pub messages: NonZeroU32,
     /// Threads per transaction for threads left once every message is gone.
     pub threads: NonZeroU32,
-    /// Contacts per transaction.
+    /// Contacts per transaction. Each contact's delete visits the heap rows of every message
+    /// and recipient the message phase just deleted, until vacuum removes their index
+    /// entries, so this bounds how long one contact batch runs.
     pub contacts: NonZeroU32,
-    /// Wait after a full batch before the next one starts.
+    /// Shortest wait after a full batch before the next one starts.
     pub pause: Duration,
+    /// Server-wide WAL bytes per second a purge waits for after a full batch.
+    pub wal_budget: NonZeroU64,
+    /// Longest wait after a full batch, so a purge keeps moving while other work holds the
+    /// server's WAL rate over budget.
+    pub max_pause: Duration,
 }
 
 impl Default for PurgePacing {
@@ -33,8 +47,10 @@ impl Default for PurgePacing {
         Self {
             messages: NonZeroU32::new(500).expect("non-zero"),
             threads: NonZeroU32::new(2_000).expect("non-zero"),
-            contacts: NonZeroU32::new(5_000).expect("non-zero"),
+            contacts: NonZeroU32::new(1_000).expect("non-zero"),
             pause: Duration::from_secs(2),
+            wal_budget: NonZeroU64::new(16 << 20).expect("non-zero"),
+            max_pause: Duration::from_secs(30),
         }
     }
 }
@@ -104,8 +120,10 @@ impl<R: LinkPurgeRepository> LinkPurgeService<R> {
         pacing: PurgePacing,
     ) -> anyhow::Result<(u64, u64)> {
         let (mut batches, mut messages, mut threads) = (0, 0, 0);
+        let mut paused = Duration::ZERO;
         let mut thread_cursor = Uuid::nil();
         loop {
+            let start = self.batch_start().await;
             let batch = self
                 .purge_message_batch(link_id, thread_cursor, pacing.messages)
                 .await?;
@@ -116,10 +134,10 @@ impl<R: LinkPurgeRepository> LinkPurgeService<R> {
                 break;
             };
             thread_cursor = next_cursor;
-            tokio::time::sleep(pacing.pause).await;
+            paused += self.pause_after(start, pacing).await;
         }
 
-        let span = record_phase(batches, pacing);
+        let span = record_phase(batches, paused);
         span.record("messages", messages);
         span.record("threads", threads);
         Ok((messages, threads))
@@ -138,17 +156,19 @@ impl<R: LinkPurgeRepository> LinkPurgeService<R> {
 )]
     async fn purge_threads(&self, link_id: Uuid, pacing: PurgePacing) -> anyhow::Result<u64> {
         let (mut batches, mut deleted) = (0, 0);
+        let mut paused = Duration::ZERO;
         loop {
+            let start = self.batch_start().await;
             let batch = self.purge_thread_batch(link_id, pacing.threads).await?;
             batches += 1;
             deleted += batch.deleted;
             if !batch.full {
                 break;
             }
-            tokio::time::sleep(pacing.pause).await;
+            paused += self.pause_after(start, pacing).await;
         }
 
-        record_phase(batches, pacing).record("deleted", deleted);
+        record_phase(batches, paused).record("deleted", deleted);
         Ok(deleted)
     }
 
@@ -165,8 +185,10 @@ impl<R: LinkPurgeRepository> LinkPurgeService<R> {
 )]
     async fn purge_contacts(&self, link_id: Uuid, pacing: PurgePacing) -> anyhow::Result<u64> {
         let (mut batches, mut deleted) = (0, 0);
+        let mut paused = Duration::ZERO;
         let mut contact_cursor = String::new();
         loop {
+            let start = self.batch_start().await;
             let batch = self
                 .purge_contact_batch(link_id, &contact_cursor, pacing.contacts)
                 .await?;
@@ -176,11 +198,54 @@ impl<R: LinkPurgeRepository> LinkPurgeService<R> {
                 break;
             };
             contact_cursor = next_cursor;
-            tokio::time::sleep(pacing.pause).await;
+            paused += self.pause_after(start, pacing).await;
         }
 
-        record_phase(batches, pacing).record("deleted", deleted);
+        record_phase(batches, paused).record("deleted", deleted);
         Ok(deleted)
+    }
+
+    async fn batch_start(&self) -> BatchStart {
+        BatchStart {
+            at: Instant::now(),
+            wal: self.wal_position().await,
+        }
+    }
+
+    /// Waits after a full batch: [`PurgePacing::pause`], then until the server's WAL rate
+    /// since `start` is within the budget, [`PurgePacing::max_pause`] at most. Returns the
+    /// time waited.
+    async fn pause_after(&self, start: BatchStart, pacing: PurgePacing) -> Duration {
+        tokio::time::sleep(pacing.pause).await;
+        let mut waited = pacing.pause;
+        let Some(start_wal) = start.wal else {
+            return waited;
+        };
+        while waited < pacing.max_pause {
+            let Some(wal) = self.wal_position().await else {
+                break;
+            };
+            let due = Duration::from_secs_f64(
+                wal.saturating_sub(start_wal) as f64 / pacing.wal_budget.get() as f64,
+            );
+            let Some(early) = due.checked_sub(start.at.elapsed()).filter(|d| !d.is_zero()) else {
+                break;
+            };
+            let wait = early.min(pacing.max_pause - waited);
+            tokio::time::sleep(wait).await;
+            waited += wait;
+        }
+        waited
+    }
+
+    /// The server's WAL position, or `None` when it can't be read, which leaves only the
+    /// fixed pause.
+    async fn wal_position(&self) -> Option<u64> {
+        self.repository
+            .wal_position()
+            .await
+            .inspect_err(|error| tracing::warn!(?error, "Failed to read the WAL position"))
+            .ok()
     }
 
     pub(crate) async fn purge_message_batch(
@@ -279,6 +344,12 @@ impl<R: LinkPurgeRepository> LinkPurgeService<R> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct BatchStart {
+    at: Instant,
+    wal: Option<u64>,
+}
+
 pub(crate) struct MessageBatch {
     pub(crate) messages: u64,
     pub(crate) threads: u64,
@@ -293,14 +364,10 @@ struct ContactBatch {
     next_cursor: Option<String>,
 }
 
-/// Records a finished phase's batch count and pause time on its span. Every batch but the
-/// last came back full and was followed by a pause.
-fn record_phase(batches: u32, pacing: PurgePacing) -> tracing::Span {
+/// Records a finished phase's batch count and total pause time on its span.
+fn record_phase(batches: u32, paused: Duration) -> tracing::Span {
     let span = tracing::Span::current();
     span.record("batches", batches);
-    span.record(
-        "paused_ms",
-        (pacing.pause * batches.saturating_sub(1)).as_millis(),
-    );
+    span.record("paused_ms", paused.as_millis());
     span
 }

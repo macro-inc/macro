@@ -30,6 +30,8 @@ pub trait LinkPurgeRepository: Send + Sync + 'static {
         &self,
         link_id: Uuid,
     ) -> impl Future<Output = anyhow::Result<Self::Transaction>> + Send;
+    /// Bytes of WAL the server has generated so far, read outside any batch transaction.
+    fn wal_position(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
 }
 
 /// SQL effects issued by the domain in their original order, within one transaction.

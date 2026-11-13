@@ -59,7 +59,9 @@ tools — hexagonal, heavily feature-gated.
   provider teardown and retries, CRM cleanup, physical deletion, completion
   events and promoted-mailbox cleanup through capability ports. Its `purge`
   service owns incremental deletion order, cursors, batching, pacing and counters;
-  `outbound/mailbox_pg/purge.rs` holds its transaction adapter.
+  `outbound/mailbox_pg/purge.rs` holds its transaction adapter. Pacing waits after
+  each full batch until the server-wide WAL rate is within `PurgePacing::wal_budget`,
+  so concurrent purges share one budget without coordinating.
 - `src/domain/mailbox/inbox_sync.rs` (feature `mailbox`): Gmail delivery admission,
   disposition, provider-error routing, message deletion, and label reconciliation.
   It also owns history/catalog reconciliation, recovery backfills, provider-message
