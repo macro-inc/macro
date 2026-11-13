@@ -11,7 +11,7 @@ It runs on a local stack against the live model, one draft at a time.
 | --- | --- |
 | `workspace.ts` | The person's workspace, generated the same way every time: 12 people, 32 channels, 7 direct messages, 7 projects, 14 documents, 3 databases and about 250 tasks, in near-duplicate name families (`engineering`, `engineering-archive`, `eng`). Two people are called Jordan; nothing is called marketing. |
 | `cases.ts` | 20 requests close to what people type, what a good draft of each does, and for most how to run the drafted routine once and what that run must do. |
-| `arms.ts` | The two ways to get a draft: `draft`, the editor's Draft it (`POST /scheduled-actions/drafts`), and `bare`, an ordinary agent chat asked to create the routine. |
+| `arms.ts` | The two ways to get a draft: `draft`, the editor's Draft it as a blocking request (`POST /scheduled-actions/drafts`; background drafts run the same drafter as a job), and `bare`, an ordinary agent chat asked to create the routine. |
 | `runcheck.ts` | Putting the workspace back between drafts, and the run check. |
 | `judge.ts` | The blind model judge and its rubric. |
 | `trace.ts` | Reading a draft's trace from Tempo and splitting its time into phases. |
@@ -85,9 +85,14 @@ Any local stack works: `--instance` names it (default `drafting`), and
 `seed` adds the eval's people on their own domain without touching anything
 else. The stack's database must have every migration of the builds it runs: a
 harness newer than its schema answers 500 on routine save and list, so the run
-checks and the `bare` arm fail. It must save event routines
-(`EVENT_ROUTINES_ENABLED`): with them off every event-triggered draft's check
-fails, so `run` stops before drafting. A debug-build document storage service
+checks and the `bare` arm fail. It must save event routines, which follow
+the owner's `enable-event-routines` PostHog flag: the harness needs the real
+PostHog key from Doppler (`POSTHOG_API_KEY`; `--no-doppler`'s placeholder
+fails every flag load) and the seeded owner needs the flag, which a release
+condition on `environment = local` would give every local stack. With them
+off every event-triggered draft's check fails, so `run` stops before drafting.
+Builds from before that flag (b23b613b5d among them) read
+`EVENT_ROUTINES_ENABLED` instead. A debug-build document storage service
 needs `RUST_MIN_STACK=8388608` or it dies on database queries. The seed CLI
 writes rows straight to the database, so search never hears of them: `seed`,
 and every run when name search can't find a seeded document or project,

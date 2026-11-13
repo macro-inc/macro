@@ -1,7 +1,9 @@
 // The two ways a person gets a routine drafted, as the eval's arms:
 //
-// - `draft`: the routine editor's Draft it (`POST /scheduled-actions/drafts`),
-//   timed from the request to the answer.
+// - `draft`: the routine editor's Draft it as a blocking request
+//   (`POST /scheduled-actions/drafts`), timed from the request to the answer.
+//   Background drafts (`draft-jobs`) run the same drafter; their admission
+//   wait and progress updates aren't timed.
 // - `bare`: an ordinary agent chat asked to create the routine, timed from
 //   the message to the routine existing.
 //
@@ -52,7 +54,9 @@ export async function preflight(at: Stack, token: string, entries: CatalogEntry[
     }),
   });
   if (problems.some((problem) => /event-trigger management/.test(problem))) {
-    throw new Error('the stack has event routines off: restart it with EVENT_ROUTINES_ENABLED=true (see README)');
+    throw new Error(
+      'the stack has event routines off: the owner needs the enable-event-routines PostHog flag, or EVENT_ROUTINES_ENABLED=true on older builds (see README)',
+    );
   }
 }
 
