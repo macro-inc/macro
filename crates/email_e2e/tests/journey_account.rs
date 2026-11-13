@@ -5,6 +5,11 @@
 //! Each step is checked in what the app reads back (`GET /email/links`, the
 //! lists) and, where the provider sees it, at the provider.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test query against the scenario's database, which the offline query cache does not cover"
+)]
+
 use email_e2e::{
     DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, eventually, gmail_emulator,
     outlook_emulator,
@@ -128,7 +133,9 @@ async fn resync_brings_back_a_lost_thread(provider: Provider) -> Result<(), Repo
     assert_eq!(deleted, 1);
     let previews = inbox.previews("inbox").await?;
     assert!(
-        !previews.iter().any(|preview| preview["name"] == "Lost thread"),
+        !previews
+            .iter()
+            .any(|preview| preview["name"] == "Lost thread"),
         "the lost thread is still listed: {previews:?}"
     );
 
@@ -142,7 +149,11 @@ async fn resync_brings_back_a_lost_thread(provider: Provider) -> Result<(), Repo
     );
 
     let back = inbox.wait_for_preview("inbox", "Lost thread").await?;
-    assert_ne!(back["id"], lost.as_str(), "the lost thread came back with its old id");
+    assert_ne!(
+        back["id"],
+        lost.as_str(),
+        "the lost thread came back with its old id"
+    );
     inbox
         .wait_for_link("the resync to finish", |link| {
             link["sync_status"] == "UP_TO_DATE"
@@ -158,10 +169,19 @@ async fn resync_brings_back_a_lost_thread(provider: Provider) -> Result<(), Repo
             .iter()
             .filter(|preview| preview["name"] == subject)
             .count();
-        assert_eq!(listed, 1, "{subject} is listed {listed} times: {previews:?}");
+        assert_eq!(
+            listed, 1,
+            "{subject} is listed {listed} times: {previews:?}"
+        );
     }
-    assert!(previews.iter().any(|preview| preview["id"] == kept.as_str()));
-    let thread = inbox.thread(back["id"].as_str().unwrap_or_default()).await?;
+    assert!(
+        previews
+            .iter()
+            .any(|preview| preview["id"] == kept.as_str())
+    );
+    let thread = inbox
+        .thread(back["id"].as_str().unwrap_or_default())
+        .await?;
     let messages = thread["messages"].as_array().map_or(0, Vec::len);
     assert_eq!(messages, 1, "{thread}");
 
@@ -261,7 +281,10 @@ async fn correspondents_and_settings(provider: Provider) -> Result<(), Report> {
 
     // An empty signature clears it.
     inbox
-        .patch("/email/settings", Some(&json!({ "settings": { "signature": "" } })))
+        .patch(
+            "/email/settings",
+            Some(&json!({ "settings": { "signature": "" } })),
+        )
         .await?
         .ok()?;
     let saved = inbox.link().await?["settings"].clone();

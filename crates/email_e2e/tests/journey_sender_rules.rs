@@ -115,7 +115,10 @@ async fn noise_rule_round_trip(provider: Provider) -> Result<(), Report> {
         )
         .await?
         .ok()?;
-    let filter_id = saved["filter"]["id"].as_str().unwrap_or_default().to_owned();
+    let filter_id = saved["filter"]["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
     let rules = filters(&inbox).await?;
     assert_eq!(rules.len(), 1, "{rules:?}");
     assert_eq!(rules[0]["id"], filter_id.as_str());
@@ -184,7 +187,10 @@ async fn wait_blocked(inbox: &Inbox, sender: &str, is_blocked: bool) -> Result<(
         &format!("the blocked senders to {state} {sender}"),
         DEFAULT_TIMEOUT,
         async || {
-            let listed = blocked(inbox).await?.iter().any(|address| address == sender);
+            let listed = blocked(inbox)
+                .await?
+                .iter()
+                .any(|address| address == sender);
             Ok((listed == is_blocked).then_some(()))
         },
     )
