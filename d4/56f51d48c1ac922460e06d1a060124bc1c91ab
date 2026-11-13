@@ -1,0 +1,91 @@
+apps/web/src/features/block-pr/data/timeline.test.ts
+  s_38e9b85856b095::t_3d912d88627ae4 161,167,174-176
+apps/web/src/features/block-pr/browser-test/github-comments.tsx
+  s_38e9b85856b095::t_6fa7151647de91 1-39
+apps/web/src/features/block-pr/browser-test/fixtures.ts
+  s_38e9b85856b095::t_92aec45dfa709d 1-112,114-123,125-134
+  s_38e9b85856b095::t_6fa7151647de91 113,124
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/StaticMarkdown.test.tsx
+  s_38e9b85856b095::t_569253899bb292 349-361
+  s_38e9b85856b095::t_e10a77bf78377c 342-348,362-367
+packages/lexical-core/transformers/details.ts
+  s_38e9b85856b095::t_bd1a85d534bbc4 112-114
+  s_38e9b85856b095::t_70aa20feb5c4e4 1-6,8-41,47-70,72-111,115,117-150,152-154,156-159,161-170
+  s_38e9b85856b095::t_1dad321bf52b6d 7,71
+  s_38e9b85856b095::t_9009be1667dbd7 42-46
+  s_38e9b85856b095::t_640fac0ee7a63d 116,151,155,160
+apps/web/src/features/block-pr/browser-test/README.md
+  s_38e9b85856b095::t_cf0abff8d576fd 1-18
+packages/lexical-core/AGENTS.md
+  s_38e9b85856b095::t_ad7764f9d8b8fe 31-37
+apps/web/src/features/block-pr/browser-test/playwright.config.ts
+  s_38e9b85856b095::t_6fa7151647de91 1-30
+apps/web/src/features/block-pr/browser-test/github-comments.html
+  s_38e9b85856b095::t_92aec45dfa709d 1-5
+packages/lexical-core/tests/github-markdown.test.ts
+  s_38e9b85856b095::t_bd1a85d534bbc4 78,86,183-184,188,192-193,200,202,204,206-226,231-235
+  s_38e9b85856b095::t_1dad321bf52b6d 1-2,83,96-181
+  s_38e9b85856b095::t_9009be1667dbd7 79-82
+  s_38e9b85856b095::t_6fd159c18a5866 3-13,15-22,24-25,27-77,84-85,87-95,182,185-187,189-191,194-199,201,203,205,227-230
+apps/web/src/features/block-pr/views/PrDetail.tsx
+  s_38e9b85856b095::t_5b37375e622e1a 22
+  s_38e9b85856b095::t_f7f5ef8951c692 67,430
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/StaticMarkdown.tsx
+  s_38e9b85856b095::t_5b37375e622e1a 6
+  s_38e9b85856b095::t_f1bf23ecccad80 28-29,43,232,817-847,1117-1118
+apps/web/src/features/block-pr/browser-test/github-comments.browser.e2e.ts
+  s_38e9b85856b095::t_946eb68d64b14f 53-56
+  s_38e9b85856b095::t_6fa7151647de91 1-25,29-30,34-44,48-52,60-73
+  s_38e9b85856b095::t_5b37375e622e1a 26-28,31-33,45-47,57-59
+packages/lexical-core/utils/github-markdown.ts
+  s_38e9b85856b095::t_1dad321bf52b6d 45-46,57-60,233-239,272-274,288
+  s_38e9b85856b095::t_379da9c298bfd2 1-10,15-42,44,47-56,61-88,91-146,149-153,158-216,220-232,240-271,275-287,289-297
+  s_38e9b85856b095::t_5b37375e622e1a 11-14
+  s_38e9b85856b095::t_c0b7b84f87d822 43,89-90,147-148,154-157,217-219
+packages/lexical-core/nodes/DetailsNode.ts
+  s_38e9b85856b095::t_38823e083d412f 1-157
+apps/web/AGENTS.md
+  s_38e9b85856b095::t_ad7764f9d8b8fe 948-949
+apps/web/src/features/block-pr/data/timeline.ts
+  s_f2f178ca1d53d7::t_80d45f376aaec2 2,5,80
+packages/lexical-core/index.ts
+  s_f2f178ca1d53d7::t_b7090acf7e6d8f 21,60
+packages/lexical-core/node-list.ts
+  s_54e65318f81586::t_97fb4a6db709b8 31,136-146
+packages/lexical-core/transformers/index.ts
+  s_54e65318f81586::t_67f99eb2b649d4 10,75,126,174
+apps/web/src/lib/core/component/LexicalMarkdown/version.ts
+  s_38e9b85856b095::t_ce0cdeb3df30eb 42,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d456f51d48c1ac922460e06d1a060124bc1c91ab",
+  "prompts": {},
+  "sessions": {
+    "s_38e9b85856b095": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f0c898ff-45be-470a-b540-8173b921f336",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_54e65318f81586": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e42b1b63-2cd9-410f-921e-bd48731983ac",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f2f178ca1d53d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4afc4f0-0017-4880-8c88-eba664463a15",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
