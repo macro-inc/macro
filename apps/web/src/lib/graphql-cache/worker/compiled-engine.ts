@@ -41,14 +41,19 @@ let retained: CompiledEngine | undefined;
 /** Page side: offers the retained engine once, then keeps what is reported. */
 export function offerCompiledEngine(port: ExchangePort): void {
   port.onmessage = (event) => {
-    if (isCompiledEngine(event.data)) retained = event.data;
+    // The worker answers `null` when it could not receive what was offered.
+    retained = isCompiledEngine(event.data) ? event.data : undefined;
   };
   port.onmessageerror = null;
   try {
     port.postMessage(retained ?? null);
   } catch {
     retained = undefined;
-    port.postMessage(null);
+    try {
+      port.postMessage(null);
+    } catch {
+      // The worker is already gone; its loss is reported elsewhere.
+    }
   }
 }
 
@@ -60,7 +65,15 @@ export function compiledEngineFromPage(
     port.onmessage = (event) => {
       resolve(isCompiledEngine(event.data) ? event.data : undefined);
     };
-    port.onmessageerror = () => resolve(undefined);
+    port.onmessageerror = () => {
+      resolve(undefined);
+      // Tell the page to stop offering a module this worker cannot receive.
+      try {
+        port.postMessage(null);
+      } catch {
+        // It offers again next time and this worker loads normally anyway.
+      }
+    };
   });
 
   return {

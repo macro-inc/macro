@@ -873,6 +873,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lazily in every new worker, which cost more than reopening the database on
   each tab return. The exchange has its own port, so a failure only costs the
   shortcut; never put the module in the activation message.
+  A reused engine records `graphql_cache.wasm_download` with 0 bytes and no
+  `wasm_compile`. The dev server never reuses: its asset URL outlives a rebuild.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.

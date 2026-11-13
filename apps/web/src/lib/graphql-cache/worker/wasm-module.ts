@@ -283,16 +283,18 @@ export interface CacheWasmModule {
 
 let modulePromise: Promise<CacheWasmModule> | undefined;
 let compiledEngineExchange: CompiledEngineExchange | undefined;
+let wasmMemory: WebAssembly.Memory | undefined;
+
+/** Returns the combined module's current unshared linear-memory allocation. */
+type EngineExports = { memory?: WebAssembly.Memory };
 
 /** Set before the first load; the worker then reuses and reports through it. */
-export function useCompiledEngineExchange(
+export function setCompiledEngineExchange(
   exchange: CompiledEngineExchange
 ): void {
   compiledEngineExchange = exchange;
 }
-let wasmMemory: WebAssembly.Memory | undefined;
 
-/** Returns the combined module's current unshared linear-memory allocation. */
 export function cacheWasmLinearMemoryBytes(): number {
   if (!wasmMemory) throw new Error('cache WASM memory is not initialized');
   return wasmMemory.buffer.byteLength;
@@ -365,14 +367,15 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         }
       };
 
-      const instantiate = async (
-        compiled: WebAssembly.Module
+      const start = (compiled: WebAssembly.Module): Promise<EngineExports> =>
+        mod.default({ module_or_path: compiled }) as Promise<EngineExports>;
+
+      const finish = async (
+        started: Promise<EngineExports>,
+        instantiateStartedAt: number
       ): Promise<CacheWasmModule> => {
-        const instantiateStartedAt = now();
         try {
-          const exports = (await mod.default({ module_or_path: compiled })) as {
-            memory?: WebAssembly.Memory;
-          };
+          const exports = await started;
           if (!(exports.memory instanceof WebAssembly.Memory)) {
             throw new Error('cache WASM did not export its linear memory');
           }
@@ -414,13 +417,32 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
 
       // A module the owner page kept from an earlier engine worker skips
       // the download and arrives with its functions already compiled. It
-      // only counts for the asset this worker would have loaded itself.
-      const offered = await compiledEngineExchange?.offered;
+      // only counts for the asset this worker would have loaded itself, and
+      // not under the dev server, whose asset URL survives a rebuilt engine.
+      const reuseStartedAt = now();
+      const offered = import.meta.env.DEV
+        ? undefined
+        : await compiledEngineExchange?.offered;
       if (offered?.assetUrl === wasmUrl.href) {
+        let started: EngineExports | undefined;
         try {
-          return await instantiate(offered.module);
+          started = await start(offered.module);
         } catch {
-          // Load it the ordinary way instead.
+          // The engine could not start from it: load it the ordinary way.
+        }
+        if (started) {
+          // Nothing was downloaded or compiled; traces tell reuse by this.
+          telemetry.record({
+            name: 'graphql_cache.wasm_download',
+            operationCategory: 'initialization',
+            outcome: 'success',
+            errorCode: 'none',
+            durationMs: now() - reuseStartedAt,
+            bytes: 0,
+          });
+          // Past this point a failure would repeat with a fresh copy of
+          // the same asset, so it is reported rather than retried.
+          return finish(Promise.resolve(started), reuseStartedAt);
         }
       }
 
@@ -429,7 +451,7 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         assetUrl: wasmUrl.href,
         module: compiled,
       });
-      return instantiate(compiled);
+      return finish(start(compiled), now());
     })();
     modulePromise = initialization;
     void initialization.catch(() => {

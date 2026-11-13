@@ -44,7 +44,7 @@ import {
   type CacheWasmModule,
   cacheWasmLinearMemoryBytes,
   loadCacheWasm,
-  useCompiledEngineExchange,
+  setCompiledEngineExchange,
 } from './wasm-module';
 import { CacheWorkerCore, type CacheWorkerCoreOptions } from './worker-core';
 
@@ -630,7 +630,7 @@ export function installCacheEngineWorker(
     }
     activated = true;
     if (compiledEnginePort) {
-      useCompiledEngineExchange(compiledEngineFromPage(compiledEnginePort));
+      setCompiledEngineExchange(compiledEngineFromPage(compiledEnginePort));
     }
     activate(parsed.value, directPort, workerScope, options).catch(
       reportEngineTaskFailure

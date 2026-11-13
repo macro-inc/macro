@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import {
   compiledEngineFromPage,
   forgetCompiledEngine,
@@ -31,12 +31,33 @@ it('gives the next engine worker the module an earlier one compiled', async () =
 
   const module = await WebAssembly.compile(EMPTY_WASM);
   first.report({ assetUrl: 'https://app.test/engine-a.wasm', module });
-  // The page keeps it once the report has been delivered.
-  await new Promise<void>((resolve) => setImmediate(resolve));
 
-  const second = await engineStart().offered;
-  expect(second?.assetUrl).toBe('https://app.test/engine-a.wasm');
-  expect(second?.module).toBeInstanceOf(WebAssembly.Module);
+  // The page keeps it once the report has been delivered.
+  await vi.waitFor(async () => {
+    const next = await engineStart().offered;
+    expect(next?.assetUrl).toBe('https://app.test/engine-a.wasm');
+    expect(next?.module).toBeInstanceOf(WebAssembly.Module);
+  });
+});
+
+it('stops offering a module the worker said it could not receive', async () => {
+  const first = engineStart();
+  first.report({
+    assetUrl: 'https://app.test/engine-a.wasm',
+    module: await WebAssembly.compile(EMPTY_WASM),
+  });
+  await vi.waitFor(async () => {
+    expect(await engineStart().offered).toBeDefined();
+  });
+
+  const channel = new MessageChannel();
+  channels.push(channel);
+  offerCompiledEngine(channel.port1);
+  channel.port2.postMessage(null);
+
+  await vi.waitFor(async () => {
+    expect(await engineStart().offered).toBeUndefined();
+  });
 });
 
 it('offers nothing when what arrives is not a compiled engine', async () => {
