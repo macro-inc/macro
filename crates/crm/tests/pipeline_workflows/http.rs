@@ -448,7 +448,18 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
         .iter()
         .map(|field| field["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["Contact", "Stage", "Owner", "Revenue", "Role"]);
+    assert_eq!(
+        names,
+        [
+            "Contact",
+            "Stage",
+            "Outcome",
+            "Owner",
+            "Revenue",
+            "Revenue currency",
+            "Role"
+        ]
+    );
     let stage = fields
         .iter()
         .find(|field| field["name"] == "Stage")

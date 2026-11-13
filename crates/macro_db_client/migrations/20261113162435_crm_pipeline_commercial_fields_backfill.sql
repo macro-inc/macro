@@ -1,14 +1,15 @@
 -- Give every existing pipeline that tracks a company or contact its Outcome
--- field and a currency field per Amount/Revenue column, then seed the rows.
--- Additive: no amount, stage, option or row identity changes. A generic
--- pipeline (record_type IS NULL) is a free-form table and gets neither.
+-- field and a currency field per Amount/Revenue column. Additive: no amount,
+-- stage, option or row identity changes. A generic pipeline (record_type IS
+-- NULL) is a free-form table and gets neither.
 -- Runs apart from the column's DDL so no table lock is held while it writes.
--- Each pipeline row is locked while its columns are added, as the service's
--- write guard does; a pipeline being written fails this file after 5s
--- instead of queueing writers behind it.
+-- Each pipeline row stays locked until this file commits, as under the
+-- service's write guard, so the file only adds columns and options; the next
+-- file seeds the rows without those locks. A pipeline being written fails this
+-- file after 5s instead of queueing writers behind it.
 SET LOCAL lock_timeout = '5s';
 
--- UUIDv7 on PostgreSQL 16 as well as 18.
+-- UUIDv7 on every supported PostgreSQL version; the row seeding drops it.
 CREATE FUNCTION crm_commercial_uuid() RETURNS UUID LANGUAGE SQL VOLATILE AS $$
     SELECT encode(set_byte(set_byte(bytes, 6, (get_byte(bytes, 6) & 15) | 112),
         8, (get_byte(bytes, 8) & 63) | 128), 'hex')::uuid
@@ -17,7 +18,7 @@ CREATE FUNCTION crm_commercial_uuid() RETURNS UUID LANGUAGE SQL VOLATILE AS $$
         FROM 1 FOR 6) AS bytes) random;
 $$;
 
--- Only this backfill uses these functions; they are dropped below. Services
+-- Only this backfill uses this function; it is dropped below. Services
 -- provision the fields of a new pipeline through DatabaseStorageProvisioner.
 CREATE FUNCTION crm_upgrade_commercial_fields(pipeline_id UUID) RETURNS VOID LANGUAGE plpgsql AS $$
 DECLARE
@@ -81,35 +82,4 @@ END $$;
 
 SELECT crm_upgrade_commercial_fields(id) FROM crm_pipeline_entities WHERE record_type IS NOT NULL;
 
--- Seed Outcome once from unambiguous closed stage labels. No stages are changed.
-INSERT INTO entity_properties(id, entity_id, entity_type, property_definition_id, values)
-SELECT crm_commercial_uuid(), r.id::text, 'DATABASE_ROW', c.property_definition_id,
-    jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array(o.id))
-FROM crm_pipeline_entities p
-JOIN database_rows r ON r.table_id = p.table_id
-JOIN database_columns c ON c.id = (p.commercial_fields ->> 'outcome')::uuid
-JOIN property_options o ON o.property_definition_id = c.property_definition_id
-    AND o.string_value = coalesce((
-        SELECT CASE lower(trim(stage_option.string_value)) WHEN 'closed won' THEN 'Won' WHEN 'closed lost' THEN 'Lost' ELSE 'Open' END
-        FROM database_columns stage_column JOIN property_definitions d ON d.id = stage_column.property_definition_id
-        JOIN entity_properties ep ON ep.property_definition_id = d.id AND ep.entity_type = 'DATABASE_ROW' AND ep.entity_id = r.id::text
-        -- Reach the option through its definition's index; a cast on the id alone scans every option.
-        JOIN property_options stage_option ON stage_option.property_definition_id = d.id
-            AND stage_option.id::text = ep.values -> 'value' ->> 0
-        WHERE stage_column.table_id = p.table_id AND lower(coalesce(stage_column.display_name, d.display_name)) = 'stage'
-        ORDER BY stage_column.position LIMIT 1
-    ), 'Open')
-ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING;
-
-INSERT INTO entity_properties(id, entity_id, entity_type, property_definition_id, values)
-SELECT crm_commercial_uuid(), r.id::text, 'DATABASE_ROW', c.property_definition_id,
-    jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array(o.id))
-FROM crm_pipeline_entities p
-CROSS JOIN LATERAL jsonb_array_elements(p.commercial_fields -> 'money') pair
-JOIN database_columns c ON c.id = (pair ->> 'currency')::uuid
-JOIN property_options o ON o.property_definition_id = c.property_definition_id AND o.string_value = 'USD'
-JOIN database_rows r ON r.table_id = p.table_id
-ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING;
-
 DROP FUNCTION crm_upgrade_commercial_fields(UUID);
-DROP FUNCTION crm_commercial_uuid();

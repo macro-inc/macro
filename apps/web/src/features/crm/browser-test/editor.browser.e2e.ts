@@ -110,8 +110,10 @@ test('outcome and currency use the shared editor and totals retain the denominat
 test('record and board editors preserve outcome and currency', async ({
   page,
 }) => {
+  // The second row is the one holding an outcome and an amount.
   await page
     .getByRole('button', { name: 'Open Linked record', exact: true })
+    .nth(1)
     .click();
   const record = page.getByRole('dialog');
   await record.getByRole('button', { name: /^Outcome: Open/ }).click();

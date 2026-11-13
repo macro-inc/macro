@@ -987,17 +987,14 @@ where
             .map_err(storage)?
             .ok_or(PipelineError::NotFound)?;
         // Insert defaults come first so they can satisfy a stage's required fields.
+        // The table read for them also serves the stage rules.
+        let mut table = None;
         if pipeline.commercial_fields.has_system_fields() {
-            let table = self
-                .databases
-                .storage_tables(pipeline.database_id)
-                .await?
-                .into_iter()
-                .find(|table| table.table.id == pipeline.table_id)
-                .ok_or(PipelineError::NotFound)?;
-            pipeline.commercial_fields.prepare(&table, &mut batch)?;
+            let loaded = self.pipeline_table(&pipeline).await?;
+            pipeline.commercial_fields.prepare(&loaded, &mut batch)?;
+            table = Some(loaded);
         }
-        self.validate_stage_requirements(&pipeline, &mut batch)
+        self.validate_stage_requirements(&pipeline, table, &mut batch)
             .await?;
         Ok(self
             .databases

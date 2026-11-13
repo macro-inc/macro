@@ -56,21 +56,23 @@ Older tool results remain readable when that metadata is absent.
 CRM owns the stable Outcome and amount/currency column identities; the shared
 database engine owns their columns, options and cells. Pipeline authorization
 and operation validation remain the common boundary for app and agent writes.
-Two migrations ship it. The first adds `crm_pipeline_entities.commercial_fields`
-with a constant default. The second, in its own transaction so it holds no table
-lock, gives every existing tracked pipeline its fields and seeds its rows; it is
-additive and preserves amounts, stages and row identities. Services provision
-the fields of a new pipeline and add Open/USD to each inserted row in their
-ordinary operation batches.
+Three migrations ship it, each in its own transaction. The first adds
+`crm_pipeline_entities.commercial_fields` with a constant default. The second
+gives every existing tracked pipeline its columns and options; it locks each
+pipeline row as the write guard does, so it does nothing else. The third seeds
+the rows' Outcome and currency cells without those locks, so writers proceed
+while it runs. All are additive and preserve amounts, stages and row
+identities. Services provision the fields of a new pipeline and add Open/USD to
+each inserted row in their ordinary operation batches.
 
 No database trigger fills these in. Migrations run before services roll, so a
 service instance still on the previous version can, for the length of the
 rollout, create a tracked pipeline without the fields or add a row without
 Open/USD. Readers accept both: a pipeline whose `outcome` is null has no system
 fields and takes writes as before, a blank Outcome shows empty, and an amount
-with no currency counts as USD in every total. Rerunning the backfill's
-statements after the rollout repairs such pipelines and rows; they are
-idempotent. A trigger on `database_rows` would instead charge every row insert
+with no currency counts as USD in every total. The backfill statements are
+idempotent, so a later migration that repeats them repairs such pipelines and
+rows; none is scheduled, because the window is one rollout. A trigger on `database_rows` would instead charge every row insert
 of every database for a CRM default. Mobile uses the existing responsive field
 editors and Add deal form.
 

@@ -1,14 +1,24 @@
 use super::*;
 
-/// The backfill as the migration runner applies it, against a pipeline put back
-/// into its pre-migration shape. Its functions are dropped at the end, so it reruns.
+/// The backfill files as the migration runner applies them, each in its own
+/// transaction, against a pipeline put back into its pre-migration shape.
+/// Their functions are dropped at the end, so they rerun.
 async fn run_backfill(pool: &PgPool) {
-    sqlx::raw_sql(include_str!(
-        "../../../macro_db_client/migrations/20261113162435_crm_pipeline_commercial_fields_backfill.sql"
-    ))
-    .execute(pool)
-    .await
-    .unwrap();
+    for file in [
+        include_str!(
+            "../../../macro_db_client/migrations/20261113162435_crm_pipeline_commercial_fields_backfill.sql"
+        ),
+        include_str!(
+            "../../../macro_db_client/migrations/20261113174353_crm_pipeline_commercial_fields_seed_rows.sql"
+        ),
+    ] {
+        let mut transaction = pool.begin().await.unwrap();
+        sqlx::raw_sql(file)
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+        transaction.commit().await.unwrap();
+    }
 }
 
 async fn forget_commercial_fields(pool: &PgPool, pipeline: Uuid) {
