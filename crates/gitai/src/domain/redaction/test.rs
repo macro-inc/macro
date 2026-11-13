@@ -192,6 +192,10 @@ fn password_and_secret_assignments_keep_the_name() {
             "password=[REDACTED:password_assignment] please",
         ),
         (
+            "password=hunter2-fake-pw. Next",
+            "password=[REDACTED:password_assignment]. Next",
+        ),
+        (
             "PASSWD = 'letmein'",
             "PASSWD = '[REDACTED:password_assignment]'",
         ),

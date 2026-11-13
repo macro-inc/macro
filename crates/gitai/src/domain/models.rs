@@ -214,8 +214,11 @@ pub struct CredentialInfo {
     /// When it was minted.
     pub created_at: DateTime<Utc>,
     /// Last authenticated request, updated at most every few minutes.
+    /// Never stored as an explicit null: the revoke update relies on absence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_used_at: Option<DateTime<Utc>>,
     /// When it was revoked; a revoked credential is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revoked_at: Option<DateTime<Utc>>,
 }
 

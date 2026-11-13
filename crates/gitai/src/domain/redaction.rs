@@ -162,8 +162,9 @@ static PATTERNS: LazyLock<[Pattern; 10]> = LazyLock::new(|| {
         Pattern {
             rule: RedactionRule::PasswordAssignment,
             // `password=x`, `client_secret = "x"`, and JSON/YAML `"password": "x"`.
+            // An unquoted value does not take a sentence's closing period.
             regex: regex!(
-                r#"(?i)(?:\b(?:password|passwd|pwd|[a-z0-9_]*secret)\s*=\s*["']?(?P<value>[^\s"'`,;&\[\]()]+)|"(?:password|passwd|pwd|[a-z0-9_]*secret)"\s*:\s*"(?P<quoted>[^"\[\]][^"]*)")"#
+                r#"(?i)(?:\b(?:password|passwd|pwd|[a-z0-9_]*secret)\s*=\s*["']?(?P<value>[^\s"'`,;&\[\]()]*[^\s"'`,;&\[\]().])|"(?:password|passwd|pwd|[a-z0-9_]*secret)"\s*:\s*"(?P<quoted>[^"\[\]][^"]*)")"#
             ),
             mask: Mask::Group("value"),
         },

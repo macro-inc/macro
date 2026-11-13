@@ -21,6 +21,9 @@ use crate::domain::ingest::{CommitRecord, SessionChunk, TokenBucket, TokenCounts
 use crate::domain::models::{CredentialHash, CredentialId, CredentialInfo};
 use crate::domain::ports::{IndexStore, SessionUpdate, StoredCredential};
 
+#[cfg(test)]
+mod test;
+
 const PK: &str = "pk";
 const SK: &str = "sk";
 const GSI1: &str = "gsi1";
@@ -256,20 +259,27 @@ impl IndexStore for DynamoIndex {
         let Some(pk) = self.credential_key(id).await? else {
             return Ok(false);
         };
+        // Keep the first revocation time. A credential written before
+        // optional fields were omitted may hold an explicit NULL, which
+        // `if_not_exists` would treat as present.
         let result = self
             .client
             .update_item()
             .table_name(&self.table)
             .key(PK, pk)
             .key(SK, s(CREDENTIAL_SK))
-            .update_expression("SET revoked_at = if_not_exists(revoked_at, :at)")
-            .condition_expression("attribute_exists(pk)")
+            .update_expression("SET revoked_at = :at")
+            .condition_expression(
+                "attribute_exists(pk) AND (attribute_not_exists(revoked_at) OR attribute_type(revoked_at, :null))",
+            )
             .expression_attribute_values(":at", s(at.to_rfc3339()))
+            .expression_attribute_values(":null", s("NULL"))
             .send()
             .await;
         match result {
             Ok(_) => Ok(true),
-            Err(error) if is_condition_failure(&error) => Ok(false),
+            // Found through gsi1, so a false condition means already revoked.
+            Err(error) if is_condition_failure(&error) => Ok(true),
             Err(error) => Err(error.into()),
         }
     }
