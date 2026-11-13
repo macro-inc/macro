@@ -295,3 +295,145 @@ fn message_roles_convert_from_agent_roles() {
         ChatMessageRole::System
     );
 }
+
+mod exposure {
+    use super::*;
+    use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+
+    fn actor() -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()
+    }
+
+    fn public(event: &ChatTopicEvent) -> PublicEvent<'_, ChatPublicEvent> {
+        match event.exposure().unwrap() {
+            Exposure::Public(public) => public,
+            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        }
+    }
+
+    fn message_sent() -> ChatTopicEvent {
+        ChatTopicEvent::MessageSent(ChatMessageSentMetadata {
+            chat_id: CHAT_ID.to_owned(),
+            message_id: MESSAGE_ID.to_owned(),
+            role: ChatMessageRole::User,
+            model: "some-model".to_owned(),
+            actor_user_id: Some(actor()),
+            attachment_count: 2,
+        })
+    }
+
+    #[test]
+    fn chat_events_reach_the_chat_audience_in_preview() {
+        let events = [
+            ChatTopicEvent::Created(ChatCreatedMetadata {
+                chat_id: CHAT_ID.to_owned(),
+                owner: Owner::User(actor()),
+                name: "Plans".to_owned(),
+                project_id: Some(PROJECT_ID.to_owned()),
+            }),
+            ChatTopicEvent::Updated(ChatUpdatedMetadata {
+                chat_id: CHAT_ID.to_owned(),
+                actor_user_id: actor(),
+                name: None,
+                previous_project_id: None,
+                project_id: None,
+                share_permission_updated: true,
+            }),
+            ChatTopicEvent::Deleted(ChatDeletedMetadata {
+                chat_id: CHAT_ID.to_owned(),
+                actor_user_id: None,
+                project_id: None,
+            }),
+            ChatTopicEvent::Restored(ChatRestoredMetadata {
+                chat_id: CHAT_ID.to_owned(),
+                actor_user_id: None,
+                project_id: None,
+            }),
+            ChatTopicEvent::Copied(ChatCopiedMetadata {
+                chat_id: CHAT_ID.to_owned(),
+                source_chat_id: SOURCE_CHAT_ID.to_owned(),
+                owner: actor(),
+                name: "Copy".to_owned(),
+            }),
+            message_sent(),
+            ChatTopicEvent::MessageDeleted(ChatMessageDeletedMetadata {
+                chat_id: CHAT_ID.to_owned(),
+                message_id: MESSAGE_ID.to_owned(),
+            }),
+        ];
+        for event in &events {
+            let public = public(event);
+            assert_eq!(
+                public.audience,
+                Audience::Entity {
+                    entity_type: EntityType::Chat,
+                    entity_id: CHAT_ID.to_owned(),
+                },
+                "{}",
+                public.name
+            );
+            assert_eq!(public.entity.entity_id, CHAT_ID);
+            assert_eq!(public.stage, Stage::Preview);
+            assert_eq!(
+                serde_json::to_value(public.payload.as_ref()).unwrap()["event_type"],
+                public.name
+            );
+        }
+    }
+
+    #[test]
+    fn message_sent_payload_omits_model_and_attachments() {
+        let event = message_sent();
+        assert_eq!(
+            serde_json::to_value(public(&event).payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "chat.message_sent",
+                "metadata": {
+                    "chat_id": CHAT_ID,
+                    "message_id": MESSAGE_ID,
+                    "role": "user",
+                    "actor_user_id": "macro|owner@example.com",
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn updated_payload_names_what_changed_without_values() {
+        let event = ChatTopicEvent::Updated(ChatUpdatedMetadata {
+            chat_id: CHAT_ID.to_owned(),
+            actor_user_id: actor(),
+            name: Some("Renamed".to_owned()),
+            previous_project_id: Some(PROJECT_ID.to_owned()),
+            project_id: Some(String::new()),
+            share_permission_updated: false,
+        });
+        assert_eq!(
+            serde_json::to_value(public(&event).payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "chat.updated",
+                "metadata": {
+                    "chat_id": CHAT_ID,
+                    "actor_user_id": "macro|owner@example.com",
+                    "changes": ["name", "project"],
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn permanent_delete_stays_internal() {
+        let event = ChatTopicEvent::PermanentlyDeleted(ChatPermanentlyDeletedMetadata {
+            chat_id: CHAT_ID.to_owned(),
+            actor_user_id: None,
+            project_id: None,
+        });
+        assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+    }
+
+    #[test]
+    fn public_payload_has_a_schema() {
+        use utoipa::ToSchema as _;
+        assert_eq!(ChatPublicEvent::name(), "ChatPublicEvent");
+    }
+}
