@@ -1,4 +1,4 @@
-import { type Accessor, createRoot, createSignal } from 'solid-js';
+import { type Accessor, batch, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { SavedView } from '../../saved-views/core/saved-view';
@@ -33,6 +33,9 @@ function setup(
     scopedTab?: TasksTab;
     enabled?: boolean;
     nonListLayoutsEnabled?: Accessor<boolean>;
+    restoreTab?: (tab: TasksTab) => Partial<TasksViewState>;
+    savedViewActive?: Accessor<boolean>;
+    beforeLayoutChange?: (layout: TasksViewState['layout']) => void;
   } = {}
 ) {
   return createRoot((dispose) => {
@@ -59,6 +62,7 @@ function setup(
     const writeSearch = vi.fn((patch: Partial<TasksTabSearchParams>) => {
       setSearch(patch);
     });
+    const restoreTab = options.restoreTab;
     const controls = createTasksViewSearch({
       state,
       setState,
@@ -67,11 +71,25 @@ function setup(
       tab: () => options.scopedTab ?? search.tab,
       enabled: options.enabled ?? true,
       nonListLayoutsEnabled: options.nonListLayoutsEnabled,
+      savedViewActive: options.savedViewActive,
+      restoreTab: restoreTab
+        ? (tab) => setState({ ...restoreTab(tab), tab })
+        : undefined,
+      beforeLayoutChange: () => options.beforeLayoutChange?.(state.layout),
     });
 
     return { state, search, setSearch, writeSearch, ...controls };
   });
 }
+
+it('captures the outgoing list before control and URL layout changes', () => {
+  const captured: TasksViewState['layout'][] = [];
+  const view = setup({ beforeLayoutChange: (layout) => captured.push(layout) });
+  view.setState('layout', 'board');
+  view.setState('layout', 'list');
+  view.setSearch('layout', 'gantt');
+  expect(captured).toEqual(['list', 'board', 'list']);
+});
 
 it('restores layout and controls from URL history without losing entry-only state', () => {
   const view = setup({
@@ -346,6 +364,73 @@ it('retains saved secondary sorts while synchronizing matching URL controls', ()
   view.setSearch('sortReversed', 'true');
   expect(view.state.sort).toEqual(savedSort);
   expect(view.state.layout).toBe('gantt');
+});
+
+it('restores URL tab changes from each tab snapshot before applying URL overrides', () => {
+  const view = setup({
+    state: { facets: { status: ['in-progress'] }, layout: 'board' },
+    restoreTab: (tab) =>
+      tab === 'team-tasks'
+        ? {
+            facets: { status: ['completed'] },
+            layout: 'list',
+            groupBy: 'status',
+            dueDate: { type: 'overdue' },
+            sort: [{ id: 'created_at', reversed: true }],
+          }
+        : {
+            facets: { status: ['in-progress'] },
+            layout: 'board',
+            groupBy: 'priority',
+            dueDate: { type: 'today' },
+            sort: [{ id: 'priority' }, { id: 'updated_at' }],
+          },
+  });
+  view.setSearch('tab', 'team-tasks');
+  expect(view.state).toMatchObject({
+    facets: { status: ['completed'] },
+    layout: 'list',
+    groupBy: 'status',
+    dueDate: { type: 'overdue' },
+    sort: [{ id: 'created_at', reversed: true }],
+  });
+  view.setState('dueDate', { type: 'tomorrow' });
+  view.setSearch('dueDate', undefined);
+  expect(view.state.dueDate).toEqual({ type: 'overdue' });
+  view.setSearch('tab', 'my-tasks');
+  expect(view.state).toMatchObject({
+    facets: { status: ['in-progress'] },
+    layout: 'board',
+    groupBy: 'priority',
+    dueDate: { type: 'today' },
+    sort: [{ id: 'priority' }, { id: 'updated_at' }],
+  });
+  view.setSearch({ sort: 'priority', sortReversed: 'false' });
+  expect(view.state.sort).toEqual([{ id: 'priority' }, { id: 'updated_at' }]);
+});
+
+it('keeps the restored built-in controls when leaving a saved view for the same tab', () => {
+  const [savedViewActive, setSavedViewActive] = createSignal(false);
+  const view = setup({ savedViewActive, restoreTab: () => ({}) });
+  setSavedViewActive(true);
+  view.setState({ layout: 'gantt', groupBy: 'assignee' });
+  batch(() => {
+    // The host restores its built-in snapshot before releasing the saved view.
+    view.setState({
+      layout: 'board',
+      groupBy: 'status',
+      dueDate: { type: 'today' },
+      sort: [{ id: 'priority', reversed: true }],
+    });
+    setSavedViewActive(false);
+  });
+  expect(view.state).toMatchObject({
+    tab: 'my-tasks',
+    layout: 'board',
+    groupBy: 'status',
+    dueDate: { type: 'today' },
+    sort: [{ id: 'priority', reversed: true }],
+  });
 });
 
 it('keeps saved scope and draft filters when changing presentation', () => {

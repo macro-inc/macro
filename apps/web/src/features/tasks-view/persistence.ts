@@ -1,18 +1,12 @@
 import { createCollapsedSidebarSectionsStorage } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
-import type {
-  MakePersistedStateOptions,
-  PersistenceStorage,
-} from '@app/lib/persistence';
-import {
-  createEntryPersistenceStorage,
-  type EntryPersistenceHandle,
-} from '@components/app/split-layout/entry-persistence';
+import type { EntryPersistenceHandle } from '@components/app/split-layout/entry-persistence';
+import { createTabbedEntryPersistenceStorage } from '@components/app/split-layout/tabbed-entry-persistence';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import { TASK_TAB_IDS } from './core/task-navigation';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
-import type { TasksViewState } from './types';
+import type { TasksTab, TasksViewState } from './types';
 
 export const TASKS_ENTRY_STATE_KEY = 'tasks.view';
 export const TASKS_LIST_ENTRY_STATE_KEY = 'tasks.listState';
@@ -73,6 +67,7 @@ const taskDueDateFilterSchema = z.union([
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
+  userId: z.string().optional(),
   layout: z.enum(['list', 'board', 'gantt']).catch('list').default('list'),
   tab: taskTabSchema.default('my-tasks'),
   search: z.string().default(''),
@@ -101,6 +96,7 @@ const DEFAULT_TASKS_ENTRY_STATE = {
 
 const tasksListStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
+  userId: z.string().optional(),
   focusKey: z.string().optional(),
   scrollOffset: z.number().finite().default(0),
 });
@@ -118,21 +114,26 @@ export const DEFAULT_TASKS_LIST_STATE: TasksListStateSnapshot = {
 };
 
 function selectEntryState(state: TasksViewState): TasksEntryState {
+  if (state.savedViewActive) {
+    // A direct saved-view entry has no earlier built-in snapshot to retain.
+    // Seed that entry from built-in defaults, never from temporary edits.
+    return {
+      ...DEFAULT_TASKS_ENTRY_STATE,
+      facets: normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION),
+      sort: DEFAULT_TASKS_ENTRY_STATE.sort.map((item) => ({ ...item })),
+      collapsedGroupIds: [],
+    };
+  }
   return {
     version: 1,
     layout: state.layout,
-    tab: state.savedViewActive ? 'my-tasks' : state.tab,
-    search: state.savedViewActive ? '' : state.search,
+    tab: state.tab,
+    search: state.search,
     groupBy: state.groupBy,
     sort: state.sort.map((item) => ({ ...item })),
-    facets: normalizeFacetSelection(
-      state.savedViewActive ? DEFAULT_TASK_FACET_SELECTION : state.facets
-    ),
+    facets: normalizeFacetSelection(state.facets),
     collapsedGroupIds: [...state.collapsedGroupIds],
-    dueDate:
-      !state.savedViewActive && state.dueDate
-        ? { ...state.dueDate }
-        : undefined,
+    dueDate: state.dueDate ? { ...state.dueDate } : undefined,
   };
 }
 
@@ -140,17 +141,29 @@ function createTasksEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
   scopeKey?: string;
-}): PersistenceStorage<TasksViewState> {
-  return createEntryPersistenceStorage({
+  savedViewActive?: Accessor<boolean>;
+  userId: Accessor<string | undefined>;
+}) {
+  let stateOwner = options.userId();
+  const storage = createTabbedEntryPersistenceStorage({
     handle: options.handle,
     key: options.scopeKey
       ? `${TASKS_ENTRY_STATE_KEY}:${options.scopeKey}`
       : TASKS_ENTRY_STATE_KEY,
-    restore: (current, stored) => {
-      if (!options.restore) return undefined;
-
+    tabs: TASK_TAB_IDS,
+    tab: (state: TasksViewState) =>
+      (options.savedViewActive?.() ?? state.savedViewActive)
+        ? undefined
+        : state.tab,
+    restoreEntryState: options.restore,
+    restore: (current: TasksViewState, stored) => {
+      const viewer = options.userId();
+      if (viewer === undefined) return;
       const result = tasksEntryStateSchemaWithDefaults.safeParse(stored);
-      const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
+      // Old history entries can outlive the account that captured them.
+      // Reject the entire entry before importing any of its tab snapshots.
+      if (!result.success || result.data.userId !== viewer) return;
+      const restored = result.data;
       return {
         ...current,
         layout: restored.layout,
@@ -163,22 +176,61 @@ function createTasksEntryStorage(options: {
         collapsedGroupIds: [...restored.collapsedGroupIds],
       };
     },
-    select: selectEntryState,
+    select: (state) => ({
+      ...selectEntryState({
+        ...state,
+        savedViewActive: options.savedViewActive?.() ?? state.savedViewActive,
+      }),
+      // Capture can precede the account-reset effect. Keep the old owner until
+      // the live controls reset rather than relabeling them as the new account.
+      userId: stateOwner,
+    }),
   });
+  return {
+    ...storage,
+    clearTabs: () => {
+      storage.clearTabs();
+      stateOwner = options.userId();
+    },
+  };
 }
 
 export function createTasksListEntryStorage(
   handle: EntryPersistenceHandle,
-  scopeKey?: string
-): PersistenceStorage<TasksListStateSnapshot> {
-  return createEntryPersistenceStorage({
+  options: {
+    scopeKey?: string;
+    tab: Accessor<TasksTab | undefined>;
+    userId: Accessor<string | undefined>;
+  }
+) {
+  let stateOwner = options.userId();
+  const storage = createTabbedEntryPersistenceStorage({
     handle,
-    key: scopeKey
-      ? `${TASKS_LIST_ENTRY_STATE_KEY}:${scopeKey}`
+    key: options.scopeKey
+      ? `${TASKS_LIST_ENTRY_STATE_KEY}:${options.scopeKey}`
       : TASKS_LIST_ENTRY_STATE_KEY,
-    restore: (current, stored) => {
-      const result = tasksListStateSchemaWithDefaults.safeParse(stored);
-      const restored = result.success ? result.data : DEFAULT_TASKS_LIST_STATE;
+    tabs: TASK_TAB_IDS,
+    tab: (_state: TasksListStateSnapshot) => options.tab(),
+    restore: (current: TasksListStateSnapshot, stored) => {
+      const activeTab = options.tab();
+      const tabs =
+        stored && typeof stored === 'object' && 'tabs' in stored
+          ? stored.tabs
+          : undefined;
+      let selected = stored;
+      if (tabs && typeof tabs === 'object') {
+        // A saved view has no built-in tab. Restore its default position while
+        // retaining the separate built-in snapshots for later tab switches.
+        selected =
+          activeTab === undefined ? undefined : Reflect.get(tabs, activeTab);
+      }
+      const result = tasksListStateSchemaWithDefaults.safeParse(selected);
+      // List may have been unmounted during an account change (for example
+      // while Board was active), so the entry itself must enforce ownership.
+      const viewer = options.userId();
+      const sameAccount =
+        viewer !== undefined && result.success && result.data.userId === viewer;
+      const restored = sameAccount ? result.data : DEFAULT_TASKS_LIST_STATE;
 
       return {
         ...current,
@@ -186,12 +238,28 @@ export function createTasksListEntryStorage(
         scrollOffset: restored.scrollOffset,
       };
     },
-    select: (state): TasksListEntryState => ({
-      version: 1,
-      ...(state.focusKey === undefined ? {} : { focusKey: state.focusKey }),
-      scrollOffset: state.scrollOffset,
-    }),
+    select: (state): TasksListEntryState => {
+      const userId = options.userId();
+      // Account navigation can capture before the list's reset effect runs.
+      // Do not relabel the old account's live position as the new account's.
+      const current = userId === stateOwner ? state : DEFAULT_TASKS_LIST_STATE;
+      return {
+        version: 1,
+        userId,
+        ...(current.focusKey === undefined
+          ? {}
+          : { focusKey: current.focusKey }),
+        scrollOffset: current.scrollOffset,
+      };
+    },
   });
+  return {
+    ...storage,
+    clearTabs: () => {
+      storage.clearTabs();
+      stateOwner = options.userId();
+    },
+  };
 }
 
 export type CreateTasksViewPersistenceOptions = {
@@ -200,24 +268,30 @@ export type CreateTasksViewPersistenceOptions = {
   restoreEntryState?: boolean;
   restorePreferences?: boolean;
   scopeKey?: string;
+  savedViewActive?: Accessor<boolean>;
 };
 
 /** Persists Tasks navigation and user-level sidebar preferences. */
 export function createTasksViewPersistence(
   options: CreateTasksViewPersistenceOptions
-): MakePersistedStateOptions<TasksViewState> {
+) {
+  const entry = createTasksEntryStorage({
+    handle: options.handle,
+    userId: options.userId,
+    restore: options.restoreEntryState ?? true,
+    scopeKey: options.scopeKey,
+    savedViewActive: options.savedViewActive,
+  });
   return {
+    restoreTab: entry.restoreTab,
+    clearTabs: entry.clearTabs,
     storages: [
-      createCollapsedSidebarSectionsStorage({
+      createCollapsedSidebarSectionsStorage<TasksViewState>({
         key: 'macro:tasks:preferences:v1',
         userId: options.userId,
         restore: options.restorePreferences ?? true,
       }),
-      createTasksEntryStorage({
-        handle: options.handle,
-        restore: options.restoreEntryState ?? true,
-        scopeKey: options.scopeKey,
-      }),
+      entry,
     ],
   };
 }

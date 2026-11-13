@@ -18,15 +18,22 @@ export function createTasksViewSearch(options: {
   tab: Accessor<TasksTab>;
   enabled: boolean;
   nonListLayoutsEnabled?: Accessor<boolean>;
+  restoreTab?: (tab: TasksTab) => void;
+  savedViewActive?: Accessor<boolean>;
+  beforeLayoutChange?: () => void;
 }) {
   const { state, search } = options;
   // Missing URL controls restore the entry snapshot, not the latest selection.
-  const entrySort = state.sort.map((item) => ({ ...item }));
-  const entryTab = state.tab;
-  const entryGroupBy = state.groupBy;
-  const entryLayout = state.layout;
-  const entryDueDate = state.dueDate ? { ...state.dueDate } : undefined;
+  const captureEntryControls = () => ({
+    tab: state.tab,
+    sort: state.sort.map((item) => ({ ...item })),
+    groupBy: state.groupBy,
+    layout: state.layout,
+    dueDate: state.dueDate ? { ...state.dueDate } : undefined,
+  });
+  let entry = captureEntryControls();
 
+  let wasSavedViewActive = false;
   createEffect(
     on(
       () =>
@@ -41,7 +48,7 @@ export function createTasksViewSearch(options: {
           search.dueEnd,
           options.nonListLayoutsEnabled?.() ?? true,
           search.savedView,
-          state.savedViewActive,
+          options.savedViewActive?.() ?? state.savedViewActive,
         ] as const,
       ([
         tab,
@@ -56,18 +63,29 @@ export function createTasksViewSearch(options: {
       ]) => {
         if (!options.enabled) return;
         const savedViewActive = Boolean(
-          search.savedView || state.savedViewActive
+          search.savedView ||
+            options.savedViewActive?.() ||
+            state.savedViewActive
         );
+        // URL navigation and sidebar navigation share the same tab snapshots.
+        // Freeze each arrival's controls so removing a URL override restores
+        // that arrival, rather than another tab's controls or a later edit.
+        if (
+          !savedViewActive &&
+          options.restoreTab &&
+          (entry.tab !== tab || wasSavedViewActive)
+        ) {
+          if (state.tab !== tab) options.restoreTab(tab);
+          entry = captureEntryControls();
+        }
+        wasSavedViewActive = savedViewActive;
         const requestedLayout =
-          layout ?? (savedViewActive ? state.layout : entryLayout);
+          layout ?? (savedViewActive ? state.layout : entry.layout);
 
+        if (requestedLayout !== state.layout) options.beforeLayoutChange?.();
         options.setState(
           produce((draft) => {
-            if (
-              !search.savedView &&
-              !draft.savedViewActive &&
-              draft.tab !== tab
-            ) {
+            if (!savedViewActive && draft.tab !== tab) {
               draft.tab = tab;
               draft.facets = normalizeFacetSelection(
                 DEFAULT_TASK_FACET_SELECTION
@@ -82,22 +100,22 @@ export function createTasksViewSearch(options: {
                 : 'list';
             draft.groupBy =
               groupBy ??
-              (draft.savedViewActive || search.savedView
+              (savedViewActive
                 ? draft.groupBy
-                : tab === entryTab
-                  ? entryGroupBy
+                : tab === entry.tab
+                  ? entry.groupBy
                   : TASK_DEFAULT_GROUP_BY[tab]);
             const reversed =
               !sort?.startsWith('due_date_') && sortReversed === 'true';
-            if (!savedViewActive) {
-              draft.sort = sort
-                ? [{ id: sort, reversed }]
-                : entrySort.map((item) => ({ ...item }));
+            if (!sort && !savedViewActive) {
+              draft.sort = entry.sort.map((item) => ({ ...item }));
             } else if (
               sort &&
               (draft.sort[0]?.id !== sort ||
                 !!draft.sort[0]?.reversed !== reversed)
             ) {
+              // The URL controls the primary sort only. A matching primary
+              // must not discard the entry snapshot's remaining sort order.
               draft.sort = [{ id: sort, reversed }];
             }
             if (!savedViewActive) {
@@ -112,8 +130,8 @@ export function createTasksViewSearch(options: {
                 draft.dueDate = undefined;
               } else if (dueDate) {
                 draft.dueDate = { type: dueDate };
-              } else if (tab === entryTab && entryDueDate) {
-                draft.dueDate = { ...entryDueDate };
+              } else if (tab === entry.tab && entry.dueDate) {
+                draft.dueDate = { ...entry.dueDate };
               } else {
                 draft.dueDate = undefined;
               }
@@ -134,6 +152,7 @@ export function createTasksViewSearch(options: {
 
   const setState = new Proxy(options.setState, {
     apply(target, thisArg, args: unknown[]) {
+      if (args[0] === 'layout') options.beforeLayoutChange?.();
       Reflect.apply(target, thisArg, args);
       if (!options.enabled) return;
 
