@@ -1,0 +1,495 @@
+apps/web/src/features/notifications/notification-metadata.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 125-132,197,303-315,385
+apps/web/src/features/settings/computers/browser-test/buy-flow.browser.e2e.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 111-117,146-187,189-195,197-203,205-218,220-231,233-282,284-310,312-324,326-335,337-345,347-386
+crates/suggestions/src/domain/check/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-80
+apps/web/src/features/notifications/notification-preview.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 40
+services/agent_harness_service/src/computers/setup_notice/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-55
+services/notification_service/src/api/user_notification/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 166-180
+  s_422464c85346e5::t_92889975aef9ad 165
+crates/hosted_runtimes/src/domain/ports.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 20,640-665
+  s_422464c85346e5::t_7f01fa7b8c0422 666
+docs/agent-guide/notifications.md
+  s_422464c85346e5::t_11a6f1eaa69a94 384-391
+crates/graphql_notification/src/notification_event.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 32-39,847-893,1499-1500,1568-1569
+  s_422464c85346e5::t_7fb84b4816d9db 1570
+crates/hosted_runtimes/src/domain/operator/test/data_disk.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 4,17-19
+crates/shown_text/src/lib.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-55
+apps/web/src/features/notifications/computer-setup-toast.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-22
+apps/web/src/features/settings/computers/browser-test/setup-notice.browser.e2e.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-272
+apps/web/src/features/notifications/notification-navigation.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 4,705-715
+crates/email_api_client/src/outbound/outlook/contacts.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 126-127
+packages/sdk/src/coverage/skipped.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 306-310
+apps/web/src/features/settings/computers/core/setup-progress.test.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 87,102,107-118
+  s_422464c85346e5::t_95a79f188e700d 119-120
+apps/web/src/features/settings/computers/browser-test/stubs/bots.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-2
+apps/web/src/features/settings/computers/primitives/setup-request.test.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-26
+packages/sdk/src/macro.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 39,148-150,277,586-595
+crates/model_notifications/src/lib.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 20-30,293-295,371,444
+apps/web/src/features/settings/computers/browser-test/stubs/agents.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-3
+crates/hosted_runtimes/src/domain/operator/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 4,17,228,331,339,348,578-579,619-620,687,810
+apps/web/src/lib/core/component/UserTooltip.test.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 304
+crates/suggestions/src/outbound/suggestion_access/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-122
+apps/web/src/features/settings/agentSettingsState.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 3-9,18-23
+apps/web/src/features/settings/computers/browser-test/stubs/user-context.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-22,24-36
+apps/web/src/features/notifications/notification-platform.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 70
+docs/architecture/macro-computers.md
+  s_422464c85346e5::t_11a6f1eaa69a94 365-370
+apps/web/src/features/settings/computers/views/computer-setup-dialog.test.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 5-109,120,126-141,147-208
+crates/email/src/outbound/mailbox_pg/test/retries.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 242,246-247,250-297,301-303,305-319,323-324,327
+apps/web/src/features/agents-view/views/AgentsView.test.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 205,209-213,391-411
+  s_422464c85346e5::t_804776d4c2bb76 412
+apps/web/src/features/settings/computers/primitives/setup-notice.test.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-92
+crates/suggestions/src/outbound/pg_suggestion_repo/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-270
+apps/web/AGENTS.md
+  s_422464c85346e5::t_11a6f1eaa69a94 1503-1512,1514-1515
+apps/web/src/features/agents-view/views/AgentsView.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 72-76,110,291-296,298,514
+apps/web/src/features/entity/utils/notification.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 297-303,394
+apps/web/src/features/notifications/notification-sender.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 36
+apps/web/src/features/settings/computers/views/setup-notification.test.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-84
+crates/email_api_client/src/outbound/outlook/messages.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 339-346,348,427-442
+crates/suggestions/src/inbound/router.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-349
+docs/agent-guide/settings.md
+  s_422464c85346e5::t_11a6f1eaa69a94 890-891,927-930,938-939,956-963,973-1004
+crates/shown_text/Cargo.toml
+  s_422464c85346e5::t_11a6f1eaa69a94 1-9
+apps/web/src/lib/i18n/locales/en/computers.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 119,123,129-137,150,174-183
+crates/suggestions/src/domain/service.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-783
+crates/shown_text/AGENTS.md
+  s_422464c85346e5::t_11a6f1eaa69a94 1-16
+apps/web/src/features/settings/computers/browser-test/main.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 1-3,5,11-12,14,17-21,26-52,57-65,67-82,89-97
+crates/macro_db_client/migrations/20261110011716_delete_suggestions_with_their_kind_rows.sql
+  s_422464c85346e5::t_11a6f1eaa69a94 1-29
+crates/suggestions/src/outbound.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-4
+apps/web/src/features/agents-view/views/NewChatPage.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 75-77,113-118,149,151
+packages/sdk/generated/notification/types.gen.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 508-543,1418-1424
+apps/web/src/features/agents-view/views/NewChatPage.test.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 27,971-1014
+  s_422464c85346e5::t_3a79fb7a22eac5 1015-1016
+apps/web/src/features/notifications/use-notification-updates.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 5,188-198
+  s_422464c85346e5::t_48d23a3e715e0b 199
+services/agent_harness_service/src/main.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1385
+services/notification_service/src/api/user_notification.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 65
+crates/suggestions/src/inbound.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-3
+apps/web/src/features/settings/computers/primitives/setup-request.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-40
+crates/hosted_runtimes/AGENTS.md
+  s_422464c85346e5::t_11a6f1eaa69a94 70-74
+apps/web/src/features/settings/computers/browser-test/stubs/split-layout.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-2
+apps/web/src/features/entity/extractors-notification/notification-description-helpers.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 141,222-223
+  s_422464c85346e5::t_158be35fe37cb6 224
+apps/web/src/features/settings/computers/browser-test/stubs/teams.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-2,12-16
+apps/web/src/features/settings/computers/views/computer-setup-dialog.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 2,11,33,37,76,85-86,91,103-105,113,124,126,128,132-145,147-155,193-197,221-237,313-322,362-366,458-460,463-479,488-497,511-519,531-532,536-544
+  s_422464c85346e5::t_4df6d390359316 545
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 260-332
+  s_422464c85346e5::t_eca01cb72d88cd 5
+crates/notification_inbox/src/domain/rows.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 479-480
+crates/macro_db_client/migrations/20261109204236_create_suggestions.sql
+  s_422464c85346e5::t_11a6f1eaa69a94 1-146
+apps/web/src/features/settings/computers/browser-test/stubs/settings.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-3
+packages/sdk/generated/notification/index.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 4
+crates/hosted_runtimes/src/domain/operator/test/setup_notice.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-91
+services/agent_harness_service/src/scheduling_openapi.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 2,5,7-9
+static_assets/schema.graphql
+  s_422464c85346e5::t_11a6f1eaa69a94 3930-3969,6793
+crates/hosted_runtimes/src/domain/fakes.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 397,401-409,795-811,813
+  s_422464c85346e5::t_a725902ba162ff 812,814
+packages/sdk/generated/scheduled-action/index.ts
+  s_422464c85346e5::t_eca01cb72d88cd 4
+packages/sdk/specs/scheduled-action.json
+  s_422464c85346e5::t_11a6f1eaa69a94 1865-2335,2836-2840,3569-3573,3603-3633,3874-3878,3906-3979,4066-4121,4620-4624,5163-5278,5284-5422,5438-5457,5545-5548
+apps/web/src/features/settings/computers/core/setup-progress.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 119-130,201-206
+apps/web/src/lib/service-clients/service-storage/graphql/soup.graphql
+  s_422464c85346e5::t_11a6f1eaa69a94 664-670
+apps/web/src/features/entity/extractors-notification/notification-description.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 40-44
+apps/web/src/features/settings/computers/browser-test/stubs/access-requests.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-2
+crates/hosted_runtimes/src/outbound/pg/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 386-400
+apps/web/src/features/settings/Harness.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 36-40,117-123
+  s_422464c85346e5::t_26668b802ac661 124
+packages/sdk/specs/notification.json
+  s_422464c85346e5::t_11a6f1eaa69a94 1840-1895,3280-3294
+apps/web/src/features/settings/computers/browser-test/stubs/claude.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-2
+packages/code-mode-sdk/scripts/catalog.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 15
+apps/web/src/features/settings/computers/browser-test/stubs/open-page.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-9
+services/agent_harness_service/AGENTS.md
+  s_422464c85346e5::t_11a6f1eaa69a94 123-126
+crates/hosted_runtimes/src/domain/lifecycle/test/setup_notice.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-234
+crates/scheduled_action/src/domain/suggestions/decode.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 10-12,18-19
+crates/suggestions/src/domain/ports.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-208
+crates/suggestions/src/outbound/suggestion_access.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-104
+services/agent_harness_service/Cargo.toml
+  s_422464c85346e5::t_11a6f1eaa69a94 173
+.github/workspace-dep-closures.json
+  s_422464c85346e5::t_11a6f1eaa69a94 1006,1017,1207,2075,2264,3631,4644,5945,6747,9851,11762,13727,14384-14387,15428-15470
+crates/model_notifications/src/metadata.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 5,13
+apps/web/src/features/notification-sounds/core/categories.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 121
+apps/web/src/features/settings/computers/primitives/setup-notice.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-72
+crates/email/src/domain/mailbox/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 14-67
+services/agent_harness_service/src/computers/setup_notice.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-83
+apps/web/src/features/notifications/notification-event-catalog.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 210-216
+apps/web/src/features/settings/computers/browser-test/vite.config.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 3,12-41,52,62-70,72-82,86,90,97-108
+crates/suggestions/Cargo.toml
+  s_422464c85346e5::t_11a6f1eaa69a94 1-34
+crates/email_api_client/src/outbound/outlook/contacts/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 74
+apps/web/src/features/settings/computers/views/MacroComputers.test.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 10-13,92-94,563-594
+  s_422464c85346e5::t_d585a6b721b63e 595
+packages/sdk/src/utils/verbs.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 95-96,99,104
+crates/hosted_runtimes/src/domain/lifecycle/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 11
+apps/web/src/features/entity/extractors-notification/notification-icon.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 88
+apps/web/src/features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 285
+apps/web/src/lib/service-clients/service-storage/graphql-soup.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1561-1579
+  s_422464c85346e5::t_baf6158802292e 1560
+crates/model_notifications/src/metadata/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1565-1647
+crates/hosted_runtimes/src/domain/lifecycle.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 24,693-695,699-717
+  s_422464c85346e5::t_50f74c0dc91888 718-719
+apps/web/src/features/settings/computers/browser-test/stubs/booking-link-mention.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-4
+apps/web/src/features/settings/computers/browser-test/composer.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 1-50
+crates/email/AGENTS.md
+  s_422464c85346e5::t_11a6f1eaa69a94 339-342
+crates/suggestions/src/domain.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-7
+crates/model_notifications/src/metadata/computer_setup.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-78
+apps/web/src/features/settings/computers/views/MacroComputers.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 26,49-52,56,425-427,432-442,506-509,553,557
+apps/web/src/features/settings/Harness.test.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 29,122-125,260,694-701
+  s_422464c85346e5::t_ff557f31cb54eb 702-704
+crates/suggestions/AGENTS.md
+  s_422464c85346e5::t_11a6f1eaa69a94 1-53
+crates/suggestions/src/domain/service/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-742
+crates/email_api_client/src/outbound/outlook/wire.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 36,41-42
+apps/web/src/features/settings/computers/browser-test/stubs/harnesses.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-3
+apps/web/src/features/settings/computers/browser-test/stubs/fixture-state.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1,5-10,22-29,36-40,45-53
+apps/web/src/features/settings/computers/browser-test/agent-settings.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 1-14
+apps/web/src/features/settings/computers/views/agent-computer-entry.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 152,157-163,172
+crates/email_api_client/src/outbound/outlook/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 862-903
+  s_422464c85346e5::t_cdf5c1f10a0387 861
+docs/runbooks/outlook-sync.md
+  s_422464c85346e5::t_11a6f1eaa69a94 36-37,42-45
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 285-289,670-674,683-687,805-809,831-876,927-970,1269-1273,1571-1644,1650-1721,1727-1744,2616-2843
+crates/suggestions/src/lib.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-9
+apps/web/src/features/settings/Settings.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 31,42-46,82,86-91
+crates/scheduled_action/Cargo.toml
+  s_422464c85346e5::t_11a6f1eaa69a94 57
+crates/suggestions/src/domain/model.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-504
+crates/suggestions/src/domain/check.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-188
+crates/email/src/domain/mailbox.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 276-277,681-684,705-711,718,724-726
+  s_422464c85346e5::t_fae780f25242f5 727-728
+packages/sdk/src/entities/suggestions/suggestion.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-189
+apps/web/src/features/settings/computers/browser-test/providers.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 1-44
+services/agent_harness_service/src/scheduling.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 75,77-80,153-164,469,472-473,554-569,597-598,612,616-622
+  s_422464c85346e5::t_e972372ca556e0 623
+crates/suggestions/src/swagger.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-36
+crates/hosted_runtimes/src/domain/operator.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 19,56,60,73-74,80,88,96,302-303,421-435,776-778,780,789-790,811-812
+Cargo.toml
+  s_422464c85346e5::t_11a6f1eaa69a94 13-14
+apps/web/src/features/settings/computers/views/computer-buy-flow.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 22,75,88-89,92-93,139-140,143-151,180-193,275
+apps/web/src/features/notifications/tests/notification-updates.test.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 27-60
+apps/web/src/features/settings/computers/components/setup-progress-list.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 3,63-69,95
+apps/web/src/features/settings/Agents.test.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 27-30,47-53,1488-1507
+  s_422464c85346e5::t_7f954faa744003 26,1508-1509
+services/agent_harness_service/src/computers.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 42,58-68,78,154
+crates/hosted_runtimes/src/domain/lifecycle/event.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 248-268,284-285
+apps/web/src/features/settings/computers/browser-test/stubs/posthog.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-2
+apps/web/src/features/settings/Agents.tsx
+  s_422464c85346e5::t_11a6f1eaa69a94 74,171-180,185,297-306,311,460,697-698,725,935-937,1355-1356
+crates/shown_text/src/test.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-29
+apps/web/src/features/settings/computers/browser-test/stubs/query-client.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 22-27
+packages/sdk/src/entities/suggestions/namespace.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-121
+apps/web/src/features/settings/computers/browser-test/stubs/user.ts
+  s_422464c85346e5::t_11a6f1eaa69a94 1-2
+crates/suggestions/src/outbound/pg_suggestion_repo.rs
+  s_422464c85346e5::t_11a6f1eaa69a94 1-632
+.sqlx/query-01eb14cb8c7c1faa4c5d13c97a9d97cbec184e57e5eea2dbb264a69483cadae6.json
+  s_422464c85346e5::t_b2466426e66b60 1-16
+.sqlx/query-07a3ff65b0a96ec5a892c569e1522b69e18b147ea0da4afc3c411a39f48c8c10.json
+  s_422464c85346e5::t_0e10f73314d466 1-19
+.sqlx/query-1ad7f1a99752f68c3f3e5644664f9550012eabbb4dd304a7f433ac039f997d08.json
+  s_422464c85346e5::t_40ca47170e2a10 1-113
+.sqlx/query-1ed6b395099ac068ce8a09378fb78d2da515fc6fdacc85896e99beb561f02b9a.json
+  s_422464c85346e5::t_aef63d6760ac82 1-15
+.sqlx/query-3657d2e96212cc08f581f73732bfc8c4bf091a9ae17744393c904bcd53493554.json
+  s_422464c85346e5::t_596464a1f70926 1-14
+.sqlx/query-3695104edcb1ee81b608f51b2811939844181574134903eb2f5864e78a0eff0d.json
+  s_422464c85346e5::t_bb379a4aebbd11 1-19
+.sqlx/query-3724df4a44e3a29fe796946c153be07505c110008a1715b658c436367e9655c2.json
+  s_422464c85346e5::t_a384f3bb584e55 1-113
+.sqlx/query-40c2ecf48cd9331bc7ad891dfccca26fca7c3d97fea2d71dfe66c4c4d60966c8.json
+  s_422464c85346e5::t_779d50abf09af2 1-23
+.sqlx/query-47fa1b1a37185ebc6b5a36033c909b053028fdf46c8ce0b108a189394f225703.json
+  s_422464c85346e5::t_0b3ec828956807 1-113
+.sqlx/query-4a9fae9c247744155e6abe9247eed1a65dd1ab7213ae1a1bb4d4ffeb5c287186.json
+  s_422464c85346e5::t_2cd8587109d32a 1-23
+.sqlx/query-67e5d3c2425f1205dfb2afa55350608bcc84016efb6d8e5cae62eb415ea6bd31.json
+  s_422464c85346e5::t_3f27f2f0406f9a 1-29
+.sqlx/query-6ee4b2f6563817cdb381a90beff0eb3497ecef00973494908ac93fb4ed9133a8.json
+  s_422464c85346e5::t_74d5139c452a9e 1-23
+.sqlx/query-6fda63285354f5fe8efc4d98532a3a90d1d1d14f1411ed618d947ef15c8c7c6a.json
+  s_422464c85346e5::t_8bfde7a66579ef 1-46
+.sqlx/query-7301f31193361efb521f26bed9081117cc9d5f5b59af7fc15e13a0f345624913.json
+  s_422464c85346e5::t_a0e0b415b881f8 1-22
+.sqlx/query-7ba719b758d1a3a24c627f2b34a35de8df960cc448f7a61bc9ebbfdb4e361679.json
+  s_422464c85346e5::t_b4f5f27b672c67 1-15
+.sqlx/query-8ab9cc02bf64f9a72693234064db0d67efc3cf048c4e05a484742ef002c49b6d.json
+  s_422464c85346e5::t_6105f768251295 1-22
+.sqlx/query-9595ac18c57196225c318aa1025606f96b8753f8875ed8ca7e0a4adfc5ecbb94.json
+  s_422464c85346e5::t_c6643d89f75ade 1-113
+.sqlx/query-c6254f74c16dd7e2859093f5e5667e2a33d31951acad311d562e044ce9f7fbd9.json
+  s_422464c85346e5::t_d672e43cf6afe1 1-40
+.sqlx/query-db2b7cf7c5b2d7070f2580fff2d33ed25593b5e37e7ce0bf230e9aebb29a4ec7.json
+  s_422464c85346e5::t_d41c105a80eb5d 1-23
+.sqlx/query-df0bea500ad8f386dc768c1d90de56d0aea23cb44af5b51adea76ec709eec3c5.json
+  s_422464c85346e5::t_3d3183137e8f52 1-23
+Cargo.lock
+  s_422464c85346e5::t_def689fb712266 734,17996,18937-18944,20114-20144
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupMetadata.ts
+  s_422464c85346e5::t_82401060f44ca6 1-23
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupMetadataHarnessId.ts
+  s_422464c85346e5::t_249f6855cd293a 1-11
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcome.ts
+  s_422464c85346e5::t_1d8f37af7ea040 1-15
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOf.ts
+  s_422464c85346e5::t_7f7a25845d18a6 1-14
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOfKind.ts
+  s_422464c85346e5::t_c982a629947b05 1-14
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOfThree.ts
+  s_422464c85346e5::t_d1b235e7ca9ca5 1-16
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOfThreeKind.ts
+  s_422464c85346e5::t_102bc4c1b37dc7 1-14
+apps/web/src/lib/service-clients/service-notification/generated/schemas/index.ts
+  s_422464c85346e5::t_c674ca7cdf591e 82-88,213-214
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEvent.ts
+  s_422464c85346e5::t_fcb9eb6c35ce84 27,89-90
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSevenone.ts
+  s_422464c85346e5::t_0b10139572e69c 7,11-12,15-17
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSevenoneTag.ts
+  s_422464c85346e5::t_80834cab32026f 13
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSeventhree.ts
+  s_422464c85346e5::t_59bc8f0ee32bef 1-20
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSeventhreeTag.ts
+  s_422464c85346e5::t_a4e8dbb525c61b 1-14
+apps/web/src/lib/service-clients/service-notification/generated/zod.ts
+  s_422464c85346e5::t_678a9a1e0791e6 2338-2387,4605-4654,6822-6871,8879-8926
+apps/web/src/lib/service-clients/service-notification/openapi.json
+  s_422464c85346e5::t_96f9851d386802 1840-1895,3280-3294
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_422464c85346e5::t_c960997868f6d6 27-29,38-40,1951-2428
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/category.ts
+  s_422464c85346e5::t_893ed2c501fa23 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/entityAction.ts
+  s_422464c85346e5::t_f3b1dc80ab6997 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/entityType.ts
+  s_422464c85346e5::t_c8c27737b67787 1-41
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_422464c85346e5::t_3f1e63b14065c3 50,113,117,143,149-153,162-169,217,266-269,271-282,293-294
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/kindName.ts
+  s_422464c85346e5::t_48d8c9e8c992e6 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestion.ts
+  s_422464c85346e5::t_97055d252da094 1-46
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionAction.ts
+  s_422464c85346e5::t_ff564596ff9b26 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionPrompt.ts
+  s_422464c85346e5::t_375485a1803d9c 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionReason.ts
+  s_422464c85346e5::t_f662bddf3f3bb2 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionRunMode.ts
+  s_422464c85346e5::t_e438387fefe15f 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/retireSuggestionRequest.ts
+  s_422464c85346e5::t_929718d456d18a 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestion.ts
+  s_422464c85346e5::t_e9cc55677d1c5e 1-36
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionAbout.ts
+  s_422464c85346e5::t_cb929d301efdd5 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionCategories.ts
+  s_422464c85346e5::t_ed1bde1ec7c6f2 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionImportance.ts
+  s_422464c85346e5::t_6f40a88a36b978 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionPrompt.ts
+  s_422464c85346e5::t_97b3267fe6ff49 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionSummary.ts
+  s_422464c85346e5::t_c498b625c12aff 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionTitle.ts
+  s_422464c85346e5::t_9c0f16257f0755 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/runMode.ts
+  s_422464c85346e5::t_121cbefa13aa24 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestion.ts
+  s_422464c85346e5::t_9ccdd0e22cc29b 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOf.ts
+  s_422464c85346e5::t_865e0c2fd34ce5 1-45
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOfStateReason.ts
+  s_422464c85346e5::t_a633582f85ae8c 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionFeed.ts
+  s_422464c85346e5::t_adf9c909d6372e 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKind.ts
+  s_422464c85346e5::t_761a147ab25c4e 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOf.ts
+  s_422464c85346e5::t_cb760c57034fdb 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfKind.ts
+  s_422464c85346e5::t_2d57df9bd7616d 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfSix.ts
+  s_422464c85346e5::t_5eed6111720943 1-17
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfSixKind.ts
+  s_422464c85346e5::t_dd6a97f67576d4 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfThree.ts
+  s_422464c85346e5::t_6697b0e26e2baf 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfThreeDraft.ts
+  s_422464c85346e5::t_f1183041eae0fc 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfThreeKind.ts
+  s_422464c85346e5::t_1d1b6cbaa81a6e 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionState.ts
+  s_422464c85346e5::t_6872da4e5991c5 1-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionWriteOutcome.ts
+  s_422464c85346e5::t_23d38adbefca03 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionWriteOutcomeSuggestion.ts
+  s_422464c85346e5::t_b318ca677f7038 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionsReview.ts
+  s_422464c85346e5::t_5f373ce504ec4a 1-33
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/target.ts
+  s_422464c85346e5::t_4f77d92156f5b4 1-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/targetPartId.ts
+  s_422464c85346e5::t_90aafd77655a66 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_422464c85346e5::t_ae2289b3e71d3c 1865-2335,2836-2840,3569-3573,3603-3633,3874-3878,3906-3979,4066-4121,4620-4624,5163-5278,5284-5422,5438-5457,5545-5548
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_422464c85346e5::t_ad26b2aaf2731d 1108-1114,3869,3915,3962,4011,4060,4109,4149,4189,4238,4287,4327,4376,4430,4479,4519,4559,4613,4662,4979,5454,5513,5573,5628,5706,5766,5842,5897,6034,6083,6132,6181,6221,6261,6310,6359,6399,6448,6502,6551,6591,6631,6685,6734,6787,6836,6885,6934,6974,7014,7063,7112,7152,7201,7255,7304,7344,7384,7438,7487,7541,7590,7639,7688,7728,7768,7817,7866,7906,7955,8009,8058,8098,8138,8192,8241,8295,8344,8393,8442,8482,8522,8571,8620,8660,8709,8763,8812,8852,8892,8946,8995,9049,9098,9147,9196,9236,9276,9325,9374,9414,9463,9517,9566,9606,9646,9700,9749,9803,9852,9901,9950,9990,10030,10079,10128,10168,10217,10271,10320,10360,10400,10454,10503,10557,10606,10655,10704,10744,10784,10833,10882,10922,10971,11025,11074,11114,11154,11208,11257,11311,11360,11409,11458,11498,11538,11587,11636,11676,11725,11779,11828,11868,11908,11962,12011,12065,12114,12163,12212,12252,12292,12341,12390,12430,12479,12533,12582,12622,12662,12716,12765,12820,12869,12918,12967,13007,13047,13096,13145,13185,13234,13288,13337,13377,13417,13471,13520,14014,14063,14112,14161,14201,14241,14290,14339,14379,14428,14482,14531,14571,14611,14665,14714,15133,15293,15464,15636,15810,15977,16144,16201,16241,16689,16738,16787,16836,16876,16916,16965,17014,17054,17103,17157,17206,17246,17286,17340,17389,17442,17491,17540,17589,17629,17669,17718,17767,17807,17856,17910,17959,17999,18039,18093,18142,18191,18240,18289,18338,18378,18418,18467,18516,18556,18605,18659,18708,18748,18788,18842,18891,18939,18988,19037,19086,19126,19166,19215,19264,19304,19353,19412,19461,19501,19541,19595,19644,19692,19741,19790,19839,19879,19919,19968,20017,20057,20106,20160,20209,20249,20289,20343,20392,20440,20489,20538,20587,20627,20667,20716,20765,20805,20854,20908,20957,20997,21037,21091,21140,21212,21262,21312,21362,21403,21444,21494,21544,21585,21635,21690,21740,21781,21822,21877,21927,21987,22037,22087,22137,22178,22219,22269,22319,22360,22410,22465,22515,22556,22597,22652,22702,22913,22954,22995,23036,23077,23118,23159,23200,23241,23282,23323,23364,23405,23446,23487,23528,23690,23747-23748,23809,23864-23865,23926,23991,24031,24071,24111,24151,24191,24231,24271,24311,24351,24391,24431,24471,24511,24551,24591,24633,24674,24715,24756,24797,24838,24879,24920,24961,25002,25043,25084,25125,25166,25207,25248,25425,25585,25756,25928,26095,26143-26144,26150-26152,26154,26157,26161-26163,26178-26179,26188-26189,26191-26193,26213-26215,26237-26239,26242-26243,26246,26248-26255,26265,26275,26277,26279-26281,26283,26298-26302,26305-26306,26308-26309
+crates/shown_text/CLAUDE.md
+  s_422464c85346e5::t_2a9a649fa79fb7 1
+crates/suggestions/CLAUDE.md
+  s_422464c85346e5::t_3ce3632022c770 1
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_422464c85346e5::t_e1e1c36d7446d0 76
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_422464c85346e5::t_24b2e1b32ac324 692-693
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "31c4791ece1d37565aef8dc6894d996bd97088c5",
+  "prompts": {},
+  "sessions": {
+    "s_422464c85346e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae48edd-7ffa-4908-b6b8-ce91c4bf54e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
