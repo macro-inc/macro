@@ -786,7 +786,15 @@ impl SoupRealtimeServiceImpl {
                 result = consumer.recv() => {
                     let Ok(message) = result else { continue; };
                     let kafka_message = message.inner();
+                    // Parent each event on its producer's trace, so a folder's
+                    // fan-out reads in the trace of the request that changed it
+                    // instead of under the consumer's lifetime span.
+                    let consumer_span = kafka_util::consumer_span(
+                        kafka_message,
+                        SoupRealtimeConsumerGroup::GROUP_NAME,
+                    );
                     let span = tracing::info_span!(
+                        parent: &consumer_span,
                         "realtime_soup_source_event",
                         topic = kafka_message.topic(),
                         partition = kafka_message.partition(),
