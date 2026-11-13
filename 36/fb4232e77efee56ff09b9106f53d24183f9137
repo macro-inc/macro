@@ -1,0 +1,24 @@
+apps/web/src/features/dynamic-ui/widgets/Stat.tsx
+  s_3c8bdfdb266f32::t_0dd4c8894a3968 159-161,163-165,169,173,175-179,183,186-187
+apps/web/src/lib/i18n/locales/en/dynamic-ui.ts
+  s_3c8bdfdb266f32::t_0dd4c8894a3968 13
+apps/web/src/features/dynamic-ui/widgets/panes.test.tsx
+  s_3c8bdfdb266f32::t_0dd4c8894a3968 7-8,23-24,90-91
+  s_3c8bdfdb266f32::t_0b4c96b3605b99 126-129,133-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "36fb4232e77efee56ff09b9106f53d24183f9137",
+  "prompts": {},
+  "sessions": {
+    "s_3c8bdfdb266f32": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "047d61f4-a7d4-4fc1-a6a7-ed748e55fd32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
