@@ -1,0 +1,53 @@
+services/agent_harness_service/src/lib.rs
+  s_c1146e8a8b951b::t_7749faa4040c89 2-16,20-2596
+services/agent_harness_service/src/main.rs
+  s_c1146e8a8b951b::t_7749faa4040c89 2,4,17
+crates/hosted_runtimes/src/outbound/docker_fleet.rs
+  s_c1146e8a8b951b::t_70bce44fcc32d9 16-22,59-61,80-83,317,567,585-586,624-632
+crates/hosted_runtimes/src/outbound/docker_fleet/test.rs
+  s_c1146e8a8b951b::t_77d79a41a55164 13,36,81-111
+crates/hosted_runtimes/src/outbound/docker_fleet/test/enrollment.rs
+  s_c1146e8a8b951b::t_8b876a2ca916ee 78,184
+docs/development/running-locally.md
+  s_c1146e8a8b951b::t_53a3cc465a9ce5 667,673-674,726-743
+nix/macro-box/AGENTS.md
+  s_c1146e8a8b951b::t_a86bb2db7f4d4c 49-58
+nix/macro-box/macro-box.nix
+  s_c1146e8a8b951b::t_a33c258674e9d9 48-59,62,69,72-75,79-80,95,97,122,128,130-133,135
+services/agent_harness_service/AGENTS.md
+  s_c1146e8a8b951b::t_1ba1562367ac82 273-275
+services/agent_harness_service/src/computers.rs
+  s_c1146e8a8b951b::t_b393c3a20703a4 121-125
+services/agent_harness_service/src/config.rs
+  s_c1146e8a8b951b::t_fd44981a97092f 513-515
+services/agent_harness_service/src/config/test.rs
+  s_c1146e8a8b951b::t_7089b8ffba65ba 260-267
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_c1146e8a8b951b::t_04782302e2a2c7 695-698,789-794,969,1045-1048,1051-1053,1056-1059,1065-1069,1072-1098,1143,1146-1156,1161-1162,1164-1168
+tooling/xtask/crates/xtask_local/src/local/build.rs
+  s_c1146e8a8b951b::t_5b23e8daa70759 31,50
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build.rs
+  s_c1146e8a8b951b::t_dad4a8c14e489b 50,59-74,134-140,353-354,358-361,378-392,513
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_c1146e8a8b951b::t_6e4eeacc81fe51 5-13,41-44,167-172,236-239,321-322,327-331,333,339,344-368,372-416,653-664,667-673,676-703,705-707,709-793,795-799,815,817,820,826,847-848,874-875
+tooling/xtask/crates/xtask_local/src/local/computers/test.rs
+  s_c1146e8a8b951b::t_5effe770ccd73c 32,38-44,479,481,492-500,502,504-505,508-534
+tooling/xtask/crates/xtask_local/src/local/validate.rs
+  s_c1146e8a8b951b::t_97b19b4b687918 234-237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "681ed36674c27f7df6ebf1f36d2c5b607e4bd916",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
