@@ -827,9 +827,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   behind ordered writes and never replay alerts when the cache resumes. Link
   cache queue/apply spans to receipt and mark listener failures without stopping
   the remaining callbacks.
-- The Soup GraphQL websocket pings when the app returns to the foreground or
-  comes back online, and terminates a socket that does not answer within five
-  seconds (close 4499, retried). A phone can wake to a socket that reads open but
+- The Soup GraphQL websocket pings each new connection, and again when the app
+  returns to the foreground or comes back online, and terminates a socket that
+  does not answer within five seconds (close 4499, retried). A phone can wake to a socket that reads open but
   is dead; the reconnect is what tells followers such as agent sessions
   (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
 - The first Soup websocket connection is not a reconnect, so it refetches

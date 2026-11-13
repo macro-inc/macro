@@ -93,6 +93,8 @@ export function createLiveUpdatesGate(options: {
   return {
     /** Whether a read that follows live updates waits now. */
     holding: () => state === 'waiting',
+    /** Whether the subscriptions have gone live (and `onLive` has run). */
+    wentLive: () => state === 'live',
     /**
      * Calls `resume` once the held read of operation `key` may go. The first
      * held read starts the bound, after which every read goes and later ones

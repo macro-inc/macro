@@ -223,7 +223,6 @@ export function createGraphqlSoupWebSocketEvents(options: {
 }) {
   const { lifecycle, onState, onReconnected } = options;
   const liveness = createGraphqlSoupWebSocketLiveness(options.terminate);
-  let connections = 0;
   return {
     connecting: () => onState?.('connecting'),
     closed: () => {
@@ -238,9 +237,8 @@ export function createGraphqlSoupWebSocketEvents(options: {
     connected: (socket: unknown) => {
       liveness.connected(socket);
       onState?.('connected');
-      lifecycle.connected(() => liveness.check('connected'));
-      connections += 1;
-      if (connections > 1) onReconnected?.();
+      if (lifecycle.connected(() => liveness.check('connected')))
+        onReconnected?.();
     },
   } satisfies ClientOptions['on'];
 }
@@ -363,9 +361,9 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   readonly liveUpdates: LiveUpdatesGate;
   /**
    * The server acknowledged a connection; `ping` checks it is live (see
-   * {@link LiveUpdatesGate.connected}).
+   * {@link LiveUpdatesGate.connected}). Returns whether it was a reconnect.
    */
-  connected(ping: () => boolean): void;
+  connected(ping: () => boolean): boolean;
   pong(received: boolean): void;
   closed(): void;
   dispose(): void;
@@ -509,7 +507,11 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       signaledFailure = false;
       connections += 1;
       liveUpdates.connected(ping);
-      if (connections > 1) recover();
+      const reconnected = connections > 1;
+      // Until the subscriptions first go live, the gate reads again what
+      // they missed when they do.
+      if (reconnected && liveUpdates.wentLive()) recover();
+      return reconnected;
     },
     pong: (received: boolean) => liveUpdates.pong(received),
     closed: () => liveUpdates.closed(),

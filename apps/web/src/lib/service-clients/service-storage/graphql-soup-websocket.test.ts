@@ -593,6 +593,39 @@ describe('GraphQL Soup connection recovery', () => {
     disposeChannelNotificationRefresh(client as never);
   });
 
+  it('leaves a connection that closed before going live to the gate', async () => {
+    const app = connectedApp();
+    app.lifecycle.connected(() => true);
+    await vi.advanceTimersByTimeAsync(0);
+    app.lifecycle.closed();
+    app.lifecycle.connected(() => true);
+    await settle();
+    expect(app.followed).not.toHaveBeenCalled();
+    expect(app.other).not.toHaveBeenCalled();
+
+    app.lifecycle.pong(true);
+    await settle();
+    expect(app.followed).not.toHaveBeenCalled();
+    expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
+    app.dispose();
+  });
+
+  it('reads everything again once when the hold gave up and the connection closed before going live', async () => {
+    const app = connectedApp();
+    app.lifecycle.liveUpdates.hold(1, () => undefined);
+    await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS);
+    app.lifecycle.connected(() => true);
+    await vi.advanceTimersByTimeAsync(0);
+    app.lifecycle.closed();
+    app.lifecycle.connected(() => true);
+    await settle();
+    app.lifecycle.pong(true);
+    await settle();
+    expect(app.followed).toHaveBeenCalledExactlyOnceWith(null);
+    expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
+    app.dispose();
+  });
+
   it('reads everything again on every later connection', async () => {
     const app = connectedApp();
     await app.live();
