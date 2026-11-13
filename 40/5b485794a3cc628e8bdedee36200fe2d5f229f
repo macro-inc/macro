@@ -1,0 +1,19 @@
+apps/web/src/features/block-canvas/views/transitions/slide-stage.tsx
+  s_7e06719c6c76a9::t_deddffa9407491 97-98,190-192,213-214,219,224,226-227,258-259,269,271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "405b485794a3cc628e8bdedee36200fe2d5f229f",
+  "prompts": {},
+  "sessions": {
+    "s_7e06719c6c76a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2309e37-d92e-45ed-b0e7-0934633357de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
