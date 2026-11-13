@@ -1,30 +1,35 @@
 use super::*;
 
+/// The backfill as the migration runner applies it, against a pipeline put back
+/// into its pre-migration shape. Its functions are dropped at the end, so it reruns.
+async fn run_backfill(pool: &PgPool) {
+    sqlx::raw_sql(include_str!(
+        "../../../macro_db_client/migrations/20261113162435_crm_pipeline_commercial_fields_backfill.sql"
+    ))
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn forget_commercial_fields(pool: &PgPool, pipeline: Uuid) {
+    sqlx::query!(
+        r#"UPDATE crm_pipeline_entities SET commercial_fields = '{"outcome": null, "money": []}' WHERE id = $1"#,
+        pipeline,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_creator_preserves_reserved_fields_and_explicit_currency(pool: PgPool) {
+async fn backfill_preserves_reserved_fields_and_explicit_currency(pool: PgPool) {
     let (s, _, a, team, company) = fixture(&pool).await;
     let p = create(&s, team, PipelineRecordType::Company).await;
     let row = inserted(&write(&s, &a, &p, vec![insert(&p, company)]).await.unwrap());
-    // Replace only the host row, preserving its storage and grants in this
-    // disposable fixture. The commercial INSERT trigger stays enabled, exactly
-    // as for an older writer omitting metadata. Existing columns exercise
-    // reserved-name collisions during upgrade.
-    let mut transaction = pool.begin().await.unwrap();
-    sqlx::raw_sql("ALTER TABLE crm_pipeline_entities DISABLE TRIGGER crm_pipeline_cleanup; SET CONSTRAINTS ALL IMMEDIATE")
-        .execute(&mut *transaction)
-        .await
-        .unwrap();
-    sqlx::query!(
-        "WITH legacy AS (DELETE FROM crm_pipeline_entities WHERE id = $1 RETURNING id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id)
-         INSERT INTO crm_pipeline_entities (id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id)
-         SELECT id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id FROM legacy",
-        p.id,
-    ).execute(&mut *transaction).await.unwrap();
-    sqlx::raw_sql("ALTER TABLE crm_pipeline_entities ENABLE TRIGGER crm_pipeline_cleanup")
-        .execute(&mut *transaction)
-        .await
-        .unwrap();
-    transaction.commit().await.unwrap();
+    // With the roles forgotten, the existing Outcome and Revenue currency columns
+    // are ordinary user fields holding the reserved names.
+    forget_commercial_fields(&pool, p.id).await;
+    run_backfill(&pool).await;
     let upgraded = s
         .get(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
         .await
@@ -133,13 +138,33 @@ async fn commercial_backfill_preserves_amounts_stages_and_row_identity(pool: PgP
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::raw_sql("DROP TRIGGER crm_pipeline_commercial_upgrade ON crm_pipeline_entities; DROP TRIGGER crm_pipeline_row_commercial_defaults ON database_rows; DROP FUNCTION crm_pipeline_commercial_upgrade(); DROP FUNCTION crm_pipeline_row_commercial_defaults(); DROP FUNCTION crm_upgrade_commercial_fields(uuid); DROP FUNCTION crm_commercial_uuid(); ALTER TABLE crm_pipeline_entities DROP COLUMN commercial_fields;").execute(&pool).await.unwrap();
-    sqlx::raw_sql(include_str!(
-        "../../../macro_db_client/migrations/20261026172316_crm_pipeline_outcome_currency.sql"
-    ))
-    .execute(&pool)
-    .await
-    .unwrap();
+    forget_commercial_fields(&pool, p.id).await;
+    let generic = s
+        .create(
+            team_receipt(team, OWNER),
+            CreatePipeline {
+                name: "Launch".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline;
+    run_backfill(&pool).await;
+    let generic_table = s
+        .table(access(&a, generic.id, EntityType::CrmPipeline, OWNER).await)
+        .await
+        .unwrap();
+    assert_eq!(generic_table.columns.len(), 1);
+    assert!(
+        !s.get(access(&a, generic.id, EntityType::CrmPipeline, OWNER).await)
+            .await
+            .unwrap()
+            .pipeline
+            .commercial_fields
+            .has_system_fields()
+    );
     let upgraded = s
         .get(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
         .await

@@ -6,15 +6,15 @@ external deal proposal. It creates no project or separate deal entity.
 
 ## Outcome
 
-Every company and contact pipeline has a protected single-select Outcome field:
-Open, Won, Lost. It uses the ordinary table, board, record and Add deal editors,
+Every pipeline that tracks a company or contact has a protected single-select
+Outcome field: Open, Won, Lost. A generic pipeline is a free-form table and has
+no Outcome or currency fields, at creation or after the backfill. Outcome uses the ordinary table, board, record and Add deal editors,
 filters, grouping, CSV and agent field APIs. Outcome is independent of Stage;
-changing it does not move a row. Stage-specific requirements are a separate
-pending change at the same pipeline operation boundary. When integrating that
-change, hold `repo.lock_write`, run `commercial_fields.prepare` before
-`validate_stage_requirements`, then call `apply_storage_ops`. This lets insert
-defaults satisfy required Outcome/currency fields. No additional closing
-requirements are introduced here.
+changing it does not move a row. Stage requirements validate at the same
+pipeline operation boundary: `apply_ops` holds `repo.lock_write`, runs
+`commercial_fields.prepare`, then `validate_stage_requirements`, then
+`apply_storage_ops`, so insert defaults satisfy a stage that requires Outcome
+or a currency. No additional closing requirements are introduced here.
 
 Existing rows start Open, except exact case-insensitive `Closed won` and
 `Closed lost` labels in the Stage field seed Won and Lost once. Stage names, option IDs and
@@ -40,8 +40,9 @@ precedence where a separator is ambiguous. Editing still starts from the exact
 stored value. Bulk clearing skips required Outcome and currency cells.
 CSV stores the
 numeric amount and its currency in separate columns, and agents read/write the
-same fields. `ListPipelines` names each amount's `currencyField`, including after
-the amount is renamed. Imports without currency use USD; invalid currencies must fail
+same fields. `ListPipelines` and the SDK's pipeline fields name each amount's
+`currencyField`, including after the amount is renamed, and SDK totals carry
+their `currency`. Imports without currency use USD; invalid currencies must fail
 the row rather than silently losing the supplied denomination. Totals group by
 currency and never convert or combine different denominations.
 
@@ -55,13 +56,23 @@ Older tool results remain readable when that metadata is absent.
 CRM owns the stable Outcome and amount/currency column identities; the shared
 database engine owns their columns, options and cells. Pipeline authorization
 and operation validation remain the common boundary for app and agent writes.
-The migration is additive and preserves amounts and row identities. Compatibility
-defaults cover old writers during a rolling deployment: the pipeline insert
-trigger upgrades metadata omitted by old creators, and the row insert trigger
-fills Open/USD before explicit cell upserts. Current services provision the
-schema and include defaults in their ordinary operation batches. Neither
-trigger changes a supplied amount or converts its denomination. Mobile uses the existing
-responsive field editors and Add deal form.
+Two migrations ship it. The first adds `crm_pipeline_entities.commercial_fields`
+with a constant default. The second, in its own transaction so it holds no table
+lock, gives every existing tracked pipeline its fields and seeds its rows; it is
+additive and preserves amounts, stages and row identities. Services provision
+the fields of a new pipeline and add Open/USD to each inserted row in their
+ordinary operation batches.
 
-This feature is part of the existing CRM rollout. Stage requirements and linked
-rows remain separate changes; no additional milestone or feature flag is needed.
+No database trigger fills these in. Migrations run before services roll, so a
+service instance still on the previous version can, for the length of the
+rollout, create a tracked pipeline without the fields or add a row without
+Open/USD. Readers accept both: a pipeline whose `outcome` is null has no system
+fields and takes writes as before, a blank Outcome shows empty, and an amount
+with no currency counts as USD in every total. Rerunning the backfill's
+statements after the rollout repairs such pipelines and rows; they are
+idempotent. A trigger on `database_rows` would instead charge every row insert
+of every database for a CRM default. Mobile uses the existing responsive field
+editors and Add deal form.
+
+This feature is part of the existing CRM rollout; no additional milestone or
+feature flag is needed.
