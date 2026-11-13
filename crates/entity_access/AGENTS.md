@@ -63,6 +63,10 @@ the entity-access domain service.
   checked access at the right level; domain code downstream (e.g.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
 
+- `get_user_source_ids` is cached for 10 s per process and concurrent misses
+  for one user share one query through `single_flight`. A failure then arrives
+  as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
+  new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 - Do not inherit document/call permissions for a session whose source thread is private, or document access for a file attached in a private discussion; explicit grants govern access.
 

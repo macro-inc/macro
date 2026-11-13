@@ -18,6 +18,7 @@ use crate::domain::{
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// PostgreSQL-backed implementation of [`AccessRepository`].
@@ -932,10 +933,19 @@ impl AccessRepository for PgAccessRepository {
 
 /// Classify an anyhow-wrapped query failure by downcasting to the sqlx error
 /// when there is one, so genuine database outages surface as `Unavailable`
-/// instead of hiding in `Internal`.
-fn anyhow_access_error(e: anyhow::Error) -> AccessError {
-    match e.downcast::<sqlx::Error>() {
-        Ok(sqlx_error) => AccessError::from(sqlx_error),
+/// instead of hiding in `Internal`. A source id lookup shared between
+/// concurrent callers hands each of them the same error behind an `Arc`.
+pub(super) fn anyhow_access_error(e: anyhow::Error) -> AccessError {
+    let e = match e.downcast::<sqlx::Error>() {
+        Ok(sqlx_error) => return AccessError::from(sqlx_error),
+        Err(other) => other,
+    };
+
+    match e.downcast::<Arc<sqlx::Error>>() {
+        Ok(shared) => {
+            let transient = is_transient(&shared);
+            classified(transient, rootcause::report!(shared).into_dynamic())
+        }
         Err(other) => AccessError::Internal(rootcause::report!(other).into_dynamic()),
     }
 }
@@ -947,23 +957,30 @@ fn anyhow_access_error(e: anyhow::Error) -> AccessError {
 // error travels inside the report, so nothing is lost from the logs.
 impl From<sqlx::Error> for AccessError {
     fn from(e: sqlx::Error) -> Self {
-        let transient = matches!(
-            &e,
-            sqlx::Error::PoolTimedOut
-                | sqlx::Error::PoolClosed
-                | sqlx::Error::WorkerCrashed
-                | sqlx::Error::Io(_)
-                | sqlx::Error::Tls(_)
-        ) || matches!(
-            &e,
-            sqlx::Error::Database(db)
-                if matches!(db.code().as_deref(), Some("40001") | Some("40P01"))
-        );
-        let report = rootcause::report!(e).into_dynamic();
-        if transient {
-            Self::Unavailable(report)
-        } else {
-            Self::Internal(report)
-        }
+        let transient = is_transient(&e);
+        classified(transient, rootcause::report!(e).into_dynamic())
+    }
+}
+
+fn is_transient(e: &sqlx::Error) -> bool {
+    matches!(
+        e,
+        sqlx::Error::PoolTimedOut
+            | sqlx::Error::PoolClosed
+            | sqlx::Error::WorkerCrashed
+            | sqlx::Error::Io(_)
+            | sqlx::Error::Tls(_)
+    ) || matches!(
+        e,
+        sqlx::Error::Database(db)
+            if matches!(db.code().as_deref(), Some("40001") | Some("40P01"))
+    )
+}
+
+fn classified(transient: bool, report: rootcause::Report) -> AccessError {
+    if transient {
+        AccessError::Unavailable(report)
+    } else {
+        AccessError::Internal(report)
     }
 }

@@ -1931,18 +1931,10 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                   SELECT COALESCE(boundary.created_at, '-infinity'::timestamptz),
                          COALESCE(boundary.id, '00000000-0000-0000-0000-000000000000'::uuid)
                   FROM agent_session AS session
-                  LEFT JOIN LATERAL (
-                    SELECT id, created_at FROM agent_session_log
-                    WHERE id = session.history_start_log_id
-                      AND agent_session_id = $1
-                      AND NOT EXISTS (
-                          SELECT 1 FROM agent_session_log AS trusted
-                          WHERE trusted.agent_session_id = $1
-                            AND trusted.direction IN ('notification', 'to_runtime')
-                            AND trusted.content->'params'->'_meta' ? 'macro.dev/notifications'
-                      )
-                    LIMIT 1
-                  ) AS boundary ON true
+                  LEFT JOIN agent_session_log AS boundary
+                    ON boundary.id = session.history_start_log_id
+                   AND boundary.agent_session_id = session.id
+                   AND NOT session.has_trusted_notifications
                   WHERE session.id = $1
               )
             ORDER BY log.created_at ASC, log.id ASC

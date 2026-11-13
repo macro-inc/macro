@@ -407,7 +407,9 @@ and the channel message hover menu, open the Agents workspace's new-conversation
 composer in a new split, the same centered composer as Home and **Create → Agent**,
 with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
 mention fills the composer as an unsent draft; an Agents split that is already open
-returns to its composer with that draft. Spreadsheet mentions retain the current
+returns to its composer with that draft. The mention fills the composer once: after
+sending, Back, Forward, or returning to Agents from the dock or sidebar shows the
+composer without it, while text still unsent comes back. Spreadsheet mentions retain the current
 sheet and selected range; channel-message actions retain the referenced message. On
 phones, the channel message long-press drawer offers the same action as **Ask Macro**.
 Add a question and press Send to start the conversation. Handoffs that carry hidden
@@ -439,8 +441,9 @@ and start it with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })
 omitting `agent` for the default persona.
 
 Ask a chat agent what your coding agents need from you and it calls
-`ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
-question, or tool approval, plus sessions running with no activity for 20
+`ListAgentUpdates` (in code mode, `macro.agentSessions.updates()`, presented
+as an `agentUpdates` view): your non-archived coding sessions waiting on a
+permission, question, or tool approval, plus sessions running with no activity for 20
 minutes (at most 25 sessions; the result says when it was truncated). The
 result shows the same live cards as the Agents home, so you answer in place;
 agents cannot answer for you. To send a coding agent instructions the chat uses
@@ -467,6 +470,8 @@ the shimmer.
   **Agents** in the sidebar opens the same roster as the composer’s
   **Create agent** action. **Connections** manages MCP integrations (including
   app authentication and disconnection), also available under Settings → Integrations.
+  Every agent composer's **+** button, including a session opened in a split,
+  lists the connected apps with **Add connections** and **Manage connections**.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
 - Ask the agent to connect an MCP server by URL (for example "connect the MCP
@@ -1743,7 +1748,7 @@ video previews that open the same lightbox as channel media; file chips that
 open the file). A prompt may be files only, including the
 first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
-Expanded queued prompts
+Open queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
 
 On a local stack, the in-memory agent reads uploaded image attachments from local
@@ -1856,7 +1861,11 @@ before collapsing smoothly. These delays are shared by the group, never queued
 per call, and do not delay answer text or tool execution. Manually opening,
 closing, or interacting with a group overrides automatic collapse. Subagents
 and tools requiring user input remain outside these groups so they stay visible
-during other tool bursts. Nested agent activity uses the same peek window.
+during other tool bursts. A subagent row is titled by the call's short
+description, else the first line of its brief, and says **Running**, **Done**,
+or **Failed**; expanding it shows the **Instructions** and the **Result**. A long
+title truncates before the state, never over it, on phones too. Nested agent
+activity uses the same peek window.
 
 The group and thought carets sit immediately after their labels and appear on
 hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
@@ -1908,11 +1917,15 @@ in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
 While a turn runs tool calls, the server words them as one live status line
-("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+("Searching your workspace…", "Reading your emails…") with a cheap model and
 pushes it to every viewer (`agent_session_activity`). It replaces the
 **Using N tools** label of the run the turn is in: one with a call in flight,
-or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls; a settled run reads **Used N tools**.
+or the newest run while the agent thinks between calls. The line carries no
+count (the server drops a trailing "(N)" the model adds), and it is the turn's
+only working indicator: no separate working row shows under it. Without a line,
+the indicator is the group's own **Using N tools** while a call runs, or a single
+**Working** row between calls. The caret still opens the raw calls; a
+settled run reads **Used N tools**.
 It also replaces the
 open activity line of an agent reply in a channel, and shows under a working
 session's row in the Agents list. It is
@@ -2246,23 +2259,33 @@ must stay hidden; subsequent live messages must still appear.
   messages. Each prompt starts as a single-line preview, including long messages.
   The preview is rendered markdown: links and `@` mention chips appear as they do
   in the transcript, never as their `<m-link>` / `<m-document-mention>` markup, and
-  clicking one opens the row rather than the link. The expanded editor has the
+  clicking one opens the row rather than the link. The open editor has the
   composer's `@` mentions, links, emoji, and code.
-  Click a preview (or press Enter/Space on it) to open its editor; opening another
-  row collapses the previous one. The expanded editor scrolls within the smaller of
-  32% of the viewport and 16rem. Click the preview again or press Escape to collapse
-  it, retaining edits and editor state. Each row shows a `Queued` label (with `by
-  {user}` when someone else queued it —
-  several users can stack prompts in one session's queue), an always-visible remove
-  (`X`) button, and, while a turn is in flight, a `Steer` button. Steering moves
-  that message to the front of the queue and cancels the current turn, so it runs
-  next, ahead of anything queued before it. Type in the expanded editor — changes
-  autosave (debounced, and on blur) with no save button. Editing and removal are
-  possible only until the entry dispatches; after that the row simply becomes the next
-  user message in the transcript.
-- Keyboard: Up at the very start of the composer input moves focus into the
-  bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
-  walks back and past the bottom row returns to the input. With an empty composer the
+  Click a preview (or press Enter/Space on it) to edit the message in place: the
+  editor takes the preview's spot in the row, so the text appears exactly once,
+  with the row's `Queued` label, `Steer`, and remove controls still beside it.
+  Opening another row closes the previous one. The editor scrolls within the
+  smaller of 32% of the viewport and 16rem. Enter saves the edit and closes the
+  row (Shift+Enter is a newline); Escape throws the typing away, shows the saved
+  text again, and closes the row; both return focus to the composer. Focus moving
+  to another control outside the row (the composer, another row) saves and
+  closes it too, while the editor's own link menu keeps it open; on a touch
+  keyboard Enter is a newline and tapping the composer is how a tapped row
+  closes. Escape with a mention
+  or emoji menu or the link popup open closes that menu only. Opening and closing an untouched row
+  never sends an edit, and emptying a row brings its saved text back rather than
+  saving nothing. Each row shows a `Queued` label (with `by {user}` when someone else
+  queued it — several users can stack prompts in one session's queue), an
+  always-visible remove (`X`) button, and, while a turn is in flight, a `Steer`
+  button. Steering moves that message to the front of the queue and cancels the
+  current turn, so it runs next, ahead of anything queued before it. Editing and
+  removal are possible only until the entry dispatches; after that the row simply
+  becomes the next user message in the transcript.
+- Keyboard: Up at the very start of the composer input opens the bottom
+  (next-to-send) queue row for editing; further Up presses walk toward newer entries,
+  Down walks back and past the bottom row returns to the input. The queued-message
+  fixture at `apps/web/src/features/block-agent/browser-test/queued.html` renders
+  these rows over the real composer, with `?count=N` entries. With an empty composer the
   busy action is Stop, and Enter does nothing; the queue drains in order, oldest first,
   as each turn ends. Steer on a queued row is the interrupt for that one message. Each
   Steer shows its message as a pending bubble at once and drops its row; consecutive

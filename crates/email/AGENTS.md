@@ -357,6 +357,9 @@ tools — hexagonal, heavily feature-gated.
   `pending`, since claims skip `confirming` ones while those still block later
   commands, as reconnect (`email_service` `mailbox_init.rs`) and `rebind_work` in
   `outbound/mailbox_pg/lifecycle.rs` do; thread operations omit older generations.
+  The same bumps delete older generations' `email_sync_streams` and
+  `email_message_reconciliation` rows: claims never take them, and left in place
+  they stay due and every lease claim reads past them.
 
 ## Related
 
