@@ -638,6 +638,18 @@ function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
     if (i.loading || i.access !== 'access') return undefined;
     return i.name;
   };
+  // Save that name on the node too, so the sent message carries it.
+  const editor = useContext(LexicalWrapperContext)?.editor;
+  createEffect(() => {
+    const name = resolvedName();
+    if (!name || props.documentName) return;
+    const documentId = props.documentId;
+    setTimeout(() => {
+      editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
+        [documentId]: name,
+      });
+    });
+  });
   return (
     <Show
       when={unavailable()}

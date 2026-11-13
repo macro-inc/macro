@@ -1,6 +1,7 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
@@ -137,4 +138,5 @@ function Fixture() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
+initializeLexical();
 render(() => <Fixture />, root);
