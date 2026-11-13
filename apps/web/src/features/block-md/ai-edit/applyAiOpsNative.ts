@@ -2,7 +2,10 @@ import type { DocumentOp } from '@ai-ops/editor';
 import { dispatchApplicationCommandNowIfSessionEdit } from '@core/component/LexicalMarkdown/plugins/group-b/command';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import type { InputSettlement } from '@macro-inc/lexical-wasm-view/view/port';
-import type { JsonValue } from '@macro-inc/lexical-wasm-view/view/types';
+import type {
+  JsonObject,
+  JsonValue,
+} from '@macro-inc/lexical-wasm-view/view/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { match, P } from 'ts-pattern';
 import {
@@ -26,6 +29,11 @@ type Outcome =
   | { readonly kind: 'handled'; readonly handled: boolean }
   | { readonly kind: 'retired'; readonly reason: RetiredReason };
 type RetiredReason = 'unmounted' | 'closed' | 'closing';
+
+/** A plain JSON object (not an array or a scalar). */
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 /** Optional telemetry never replaces the primary outcome. */
 function record(write: () => void): void {
@@ -146,18 +154,14 @@ function run(
     let refusal: AiOpRefusalCause | 'invalid' | undefined;
     let refusals = 0;
     const stop = view.onPluginEvent('group-c.ai-op-refused', (payload) => {
+      // Narrowed by hand: pattern matching over the recursive JsonValue type
+      // exceeds the compiler's instantiation depth.
+      const fields = isJsonObject(payload) ? payload : undefined;
       // Only this input's refusal counts; nested work carries other tokens.
-      const own = match(payload)
-        .with(
-          { invocation: P.number },
-          ({ invocation: token }) => token === invocation
-        )
-        .otherwise(() => false);
-      if (!own) return;
+      if (fields?.invocation !== invocation) return;
       refusals++;
-      refusal = match(payload)
-        .with({ cause: P.union(...REFUSAL_CAUSES) }, ({ cause }) => cause)
-        .otherwise(() => 'invalid' as const);
+      const cause = fields.cause;
+      refusal = REFUSAL_CAUSES.find((known) => known === cause) ?? 'invalid';
     });
     let outcome: Outcome;
     try {
