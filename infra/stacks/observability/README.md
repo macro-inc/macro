@@ -654,6 +654,12 @@ models. Grafana uses the EC2 role for regional metric reads and publishing to th
 configured alarm SNS topic. Other unprivileged HTTP/ingest services still cannot
 access instance metadata.
 
+The `AI authorship` folder holds one dashboard (`/d/gitai-authorship`) built on
+gitai-service's OTLP counters: AI share of added lines, agent token spend, and
+ingest health. It is the plain JSON file `nixos/gitai-dashboard.json`, wired in
+by `nixos/gitai-dashboard.nix`; `tooling/gitai/README.md` covers the service's
+client side.
+
 `nixos/prod-alerts.nix` lists the prod CloudWatch alerts: macrodb memory, swap,
 load, CPU, connections, replica lag, read latency and storage; Redis memory and
 evictions; SQS queue age. Each entry holds its query, thresholds, window and

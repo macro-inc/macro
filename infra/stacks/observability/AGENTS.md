@@ -26,6 +26,8 @@ us-east-1. `README.md` is the full operations guide.
 - Change a run_local query: edit `nixos/local-report.json`, read by the
   `Macro run_local` dashboard and `scripts/ci-report.ts --spec local`. Both
   dashboards share their Loki panel builders in `nixos/loki-report-panels.nix`.
+- Change the AI authorship dashboard: edit `nixos/gitai-dashboard.json` by hand;
+  unlike the other dashboards it is plain JSON, so it can also be imported by hand.
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
