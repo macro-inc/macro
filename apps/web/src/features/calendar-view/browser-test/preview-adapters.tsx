@@ -117,6 +117,7 @@ export function useRespondToCalendarJoinRequestMutation(callbacks?: {
 export const isGuestInviteRefused = () => false;
 
 export const useVisibleCalendarsQuery = () => ({ isSuccess: true, data: [] });
+export const calendarEventIsUpdating = () => false;
 export const useDeleteCalendarEventMutation = () => ({
   isPending: false,
   mutate: () => announce('Delete event · Preview only'),
