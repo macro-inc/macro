@@ -3137,8 +3137,9 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   Enter/Space while it is focused toggles that tag and keeps the picker open;
   clicking its label toggles and saves all staged selections, then closes.
   Shift-click and Shift+Enter also keep it open. Mobile retains Done.
-  During tag creation, Back and Escape return from sharing to color, then to the
-  name search, preserving the name and chosen color.
+  During tag creation, the compact Back/title row shows the draft color beside
+  the heading. Back and Escape return from sharing to color, then to the name
+  search, preserving the name and chosen color.
   With GraphQL Soup enabled, applying the first tag refetches only that entity's
   properties; later edits update the existing assignment optimistically. Verify
   both the side panel and list-row chip, then reload to confirm persistence.

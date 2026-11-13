@@ -776,6 +776,8 @@ function CreateTagFlow(props: {
   onScopeSelect: (scope: TagScope) => void;
 }) {
   let container: HTMLDivElement | undefined;
+  const selectedColor = () =>
+    props.colorOptions[props.selectedColorIndex]?.color ?? DEFAULT_TAG_COLOR;
   onMount(() => container?.focus());
   return (
     <div
@@ -789,7 +791,7 @@ function CreateTagFlow(props: {
         if (isArrow || isShortcut) event.currentTarget.focus();
       }}
     >
-      <div class="flex items-center gap-2 px-2 pb-1 pt-1">
+      <div class="flex items-center gap-1 px-2 pb-1 pt-1">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -803,8 +805,9 @@ function CreateTagFlow(props: {
         >
           <BackIcon class="size-4" />
         </Button>
-        <span class="min-w-0 truncate text-xs text-ink-extra-muted">
-          Create tag "{props.label}"
+        <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
+          <span class="truncate">Create tag "{props.label}"</span>
+          <TagDot color={selectedColor()} />
         </span>
       </div>
       <Show
@@ -817,12 +820,7 @@ function CreateTagFlow(props: {
                 onMouseEnter={() => props.onScopeMouseEnter(index())}
                 onClick={() => props.onScopeSelect(option.scope)}
               >
-                <TagDot
-                  color={
-                    props.colorOptions[props.selectedColorIndex]?.color ??
-                    DEFAULT_TAG_COLOR
-                  }
-                />
+                <TagDot color={selectedColor()} />
                 <span class="min-w-0 flex-1 truncate">{option.label}</span>
                 <Show
                   when={props.pending && props.selectedScopeIndex === index()}
