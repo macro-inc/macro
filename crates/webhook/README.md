@@ -101,7 +101,9 @@ feature flag. Live streams (`GET /events/stream`) live in
   `channel.deleted`,
   `channel.participant_added`, `channel.participant_removed`, and
   `channel.access_requested` (someone outside a private or team channel asked
-  to join; the payload carries the request id).
+  to join; the payload carries the request id). Participant events reach the
+  channel's current members: a removed participant does not receive their own
+  `channel.participant_removed`.
 - Messages, on channels and document discussions alike: `message.posted`,
   `message.patched`, `message.deleted`, `message.attachment_created`,
   `message.attachment_removed`, and `message.mentioned`. Each payload carries

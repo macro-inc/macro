@@ -72,6 +72,14 @@ event (`lagged`, `revoked`, `reset`).
 - An audience resolution error drops that event for those streams; it never
   closes them. Upstream is at most once (no outbox); SSE is at least once
   within the replay window when the client resumes with its cursor.
+- `channel.participant_removed` is `Entity` only (unchanged behaviour of a
+  stable event): the removed user no longer has access, so neither streams nor
+  webhooks deliver the removal to them. New removal events (such as
+  `team.member_removed`) add a `Snapshot` of who was removed.
+- A stream re-validates the headers it opened with every 60 s, so an expired
+  session closes it as `revoked`; clients reconnect with a fresh credential.
+- The writer's kill switch stops every live stream's events, flagged or not
+  (the old per-process consumer is gone); webhooks are unaffected.
 - Without the flag a stream behaves as before: no cursors, SSE ids are event
   ids, wildcards are literal names, preview events are never delivered.
 
