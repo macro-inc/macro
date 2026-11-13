@@ -75,8 +75,8 @@ pub trait AccessDirectory: Send + Sync + 'static {
         entity_id: &str,
     ) -> impl Future<Output = Result<bool, AccessLookupError>> + Send;
 
-    /// Whether one principal is an explicit accessor whose access level is
-    /// at least `min_level`.
+    /// Whether one principal is an explicit accessor whose granted level is
+    /// at least `min_level`. Link shares never count, as for webhooks.
     fn is_accessor_at_least(
         &self,
         principal_id: &str,

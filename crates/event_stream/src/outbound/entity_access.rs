@@ -9,6 +9,9 @@ use event_exposure::{EntityType, MinAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 /// Explicit accessors from `entity_access`, uncached.
 pub struct EntityAccessDirectory<A> {
     service: Arc<A>,
@@ -73,15 +76,16 @@ impl<A: EntityAccessService> AccessDirectory for EntityAccessDirectory<A> {
         let Ok(user) = MacroUserIdStr::parse_from_str(principal_id) else {
             return Ok(false);
         };
-        // The explicit accessor's level. Link-share access cannot admit
-        // anyone here: the accessor check above already excluded link-only
-        // viewers.
-        let level = self
+        // Grants only, the same set webhooks resolve: a link share's level
+        // never lifts an explicit accessor over the floor.
+        let admitted = self
             .service
-            .get_access_level(Some(&user.0), entity_id, entity_type)
+            .get_users_by_entity_at_least(entity_id, entity_type, min_access_level(min_level))
             .await
             .map_err(lookup_error)?;
-        Ok(level.is_some_and(|level| level >= min_access_level(min_level)))
+        Ok(admitted
+            .iter()
+            .any(|admitted| admitted.as_ref().eq_ignore_ascii_case(user.as_ref())))
     }
 }
 
