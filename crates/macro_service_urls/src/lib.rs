@@ -660,6 +660,12 @@ service_url! {
             dev: "https://sync-service-dev3.macroverse.workers.dev",
             prod: "https://sync-service-prod2.macroverse.workers.dev",
         },
+        /// gitai-service API URL: Macro's server for the git-ai client.
+        pub GitaiServiceUrl {
+            local: "http://localhost:8113",
+            dev: "https://dev-gateway.macro.com/gitai",
+            prod: "https://gateway.macro.com/gitai",
+        },
         /// AI editing worker API URL.
         pub AiEditingWorkerUrl {
             local: "http://localhost:8933",
@@ -739,6 +745,16 @@ service_url! {
         local: "https://oauth2.googleapis.com/revoke",
         dev: "https://oauth2.googleapis.com/revoke",
         prod: "https://oauth2.googleapis.com/revoke",
+    }
+}
+
+service_url! {
+    /// GitHub REST and GraphQL API root. GitHub's host in every environment;
+    /// tests point an adapter at a fake through its constructor.
+    pub struct GithubApiUrl {
+        local: "https://api.github.com",
+        dev: "https://api.github.com",
+        prod: "https://api.github.com",
     }
 }
 

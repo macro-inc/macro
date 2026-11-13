@@ -27,6 +27,7 @@ export enum ServiceUrl {
   MCP_SERVER_URL = 'MCP_SERVER_URL',
   MCP_CHATGPT_SERVICE_URL = 'MCP_CHATGPT_SERVICE_URL',
   CONNECT_API_URL = 'CONNECT_API_URL',
+  GITAI_SERVICE_URL = 'GITAI_SERVICE_URL',
 }
 
 /**
@@ -66,6 +67,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.MCP_CHATGPT_SERVICE_URL]:
     'https://mcp-chatgpt-worker-dev.macroverse.workers.dev',
   [ServiceUrl.CONNECT_API_URL]: 'https://connect-dev.macro.com',
+  [ServiceUrl.GITAI_SERVICE_URL]: 'https://dev-gateway.macro.com/gitai',
 };
 
 /**
@@ -96,6 +98,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.MCP_CHATGPT_SERVICE_URL]:
     'https://mcp-chatgpt-worker.macroverse.workers.dev',
   [ServiceUrl.CONNECT_API_URL]: 'https://connect.macro.com',
+  [ServiceUrl.GITAI_SERVICE_URL]: 'https://gateway.macro.com/gitai',
 };
 
 /**

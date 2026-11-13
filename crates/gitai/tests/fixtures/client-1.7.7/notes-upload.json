@@ -1,0 +1,42 @@
+{
+  "body": {
+    "entries": [
+      {
+        "commit_sha": "0cc2f419d3ba2d22a17f46b783944c9f8c05c69d",
+        "content": "README.md\n  h_118bc64884c4da 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"0cc2f419d3ba2d22a17f46b783944c9f8c05c69d\",\n  \"prompts\": {},\n  \"humans\": {\n    \"h_118bc64884c4da\": {\n      \"author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}"
+      },
+      {
+        "commit_sha": "b3e772d0e3b72601e6a428ce7cfc810d55bd95ec",
+        "content": "hello.txt\n  s_a5a876c86efa83::t_a0c69a9a69e80b 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"b3e772d0e3b72601e6a428ce7cfc810d55bd95ec\",\n  \"prompts\": {},\n  \"sessions\": {\n    \"s_a5a876c86efa83\": {\n      \"agent_id\": {\n        \"tool\": \"claude\",\n        \"id\": \"22222222-2222-4222-8222-222222222222\",\n        \"model\": \"unknown\"\n      },\n      \"human_author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}"
+      },
+      {
+        "commit_sha": "b445cc3ce6cf301cb2a613ef52ff7795cf48d198",
+        "content": "hello.txt\n  s_5b121f435f7f3f::t_e48086aa8b4d11 1\n  s_5b121f435f7f3f::t_c885ece031a4cb 2\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"b445cc3ce6cf301cb2a613ef52ff7795cf48d198\",\n  \"prompts\": {},\n  \"sessions\": {\n    \"s_5b121f435f7f3f\": {\n      \"agent_id\": {\n        \"tool\": \"claude\",\n        \"id\": \"11111111-1111-4111-8111-111111111111\",\n        \"model\": \"claude-sonnet-4-5-20250929\"\n      },\n      \"human_author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}"
+      },
+      {
+        "commit_sha": "d75d17c3bc188b7ff40089543fb2dbb669816520",
+        "content": "codex.txt\n  s_f4be7d5430ba3a::t_60d8ea5dd73147 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"d75d17c3bc188b7ff40089543fb2dbb669816520\",\n  \"prompts\": {},\n  \"sessions\": {\n    \"s_f4be7d5430ba3a\": {\n      \"agent_id\": {\n        \"tool\": \"codex\",\n        \"id\": \"44444444-4444-4444-8444-444444444444\",\n        \"model\": \"gpt-5.1-codex\"\n      },\n      \"human_author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}"
+      }
+    ]
+  },
+  "headers": {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0002",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "POST",
+  "path": "/worker/notes/upload",
+  "query": {},
+  "response": {
+    "body": {
+      "failure_count": 0,
+      "success_count": 4
+    },
+    "headers": {},
+    "status": 200
+  }
+}

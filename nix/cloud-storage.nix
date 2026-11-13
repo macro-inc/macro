@@ -522,6 +522,11 @@
           packageName = "whatsapp_session_service";
           binaries = [ "whatsapp_session_service" ];
         }
+        {
+          serviceName = "gitai-service";
+          packageName = "gitai_service";
+          binaries = [ "gitai_service" ];
+        }
       ];
 
       localStackBinaryDefinitions = [
@@ -671,6 +676,7 @@
         "contacts-service"
         "document-storage-service"
         "email-service"
+        "gitai-service"
         "image-proxy-service"
         "notification-service"
         "static-file-service"

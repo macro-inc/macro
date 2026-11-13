@@ -1,0 +1,68 @@
+{
+  "body": {
+    "daemon_id": "34290d3b-c454-4fc7-a240-45cd6cf792c3",
+    "events": [
+      {
+        "fields": {
+          "events": 27,
+          "file": "src/daemon/telemetry_worker.rs",
+          "invalid_records": 0,
+          "line": 1191,
+          "max_id": "Some(37)",
+          "min_id": "Some(1)",
+          "module_path": "git_ai::daemon::telemetry_worker"
+        },
+        "id": "c39308bb-20ce-4ccf-bd35-87c231d50b19",
+        "kind": "log",
+        "level": "info",
+        "message": "metrics upload batch sending",
+        "target": "git_ai::daemon::telemetry_worker",
+        "timestamp": "2026-11-13T04:26:07.669908942+00:00"
+      },
+      {
+        "fields": {
+          "delivered_events": 27,
+          "errored_events": 0,
+          "errors": "[]",
+          "events": 27,
+          "file": "src/daemon/telemetry_worker.rs",
+          "line": 1236,
+          "max_id": "Some(37)",
+          "min_id": "Some(1)",
+          "module_path": "git_ai::daemon::telemetry_worker"
+        },
+        "id": "2d83964a-ba78-41a2-b7dc-a81760fa4406",
+        "kind": "log",
+        "level": "info",
+        "message": "metrics upload batch result",
+        "target": "git_ai::daemon::telemetry_worker",
+        "timestamp": "2026-11-13T04:26:07.671511085+00:00"
+      }
+    ],
+    "git_ai_version": "1.7.7",
+    "install_id": "00000000-0000-4000-8000-000000000001",
+    "version": 1
+  },
+  "headers": {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0001",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "POST",
+  "path": "/worker/logs/upload",
+  "query": {},
+  "response": {
+    "body": {
+      "accepted": 2,
+      "dropped": 0,
+      "enqueued": true,
+      "errors": []
+    },
+    "headers": {},
+    "status": 200
+  }
+}

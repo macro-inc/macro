@@ -9046,6 +9046,67 @@ dependencies = [
 ]
 
 [[package]]
+name = "gitai"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-dynamodb",
+ "aws-sdk-s3",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "constant_time_eq 0.3.1",
+ "futures",
+ "hex",
+ "lazy-regex",
+ "macro_tower_layers",
+ "nom 8.0.0",
+ "opentelemetry",
+ "rand 0.9.4",
+ "regex",
+ "reqwest 0.13.4",
+ "rootcause",
+ "ruzstd",
+ "serde",
+ "serde_dynamo",
+ "serde_json",
+ "sha2 0.10.9",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "upstream_error",
+ "url",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "gitai_service"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-dynamodb",
+ "axum",
+ "doppler-config",
+ "gitai",
+ "macro_aws_config",
+ "macro_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_service_urls",
+ "macro_tower_layers",
+ "rootcause",
+ "tokio",
+ "tower 0.5.3",
+ "tower-http",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "github"
 version = "0.1.0"
 dependencies = [

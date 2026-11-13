@@ -1,0 +1,6 @@
+{
+  "commit": {
+    "message": "fix(settings): show the native binary's build date (#10651)"
+  },
+  "sha": "a550235529f7a6e8329525dddca0974836eeb1e1"
+}

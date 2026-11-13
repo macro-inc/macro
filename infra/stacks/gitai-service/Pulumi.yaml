@@ -1,0 +1,3 @@
+name: gitai-service
+runtime: nodejs
+description: Macro's self-hosted git-ai server

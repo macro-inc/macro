@@ -1,0 +1,61 @@
+{
+  "body": {
+    "events": [
+      {
+        "a": {
+          "0": "1.7.7",
+          "1": "https://github.com/macro-inc/macro",
+          "2": "Test Dev <dev@example.com>",
+          "3": "665f5f27df36023f2b29e90b979d2474b7ed2f58",
+          "4": "ff3b61bc7add7e2ae25bba7c102ad1f13266691c",
+          "5": "main"
+        },
+        "e": 1,
+        "t": 1794543258,
+        "v": {
+          "0": 1,
+          "1": 0,
+          "10": null,
+          "11": "chore: status-503",
+          "12": null,
+          "13": "human.txt\n  h_118bc64884c4da 1\n---\n{\n  \"schema_version\": \"authorship/3.0.0\",\n  \"git_ai_version\": \"1.7.7\",\n  \"base_commit_sha\": \"665f5f27df36023f2b29e90b979d2474b7ed2f58\",\n  \"prompts\": {},\n  \"humans\": {\n    \"h_118bc64884c4da\": {\n      \"author\": \"Test Dev <dev@example.com>\"\n    }\n  }\n}",
+          "14": "[{\"commit_sha\":\"665f5f27df36023f2b29e90b979d2474b7ed2f58\",\"content_hash\":\"4e2626a6251f8224a69399522df12ef759bd1dc4370ca61deacff1a746b8a3de\",\"hunk_kind\":\"addition\",\"start_line\":1,\"end_line\":1,\"file_path\":\"human.txt\",\"human_id\":\"h_118bc64884c4da\"}]",
+          "15": 1794543256,
+          "16": 1794543256,
+          "17": "ae7f05be7dafc39e3428676a6f4ec6e52cb8ec7d",
+          "18": null,
+          "2": 1,
+          "3": [
+            "all"
+          ],
+          "5": [
+            0
+          ],
+          "6": [
+            0
+          ]
+        }
+      }
+    ],
+    "v": 1
+  },
+  "headers": {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "host": "127.0.0.1:8787",
+    "user-agent": "git-ai/1.7.7",
+    "x-api-key": "gitai_test_FAKEKEY_0001",
+    "x-author-identity": "Test Dev <dev@example.com>",
+    "x-distinct-id": "00000000-0000-4000-8000-000000000001"
+  },
+  "method": "POST",
+  "path": "/worker/metrics/upload",
+  "query": {},
+  "response": {
+    "body": {
+      "errors": []
+    },
+    "headers": {},
+    "status": 200
+  }
+}

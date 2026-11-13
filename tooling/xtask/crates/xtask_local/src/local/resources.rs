@@ -32,6 +32,8 @@ pub const BULK_UPLOAD_TABLE: &str = "bulk-upload";
 pub const CONNECTION_GATEWAY_TABLE: &str = "connection-gateway-table";
 /// The static-file metadata table.
 pub const STATIC_FILE_TABLE: &str = "static-file-metadata";
+/// gitai_service's index table.
+pub const GITAI_TABLE: &str = "gitai-service-index";
 
 /// Alias for the KMS key that encrypts users' Cursor API keys.
 ///
@@ -324,6 +326,16 @@ pub const BUCKETS: &[Bucket] = &[
         name: "github-pull-request-patches",
         env_key: "GITHUB_PULL_REQUEST_PATCH_BUCKET",
     },
+    Bucket {
+        // gitai_service's raw batches, notes, commits and usage.
+        name: "gitai-events",
+        env_key: "GITAI_EVENTS_BUCKET",
+    },
+    Bucket {
+        // gitai_service's session transcripts.
+        name: "gitai-sessions",
+        env_key: "GITAI_SESSIONS_BUCKET",
+    },
 ];
 
 /// Every local DynamoDB table and the env var that references it.
@@ -339,6 +351,10 @@ pub const TABLES: &[Table] = &[
     Table {
         name: STATIC_FILE_TABLE,
         env_key: "STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME",
+    },
+    Table {
+        name: GITAI_TABLE,
+        env_key: "GITAI_TABLE",
     },
 ];
 

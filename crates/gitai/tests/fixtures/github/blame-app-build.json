@@ -1,0 +1,34 @@
+{
+  "data": {
+    "repository": {
+      "object": {
+        "oid": "a550235529f7a6e8329525dddca0974836eeb1e1",
+        "blame": {
+          "ranges": [
+            {
+              "startingLine": 1,
+              "endingLine": 18,
+              "commit": {
+                "oid": "78958681c3dd65b37ee84d2a9a2b040d85605546"
+              }
+            },
+            {
+              "startingLine": 19,
+              "endingLine": 30,
+              "commit": {
+                "oid": "a550235529f7a6e8329525dddca0974836eeb1e1"
+              }
+            },
+            {
+              "startingLine": 31,
+              "endingLine": 47,
+              "commit": {
+                "oid": "78958681c3dd65b37ee84d2a9a2b040d85605546"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -123,6 +123,8 @@ pub enum Port {
     /// The Outlook emulator: Microsoft's sign-in page for the browser, and
     /// its control API.
     OutlookEmulator = 8481,
+    /// `gitai_service`, Macro's server for the git-ai client.
+    Gitai = 8113,
 }
 
 impl Port {

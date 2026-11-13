@@ -182,9 +182,12 @@ fn static_file_block_is_mode_specific() {
 /// Drift gate across the Rust↔TypeScript seam: every proxied service's prefix
 /// must be wired into `proxyServers()` in `servers.ts`, or the frontend can't
 /// reach it through the single-origin proxy. servers.ts can't be derived from
-/// Rust, so this test is what keeps the two in sync.
+/// Rust, so this test is what keeps the two in sync. Services only other
+/// clients call are exempt.
 #[test]
 fn frontend_wires_every_inventory_prefix() {
+    // The git-ai client and agents call gitai_service; the web app never does.
+    const NOT_CALLED_BY_FRONTEND: &[&str] = &["gitai_service"];
     let servers = repo_root().join("apps/web/src/lib/core/constant/servers.ts");
     let src = std::fs::read_to_string(&servers)
         .unwrap_or_else(|e| panic!("reading {}: {e}", servers.display()));
@@ -192,6 +195,9 @@ fn frontend_wires_every_inventory_prefix() {
         let Some(prefix) = svc.path_prefix else {
             continue;
         };
+        if NOT_CALLED_BY_FRONTEND.contains(&svc.compose_name) {
+            continue;
+        }
         let http = format!("${{proxyOrigin}}{prefix}");
         let ws = format!("${{wsProxyOrigin}}{prefix}");
         assert!(
