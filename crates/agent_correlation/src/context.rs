@@ -14,7 +14,9 @@ pub struct Attribution {
     pub routine_id: Option<Uuid>,
     /// The validated invocation's agent session.
     pub session_id: Option<Uuid>,
-    /// The scope that session's credential was minted with.
+    /// The scope stored with the validated invocation, else the one the
+    /// credential signs. Set without a session when the credential signs a
+    /// scope but carries no correlation.
     pub scope: Option<SessionScope>,
     /// Display verb the SDK sent with a validated correlation. Display only;
     /// it is dropped whenever there is no correlation.
@@ -41,7 +43,9 @@ pub fn current_session() -> Option<Uuid> {
     attribution().session_id
 }
 
-/// The scope the current request's session credential was minted with.
+/// The scope the current request is held to: the one stored with its
+/// invocation, else the one its credential signs. It may be set when
+/// `current_session` is not.
 pub fn current_scope() -> Option<SessionScope> {
     attribution().scope
 }

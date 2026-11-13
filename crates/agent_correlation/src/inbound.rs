@@ -60,9 +60,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
         let token = verified_api_token(parts, &state.jwt).await;
-        if outside_signed_scope(token.as_ref(), parts) {
-            return Err(CorrelationRejection(CorrelationError::OutOfScope));
-        }
+        checked_signed_scope(token.as_ref(), parts)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
         if let Some((_, correlation)) = correlation
             && let Some(scope) = correlation.scope
@@ -99,12 +97,14 @@ async fn verified_api_token(parts: &mut Parts, jwt: &JwtValidationArgs) -> Optio
     }
 }
 
-/// Whether the request is outside the scope `token` signs. The signature is
-/// the claim's authority, so this needs no lookup.
-fn outside_signed_scope(token: Option<&MacroApiToken>, parts: &Parts) -> bool {
+/// The scope `token` signs, or a refusal when the request is outside it. The
+/// signature is the claim's authority, so this needs no lookup.
+fn checked_signed_scope(
+    token: Option<&MacroApiToken>,
+    parts: &Parts,
+) -> Result<SignedScope, CorrelationRejection> {
     let scope = SignedScope::from_claim(token.and_then(|token| token.agent_scope.as_deref()));
-    let outside = !scope.allows(parts.method.as_str(), parts.uri.path());
-    if outside {
+    if !scope.allows(parts.method.as_str(), parts.uri.path()) {
         tracing::warn!(
             ?scope,
             method = %parts.method,
@@ -112,8 +112,9 @@ fn outside_signed_scope(token: Option<&MacroApiToken>, parts: &Parts) -> bool {
             agent_session_id = ?token.and_then(|token| token.agent_session_id),
             "refused a request outside its credential's signed scope"
         );
+        return Err(CorrelationRejection(CorrelationError::OutOfScope));
     }
-    outside
+    Ok(scope)
 }
 
 /// The SDK's display verb. Callers read it only after the correlation that
@@ -189,9 +190,10 @@ async fn propagate_request(
 ) -> Response {
     let (mut parts, body) = request.into_parts();
     let token = verified_api_token(&mut parts, &state.jwt).await;
-    if outside_signed_scope(token.as_ref(), &parts) {
-        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
-    }
+    let signed = match checked_signed_scope(token.as_ref(), &parts) {
+        Ok(signed) => signed,
+        Err(rejection) => return rejection.into_response(),
+    };
     let correlation = match accept_correlation(&state, token.as_ref()).await {
         Ok(correlation) => correlation,
         Err(error) => return error.into_response(),
@@ -215,7 +217,6 @@ async fn propagate_request(
     let correlation_id = correlation.map(|(id, _)| id);
     // Handlers read the scope stored with the correlation, else the one the
     // credential signs (the harness signs the stored one).
-    let signed = SignedScope::from_claim(token.as_ref().and_then(|t| t.agent_scope.as_deref()));
     // The routine claim needs no lookup: the token's signature is its authority.
     let attribution = Attribution {
         correlation_id,
@@ -254,8 +255,8 @@ async fn enforce_signed_scope_request(
 ) -> Response {
     let (mut parts, body) = request.into_parts();
     let token = verified_api_token(&mut parts, &jwt).await;
-    if outside_signed_scope(token.as_ref(), &parts) {
-        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
+    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts) {
+        return rejection.into_response();
     }
     next.run(Request::from_parts(parts, body)).await
 }
