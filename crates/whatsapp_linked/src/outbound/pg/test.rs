@@ -25,6 +25,7 @@ mod deletion;
 mod media;
 mod names;
 mod pairing;
+mod pictures;
 mod rich;
 mod timeline;
 
