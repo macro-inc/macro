@@ -61,18 +61,17 @@ async fn membership_matches_exactly_the_source_list(pool: PgPool) -> anyhow::Res
 
         if viewer.is_anonymous() {
             assert!(old.is_empty(), "{} had sources", matrix_viewer.label);
-            continue;
         }
-        let listed: Vec<String> = sqlx::query_scalar!(
-            r#"SELECT s.source AS "source!" FROM entity_access_viewer_sources($1, $2) s(source)"#,
+        let listed: Vec<Option<String>> = sqlx::query_scalar!(
+            r#"SELECT s.source FROM entity_access_viewer_sources($1, $2) s(source)"#,
             viewer.id(),
             viewer.scope_team(),
         )
         .fetch_all(&pool)
         .await?;
         assert_eq!(
-            listed.iter().map(String::as_str).collect::<BTreeSet<_>>(),
-            old,
+            listed.iter().map(Option::as_deref).collect::<BTreeSet<_>>(),
+            old.iter().copied().map(Some).collect::<BTreeSet<_>>(),
             "{}",
             matrix_viewer.label
         );

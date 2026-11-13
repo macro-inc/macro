@@ -37,7 +37,7 @@ $$;
 -- The same sources as rows, for listings that start from the viewer's sources.
 CREATE FUNCTION entity_access_viewer_sources(viewer text, scope_team uuid)
 RETURNS SETOF text LANGUAGE sql STABLE PARALLEL SAFE AS $$
-    SELECT viewer
+    SELECT viewer WHERE viewer IS NOT NULL
     UNION ALL
     SELECT tu.team_id::text FROM team_user tu WHERE scope_team IS NULL AND tu.user_id = viewer
     UNION ALL
