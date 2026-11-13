@@ -32,7 +32,7 @@ impl ServiceProcess {
         let binary = binary_dir()?.join(name);
         if !binary.is_file() {
             bail!(
-                "{} is missing: build it with `cargo build -p email_service --bin email_service --bin pubsub_workers`, \
+                "{} is missing: build it with `cargo build -p email_service --bin email_service --bin pubsub_workers -p calendar_service --bin calendar_service`, \
                  or run the suite with `just email-e2e`",
                 binary.display()
             );

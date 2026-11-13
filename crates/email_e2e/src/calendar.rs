@@ -161,9 +161,10 @@ impl Calendar {
     /// first occurrence's item (`event` and `occurrence`).
     pub async fn wait_for_event(&self, title: &str) -> Result<Value, Report> {
         let items = self
-            .wait_for_occurrences(&format!("the event `{title}` to be on the calendar"), |items| {
-                items.iter().any(|item| item["event"]["title"] == title)
-            })
+            .wait_for_occurrences(
+                &format!("the event `{title}` to be on the calendar"),
+                |items| items.iter().any(|item| item["event"]["title"] == title),
+            )
             .await?;
         items
             .into_iter()
@@ -173,9 +174,10 @@ impl Calendar {
 
     /// Waits until no event titled `title` is on the calendar.
     pub async fn wait_until_gone(&self, title: &str) -> Result<(), Report> {
-        self.wait_for_occurrences(&format!("the event `{title}` to leave the calendar"), |items| {
-            !items.iter().any(|item| item["event"]["title"] == title)
-        })
+        self.wait_for_occurrences(
+            &format!("the event `{title}` to leave the calendar"),
+            |items| !items.iter().any(|item| item["event"]["title"] == title),
+        )
         .await
         .map(drop)
     }

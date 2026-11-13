@@ -37,9 +37,7 @@ fn google_event(title: &str, start: DateTime<Utc>) -> GoogleEvent {
 
 /// An hour-long Outlook event.
 fn outlook_event(title: &str, start: DateTime<Utc>) -> Result<OutlookEvent, Report> {
-    let graph_time = |at: DateTime<Utc>| {
-        json!({ "dateTime": at.format("%Y-%m-%dT%H:%M:%S").to_string(), "timeZone": "UTC" })
-    };
+    let graph_time = |at: DateTime<Utc>| json!({ "dateTime": at.format("%Y-%m-%dT%H:%M:%S").to_string(), "timeZone": "UTC" });
     Ok(serde_json::from_value(json!({
         "subject": title,
         "start": graph_time(start),
@@ -55,10 +53,12 @@ fn outlook_event(title: &str, start: DateTime<Utc>) -> Result<OutlookEvent, Repo
 async fn google_events_arrive_on_import_and_by_push() -> Result<(), Report> {
     let stack = calendar_stack().await?;
     let ada = stack.user("ada").await?;
-    stack.gmail().add_mailbox(&email_e2e::gmail_emulator::SeedMailbox {
-        email: ada.email().to_owned(),
-        ..Default::default()
-    })?;
+    stack
+        .gmail()
+        .add_mailbox(&email_e2e::gmail_emulator::SeedMailbox {
+            email: ada.email().to_owned(),
+            ..Default::default()
+        })?;
     let standup = in_days(1);
     stack
         .gmail()
@@ -96,21 +96,17 @@ async fn outlook_events_arrive_on_import_and_by_poll() -> Result<(), Report> {
             email: ada.email().to_owned(),
             ..Default::default()
         })?;
-    stack.outlook().add_event(
-        ada.email(),
-        DEFAULT,
-        &outlook_event("Standup", in_days(1))?,
-    )?;
+    stack
+        .outlook()
+        .add_event(ada.email(), DEFAULT, &outlook_event("Standup", in_days(1))?)?;
 
     ada.link_outlook_with_calendar().await?;
     let calendar = ada.calendar()?;
     calendar.wait_for_event("Standup").await?;
 
-    stack.outlook().add_event(
-        ada.email(),
-        DEFAULT,
-        &outlook_event("Retro", in_days(2))?,
-    )?;
+    stack
+        .outlook()
+        .add_event(ada.email(), DEFAULT, &outlook_event("Retro", in_days(2))?)?;
     calendar.poll_outlook_now(ada.email()).await?;
     calendar.wait_for_event("Retro").await?;
 

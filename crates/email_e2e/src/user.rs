@@ -118,7 +118,8 @@ impl User {
     /// [`User::link_outlook`] only in what it waits for. Needs a stack
     /// started with `StackOptions::calendar`.
     pub async fn link_outlook_with_calendar(&self) -> Result<Inbox, Report> {
-        self.link_with_calendar(Provider::Outlook, &self.email).await
+        self.link_with_calendar(Provider::Outlook, &self.email)
+            .await
     }
 
     /// Links the mailbox `address` at `provider` with its calendar and waits
@@ -131,7 +132,9 @@ impl User {
         let calendar = self.calendar()?;
         let mut scopes = vec![GMAIL_SCOPE];
         scopes.extend(GOOGLE_CALENDAR_SCOPES);
-        let inbox = self.start_link_with_scopes(provider, address, &scopes).await?;
+        let inbox = self
+            .start_link_with_scopes(provider, address, &scopes)
+            .await?;
         inbox.wait_until_synced().await?;
         calendar.wait_until_synced(address).await?;
         Ok(inbox)
@@ -147,7 +150,11 @@ impl User {
             api_url: url.to_owned(),
             ..self.api.clone()
         };
-        Ok(Calendar::new(at(service_url), at(reads_url), self.db.clone()))
+        Ok(Calendar::new(
+            at(service_url),
+            at(reads_url),
+            self.db.clone(),
+        ))
     }
 
     /// Links the mailbox `address` at `provider` and waits for its first

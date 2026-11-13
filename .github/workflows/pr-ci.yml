@@ -530,6 +530,8 @@ jobs:
             - 'services/email_service/**'
             - 'crates/email/**'
             - 'crates/email_*/**'
+            - 'services/calendar_service/**'
+            - 'crates/calendar_*/**'
             - 'crates/gmail_*/**'
             - 'crates/outlook_*/**'
             - 'crates/macro_db_client/migrations/**'

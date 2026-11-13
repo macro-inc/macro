@@ -18,8 +18,8 @@ use sqlx::PgPool;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
-pub use self::calendar_reads::CalendarSignal;
 use self::calendar_reads::CalendarReads;
+pub use self::calendar_reads::CalendarSignal;
 use crate::aws::{Aws, StoredObject};
 use crate::inbox::{Mail, Provider};
 use crate::infra::postgres::Database;
@@ -173,8 +173,15 @@ impl Stack {
         let calendar = if options.calendar {
             let app_url = macro_services.url(APP);
             Some(
-                start_calendar(&http, &env, &app_url, &options.env, database.pool(), &log_dir)
-                    .await?,
+                start_calendar(
+                    &http,
+                    &env,
+                    &app_url,
+                    &options.env,
+                    database.pool(),
+                    &log_dir,
+                )
+                .await?,
             )
         } else {
             None
@@ -539,7 +546,8 @@ async fn start_calendar(
     let team_sharing = env
         .get(calendar_environment::TEAM_SHARING)
         .is_some_and(|value| value == "true");
-    let reads = CalendarReads::start(db.clone(), environment::INTERNAL_API_KEY, team_sharing).await?;
+    let reads =
+        CalendarReads::start(db.clone(), environment::INTERNAL_API_KEY, team_sharing).await?;
     Ok(CalendarPart {
         service,
         url: calendar_environment::gateway_url(port),

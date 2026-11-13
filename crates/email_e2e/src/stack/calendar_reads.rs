@@ -133,8 +133,8 @@ impl CalendarReads {
         internal_api_key: &str,
         team_sharing: bool,
     ) -> Result<Self, Report> {
-        let authorization = MacroAuthorizationState::new(Arc::new(
-            MacroAuthorizationServiceImpl::new(
+        let authorization =
+            MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
                 MacroAuthJwtValidator::new(JwtValidationArgs::new_testing()),
                 InternalAuthConfig {
                     api_key: internal_api_key.to_owned(),
@@ -142,8 +142,7 @@ impl CalendarReads {
                 },
                 NoBotAuthorizer,
                 NoUserApiKeyAuthorizer,
-            ),
-        ));
+            )));
         let recorder = Recorder::default();
 
         let app: Router = Router::new()

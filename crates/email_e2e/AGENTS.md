@@ -2,8 +2,9 @@
 
 ## What it is
 
-The end-to-end test suite for Email: the real `email_service` API and its
-`pubsub_workers` (queue workers and the Outlook mailbox loops) run as
+The end-to-end test suite for Email and Calendar: the real `email_service` API, its
+`pubsub_workers` (queue workers and the Outlook mailbox loops) and, when a
+scenario asks, `calendar_service` run as
 processes against `gmail_emulator` and `outlook_emulator`, with their own
 Postgres database, Redis database and SQS queues. A scenario drives them the
 way a user and a provider do. `src/` is the harness; `tests/` holds the
@@ -68,6 +69,37 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   which still fail and which now pass. Remove the attribute with the fix.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
 
+## Calendar scenarios
+
+```rust
+let stack = Stack::start_with(StackOptions { calendar: true, ..StackOptions::default() }).await?;
+let ada = stack.user("ada").await?;
+ada.link_gmail_with_calendar().await?;   // or link_outlook_with_calendar(); waits for both first syncs
+let calendar = ada.calendar()?;
+stack.gmail().add_event(ada.email(), "primary", event)?;   // the provider's side
+let item = calendar.wait_for_event("Standup").await?;      // { event, occurrence }
+calendar.patch(&format!("/events/{}", item["event"]["id"].as_str().unwrap()), &change).await?;
+```
+
+- `StackOptions::calendar` adds `calendar_service` (its log is next to the
+  others), its backfill queue, and the calendar read routes. Without it a
+  stack is exactly the email one.
+- `Calendar` talks to two places, as the web app does: changes go to
+  `calendar_service` under the gateway's `/calendar` prefix (`get`, `post`,
+  `put`, `patch`, `delete`, `request`), which is also where Google pushes
+  (`/calendar/notifications`); reads go to `/calendar-events...` (`read`,
+  `occurrences`, `wait_for_event`, `wait_for_occurrences`, `wait_until_gone`).
+- The read routes belong to `document_storage_service` in production. The
+  harness does not start that service: it serves the same `calendar_events`
+  routers in-process on the scenario's database (`src/stack/calendar_reads.rs`),
+  and records what the join request service would send to notifications and
+  the connection gateway (`stack.calendar_signals()`). What
+  `calendar_service` itself tells the gateway is in `stack.service_requests()`.
+- Google changes arrive by push. Outlook has no calendar push: after changing
+  an Outlook calendar call `calendar.poll_outlook_now(address)`, which stands
+  in for the two-minute poll.
+- Scenarios live in `tests/calendar_*.rs`.
+
 ## Start here
 
 - `tests/gmail.rs`, `tests/outlook.rs`: one worked scenario per provider.
@@ -79,7 +111,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Owns: the harness and the email scenarios.
 - Not here: the fakes of Google and Microsoft → `crates/gmail_emulator`,
   `crates/outlook_emulator`. Tests of one crate's logic → that crate.
-- Not started yet: `calendar_service`, search, the real notification,
+- Not started yet: search, the real notification,
   document storage and authentication services, and the web app.
 
 ## Checks

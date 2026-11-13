@@ -9,6 +9,9 @@ flags=(--locked --config 'profile.dev.package."*".debug=false')
 # test build resolves; default features, because `local_auth` changes how the
 # API authenticates.
 cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
+# calendar_service, which the calendar scenarios start, has no such test
+# target: its binary is built directly.
+cargo build "${flags[@]}" -p calendar_service --bin calendar_service
 
 started=$(date +%s)
 cargo nextest run -P email-e2e -p email_e2e "${flags[@]}"
