@@ -1,5 +1,5 @@
 //! Reuse of team-scoped OpenBao service tokens across provider calls.
-use crate::domain::models::TeamId;
+use crate::domain::models::{Error, TeamId};
 use lru::LruCache;
 use openbao_client::Session;
 use std::{
@@ -19,7 +19,20 @@ const REFRESH_MARGIN: Duration = Duration::from_secs(15);
 /// Teams whose tokens are kept; the least recently used team is dropped first.
 pub(super) const CAPACITY: NonZeroUsize = NonZeroUsize::new(1024).expect("nonzero capacity");
 
-type Slot = Arc<tokio::sync::Mutex<Option<Cached>>>;
+type Slot = Arc<TeamSlot>;
+
+#[derive(Default)]
+struct TeamSlot {
+    /// Completed login attempts, readable without waiting for the lock.
+    attempts: AtomicU64,
+    state: tokio::sync::Mutex<SlotState>,
+}
+
+#[derive(Default)]
+struct SlotState {
+    cached: Option<Cached>,
+    last_login_failed: bool,
+}
 
 struct Cached {
     session: Session,
@@ -57,19 +70,21 @@ impl TokenCache {
     }
 
     /// Returns the team's live token, or logs in once while concurrent callers
-    /// for the same team wait for that login.
-    pub(super) async fn session<Login, Pending, Failure>(
+    /// for the same team wait for that login. Callers that waited on a failed
+    /// login share its failure instead of each retrying it in turn.
+    pub(super) async fn session<Login, Pending>(
         &self,
         team: TeamId,
         login: Login,
-    ) -> Result<Lease, Failure>
+    ) -> Result<Lease, Error>
     where
         Login: FnOnce() -> Pending,
-        Pending: Future<Output = Result<Session, Failure>>,
+        Pending: Future<Output = Result<Session, Error>>,
     {
         let slot = self.slot(team);
-        let mut cached = slot.lock().await;
-        if let Some(entry) = cached.as_ref()
+        let seen = slot.attempts.load(Ordering::Acquire);
+        let mut state = slot.state.lock().await;
+        if let Some(entry) = state.cached.as_ref()
             && Instant::now() < entry.refresh_at
         {
             return Ok(Lease {
@@ -78,13 +93,19 @@ impl TokenCache {
                 generation: entry.generation,
             });
         }
-        *cached = None;
+        if state.last_login_failed && slot.attempts.load(Ordering::Acquire) != seen {
+            return Err(Error::Unavailable);
+        }
+        state.cached = None;
         // The lease runs from the request, so a slow response cannot extend it.
         let requested = Instant::now();
-        let session = login().await?;
+        let outcome = login().await;
+        state.last_login_failed = outcome.is_err();
+        slot.attempts.fetch_add(1, Ordering::Release);
+        let session = outcome?;
         let generation = self.generations.fetch_add(1, Ordering::Relaxed);
         if let Some(usable) = session.lease_duration().checked_sub(REFRESH_MARGIN) {
-            *cached = Some(Cached {
+            state.cached = Some(Cached {
                 session: session.clone(),
                 refresh_at: requested + usable,
                 generation,
@@ -100,12 +121,13 @@ impl TokenCache {
     /// Drops the token a rejected call used, unless another caller already replaced it.
     pub(super) async fn invalidate(&self, team: TeamId, lease: &Lease) {
         let slot = self.slot(team);
-        let mut cached = slot.lock().await;
-        if cached
+        let mut state = slot.state.lock().await;
+        if state
+            .cached
             .as_ref()
             .is_some_and(|entry| entry.generation == lease.generation)
         {
-            *cached = None;
+            state.cached = None;
         }
     }
 }

@@ -229,3 +229,39 @@ async fn lease_debug_redacts_the_token() {
         .expect("login");
     assert!(!format!("{lease:?}").contains("synthetic-cached-token"));
 }
+
+#[tokio::test]
+async fn callers_waiting_on_a_failed_login_share_its_failure() {
+    let session = issue(60).await;
+    let cache = TokenCache::new(CAPACITY);
+    let logins = AtomicUsize::new(0);
+    let team = team();
+    let (release, released) = tokio::sync::oneshot::channel::<()>();
+    let released = tokio::sync::Mutex::new(Some(released));
+    let callers = (0..8).map(|_| {
+        cache.session(team, || async {
+            logins.fetch_add(1, Ordering::SeqCst);
+            if let Some(released) = released.lock().await.take() {
+                released.await.expect("release");
+            }
+            Err(crate::domain::models::Error::Unavailable)
+        })
+    });
+    let all = futures::future::join_all(callers);
+    tokio::pin!(all);
+    assert!(futures::poll!(&mut all).is_pending());
+    release.send(()).expect("release");
+    assert!(all.await.iter().all(Result::is_err));
+    assert_eq!(
+        logins.load(Ordering::SeqCst),
+        1,
+        "an outage costs one login timeout, not one per waiting caller"
+    );
+    assert!(
+        !cache
+            .session(team, || counted_login(&logins, &session))
+            .await
+            .expect("a later caller tries again")
+            .cache_hit
+    );
+}
