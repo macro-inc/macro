@@ -139,7 +139,7 @@ Run it locally with `nix build --no-link .#code-mode-assets`.
 | Lambda | `Lambda` (`packages/lambda`), binary listed under `deploy_lambdas` | `deleted-item-poller/lambda.ts` |
 | Redis | `Redis` (`packages/resources`) | `calendar-service/index.ts` |
 | DynamoDB | `ServiceDynamoDBTable` (least privilege), not `DynamoDBTable` (`dynamodb:*`) | `packages/service/src/dynamodb.ts` |
-| Bucket | `createBucketV2` | `packages/resources/src/resources/bucket.ts` |
+| Bucket | `createBucketV2`; `cors: false` for buckets no browser reads | `gitai-service/storage.ts` |
 | Datadog monitor | `infra/stacks/monitoring` (prod only, manual deploy) | `monitoring/monitors/ai-editing.ts` |
 
 When you add a prod queue or bucket, also add it to the local catalog in
