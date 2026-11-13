@@ -262,16 +262,10 @@ async fn run_server() -> anyhow::Result<()> {
 
     let readonly_limits = db_pools::readonly_limits(config.environment);
 
-    let readonly_connection = async {
-        PgPoolOptions::new()
-            .min_connections(readonly_limits.min_connections)
-            .max_connections(readonly_limits.max_connections)
-            .acquire_timeout(readonly_limits.acquire_timeout)
-            .connect_with(db_pools::connect_options(&config.database_url_readonly)?)
-            .await
-    };
+    let readonly_connection =
+        db_pools::connect_readonly(&config.database_url_readonly, readonly_limits).await;
 
-    let (readonly_db, readonly_is_replica) = match readonly_connection.await {
+    let (readonly_db, readonly_is_replica) = match readonly_connection {
         Ok(pool) => {
             tracing::trace!(
                 min_connections = readonly_limits.min_connections,
