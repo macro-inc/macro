@@ -264,6 +264,14 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         correlation: Option<Uuid>,
     ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
 
+    /// [`Self::check_action`] for a routine the drafter wrote itself for
+    /// `owner`, outside any session: nothing is kept.
+    fn check_draft(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        input: ActionConfiguration,
+    ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
+
     /// `create_action` for a routine activated from `template_id`, recorded
     /// as given: callers check that the template exists.
     fn create_action_from_template(
@@ -430,6 +438,49 @@ pub trait DraftHandBacks: Send + Sync + 'static {
     /// drafts a waiting request runs; background drafts have their own
     /// lifecycle ([`DraftJobStore`]).
     async fn stale(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
+}
+
+/// The model a routine draft is written with, admitted and billed as the
+/// person's automation usage. Object-safe (`async_trait`): the drafter holds
+/// it erased.
+#[async_trait::async_trait]
+pub trait DraftModel: Send + Sync + 'static {
+    /// Admit `owner`'s usage for one draft, before its first call.
+    async fn admit(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<(), ai_billing::AiAdmissionError>;
+
+    /// One call's answer, as text.
+    async fn complete(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        call: super::drafts::direct::DraftCall<'_>,
+    ) -> Result<String, super::drafts::direct::DraftCallError>;
+}
+
+/// Finds the items a person can access by the names a request uses, of
+/// any kind, in one call. Object-safe (`async_trait`): the drafter holds it
+/// erased.
+#[async_trait::async_trait]
+pub trait NameLookups: Send + Sync + 'static {
+    /// What each of `names` matched, in the order asked.
+    async fn look_up(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        names: &[super::drafts::direct::NameAsked],
+    ) -> Result<Vec<super::drafts::direct::NameAnswer>, super::drafts::direct::NameLookupError>;
+}
+
+/// Saving's checks for a routine a drafter wrote, as its owner, saving
+/// nothing. Object-safe (`async_trait`): the drafter holds it erased.
+#[async_trait::async_trait]
+pub trait DraftChecks: Send + Sync + 'static {
+    async fn check(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        routine: ActionConfiguration,
+    ) -> Result<super::models::RoutineCheck>;
 }
 
 /// Background drafts' rows: the same rows [`DraftHandBacks`] keeps checks
@@ -841,6 +892,19 @@ pub trait RoutineCode: Send + Sync + 'static {
     /// doesn't have. Empty when there's nothing to say.
     fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
         let _ = (symbols, shown);
+        String::new()
+    }
+
+    /// Every area of the SDK, one line each: its name and when to use it.
+    /// Empty when code can't run here.
+    fn sdk_areas(&self) -> String {
+        String::new()
+    }
+
+    /// The guidance and index of each SDK area `areas` names, as
+    /// [`Self::sdk_areas`] names them; names it doesn't know are skipped.
+    fn area_reference(&self, areas: &[String]) -> String {
+        let _ = areas;
         String::new()
     }
 

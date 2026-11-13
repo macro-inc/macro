@@ -7,6 +7,7 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 use super::StepKind;
+use super::direct::ItemKind;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::RoutineCheck;
 
@@ -29,10 +30,9 @@ impl DraftProgress for Unreported {
 /// Something the drafter reached.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DraftMilestone {
-    /// The items the person's words name were looked up, before any model
-    /// call: how many were found. Reported where the brief is written,
-    /// once the drafter resolves those names itself.
-    Found { items: u32 },
+    /// The items the person’s words name were looked up, before the
+    /// model writes: which were found, and which are left for them to pick.
+    Found(FoundNames),
     /// The model is writing: the session's prompt was accepted, so its
     /// usage was admitted.
     Writing,
@@ -69,6 +69,10 @@ pub struct DraftJobProgress {
     /// looked up.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub found: Option<u32>,
+    /// Which items the words name were found, and which are left for the
+    /// person to pick; absent before they were looked up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub names: Option<FoundNames>,
     /// The latest routine handed back; absent before the first check.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub check: Option<CheckSummary>,
@@ -78,9 +82,10 @@ impl DraftJobProgress {
     /// The progress once `milestone` is reached.
     pub fn reach(&mut self, milestone: DraftMilestone) {
         match milestone {
-            DraftMilestone::Found { items } => {
+            DraftMilestone::Found(names) => {
                 self.stage = DraftStage::Found;
-                self.found = Some(items);
+                self.found = Some(u32::try_from(names.found.len()).unwrap_or(u32::MAX));
+                self.names = Some(names);
             }
             DraftMilestone::Writing => self.stage = DraftStage::Writing,
             DraftMilestone::Checked(check) => {
@@ -90,6 +95,41 @@ impl DraftJobProgress {
             DraftMilestone::Fixing => self.stage = DraftStage::Fixing,
         }
     }
+}
+
+/// The items a draft's words name, as the drafter looked them up by name.
+/// Names only, as the person wrote them or the items are called: never
+/// ids.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundNames {
+    /// Each the only item of its kinds with the name the words use.
+    pub found: Vec<FoundName>,
+    /// Names no item has, or several do: the draft leaves them out for the
+    /// person to pick.
+    pub left: Vec<LeftName>,
+}
+
+/// An item found by the name the words use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundName {
+    /// Its name as stored.
+    pub name: String,
+    pub kind: ItemKind,
+}
+
+/// A name the words use that the drafter couldn't settle on one item for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LeftName {
+    /// The name as the words use it.
+    pub name: String,
+    /// The kind it most likely names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<ItemKind>,
+    /// How many items have it: none, or several.
+    pub matches: u32,
 }
 
 /// A routine the session handed back, as a person watching reads it: never

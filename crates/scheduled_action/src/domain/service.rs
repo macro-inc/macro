@@ -901,6 +901,25 @@ where
         Ok(check)
     }
 
+    #[tracing::instrument(name = "routine.check", skip_all, fields(
+        routine.check.ok = tracing::field::Empty,
+        routine.check.problems = tracing::field::Empty,
+        routine.check.failing_steps = tracing::field::Empty,
+        routine.check.draft = true,
+    ), err)]
+    async fn check_draft(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        input: ActionConfiguration,
+    ) -> Result<RoutineCheck> {
+        let check = self.check(owner, input).await?;
+        let span = tracing::Span::current();
+        span.record("routine.check.ok", check.ok);
+        span.record("routine.check.problems", check.problems.len());
+        span.record("routine.check.failing_steps", check.steps.len());
+        Ok(check)
+    }
+
     async fn create_action_from_template(
         &self,
         principal: &CreationPrincipal,

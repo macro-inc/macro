@@ -72,10 +72,36 @@ fn progress_moves_through_its_milestones_keeping_what_each_found() {
     let mut progress = DraftJobProgress::default();
     assert_eq!(progress.stage, DraftStage::Started);
 
-    progress.reach(DraftMilestone::Found { items: 2 });
+    progress.reach(DraftMilestone::Found(FoundNames {
+        found: vec![
+            FoundName {
+                name: "Finance".to_owned(),
+                kind: ItemKind::Label,
+            },
+            FoundName {
+                name: "engineering".to_owned(),
+                kind: ItemKind::Channel,
+            },
+        ],
+        left: vec![LeftName {
+            name: "Jordan".to_owned(),
+            kind: Some(ItemKind::Person),
+            matches: 2,
+        }],
+    }));
     progress.reach(DraftMilestone::Writing);
     assert_eq!(progress.stage, DraftStage::Writing);
     assert_eq!(progress.found, Some(2));
+    assert_eq!(
+        serde_json::to_value(&progress).unwrap()["names"],
+        json!({
+            "found": [
+                { "name": "Finance", "kind": "label" },
+                { "name": "engineering", "kind": "channel" },
+            ],
+            "left": [{ "name": "Jordan", "kind": "person", "matches": 2 }],
+        })
+    );
 
     progress.reach(DraftMilestone::Checked(CheckSummary::of(
         &check(false, Vec::new()),
