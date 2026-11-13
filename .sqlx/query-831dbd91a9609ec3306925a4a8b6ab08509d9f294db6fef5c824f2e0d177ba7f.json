@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_projection SET prompt_hash = 'hash_v2' WHERE id = 'high/day'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "831dbd91a9609ec3306925a4a8b6ab08509d9f294db6fef5c824f2e0d177ba7f"
+}

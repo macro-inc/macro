@@ -400,6 +400,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_credentials"
+version = "0.1.0"
+dependencies = [
+ "constant_time_eq 0.3.1",
+ "hex",
+ "lazy-regex",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "user_api_key",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -477,6 +494,44 @@ dependencies = [
  "tracing",
  "utoipa",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "agent_git"
+version = "0.1.0"
+dependencies = [
+ "agent_credentials",
+ "axum",
+ "axum-extra",
+ "bytes",
+ "chrono",
+ "feature_flags",
+ "flate2",
+ "futures",
+ "hex",
+ "httparse",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -579,8 +634,10 @@ dependencies = [
  "agent_changes",
  "agent_code_mode",
  "agent_correlation",
+ "agent_credentials",
  "agent_egress",
  "agent_fold",
+ "agent_git",
  "agent_harness",
  "agent_inmem",
  "agent_preview",
@@ -606,6 +663,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "bot_id",
  "bots",
  "calendar_events",
@@ -663,6 +721,7 @@ dependencies = [
  "incus_client",
  "initiative",
  "jev",
+ "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
  "lexical_mention_extractor",
@@ -737,12 +796,14 @@ dependencies = [
  "suggestions",
  "sync_service_client",
  "system_properties",
+ "team_agents",
  "teams",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
  "tokio-stream",
+ "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
@@ -751,6 +812,7 @@ dependencies = [
  "unfurl_service",
  "universal_input",
  "url",
+ "user_api_key",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -2232,6 +2294,7 @@ dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
  "agent_correlation",
+ "agent_git",
  "ai_billing",
  "ai_usage",
  "analytics_client",
@@ -2341,6 +2404,7 @@ dependencies = [
  "static_file_service_client",
  "strum 0.27.2",
  "system_status",
+ "team_agents",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -13060,7 +13124,9 @@ dependencies = [
  "chrono",
  "cursor_api_key",
  "fusionauth",
+ "jsonwebtoken 10.3.0",
  "macro_auth",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_tower_layers",
  "macro_user_id",
@@ -20627,6 +20693,35 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "team_agents"
+version = "0.1.0"
+dependencies = [
+ "agent_credentials",
+ "agent_git",
+ "axum",
+ "chrono",
+ "entity_access",
+ "feature_flags",
+ "hosted_runtimes",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "user_api_key",
  "utoipa",
  "uuid",
  "workspace-hack",

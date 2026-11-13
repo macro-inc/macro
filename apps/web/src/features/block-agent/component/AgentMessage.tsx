@@ -41,6 +41,7 @@ import { agentContextText, promptOrigin } from '../state/prompt-origin';
 import { sectionSteps } from '../state/section-steps';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import {
+  isBlankText,
   isCodeExecution,
   liveToolSegment,
   type PartSegment,
@@ -233,7 +234,8 @@ function ToolGroupPart(props: {
   const shownParts = () =>
     parts()
       .map((part, offset) => ({ part, index: props.start + offset }))
-      .filter(({ part }) => !isCodeModeSupportCall(part));
+      // A blank line between calls joins the run but has nothing to show.
+      .filter(({ part }) => !isCodeModeSupportCall(part) && !isBlankText(part));
   const renderParts = () => (
     <Index each={shownParts()}>
       {(shown) => (
