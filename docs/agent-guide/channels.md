@@ -770,7 +770,10 @@ the task for an assignment or a mention in its thread; the project for a mention
 in its thread; `/app/routines/<id>`; the session itself, labelled with what it
 was, for a direct prompt, a dispatch, or a document, CRM, or call thread). It returns that block as `description_links` with `description`
 `added`, `already_linked`, or `not_written`; on `not_written` (no GitHub link, or
-GitHub refused) the agent pastes the block itself.
+GitHub refused) the agent pastes the block itself. It rewrites a block in an
+older format, removes bare `Macro agent session:` / `Source:` lines for the same
+links outside the block, and returns a `next_step` when the channel or routine
+link still appears outside it, where the privacy check rejects it.
 Macro Internal MCP's server instructions ask coding agents to register PRs with
 it (again after replacing a description; the PR block reads the session link as
 the PR's origin), to open them ready for review rather than as

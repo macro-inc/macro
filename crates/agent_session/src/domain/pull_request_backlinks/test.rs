@@ -434,3 +434,101 @@ async fn a_description_macro_cannot_edit_is_left_to_the_agent() {
         Err(AgentSessionError::Forbidden)
     ));
 }
+
+fn mentioned_in_a_channel() -> AgentSession {
+    let message = Uuid::from_u128(3);
+    let mut session = session_with(TriggerOrigin::Mentioned {
+        by: person(),
+        message_id: message,
+    });
+    session.thread_parent = Some(MessageParent::Channel(Uuid::from_u128(1)));
+    session.thread_id = Some(message);
+    session
+}
+
+#[test]
+fn an_old_format_or_stale_label_block_is_rewritten() {
+    let links = PullRequestBacklinks::for_session(&mentioned_in_a_channel(), APP, None);
+    // The earlier run-on format: no blank line between the links.
+    let run_on = format!(
+        "Text\n\n{BLOCK_START}\nMacro agent session: {}\nSource (channel message): {}\n{BLOCK_END}\n",
+        links.session_url, links.source.url
+    );
+    assert!(!links.linked_in(&run_on));
+    assert_eq!(
+        links.updated(&run_on),
+        Some(format!("Text\n\n{}\n", links.block()))
+    );
+    // The same URL under another label.
+    let stale = format!(
+        "{BLOCK_START}\nMacro agent session: {}\n\nSource (agent session prompt): {}\n{BLOCK_END}",
+        links.session_url, links.source.url
+    );
+    assert!(!links.linked_in(&stale));
+    assert_eq!(links.updated(&stale), Some(links.block()));
+
+    let current = format!("Text\n\n{}\n", links.block());
+    assert!(links.linked_in(&current));
+    assert!(links.linked_in(&current.replace('\n', "\r\n")));
+    assert_eq!(links.updated(&current), None);
+}
+
+#[test]
+fn loose_link_lines_are_removed_and_other_loose_links_are_reported() {
+    let links = PullRequestBacklinks::for_session(&mentioned_in_a_channel(), APP, None);
+    // What agents wrote before the block existed.
+    let loose = format!(
+        "## Why\n\nBecause.\n\nMacro agent session: {}\n- Source: {}\n",
+        links.session_url, links.source.url
+    );
+    let updated = links.updated(&loose).unwrap();
+    assert_eq!(
+        updated,
+        format!("## Why\n\nBecause.\n\n{}\n", links.block())
+    );
+    assert!(!links.loose_source(&updated));
+
+    // A link inside a sentence is not removed; the agent is told to.
+    let prose = format!(
+        "Started from {} today.\n\n{}\n",
+        links.source.url,
+        links.block()
+    );
+    assert_eq!(links.updated(&prose), None);
+    assert!(links.loose_source(&prose));
+
+    // A task or the session itself may appear anywhere.
+    let task = PullRequestBacklinks::for_session(
+        &session_with(TriggerOrigin::TaskAssigned {
+            by: person(),
+            task: "task-1".into(),
+        }),
+        APP,
+        None,
+    );
+    assert!(!task.loose_source(&format!("See {}.\n\n{}", task.source.url, task.block())));
+}
+
+#[tokio::test]
+async fn the_service_reports_a_loose_source_it_left_in_place() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = mentioned_in_a_channel();
+    repo.insert_session(session.clone());
+    let links = PullRequestBacklinks::for_session(&session, APP, None);
+    let descriptions = Arc::new(FakeDescriptions {
+        body: Mutex::new(format!("Started from {} today.", links.source.url)),
+        ..Default::default()
+    });
+    let service = PullRequestBacklinkService::new(
+        repo,
+        FixedTaskDirectory::default(),
+        descriptions.clone(),
+        APP,
+    );
+    let linked = service
+        .link_description(session.id, &owner(), PR)
+        .await
+        .unwrap();
+    assert_eq!(linked.description, DescriptionLinks::Added);
+    assert!(linked.loose_source);
+}

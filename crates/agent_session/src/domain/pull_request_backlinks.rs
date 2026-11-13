@@ -183,13 +183,64 @@ impl PullRequestBacklinks {
         )
     }
 
-    /// Whether `description` already has a block linking both the session and
-    /// the source. Links outside a block do not count: the privacy check
-    /// allows a channel or routine link only inside one.
+    /// Whether `description` already has this session's block exactly as
+    /// [`Self::block`] writes it. Links outside a block do not count (the
+    /// privacy check allows a channel or routine link only inside one), and a
+    /// block in an older format or with a stale label is rewritten.
     #[must_use]
     pub fn linked_in(&self, description: &str) -> bool {
-        self.own_block(description)
-            .is_some_and(|(start, end)| description[start..end].contains(&self.source.url))
+        self.own_block(description).is_some_and(|(start, end)| {
+            description[start..end].replace("\r\n", "\n") == self.block()
+        })
+    }
+
+    /// The description Macro should write, or `None` when `description` is
+    /// already right: this session's block in place, and bare
+    /// `Macro agent session: <url>` / `Source: <url>` lines for the same links
+    /// outside any block removed.
+    #[must_use]
+    pub fn updated(&self, description: &str) -> Option<String> {
+        let cleaned = self.without_loose_lines(description);
+        let updated = if self.linked_in(&cleaned) {
+            cleaned
+        } else {
+            self.applied_to(&cleaned)
+        };
+        (updated != description).then_some(updated)
+    }
+
+    /// Whether the source link still appears outside every links block, where
+    /// the privacy check rejects a channel or routine link.
+    #[must_use]
+    pub fn loose_source(&self, description: &str) -> bool {
+        matches!(
+            self.source.kind,
+            PullRequestSourceKind::ChannelMessage | PullRequestSourceKind::Routine
+        ) && outside_blocks(description)
+            .into_iter()
+            .any(|(outside, line)| outside && line.contains(&self.source.url))
+    }
+
+    /// `description` without lines outside any block that hold nothing but
+    /// one of this session's links under its usual label.
+    fn without_loose_lines(&self, description: &str) -> String {
+        let loose = |line: &str| {
+            let text = line.trim().trim_start_matches(['-', '*']).trim_start();
+            let Some((label, url)) = text.split_once(':') else {
+                return false;
+            };
+            let url = url.trim();
+            let label = label.trim();
+            let labelled = label == "Macro agent session"
+                || label == "Source"
+                || (label.starts_with("Source (") && label.ends_with(')'));
+            labelled && (url == self.session_url || url == self.source.url)
+        };
+        outside_blocks(description)
+            .into_iter()
+            .filter(|(outside, line)| !(*outside && loose(line)))
+            .map(|(_, line)| line)
+            .collect()
     }
 
     /// `description` with this session's block in it. A block of this
@@ -240,6 +291,30 @@ impl PullRequestBacklinks {
         }
         found
     }
+}
+
+/// Each line of `description` with its line ending, and whether it lies
+/// outside every closed links block (marker lines count as inside).
+fn outside_blocks(description: &str) -> Vec<(bool, &str)> {
+    let lines: Vec<&str> = description.split_inclusive('\n').collect();
+    let bare = |line: &str| line.trim_end_matches(['\r', '\n']).to_owned();
+    let mut outside = vec![true; lines.len()];
+    let mut index = 0;
+    while index < lines.len() {
+        if bare(lines[index]) == BLOCK_START
+            && let Some(end) = lines[index + 1..]
+                .iter()
+                .position(|line| bare(line) == BLOCK_END || bare(line) == BLOCK_START)
+                .map(|offset| index + 1 + offset)
+            && bare(lines[end]) == BLOCK_END
+        {
+            outside[index..=end].fill(false);
+            index = end + 1;
+            continue;
+        }
+        index += 1;
+    }
+    outside.into_iter().zip(lines).collect()
 }
 
 /// A GitHub pull request, by repository and number.
@@ -343,6 +418,9 @@ pub struct LinkedDescription {
     pub backlinks: PullRequestBacklinks,
     /// Whether the description has them.
     pub description: DescriptionLinks,
+    /// The source link also appears outside the block, where the privacy
+    /// check rejects it, in a line Macro did not remove.
+    pub loose_source: bool,
 }
 
 /// Put a session's links in its pull request description.
@@ -408,17 +486,20 @@ impl<R, D: TaskDirectory> PullRequestBacklinkService<R, D> {
         owner: &MacroUserIdStr<'static>,
         url: &str,
         backlinks: &PullRequestBacklinks,
-    ) -> std::result::Result<DescriptionLinks, PullRequestDescriptionError> {
+    ) -> std::result::Result<(DescriptionLinks, bool), PullRequestDescriptionError> {
         let pull_request = PullRequestNumber::parse(url)
             .map_err(|error| PullRequestDescriptionError::Refused(error.to_string()))?;
         let current = self.descriptions.read(owner, &pull_request).await?;
-        if backlinks.linked_in(&current) {
-            return Ok(DescriptionLinks::AlreadyLinked);
-        }
+        let Some(updated) = backlinks.updated(&current) else {
+            return Ok((
+                DescriptionLinks::AlreadyLinked,
+                backlinks.loose_source(&current),
+            ));
+        };
         self.descriptions
-            .write(owner, &pull_request, &backlinks.applied_to(&current))
+            .write(owner, &pull_request, &updated)
             .await?;
-        Ok(DescriptionLinks::Added)
+        Ok((DescriptionLinks::Added, backlinks.loose_source(&updated)))
     }
 }
 
@@ -450,19 +531,19 @@ impl<R: AgentSessionRepo, D: TaskDirectory> SessionPullRequestBacklinks
                     thread_task.as_deref(),
                 );
                 tracing::Span::current().record("source_kind", backlinks.source.kind.as_ref());
-                let description =
-                    self.ensure(owner, url, &backlinks)
-                        .await
-                        .unwrap_or_else(|error| {
-                            tracing::warn!(error = ?error, "could not write pull request links");
-                            DescriptionLinks::NotWritten {
-                                reason: error.to_string(),
-                            }
-                        });
+                let (description, loose_source) = self
+                    .ensure(owner, url, &backlinks)
+                    .await
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(error = ?error, "could not write pull request links");
+                        let reason = error.to_string();
+                        (DescriptionLinks::NotWritten { reason }, false)
+                    });
                 tracing::Span::current().record("outcome", description.outcome());
                 Ok(LinkedDescription {
                     backlinks,
                     description,
+                    loose_source,
                 })
             }
             .instrument(span),

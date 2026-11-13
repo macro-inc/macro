@@ -66,8 +66,9 @@ impl SetPullRequestOutput {
         let LinkedDescription {
             backlinks,
             description,
+            loose_source,
         } = linked;
-        let (description, next_step) = match description {
+        let (description, mut next_step) = match description {
             DescriptionLinks::AlreadyLinked => (DescriptionStatus::AlreadyLinked, None),
             DescriptionLinks::Added => (DescriptionStatus::Added, None),
             DescriptionLinks::NotWritten { reason } => (
@@ -77,6 +78,12 @@ impl SetPullRequestOutput {
                 )),
             ),
         };
+        if loose_source {
+            next_step = Some(format!(
+                "The description also has {} outside the macro-agent-links block. Remove it there: the privacy check allows that link only inside the block, which already has it.",
+                backlinks.source.url
+            ));
+        }
         Self {
             pull_request_url,
             description_links: backlinks.block(),
