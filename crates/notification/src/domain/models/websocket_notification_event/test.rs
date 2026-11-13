@@ -237,3 +237,15 @@ fn an_empty_status_update_is_internal() {
         };
     assert!(matches!(event.exposure(), Ok(Exposure::Internal(_))));
 }
+
+#[test]
+fn a_shared_deletion_with_no_users_is_internal() {
+    let event: NotificationTopicEvent<'static, serde_json::Value> =
+        NotificationTopicEvent::NotificationStatusUpdatedForUsers {
+            users: vec![],
+            update: Box::new(NotificationDelete::Delete {
+                id: Uuid::from_u128(3),
+            }),
+        };
+    assert!(matches!(event.exposure(), Ok(Exposure::Internal(_))));
+}

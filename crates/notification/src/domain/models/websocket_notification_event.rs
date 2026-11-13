@@ -164,6 +164,11 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
                 )
             }
             Self::NotificationStatusUpdatedForUsers { users, update } => {
+                if users.is_empty() {
+                    return Ok(Exposure::internal_by_design(
+                        "a status update with no recipients",
+                    ));
+                }
                 let NotificationDelete::Delete { id } = **update;
                 (
                     NOTIFICATION_UPDATED,
