@@ -1,0 +1,25 @@
+packages/sdk/generated/storage/sdk.gen.ts
+  s_699e95788b47ad::t_072b2850497669 2200,2207
+packages/sdk/generated/storage/types.gen.ts
+  s_699e95788b47ad::t_ad2c4c84cb5c7a 28532,28535,28562,28565
+packages/sdk/specs/storage.json
+  s_699e95788b47ad::t_1cfdc3cc08602e 11885,11902,11957,11974
+packages/sdk/src/entities/dashboards/dashboard.ts
+  s_699e95788b47ad::t_632858e3eacc29 169,184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e5b8bd9ad5464519475f25b7b382e30bdba6466f",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
