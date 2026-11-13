@@ -171,11 +171,12 @@ off for this account) stops the sink for the rest of the run.
 No call is waited on longer than `timeoutMs` (10 seconds): past it, the
 signal the client was handed aborts. A live upload still running at `end` is
 waited on (again at most `timeoutMs`) before the final one, so it can't land
-after it. Failures are dropped: a slow or down Macro costs records and traces,
+after it, and Macro drops a live trace that arrives after the `end` record
+anyway. Failures are dropped: a slow or down Macro costs records and traces,
 never the wake or the other sinks. A trace is redacted with every credential's
 value (`secrets`); if one can't be read, that upload is skipped. A record's
-error message and summaries are redacted the same way (dropped if the secrets
-can't be read).
+error message and summaries are redacted the same way, also by a sink with no
+`traces` (dropped if the secrets can't be read).
 
 ### The trace
 

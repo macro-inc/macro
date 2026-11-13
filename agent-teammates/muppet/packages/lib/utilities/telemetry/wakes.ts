@@ -30,9 +30,9 @@
  *           send("PUT", `${wakes}/${encodeURIComponent(wake)}/trace`, trace, signal),
  *       },
  *       clock,
+ *       secrets: credentialValues(credentials),
  *       traces: {
  *         transcript: (session) => readTranscript(session),  // parsed JSONL lines, or undefined
- *         secrets: credentialValues(credentials),
  *       },
  *     });
  *     wakeTelemetry({ …, sinks: [sink, …] });
@@ -87,8 +87,6 @@ export type WakeTraces = {
 	readonly transcript: (
 		session: Session,
 	) => Promise<readonly unknown[] | undefined>;
-	/** The exact values to redact, e.g. `credentialValues(credentials)`. Asked before every upload; if it rejects, that upload is skipped. */
-	readonly secrets: () => Promise<readonly string[]>;
 	/** How often a running wake's trace is sent again, if it changed. 60 seconds unless said. */
 	readonly intervalMs?: number;
 	/** How often it is sent again even if it didn't, so Macro hears the wake is alive through a long silent step. 10 minutes unless said. */
@@ -111,8 +109,8 @@ type Watch = {
  * A sink that sends every record to Macro through `client`, unchanged, and,
  * given `traces`, the wake's trace: from its `session` record every
  * `intervalMs` while it runs (when it changed, or every `heartbeatMs` anyway),
- * and once more, no longer live, after its `end`. A record's error message and
- * summaries are redacted like the trace. No call to Macro is waited on longer
+ * and once more, no longer live, after its `end`. Every trace, and a record's
+ * error message and summaries, traces or not, are redacted with `secrets`. No call to Macro is waited on longer
  * than `timeoutMs` (10 seconds unless said): past it, the call's signal
  * aborts. The final trace is sent in the background, so the end of a wake
  * waits only on its record; it first waits (no longer than the timeout) for a
@@ -123,12 +121,19 @@ type Watch = {
 export const macroSink = ({
 	client,
 	clock,
+	secrets,
 	traces,
 	timeoutMs = 10_000,
 }: {
 	readonly client: WakeClient;
 	/** For the timeout and the interval. */
 	readonly clock: Pick<Clock, "sleep">;
+	/**
+	 * The exact values to redact, e.g. `credentialValues(credentials)`. Asked
+	 * before every record with free text and every trace upload; if it
+	 * rejects, that text becomes `[secret]` and that upload is skipped.
+	 */
+	readonly secrets: () => Promise<readonly string[]>;
 	readonly traces?: WakeTraces;
 	readonly timeoutMs?: number;
 }): Sink => {
@@ -169,10 +174,9 @@ export const macroSink = ({
 
 	/**
 	 * The record with its free text (error message, summaries) redacted with
-	 * the trace's secrets. If they can't be read, that text is dropped.
+	 * `secrets`. If they can't be read, that text is dropped.
 	 */
 	const redacted = async (record: WakeRecord): Promise<WakeRecord> => {
-		if (traces === undefined) return record;
 		const error = record.phase === "end" ? record.error : undefined;
 		const outcome = record.phase === "end" ? record.outcome : undefined;
 		if (
@@ -181,7 +185,7 @@ export const macroSink = ({
 			record.trigger.summary === undefined
 		)
 			return record;
-		const text = await traces.secrets().then(
+		const text = await secrets().then(
 			(secrets) => redactor(secrets).text,
 			() => () => "[secret]",
 		);
@@ -213,7 +217,7 @@ export const macroSink = ({
 		const lines = await sources.transcript(session);
 		if (lines === undefined) return;
 		// A credential that can't be read rejects here: no trace this time.
-		const redact = redactor(await sources.secrets());
+		const redact = redactor(await secrets());
 		const trace = wakeTrace({ lines, live, redact });
 		if (trace === undefined) return;
 		const limit = sources.limit ?? traceLimit;

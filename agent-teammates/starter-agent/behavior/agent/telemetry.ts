@@ -165,9 +165,9 @@ export const recordedAgent = (
 					fetch,
 				}),
 				clock,
+				secrets: credentialValues(credentials),
 				traces: {
 					transcript: claudeTranscript({ ...base, home: config.home }),
-					secrets: credentialValues(credentials),
 				},
 			}),
 		],

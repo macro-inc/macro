@@ -94,7 +94,11 @@ const recording = () => {
 describe("macroSink", () => {
 	test("sends every record as it is", async () => {
 		const { records, client } = recording();
-		const sink = macroSink({ client, clock: fakeClock() });
+		const sink = macroSink({
+			client,
+			clock: fakeClock(),
+			secrets: async () => [],
+		});
 		for (const record of [started, session, ended]) await sink(record);
 		expect(records).toEqual([started, session, ended]);
 	});
@@ -109,7 +113,8 @@ describe("macroSink", () => {
 				uploadTrace: () => Promise.reject(new Error("down")),
 			},
 			clock,
-			traces: { transcript, secrets: async () => [] },
+			secrets: async () => [],
+			traces: { transcript },
 		});
 		await sink(started);
 		await sink(session);
@@ -125,6 +130,7 @@ describe("macroSink", () => {
 				uploadTrace: async () => {},
 			},
 			clock,
+			secrets: async () => [],
 			timeoutMs: 5_000,
 		});
 		let done = false;
@@ -146,12 +152,12 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock,
+			secrets: async () => ["fake-deploy-key-123456"],
 			traces: {
 				transcript: async (of) => {
 					asked.push(of);
 					return [...lines];
 				},
-				secrets: async () => ["fake-deploy-key-123456"],
 				intervalMs: 60_000,
 			},
 		});
@@ -211,7 +217,8 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock: fakeClock(),
-			traces: { transcript, secrets: async () => [] },
+			secrets: async () => [],
+			traces: { transcript },
 		});
 		await sink(ended);
 		await flush();
@@ -224,7 +231,8 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock: fakeClock(),
-			traces: { transcript, secrets: async () => [], limit },
+			secrets: async () => [],
+			traces: { transcript, limit },
 		});
 		await sink(ended);
 		await flush();
@@ -239,7 +247,8 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock: fakeClock(),
-			traces: { transcript: async () => undefined, secrets: async () => [] },
+			secrets: async () => [],
+			traces: { transcript: async () => undefined },
 		});
 		await sink(session);
 		await sink(ended);
@@ -253,14 +262,11 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock,
-			traces: {
-				transcript,
-				secrets: async () => {
-					if (!readable) throw new Error("keychain locked");
-					return [];
-				},
-				intervalMs: 60_000,
+			secrets: async () => {
+				if (!readable) throw new Error("keychain locked");
+				return [];
 			},
+			traces: { transcript, intervalMs: 60_000 },
 		});
 		await sink(session);
 		await clock.advance(0);
@@ -295,7 +301,8 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock,
-			traces: { transcript, secrets: async () => [] },
+			secrets: async () => [],
+			traces: { transcript },
 			timeoutMs: 5_000,
 		});
 		await sink(session);
@@ -327,7 +334,8 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock,
-			traces: { transcript, secrets: async () => [], intervalMs: 60_000 },
+			secrets: async () => [],
+			traces: { transcript, intervalMs: 60_000 },
 			timeoutMs: 5_000,
 		});
 		await sink(session);
@@ -355,7 +363,8 @@ describe("macroSink", () => {
 				},
 			},
 			clock,
-			traces: { transcript, secrets: async () => [] },
+			secrets: async () => [],
+			traces: { transcript },
 		});
 		await sink(started);
 		await sink(session);
@@ -370,12 +379,8 @@ describe("macroSink", () => {
 		const sink = macroSink({
 			client,
 			clock,
-			traces: {
-				transcript,
-				secrets: async () => [],
-				intervalMs: 60_000,
-				heartbeatMs: 180_000,
-			},
+			secrets: async () => [],
+			traces: { transcript, intervalMs: 60_000, heartbeatMs: 180_000 },
 		});
 		await sink(session);
 		await clock.advance(0);
@@ -387,7 +392,7 @@ describe("macroSink", () => {
 		expect(traces[1]?.trace).toEqual(traces[0]?.trace);
 	});
 
-	test("redacts a record's error and summaries, and drops them if secrets can't be read", async () => {
+	test("redacts a record's error and summaries without traces, and drops them if secrets can't be read", async () => {
 		const failed: Ended = {
 			...ended,
 			status: "failed",
@@ -403,10 +408,11 @@ describe("macroSink", () => {
 			},
 		};
 		const { records, client } = recording();
+		// A sink for records only, with no traces, still redacts them.
 		await macroSink({
 			client,
 			clock: fakeClock(),
-			traces: { transcript, secrets: async () => ["fake-deploy-key-123456"] },
+			secrets: async () => ["fake-deploy-key-123456"],
 		})(failed);
 		expect(JSON.stringify(records)).not.toContain("fake-deploy-key-123456");
 		expect(JSON.stringify(records)).not.toContain("token=abc");
@@ -416,11 +422,8 @@ describe("macroSink", () => {
 		await macroSink({
 			client: locked.client,
 			clock: fakeClock(),
-			traces: {
-				transcript,
-				secrets: async () => {
-					throw new Error("keychain locked");
-				},
+			secrets: async () => {
+				throw new Error("keychain locked");
 			},
 		})(failed);
 		const [sent] = locked.records;
