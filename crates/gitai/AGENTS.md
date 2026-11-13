@@ -18,6 +18,10 @@ agents use for attribution. `services/gitai_service` wires it up.
 - `src/domain/redaction.rs`, `repository.rs`, `note.rs`: the redaction rules,
   the repository allowlist check, and the sessions named in a note.
 - `src/domain/models.rs`: allowlist, pinned release, credential types.
+- `src/domain/read/service.rs`: the read API (`/v1/commits`, `/v1/prs`,
+  `/v1/blame`, `/v1/sessions`); routes in `inbound/http/read.rs`, ports in
+  `domain/read/ports.rs`, adapters `outbound/dynamodb_read.rs` and
+  `outbound/github.rs`.
 
 ## Scope
 
@@ -95,9 +99,41 @@ Table (string `pk`/`sk`, GSI `gsi1` on `gsi1pk`/`gsi1sk`, TTL on
 | Session | `SESSION#<id>` | `SESSION` | `EXTERNAL_SESSION#<agent id>` / `SESSION#<id>` | `tool`, `model`, `repository`, `author`, `hostname`, `transcript_prefix`, `first_seen`, `last_seen`, `event_count`, `*_tokens`, `cost_micro_usd`, `commit_shas` (SS) |
 | Transcript chunk | `SESSION#<id>` | `CHUNK#<first ts>#<chunk id>` | | `s3_key`, `event_count`, `first_ts`, `last_ts` |
 | Token bucket | `SESSION#<id>` | `TOKENS#<model>#<speed>#<bucket ts>` | | `TokenBucket` fields |
+| Pull request commits (read cache) | `PR#macro-inc/macro#<n>` | `PR` | | `commits` (L), `open`, `expires_at` |
+| Commit's pull request (read cache) | `GHCOMMIT#<sha>` | `GHCOMMIT` | | `pr_number` (absent when none), `expires_at` |
 
 Page a transcript with a `Query` on `begins_with(sk, "CHUNK#")`: chunks come
 back in time order. Counter attributes are absent while zero.
+
+## Read API
+
+- Every `/v1/*` read authenticates a device credential through
+  `DeviceAuthenticator` (implemented by `GitaiService`). Response shapes are
+  the plan's READ API contract (snake_case, not the repo's camelCase DTOs),
+  plus `unattributed_commits`.
+- A commit with an indexed note answers from it (`resolved_via: note`).
+  Otherwise GitHub's commit subject must end in `(#N)`; pull request N's
+  commits (GitHub lists at most 250) are joined to indexed commits
+  (`resolved_via: pr`). Commits without a note are `unattributed_commits`
+  and not in the line totals.
+- GitHub answers are cached: a commit's link 30 days, an open pull request's
+  commits 5 minutes, a closed one's 30 days. Notes are joined on every read.
+- Per-session `ai_lines` come from each note's line attestations
+  (`domain/read/attestation.rs`); `tokens`/`cost_usd` are whole sessions'.
+  Pull request totals add per-commit numbers, so lines rewritten by a later
+  commit of the same pull request count twice.
+- Blame uses GitHub's GraphQL blame, which needs `GITHUB_TOKEN` (501
+  without). Note line numbers count in the noted commit's file, and GitHub
+  does not map a blamed line back to it, so a range is line-exact only when
+  the blamed commit is `rev` itself and has its own note. Otherwise the range
+  gets the session that alone wrote lines of that file in the commit (or its
+  pull request), or `session_ids` when several did. At most 50 distinct
+  commits are resolved per request.
+- Transcript pages read chunks in sort-key order; the cursor is base64url
+  JSON `{chunk, offset}`. `limit` defaults to 100, capped at 500.
+- GitHub failures are `upstream_error::UpstreamError`: 503 when down or rate
+  limited, 502 for unusable answers. Unauthenticated GitHub allows 60 REST
+  calls an hour.
 
 ## Recipes
 
@@ -112,7 +148,8 @@ back in time order. Counter attributes are absent while zero.
 ## Checks
 
 - `cargo nextest run --all-features -p gitai -p gitai_service`
-- Contract tests decode every fixture in `tests/fixtures/client-1.7.7`.
+- Contract tests decode every fixture in `tests/fixtures/client-1.7.7`; the
+  GitHub adapter's run against `tests/fixtures/github` on wiremock.
 
 ## Gotchas
 

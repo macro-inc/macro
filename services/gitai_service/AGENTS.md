@@ -24,7 +24,10 @@ accepted. This crate is the composition root; the logic lives in
 ## Config
 
 - `GITAI_SHARED_KEY` (set by hand): mints device credentials; never on a laptop.
-- `GITHUB_TOKEN` (optional, set by hand): squash-merge pull request lookups.
+- `GITHUB_TOKEN` (optional, set by hand): GitHub reads for squash merges and
+  blame. Without it REST calls are unauthenticated (60 an hour) and
+  `/v1/blame` answers 501. A fine-grained token with read-only access to
+  public repositories (no scopes) is enough; base URL is `GithubApiUrl`.
 - `GITAI_EVENTS_BUCKET`, `GITAI_SESSIONS_BUCKET`, `GITAI_TABLE`: written into
   Doppler by `infra/stacks/gitai-service` (`doppler.Secret`).
 - Repository allowlist and pinned client version are constants in
