@@ -1423,16 +1423,38 @@ function caretOnEdgeLine(
   const selection = target.ownerDocument.getSelection();
   if (!selection?.rangeCount || !selection.isCollapsed) return false;
   const caret = selection.getRangeAt(0);
-  const rest = target.ownerDocument.createRange();
-  rest.selectNodeContents(target);
-  if (direction === 1) rest.setStart(caret.endContainer, caret.endOffset);
-  else rest.setEnd(caret.startContainer, caret.startOffset);
+  const before = target.ownerDocument.createRange();
+  before.selectNodeContents(target);
+  before.setEnd(caret.startContainer, caret.startOffset);
+  const after = target.ownerDocument.createRange();
+  after.selectNodeContents(target);
+  after.setStart(caret.endContainer, caret.endOffset);
+  const rest = direction === 1 ? after : before;
   if (rest.toString().includes('\n')) return false;
-  const line = caret.getBoundingClientRect();
-  // Without a caret box (an empty editor) there is no wrapped line to move to.
-  if (!line.height) return true;
+  const behind = visibleBoxes(before);
+  const ahead = visibleBoxes(after);
+  // The caret's own box can't place it: where a line wraps, the end of one
+  // line and the start of the next are the same position, and beside a pill
+  // the caret has no box. Read its line from the text beside it, on the side
+  // that keeps the arrow in the cell when the position is ambiguous. At
+  // worst the arrow first moves the caret to the start or end of its line.
+  let line: DOMRect | undefined;
+  if (direction === 1) {
+    const startsLine = !behind.length || before.toString().endsWith('\n');
+    line = startsLine ? ahead[0] : behind.at(-1);
+  } else {
+    const endsLine = !ahead.length || after.toString().startsWith('\n');
+    line = endsLine ? behind.at(-1) : ahead[0];
+  }
+  // Nothing beside the caret: an empty editor, or an empty last line.
+  if (!line) return true;
   const middle = line.top + line.height / 2;
-  return Array.from(rest.getClientRects()).every((box) =>
+  return (direction === 1 ? ahead : behind).every((box) =>
     direction === 1 ? box.top <= middle : box.bottom >= middle
   );
+}
+
+/** A range's boxes that draw something; empty ones mark the caret's own spot. */
+function visibleBoxes(range: Range) {
+  return Array.from(range.getClientRects()).filter((box) => box.width > 0);
 }

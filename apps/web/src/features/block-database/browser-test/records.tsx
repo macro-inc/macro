@@ -1,5 +1,6 @@
 import '@app/index.css';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { createSignal, onMount, Show } from 'solid-js';
 import { Portal, render } from 'solid-js/web';
@@ -34,6 +35,22 @@ const MULTILINE_ROWS = [
     cells: { name: 'Lines', notes: 'Line one\nLine two\nLine three' },
   },
   { rowId: 'last', cells: { name: 'Last', notes: 'Last note' } },
+  {
+    rowId: 'mention',
+    cells: {
+      name: 'Mention',
+      notes:
+        'Renewal call: ' +
+        'they want the security review and the onboarding plan before the call. '.repeat(
+          2
+        ) +
+        encodeCellMention({
+          type: 'date',
+          date: '2026-11-20T00:00:00.000Z',
+          displayFormat: 'Nov 20, 2026',
+        }),
+    },
+  },
 ];
 
 // A host owns the records and writes. No database entity, saved view, or app provider.

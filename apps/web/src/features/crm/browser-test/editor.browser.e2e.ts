@@ -158,6 +158,10 @@ test('arrow keys move through a wrapped note before leaving it', async ({
   await page.keyboard.press('ArrowDown');
   await expect(editor).toContainText('Oct 21 emailed');
   await expect(editor).toBeFocused();
+  // From the start of the second line, ArrowUp goes back to the first.
+  await page.keyboard.press('ArrowUp');
+  await expect(editor).toContainText('Oct 21 emailed');
+  await expect(editor).toBeFocused();
   await page.keyboard.press('Control+End');
   await page.keyboard.press('ArrowDown');
   await expect(editor).toHaveText('Follow up');

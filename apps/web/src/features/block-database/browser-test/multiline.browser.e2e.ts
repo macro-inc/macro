@@ -82,12 +82,35 @@ test('arrow keys move through a wrapped note before leaving it', async ({
   await expect(editor).toContainText('Long note');
   await expect(editor).toBeFocused();
   expect(await caretOffset(page)).toBeGreaterThan(0);
+  // The caret now starts the second line, a position the first line ends at
+  // too; ArrowUp goes back to the first line instead of leaving the note.
+  await page.keyboard.press('ArrowUp');
+  await expect(editor).toContainText('Long note');
+  await expect(editor).toBeFocused();
+  expect(await caretOffset(page)).toBe(0);
   await page.keyboard.press('Control+End');
   await page.keyboard.press('ArrowDown');
   await expect(editor).toContainText('Line three');
   await expect(editor).toBeFocused();
   await page.keyboard.press('Escape');
   expect((await storedNotes(page)).wrapped).toMatch(/^Long note: /);
+});
+
+test('arrow keys move through a wrapped note that ends in a mention', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: /^Notes: Renewal call/ }).click();
+  const editor = page.getByRole('textbox', { name: 'Edit Notes' });
+  await expect(editor).toBeFocused();
+  // The caret sits after the date pill, where the caret itself has no box.
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('ArrowUp');
+  await expect(editor).toContainText('Renewal call');
+  await expect(editor).toBeFocused();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('ArrowDown');
+  await expect(editor).toContainText('Renewal call');
+  await expect(editor).toBeFocused();
 });
 
 test('a text cell keeps its weight and line height when it opens', async ({
