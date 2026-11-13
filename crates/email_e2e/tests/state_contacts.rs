@@ -126,24 +126,21 @@ async fn received_mail_connects_the_owner_with_the_sender(
         ada.macro_id().to_owned(),
         "macro|walt@example.com".to_owned(),
     );
+    let from_grace = (
+        ada.macro_id().to_owned(),
+        "macro|grace@example.com".to_owned(),
+    );
     email_e2e::eventually(
         "the contact of the received mail",
         email_e2e::DEFAULT_TIMEOUT,
         async || {
             seen.extend(stack.take_queue_messages("contacts").await?);
             let all: BTreeSet<_> = seen.iter().flat_map(connections).collect();
-            Ok(all.contains(&wanted).then_some(()))
+            Ok((all.contains(&wanted) && all.contains(&from_grace)).then_some(()))
         },
     )
     .await?;
     let all: BTreeSet<_> = seen.iter().flat_map(connections).collect();
-    assert!(
-        all.contains(&(
-            ada.macro_id().to_owned(),
-            "macro|grace@example.com".to_owned()
-        )),
-        "the owner is connected with the first sender: {all:?}"
-    );
     assert!(
         !all.contains(&(
             "macro|alan@example.com".to_owned(),
