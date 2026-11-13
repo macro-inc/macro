@@ -11,6 +11,7 @@ chrono = { workspace = true }
 cookie = { workspace = true }
 futures = { workspace = true }
 lazy-regex = { workspace = true }
+macro_service_urls = { path = "../macro_service_urls" }
 rand = { workspace = true }
 reqwest = { workspace = true, features = ["multipart"] }
 serde = { workspace = true }

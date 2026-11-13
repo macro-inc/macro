@@ -20,9 +20,6 @@ use uuid::Uuid;
 
 use super::ports::{OpenFailure, Secrets, SlackConnector};
 
-/// Slack's sign-in page, where the captcha belongs.
-const SIGN_IN_PAGE: &str = "https://slack.com/signin";
-
 /// A sign-in's private state between steps, sealed in the attempt row.
 #[derive(Serialize, Deserialize)]
 struct Progress {
@@ -43,15 +40,23 @@ pub struct Logins<Connector, Keys> {
     sessions: SessionService,
     connector: Arc<Connector>,
     secrets: Arc<Keys>,
+    /// Slack's sign-in page, where the captcha belongs.
+    sign_in_page: String,
 }
 
 impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
     /// Wire the worker.
-    pub fn new(sessions: SessionService, connector: Arc<Connector>, secrets: Arc<Keys>) -> Self {
+    pub fn new(
+        sessions: SessionService,
+        connector: Arc<Connector>,
+        secrets: Arc<Keys>,
+        sign_in_page: String,
+    ) -> Self {
         Self {
             sessions,
             connector,
             secrets,
+            sign_in_page,
         }
     }
 
@@ -268,7 +273,7 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
             }
             LoginState::AwaitingCaptcha { site_key, .. } => LoginStep::Captcha {
                 site_key: site_key.clone(),
-                page_url: SIGN_IN_PAGE.to_owned(),
+                page_url: self.sign_in_page.clone(),
                 retry,
             },
             LoginState::AwaitingEmailCode { email, .. } => LoginStep::EmailCode {

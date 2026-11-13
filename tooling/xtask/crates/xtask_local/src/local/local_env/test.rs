@@ -454,8 +454,14 @@ fn the_whatsapp_session_service_never_points_at_the_fake_server() {
     // Tests point the client at a fake server; a local stack never does.
     assert!(!env.contains_key("OVERRIDE_WHATSAPP_WEBSOCKET_URL"));
     assert!(!env.contains_key("OVERRIDE_WHATSAPP_MEDIA_HOST"));
-    assert!(!env.contains_key("OVERRIDE_SLACK_BASE_URL"));
-    assert!(!env.contains_key("OVERRIDE_SLACK_WEBSOCKET_URL"));
+    for name in [
+        "OVERRIDE_SLACK_URL",
+        "OVERRIDE_SLACK_APP_URL",
+        "OVERRIDE_SLACK_EDGE_API_URL",
+        "OVERRIDE_SLACK_WEBSOCKET_URL",
+    ] {
+        assert!(!env.contains_key(name), "{name}");
+    }
 }
 
 /// Sandboxes and the harness are both containers, so they reach each other on a

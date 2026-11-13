@@ -778,6 +778,50 @@ service_url! {
 }
 
 service_url! {
+    /// Slack's main host: sign-in (`api/signin.*`, `api/signup.*`, the
+    /// `signin` page its captcha belongs to) and `api/auth.test` before the
+    /// workspace is known. Slack's host in every environment; override it to
+    /// run against `crates/slack_fake_server`.
+    pub struct SlackUrl {
+        local: "https://slack.com/",
+        dev: "https://slack.com/",
+        prod: "https://slack.com/",
+    }
+}
+
+service_url! {
+    /// Slack's web app host: magic sign-in links and the `Origin` the web
+    /// client's requests carry. Slack's host in every environment; override
+    /// it to run against `crates/slack_fake_server`.
+    pub struct SlackAppUrl {
+        local: "https://app.slack.com/",
+        dev: "https://app.slack.com/",
+        prod: "https://app.slack.com/",
+    }
+}
+
+service_url! {
+    /// Slack's edge API host: the web client's user cache. Slack's host in
+    /// every environment; override it to run against
+    /// `crates/slack_fake_server`.
+    pub struct SlackEdgeApiUrl {
+        local: "https://edgeapi.slack.com/",
+        dev: "https://edgeapi.slack.com/",
+        prod: "https://edgeapi.slack.com/",
+    }
+}
+
+service_url! {
+    /// The Slack web client's real-time websocket. Slack's host in every
+    /// environment; override it to run against `crates/slack_fake_server`.
+    pub struct SlackWebsocketUrl {
+        local: "wss://wss-primary.slack.com/",
+        dev: "wss://wss-primary.slack.com/",
+        prod: "wss://wss-primary.slack.com/",
+    }
+}
+
+service_url! {
     /// Control and internal MCP surface of the live preview service.
     pub struct PreviewGatewayUrl {
         local: "http://localhost:8101/preview",

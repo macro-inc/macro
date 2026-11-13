@@ -21,7 +21,7 @@ pub mod realtime;
 
 pub use client::{DownloadedFile, SlackClient};
 pub use credentials::{CookieToken, InvalidCredential, Secret, SessionCredentials, SessionToken};
-pub use endpoints::{SlackEndpoints, SlackWorkspace};
+pub use endpoints::{EndpointsError, SlackEndpoints, SlackWorkspace};
 pub use error::{SlackError, SlackErrorCode};
 pub use ids::{
     AppId, BotId, ChannelId, EnterpriseId, FileId, InvalidId, MessageTs, TeamId, UserGroupId,

@@ -14499,6 +14499,9 @@
       "crates/workspace-hack"
     ],
     "slack_client": [
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_service_urls",
       "crates/slack_client",
       "crates/workspace-hack"
     ],
@@ -14818,6 +14821,7 @@
       "crates/macro_entrypoint",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_service_urls",
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/model",

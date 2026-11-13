@@ -24,8 +24,6 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RATE_LIMIT_RETRIES: u8 = 3;
 /// `Retry-After` when Slack sends a 429 without one.
 const DEFAULT_RETRY_AFTER: Duration = Duration::from_secs(30);
-/// The web client's `Origin`.
-pub(crate) const WEB_CLIENT_ORIGIN: &str = "https://app.slack.com";
 
 /// Form fields of one Web API call; the client adds the token.
 pub(crate) type Form = Vec<(&'static str, String)>;
@@ -155,7 +153,9 @@ impl SlackClient {
             value.set_sensitive(true);
             headers.insert(header::COOKIE, value);
         }
-        headers.insert(header::ORIGIN, HeaderValue::from_static(WEB_CLIENT_ORIGIN));
+        if let Ok(origin) = HeaderValue::from_str(&self.inner.endpoints.web_origin()) {
+            headers.insert(header::ORIGIN, origin);
+        }
         headers
     }
 

@@ -40,8 +40,10 @@ through rows and `NOTIFY`.
 - KMS key `alias/slack-session-service-<environment>` from `ENVIRONMENT`
   (`slack_linked::outbound::kms::SlackKmsKey`); `xtask_local` creates the
   `-local` alias in LocalStack.
-- Tests only, process env: `OVERRIDE_SLACK_BASE_URL` and
-  `OVERRIDE_SLACK_WEBSOCKET_URL` (both, or neither) point at a fake Slack.
+- Slack's hosts are `SlackUrl`, `SlackAppUrl`, `SlackEdgeApiUrl` and
+  `SlackWebsocketUrl` in `macro_service_urls` (`SlackEndpoints::from_service_urls`);
+  their `OVERRIDE_SLACK_*` variables point the binary at a fake Slack. The
+  fleet tests (`crates/slack_e2e`) pass the fake's endpoints directly.
 
 ## Telemetry
 

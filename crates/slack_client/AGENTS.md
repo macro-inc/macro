@@ -44,7 +44,7 @@ real-time websocket. An outbound adapter library: no DB, no Macro entities.
 
 ## Gotchas
 
-- `SlackEndpoints` is the only host config: `production()` or a fake's URLs.
+- `SlackEndpoints` is the only host config: `from_service_urls()` (the `Slack*Url` types in `macro_service_urls`, overridable with `OVERRIDE_SLACK_*`) or a fake's URLs.
   Web API calls go to the workspace URL from `auth.test` (`<url>api/…`),
   which routes Grid shards; `validate_session` uses `slack.com` before the
   workspace is known.

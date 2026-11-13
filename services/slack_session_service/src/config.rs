@@ -1,7 +1,7 @@
 //! Startup configuration. `DATABASE_URL` comes from Doppler (`APP_SECRETS_JSON`
 //! in ECS); the KMS key follows `ENVIRONMENT`
-//! (`slack_linked::outbound::kms::SlackKmsKey`); `main.rs` reads the test-only
-//! overrides from the process environment.
+//! (`slack_linked::outbound::kms::SlackKmsKey`); Slack's hosts are
+//! `macro_service_urls` types (`slack_client::SlackEndpoints::from_service_urls`).
 
 use database_env_vars::DatabaseUrl;
 

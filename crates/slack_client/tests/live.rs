@@ -51,7 +51,7 @@ async fn live_session_smoke() {
         cookie: CookieToken::new(file.d).expect("cookie shape"),
         cookie_session_start: file.d_s.map(Secret::new),
     };
-    let endpoints = SlackEndpoints::production();
+    let endpoints = SlackEndpoints::from_service_urls().expect("Slack's hosts");
 
     let auth = validate_session(&credentials, &endpoints)
         .await

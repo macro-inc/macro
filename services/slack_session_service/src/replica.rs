@@ -149,9 +149,15 @@ pub async fn start<Kms: EnvelopeKms + 'static>(
     let lock_backend_pid = locks.backend_pid();
 
     let sessions = SessionService::new(Arc::new(PgSlackRepository::new(deps.pool.clone())));
+    let sign_in_page = deps.endpoints.sign_in_page().to_string();
     let connector = Arc::new(SlackApi::new(deps.endpoints, tracker.clone())?);
     let secrets = Arc::new(KmsSecrets::new(deps.kms));
-    let logins = Logins::new(sessions.clone(), connector.clone(), secrets.clone());
+    let logins = Logins::new(
+        sessions.clone(),
+        connector.clone(),
+        secrets.clone(),
+        sign_in_page,
+    );
     tracker.spawn({
         let stop = listener_stop.clone();
         let sessions = sessions.clone();

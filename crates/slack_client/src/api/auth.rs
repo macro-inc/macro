@@ -69,7 +69,7 @@ pub async fn validate_session(
     let request = http
         .post(url)
         .header(reqwest::header::COOKIE, cookie)
-        .header(reqwest::header::ORIGIN, crate::client::WEB_CLIENT_ORIGIN)
+        .header(reqwest::header::ORIGIN, endpoints.web_origin())
         .form(&[("token", credentials.token.expose())]);
     async move {
         let outcome = send_once::<AuthTest>(method, request).await;
