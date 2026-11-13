@@ -1,0 +1,20 @@
+crates/gitai/src/domain/service.rs
+  s_e003e6a508b15c::t_f4b83e685e5f0c 132-134,176,305
+  s_e003e6a508b15c::t_23cd152013b27e 217-221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c1dd5ac8509781340a4165c63bf5d4e4d5e4167c",
+  "prompts": {},
+  "sessions": {
+    "s_e003e6a508b15c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a82c37e1-00f7-4ac9-9bb5-e0f8d2293a0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
