@@ -38,7 +38,7 @@ const DOCUMENT_STORAGE: &str = "document_storage_service";
 /// The setting that names the Kafka brokers.
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 /// Where that service answers GraphQL.
-const GRAPHQL_PATH: &str = "/items/soup/graphql";
+pub(crate) const GRAPHQL_PATH: &str = "/items/soup/graphql";
 /// The Lambda binary of the scheduled-send sweep.
 const SCHEDULED_HANDLER: &str = "email_scheduled_handler";
 /// How long a service gets to answer its health check.
@@ -570,6 +570,11 @@ impl Stack {
 
     pub(crate) fn http(&self) -> &reqwest::Client {
         &self.http
+    }
+
+    /// Where the stack's services write their logs.
+    pub(crate) fn log_dir(&self) -> &std::path::Path {
+        &self.log_dir
     }
 
     pub(crate) fn internal_api_key(&self) -> &str {

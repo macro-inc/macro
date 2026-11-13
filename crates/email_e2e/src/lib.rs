@@ -18,6 +18,7 @@ mod lambda;
 mod macro_services;
 mod process;
 mod stack;
+mod stack_server;
 mod tls;
 mod user;
 mod wait;
@@ -35,5 +36,6 @@ pub use redis;
 /// The error type every harness method returns.
 pub use rootcause::Report;
 pub use stack::{Stack, StackOptions};
+pub use stack_server::serve_stacks;
 pub use user::User;
 pub use wait::{DEFAULT_TIMEOUT, eventually};
