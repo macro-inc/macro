@@ -5,7 +5,7 @@ import './homepage-open-source.css';
 export function HomepageSidebarConnection(props: { children: JSX.Element }) {
   let connection!: HTMLDivElement;
   let line!: SVGPathElement;
-  let endpoint!: SVGPolygonElement;
+  let endpoint!: SVGCircleElement;
 
   onMount(() => {
     let scroller: HTMLElement = connection.parentElement!;
@@ -70,10 +70,8 @@ export function HomepageSidebarConnection(props: { children: JSX.Element }) {
       );
       const endpointX = mobile ? fromX : x;
       const endpointY = mobile ? y + 2 : y;
-      endpoint.setAttribute(
-        'points',
-        `${endpointX},${endpointY - 3} ${endpointX + 3},${endpointY} ${endpointX},${endpointY + 3} ${endpointX - 3},${endpointY}`
-      );
+      endpoint.setAttribute('cx', `${endpointX}`);
+      endpoint.setAttribute('cy', `${endpointY}`);
       travel = Math.max(1, y - fromY);
       update();
     };
@@ -101,8 +99,9 @@ export function HomepageSidebarConnection(props: { children: JSX.Element }) {
           fill="none"
         >
           <path ref={line} pathLength="1" />
-          <polygon
+          <circle
             ref={endpoint}
+            r={2.55}
             class="homepage-sidebar-connection-endpoint"
           />
         </svg>
