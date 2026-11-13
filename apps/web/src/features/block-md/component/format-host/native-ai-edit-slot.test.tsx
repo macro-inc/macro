@@ -147,8 +147,12 @@ afterEach(async () => {
         );
       else Reflect.deleteProperty(Range.prototype, 'getClientRects');
     });
-    await attempt(() => vi.unstubAllGlobals());
-    await attempt(() => vi.restoreAllMocks());
+    await attempt(() => {
+      vi.unstubAllGlobals();
+    });
+    await attempt(() => {
+      vi.restoreAllMocks();
+    });
   }
   if (failures.length > 0) throw failures[0];
 });
