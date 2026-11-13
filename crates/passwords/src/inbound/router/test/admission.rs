@@ -375,10 +375,11 @@ async fn import_enforces_body_and_batch_limits_without_echoing_payloads() {
     }
     let invalid = serde_json::json!({"format":"bitwarden_json","target":{"kind":"root"},"private":true,"folders":[],"items":(0..26).map(|i|serde_json::json!({"sourceKey":i.to_string(),"name":"Synthetic","kind":"login","favorite":false,"values":{"username":"","password":"","notes":"","fields":[]}})).collect::<Vec<_>>()});
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(path)
+                .uri(&path)
                 .header("authorization", "Bearer session")
                 .header("x-macro-passwords", "1")
                 .header("content-type", "application/json")
@@ -388,4 +389,31 @@ async fn import_enforces_body_and_batch_limits_without_echoing_payloads() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let sentinel = "synthetic-kind-sentinel";
+    let malformed = serde_json::json!({"format":"bitwarden_json","target":{"kind":"root"},"private":true,"folders":[],
+        "items":[{"sourceKey":"one","name":"Synthetic","kind":sentinel,"favorite":false,
+            "values":{"username":"","password":"","notes":"","fields":[]}}]});
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(&path)
+                .header("authorization", "Bearer session")
+                .header("x-macro-passwords", "1")
+                .header("content-type", "application/json")
+                .body(Body::from(malformed.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({"code":"invalid_request"})
+    );
+    assert!(!String::from_utf8_lossy(&body).contains(sentinel));
 }

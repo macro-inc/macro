@@ -1,9 +1,11 @@
 //! Import HTTP mapping; admission and all policy live in the domain service.
 use super::router::{ApiError, Failure, PasswordRouterState, actor};
-use crate::domain::models::{ImportBatch, ImportBatchResult, TeamId};
+use crate::domain::models::{Error, ImportBatch, ImportBatchResult, TeamId};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, State, rejection::JsonRejection},
+    http::StatusCode,
+    response::{IntoResponse, Response},
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOnly};
 use uuid::Uuid;
@@ -22,12 +24,21 @@ pub async fn import_batch<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, import_id)): Path<(Uuid, Uuid)>,
-    Json(batch): Json<ImportBatch>,
-) -> Result<Json<ImportBatchResult>, ApiError> {
-    Ok(Json(
-        state
-            .service
-            .import_batch(&actor(user)?, TeamId(team), import_id, batch)
-            .await?,
-    ))
+    batch: Result<Json<ImportBatch>, JsonRejection>,
+) -> Result<Json<ImportBatchResult>, Response> {
+    // A deserializer message can quote the payload; answer with fixed bodies.
+    let Json(batch) = batch.map_err(|rejection| {
+        if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            StatusCode::PAYLOAD_TOO_LARGE.into_response()
+        } else {
+            ApiError::from(Error::Invalid).into_response()
+        }
+    })?;
+    let actor = actor(user).map_err(IntoResponse::into_response)?;
+    state
+        .service
+        .import_batch(&actor, TeamId(team), import_id, batch)
+        .await
+        .map(Json)
+        .map_err(|error| ApiError::from(error).into_response())
 }
