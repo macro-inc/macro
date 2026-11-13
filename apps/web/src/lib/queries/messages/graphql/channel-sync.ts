@@ -10,7 +10,6 @@ import type {
   MessageTimelineEntry,
 } from '@service-storage/messages';
 import { hashKey } from '@tanstack/solid-query';
-import { withinCacheHeadStart } from '../../calendar/graphql/readiness';
 import { queryClient } from '../../client';
 import {
   normalizeChannelMessageSender,
@@ -55,13 +54,6 @@ import {
   writeCachedLatestPage,
 } from './source';
 
-/**
- * How long the cache is waited on alone for a channel it is known to hold. It
- * answers in milliseconds unless the engine is busy. For any other channel
- * the read is most likely a miss, or the cache is still starting, so the
- * server is asked at once.
- */
-const ANSWERED_CACHE_HEAD_START_MS = 2_000;
 /** The page size the REST timeline reads behind a cursor, and the cached page's bound. */
 export const CURSOR_PAGE_LIMIT = 100;
 const FIRST_PAGE_LIMIT = 50;
@@ -86,19 +78,6 @@ type ChannelSyncState = {
 };
 
 const STATES = new Map<string, ChannelSyncState>();
-/**
- * Channels each cache is known to hold a page for, learned from reads and
- * writes this session. Only those wait on the cache alone.
- */
-const CACHED_CHANNELS = new WeakMap<object, Set<string>>();
-
-/** Records whether the cache holds a page for the channel. */
-export function noteCachedPage(host: object, channelId: string, held: boolean) {
-  const known = CACHED_CHANNELS.get(host) ?? new Set<string>();
-  CACHED_CHANNELS.set(host, known);
-  if (held) known.add(channelId);
-  else known.delete(channelId);
-}
 
 function track(channelId: string, userId: string) {
   const state = STATES.get(channelId);
@@ -303,9 +282,7 @@ async function readCache(
 ): Promise<CachedLatestPage | undefined> {
   try {
     const page = await readCachedLatestPage(host, channelId, 'user-visible');
-    const held = page && page.page.entries.length > 0 ? page : undefined;
-    noteCachedPage(host, channelId, held !== undefined);
-    return held;
+    return page && page.page.entries.length > 0 ? page : undefined;
   } catch {
     // An unreadable cache is a miss: the network read replaces what it holds.
     return undefined;
@@ -323,7 +300,6 @@ async function dropCachedPage(host: CacheHost, channelId: string) {
     ...cached,
     page: { ...cached.page, entries: [] },
   });
-  noteCachedPage(host, channelId, false);
 }
 
 type LatestPageRead =
@@ -398,18 +374,16 @@ async function readLatestPage(
       throw error;
     }
   }
-  const cache = readCache(host, parent.id);
-  const early = CACHED_CHANNELS.get(host)?.has(parent.id)
-    ? await withinCacheHeadStart(cache, ANSWERED_CACHE_HEAD_START_MS)
-    : 'not-ready';
-  signal?.throwIfAborted();
-  if (early === 'not-ready') {
-    const winner = await raceCacheWithNetwork(host, cache, parent.id, signal);
-    return { ...winner, raced: true };
-  }
-  if (early) return { source: 'cache', read: early, raced: false };
-  const read = await fetchLatestChannelPage(parent.id, signal);
-  return { source: 'network', read, raced: false };
+  // The cache is never waited on alone. In the seconds after a page load the
+  // engine can take seconds to answer a read, and an open that waited for it
+  // would be that much slower than asking the server.
+  const winner = await raceCacheWithNetwork(
+    host,
+    readCache(host, parent.id),
+    parent.id,
+    signal
+  );
+  return { ...winner, raced: true };
 }
 
 async function loadLatestPage(
@@ -795,7 +769,6 @@ async function persistLatestPage(host: CacheHost, parent: MessageParent) {
     userId: state.userId,
     page: trimLatestPage(latest, CURSOR_PAGE_LIMIT),
   });
-  noteCachedPage(host, parent.id, true);
 }
 
 /** Write the loaded latest page back to the cache once the timeline is quiet. */

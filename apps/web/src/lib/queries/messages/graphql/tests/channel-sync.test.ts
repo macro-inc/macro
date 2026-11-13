@@ -43,7 +43,6 @@ import {
   catchUpChannel,
   channelSyncSeq,
   loadChannelTimelinePage,
-  noteCachedPage,
   resetChannelSync,
 } from '../channel-sync';
 import { entryToGraphql } from '../convert';
@@ -130,8 +129,14 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.writeCachedLatestPage.mockResolvedValue(undefined);
   mocks.channelCacheHost.mockReturnValue(HOST);
-  // Most cases open a channel the cache is known to hold a page for.
-  noteCachedPage(HOST, CHANNEL.id, true);
+  // Most cases open from the cache: the server read the open races it with
+  // stays unanswered until the cached page wins and cancels it.
+  mocks.fetchLatestChannelPage.mockImplementation(
+    (_id: string, signal?: AbortSignal) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      })
+  );
 });
 
 afterEach(() => {
@@ -185,7 +190,9 @@ describe('opening a channel', () => {
       })
     );
     await open();
-    expect(mocks.fetchLatestChannelPage).not.toHaveBeenCalled();
+    // The server read the open raced the cache with is cancelled.
+    const [, signal] = mocks.fetchLatestChannelPage.mock.calls[0];
+    expect(signal.aborted).toBe(true);
     await caughtUpTo(9);
     expect(mocks.fetchChannelChanges).toHaveBeenCalledWith(CHANNEL.id, 7);
     expect(loadedIds()).toEqual([['m3', 'm1']]);
@@ -330,8 +337,8 @@ describe('opening a channel', () => {
       { code: 'FORBIDDEN', message: 'forbidden' },
     ]);
     mocks.fetchChannelChanges.mockRejectedValue(refusal);
-    mocks.fetchLatestChannelPage.mockRejectedValue(refusal);
     await open();
+    mocks.fetchLatestChannelPage.mockRejectedValue(refusal);
     await vi.waitFor(() => expect(loadedIds()).toEqual([]));
     await vi.waitFor(() =>
       expect(mocks.writeCachedLatestPage).toHaveBeenCalledTimes(1)
@@ -428,7 +435,7 @@ describe('opening a channel while the cache is still starting', () => {
     page: page([messageEntry('m2', 2), messageEntry('m1', 1)]),
   };
 
-  // Longer than the head start given to a cache known to hold the channel.
+  // A cache read held up by a busy engine.
   const SLOW = 2_500;
 
   function after<T>(ms: number, value: T): Promise<T> {
@@ -469,12 +476,11 @@ describe('opening a channel while the cache is still starting', () => {
     expect(signal.aborted).toBe(true);
   });
 
-  it('asks the server at once for a channel the cache is not known to hold', async () => {
+  it('does not wait for a slow cache before asking the server', async () => {
     vi.useFakeTimers();
-    mocks.channelCacheHost.mockReturnValue({} as CacheHost);
     mocks.readCachedLatestPage.mockReturnValue(after(SLOW, CACHED));
     mocks.fetchLatestChannelPage.mockResolvedValue(SERVER);
-    // No timer has to pass: the open does not wait on the cache alone.
+    // No timer has to pass: the open never waits on the cache alone.
     await open();
     expect(loadedIds()).toEqual([['m2', 'm1']]);
     expect(channelSyncSeq(CHANNEL.id)).toBe(9);
