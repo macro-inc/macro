@@ -5,6 +5,8 @@ import type {
   ParsedImportItem,
   ParseReply,
 } from '@core/password-import/types';
+import type { PasswordImportErrorCode } from '@service-storage/generated/schemas/passwordImportErrorCode';
+import type { PasswordImportOutcome } from '@service-storage/generated/schemas/passwordImportOutcome';
 import type { Result } from 'neverthrow';
 import {
   type Accessor,
@@ -75,7 +77,7 @@ export type PasswordSource = {
   importBatch(
     importId: string,
     batch: ImportBatchBody
-  ): PasswordResult<ImportBatchResult>;
+  ): Promise<Result<ImportBatchResult, ImportRequestFailure>>;
 };
 /** One request to `POST …/imports/{importId}/items`; checked against `PasswordImportBatch`. */
 export type ImportBatchBody = {
@@ -85,15 +87,10 @@ export type ImportBatchBody = {
   folders: { key: string; name: string; parentKey: string | null }[];
   items: ParsedImportItem[];
 };
-export type ImportItemOutcome = 'created' | 'already_present' | 'failed';
-export type ImportErrorCode =
-  | 'not_found'
-  | 'forbidden'
-  | 'invalid_request'
-  | 'version_conflict'
-  | 'folder_missing'
-  | 'busy'
-  | 'vault_unavailable';
+export type ImportItemOutcome = PasswordImportOutcome;
+export type ImportErrorCode = PasswordImportErrorCode;
+/** A batch request that failed as a whole: worth resending, or not. */
+export type ImportRequestFailure = 'retryable' | 'rejected';
 /** Per-item outcomes, never values; mapped from `PasswordImportBatchResult`. */
 export type ImportBatchResult = {
   targetFolderId: string | null;
@@ -124,11 +121,18 @@ export type ImportPreview = {
   resumed: boolean;
   newFolderName: string;
 };
-/** An unfinished import, kept per file so a rerun continues it. Ids only. */
+/**
+ * An unfinished import, kept per file so a rerun continues it with the same
+ * destination and privacy. Ids only: the items it created, never names.
+ */
 export type ImportResume = {
   importId: string;
   format: ImportFormat;
   startedAt: string;
+  destination: ImportDestination;
+  private: boolean;
+  /** Vault items this import created; a rerun resends them, not skips them. */
+  itemIds: string[];
 };
 export type ImportResumeStore = {
   get(key: string): ImportResume | undefined;

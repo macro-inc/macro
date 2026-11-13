@@ -197,7 +197,7 @@ export default {
   importItems: { one: '{{count}} item', other: '{{count}} items' },
   importFolderCount: { one: '{{count}} folder', other: '{{count}} folders' },
   importResumed:
-    'Continuing an earlier import of this file. Items already imported are not added again.',
+    'Continuing an earlier import of this file, into the same place and with the same privacy. Items already imported are not added again.',
   importDuplicates: {
     one: '{{count}} item looks like one you already have.',
     other: '{{count}} items look like ones you already have.',

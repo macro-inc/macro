@@ -104,5 +104,12 @@ export type DetectOutcome =
   | { outcome: 'detected'; format: ImportFormat }
   | { outcome: 'failed'; error: ImportFileError };
 
-/** What the import worker answers; `unreadable` means the parser itself failed. */
-export type ParseReply = ParseOutcome | { outcome: 'unreadable' };
+/**
+ * What the import worker answers; `unreadable` means the parser itself failed.
+ * A parsed file comes with the SHA-256 of its bytes (hex), which identifies the
+ * file without keeping any of it.
+ */
+export type ParseReply =
+  | { outcome: 'parsed'; export: ParsedImport; fileHash: string }
+  | { outcome: 'failed'; error: ImportFileError }
+  | { outcome: 'unreadable' };

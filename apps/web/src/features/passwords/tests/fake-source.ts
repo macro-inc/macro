@@ -2,6 +2,7 @@ import { err, ok } from 'neverthrow';
 import type {
   ImportBatchBody,
   ImportBatchResult,
+  ImportRequestFailure,
   PasswordSource,
 } from '../context/passwords-context';
 import {
@@ -18,7 +19,17 @@ export type FakeSeed = { item: PasswordItem; values: PasswordValues };
 /** Scripted import answers: busy rounds per source key, failed requests. */
 export type FakeImportScript = {
   busy?: Map<string, number>;
+  /**
+   * Items whose verification code setup fails this many times: the item is
+   * created and answered failed with its id, as the vault does. A later send
+   * of the same item finishes the setup.
+   */
+  totpFailures?: Map<string, number>;
+  /** Items answered `folder_missing` this many times, as if their folder were deleted mid-batch. */
+  folderMissing?: Map<string, number>;
   failRequests?: number;
+  /** How the failed requests fail; retryable unless set. */
+  failWith?: ImportRequestFailure;
   requests?: ImportBatchBody[];
 };
 
@@ -189,7 +200,7 @@ export function createFakePasswordSource(
       script.requests?.push(structuredClone(batch));
       if (script.failRequests && script.failRequests > 0) {
         script.failRequests--;
-        return err('failed');
+        return err(script.failWith ?? 'retryable');
       }
       let targetFolderId: string | null = null;
       if (batch.target.kind === 'new') {
@@ -220,13 +231,40 @@ export function createFakePasswordSource(
             errorCode: 'busy',
           };
         }
+        const missing = script.folderMissing?.get(entry.sourceKey) ?? 0;
+        if (missing > 0) {
+          script.folderMissing?.set(entry.sourceKey, missing - 1);
+          return {
+            sourceKey: entry.sourceKey,
+            outcome: 'failed',
+            errorCode: 'folder_missing',
+          };
+        }
         const id = `${importId}:${entry.sourceKey}`;
-        if (items.some((item) => item.id === id))
+        const totpFails = (script.totpFailures?.get(entry.sourceKey) ?? 0) > 0;
+        if (totpFails)
+          script.totpFailures?.set(
+            entry.sourceKey,
+            (script.totpFailures?.get(entry.sourceKey) ?? 1) - 1
+          );
+        const enrolled = entry.totp !== null && !totpFails;
+        if (items.some((item) => item.id === id)) {
+          if (totpFails)
+            return {
+              sourceKey: entry.sourceKey,
+              outcome: 'failed',
+              errorCode: 'vault_unavailable',
+              itemId: id,
+            };
+          items = items.map((item) =>
+            item.id === id && enrolled ? { ...item, hasTotp: true } : item
+          );
           return {
             sourceKey: entry.sourceKey,
             outcome: 'already_present',
             itemId: id,
           };
+        }
         const timestamp = new Date().toISOString();
         items = [
           ...items,
@@ -246,13 +284,20 @@ export function createFakePasswordSource(
             canManage: true,
             canEdit: true,
             version: 1,
-            hasTotp: entry.totp !== null,
+            hasTotp: enrolled,
             createdAt: timestamp,
             updatedAt: timestamp,
             lastUsedAt: null,
           },
         ];
         values.set(id, structuredClone(entry.values));
+        if (totpFails)
+          return {
+            sourceKey: entry.sourceKey,
+            outcome: 'failed',
+            errorCode: 'vault_unavailable',
+            itemId: id,
+          };
         return { sourceKey: entry.sourceKey, outcome: 'created', itemId: id };
       });
       return ok({

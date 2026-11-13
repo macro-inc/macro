@@ -10,13 +10,22 @@ import { loadPasswordImportWasm } from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 
+async function sha256Hex(buffer: ArrayBuffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('');
+}
+
 async function parse(buffer: ArrayBuffer): Promise<ParseReply> {
   try {
     const wasm = await loadPasswordImportWasm();
     const bytes = new Uint8Array(buffer);
     const detected = wasm.detect(bytes);
     if (detected.outcome === 'failed') return detected;
-    return wasm.parse(bytes, detected.format);
+    const parsed = wasm.parse(bytes, detected.format);
+    if (parsed.outcome === 'failed') return parsed;
+    return { ...parsed, fileHash: await sha256Hex(buffer) };
   } catch {
     // Never forward the error: it could quote the file.
     return { outcome: 'unreadable' };

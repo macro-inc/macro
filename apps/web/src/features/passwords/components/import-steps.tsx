@@ -340,6 +340,7 @@ export function ImportPreviewStep(props: {
             <Dropdown.Trigger
               variant="secondary"
               size="sm"
+              disabled={props.preview.resumed}
               aria-label={t('passwords.importDestinationChange')}
             >
               {t('passwords.importDestinationChange')}
@@ -368,7 +369,11 @@ export function ImportPreviewStep(props: {
               </For>
             </Dropdown.Content>
           </Dropdown>
-          <Checkbox checked={props.makePrivate} onChange={props.onPrivate}>
+          <Checkbox
+            checked={props.makePrivate}
+            onChange={props.onPrivate}
+            disabled={props.preview.resumed}
+          >
             <Checkbox.Control />
             <Checkbox.Label class="flex items-center gap-1.5">
               <Show

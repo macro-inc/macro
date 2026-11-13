@@ -13,6 +13,7 @@ import { v7 as uuidv7 } from 'uuid';
 import {
   type ImportBatchBody,
   type ImportDestination,
+  type ImportErrorCode,
   type ImportFileFailure,
   type ImportPreview,
   type ImportResume,
@@ -26,7 +27,6 @@ import {
   foldersFor,
   type ImportTally,
   type ImportTarget,
-  isRetryable,
   MAX_DUPLICATE_SEARCHES,
   planBatches,
   uniqueRootFolderName,
@@ -61,11 +61,14 @@ const SOURCE_NAMES: Record<ImportFormat, string> = {
   bitwarden_csv: 'Bitwarden',
 };
 
-/** sessionStorage key for an import of this file: a hash, never the name itself. */
-async function resumeKey(scopeKey: string, file: File) {
+/**
+ * sessionStorage key for an import of this file by this viewer: a hash of the
+ * viewer and the file's contents, so an edited file is a new import.
+ */
+async function resumeKey(scopeKey: string, fileHash: string) {
   const digest = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode(`${scopeKey}\u0000${file.name}\u0000${file.size}`)
+    new TextEncoder().encode(`${scopeKey}\u0000${fileHash}`)
   );
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, '0')
@@ -99,9 +102,29 @@ type RunOutcome = {
 };
 
 /**
- * Sends `run` one batch at a time. A batch whose request fails is sent again
- * (the source already retries busy answers); items answered busy or
- * unavailable go into a later round, after a wait. Item ids derive from the
+ * Item failures worth sending again: the vault was busy or briefly
+ * unavailable, or a folder was deleted after the batch ensured it (the resend
+ * ensures it again).
+ */
+function isRetryable(code: ImportErrorCode | undefined) {
+  return match(code)
+    .with('busy', 'vault_unavailable', 'folder_missing', () => true)
+    .with(
+      'not_found',
+      'forbidden',
+      'invalid_request',
+      'version_conflict',
+      undefined,
+      () => false
+    )
+    .exhaustive(() => false);
+}
+
+/**
+ * Sends `run` one batch at a time. A batch whose request fails for want of
+ * an answer, a busy vault or a server error is sent again; a rejected one is
+ * not. Items answered busy, unavailable or folder missing go into a later
+ * round, after a wait. Item ids derive from the
  * import id and source key on the server, so a resent item is never doubled.
  */
 export async function sendImport(
@@ -110,6 +133,8 @@ export async function sendImport(
   options: {
     span: Span;
     onProgress: (done: number) => void;
+    /** Ids of the items each batch created or found, for resuming. */
+    onLanded?: (itemIds: string[]) => void;
     wait?: (ms: number) => Promise<void>;
   }
 ): Promise<RunOutcome> {
@@ -140,7 +165,9 @@ export async function sendImport(
       );
       for (
         let attempt = 1;
-        result.isErr() && attempt < BATCH_ATTEMPTS;
+        result.isErr() &&
+        result.error === 'retryable' &&
+        attempt < BATCH_ATTEMPTS;
         attempt++
       ) {
         await wait(RETRY_BACKOFF_MS * 2 ** (attempt - 1));
@@ -162,6 +189,11 @@ export async function sendImport(
       // Later batches reuse the folder the first one ensured.
       if (target.kind === 'new' && result.value.targetFolderId)
         target = { kind: 'existing', folderId: result.value.targetFolderId };
+      options.onLanded?.(
+        result.value.items.flatMap((answer) =>
+          answer.itemId ? [answer.itemId] : []
+        )
+      );
       const bySource = new Map(items.map((item) => [item.sourceKey, item]));
       for (const answer of result.value.items) {
         const item = bySource.get(answer.sourceKey);
@@ -315,20 +347,30 @@ export function createPasswordImport(props: {
       return;
     }
     parsed = reply.export;
+    const key = await resumeKey(scope.key, reply.fileHash);
+    if (run !== generation) return;
+    const stored = importResume.get(key);
+    const earlier = stored?.format === parsed.format ? stored : undefined;
     const known = await knownItems(parsed.items);
     if (run !== generation || !scope.isCurrent()) return;
-    duplicates = duplicateKeys(parsed.items, known.items);
-    const key = await resumeKey(scope.key, file);
-    if (run !== generation) return;
-    const earlier = importResume.get(key);
-    const entry =
-      earlier && earlier.format === parsed.format
-        ? earlier
-        : {
-            importId: uuidv7(),
-            format: parsed.format,
-            startedAt: new Date().toISOString(),
-          };
+    // Items this import already created are resent, not skipped: the vault
+    // answers already present and finishes what an earlier run left undone.
+    const own = new Set(earlier?.itemIds);
+    duplicates = duplicateKeys(
+      parsed.items,
+      known.items.filter((item) => !own.has(item.id))
+    );
+    const entry: ImportResume = earlier ?? {
+      importId: uuidv7(),
+      format: parsed.format,
+      startedAt: new Date().toISOString(),
+      destination: 'new',
+      private: false,
+      itemIds: [],
+    };
+    // A continued import keeps the destination and privacy it started with.
+    setDestination(entry.destination);
+    setMakePrivate(entry.private);
     resume = { key, entry };
     setStep({
       step: 'preview',
@@ -373,9 +415,17 @@ export function createPasswordImport(props: {
     // Read while the preview is current: the target is derived from it.
     const chosenTarget = target();
     const folders = parsed.folders;
-    const { key, entry } = resume;
+    const { key } = resume;
+    const landed = new Set(resume.entry.itemIds);
+    const entry: ImportResume = {
+      ...resume.entry,
+      destination: destination(),
+      private: makePrivate(),
+    };
     // Ids only: lets a rerun with the same file continue this import.
-    importResume.set(key, entry);
+    const remember = () =>
+      importResume.set(key, { ...entry, itemIds: [...landed] });
+    remember();
     setStep({ step: 'importing', done: 0, total: items.length });
     const outcome = await Telemetry.span('passwords.import', async (span) => {
       span.setAttr('passwords.import.id', entry.importId);
@@ -397,6 +447,10 @@ export function createPasswordImport(props: {
           onProgress: (done) => {
             if (run === generation)
               setStep({ step: 'importing', done, total: items.length });
+          },
+          onLanded: (itemIds) => {
+            for (const id of itemIds) landed.add(id);
+            remember();
           },
         }
       );

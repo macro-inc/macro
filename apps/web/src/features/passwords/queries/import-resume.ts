@@ -15,12 +15,20 @@ const RESUME_SCHEMA = z.object({
     'bitwarden_csv',
   ]),
   startedAt: z.iso.datetime(),
+  destination: z.union([
+    z.literal('new'),
+    z.literal('root'),
+    z.templateLiteral(['folder:', z.uuid()]),
+  ]),
+  private: z.boolean(),
+  itemIds: z.array(z.uuid()).max(20_000),
 });
 
 /**
  * Unfinished imports in this tab's sessionStorage, keyed by a hash of the
- * viewer and file. Holds the import id, format and start time: never names,
- * values or anything from the file.
+ * viewer and the file's contents. Holds the import id, format, start time,
+ * destination, privacy and the ids of items it created: never names, values
+ * or anything from the file.
  */
 export function createSessionImportResume(): ImportResumeStore {
   return {

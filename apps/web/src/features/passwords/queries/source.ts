@@ -23,9 +23,10 @@ import type { PasswordTotpCode } from '@service-storage/generated/schemas/passwo
 import type { PasswordUsername } from '@service-storage/generated/schemas/passwordUsername';
 import type { PasswordVersion as VersionDto } from '@service-storage/generated/schemas/passwordVersion';
 import type { PasswordWriteItem } from '@service-storage/generated/schemas/passwordWriteItem';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type {
   ImportBatchResult,
+  ImportRequestFailure,
   PasswordFailure,
   PasswordResult,
   PasswordSource,
@@ -59,9 +60,27 @@ function folder(dto: FolderDto): PasswordFolder {
 const BUSY_RETRIES = 4;
 const BUSY_BACKOFF_MS = 200;
 
-function failure(codes: readonly (string | undefined)[]): PasswordFailure {
+function failure(codes: readonly string[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
   return 'failed';
+}
+
+/** The viewer changed: the request was dropped and must not be retried. */
+const SCOPE_CHANGED = 'SCOPE_CHANGED';
+
+/**
+ * Worth sending again: no answer, a busy vault (after the request's own busy
+ * retries), or a server error. A rejected request would fail the same way.
+ */
+function importFailure(codes: readonly string[]): ImportRequestFailure {
+  const retryable = codes.some(
+    (code) =>
+      code === 'NETWORK_ERROR' ||
+      code === 'SERVER_ERROR' ||
+      code === PasswordErrorCode.vault_busy ||
+      code === PasswordErrorCode.vault_unavailable
+  );
+  return retryable ? 'retryable' : 'rejected';
 }
 
 /**
@@ -85,11 +104,19 @@ export function createPasswordSource(
     method: string,
     body?: object
   ): PasswordResult<T> {
+    return (await requestCodes<T>(path, method, body)).mapErr(failure);
+  }
+  /** `request`, keeping the error codes: network, `SERVER_ERROR` (any 5xx), or the vault's. */
+  async function requestCodes<T extends object>(
+    path: string,
+    method: string,
+    body?: object
+  ): Promise<Result<T, string[]>> {
     const payload = body ? JSON.stringify(body) : undefined;
     return Telemetry.span('passwords.request', async (span) => {
       for (let retries = 0; ; retries++) {
         // Never send or finish a request for a viewer that has since changed.
-        if (!isCurrent()) return err('failed' as const);
+        if (!isCurrent()) return err([SCOPE_CHANGED]);
         span.setAttr('retry.count', retries);
         const response = await fetchWithToken<T, PasswordErrorCode>(
           `${root}${path}`,
@@ -104,6 +131,8 @@ export function createPasswordSource(
             retry: { maxTries: 1 },
             trace: { parentSpan: span },
             errorResponseHandler: async (response) => {
+              if (response.status >= 500)
+                return { code: 'SERVER_ERROR', message: 'Server error' };
               const fallback = statusError(response.status);
               if (response.status !== 403 && response.status !== 409)
                 return fallback;
@@ -124,7 +153,7 @@ export function createPasswordSource(
           }
         );
         // A response for a viewer that has since changed is dropped, busy or not.
-        if (!isCurrent()) return err('failed' as const);
+        if (!isCurrent()) return err([SCOPE_CHANGED]);
         if (
           response.isErr() &&
           retries < BUSY_RETRIES &&
@@ -135,9 +164,7 @@ export function createPasswordSource(
           await sleep(BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random()));
           continue;
         }
-        return response.mapErr((errors) =>
-          failure(errors.map((error) => error.code))
-        );
+        return response.mapErr((errors) => errors.map((error) => error.code));
       }
     });
   }
@@ -350,23 +377,25 @@ export function createPasswordSource(
     async importBatch(importId, batch) {
       // Spanned by the caller's `passwords.import`; values never reach attributes.
       return (
-        await request<PasswordImportBatchResult>(
+        await requestCodes<PasswordImportBatchResult>(
           `/imports/${encodeURIComponent(importId)}/items`,
           'POST',
           batch satisfies PasswordImportBatch
         )
-      ).map(
-        (result): ImportBatchResult => ({
-          targetFolderId: result.targetFolderId ?? null,
-          folders: result.folders,
-          items: result.items.map((item) => ({
-            sourceKey: item.sourceKey,
-            outcome: item.outcome,
-            errorCode: item.errorCode ?? undefined,
-            itemId: item.itemId ?? undefined,
-          })),
-        })
-      );
+      )
+        .mapErr(importFailure)
+        .map(
+          (result): ImportBatchResult => ({
+            targetFolderId: result.targetFolderId ?? null,
+            folders: result.folders,
+            items: result.items.map((item) => ({
+              sourceKey: item.sourceKey,
+              outcome: item.outcome,
+              errorCode: item.errorCode ?? undefined,
+              itemId: item.itemId ?? undefined,
+            })),
+          })
+        );
     },
     async logo(domain) {
       const response = await fetchWithToken<Uint8Array>(
