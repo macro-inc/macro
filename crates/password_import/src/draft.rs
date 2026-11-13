@@ -292,7 +292,7 @@ impl Draft {
         let folder = match std::mem::take(&mut self.folder) {
             SourceFolder::None => None,
             SourceFolder::Path(path) => Some(path),
-            SourceFolder::TooLong => return Err(self.skipped(SkipReason::TooLarge)),
+            SourceFolder::OverLimit => return Err(self.skipped(SkipReason::TooLarge)),
         };
 
         let url = self.place_urls();

@@ -45,14 +45,16 @@ file never leaves the device.
   `vault::*`; the vault's own write checks in `crates/passwords` must match them.
 - Hostile input stays bounded by counts, not just bytes: JSON lists are
   counted before they're kept (`bounded.rs`), per-item lists stop at 256
-  entries, CSV records at 256 cells, URLs per item at 51. Keep new lists behind
+  entries, CSV records at 256 cells, URLs per item at 51, folders at 32 levels. Keep new lists behind
   `Bounded` or `Count`.
 - Not zeroized: intermediate parser buffers (CSV records, URL parsing) and
   serde_json's scratch buffer, which holds every JSON string with an escape
   (multi-line SSH keys, most notes) in plain text until it is reused or freed.
   Only values held in `Secret` are zeroized.
 - 1Password 7 CSV is refused with `UnsupportedVersion`, not read as 1Password 8.
-- CSV source keys are `row:<n>`, the 1-based data row (header excluded).
+- Source keys: `<account>:<vault>:<item>` uuids for 1Password (item uuids
+  repeat across vaults), the Bitwarden id, `row:<n>` for CSV (1-based data
+  row), else `item:<n>`. They must stay unique within one export.
 - `ParsedExport::folders` holds only folders used by imported items, ancestors
   included; empty source folders are not carried over.
 

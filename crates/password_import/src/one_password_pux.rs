@@ -66,6 +66,7 @@ struct Account<'a> {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AccountAttributes {
+    uuid: Option<String>,
     account_name: Option<String>,
     name: Option<String>,
 }
@@ -79,6 +80,7 @@ struct Vault<'a> {
 
 #[derive(Deserialize)]
 struct VaultAttributes {
+    uuid: Option<String>,
     name: Option<String>,
 }
 
@@ -277,6 +279,7 @@ struct Overview {
 
 #[derive(Deserialize)]
 struct OverviewUrl {
+    label: Option<String>,
     url: Option<String>,
 }
 
@@ -332,18 +335,22 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     let mut index = 0;
 
     for account in &accounts {
-        let account_name = account
-            .attrs
-            .as_ref()
+        let account_attrs = account.attrs.as_ref();
+        let account_uuid = account_attrs.and_then(|attrs| attrs.uuid.as_deref());
+        let account_name = account_attrs
             .and_then(|attrs| attrs.account_name.as_deref().or(attrs.name.as_deref()))
             .unwrap_or_default();
 
         for vault in &account.vaults {
-            let vault_name = vault
-                .attrs
-                .as_ref()
+            let vault_attrs = vault.attrs.as_ref();
+            let vault_name = vault_attrs
                 .and_then(|attrs| attrs.name.as_deref())
                 .unwrap_or_default();
+            // Item uuids are unique within a vault, vault uuids within an account.
+            let scope = [
+                account_uuid,
+                vault_attrs.and_then(|attrs| attrs.uuid.as_deref()),
+            ];
 
             // With several accounts, `Account / Vault` keeps same-named vaults apart.
             let folder = if several_accounts {
@@ -354,9 +361,9 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
 
             for raw in &vault.items {
                 match serde_json::from_str::<Item<'_>>(raw.get()) {
-                    Ok(item) => add_item(&mut parts, item, index, &folder),
+                    Ok(item) => add_item(&mut parts, item, &scope, index, &folder),
                     Err(_) => parts.skip(
-                        Some(SourceKey::of_malformed(raw, index)),
+                        Some(SourceKey::of_malformed(raw, &scope, index)),
                         None,
                         SkipReason::Malformed,
                     ),
@@ -369,8 +376,14 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     Ok(parts)
 }
 
-fn add_item(parts: &mut Parts, item: Item<'_>, index: usize, folder: &SourceFolder) {
-    let key = SourceKey::from_source_id_or_index(item.uuid.as_deref(), index);
+fn add_item(
+    parts: &mut Parts,
+    item: Item<'_>,
+    scope: &[Option<&str>],
+    index: usize,
+    folder: &SourceFolder,
+) {
+    let key = SourceKey::from_scoped_id_or_index(scope, item.uuid.as_deref(), index);
     let name = item
         .overview
         .as_ref()
@@ -406,13 +419,15 @@ fn add_item(parts: &mut Parts, item: Item<'_>, index: usize, folder: &SourceFold
         if overview.urls.overflowed || overview.tags.overflowed {
             draft.mark_too_large();
         }
-        for url in overview.urls.entries {
-            if let Some(url) = url.url {
-                draft.add_url(&url);
-            }
-        }
+        // `url` is the primary URL; `urls` repeats it among labeled others.
         if let Some(url) = overview.url {
             draft.add_url(&url);
+        }
+        for url in overview.urls.entries {
+            let label = url.label.filter(|label| !label.trim().is_empty());
+            if let Some(value) = url.url {
+                draft.add_labeled_url(label, &value, false);
+            }
         }
         for tag in overview.tags.entries {
             draft.add_tag(&tag);

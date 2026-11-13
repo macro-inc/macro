@@ -143,9 +143,11 @@ impl TotpSeed {
     }
 }
 
-/// Where an item came from: a 1Password item uuid, a Bitwarden id, or
-/// `row:<n>` (1-based data row) for CSV. Opaque and never secret, so it is
-/// safe to show in `Debug` and to derive vault ids from.
+/// Where an item came from, unique within one export: `<account>:<vault>:<item>`
+/// uuids for 1Password (item uuids repeat across vaults), a Bitwarden id,
+/// `row:<n>` (1-based data row) for CSV, or `item:<n>` when the source ids
+/// aren't usable. Opaque and never secret, so it is safe to show in `Debug`
+/// and to derive vault ids from.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
 #[cfg_attr(feature = "reveal-secrets", serde(transparent))]
@@ -154,31 +156,44 @@ pub struct SourceKey(String);
 impl SourceKey {
     const MAX_LEN: usize = 128;
 
-    /// A source id if it looks like one (ASCII letters, digits, `-`, `_`, at
+    /// Whether `id` looks like a source id (ASCII letters, digits, `-`, `_`, at
     /// most 128 bytes); anything else might be content and is refused.
-    pub(crate) fn from_source_id(id: &str) -> Option<Self> {
-        let valid = !id.is_empty()
+    fn is_source_id(id: &str) -> bool {
+        !id.is_empty()
             && id.len() <= Self::MAX_LEN
             && id
                 .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
-
-        valid.then(|| Self(id.to_owned()))
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
     }
 
-    /// The source id when it is usable, else the `index`th item's key.
-    pub(crate) fn from_source_id_or_index(id: Option<&str>, index: usize) -> Self {
-        id.and_then(Self::from_source_id)
-            .unwrap_or_else(|| Self::from_item_index(index))
+    /// An id that is unique only within `scope` (1Password: account uuid, then
+    /// vault uuid), as `scope:...:id`. `None` unless every part is a usable
+    /// source id; Bitwarden ids are unique alone and have an empty scope.
+    fn from_scoped_id(scope: &[Option<&str>], id: Option<&str>) -> Option<Self> {
+        let mut parts = Vec::with_capacity(scope.len() + 1);
+        for part in scope.iter().copied().chain([id]) {
+            parts.push(part.filter(|part| Self::is_source_id(part))?);
+        }
+        Some(Self(parts.join(":")))
     }
 
-    /// Key for an item whose full shape didn't parse: its id or uuid when
-    /// that much reads, else the `index`th item's key.
-    pub(crate) fn of_malformed(raw: &RawValue, index: usize) -> Self {
+    /// The scoped source id when every part is usable, else the `index`th
+    /// item's key.
+    pub(crate) fn from_scoped_id_or_index(
+        scope: &[Option<&str>],
+        id: Option<&str>,
+        index: usize,
+    ) -> Self {
+        Self::from_scoped_id(scope, id).unwrap_or_else(|| Self::from_item_index(index))
+    }
+
+    /// Key for an item whose full shape didn't parse: its scoped id or uuid
+    /// when that much reads, else the `index`th item's key.
+    pub(crate) fn of_malformed(raw: &RawValue, scope: &[Option<&str>], index: usize) -> Self {
         let id = serde_json::from_str::<ItemId>(raw.get())
             .ok()
             .and_then(|item| item.id);
-        Self::from_source_id_or_index(id.as_deref(), index)
+        Self::from_scoped_id_or_index(scope, id.as_deref(), index)
     }
 
     /// Key for the `index`th item (0-based) of a source without usable ids.
@@ -212,6 +227,10 @@ struct ItemId {
 pub struct FolderPath(Vec<String>);
 
 impl FolderPath {
+    /// Most nesting levels kept. Every ancestor becomes a folder of its own, so
+    /// depth costs quadratically; real exports nest a few levels.
+    pub const MAX_DEPTH: usize = 32;
+
     /// Validate segments; blank ones are dropped (`a//b` is `a/b`).
     pub(crate) fn parse<'a>(segments: impl IntoIterator<Item = &'a str>) -> SourceFolder {
         let mut path = Vec::new();
@@ -222,8 +241,8 @@ impl FolderPath {
             if segment.is_empty() {
                 continue;
             }
-            if segment.len() > vault::MAX_FOLDER_NAME_BYTES {
-                return SourceFolder::TooLong;
+            if segment.len() > vault::MAX_FOLDER_NAME_BYTES || path.len() >= Self::MAX_DEPTH {
+                return SourceFolder::OverLimit;
             }
 
             path.push(segment.to_owned());
@@ -255,9 +274,9 @@ pub(crate) enum SourceFolder {
     None,
     /// In this folder.
     Path(FolderPath),
-    /// A segment over the vault's folder name limit; the item is skipped
-    /// rather than filed elsewhere.
-    TooLong,
+    /// A segment over the vault's folder name limit, or deeper than
+    /// [`FolderPath::MAX_DEPTH`]; the item is skipped rather than filed elsewhere.
+    OverLimit,
 }
 
 impl fmt::Debug for FolderPath {

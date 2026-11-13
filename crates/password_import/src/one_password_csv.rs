@@ -33,12 +33,14 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     let archived = table.column("archived");
     let tags = table.column("tags");
     let notes = table.column("notes");
-    let extra_columns: Vec<usize> = table
-        .headers
+    // Each known name maps to its first column; every other column, including
+    // a repeat of a known name, is an extra field.
+    let known: Vec<usize> = KNOWN_COLUMNS
         .iter()
-        .enumerate()
-        .filter(|(_, header)| !KNOWN_COLUMNS.contains(&header.as_str()))
-        .map(|(column, _)| column)
+        .filter_map(|name| table.column(name))
+        .collect();
+    let extra_columns: Vec<usize> = (0..table.headers.len())
+        .filter(|column| !known.contains(column))
         .collect();
 
     let mut parts = Parts::default();
