@@ -1250,6 +1250,78 @@ fn opening_a_normalized_document_writes_nothing() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+/// Guard, NAMED DIFFERENCE (unreachable): native SetState replaces the live model, so a
+/// payload without root documentMetadata deletes it at once, while Source's setEditorState
+/// reports no mutated nodes and syncs nothing. No app module sends a native EditorSetState
+/// with an external state (R003 freeze grep: only the generated ABI and the empty
+/// envelope placeholder; Source's setEditorState sites are initial loads, separate
+/// composer/headless editors and comment staging). ast-grep ts/tsx-no-editor-set-state
+/// keeps it that way; this pins the native behaviour.
+#[test]
+fn guard_set_state_without_root_metadata_deletes_it_unreachable_from_the_app()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5","searchText":""},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let writer = lexical_loro::new_doc(60)?;
+    writer.import(&snapshot)?;
+    let root_state = match writer.get_map("root").get("$") {
+        Some(loro::ValueOrContainer::Container(loro::Container::Map(map))) => map,
+        _ => return Err("root state map".into()),
+    };
+    let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
+    metadata.insert("version", 10)?;
+    metadata.insert("environmentTags", loro::LoroValue::Null)?;
+    writer.commit();
+    let doc = lexical_loro::new_doc(50)?;
+    doc.import(&writer.export(loro::ExportMode::Snapshot)?)?;
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut Vec::new())?;
+    let mut state = surface.state().to_json()?;
+    if let Some(serde_json::Value::Object(root_state)) = state.root.get_mut("$") {
+        root_state.shift_remove("documentMetadata");
+    }
+    state.root["children"][0]["children"] =
+        json!([{"type":"text","version":1,"text":"set","$":{"id":"set-leaf"}}]);
+    let set = local_input(
+        &mut surface,
+        &doc,
+        Input::SetState {
+            state,
+            tags: TagSet::default(),
+        },
+        1000,
+    )?;
+    assert_eq!(
+        set.last(),
+        Some(&map_op("delete", "documentMetadata")),
+        "SetState deletes the stored metadata: {set:?}"
+    );
+    assert!(
+        !set.contains(&map_op("insert", "documentMetadata")),
+        "{set:?}"
+    );
+    assert!(stored_root(&doc)["$"].get("documentMetadata").is_none());
+    Ok(())
+}
+
 /// Source's writeStateToLoro skips read-only editors; load normalisation never reaches Loro.
 #[test]
 fn read_and_comment_only_opens_write_no_load_normalisation()

@@ -1,0 +1,44 @@
+id: tsx-no-editor-set-state
+language: tsx
+# Twin of ts-no-editor-set-state — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: error
+message: Don't send a native EditorSetState with an external state. No shipping flow does, and its metadata behaviour differs from Source; see the guard test in crates/client/document_session/tests/metadata_hydration.rs.
+note: |-
+  Native SetState replaces the live model: with no root documentMetadata in the
+  payload it deletes the stored metadata at once, while Source's setEditorState
+  reports no mutated nodes and syncs nothing. That difference is unreachable
+  only because no app module sends one (R003 freeze grep), and the guard test
+  guard_set_state_without_root_metadata_deletes_it_unreachable_from_the_app
+  pins the native behaviour. Adding a shipping SetState flow needs a Source
+  comparison of that flow first.
+files:
+  - apps/web/src/**
+  - packages/collaboration/src/**
+  - packages/lexical-wasm-view/**
+ignores:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.spec.ts'
+  - '**/*.e2e.ts'
+  - '**/*.d.ts'
+  - '**/*generated*'
+  - '**/browser-test/**'
+  - '**/*-browser-test/**'
+  - '**/test/**'
+  - '**/*test-fixture*'
+  # Preview/test-only probes; production builds exclude dev-probes.
+  - '**/*.dev-probes.ts'
+  - '**/fuzz/**'
+  - '**/tests/**'
+  - '**/test-utils/**'
+  # Empty placeholder for the fixed input envelope; it is never admitted as a SetState.
+  - packages/collaboration/src/session/input.ts
+  # Defines SessionPort.setState; its callers are matched below.
+  - packages/lexical-wasm-view/src/view/session-port.ts
+rule:
+  any:
+    - pattern: EditorInputMsg.fromEditorSetState($$$ARGS)
+    - pattern: new EditorSetState($$$ARGS)
+    - pattern: $OWNER.port.setState($$$ARGS)
+    - pattern: port.setState($$$ARGS)
