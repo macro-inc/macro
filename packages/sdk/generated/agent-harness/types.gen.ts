@@ -1176,6 +1176,23 @@ export type CreateSessionThread = {
 };
 
 /**
+ * Error body for a provider that refused the caller's connected credential.
+ *
+ * JSON rather than the plain text other failures answer with, so a client
+ * can tell this 409 from a disconnected runtime and show `message` as is.
+ */
+export type CredentialRejectedResponse = {
+    /**
+     * Always [`Self::CODE`].
+     */
+    code: string;
+    /**
+     * What to tell the caller, e.g. which kind of key to reconnect with.
+     */
+    message: string;
+};
+
+/**
  * Surface of a review decision.
  */
 export type DecisionVia = 'card' | 'chat' | 'inbox';
@@ -2460,9 +2477,9 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body)
      */
-    409: unknown;
+    409: CredentialRejectedResponse;
     /**
      * Provider probe failed
      */
@@ -2472,6 +2489,8 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     504: unknown;
 };
+
+export type DiscoverAgentCapabilitiesHandlerError = DiscoverAgentCapabilitiesHandlerErrors[keyof DiscoverAgentCapabilitiesHandlerErrors];
 
 export type DiscoverAgentCapabilitiesHandlerResponses = {
     /**
@@ -2685,9 +2704,9 @@ export type LoadAgentModelsHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body)
      */
-    409: unknown;
+    409: CredentialRejectedResponse;
     /**
      * Provider probe failed
      */
@@ -2697,6 +2716,8 @@ export type LoadAgentModelsHandlerErrors = {
      */
     504: unknown;
 };
+
+export type LoadAgentModelsHandlerError = LoadAgentModelsHandlerErrors[keyof LoadAgentModelsHandlerErrors];
 
 export type LoadAgentModelsHandlerResponses = {
     /**

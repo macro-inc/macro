@@ -28,6 +28,7 @@ import type {
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
   CreateReview,
+  CredentialRejectedResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
@@ -82,7 +83,7 @@ export type discoverAgentCapabilitiesHandlerResponse403 = {
 };
 
 export type discoverAgentCapabilitiesHandlerResponse409 = {
-  data: void;
+  data: CredentialRejectedResponse;
   status: 409;
 };
 
@@ -557,7 +558,7 @@ export type loadAgentModelsHandlerResponse403 = {
 };
 
 export type loadAgentModelsHandlerResponse409 = {
-  data: void;
+  data: CredentialRejectedResponse;
   status: 409;
 };
 
