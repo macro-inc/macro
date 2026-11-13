@@ -664,9 +664,9 @@ test('table focus cell deleted while the insert is queued (table and anchor rema
 /** Selection kind and keys, named by the fixture, in the Source oracle's shape. */
 function describeSelection(
   runtime: ReturnType<typeof mount>,
-  names: Map<string, string>
+  names: Map<number, string>
 ) {
-  const name = (key: string) =>
+  const name = (key: number) =>
     names.get(key) ?? `unnamed:${runtime.view.node(key)?.type ?? 'missing'}`;
   const { selection } = runtime.view.selection();
   if (selection.kind === 'node')
@@ -691,7 +691,7 @@ function describeSelection(
 async function commitDetached(
   runtime: ReturnType<typeof mount>,
   gif: ReturnType<typeof bound>,
-  names: Map<string, string>
+  names: Map<number, string>
 ) {
   const insertion = prepared(gif);
   runtime.port.setState(REPLACED);

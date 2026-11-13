@@ -139,7 +139,7 @@ function commitCaptured(
   );
   let owned = false;
   let thrown: unknown;
-  let result: boolean | undefined;
+  let result: boolean | Promise<boolean> | undefined;
   try {
     result = runtime.host.commit(insertion, GIF, FILE_ID, () => {
       owned = true;
