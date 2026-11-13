@@ -1,29 +1,40 @@
 //! Feature-flag backed rollout of dynamic multi-term matching.
 
 use std::{
-    collections::HashMap,
-    sync::{Mutex, PoisonError},
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
     time::Duration,
 };
 
 use feature_flags::FeatureFlags;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use tokio::time::Instant;
+use tracing::Instrument;
 
 use crate::domain::term_matching::TermMatchingRollout;
 
 const ENABLE_DYNAMIC_SEARCH_TERM_MATCHING: &str = "enable-dynamic-search-term-matching";
 
-/// How long one caller's answer is reused. A rollout change reaches a caller
-/// within this window; until then their searches skip the flag provider.
+/// How long one caller's answer counts as current. After it, the next search
+/// still gets that answer and starts a refresh.
 const DECISION_LIFETIME: Duration = Duration::from_secs(300);
 
-/// Answers from the per-user flag, asking the provider at most once per
-/// caller per [`DECISION_LIFETIME`]. The provider is a network call, and a
-/// search must not wait on one per request. A failed read is remembered as
-/// "off" for the same window, so an unreachable provider is not retried on
-/// every search.
+/// How long a lapsed answer is kept for a caller who has stopped searching.
+const LAPSED_DECISION_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Answers from the per-user flag without ever making a search wait on the
+/// flag provider, which is a network call.
+///
+/// A search gets the caller's remembered answer, or "off" when there is none.
+/// When that answer is missing or older than [`DECISION_LIFETIME`], one
+/// background read per caller replaces it; a failed read is remembered as
+/// "off". So the first search after the flag turns on for a caller, in each
+/// process, still runs strict, and the next one is dynamic.
 pub struct FlaggedTermMatching<F> {
+    shared: Arc<Shared<F>>,
+}
+
+struct Shared<F> {
     flags: F,
     decisions: Mutex<Decisions>,
 }
@@ -31,6 +42,8 @@ pub struct FlaggedTermMatching<F> {
 #[derive(Default)]
 struct Decisions {
     by_caller: HashMap<String, Decision>,
+    /// Callers whose answer is being read right now.
+    refreshing: HashSet<String>,
     /// When lapsed entries are next dropped; `None` until the first answer.
     prune_at: Option<Instant>,
 }
@@ -42,35 +55,46 @@ struct Decision {
 }
 
 impl<F> FlaggedTermMatching<F> {
-    /// Wrap a flag provider with an empty decision cache.
+    /// Wrap a flag provider; nothing is remembered yet.
     pub fn new(flags: F) -> Self {
         Self {
-            flags,
-            decisions: Mutex::new(Decisions::default()),
+            shared: Arc::new(Shared {
+                flags,
+                decisions: Mutex::new(Decisions::default()),
+            }),
         }
     }
+}
 
-    fn remembered(&self, caller: &str) -> Option<bool> {
-        let decisions = self
-            .decisions
+impl<F> Shared<F> {
+    fn decisions(&self) -> MutexGuard<'_, Decisions> {
+        self.decisions
             .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        let decision = decisions.by_caller.get(caller)?;
-        (decision.expires_at > Instant::now()).then_some(decision.enabled)
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The caller's remembered answer, and whether this search should start
+    /// a refresh: the answer is missing or lapsed and no refresh is running.
+    fn remembered(&self, caller: &str) -> (bool, bool) {
+        let mut decisions = self.decisions();
+        let remembered = decisions.by_caller.get(caller).copied();
+        let enabled = remembered.is_some_and(|decision| decision.enabled);
+        let is_current = remembered.is_some_and(|decision| decision.expires_at > Instant::now());
+        let starts_refresh = !is_current && decisions.refreshing.insert(caller.to_owned());
+        (enabled, starts_refresh)
     }
 
     fn remember(&self, caller: &str, enabled: bool) {
         let now = Instant::now();
-        let mut decisions = self
-            .decisions
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        // Dropping lapsed entries once per lifetime keeps the map to callers
-        // who searched within the last two, without a scan on every miss.
+        let mut decisions = self.decisions();
+        decisions.refreshing.remove(caller);
+
+        // Dropping long-lapsed entries once per lifetime keeps the map to
+        // recent searchers, without a scan on every refresh.
         if decisions.prune_at.is_none_or(|prune_at| prune_at <= now) {
             decisions
                 .by_caller
-                .retain(|_, decision| decision.expires_at > now);
+                .retain(|_, decision| decision.expires_at + LAPSED_DECISION_RETENTION > now);
             decisions.prune_at = Some(now + DECISION_LIFETIME);
         }
         decisions.by_caller.insert(
@@ -83,20 +107,8 @@ impl<F> FlaggedTermMatching<F> {
     }
 }
 
-#[async_trait::async_trait]
-impl<F: FeatureFlags + 'static> TermMatchingRollout for FlaggedTermMatching<F> {
-    #[tracing::instrument(
-        skip_all,
-        name = "search.term_matching_rollout",
-        fields(cache_hit = tracing::field::Empty)
-    )]
-    async fn dynamic_enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool {
-        let remembered = self.remembered(caller.as_ref());
-        tracing::Span::current().record("cache_hit", remembered.is_some());
-        if let Some(enabled) = remembered {
-            return enabled;
-        }
-
+impl<F: FeatureFlags + 'static> Shared<F> {
+    async fn refresh(&self, caller: MacroUserIdStr<'static>) {
         let enabled = match self.flags.load(&caller).await {
             Ok(flags) => flags.is_enabled(ENABLE_DYNAMIC_SEARCH_TERM_MATCHING),
             Err(error) => {
@@ -104,7 +116,25 @@ impl<F: FeatureFlags + 'static> TermMatchingRollout for FlaggedTermMatching<F> {
                 false
             }
         };
+        tracing::Span::current().record("enabled", enabled);
         self.remember(caller.as_ref(), enabled);
+    }
+}
+
+#[async_trait::async_trait]
+impl<F: FeatureFlags + 'static> TermMatchingRollout for FlaggedTermMatching<F> {
+    async fn dynamic_enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool {
+        let (enabled, starts_refresh) = self.shared.remembered(caller.as_ref());
+        if starts_refresh {
+            // Parented on the search's span so the read stays in its trace.
+            let span = tracing::info_span!(
+                "search.term_matching_refresh",
+                enabled = tracing::field::Empty
+            );
+            let shared = self.shared.clone();
+            let caller = caller.into_owned();
+            tokio::spawn(async move { shared.refresh(caller).await }.instrument(span));
+        }
         enabled
     }
 }

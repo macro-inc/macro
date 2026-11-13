@@ -66,10 +66,12 @@ per-entity-type search plus a unified search across them — mounted into
   `term_matching: dynamic` on the unified request (see `opensearch_client`'s
   `DocumentTermMatching`). It applies only when the request asks for it and
   the `enable-dynamic-search-term-matching` flag is on for the caller
-  (`TermMatchingRollout`; local stacks have it on). The adapter keeps each
-  caller's answer for five minutes, failed reads included, so a search waits
-  on the flag provider at most once per caller in that window and a rollout
-  change takes up to five minutes to reach them. The SDK and AI tools
+  (`TermMatchingRollout`; local stacks have it on). The adapter never
+  makes a search wait on the flag provider: a search gets the caller's
+  remembered answer, or off when there is none, and an answer that is missing
+  or older than five minutes is re-read in the background, once per caller,
+  failed reads remembered as off. So in each process a caller's first search
+  after the flag turns on still runs strict. The SDK and AI tools
   never send it, so their documented AND holds. Names, emails, channels,
   chats and call records are always a strict AND.
 - Calendar events have two scopes (`calendar_event_scope` on the unified
