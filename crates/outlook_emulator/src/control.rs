@@ -1,6 +1,8 @@
 //! The control API under `/_emulator/`: each route calls the
 //! [`OutlookEmulator`] method of the same purpose.
 
+mod calendar;
+
 use std::time::Duration;
 
 use axum::extract::{Path, Query, State as AxumState};
@@ -13,7 +15,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::seed::{NewMessage, Seed, SeedContact, SeedError, SeedMailbox};
+
 use crate::{EmulatorError, Fault, LifecycleEvent, OutlookEmulator};
+pub use calendar::CalendarSummary;
 
 type Emulator = AxumState<OutlookEmulator>;
 
@@ -180,9 +184,11 @@ impl IntoResponse for EmulatorError {
             Self::UnknownMailbox(_)
             | Self::UnknownFolder(_)
             | Self::UnknownMessage(_)
+            | Self::UnknownCalendar(_)
+            | Self::UnknownEvent(_)
             | Self::UnknownSubscription(_) => StatusCode::NOT_FOUND,
             Self::MailboxExists(_) | Self::GrantRevoked(_) => StatusCode::CONFLICT,
-            Self::InvalidMessage(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidMessage(_) | Self::InvalidEvent(_) => StatusCode::BAD_REQUEST,
         };
         (status, Json(json!({ "error": self.to_string() }))).into_response()
     }
@@ -223,7 +229,8 @@ pub(crate) fn router() -> Router<OutlookEmulator> {
         .route("/requests", get(requests).delete(clear_requests))
         .route("/subscriptions", get(subscriptions))
         .route("/subscriptions/{id}/lifecycle", post(send_lifecycle))
-        .route("/notifications", get(notifications));
+        .route("/notifications", get(notifications))
+        .merge(calendar::routes());
     Router::new().nest("/_emulator", routes)
 }
 

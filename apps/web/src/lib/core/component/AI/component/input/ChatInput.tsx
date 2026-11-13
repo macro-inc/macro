@@ -450,6 +450,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               </div>
             </Show>
             <div
+              data-composer-scroll
               id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn(
                 'text-base text-ink touch:px-3 touch:py-2 not-touch:leading-[24.375px] not-touch:text-composer-ink',

@@ -74,6 +74,9 @@ import { AGENTS_TOUR } from '../tour';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
 
+/** Another surface asking the composer to select an agent. */
+export type AgentRequest = { agentId: string; request: string };
+
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
   prompt: string;
@@ -109,8 +112,12 @@ export function NewChatPage(props: {
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
-  /** An agent to select, e.g. one just set up on a Macro computer. */
-  requestedAgentId?: string;
+  /**
+   * An agent to select, e.g. one just set up on a Macro computer. Each
+   * request selects it again, also after the user picked another; one not in
+   * the roster yet is selected once it arrives.
+   */
+  requestedAgent?: AgentRequest;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -141,9 +148,9 @@ export function NewChatPage(props: {
   const [agentId, setAgentId] = createSignal<string>();
   createEffect(
     on(
-      () => props.requestedAgentId,
+      () => props.requestedAgent,
       (requested) => {
-        if (requested) setAgentId(requested);
+        if (requested) setAgentId(requested.agentId);
       }
     )
   );
