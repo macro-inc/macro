@@ -31,12 +31,21 @@ impl std::error::Error for StorageDown {}
 impl ActivityRepo for FakeRepo {
     type Err = StorageDown;
 
-    async fn insert_activities(&self, _activities: &[Activity]) -> Result<(), Self::Err> {
+    async fn insert_activities(
+        &self,
+        activities: &[Activity],
+    ) -> Result<Vec<crate::domain::ports::ActivityReceipt>, Self::Err> {
         if self.fail {
             return Err(StorageDown);
         }
         self.log.lock().expect("log lock").push("insert");
-        Ok(())
+        Ok(activities
+            .iter()
+            .map(|activity| crate::domain::ports::ActivityReceipt {
+                activity_id: activity.id,
+                seq: Some(7),
+            })
+            .collect())
     }
 
     async fn purge_entities(&self, _entities: &[(EntityType, String)]) -> Result<(), Self::Err> {
@@ -58,6 +67,19 @@ impl ActivityRealtimePublisher for FakePublisher {
     }
     async fn publish_recorded(&self, _activities: &[Activity]) {
         self.log.lock().expect("log lock").push("publish");
+    }
+
+    async fn publish_recorded_with_receipts(
+        &self,
+        activities: &[Activity],
+        receipts: &[crate::domain::ports::ActivityReceipt],
+    ) {
+        assert_eq!(activities.len(), receipts.len());
+        for (activity, receipt) in activities.iter().zip(receipts) {
+            assert_eq!(receipt.activity_id, activity.id);
+            assert_eq!(receipt.seq, Some(7));
+        }
+        self.publish_recorded(activities).await;
     }
 }
 
@@ -94,6 +116,26 @@ async fn announces_only_after_a_successful_insert() {
         .await
         .expect("insert succeeds");
     assert_eq!(*log.lock().expect("log lock"), vec!["insert", "publish"]);
+}
+
+#[tokio::test]
+async fn forwards_commit_receipts_to_both_publishers() {
+    let log: CallLog = Arc::default();
+    let consumer = ActivityMaterializer::new(
+        FakeRepo {
+            log: log.clone(),
+            fail: false,
+        },
+        (
+            FakePublisher { log: log.clone() },
+            FakePublisher { log: log.clone() },
+        ),
+    );
+    consumer
+        .apply(Ingest::Insert(vec![activity()]))
+        .await
+        .unwrap();
+    assert_eq!(*log.lock().unwrap(), vec!["insert", "publish", "publish"]);
 }
 
 #[tokio::test]

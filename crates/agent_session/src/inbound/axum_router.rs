@@ -356,6 +356,15 @@ impl IntoResponse for AgentSessionApiError {
             // answers 409 with a reason rather than a 500 that reads as a bug
             // and buries the one fact worth showing a user.
             Self::Domain(AgentSessionError::Admission(error)) => error.into_response(),
+            Self::Domain(AgentSessionError::ReplyBusy(error)) => {
+                tracing::warn!(error = ?error, "agent reply admission is busy");
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(header::RETRY_AFTER, "1")],
+                    "agent reply is busy; retry the request",
+                )
+                    .into_response()
+            }
             Self::Domain(AgentSessionError::Disconnected(session_id)) => {
                 tracing::info!(%session_id, "action refused: the session's runtime is not connected");
                 (
@@ -1080,7 +1089,7 @@ pub(crate) fn control_principal(
         (status = 403, body = String),
         (status = 422, body = String),
         (status = 500, body = String),
-        (status = 503, description = "AI usage validation unavailable, or replica draining; retry later",
+        (status = 503, description = "AI usage validation unavailable, replica draining, or reply admission busy; retry later",
             content(
                 (AiAdmissionErrorBody = "application/json"),
                 (String = "text/plain"),
@@ -2159,6 +2168,15 @@ impl IntoResponse for CreateSessionApiError {
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
             Self::Domain(AgentSessionError::Admission(error)) => return error.into_response(),
+            Self::Domain(AgentSessionError::ReplyBusy(error)) => {
+                tracing::warn!(error = ?error, "agent reply admission is busy");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(header::RETRY_AFTER, "1")],
+                    "agent reply is busy; retry the request",
+                )
+                    .into_response();
+            }
             Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => {
                 return (
                     StatusCode::FORBIDDEN,
@@ -2317,7 +2335,12 @@ fn principal_owner(
         (status = 404, body = String),
         (status = 422, body = String),
         (status = 500, body = String),
-        (status = 503, description = "AI usage validation unavailable; retry later", body = AiAdmissionErrorBody),
+        (status = 503, description = "AI usage validation unavailable or reply admission busy; retry later",
+            content(
+                (AiAdmissionErrorBody = "application/json"),
+                (String = "text/plain"),
+            )
+        ),
     )
 )]
 /// Open an agent session served by an external runtime.

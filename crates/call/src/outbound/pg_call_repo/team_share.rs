@@ -29,6 +29,12 @@ use crate::domain::models::CallError;
 // levels) return `CallError`; plain database failures fold into `Internal`.
 impl From<sqlx::Error> for CallError {
     fn from(error: sqlx::Error) -> Self {
+        if matches!(&error, sqlx::Error::Io(error)
+            if error.get_ref().is_some_and(|source|
+                source.downcast_ref::<message_write_gate::AdmissionTimeout>().is_some()))
+        {
+            return Self::Contended(rootcause::Report::new(error).into());
+        }
         Self::Internal(error.into())
     }
 }

@@ -2,6 +2,128 @@ use super::*;
 use crate::domain::conversation_turns::{ConversationTurnState, ConversationTurnStore};
 use agent_fold::domain::model::{ProjectedSegment, Segment, SegmentKind};
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bootstrap_admission_rejection_keeps_the_command_queued_for_recovery(pool: sqlx::PgPool) {
+    let journal = pg_journal(&pool);
+    let (service, announcer, _, _container, mut command) =
+        journaled_conversation(pool, journal.clone()).await;
+    let original = journal
+        .get(mention_origin(&command).message_id, command.bot_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let source = macro_uuid::generate_uuid_v7();
+    mention_origin_mut(&mut command).message_id = source;
+    let queued = journal
+        .admit(original.session_id, original.channel_id, command.clone())
+        .await
+        .unwrap();
+    announcer.refuses_write_admission("parent is busy");
+    let error = service
+        .execute(
+            original.session_id,
+            HarnessCommand::ConversationMessage(command),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, HarnessError::ReplyBusy(_)));
+    assert_eq!(
+        journal
+            .by_action(queued.action_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
+        ConversationTurnState::Queued
+    );
+
+    announcer.recovers();
+    service.recover_conversations().await.unwrap();
+    let pending = journal.by_action(queued.action_id).await.unwrap().unwrap();
+    assert_eq!(pending.state, ConversationTurnState::Queued);
+    assert!(!pending.reply_finalized);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reply_admission_rejection_preserves_the_durable_reply_for_recovery(pool: sqlx::PgPool) {
+    let journal = pg_journal(&pool);
+    let (service, announcer, _, _container, command) =
+        journaled_conversation(pool, journal.clone()).await;
+    let source = mention_origin(&command).message_id;
+    let record = journal.get(source, command.bot_id).await.unwrap().unwrap();
+    let mut flight = record.in_flight.unwrap();
+    if flight.presented.is_empty() {
+        let reserved = macro_uuid::generate_uuid_v7();
+        flight.presented.push(reserved);
+        flight.announcement_message_id = Some(reserved);
+        journal
+            .record_flight(record.action_id, &flight)
+            .await
+            .unwrap();
+    }
+    let outcome = ReplyOutcome::Failed;
+    journal
+        .finish(
+            record.action_id,
+            ConversationTurnState::Failed,
+            outcome.clone(),
+        )
+        .await
+        .unwrap();
+    let original_ids = flight.presented.clone();
+    announcer.refuses_write_admission("parent is busy");
+    service
+        .inner
+        .resolve_reply(record.session_id, Some(&flight), outcome.clone())
+        .await;
+    let waiting = journal.by_action(record.action_id).await.unwrap().unwrap();
+    assert!(!waiting.reply_finalized);
+    assert_eq!(waiting.in_flight.unwrap().presented, original_ids);
+    assert!(announcer.presented().is_empty());
+
+    announcer.recovers();
+    service
+        .inner
+        .resolve_reply(record.session_id, Some(&flight), outcome)
+        .await;
+    let recovered = journal.by_action(record.action_id).await.unwrap().unwrap();
+    assert!(recovered.reply_finalized);
+    assert_eq!(recovered.in_flight.unwrap().presented, original_ids);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn durable_parent_is_rechecked_after_reply_admission(pool: sqlx::PgPool) {
+    let journal = pg_journal(&pool);
+    let (service, announcer, _, _container, command) =
+        journaled_conversation(pool, journal.clone()).await;
+    let source = mention_origin(&command).message_id;
+    let record = journal.get(source, command.bot_id).await.unwrap().unwrap();
+    let mut stale = record.in_flight.unwrap();
+    stale.announce.as_mut().unwrap().parent =
+        MessageParent::Channel(macro_uuid::generate_uuid_v7());
+    journal
+        .finish(
+            record.action_id,
+            ConversationTurnState::Failed,
+            ReplyOutcome::Failed,
+        )
+        .await
+        .unwrap();
+    service
+        .inner
+        .resolve_reply(record.session_id, Some(&stale), ReplyOutcome::Failed)
+        .await;
+    assert!(
+        !journal
+            .by_action(record.action_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .reply_finalized
+    );
+    assert!(announcer.presented().is_empty());
+}
+
 fn passage(index: u32, text: &str) -> ProjectedSegment {
     ProjectedSegment {
         segment: Segment {

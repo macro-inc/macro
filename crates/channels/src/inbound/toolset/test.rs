@@ -5,6 +5,7 @@ use super::{
     delete_channel_message::DeleteChannelMessage,
     edit_channel_message::EditChannelMessage,
     manage_channel_participants::{ManageChannelParticipants, ParticipantAction},
+    message_mutation_error,
     open_direct_message::OpenDirectMessage,
     parse_participants,
     react_to_channel_message::{ReactToChannelMessage, ReactionAction},
@@ -34,6 +35,7 @@ use entity_access::domain::{
     ports::{EntityAccessService, NoOpEntityAccessService},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use messages::domain::ports::MessageError;
 use std::{
     collections::HashMap,
     sync::{
@@ -84,6 +86,7 @@ impl RecordingMessages {
             id,
             parent: messages::domain::models::MessageParent::parse("channel", channel_id).unwrap(),
             thread_id: None,
+            import_order: None,
             sender_id: self
                 .stored_sender
                 .clone()
@@ -154,6 +157,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             id: Uuid::new_v4(),
             parent,
             thread_id: input.thread_id,
+            import_order: None,
             sender_id: sender,
             guest_name: None,
             imported_author: None,
@@ -244,6 +248,24 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
 
 #[async_trait::async_trait]
 impl messages::domain::api::MessageReader for RecordingMessages {
+    async fn channel_changes(
+        &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            messages::domain::service::MessageView,
+        >,
+        _: uuid::Uuid,
+        _: i64,
+    ) -> Result<messages::domain::changes::ChannelChanges, messages::domain::ports::MessageError>
+    {
+        unimplemented!()
+    }
+    async fn channel_seq(
+        &self,
+        _: uuid::Uuid,
+    ) -> Result<i64, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+
     async fn get(
         &self,
         access: EntityAccessReceipt<messages::domain::service::MessageView>,
@@ -258,6 +280,23 @@ impl messages::domain::api::MessageReader for RecordingMessages {
     ) -> Result<messages::domain::models::MessageThread, messages::domain::ports::MessageError>
     {
         unimplemented!("read path unused by mutation tools")
+    }
+    async fn get_root(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::ports::MessageTimelineEntry, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn thread_page(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+        _: messages::domain::ports::MessageThreadQuery,
+    ) -> Result<messages::domain::ports::MessageThreadPage, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
     }
     async fn timeline(
         &self,
@@ -930,6 +969,20 @@ fn mutation_errors_are_actionable_without_exposing_repository_details() {
         ChannelMutationErr::Repo(anyhow::anyhow!("database password leaked")),
     );
     assert_eq!(repository.description, "failed to rename the channel");
+}
+
+#[test]
+fn contended_message_mutation_has_retry_guidance_and_retains_the_internal_cause() {
+    let error = message_mutation_error("edit the message")(MessageError::Contended(
+        rootcause::report!("private database detail"),
+    ));
+
+    assert_eq!(error.description, "conversation is busy; retry the request");
+    let Some(MessageError::Contended(cause)) = error.internal_error.downcast_ref::<MessageError>()
+    else {
+        panic!("expected the typed contention cause");
+    };
+    assert!(cause.to_string().contains("private database detail"));
 }
 
 #[tokio::test]

@@ -13,6 +13,7 @@ import { SearchProvider } from '@app/features/soup/search/context';
 import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
 import { useCalendarCache } from '@app/lib/queries/calendar/graphql/use-calendar-cache';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
+import { useChannelCache } from '@app/lib/queries/messages/local/use-channel-cache';
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { MacOSNotificationUpdateRequiredError } from '@app/lib/tauri/notification';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -129,6 +130,7 @@ export function AppProviders(props: ParentProps) {
   useQuerySync(userId);
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
+  useChannelCache(() => userId() !== undefined);
   useWarmPromptDismissals(userId);
   useResumeFolderUploads(userId);
   useGlobalAttachableHistory();

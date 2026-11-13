@@ -52,6 +52,7 @@ macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 models_email = { path = "../../crates/models_email" }
+messages = { path = "../../crates/messages", default-features = false, features = ["outbound"] }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

@@ -182,6 +182,7 @@ fn message() -> Message {
         id: Uuid::from_u128(1),
         parent: MessageParent::Channel(CHANNEL),
         thread_id: None,
+        import_order: None,
         sender_id: SENDER.to_owned().try_into().unwrap(),
         triggered_via: None,
         triggered_by: None,
@@ -208,6 +209,7 @@ fn message() -> Message {
 
 fn event(change: MessageChange) -> MessageEvent {
     MessageEvent {
+        seq: None,
         parent: MessageParent::Channel(CHANNEL),
         actor: SENDER.to_owned(),
         nonce: Some("n1".into()),

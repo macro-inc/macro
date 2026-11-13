@@ -359,6 +359,7 @@ fn message_mutation_error(action: &'static str) -> impl FnOnce(MessageError) -> 
                 "not allowed to {action}: only the message's author or a channel admin or owner can change it"
             ),
             MessageError::Invalid(message) => (*message).to_string(),
+            MessageError::Contended(_) => err.to_string(),
             MessageError::Conflict | MessageError::Repository(_) => format!("failed to {action}"),
         };
         ToolCallError {

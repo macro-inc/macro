@@ -30,6 +30,20 @@ use super::{
 const USER: &str = "macro|commenter@example.com";
 const DOCUMENT: Uuid = Uuid::from_u128(0x019fd3b9_3c6c_7c05_89c2_a27f0121813b);
 
+#[test]
+fn contended_comment_has_retry_guidance_and_retains_the_internal_cause() {
+    let error = super::comment_error("unable to post comment")(MessageError::Contended(
+        rootcause::report!("private database detail"),
+    ));
+
+    assert_eq!(error.description, "conversation is busy; retry the request");
+    let Some(MessageError::Contended(cause)) = error.internal_error.downcast_ref::<MessageError>()
+    else {
+        panic!("expected the typed contention cause");
+    };
+    assert!(cause.to_string().contains("private database detail"));
+}
+
 /// Records the comment threads the tool posts.
 #[derive(Clone, Default)]
 pub(in crate::inbound::toolset) struct FakeMessages {
@@ -40,6 +54,24 @@ pub(in crate::inbound::toolset) struct FakeMessages {
 
 #[async_trait::async_trait]
 impl MessageReader for FakeMessages {
+    async fn channel_changes(
+        &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            messages::domain::service::MessageView,
+        >,
+        _: uuid::Uuid,
+        _: i64,
+    ) -> Result<messages::domain::changes::ChannelChanges, messages::domain::ports::MessageError>
+    {
+        unimplemented!()
+    }
+    async fn channel_seq(
+        &self,
+        _: uuid::Uuid,
+    ) -> Result<i64, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+
     async fn get(
         &self,
         _access: EntityAccessReceipt<MessageView>,
@@ -53,6 +85,23 @@ impl MessageReader for FakeMessages {
         _root: Uuid,
     ) -> Result<MessageThread, MessageError> {
         panic!("unexpected get_thread call")
+    }
+    async fn get_root(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::ports::MessageTimelineEntry, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn thread_page(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+        _: messages::domain::ports::MessageThreadQuery,
+    ) -> Result<messages::domain::ports::MessageThreadPage, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
     }
     async fn timeline(
         &self,
@@ -114,6 +163,7 @@ impl MessageCommands for FakeMessages {
             id: Uuid::from_u128(99),
             parent: MessageParent::parse("document", &access.entity().entity_id).unwrap(),
             thread_id: input.thread_id,
+            import_order: None,
             sender_id: ChannelSender::try_from(
                 bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
             )

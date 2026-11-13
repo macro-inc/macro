@@ -71,6 +71,7 @@ fn posted(
         mentions: vec![],
         guest_name: None,
         imported_author: None,
+        import_order: None,
         content: content.into(),
         created_at: at(minute),
         updated_at: at(minute),
@@ -184,6 +185,10 @@ async fn a_failed_read_is_not_mistaken_for_a_gone_message() {
         (MessageError::Forbidden, true),
         (
             MessageError::Repository(rootcause::report!("connection reset")),
+            false,
+        ),
+        (
+            MessageError::Contended(rootcause::report!("channel counter lock timed out")),
             false,
         ),
     ] {

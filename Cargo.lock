@@ -587,6 +587,7 @@ dependencies = [
  "macro_uuid",
  "mcp_client",
  "mcp_select",
+ "message_write_gate",
  "messages",
  "model",
  "model-entity",
@@ -4061,6 +4062,7 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_tower_layers",
+ "messages",
  "models_email",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -4102,6 +4104,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bot_id",
+ "channel_change_db_utils",
  "channels",
  "chrono",
  "cloudfront_sign",
@@ -4124,6 +4127,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "message_write_gate",
  "messages",
  "mockall",
  "model-entity",
@@ -4351,6 +4355,18 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "channel_change_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "sqlx",
+ "tokio",
  "uuid",
  "workspace-hack",
 ]
@@ -4995,6 +5011,8 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
+ "messages",
+ "mockall",
  "model-entity",
  "model_notifications",
  "model_owner",
@@ -5018,6 +5036,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "work_feed",
  "workspace-hack",
@@ -6760,6 +6779,7 @@ dependencies = [
  "calendar_events",
  "call",
  "channel_bots",
+ "channel_change_db_utils",
  "channel_labels",
  "channels",
  "chat",
@@ -6799,6 +6819,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_channel",
  "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
@@ -6837,6 +6858,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
+ "message_write_gate",
  "messages",
  "mockall",
  "model",
@@ -9392,13 +9414,18 @@ dependencies = [
 name = "graphql_channel"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-graphql",
  "channels",
  "chrono",
  "entity_access",
  "graphql_common",
  "macro_user_id",
+ "messages",
+ "nom 8.0.0",
+ "serde_json",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -13346,6 +13373,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "message_write_gate"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "messages"
 version = "0.1.0"
 dependencies = [
@@ -13354,6 +13390,7 @@ dependencies = [
  "async-trait",
  "axum",
  "bot_id",
+ "channel_change_db_utils",
  "channel_sender",
  "chrono",
  "connection_gateway_client",
@@ -13368,6 +13405,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
+ "message_write_gate",
  "mockall",
  "model",
  "model-entity",
@@ -19263,6 +19301,7 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
+ "message_write_gate",
  "messages",
  "reqwest 0.13.4",
  "rootcause",

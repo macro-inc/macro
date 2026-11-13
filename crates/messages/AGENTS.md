@@ -12,8 +12,15 @@ they need.
 - `src/domain/models.rs`: shared message/thread models.
 - `src/domain/service.rs` + `src/domain/ports.rs`: use-case orchestration and
   the repository/delivery ports (feature `ports`).
+- `src/domain/changes.rs` + `src/domain/service/changes.rs`: authorized channel
+  catch-up pages and 30-day change-log retention; `channel_changes` includes
+  tombstones and the root of each changed reply, with 200 log rows per page.
+- `crates/channel_change_db_utils`: owns counter/log SQL; message adapters pass
+  transaction boundaries and policy limits to it, then map rows to domain types.
+  DSS composes atomic activity logging; the call repository appends root changes.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
-  adapters call through.
+  adapters call through; `thread_page` adds bounded reply windows while
+  `get_thread` preserves the complete REST thread read.
 - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
 - `src/inbound/toolset.rs`: the AI tools for any entity's Discussion
   (`ReadDiscussion`, `Comment`, `EditComment`, `DeleteComment`,
@@ -26,7 +33,13 @@ they need.
 - `src/domain/service/guest_chat.rs` + `src/inbound/guest_chat.rs`: live guest
   call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
-  adapters (feature `outbound`).
+  adapters (feature `outbound`); `pg_message_repo/thread.rs` pages replies
+  by `(import_order NULLS LAST, created_at, id)` using the thread-order index.
+- `src/outbound/pg_message_repo/write_hydration.rs`: channel writes hydrate in
+  one indexed statement (plus a bot lookup when needed); other parents keep
+  their existing statements.
+- `src/outbound/pg_message_repo/change_log.rs`: append channel changes as the
+  final statement before commit; other message parents run no extra statements.
 - `src/outbound/connection_gateway.rs`, `notification_sender.rs`, `broker.rs`:
   realtime/notification delivery adapters (features `outbound`/`broker`).
 
@@ -41,10 +54,11 @@ they need.
 
 - Depends on (by feature): `entity_access` (ports/inbound), `model` (annotations),
   `properties`/`models_properties`/`model_notifications`/`notification`
-  (delivery), `initiative` (outbound), `macro_event_broker`/`macro_event_topics`
-  (broker).
+  (delivery), `initiative` and `channel_change_db_utils` (outbound), `activity` models,
+  `macro_event_broker`/`macro_event_topics` (broker).
 - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
-  `channel_bots`, `channels`, `coding_agent_worker`, `crm`, `documents`,
+  `calendar_service`, `call`, `channel_bots`, `channels`, `coding_agent_worker`,
+  `crm`, `documents`,
   `lexical_client`, `lexical_mention_extractor`, `macro_db_client`,
   `soup_realtime`, `webhook`.
 
@@ -58,6 +72,8 @@ they need.
 ## Checks
 
 - `cargo test -p messages --all-features` (`SQLX_OFFLINE` unset).
+- `proofs/README.md`: reproducible local query plans for the channel change log,
+  hydration, retention, and writes on production-size synthetic fixtures.
 
 A finalized bot reply (`NotifyAsPostedMessage` edit by the bot itself) carries
 `completed_reply` on its patch event so agent triggers evaluate it like a new
@@ -76,14 +92,31 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 
 ## Gotchas
 
+- Acquire process-wide parent admission before a message write takes a database
+  connection; retain the permit through commit. The shared gate admits four
+  writes per `(entity type, id)` and rejects a two-second wait as retryable
+  `MessageError::Contended`. Caller-owned transactions acquire admission first.
+  Channel counter appends retain a five-second lock-timeout guard; ordinary
+  statement cancellation remains a repository error.
+- Channel change rows retain 30 days of history; the calendar outbox worker
+  runs their bounded hourly prune even when calendar sync is disabled. Changes
+  pages cover 200 rows; a pruned position, a reset row, or a lag over 1,000
+  requires a fresh snapshot. Realtime pushes carry the committed sequence.
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
+- Channel change-log rows and their counters are read in one snapshot; retention
+  removes a prefix, so the first retained sequence minus one is the resume floor.
+  Keep counters after pruning so sequence numbers are never reused.
 - A call chat's first message is a normal `MessageKind::Message` root; deleting it tombstones only
   that message and keeps the thread and replies available for later posts.
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
+
+- Thread summaries count live replies on each page. With stale statistics after a
+  very large import, an ordinary-reply page can also scan that thread's imported
+  prefix; keep this cost visible when changing the thread queries.
 
 ## Related
 

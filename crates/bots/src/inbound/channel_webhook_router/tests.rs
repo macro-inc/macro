@@ -37,6 +37,44 @@ use tower::ServiceExt;
 
 const DEFAULT_BEARER_TOKEN: &str = "macro|bot-admin@example.com";
 
+#[tokio::test]
+async fn contended_channel_webhook_is_retryable_without_exposing_the_database_cause() {
+    let response = ChannelBotWebhookHandlerErr::Message(MessageError::Contended(
+        rootcause::report!("private database detail"),
+    ))
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(response.headers()[RETRY_AFTER], "1");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({"message": "conversation is busy; retry the request"})
+    );
+}
+
+#[tokio::test]
+async fn other_webhook_failures_do_not_claim_channel_contention() {
+    let response = ChannelBotWebhookHandlerErr::Message(MessageError::Repository(
+        rootcause::report!("private database detail"),
+    ))
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(!response.headers().contains_key(RETRY_AFTER));
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({"message": "message operation failed"})
+    );
+}
+
 #[derive(Clone)]
 enum TestCreateMode {
     Ok(CreateChannelScopedBotResponse),
@@ -576,6 +614,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                 sender_id: actor,
                 guest_name: None,
                 imported_author: None,
+                import_order: None,
                 bot_profile: None,
                 mentions: Vec::new(),
                 triggered_via: None,

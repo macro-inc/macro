@@ -1157,7 +1157,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
-        let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
+        let activity_repo = crate::service::activity::PgChannelActivityRepo::new(db.clone());
         let activity_realtime = activity::domain::announcements::ActivityAnnouncements::new(
             activity::KafkaActivityRealtimePublisher::new(macro_event_broker.clone()),
             crate::service::activity::EntityAccessActivityAudience::new(
@@ -1431,6 +1431,10 @@ async fn run_server() -> anyhow::Result<()> {
             message_service.clone(),
             call_service.clone(),
         ),
+    );
+    let graphql_channel_context = graphql_channel::ChannelGraphqlContext::new(
+        message_service.clone(),
+        entity_access_service.clone(),
     );
     let messages_state = messages::inbound::axum_router::MessagesRouterState {
         service: message_service.clone(),
@@ -2562,6 +2566,7 @@ async fn run_server() -> anyhow::Result<()> {
             scheduled_action_read_service,
         ),
         graphql_contacts_context,
+        graphql_channel_context,
         graphql_calendar_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(

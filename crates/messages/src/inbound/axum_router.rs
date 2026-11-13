@@ -1,8 +1,12 @@
 use crate::domain::{api::MessageServiceApi, models::*, ports::*};
+
+#[cfg(test)]
+mod test;
+
 use axum::{
     Json, Router,
     extract::{FromRef, Path, Query, State},
-    http::StatusCode,
+    http::{HeaderValue, StatusCode, header::RETRY_AFTER},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -165,6 +169,13 @@ impl IntoResponse for MessageHttpError {
             MessageError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             MessageError::Invalid(message) => (StatusCode::BAD_REQUEST, message),
             MessageError::Conflict => (StatusCode::CONFLICT, "message id already exists"),
+            MessageError::Contended(error) => {
+                tracing::warn!(error=?error, "channel sequence is contended");
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "conversation is busy; retry the request",
+                )
+            }
             MessageError::Repository(error) => {
                 tracing::error!(error=?error, "message request failed");
                 (
@@ -173,7 +184,14 @@ impl IntoResponse for MessageHttpError {
                 )
             }
         };
-        (status, Json(serde_json::json!({ "message": message }))).into_response()
+        let mut response =
+            (status, Json(serde_json::json!({ "message": message }))).into_response();
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from_static("1"));
+        }
+        response
     }
 }
 
@@ -234,7 +252,7 @@ fn path_id(path: &ParentPath) -> Result<Uuid, MessageHttpError> {
         .ok_or_else(|| MessageError::Invalid("message id required").into())
 }
 
-#[utoipa::path(operation_id = "entity_message_create", post, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path)), request_body = PostMessage, responses((status = 200, body = Message)))]
+#[utoipa::path(operation_id = "entity_message_create", post, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path)), request_body = PostMessage, responses((status = 200, body = Message), (status = 503, description = "Channel is busy; retry after Retry-After seconds")))]
 /// Create a root message or reply.
 pub async fn create<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
@@ -306,7 +324,7 @@ where
     ))
 }
 
-#[utoipa::path(operation_id = "entity_message_edit", patch, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = MessagePatch, responses((status = 200, body = Message)))]
+#[utoipa::path(operation_id = "entity_message_edit", patch, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = MessagePatch, responses((status = 200, body = Message), (status = 503, description = "Channel is busy; retry after Retry-After seconds")))]
 /// Edit an owned message.
 pub async fn edit<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
@@ -337,7 +355,7 @@ pub struct NonceQuery {
     pub nonce: Option<String>,
 }
 
-#[utoipa::path(operation_id = "entity_message_delete_message", delete, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = Message)))]
+#[utoipa::path(operation_id = "entity_message_delete_message", delete, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = Message), (status = 503, description = "Channel is busy; retry after Retry-After seconds")))]
 /// Tombstone one message; deleting a discussion's root deletes the discussion.
 pub async fn delete_message<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
@@ -372,7 +390,7 @@ pub struct ReactionInput {
     pub nonce: Option<String>,
 }
 
-#[utoipa::path(operation_id = "entity_message_react", post, path = "/messages/{parent_type}/{parent_id}/items/{id}/reactions", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ReactionInput, responses((status = 200, body = Message)))]
+#[utoipa::path(operation_id = "entity_message_react", post, path = "/messages/{parent_type}/{parent_id}/items/{id}/reactions", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ReactionInput, responses((status = 200, body = Message), (status = 503, description = "Channel is busy; retry after Retry-After seconds")))]
 /// Change the caller's reaction.
 pub async fn react<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
@@ -455,7 +473,7 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(operation_id = "entity_message_patch_thread", patch, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ThreadPatch, responses((status = 200, body = ThreadState)))]
+#[utoipa::path(operation_id = "entity_message_patch_thread", patch, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ThreadPatch, responses((status = 200, body = ThreadState), (status = 503, description = "Channel is busy; retry after Retry-After seconds")))]
 /// Update a discussion's lifecycle and placement.
 pub async fn patch_thread<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
@@ -479,7 +497,7 @@ where
     ))
 }
 
-#[utoipa::path(operation_id = "entity_message_delete_thread", delete, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = ThreadState)))]
+#[utoipa::path(operation_id = "entity_message_delete_thread", delete, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = ThreadState), (status = 503, description = "Channel is busy; retry after Retry-After seconds")))]
 /// Explicitly remove a discussion.
 pub async fn delete_thread<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,

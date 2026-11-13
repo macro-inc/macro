@@ -51,6 +51,7 @@ fn message(n: u128, root: Option<u128>, content: &str) -> Message {
         sender_id: ChannelSender::new_from_user(user()),
         guest_name: None,
         imported_author: None,
+        import_order: None,
         bot_profile: None,
         mentions: vec![],
         triggered_via: None,

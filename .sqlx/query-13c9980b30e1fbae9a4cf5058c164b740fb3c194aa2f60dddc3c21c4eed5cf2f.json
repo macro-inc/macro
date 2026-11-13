@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM channel_change_log\n            WHERE ctid = ANY(ARRAY(\n                SELECT ctid FROM channel_change_log\n                WHERE created_at < $1\n                ORDER BY created_at, channel_id, seq\n                LIMIT $2\n            ))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "13c9980b30e1fbae9a4cf5058c164b740fb3c194aa2f60dddc3c21c4eed5cf2f"
+}

@@ -181,12 +181,9 @@ where
         let Some(store) = &self.external_replies else {
             return Ok(());
         };
-        let claim = store.claim(session_id, action_id).await?;
-        tracing::Span::current().record("external_reply.claimed", claim.is_some());
-        let Some(_lease) = claim else {
-            return Ok(());
-        };
-        let Some(mut reply) = store.get(session_id, action_id).await? else {
+        // This read holds no lease: admission must not wait while retaining a
+        // journal connection. Reread the durable target under the lease below.
+        let Some(reply) = store.get(session_id, action_id).await? else {
             return Ok(());
         };
         if reply.finalized {
@@ -195,77 +192,101 @@ where
         let Some(target) = reply.target else {
             return Ok(());
         };
-        if let Err(error) = self
-            .prompt_context
-            .authorize_origin(&target.actor, &target.origin)
-            .await
-        {
-            if matches!(error, HarnessError::InvalidOrigin(_)) {
+        let admitted_parent = target.origin.parent;
+        let reconcile = async {
+            let claim = store.claim(session_id, action_id).await?;
+            tracing::Span::current().record("external_reply.claimed", claim.is_some());
+            let Some(_lease) = claim else {
+                return Ok(());
+            };
+            let Some(mut reply) = store.get(session_id, action_id).await? else {
+                return Ok(());
+            };
+            if reply.finalized {
+                return Ok(());
+            }
+            let Some(target) = reply.target else {
+                return Ok(());
+            };
+            if target.origin.parent != admitted_parent {
+                tracing::warn!(%session_id, %action_id, "external reply parent changed before admission");
+                return Ok(());
+            }
+            if let Err(error) = self
+                .prompt_context
+                .authorize_origin(&target.actor, &target.origin)
+                .await
+            {
+                if matches!(error, HarnessError::InvalidOrigin(_)) {
+                    store.finalize(session_id, action_id).await?;
+                }
+                return Err(error);
+            }
+            if reply.completion.is_none() {
+                use agent_session::domain::action_history::RecordedAction;
+                let completion = match self.sessions.recorded_action(session_id, action_id).await? {
+                    Some(RecordedAction::Finished {
+                        turn,
+                        stop,
+                        last_text,
+                        ..
+                    }) => Some(ExternalReplyCompletion {
+                        turn,
+                        outcome: ReplyOutcome::of_turn(&stop, last_text),
+                    }),
+                    Some(RecordedAction::Interrupted { turn }) => Some(ExternalReplyCompletion {
+                        turn,
+                        outcome: ReplyOutcome::Failed,
+                    }),
+                    Some(RecordedAction::Running { .. }) | None => None,
+                };
+                if let Some(completion) = completion {
+                    store.complete(session_id, action_id, &completion).await?;
+                    reply.completion = Some(completion);
+                }
+            }
+            let session = self.sessions.get_session(session_id).await?;
+            // Posting a reserved ID is idempotent and never overwrites a completed
+            // or deleted message. A lost post response can therefore be retried.
+            if !reply.announced {
+                self.announcer
+                    .announce(SessionAnnouncement {
+                        reply_message_id: Some(target.message_id),
+                        reply_placement: target.origin.reply_placement,
+                        reuse_origin_message: false,
+                        session_id,
+                        bot_id: session.bot_id,
+                        is_coding: false,
+                        origin_parent: target.origin.parent.clone(),
+                        origin_thread_id: target.origin.thread_id,
+                        origin_message_id: target.origin.message_id,
+                        prompted_message_id: MessageId::first(AuthorKind::User),
+                        prompted_content: String::new(),
+                        triggered_by: target.actor.clone(),
+                    })
+                    .await?;
+                store.mark_announced(session_id, action_id).await?;
+            }
+            if let Some(completion) = reply.completion {
+                self.announcer
+                    .resolve(ResolvedReply {
+                        session_id,
+                        bot_id: session.bot_id,
+                        is_coding: false,
+                        message_id: target.message_id,
+                        origin_parent: target.origin.parent,
+                        triggered_by: target.actor,
+                        outcome: completion.outcome,
+                        turn: completion.turn,
+                        segments: Vec::new(),
+                    })
+                    .await?;
                 store.finalize(session_id, action_id).await?;
             }
-            return Err(error);
-        }
-        if reply.completion.is_none() {
-            use agent_session::domain::action_history::RecordedAction;
-            let completion = match self.sessions.recorded_action(session_id, action_id).await? {
-                Some(RecordedAction::Finished {
-                    turn,
-                    stop,
-                    last_text,
-                    ..
-                }) => Some(ExternalReplyCompletion {
-                    turn,
-                    outcome: ReplyOutcome::of_turn(&stop, last_text),
-                }),
-                Some(RecordedAction::Interrupted { turn }) => Some(ExternalReplyCompletion {
-                    turn,
-                    outcome: ReplyOutcome::Failed,
-                }),
-                Some(RecordedAction::Running { .. }) | None => None,
-            };
-            if let Some(completion) = completion {
-                store.complete(session_id, action_id, &completion).await?;
-                reply.completion = Some(completion);
-            }
-        }
-        let session = self.sessions.get_session(session_id).await?;
-        // Posting a reserved ID is idempotent and never overwrites a completed
-        // or deleted message. A lost post response can therefore be retried.
-        if !reply.announced {
-            self.announcer
-                .announce(SessionAnnouncement {
-                    reply_message_id: Some(target.message_id),
-                    reply_placement: target.origin.reply_placement,
-                    reuse_origin_message: false,
-                    session_id,
-                    bot_id: session.bot_id,
-                    is_coding: false,
-                    origin_parent: target.origin.parent.clone(),
-                    origin_thread_id: target.origin.thread_id,
-                    origin_message_id: target.origin.message_id,
-                    prompted_message_id: MessageId::first(AuthorKind::User),
-                    prompted_content: String::new(),
-                    triggered_by: target.actor.clone(),
-                })
-                .await?;
-            store.mark_announced(session_id, action_id).await?;
-        }
-        if let Some(completion) = reply.completion {
-            self.announcer
-                .resolve(ResolvedReply {
-                    session_id,
-                    bot_id: session.bot_id,
-                    is_coding: false,
-                    message_id: target.message_id,
-                    origin_parent: target.origin.parent,
-                    triggered_by: target.actor,
-                    outcome: completion.outcome,
-                    turn: completion.turn,
-                    segments: Vec::new(),
-                })
-                .await?;
-            store.finalize(session_id, action_id).await?;
-        }
-        Ok(())
+            Ok(())
+        };
+        self.announcer
+            .with_write_admission(&admitted_parent, reconcile)
+            .await?
     }
 }

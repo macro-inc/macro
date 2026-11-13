@@ -25,6 +25,23 @@ use crate::outbound::pg_call_repo::PgCallRepo;
 
 const TEAM_ID: Uuid = Uuid::from_u128(0x7ea3_0000_0000_0000_0000_0000_0000_0001);
 
+#[test]
+fn only_typed_admission_failure_is_retryable() {
+    let admission = sqlx::Error::Io(std::io::Error::new(
+        std::io::ErrorKind::TimedOut,
+        message_write_gate::AdmissionTimeout,
+    ));
+    let CallError::Contended(cause) = CallError::from(admission) else {
+        panic!("admission must retain its retryable type");
+    };
+    assert!(cause.downcast_current_context::<sqlx::Error>().is_some());
+    let unrelated = sqlx::Error::Io(std::io::Error::new(
+        std::io::ErrorKind::TimedOut,
+        "network timeout",
+    ));
+    assert!(matches!(CallError::from(unrelated), CallError::Internal(_)));
+}
+
 fn level_request(level: Option<AccessLevel>) -> UpdateSharePermissionRequestV2 {
     UpdateSharePermissionRequestV2 {
         link_share: None,
