@@ -1350,7 +1350,12 @@ Team owners/admins can confirm requests and manage any booking. Assigned hosts c
 reschedule or cancel their own future confirmed bookings without admin access. Cancellation asks for confirmation before releasing the
 reserved time. The confirmation appears above the details; Cancel/Decline scrolls it
 into view and focuses Keep booking. Keep booking returns focus to Cancel/Decline. After a confirmed meeting ends, an assigned host or team admin can
-record attendance or a host/guest no-show in its details.
+record attendance or a host/guest no-show in its details. Tracked Macro calls also
+resolve attendance automatically after the booked window and overlapping call sessions
+end: a host alone is a guest
+no-show, a guest alone is a host no-show, and both sides joining is attended. Neither
+joining stays unknown. Manual choices override detection; clearing a choice resumes it.
+External meetings and older untracked calls still require a manual outcome.
 Open **Filters**, then the date-range control to choose From/Through dates and
 Apply dates (initially 30 days before and after today). On touch, Cancel discards
 the date draft and closes the filter drawer. Closing without applying keeps the
@@ -1368,7 +1373,7 @@ ranges, event/host filters, previous-period comparisons, event trends, meeting
 hours, no-shows, popular events, and host counts. Download exports the filtered
 bookings to CSV. Metrics use booking start dates in the default schedule’s time
 zone; failed/processing requests are excluded. Completed means ended confirmed
-bookings excluding recorded no-shows. Rescheduled counts bookings with recorded
+bookings excluding recorded or automatically detected no-shows. Rescheduled counts bookings with recorded
 reschedule history. Ratings/CSAT are not shown because no survey data is collected.
 Oversized result sets return an error instead of silently truncating insights.
 The top toolbar places the filter button beside **Download**. Touch uses the

@@ -62,7 +62,7 @@ export type Booking = {
         [key: string]: string;
     };
     /**
-     * Explicit attendance outcome; existing booking records default to unknown.
+     * Effective attendance on reads; stored manual outcomes override automatic detection.
      */
     attendance?: BookingAttendance;
     /**
@@ -126,7 +126,7 @@ export type Booking = {
 };
 
 /**
- * Attendance recorded by an assigned host or profile administrator after a meeting.
+ * Attendance recorded by a host or derived from observed Macro-call participation.
  */
 export type BookingAttendance = 'unknown' | 'attended' | 'guestNoShow' | 'hostNoShow';
 
@@ -1262,15 +1262,15 @@ export type InsightCounts = {
      */
     cancelled: number;
     /**
-     * Confirmed, ended bookings excluding explicit no-shows.
+     * Confirmed, ended bookings excluding recorded or automatically detected no-shows.
      */
     completed: number;
     /**
-     * Explicit guest no-shows only.
+     * Guest no-shows from recorded or observed attendance.
      */
     guestNoShow: number;
     /**
-     * Explicit host no-shows only.
+     * Host no-shows from recorded or observed attendance.
      */
     hostNoShow: number;
     /**

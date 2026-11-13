@@ -285,7 +285,7 @@ export function BookingDetailsDialog(props: {
                     label={`Attendance for ${props.booking.name}`}
                     value={props.booking.attendance ?? 'unknown'}
                     options={[
-                      { value: 'unknown', label: 'Not recorded' },
+                      { value: 'unknown', label: 'Automatic / not recorded' },
                       { value: 'attended', label: 'Attended' },
                       { value: 'guestNoShow', label: 'Guest no-show' },
                       { value: 'hostNoShow', label: 'Host no-show' },

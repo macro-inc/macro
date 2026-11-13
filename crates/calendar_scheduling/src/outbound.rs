@@ -1,5 +1,7 @@
 //! Persistence adapters for scheduling-owned data.
 #[cfg(feature = "calendar")]
+pub mod attendance;
+#[cfg(feature = "calendar")]
 pub mod macro_services;
 #[cfg(feature = "calendar")]
 pub mod meeting_links;

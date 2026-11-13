@@ -15,17 +15,17 @@ export interface InsightCounts {
    */
   cancelled: number;
   /**
-   * Confirmed, ended bookings excluding explicit no-shows.
+   * Confirmed, ended bookings excluding recorded or automatically detected no-shows.
    * @minimum 0
    */
   completed: number;
   /**
-   * Explicit guest no-shows only.
+   * Guest no-shows from recorded or observed attendance.
    * @minimum 0
    */
   guestNoShow: number;
   /**
-   * Explicit host no-shows only.
+   * Host no-shows from recorded or observed attendance.
    * @minimum 0
    */
   hostNoShow: number;

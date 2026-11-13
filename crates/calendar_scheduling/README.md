@@ -45,9 +45,16 @@ Booking queries accept a half-open `from`/`to` range of start times, up to 733 d
 complete range or a clear error when more than 5,000 records match. The management UI starts with a 61-day range and exposes date controls so large profiles can narrow it; round-robin balancing uses aggregate host counts and is independent of this list limit. Insights must not
 interpret failures as an empty dataset. Reschedule counts increase only after a
 successful move; old records default to zero, without reconstructing unknown history.
-Attendance defaults to unknown and may be recorded only after a confirmed meeting has
-ended, by a current assigned host or profile administrator. Elapsed confirmed meetings
-can be counted as completed, but this alone is not evidence of attendance.
+Attendance defaults to unknown. For confirmed, ended Macro-call bookings whose overlapping
+native call sessions are tracked and finished, reads derive attendance during the
+booking window: an assigned host without a guest is a guest no-show, and a guest without
+an assigned host is a host no-show. A guest is an anonymous participant or a signed-in
+human outside the assigned hosts; this does not verify the booker's email identity.
+Neither side joining leaves attendance unknown. Explicit host/admin outcomes take
+precedence; clearing one resumes automatic detection. External meetings and older,
+untracked Macro meetings remain manual. Live sessions or deleted evidence leave the result
+unknown; late webhook delivery can update an inferred result. Elapsed time alone never
+proves attendance.
 
 ## Verification
 

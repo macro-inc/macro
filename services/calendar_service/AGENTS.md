@@ -24,7 +24,8 @@ gateway `/calendar` prefix.
 
 - Depends on: `calendar_events`, `calendar_scheduling` (domain crates owning
   the Postgres/Google adapters), `connection_gateway_client`,
-  `authentication_service_client`, `macro_authorization`, `macro_service_urls`.
+  `authentication_service_client`, `macro_authorization`, `macro_service_urls`,
+  and the call domain's lightweight meeting-attendance reader.
 - Used by: the web app and SDK calendar clients, through the gateway.
 
 ## Recipes
@@ -42,6 +43,9 @@ gateway `/calendar` prefix.
 - `curl http://localhost:8088/health` after `just run_local`.
 
 ## Gotchas
+
+- Scheduling receives the call-owned attendance reader at the composition root;
+  only authorized booking reads derive outcomes, and manual attendance stays stored.
 
 - The API's server spans come from `macro_tower_layers` (`api::traced`).
   tower-http's default `TraceLayer` span is DEBUG, below the exporter's INFO

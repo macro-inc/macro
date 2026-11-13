@@ -178,7 +178,7 @@ pub enum BookingStatus {
     /// Calendar write failed; reservation retained for safe reconciliation.
     Failed,
 }
-/// Attendance recorded by an assigned host or profile administrator after a meeting.
+/// Attendance recorded by a host or derived from observed Macro-call participation.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -222,7 +222,7 @@ pub struct Booking {
     pub hosts: Vec<String>,
     /// Current lifecycle state.
     pub status: BookingStatus,
-    /// Explicit attendance outcome; existing booking records default to unknown.
+    /// Effective attendance on reads; stored manual outcomes override automatic detection.
     #[serde(default)]
     pub attendance: BookingAttendance,
     /// Number of successfully completed moves to a different start time.

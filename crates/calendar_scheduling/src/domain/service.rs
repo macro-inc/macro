@@ -1,10 +1,12 @@
 //! Scheduling use cases, authorization, and booking state transitions.
 use super::{
+    attendance::AttendanceSource,
     availability::{schedule_contains, slots_for_date, validate_profile},
     models::*,
     ports::*,
 };
 use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Scheduling domain service with replaceable persistence, directory, and calendars.
@@ -12,6 +14,7 @@ pub struct Service<R, C, D> {
     pub(super) repository: R,
     pub(super) calendars: C,
     pub(super) directory: D,
+    pub(super) attendance_source: Option<Arc<dyn AttendanceSource>>,
 }
 impl<R: Repository, C, D: Directory> Service<R, C, D> {
     /// Construct the scheduling use-case service.
@@ -20,7 +23,13 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
             repository,
             calendars,
             directory,
+            attendance_source: None,
         }
+    }
+    /// Use observed human participation to resolve otherwise unknown attendance.
+    pub fn with_attendance_source(mut self, source: impl AttendanceSource + 'static) -> Self {
+        self.attendance_source = Some(Arc::new(source));
+        self
     }
     /// Validate a saved booking destination for an authorized authoring integration.
     pub async fn validate_attachment(
@@ -584,10 +593,9 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             return Ok(vec![]);
         };
         self.authorize(user, &owner, false).await?;
-        Ok(self
-            .repository
-            .bookings(id, start, end)
-            .await?
+        let mut records = self.repository.bookings(id, start, end).await?;
+        self.enrich_attendance(&mut records, Utc::now()).await?;
+        Ok(records
             .into_iter()
             .map(|mut r| {
                 r.booking.question_labels = r
@@ -621,10 +629,13 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             ));
         }
         record.booking.attendance = attendance;
-        self.repository
-            .update_booking(record.clone(), BookingStatus::Confirmed)
+        let mut response = record.clone();
+        self.enrich_attendance(std::slice::from_mut(&mut response), Utc::now())
             .await?;
-        Ok(record.booking)
+        self.repository
+            .update_booking(record, BookingStatus::Confirmed)
+            .await?;
+        Ok(response.booking)
     }
     /// Approve a held booking, revalidating membership and calendar conflicts.
     pub async fn approve(&self, user: &str, id: Uuid) -> Result<Booking, Error> {
@@ -680,13 +691,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
     }
     /// Let a profile administrator open the booking's management page.
     pub async fn manage(&self, user: &str, id: Uuid) -> Result<BookingRecord, Error> {
-        let record = self.repository.booking(id).await?.ok_or(Error::NotFound)?;
+        let mut record = self.repository.booking(id).await?.ok_or(Error::NotFound)?;
         let owner = self
             .repository
             .profile(record.profile_id)
             .await?
             .ok_or(Error::NotFound)?;
         self.authorize_booking(user, &owner, &record).await?;
+        self.enrich_attendance(std::slice::from_mut(&mut record), Utc::now())
+            .await?;
         Ok(record)
     }
     /// Hosts may manage the meetings they host; anyone else needs admin rights.
@@ -701,6 +714,13 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
     }
     /// Read a booking using its unguessable booker capability.
     pub async fn receipt(&self, id: Uuid, token: Uuid) -> Result<BookingRecord, Error> {
+        let mut record = self.booker_record(id, token).await?;
+        self.enrich_attendance(std::slice::from_mut(&mut record), Utc::now())
+            .await?;
+        Ok(record)
+    }
+    // Mutation paths use the stored choice, never a derived display outcome.
+    async fn booker_record(&self, id: Uuid, token: Uuid) -> Result<BookingRecord, Error> {
         let record = self.repository.booking(id).await?.ok_or(Error::NotFound)?;
         if record.token != token {
             return Err(Error::NotFound);
@@ -717,7 +737,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         date: NaiveDate,
         zone: Option<chrono_tz::Tz>,
     ) -> Result<Vec<Slot>, Error> {
-        let record = self.receipt(id, token).await?;
+        let record = self.booker_record(id, token).await?;
         self.repository
             .consume_budget(record.profile_id, PublicBudget::Availability)
             .await?;
@@ -793,7 +813,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         token: Uuid,
         starts_at: DateTime<Utc>,
     ) -> Result<BookingRecord, Error> {
-        let mut record = self.receipt(id, token).await?;
+        let mut record = self.booker_record(id, token).await?;
         let original_start = record.booking.starts_at;
         let date = starts_at
             .with_timezone(&record.schedule.time_zone)

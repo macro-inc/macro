@@ -1,4 +1,5 @@
 //! Scheduling policy and capability contracts.
+pub mod attendance;
 pub mod availability;
 pub mod models;
 pub mod ports;

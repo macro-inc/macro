@@ -295,22 +295,30 @@ async fn main() -> anyhow::Result<()> {
             config.internal_api_key.to_string(),
         ),
     );
-    let scheduling_service = Arc::new(calendar_scheduling::domain::service::Service::new(
-        calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
-        calendar_scheduling::outbound::macro_services::MacroCalendars::with_meeting_links(
-            calendar_service.clone(),
-            calendar_mutation_service.clone(),
-            meeting_links.clone(),
-            match config.environment {
-                Environment::Production => Some("https://macro.com".into()),
-                Environment::Develop => Some("https://dev.macro.com".into()),
-                Environment::Local => None,
-            },
+    let scheduling_service = Arc::new(
+        calendar_scheduling::domain::service::Service::new(
+            calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
+            calendar_scheduling::outbound::macro_services::MacroCalendars::with_meeting_links(
+                calendar_service.clone(),
+                calendar_mutation_service.clone(),
+                meeting_links.clone(),
+                match config.environment {
+                    Environment::Production => Some("https://macro.com".into()),
+                    Environment::Develop => Some("https://dev.macro.com".into()),
+                    Environment::Local => None,
+                },
+            ),
+            calendar_scheduling::outbound::macro_services::MacroDirectory(
+                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+            ),
+        )
+        .with_attendance_source(
+            calendar_scheduling::outbound::attendance::MacroCallAttendance::new(
+                call::outbound::meeting_attendance::PgMeetingAttendanceReader::new(db.clone()),
+                reqwest::Url::parse(AppServiceUrl::new()?.as_str())?,
+            ),
         ),
-        calendar_scheduling::outbound::macro_services::MacroDirectory(
-            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
-        ),
-    ));
+    );
     if config.calendar_sync_enabled {
         worker_tracker.spawn(scheduling_recovery::run(
             scheduling_service.clone(),

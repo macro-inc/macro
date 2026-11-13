@@ -1575,7 +1575,7 @@
           },
           "attendance": {
             "$ref": "#/components/schemas/BookingAttendance",
-            "description": "Explicit attendance outcome; existing booking records default to unknown."
+            "description": "Effective attendance on reads; stored manual outcomes override automatic detection."
           },
           "email": {
             "type": "string",
@@ -1654,7 +1654,7 @@
       },
       "BookingAttendance": {
         "type": "string",
-        "description": "Attendance recorded by an assigned host or profile administrator after a meeting.",
+        "description": "Attendance recorded by a host or derived from observed Macro-call participation.",
         "enum": ["unknown", "attended", "guestNoShow", "hostNoShow"]
       },
       "BookingChange": {
@@ -3201,19 +3201,19 @@
           "completed": {
             "type": "integer",
             "format": "int32",
-            "description": "Confirmed, ended bookings excluding explicit no-shows.",
+            "description": "Confirmed, ended bookings excluding recorded or automatically detected no-shows.",
             "minimum": 0
           },
           "guestNoShow": {
             "type": "integer",
             "format": "int32",
-            "description": "Explicit guest no-shows only.",
+            "description": "Guest no-shows from recorded or observed attendance.",
             "minimum": 0
           },
           "hostNoShow": {
             "type": "integer",
             "format": "int32",
-            "description": "Explicit host no-shows only.",
+            "description": "Host no-shows from recorded or observed attendance.",
             "minimum": 0
           },
           "rescheduled": {

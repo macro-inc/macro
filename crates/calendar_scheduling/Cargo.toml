@@ -11,9 +11,10 @@ ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:anyhow"]
 postgres = ["dep:sqlx"]
 inbound = ["dep:axum", "dep:macro_authorization", "schema"]
 schema = ["dep:utoipa"]
-calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id", "dep:reqwest"]
+calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id", "dep:reqwest", "dep:call"]
 
 [dependencies]
+call = { path = "../call", default-features = false, features = ["attendance"], optional = true }
 reqwest = { workspace = true, optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }

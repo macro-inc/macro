@@ -579,7 +579,7 @@ export function InsightsPanel(props: {
                   />
                   <Metric
                     label="Events completed"
-                    definition="Confirmed bookings that have ended, excluding marked no-shows. This does not imply attendance was recorded."
+                    definition="Confirmed bookings that have ended, excluding no-shows. Completion alone does not prove attendance."
                     value={current().counts.completed}
                     previous={previous().counts.completed}
                   />
@@ -616,14 +616,14 @@ export function InsightsPanel(props: {
                   />
                   <Metric
                     label="No-show (host)"
-                    definition="Bookings explicitly marked as a host no-show. Unrecorded attendance is not treated as a no-show."
+                    definition="Bookings marked as a host no-show or detected from human participation in a tracked Macro call. Unknown attendance is not a no-show."
                     value={current().counts.hostNoShow}
                     previous={previous().counts.hostNoShow}
                     lowerIsBetter
                   />
                   <Metric
                     label="No-show (guest)"
-                    definition="Bookings explicitly marked as a guest no-show. Unrecorded attendance is not treated as a no-show."
+                    definition="Bookings marked as a guest no-show or detected from human participation in a tracked Macro call. Unknown attendance is not a no-show."
                     value={current().counts.guestNoShow}
                     previous={previous().counts.guestNoShow}
                     lowerIsBetter

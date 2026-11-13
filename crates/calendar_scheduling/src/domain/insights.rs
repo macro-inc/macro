@@ -33,15 +33,15 @@ pub struct InsightQuery {
 pub struct InsightCounts {
     /// All bookings except failed and processing requests.
     pub total: u32,
-    /// Confirmed, ended bookings excluding explicit no-shows.
+    /// Confirmed, ended bookings excluding recorded or automatically detected no-shows.
     pub completed: u32,
     /// Bookings with at least one completed reschedule, counted once.
     pub rescheduled: u32,
     /// Cancelled bookings, grouped by their scheduled start.
     pub cancelled: u32,
-    /// Explicit guest no-shows only.
+    /// Guest no-shows from recorded or observed attendance.
     pub guest_no_show: u32,
-    /// Explicit host no-shows only.
+    /// Host no-shows from recorded or observed attendance.
     pub host_no_show: u32,
 }
 impl InsightCounts {
