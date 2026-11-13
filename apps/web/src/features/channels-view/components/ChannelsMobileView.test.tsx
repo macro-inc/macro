@@ -12,6 +12,7 @@ import {
 import { createMemo, createRoot, createSignal, For, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolveChannelLabelMemberships } from '../core/smart-tags';
 import type { ChannelsDataSource } from '../queries';
 
 const mocks = vi.hoisted(() => ({
@@ -308,14 +309,30 @@ describe('mobile channel press feedback', () => {
 });
 
 describe('mobile section membership', () => {
-  it('reads a large rule section membership once instead of once per conversation', () => {
-    const channels = Array.from({ length: 1000 }, (_, index) => ({
+  it('indexes 10,000 name matches among 20,000 channels once per membership change', () => {
+    const channels = Array.from({ length: 20_000 }, (_, index) => ({
       ...channel,
       id: `channel-${index}`,
+      name: `${index < 10_000 ? 'Matching' : 'Different'} ${index}`,
     }));
-    const [memberIds, setMemberIds] = createStore(
-      channels.slice(0, 500).map(({ id }) => id)
+    const [matchedSection] = resolveChannelLabelMemberships(
+      [
+        {
+          id: 'large-rule',
+          name: 'Large rule',
+          rule: { attribute: 'name', contains: 'matching' },
+          channelIds: [],
+          explicitChannelIds: [],
+          channelCount: 0,
+          sortOrder: 0,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+      channels
     );
+    expect(matchedSection.channelIds).toHaveLength(10_000);
+    const [memberIds, setMemberIds] = createStore(matchedSection.channelIds);
     let memberReads = 0;
     const trackedIds = new Proxy(memberIds, {
       get(target, property, receiver) {
@@ -326,14 +343,8 @@ describe('mobile section membership', () => {
       },
     });
     const label: ChannelLabel = {
-      id: 'large-rule',
-      name: 'Large rule',
-      rule: { attribute: 'name', contains: 'channel' },
+      ...matchedSection,
       channelIds: trackedIds,
-      channelCount: memberIds.length,
-      sortOrder: 0,
-      createdAt: '',
-      updatedAt: '',
     };
     createRoot((dispose) => {
       try {
@@ -344,12 +355,21 @@ describe('mobile section membership', () => {
             labels: [label],
           })
         );
-        expect(matches()).toEqual(channels.slice(0, 500));
+        expect(matches()).toEqual(channels.slice(0, 10_000));
         expect(memberReads).toBeLessThanOrEqual(memberIds.length);
 
+        channels[19_999].name = 'Matching renamed';
+        const [renamedSection] = resolveChannelLabelMemberships(
+          [matchedSection],
+          channels
+        );
+        expect(renamedSection.channelIds).toHaveLength(10_001);
         memberReads = 0;
-        setMemberIds(0, 'channel-999');
-        expect(matches()).toEqual([...channels.slice(1, 500), channels[999]]);
+        setMemberIds(renamedSection.channelIds);
+        expect(matches()).toEqual([
+          ...channels.slice(0, 10_000),
+          channels[19_999],
+        ]);
         expect(memberReads).toBeLessThanOrEqual(memberIds.length);
       } finally {
         dispose();
