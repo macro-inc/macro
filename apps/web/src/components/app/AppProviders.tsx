@@ -40,6 +40,7 @@ import {
   useReopenTrackedEntitiesOnReconnect,
 } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
+import { useResumeFolderUploads } from '@service-storage/util/pendingFolderUploads';
 import { ImperativeDialogHost } from '@ui';
 import type { ParentProps } from 'solid-js';
 
@@ -128,6 +129,7 @@ export function AppProviders(props: ParentProps) {
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
   useWarmPromptDismissals(userId);
+  useResumeFolderUploads(userId);
   useGlobalAttachableHistory();
   useInterfaceLanguageSync();
 

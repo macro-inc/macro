@@ -670,6 +670,89 @@ service_url! {
 }
 
 service_url! {
+    /// Gmail REST API base. Google's host in every environment; override it
+    /// to run against `crates/gmail_emulator`.
+    pub struct GmailApiUrl {
+        local: "https://www.googleapis.com/gmail/v1",
+        dev: "https://www.googleapis.com/gmail/v1",
+        prod: "https://www.googleapis.com/gmail/v1",
+    }
+}
+
+service_url! {
+    /// Google Calendar REST API base. Google's host in every environment;
+    /// override it to run against `crates/gmail_emulator`.
+    pub struct GoogleCalendarApiUrl {
+        local: "https://www.googleapis.com/calendar/v3",
+        dev: "https://www.googleapis.com/calendar/v3",
+        prod: "https://www.googleapis.com/calendar/v3",
+    }
+}
+
+service_url! {
+    /// Google People API base. Google's host in every environment; override
+    /// it to run against `crates/gmail_emulator`.
+    pub struct GooglePeopleApiUrl {
+        local: "https://people.googleapis.com/v1",
+        dev: "https://people.googleapis.com/v1",
+        prod: "https://people.googleapis.com/v1",
+    }
+}
+
+service_url! {
+    /// Google's public keys for verifying Gmail push tokens. Google's host in
+    /// every environment; override it to run against `crates/gmail_emulator`.
+    pub struct GoogleOauthCertsUrl {
+        local: "https://www.googleapis.com/oauth2/v3/certs",
+        dev: "https://www.googleapis.com/oauth2/v3/certs",
+        prod: "https://www.googleapis.com/oauth2/v3/certs",
+    }
+}
+
+service_url! {
+    /// Google's OAuth authorization endpoint, where a browser goes to sign in
+    /// and consent. Google's host in every environment; override it to run
+    /// against `crates/gmail_emulator`. The override is opened by a browser,
+    /// so it names an address the browser reaches, not an in-network one.
+    pub struct GoogleOauthAuthorizationUrl {
+        local: "https://accounts.google.com/o/oauth2/v2/auth",
+        dev: "https://accounts.google.com/o/oauth2/v2/auth",
+        prod: "https://accounts.google.com/o/oauth2/v2/auth",
+    }
+}
+
+service_url! {
+    /// Google's OAuth token endpoint: authorization code exchange and token
+    /// refresh. Google's host in every environment; override it to run
+    /// against `crates/gmail_emulator`.
+    pub struct GoogleOauthTokenUrl {
+        local: "https://oauth2.googleapis.com/token",
+        dev: "https://oauth2.googleapis.com/token",
+        prod: "https://oauth2.googleapis.com/token",
+    }
+}
+
+service_url! {
+    /// Google's OAuth token revocation endpoint. Google's host in every
+    /// environment; override it to run against `crates/gmail_emulator`.
+    pub struct GoogleOauthRevokeUrl {
+        local: "https://oauth2.googleapis.com/revoke",
+        dev: "https://oauth2.googleapis.com/revoke",
+        prod: "https://oauth2.googleapis.com/revoke",
+    }
+}
+
+service_url! {
+    /// Microsoft Graph v1.0 API root. Microsoft's host in every environment;
+    /// override it to run against `crates/outlook_emulator`.
+    pub struct MicrosoftGraphUrl {
+        local: "https://graph.microsoft.com/v1.0/",
+        dev: "https://graph.microsoft.com/v1.0/",
+        prod: "https://graph.microsoft.com/v1.0/",
+    }
+}
+
+service_url! {
     /// Control and internal MCP surface of the live preview service.
     pub struct PreviewGatewayUrl {
         local: "http://localhost:8101/preview",

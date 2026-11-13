@@ -341,6 +341,14 @@ tools — hexagonal, heavily feature-gated.
   makes), and the discover span sums it as `outlook.provider_item_count`. It
   counts what the folder holds at the provider, imported or not, so an import
   is checked against it.
+- `email_sync_streams.reader_revision` is the folder reader revision a mail
+  folder stream's current delta round started at, written by `commit_page` on
+  the round's first page and copied by `rebind_work`. `domain/mailbox/reimport.rs`
+  restarts streams whose round started at an older revision (or none), Inbox
+  and Sent first, through the Outlook resync's reset limited to those folders;
+  a new query that copies or resets streams keeps the column consistent.
+  `PgMailboxSync::with_imports_paused` makes `claim_message` take only live
+  rows (`is_import IN (false,$2)` keeps both values named for the claim index).
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

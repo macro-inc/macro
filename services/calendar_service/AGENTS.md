@@ -41,12 +41,19 @@ gateway `/calendar` prefix.
 - `cargo test -p calendar_service` (`SQLX_OFFLINE` unset).
 - `curl http://localhost:8088/health` after `just run_local`.
 
+- Run it without a Google account: `crates/gmail_emulator` serves the
+  Calendar API and pushes to `/notifications`; its `AGENTS.md` lists the
+  overrides. A local stack with no Google client sets them by itself.
+
 ## Gotchas
 
 - The API's server spans come from `macro_tower_layers` (`api::traced`).
   tower-http's default `TraceLayer` span is DEBUG, below the exporter's INFO
   filter, so an API wrapped in it sends no server spans.
 
+- A calendar whose sync fails is isolated: the job completes, the calendar
+  keeps its error and failure count, and nothing retries it before the next
+  push or the five-minute poll, whatever `Retry-After` Google sent.
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by

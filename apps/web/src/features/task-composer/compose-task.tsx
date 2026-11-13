@@ -9,8 +9,8 @@ import {
   createTaskComposer,
   type TaskComposerHost,
 } from './primitives/task-composer';
-import { DesktopTaskComposer } from './views/desktop-task-composer';
-import { MobileTaskComposer } from './views/mobile-task-composer';
+import { MobileTaskComposer } from './views/mobile/task-composer';
+import { TaskComposer } from './views/task-composer';
 
 function createSplitTaskComposerHost(): TaskComposerHost {
   const splitPanel = useSplitPanelOrThrow();
@@ -65,7 +65,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   return (
     <Show
       when={isTouchDevice() && composer.isPopover()}
-      fallback={<DesktopTaskComposer composer={composer} />}
+      fallback={<TaskComposer composer={composer} />}
     >
       <MobileTaskComposer composer={composer} />
     </Show>

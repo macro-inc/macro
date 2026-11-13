@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: whatsapp-session-service
+    app.kubernetes.io/name: whatsapp-session-service
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: whatsapp-session-service
+  namespace: macro-kube-reference
+spec:
+  ports:
+    - name: p8080
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  publishNotReadyAddresses: false
+  selector:
+    app: whatsapp-session-service

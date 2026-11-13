@@ -56,6 +56,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false,
 macro_event_topics = { path = "../macro_event_topics", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
+mention_utils = { path = "../mention_utils" }
 mockall = { workspace = true, optional = true }
 model = { path = "../model", optional = true }
 model-entity = { path = "../model-entity", optional = true }
@@ -80,5 +81,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 initiative = { path = "../initiative", default-features = false, features = ["postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_uuid = { path = "../macro_uuid" }
 models_permissions = { path = "../models_permissions" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

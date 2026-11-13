@@ -105,7 +105,7 @@ PostHog unless the variable was set when it was built. With the flag off:
   the slash menu's **Database** and **Query** actions are absent, and no starter database is
   created.
 - The sidebar, mentions, search and Quick Access list no databases; Activity
-  and the ReadActivity tool leave out database rows.
+  and `macro.activity.mine()` leave out database rows.
 - A document's database answer shows its title (or "Database answer") as a
   plain label, keeps the node unchanged, and never loads the SQL engine.
 - Database tool calls in a chat render as a muted "Database tool" line.
@@ -582,18 +582,23 @@ A timeline draws one bar per record across its date-range column, on the shared
 Gantt chart: an all-day range spans whole days, and a range with times starts and
 ends at its exact times in the viewer's time zone. The chart is the whole view:
 the record list drawer at the left starts closed (**Show timeline items** opens
-it), beside **Today**, grid settings and zoom controls. A bar shows its record's
+it), and **Today**, grid settings and the **Timeline menu** sit at the top right
+over the header, with zoom controls at the bottom right. A bar shows its record's
 name, then, as room allows, its times (**9:30 AM – 4 PM** within a day,
 **Oct 9, 10:30 AM → Oct 13, 5 PM** across days; all-day bars show none), then
 its bar fields separated by middots. What does not fit drops whole from the
-end (fields first, then times); only a name longer than its bar is cut short.
+end (fields first, then times). A bar too short for its name, such as a one-day
+bar at month zoom or a meeting at week zoom, shows the name beside it, to its
+right, in muted text; it moves back inside once zooming in makes room. A bar
+field cut short (each shows at most about 160px) does not move the name out.
 Records with an empty range show a dashed chip with their name and **No
 dates** in their row at today (now at hours zoom), kept at the nearest visible
 edge when today is scrolled away; ungrouped, they sit under an **Undated**
 heading. Clicking a bar or chip, or Enter on it (they are focusable in row
 order), opens its record.
-The **Timeline menu** (the **⋯** above the chart, for anyone who can change the
-view) chooses **Time range** (which time-range column the bars span), **Bar label**
+The **Timeline menu** (the **⋯** after grid settings, for anyone who can change
+the view; above the message when the timeline has no time range column, or has
+no records and the viewer cannot add one) chooses **Time range** (which time-range column the bars span), **Bar label**
 (the column each record is named by, the table's first by default), **Bar
 fields** (other columns shown after the name, in the order turned on), **Group
 by** (**None**, or a single select or single person) and **Color by** (**None**,

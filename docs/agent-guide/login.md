@@ -26,6 +26,23 @@ completion without submitting that consumed code again. Queued edits stay preser
 and the app opens only after cleanup succeeds. Changing the email, going back or
 requesting another code starts a new attempt that must verify with the server.
 
+## Google sign-in on a local stack
+
+A local stack without real Google keys runs the Gmail emulator in Google's
+place (see [running locally](../development/running-locally.md#google-sign-in-and-gmail-without-a-google-account)).
+
+1. On `/app/welcome`, click `Continue with Google`. The browser goes through
+   FusionAuth to the emulator's page, titled `Choose an account`, at
+   `http://localhost:<gmail_emulator port>/o/oauth2/v2/auth`.
+2. Click the button of a seeded user, such as `Ada Example`. The scope
+   checkboxes below the list can stay checked.
+3. A first sign-in lands on onboarding at `/app/welcome`; its work email step
+   already shows `Work email connected` with the user's address. `Connect
+   personal email` on the next step opens the emulator's page again: pick
+   another seeded user to add that mailbox. A returning user lands in the app.
+4. `/app/mail` lists the seeded mail of every connected mailbox once the
+   backfill finishes, a few seconds after connecting.
+
 ## Agent accounts
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without

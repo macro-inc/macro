@@ -63,6 +63,9 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
     let google = GoogleIdp {
         client_id: "abc.apps.googleusercontent.com".into(),
         client_secret: "GOCSPX-real".into(),
+        authorization_endpoint: "http://localhost:8480/o/oauth2/v2/auth".into(),
+        token_endpoint: "http://gmail-emulator:8080/token".into(),
+        userinfo_endpoint: "http://gmail-emulator:8080/v1/userinfo".into(),
     };
     let doc = build(
         redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
@@ -108,6 +111,24 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
 
     let plain = &requests[google_idp]["body"]["identityProvider"];
     assert_eq!(plain["name"], "google");
+    assert_eq!(
+        plain["oauth2"]["authorization_endpoint"],
+        "http://localhost:8480/o/oauth2/v2/auth?prompt=consent&access_type=offline"
+    );
+    assert_eq!(
+        plain["oauth2"]["token_endpoint"],
+        "http://gmail-emulator:8080/token"
+    );
+
+    // The browser-facing endpoint names an instance port, so it stays out of
+    // the snapshot key; the in-network ones are the same for every instance.
+    let keyed = without_instance_urls(doc.clone());
+    let keyed_plain = &keyed["requests"][google_idp]["body"]["identityProvider"]["oauth2"];
+    assert!(keyed_plain.get("authorization_endpoint").is_none());
+    assert_eq!(
+        keyed_plain["token_endpoint"],
+        "http://gmail-emulator:8080/token"
+    );
     assert_eq!(plain["oauth2"]["scope"], "openid profile email");
     assert!(plain["lambdaConfiguration"].is_null());
 }
