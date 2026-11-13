@@ -1,0 +1,800 @@
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItemIds.ts
+  s_1656893481611a::t_6d2a6daf08e414 9-10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilterIds.ts
+  s_1656893481611a::t_32e7259dafb867 9-10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEvent.ts
+  s_1656893481611a::t_58452e1bfa4c86 1-16
+packages/sdk/src/events/hydrate/initiative.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-40
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentContentChanged.ts
+  s_1656893481611a::t_2f526da52b059b 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/audienceClass.ts
+  s_1656893481611a::t_e0959e0706acff 1-26
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_1656893481611a::t_9beaec695a4ed7 18429-18585,28212-28213,28227-28236,28245,28264-28273,28284-28303,29287-29320,31163-31179,31657-31724,31804-31853,31913-31951,32281-32292,32721-32770,33292-33296,33421-33470,33938-33966,35319-35323,35366-35480,38721-38830,39259-39293,40017-40029,43511-43515,43744-44018,44125-44354,44394-44648,45193-45206,48021-48130,49582-49601,49751-49813,51179-51243,51719-51729,52194-52228,53997-54088,54103-54137,54143-54156,56633-56637,56790-56884,57236-57345,57483-58268,59671-59675,65363-65382,65618-65708,65738-65820,65865-66019,66025-66048,67598,67601-67607,67613,67620,68179,68196,68201-68264,68267,68271,68274-68280,68286,68293,68300
+apps/web/src/lib/service-clients/service-storage/generated/schemas/streamEventsAliasParams.ts
+  s_1656893481611a::t_f78d44e45e95b5 1-25
+packages/sdk/tests/events-subscribe.test.ts
+  s_1656893481611a::t_ddd06f84b87314 30
+  s_1656893481611a::t_97524923241d91 1-29,31-332
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_1656893481611a::t_263862415230ce 39522-39592,83902-83903,83905,83915-83921,83950-83955,83958-83960,83965,83969,84014-84019,84022-84024,84029,84033,84048,84076-84081,84084-84086,84091,84095,84147-84152,84155-84157,84162,84166,84202-84207,84210-84212,84217,84221
+packages/sdk/src/events/hydrate/project.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-49
+packages/sdk/src/events/types.ts
+  s_1656893481611a::t_b33065fd2ea9c2 104
+  s_1656893481611a::t_6b04da27601e6d 77-84
+  s_1656893481611a::t_2bfd447fd152d7 66,72-74,85-86
+  s_1656893481611a::t_7bf0fef0ece4a8 11,13-14,16-18,20-22,48-52
+  s_1656893481611a::t_47cb0d3e864bae 55,87-103
+  s_48270cd6f8d6f1::t_868dae7f254594 8-9,53-54,56-58,65,105-110
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItem.ts
+  s_1656893481611a::t_3de8ca14e021e1 7,11-12,15-20,22-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_1656893481611a::t_1b9f9a74e274d8 209,255,257,260,273-279,287-289,311,355-361,409,432-438,484,571,576,579-593,907-921,969-973,1035,1387,1401-1415,1427-1457,1462-1476,1534,1753-1767,1911-1913,1929-1935,2041-2049,2104,2159-2163,2304-2311,2313-2317,2319,2538,2558-2570,2608-2622,2640-2708,2848,3347,3414-3415,3438-3442,3444-3447,3451-3471,3473-3475,3633,3681
+  s_1656893481611a::t_76b9b17e029a14 37-40
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOf.ts
+  s_1656893481611a::t_65edb753cab215 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOfEventType.ts
+  s_1656893481611a::t_47e4cc53427905 1-14
+packages/sdk/generated/storage/sdk.gen.ts
+  s_1656893481611a::t_a1cca40905501b 5,3274-3287,4857-4858,4860-4861
+packages/sdk/src/events/subscribe.ts
+  s_1656893481611a::t_39970fc3162e14 307-314
+  s_1656893481611a::t_e7569584a78f1f 6,189-190,230-232,234-242,248-251,253-259
+  s_1656893481611a::t_bdaa7c1b335652 1-5,7-10,11,13-90,95-125,128-188,193-223,225,233,243-247,252,260-271,291-306,315-322,326-338,343-355
+  s_1656893481611a::t_d37271e0e97481 126-127,323-325,339-342
+  s_1656893481611a::t_ddd06f84b87314 91-94,226-229
+  s_1656893481611a::t_52930c6314d9af 356-357
+  h_659b58cf3b37bf 12,191-192,224,272-290
+packages/sdk/generated/storage/types.gen.ts
+  s_1656893481611a::t_a1cca40905501b 231,233,236,238,240,242,244,246,248,250,1474-1478,1823-1879,1930-1954,2007-2040,2278-2287,2616-2639,2945-2949,3034-3057,3428-3449,4333-4337,4371-4426,6719-6766,7055-7072,7505-7509,9416-9421,9588-9784,9850-9944,9978-10145,10441-10451,12015-12062,13033-13043,13171-13210,14134-14163,14434-14438,14794-14811,15918-15969,15981-15999,16005-16014,17537-17541,17611-17652,17830-17878,17946-18575,19475-19479,23116-23133,23309-23389,23412-23478,23513-23577,23585-23606,24664-24671,24675-24676,25029-25033,25035,25038-25039,25043-25050,25054-25055,25061-25063,33452-33545,37549,37558-37559,37562-37567,37572,37577-37580,37585-37589
+  s_d4c2d696332a80::t_2f3e9cc8f3334b 232,234-235,237,239,241,243,245,247,249,251,37590-37592,37599,37601,37603,37608
+packages/sdk/AGENTS.md
+  s_1656893481611a::t_f92d3843c4701d 152-158
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilterEntityTypes.ts
+  s_1656893481611a::t_872cccf2330b8f 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/catalogEntry.ts
+  s_1656893481611a::t_e395743cceb889 1-21
+packages/sdk/tests/events.test.ts
+  s_1656893481611a::t_30477b2a6c697d 78
+  s_1656893481611a::t_b95ca224015e79 115-151
+packages/sdk/src/events/hydrate/chat.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-61
+packages/sdk/src/events/hydrate/form.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-11,16-50
+  s_1656893481611a::t_ddd06f84b87314 12-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_dc3811d434dcaa 1-14
+packages/sdk/specs/storage.json
+  s_1656893481611a::t_a1cca40905501b 18429-18585,28212-28213,28227-28236,28245,28264-28273,28284-28303,29287-29320,31163-31179,31657-31724,31804-31853,31913-31951,32281-32292,32721-32770,33292-33296,33421-33470,33938-33966,35319-35323,35366-35480,38721-38830,39259-39293,40017-40029,43511-43515,43744-44018,44125-44354,44394-44648,45193-45206,48021-48130,49582-49601,49751-49813,51179-51243,51719-51729,52194-52228,53997-54088,54103-54137,54143-54156,56633-56637,56790-56884,57236-57345,57483-58268,59671-59675,65363-65382,65618-65708,65738-65820,65865-66019,66025-66048,67598,67601-67607,67613,67620,68179,68196,68201-68264,68267,68271,68274-68280,68286,68293,68300
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentAppearanceChanged.ts
+  s_1656893481611a::t_e004aef5ed6b5c 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentAppearanceChangedOnBehalfOf.ts
+  s_1656893481611a::t_086b6b642386a7 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentPublicEvent.ts
+  s_1656893481611a::t_5d19292378118d 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/documentChangePublicEventOneOfThree.ts
+  s_1656893481611a::t_5d14b1b102ea26 1-17
+packages/sdk/src/macro.ts
+  s_1656893481611a::t_41643da514208a 125-142
+packages/sdk/src/events/hydrate/database.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-46
+packages/sdk/src/events/receiver.ts
+  s_1656893481611a::t_215fd8d67990b5 236
+  s_1656893481611a::t_7bf0fef0ece4a8 13,15-16,18-20,22,98,104,107,125-147
+  s_1656893481611a::t_ddd06f84b87314 85-86,220
+  s_1656893481611a::t_dd8785782f0e3e 3,24,26,32,34,60-84,87-91,148-168,200-219,221-235,237,242,247,249,288-289,291-292,311-312
+  s_1656893481611a::t_ff3db747a355d7 10-11,23,92-93,99-100,105-106,238-241,243-246,248,250-256,290,313-314,316-317,319-320,334,406-409
+  h_659b58cf3b37bf 8,321-329
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookScope.ts
+  s_1656893481611a::t_632618fd2cbd57 9-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilter.ts
+  s_1656893481611a::t_b3048220de3242 7,11-12,15-20,22-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentEditorOnBehalfOf.ts
+  s_1656893481611a::t_8cec3c818f968c 1-9
+packages/sdk/src/events/hydrate/document.ts
+  s_1656893481611a::t_7bf0fef0ece4a8 85-97
+packages/sdk/src/utils/verbs.ts
+  s_1656893481611a::t_7cfd171f9aea50 234,238
+apps/web/src/lib/service-clients/service-storage/generated/schemas/eventCatalog.ts
+  s_1656893481611a::t_0b823a9c8aedab 1-16
+packages/sdk/generated/storage/index.ts
+  s_1656893481611a::t_a1cca40905501b 4
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentContentChangedDocumentVersionId.ts
+  s_1656893481611a::t_9c1f20dc665ad5 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentAppearanceChangedActor.ts
+  s_1656893481611a::t_914bb52afebc24 1-11
+packages/sdk/src/events/hydrate/callRecord.ts
+  s_1656893481611a::t_7f2a409c0a82f9 1-47
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDocumentEditor.ts
+  s_1656893481611a::t_1db844b4492926 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/streamEventsParams.ts
+  s_1656893481611a::t_16c938bdff1430 15-16,19-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItemEntityTypes.ts
+  s_1656893481611a::t_77cdf9e9ef01b7 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/activityPublicEvent.ts
+  s_1656893481611a::t_4d3c5bc50895e9 1-13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/activityPublicEventOneOf.ts
+  s_1656893481611a::t_8820e4e0a87a37 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/activityPublicEventOneOfEventType.ts
+  s_1656893481611a::t_2ce06d0c51fe9f 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/activityRecorded.ts
+  s_1656893481611a::t_1a7671f4beae53 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botCreated.ts
+  s_1656893481611a::t_6c44084362b28b 1-31
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botDeleted.ts
+  s_1656893481611a::t_342d5c173baa08 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botField.ts
+  s_1656893481611a::t_78daf4f5c02405 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botPublicEvent.ts
+  s_1656893481611a::t_6a958eb1a2dd86 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botPublicEventOneOf.ts
+  s_1656893481611a::t_779b6214799f1b 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botPublicEventOneOfEventType.ts
+  s_1656893481611a::t_56817f6c407712 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botPublicEventOneOfFive.ts
+  s_1656893481611a::t_04c46994b511fa 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_1c19d6adc6c666 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botPublicEventOneOfThree.ts
+  s_1656893481611a::t_ed37e9f29027e7 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_7c14017bfeae34 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botUpdated.ts
+  s_1656893481611a::t_65b022a0e83e25 1-33
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botUpdatedHandle.ts
+  s_1656893481611a::t_ee4f397810f585 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/botUpdatedName.ts
+  s_1656893481611a::t_f3c8e65ceaf987 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarEventChange.ts
+  s_1656893481611a::t_d0de8f8b0ab391 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarPublicEvent.ts
+  s_1656893481611a::t_dcc36ccede6609 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarPublicEventOneOf.ts
+  s_1656893481611a::t_2e34e5c0c3f360 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarPublicEventOneOfEventType.ts
+  s_1656893481611a::t_eb9e9761db6e37 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarPublicEventOneOfFive.ts
+  s_1656893481611a::t_a6c30df4f811af 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_6a1753fab6eff5 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarPublicEventOneOfThree.ts
+  s_1656893481611a::t_2508a98d07638e 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/calendarPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_7abc4f727ef618 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordChange.ts
+  s_1656893481611a::t_ac7faeacf99a54 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordPublicEvent.ts
+  s_1656893481611a::t_3ae96fe88b4e50 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordPublicEventOneOf.ts
+  s_1656893481611a::t_080667d4c07818 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordPublicEventOneOfEventType.ts
+  s_1656893481611a::t_0668ab8f95f818 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordPublicEventOneOfFive.ts
+  s_1656893481611a::t_00506479dfabef 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_38dcf16fbf80b1 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordPublicEventOneOfThree.ts
+  s_1656893481611a::t_f1e7e9d19eb79e 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/callRecordPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_4f39eefd884be7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatChange.ts
+  s_1656893481611a::t_a5df11d9e8c7d6 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatMessageRole.ts
+  s_1656893481611a::t_708b0171437df2 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEvent.ts
+  s_1656893481611a::t_c58df65c2219c6 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOf.ts
+  s_1656893481611a::t_7f98d1bf1bf1ff 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfEventType.ts
+  s_1656893481611a::t_5f5263fa0db27b 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfFive.ts
+  s_1656893481611a::t_986bf867b6b5ff 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_22c4a0073a0e5b 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfNine.ts
+  s_1656893481611a::t_d5d97716eeecb5 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfNineEventType.ts
+  s_1656893481611a::t_0284cc24569f3f 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfOneone.ts
+  s_1656893481611a::t_ca7a9641087b5c 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfOneoneEventType.ts
+  s_1656893481611a::t_4b64ccd2b22363 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfOnethree.ts
+  s_1656893481611a::t_3148869a984306 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfOnethreeEventType.ts
+  s_1656893481611a::t_4d717c20ac4f82 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfSeven.ts
+  s_1656893481611a::t_302a4f7138c173 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_f9cff869c821cc 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfThree.ts
+  s_1656893481611a::t_8923ee2851b67a 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/chatPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_c9e6f31bd6b9e7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEvent.ts
+  s_1656893481611a::t_b9fb4958adaea3 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOf.ts
+  s_1656893481611a::t_afb9da6d82ab29 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfEventType.ts
+  s_1656893481611a::t_cefce38bcf1914 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfFive.ts
+  s_1656893481611a::t_4b1c18b9d7ea2a 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_35208085de34a7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfNine.ts
+  s_1656893481611a::t_23175cbe00f110 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfNineEventType.ts
+  s_1656893481611a::t_7cf71626254e06 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfOneone.ts
+  s_1656893481611a::t_4fe0caa9a9347b 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfOneoneEventType.ts
+  s_1656893481611a::t_ab30d2c1ae2887 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfOnethree.ts
+  s_1656893481611a::t_ae5f0332ee1b39 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfOnethreeEventType.ts
+  s_1656893481611a::t_1e5222c544675a 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfSeven.ts
+  s_1656893481611a::t_45e661b07988b9 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_6af48fa70c52d5 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfThree.ts
+  s_1656893481611a::t_7fea6543747d7e 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/databasePublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_dc78d5ef71a421 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailEventOrigin.ts
+  s_1656893481611a::t_9cca7357f60a0b 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLabel.ts
+  s_1656893481611a::t_e077e1188f4ed0 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLabelLabelId.ts
+  s_1656893481611a::t_28dab89d3ecd09 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLabelName.ts
+  s_1656893481611a::t_ae9fd593ba31dc 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLinkConnected.ts
+  s_1656893481611a::t_395ea20d732b29 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLinkDisconnected.ts
+  s_1656893481611a::t_fbee7dd89760c9 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLinkReauthRequired.ts
+  s_1656893481611a::t_e41064112621c2 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageDeleted.ts
+  s_1656893481611a::t_ab95daff9b8c70 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageReceived.ts
+  s_1656893481611a::t_3ff28445066e25 1-30
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageReceivedReceivedAt.ts
+  s_1656893481611a::t_d66282bdf73917 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendCancelled.ts
+  s_1656893481611a::t_ce1dd150b25693 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendCancelledActor.ts
+  s_1656893481611a::t_c8f8dc58652c87 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendQueued.ts
+  s_1656893481611a::t_bbde1919046487 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendQueuedActor.ts
+  s_1656893481611a::t_b4352fc03e7056 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSent.ts
+  s_1656893481611a::t_375a49d6b04fd9 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSentActor.ts
+  s_1656893481611a::t_2b592603fcfbcf 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEvent.ts
+  s_1656893481611a::t_6a970d469ce0d7 1-41
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOf.ts
+  s_1656893481611a::t_bbf63b3c596817 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfEventType.ts
+  s_1656893481611a::t_235e872c448f23 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfFive.ts
+  s_1656893481611a::t_b5d45b260ccad4 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_380e4902c099ae 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfNine.ts
+  s_1656893481611a::t_5cc2db412eb0aa 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfNineEventType.ts
+  s_1656893481611a::t_cf256dde7f79ed 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOnefive.ts
+  s_1656893481611a::t_22015e5cac0fb7 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOnefiveEventType.ts
+  s_1656893481611a::t_dbd6777aac7958 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOnenine.ts
+  s_1656893481611a::t_cff465214d6dee 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOnenineEventType.ts
+  s_1656893481611a::t_e32cd9eaf1faae 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOneone.ts
+  s_1656893481611a::t_ab2eacd2613706 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOneoneEventType.ts
+  s_1656893481611a::t_ff3f1693da4862 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOneseven.ts
+  s_1656893481611a::t_b8b1cf80bbec63 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOnesevenEventType.ts
+  s_1656893481611a::t_017d66312192a7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOnethree.ts
+  s_1656893481611a::t_eb1507093f7ac2 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfOnethreeEventType.ts
+  s_1656893481611a::t_b48470a3c8053d 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfSeven.ts
+  s_1656893481611a::t_ba3c5d0cd21e96 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_209ce6ffc5ecb7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfThree.ts
+  s_1656893481611a::t_8c75c4709df5d9 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_db7f74dfce076f 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwofive.ts
+  s_1656893481611a::t_021294905df8c3 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwofiveEventType.ts
+  s_1656893481611a::t_02eea18cd8f994 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwonine.ts
+  s_1656893481611a::t_b8ff88ece0bb95 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwonineEventType.ts
+  s_1656893481611a::t_fbc451b1d9e248 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwoone.ts
+  s_1656893481611a::t_d96a071fb8285b 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwooneEventType.ts
+  s_1656893481611a::t_c2650724f01e5d 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwoseven.ts
+  s_1656893481611a::t_b5164173e90eea 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwosevenEventType.ts
+  s_1656893481611a::t_7c547112cabf2a 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwothree.ts
+  s_1656893481611a::t_6b1d862ab1af25 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailPublicEventOneOfTwothreeEventType.ts
+  s_1656893481611a::t_913e67a0cc5181 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadArchived.ts
+  s_1656893481611a::t_c32bbb8af9182f 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadArchivedActor.ts
+  s_1656893481611a::t_87916268c98064 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadLabelsUpdated.ts
+  s_1656893481611a::t_a27131c0630ea8 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadLabelsUpdatedActor.ts
+  s_1656893481611a::t_695df7994083ed 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadProjectChanged.ts
+  s_1656893481611a::t_cc65d277e54112 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadProjectChangedPreviousProjectId.ts
+  s_1656893481611a::t_fb10b168c3008b 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadProjectChangedProjectId.ts
+  s_1656893481611a::t_037fb9215e496a 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadRead.ts
+  s_1656893481611a::t_38cbce99e6481a 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadReadActor.ts
+  s_1656893481611a::t_c2854c9f2457b0 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadSpamChanged.ts
+  s_1656893481611a::t_c419b13081dc22 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadSpamChangedActor.ts
+  s_1656893481611a::t_c6a675de478c31 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadStarred.ts
+  s_1656893481611a::t_2c8f8a72d11e57 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadStarredActor.ts
+  s_1656893481611a::t_687cd359086feb 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadTrashed.ts
+  s_1656893481611a::t_ffb61bc38f0dc8 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadTrashedActor.ts
+  s_1656893481611a::t_37e6b8cfb32a72 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEvent.ts
+  s_1656893481611a::t_2550844023d005 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOf.ts
+  s_1656893481611a::t_d7606a92dd328a 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfEventType.ts
+  s_1656893481611a::t_54176263ffc1d3 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfFive.ts
+  s_1656893481611a::t_2414adf2230b17 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_2fdc3555f510ca 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfNine.ts
+  s_1656893481611a::t_f3c9778cc66574 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfNineEventType.ts
+  s_1656893481611a::t_f543a8a17ed3bf 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfOneone.ts
+  s_1656893481611a::t_88da6fcfe36bcc 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfOneoneEventType.ts
+  s_1656893481611a::t_65b3193065b697 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfOnethree.ts
+  s_1656893481611a::t_1f4f6d12bfa8b1 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfOnethreeEventType.ts
+  s_1656893481611a::t_8f858c2d0432d3 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfSeven.ts
+  s_1656893481611a::t_58122d1705b4e3 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_63b1111ed4d3d8 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfThree.ts
+  s_1656893481611a::t_dfe9908c28789e 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/formPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_d14bc1448a9838 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubPullRequestPublicEvent.ts
+  s_1656893481611a::t_2f9a2bc45091c1 1-13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubPullRequestPublicEventOneOf.ts
+  s_1656893481611a::t_088f0b28199ab2 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubPullRequestPublicEventOneOfEventType.ts
+  s_1656893481611a::t_21d1f7054d729c 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubWebhookDelivery.ts
+  s_1656893481611a::t_8a1fded0e827e7 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubWebhookDeliveryAction.ts
+  s_1656893481611a::t_ac2f09fce6042e 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubWebhookDeliveryRepository.ts
+  s_1656893481611a::t_4fd4ef697ac70a 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubWebhookDeliveryRepositoryProperty.ts
+  s_1656893481611a::t_665604c5426bb3 1-10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubWebhookPublicEvent.ts
+  s_1656893481611a::t_8c8282e0ec95c0 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubWebhookPublicEventOneOf.ts
+  s_1656893481611a::t_0793b2b9434014 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/githubWebhookPublicEventOneOfEventType.ts
+  s_1656893481611a::t_a655cb57eecd53 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEvent.ts
+  s_1656893481611a::t_25138f7629ca36 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOf.ts
+  s_1656893481611a::t_7917713c9d79e5 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOfEventType.ts
+  s_1656893481611a::t_83734fb052024b 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOfFive.ts
+  s_1656893481611a::t_30c1881ef3c818 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_f812b374828d65 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOfSeven.ts
+  s_1656893481611a::t_151985cf3c3df8 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_e0a9eb9329c016 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOfThree.ts
+  s_1656893481611a::t_47e87cbe239b53 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/initiativePublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_14d9b31ba81652 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/linkDisconnectReason.ts
+  s_1656893481611a::t_7768cd861f9e37 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/mentionPublicEvent.ts
+  s_1656893481611a::t_fb81d5103356c4 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/mentionPublicEventOneOf.ts
+  s_1656893481611a::t_de781a36c35d17 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/mentionPublicEventOneOfEventType.ts
+  s_1656893481611a::t_c17513fdba393d 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/mentionPublicEventOneOfThree.ts
+  s_1656893481611a::t_44ed5d1202442b 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/mentionPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_e97a7947a852d5 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationChange.ts
+  s_1656893481611a::t_d05bbe0f47a84d 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationChangeOneOf.ts
+  s_1656893481611a::t_52accf31f46d3f 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationChangeOneOfChange.ts
+  s_1656893481611a::t_cc8faaad7b8685 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationChangeOneOfFour.ts
+  s_1656893481611a::t_057dac5bfaba27 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationChangeOneOfFourChange.ts
+  s_1656893481611a::t_2b6be94efcd86c 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationChangeOneOfViewedAt.ts
+  s_1656893481611a::t_c3abc789d7a505 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationCreated.ts
+  s_1656893481611a::t_11737a6b1f0d11 1-25
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationCreatedSenderId.ts
+  s_1656893481611a::t_bf226b9d9779cf 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationPublicEvent.ts
+  s_1656893481611a::t_f681df60cf99d5 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationPublicEventOneOf.ts
+  s_1656893481611a::t_f0cc7ff212c301 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationPublicEventOneOfEventType.ts
+  s_1656893481611a::t_2dfc4634913325 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationPublicEventOneOfThree.ts
+  s_1656893481611a::t_0b3fc191ae6688 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_f2a56398ec2a14 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/notificationUpdated.ts
+  s_1656893481611a::t_09ce49c8a96662 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectChange.ts
+  s_1656893481611a::t_17b314b4a138f7 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEvent.ts
+  s_1656893481611a::t_ad7b30f7933e89 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOf.ts
+  s_1656893481611a::t_ab471a2f323bdb 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfEventType.ts
+  s_1656893481611a::t_159b35c3191ef7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfFive.ts
+  s_1656893481611a::t_653dddf32d7d85 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_c75329862c092b 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfNine.ts
+  s_1656893481611a::t_4c27d5a6c2112a 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfNineEventType.ts
+  s_1656893481611a::t_a0b754a3130300 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfOneone.ts
+  s_1656893481611a::t_947f6ce9c01f21 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfOneoneEventType.ts
+  s_1656893481611a::t_3b1a57a9906405 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfSeven.ts
+  s_1656893481611a::t_0017b42518b3c1 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_0e3a5ef9017e8c 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfThree.ts
+  s_1656893481611a::t_ee216d80f06cfc 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/projectPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_70554d8e3bb4e3 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEvent.ts
+  s_1656893481611a::t_d2db631eb3e3b7 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOf.ts
+  s_1656893481611a::t_d5e0df8dc205b2 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfEventType.ts
+  s_1656893481611a::t_2949bbd47b7592 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfFive.ts
+  s_1656893481611a::t_8660b034058462 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_54548d41b1a5ea 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfNine.ts
+  s_1656893481611a::t_6fcd7f8040e293 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfNineEventType.ts
+  s_1656893481611a::t_407c7fdf5e57b8 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfOneone.ts
+  s_1656893481611a::t_f8e6e776e7971a 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfOneoneEventType.ts
+  s_1656893481611a::t_f814937ba9efc0 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfOnethree.ts
+  s_1656893481611a::t_3e2efc3791ce35 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfOnethreeEventType.ts
+  s_1656893481611a::t_db7dd608c7943f 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfSeven.ts
+  s_1656893481611a::t_3e5ef8e36b46ed 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_d43cfb99ea1b8d 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfThree.ts
+  s_1656893481611a::t_118cfa9a0c7501 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/propertyPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_86303ff40b3f68 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicActivity.ts
+  s_1656893481611a::t_e7abb49ab27a40 1-28
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicCallRecordDeleted.ts
+  s_1656893481611a::t_a8680ae82015c1 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicCallRecordDeletedActorUserId.ts
+  s_1656893481611a::t_a839cbb4fc4c5f 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicCallRecordImported.ts
+  s_1656893481611a::t_f54bed634d713d 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicCallRecordUpdated.ts
+  s_1656893481611a::t_e88939ea7b43b1 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicCallRecordUpdatedActorUserId.ts
+  s_1656893481611a::t_7d5121fe5009fc 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicCallRecordUpdatedChannelId.ts
+  s_1656893481611a::t_ff7033f067c499 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatCopied.ts
+  s_1656893481611a::t_e52b6b3fd837b6 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatCreated.ts
+  s_1656893481611a::t_703155d6fdcf14 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatCreatedProjectId.ts
+  s_1656893481611a::t_1ca094939be8c3 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatMessageDeleted.ts
+  s_1656893481611a::t_3d3f3fc8644cdb 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatMessageSent.ts
+  s_1656893481611a::t_9600fe270608de 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatMessageSentActorUserId.ts
+  s_1656893481611a::t_f1aa3b64b18519 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatTrash.ts
+  s_1656893481611a::t_758376ef61ff77 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatTrashActorUserId.ts
+  s_1656893481611a::t_060e41b5c68522 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicChatUpdated.ts
+  s_1656893481611a::t_af5cbada792166 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDatabaseChange.ts
+  s_1656893481611a::t_d2434c9c0d4e29 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDatabaseChangeActor.ts
+  s_1656893481611a::t_704cccf23cedc8 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDatabaseChangeOnBehalfOf.ts
+  s_1656893481611a::t_76e678e3ff03a1 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDatabaseCreated.ts
+  s_1656893481611a::t_408f10fd0703a7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDatabaseCreatedAllOf.ts
+  s_1656893481611a::t_f5093e44d6dc0f 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDatabaseTablesChanged.ts
+  s_1656893481611a::t_4e277b8400d480 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicDatabaseTablesChangedAllOf.ts
+  s_1656893481611a::t_9b5d1dd13f75f5 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertiesCleared.ts
+  s_1656893481611a::t_5acb041f3d10c5 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertiesClearedActor.ts
+  s_1656893481611a::t_eb83dac7007f64 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertiesClearedOnBehalfOf.ts
+  s_1656893481611a::t_80300f9420d558 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertyUpdated.ts
+  s_1656893481611a::t_2648ce5c4a3e35 1-36
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertyUpdatedActor.ts
+  s_1656893481611a::t_1d83b6e7bf2d60 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertyUpdatedOnBehalfOf.ts
+  s_1656893481611a::t_3435068d4cfb7c 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertyUpdatedPreviousValue.ts
+  s_1656893481611a::t_a61c7691a9b21c 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicEntityPropertyUpdatedValue.ts
+  s_1656893481611a::t_1de1e8295313a2 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicFormChange.ts
+  s_1656893481611a::t_807c35237c5da2 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicFormChangeActor.ts
+  s_1656893481611a::t_5bd01d47779a8a 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicFormChangeOnBehalfOf.ts
+  s_1656893481611a::t_a5f35f4c23dfb1 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicFormCreated.ts
+  s_1656893481611a::t_71cc0e379e86fb 1-13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicFormCreatedAllOf.ts
+  s_1656893481611a::t_ff84c1460d7efb 1-13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicFormResponseSubmitted.ts
+  s_1656893481611a::t_2daec3116a0445 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicFormResponseSubmittedRowId.ts
+  s_1656893481611a::t_0a793a6180e7ea 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicGithubPullRequestUpdated.ts
+  s_1656893481611a::t_b7ffe6562c96b6 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicInitiativeChange.ts
+  s_1656893481611a::t_73884b89b66f10 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicInitiativeChangeActor.ts
+  s_1656893481611a::t_44d3c4974c1b74 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicInitiativeChangeOnBehalfOf.ts
+  s_1656893481611a::t_2356b2eb37e467 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicInitiativePurged.ts
+  s_1656893481611a::t_2918f270988d4b 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicMention.ts
+  s_1656893481611a::t_0b3d73e311e3df 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectCreated.ts
+  s_1656893481611a::t_2a32dfc1cb6c6f 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectCreatedCreatedAt.ts
+  s_1656893481611a::t_ac5c88f8b8ec9e 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectCreatedParentProjectId.ts
+  s_1656893481611a::t_608c4d4b9a06bb 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectTree.ts
+  s_1656893481611a::t_6da2767ca41c17 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectTreeActorUserId.ts
+  s_1656893481611a::t_f67d80469bcf73 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectTreeParentProjectId.ts
+  s_1656893481611a::t_0dde9826824f89 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectUpdated.ts
+  s_1656893481611a::t_10dbb003b2daad 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicProjectUpdatedActorUserId.ts
+  s_1656893481611a::t_1f1e94c7e14aa5 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyCreated.ts
+  s_1656893481611a::t_c3bca5a41d0206 1-30
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyCreatedActor.ts
+  s_1656893481611a::t_8429621795e99e 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyDeleted.ts
+  s_1656893481611a::t_824cad55304514 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyDeletedActor.ts
+  s_1656893481611a::t_a51b5dc9d8d7bc 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyOption.ts
+  s_1656893481611a::t_5e6d62dc26761a 1-29
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyOptionActor.ts
+  s_1656893481611a::t_92e1470f6c5aef 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyOptionColor.ts
+  s_1656893481611a::t_2b7a498ee3bce0 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyOptionDeleted.ts
+  s_1656893481611a::t_9875135bc28acf 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicPropertyOptionDeletedActor.ts
+  s_1656893481611a::t_0ed4e0480405a3 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/publicTableVersion.ts
+  s_1656893481611a::t_a43440dff78308 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/sendCancelReason.ts
+  s_1656893481611a::t_acbfdb9183befd 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamAutoJoinDomainToggled.ts
+  s_1656893481611a::t_d42e321bacbd99 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamAutoJoinDomainToggledAutoJoinDomain.ts
+  s_1656893481611a::t_6d08656a1c4e06 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamCreated.ts
+  s_1656893481611a::t_5aec6f98a31655 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamDeleted.ts
+  s_1656893481611a::t_bae8a6dbd3a773 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamInviteCreated.ts
+  s_1656893481611a::t_2a9f5f70d33811 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamInviteResolved.ts
+  s_1656893481611a::t_f0dfa81272bf8f 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamJoinKind.ts
+  s_1656893481611a::t_5bdaf8b48ab1ea 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamMemberJoined.ts
+  s_1656893481611a::t_92166e5028bede 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamMemberRemoved.ts
+  s_1656893481611a::t_f44ec0da1ef528 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamMemberRoleChanged.ts
+  s_1656893481611a::t_1adc14a4da1244 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamMemberRoleChangedPreviousRole.ts
+  s_1656893481611a::t_d77003773f2194 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEvent.ts
+  s_1656893481611a::t_af7f9c3d299369 1-31
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOf.ts
+  s_1656893481611a::t_087d2e352f2d60 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfEventType.ts
+  s_1656893481611a::t_bb78163f23ac53 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfFive.ts
+  s_1656893481611a::t_ed9542655b43f0 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfFiveEventType.ts
+  s_1656893481611a::t_f4dc8243e155c8 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfNine.ts
+  s_1656893481611a::t_510d9cef73d454 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfNineEventType.ts
+  s_1656893481611a::t_1e912dd124330c 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOnefive.ts
+  s_1656893481611a::t_71b73b78d047e2 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOnefiveEventType.ts
+  s_1656893481611a::t_e3f6277fa61875 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOnenine.ts
+  s_1656893481611a::t_b0927284314788 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOnenineEventType.ts
+  s_1656893481611a::t_7cc8fa9fa5b58b 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOneone.ts
+  s_1656893481611a::t_dd849d81f48c79 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOneoneEventType.ts
+  s_1656893481611a::t_cd236128e776b4 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOneseven.ts
+  s_1656893481611a::t_9d14012844f802 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOnesevenEventType.ts
+  s_1656893481611a::t_bcece66b578c40 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOnethree.ts
+  s_1656893481611a::t_fd8eb71503218d 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfOnethreeEventType.ts
+  s_1656893481611a::t_e792eec51c43a2 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfSeven.ts
+  s_1656893481611a::t_6eb4d1fac19e6b 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfSevenEventType.ts
+  s_1656893481611a::t_744af02e8ea96e 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfThree.ts
+  s_1656893481611a::t_94f70f4c7d3489 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamPublicEventOneOfThreeEventType.ts
+  s_1656893481611a::t_c64e221fa7e898 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamUpdated.ts
+  s_1656893481611a::t_fa390c8e7b651e 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamUpdatedName.ts
+  s_1656893481611a::t_d03f7f7c0492cd 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamUpdatedSlug.ts
+  s_1656893481611a::t_5ea9753fa17af4 1-11
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_1656893481611a::t_6ab7be795b054f 107
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_1656893481611a::t_72d539129c84b8 822,824,826
+packages/sdk/src/entities/databases/database.ts
+  s_1656893481611a::t_96b5bd4b2fb3f2 27
+packages/sdk/src/events/hydrate/bot.ts
+  s_695cafe799631b::t_d645760b1f1c04 1-14
+packages/sdk/src/events/hydrate/calendar.ts
+  s_695cafe799631b::t_1a948313ff1a22 1-20
+packages/sdk/src/events/hydrate/call.ts
+  s_1656893481611a::t_900cfaabfec495 9-12
+packages/sdk/src/events/hydrate/email.ts
+  s_695cafe799631b::t_f22c519d56dc61 1-28
+packages/sdk/src/events/hydrate/notification.ts
+  s_695cafe799631b::t_e52b2e22bc4ce0 1-34
+packages/sdk/src/events/hydrate/property.ts
+  s_48270cd6f8d6f1::t_4ec394de8802a8 1-64
+packages/sdk/package.json
+  s_1656893481611a::t_43bbe23d22bddb 3
+packages/sdk/README.md
+  s_1656893481611a::t_e698249321f029 846-847,850-867,869-903,908-917,1056-1061
+  s_1656893481611a::t_b09d52ddf74d27 868
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "81a71cb9977cc0714347163932f489e0cab53bef",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_1656893481611a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b222a84f-15df-400c-9f06-1a0c64e2aa0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_695cafe799631b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bc62c68-1b4e-4243-bba7-d22f0052d31c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_d4c2d696332a80": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8237ce79-a9ac-4b1a-bced-6b9de71c7898",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
