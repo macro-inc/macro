@@ -1,6 +1,7 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { requestComputerSetup } from '@app/features/settings/computers/primitives/setup-request';
 import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { analytics } from '@app/lib/analytics';
 import { paneRoute } from '@app/routes/app-route';
@@ -730,6 +731,17 @@ function getSupportedHandler(
               { newSplit, sourceHandle, onApplied }
             )
       )
+      // Back into the computer's guided setup, at Bring your AI: a ready
+      // computer continues there, a failed one offers Retry setup.
+      .with('computer_setup', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'computer_setup') return null;
+        const computerId = meta.content.computerId;
+        return async (lm: SplitManager, newSplit = false) => {
+          requestComputerSetup(computerId);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
       // Its machine has no page of its own; Settings → Runtimes points it out.
       .with('runtime_access_removed', () => {
         const harnessId = notification.entity_id;

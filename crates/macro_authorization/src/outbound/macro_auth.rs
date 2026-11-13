@@ -47,6 +47,9 @@ impl JwtValidator for MacroAuthJwtValidator {
 fn identity_from_token(token: JwtToken) -> ValidatedCredential {
     let origin = match &token {
         JwtToken::MacroAccessToken(_) => CredentialOrigin::Session,
+        JwtToken::MacroApiToken(token) if token.agent_scope.is_some() => {
+            CredentialOrigin::ScopedMacroApiJwt
+        }
         JwtToken::MacroApiToken(_) => CredentialOrigin::MacroApiJwt,
     };
     let (user_id, fusion_user_id, organization_id, agent_id, agent_via) = match token {

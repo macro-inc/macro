@@ -295,6 +295,13 @@ export function getNotificationActionText(n: Notification): string {
         ? 'expired'
         : 'expiring';
     })
+    .with('computer_setup', () => {
+      const meta = n.notification_metadata;
+      return meta.tag === 'computer_setup' &&
+        meta.content.outcome.kind === 'failed'
+        ? 'failed'
+        : 'ready';
+    })
     .exhaustive(() => 'notified');
 }
 
@@ -389,6 +396,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
     .with({ tag: 'routine_run_finished' }, (m) => m.content.routineName)
     .with({ tag: 'agent_sign_in_expiry' }, (m) => m.content.computerName)
+    .with({ tag: 'computer_setup' }, (m) => m.content.computerName)
     .exhaustive(() => '');
 }
 

@@ -10,6 +10,10 @@
 //! and sends it, so recording never waits on the network or on Doppler. A
 //! process killed mid-run leaves its file behind, and the next recording process
 //! sends it, closed off as an `interrupted` run.
+//!
+//! `services = true` in the settings also forwards the local stack's own
+//! telemetry, which [`forwarding`] decides and `xtask_local` runs; its runs then
+//! carry the readable machine name as `host_name`.
 
 #![deny(missing_docs)]
 
@@ -26,6 +30,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 pub mod config;
+pub mod forwarding;
 mod otlp;
 pub mod provision;
 mod sender;
@@ -34,6 +39,7 @@ mod sender;
 mod test;
 
 pub use config::{ConfigError, Paths, Switch};
+pub use forwarding::{Forwarding, ForwardingError, MachineName, host_name};
 pub use provision::take_hint;
 
 /// One thing that happened: a finished step, a build, a service turning healthy.
@@ -128,6 +134,9 @@ pub(crate) enum Line {
 
 /// The event that closes a run, and the root span its steps hang under.
 pub(crate) const RUN_EVENT: &str = "run";
+/// The common field naming the machine, as forwarded telemetry's `host.name`
+/// arrives in Loki, so one filter finds both.
+pub(crate) const MACHINE_FIELD: &str = "host_name";
 
 /// Records one process's events: one run (a bring-up, a rebuild, a stop).
 pub struct Recorder {
@@ -194,7 +203,8 @@ impl Shared {
 impl Recorder {
     /// Start recording a run that began at `started_at`, unless opted out.
     /// `common` builds the fields every event carries (kind, mode, instance,
-    /// host, ...); it is only called when recording.
+    /// host, ...); it is only called when recording. With `services = true`,
+    /// the machine's readable name joins them as `host_name`.
     ///
     /// `Ok(None)` means off: opted out, or no settings file and no way to get one
     /// now (no provisioning, or it failed within the hour). Nothing was created,
@@ -224,11 +234,21 @@ impl Recorder {
         };
         std::fs::create_dir_all(&paths.buffer_dir).map_err(buffer_error(&paths.buffer_dir))?;
 
+        // Forwarding tags the stack's telemetry with this name; the same name on
+        // the runs puts both under one machine.
+        let machine = config
+            .as_ref()
+            .filter(|config| config.services())
+            .and_then(|config| config.machine().cloned().or_else(MachineName::of_this_host));
+        let mut common = common();
+        if let Some(machine) = machine {
+            common.insert(MACHINE_FIELD.to_owned(), Value::from(machine.as_str()));
+        }
         let run_id = uuid::Uuid::now_v7().simple().to_string();
         let begin = Begin {
             run_id,
             started_ns: unix_ns(started_at),
-            common: common(),
+            common,
         };
         let own_file = paths.buffer_dir.join(format!("{}.jsonl", begin.run_id));
         // Locked and holding its begin line before it gets the name other

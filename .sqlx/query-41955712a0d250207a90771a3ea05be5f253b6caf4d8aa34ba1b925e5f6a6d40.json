@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH links AS MATERIALIZED (\n                SELECT link.id\n                FROM email_links link\n                WHERE link.macro_id = $1\n                UNION\n                SELECT delegation.link_id\n                FROM macro_user_links delegation\n                WHERE delegation.primary_macro_id = $1\n            )\n            SELECT\n                links.id AS \"email_link_id!\",\n                account.provider AS \"provider!\",\n                account.sync_status AS \"account_status!\",\n                account.last_synced_at IS NOT NULL AS \"account_synced!\",\n                calendar.id AS \"calendar_id?\",\n                calendar.provider_calendar_id AS \"provider_calendar_id?\",\n                calendar.synced_at AS \"synced_at?\",\n                calendar.last_sync_error IS NOT NULL AS \"calendar_failed?\",\n                calendar.last_sync_error_kind AS \"calendar_failure_kind?\"\n            FROM links\n            JOIN calendar_accounts account ON account.email_link_id = links.id\n            LEFT JOIN calendars calendar\n                ON calendar.account_id = account.id\n               AND NOT calendar.is_deleted\n            WHERE account.sync_status <> 'disabled'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "account_status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "account_synced!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "calendar_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "provider_calendar_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "synced_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "calendar_failed?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "calendar_failure_kind?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      null,
+      true,
+      true,
+      true,
+      null,
+      true
+    ]
+  },
+  "hash": "41955712a0d250207a90771a3ea05be5f253b6caf4d8aa34ba1b925e5f6a6d40"
+}

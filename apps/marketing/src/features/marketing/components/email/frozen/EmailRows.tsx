@@ -114,7 +114,7 @@ function NarrowRow(props: { email: DemoEmail }) {
         </span>
       </span>
       <span
-        class="flex items-center gap-2 truncate font-semibold pt-3"
+        class="flex items-center gap-2 truncate font-medium pt-3"
         style={{ 'grid-area': 'title' }}
       >
         <span class="truncate min-w-0">{props.email.sender}</span>

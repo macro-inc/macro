@@ -94,6 +94,15 @@ fn embedded_bundle_build() -> u64 {
         .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer")
 }
 
+/// When this native binary was compiled, in Unix milliseconds. Unlike the
+/// JavaScript build time, OTA bundle updates do not change it.
+#[tauri::command]
+fn get_native_build_time() -> u64 {
+    env!("MACRO_NATIVE_BUILD_TIME_MS")
+        .parse()
+        .expect("MACRO_NATIVE_BUILD_TIME_MS must be an unsigned integer")
+}
+
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
@@ -326,6 +335,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
                 .build(),
         )
         .plugin(navigation.clone())
+        .manage(navigation.clone())
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
                 AppEnvironment::current()
@@ -397,6 +407,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,
             diagnostics::record_frontend_diagnostic,
+            open_external_url,
             #[cfg(target_os = "linux")]
             linux_notification::send_linux_notification,
             #[cfg(target_os = "linux")]
@@ -456,6 +467,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
             is_ipad,
+            get_native_build_time,
             get_pending_share_filenames,
             pop_shared_files,
             clear_shared_files,
@@ -678,6 +690,19 @@ enum LaunchState {
     PendingNavigation(Url),
     /// Frontend is ready; links emit directly.
     Ready,
+}
+
+/// Opens a URL from `openExternalUrl` on desktop through the navigation
+/// policy, without a popup request (which WebKitGTK drops once the click's
+/// user gesture has expired) or a page navigation (which runs `beforeunload`).
+/// Returns false when the page must open it as a popup itself.
+#[tauri::command]
+fn open_external_url(
+    app: AppHandle<AppRuntime>,
+    navigation: tauri::State<'_, MacroNavigationPlugin>,
+    url: Url,
+) -> bool {
+    navigation.open_external(&app, &url)
 }
 
 /// Convert a deep link url into a `navigate` event for the frontend router.

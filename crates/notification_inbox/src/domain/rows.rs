@@ -477,7 +477,8 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         | NotifEvent::ExternalChatAccountEnded(_)
         | NotifEvent::ChannelAccessRequested(_)
         | NotifEvent::RoutineRunFinished(_)
-        | NotifEvent::AgentSignInExpiry(_) => return None,
+        | NotifEvent::AgentSignInExpiry(_)
+        | NotifEvent::ComputerSetup(_) => return None,
         // Channel activity and discussions are placed by their own rules; on
         // any other entity they have no row.
         NotifEvent::ChannelMention(_)

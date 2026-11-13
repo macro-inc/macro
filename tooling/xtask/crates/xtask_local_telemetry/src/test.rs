@@ -369,6 +369,43 @@ fn unprovisioned(dir: &Path, endpoint: &str, script: &str) -> Paths {
 }
 
 #[test]
+fn forwarding_runs_carry_the_readable_machine_name() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut paths = opt_in(dir.path(), &endpoint.server.uri());
+    let run = |paths: &Paths| {
+        let recorder = Recorder::start(paths, SystemTime::now(), common)
+            .expect("start")
+            .expect("on");
+        recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+    };
+
+    run(&paths);
+    let plain = endpoint.log_records();
+    assert!(!plain.is_empty());
+    assert!(
+        plain
+            .iter()
+            .all(|record| !fields(record).contains_key("host_name"))
+    );
+
+    let settings = std::fs::read_to_string(&paths.config).expect("read");
+    std::fs::write(
+        &paths.config,
+        format!("{settings}services = true\nmachine = \"build-box\"\n"),
+    )
+    .expect("write");
+    paths.buffer_dir = dir.path().join("buffer-forwarding");
+    run(&paths);
+    let records = endpoint.log_records();
+    let forwarding = &records[plain.len()..];
+    assert!(!forwarding.is_empty());
+    for record in forwarding {
+        assert_eq!(fields(record).get("host_name"), Some(&json!("build-box")));
+    }
+}
+
+#[test]
 fn opting_out_wins_over_working_settings() {
     let endpoint = Endpoint::start(ResponseTemplate::new(204));
     let dir = tempfile::tempdir().expect("tempdir");
@@ -470,7 +507,7 @@ fn a_rejected_provisioned_token_is_fetched_again() {
     std::fs::write(
         &paths.config,
         format!(
-            "endpoint = \"{}\"\ntoken = \"{TOKEN}\"\nprovisioned = true\n",
+            "endpoint = \"{}\"\ntoken = \"{TOKEN}\"\nprovisioned = true\nservices = true\nmachine = \"build-box\"\n",
             server.uri()
         ),
     )
@@ -484,6 +521,9 @@ fn a_rejected_provisioned_token_is_fetched_again() {
 
     let written = std::fs::read_to_string(&paths.config).expect("read");
     assert!(written.contains(FRESH));
+    // The user's forwarding choices survive the new token.
+    assert!(written.contains("services = true\n"));
+    assert!(written.contains("machine = \"build-box\"\n"));
     assert!(
         buffered_files(&paths).is_empty(),
         "sent with the fresh token"

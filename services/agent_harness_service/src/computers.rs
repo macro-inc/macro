@@ -5,6 +5,7 @@
 //! which owns Stripe; both share the `hosted_runtime*` tables.
 
 use hosted_runtimes::domain::ids::{ComputerId, PairingId};
+use hosted_runtimes::domain::image::GuestImages;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -34,11 +35,13 @@ use tokio_util::task::TaskTracker;
 
 use crate::config::{ComputerFleetConfig, Config};
 
+pub(crate) mod agent_enrollment;
 pub(crate) mod claude;
 pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
 mod presence;
+pub(crate) mod setup_notice;
 pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
@@ -54,7 +57,17 @@ const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// sign-in or sign-out made on the computer itself.
 const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
 
-pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+/// The notification ingress the operator's setup notices go through.
+pub type SetupNotifications =
+    notification::domain::service::SqsNotificationIngress<notification::outbound::queue::SqsQueue>;
+
+pub type Operator = ComputerOperator<
+    PgComputerRepo,
+    ConfiguredFleet,
+    HostedHarnesses,
+    SystemClock,
+    setup_notice::IngressSetupNotices<SetupNotifications>,
+>;
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// has no attached computer fleet (`COMPUTERS_FLEET` is absent).
@@ -64,6 +77,7 @@ pub(crate) async fn operator(
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    notifications: Arc<SetupNotifications>,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
@@ -91,12 +105,16 @@ pub(crate) async fn operator(
                 )?,
                 reserve_gb: settings.computers_host_reserve_gb,
                 oversell_factor: settings.computers_oversell_factor,
-                image: ImageSource {
-                    reference: ImageReference::Alias(incus_client::ImageAlias::try_new(
-                        &settings.computers_image,
-                    )?),
-                    remote: None,
-                },
+                images: GuestImages {
+                    regular: &settings.computers_image,
+                    agent: &settings.computers_agent_image,
+                }
+                .try_map(|alias| {
+                    Ok::<_, incus_client::InvalidName>(ImageSource {
+                        reference: ImageReference::Alias(incus_client::ImageAlias::try_new(alias)?),
+                        remote: None,
+                    })
+                })?,
                 profile: incus_client::ProfileName::try_new(
                     &settings.computers_incus_profile.clone(),
                 )?,
@@ -113,9 +131,11 @@ pub(crate) async fn operator(
                     control_plane_id: ControlPlaneId::parse(
                         settings.computers_control_plane_id.clone(),
                     )?,
-                    image: hosted_runtimes::domain::image::GuestImage::try_new(
-                        &settings.computers_image,
-                    )?,
+                    images: GuestImages {
+                        regular: settings.computers_image.as_str(),
+                        agent: settings.computers_agent_image.as_str(),
+                    }
+                    .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
                     network: settings.computers_docker_network.clone(),
                     enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
                     host_name: settings.computers_host_name.clone(),
@@ -139,11 +159,18 @@ pub(crate) async fn operator(
             service: harnesses,
             default_agents,
         },
+        setup_notice::IngressSetupNotices::new(notifications),
         SystemClock,
         Arc::new(ServiceDeployment),
     )
     .await
-    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
+    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
+    // Every computer asks: one bought for an agent teammate must never
+    // enroll without its agent.
+    // The authentication service checks its own internal key, not ours.
+    .with_agent_enrollment(Arc::new(agent_enrollment::AuthAgentEnrollment::new(
+        config.authentication_service_secret_key.as_ref(),
+    )?));
     Ok(Some(Arc::new(operator)))
 }
 
