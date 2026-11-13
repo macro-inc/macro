@@ -166,6 +166,9 @@ in
     systemd.network.wait-online = {
       anyInterface = true;
       timeout = 30;
+      # Online once DHCPv4 answers. Waiting for IPv6 too held enrollment ~2 s
+      # for a link-local address nothing here uses.
+      extraArgs = [ "--ipv4" ];
     };
     time.timeZone = "UTC";
     i18n.defaultLocale = "en_US.UTF-8";
