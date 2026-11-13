@@ -95,6 +95,13 @@ impl IntoResponse for JoinTeamByInviteLinkError {
             JoinTeamByInviteLinkError::JoinError(JoinTeamDirectlyError::JoinTeamError(e)) => {
                 e.into_response()
             }
+            JoinTeamByInviteLinkError::JoinError(JoinTeamDirectlyError::AlreadyMember) => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            )
+                .into_response(),
         }
     }
 }

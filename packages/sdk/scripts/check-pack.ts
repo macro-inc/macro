@@ -77,8 +77,9 @@ try {
     const packages = [join(temporary, report.filename)];
     const peer = runtime === 'node' ? '@livekit/rtc-node' : 'livekit-client';
     if (runtime !== 'core') {
+      // The SDK is a root workspace member: its packages may be hoisted.
       const installed = await Bun.file(
-        join(sdk, 'node_modules', peer, 'package.json'),
+        Bun.resolveSync(`${peer}/package.json`, sdk),
       ).json();
       packages.push(`${peer}@${installed.version}`);
     }
@@ -129,7 +130,7 @@ try {
     await run(
       [
         process.execPath,
-        join(sdk, 'node_modules/typescript/bin/tsc'),
+        Bun.resolveSync('typescript/bin/tsc', sdk),
         '--noEmit',
         '--strict',
         // Match the SDK's compiler settings for third-party RTC declarations.

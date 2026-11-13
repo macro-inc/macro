@@ -153,6 +153,12 @@ assets; importing the client alone should not construct a worker. A
 `data:video/mp2t` worker URL indicates raw TypeScript was packaged as an asset.
 An empty worker startup error does not by itself establish that the tab is stale.
 
+While a reply streams, the transcript follows its end. Pressing a disclosure in
+it (a tool group, a tool row, a thought) stops following, so what you open stays
+under the pointer while text keeps arriving below; scrolling back to the bottom
+or the jump-to-latest button follows again. The backend-free desktop/phone check
+is `bunx playwright test --config apps/web/src/features/block-agent/browser-test/playwright.config.ts transcript.browser.e2e.ts`.
+
 Repeat from Home, Agents, and the create menu with an already-ready session.
 The first prompt can be accepted before its destination mounts; navigating into
 the session must keep the same streamed turn without restarting its load. Also
@@ -1873,7 +1879,8 @@ no caret. Tool arguments and results never fall back to raw JSON.
 
 Consecutive tool calls, programs and thoughts between two pieces of the agent's
 text form one group, with the thoughts before, between and after its calls; a
-run of thoughts with no call stays as separate rows. Subagents, tools requiring user input, presented views and tools that
+run of thoughts with no call stays as separate rows. A blank line the agent
+emits between calls is not text and does not split the group. Subagents, tools requiring user input, presented views and tools that
 render their own answer stay outside groups so they stay visible during other
 tool bursts. A group never opens on its own and has no scrolling window: opened,
 it lists every call in full, and that stays open as the group settles.

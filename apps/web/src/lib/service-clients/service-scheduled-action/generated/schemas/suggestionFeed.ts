@@ -5,15 +5,22 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { FeedCounts } from './feedCounts';
 import type { Suggestion } from './suggestion';
+import type { SuggestionFeedDone } from './suggestionFeedDone';
 
 /**
  * A person's feed: their open suggestions, best first, and the ones they
-finished in the last day, newest first.
+finished in the last day, newest first. Both lists are in the order to
+show them.
  */
 export interface SuggestionFeed {
-  /** Suggestions done in the last 24 hours, with what they produced. */
-  done: Suggestion[];
-  /** The open suggestions. */
+  /** How many suggestions the whole feed holds of each status, whatever the
+`limit`. */
+  counts: FeedCounts;
+  /** Suggestions done in the last 24 hours, with what they produced; left
+out when the feed was read with a `limit`. */
+  done?: SuggestionFeedDone;
+  /** The open suggestions, at most `limit` of them. */
   suggestions: Suggestion[];
 }

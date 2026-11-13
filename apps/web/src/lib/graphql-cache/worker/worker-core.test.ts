@@ -1068,6 +1068,114 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('collects the requests already sent before starting one, so a typed search is not run in arrival order', async () => {
+    const order: string[] = [];
+    const resumes: (() => void)[] = [];
+    let holdArrivals = false;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          return { kind: 'miss' };
+        },
+        search: async (request: { query: string }) => {
+          order.push(`search:${request.query}`);
+          return { documents: [], nextCursor: null };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => {
+        if (holdArrivals) resumes.push(resume);
+        else queueMicrotask(resume);
+      },
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    // Let the engine finish releasing `init` before the next message.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    holdArrivals = true;
+
+    // The browser delivers one message per task: the replayed read first.
+    const replayed = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'replayed',
+      query: 'query Replayed { replayed }',
+      priority: 'user-visible',
+    });
+    expect(order).toEqual([]);
+    // The search is delivered in the task the worker yielded to.
+    const search = core.handleRequest(port, {
+      id: 3,
+      kind: 'search',
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'todo',
+        limit: 20,
+        nowMs: 1,
+      },
+    });
+    resumes.shift()?.();
+    // Something arrived during that yield, so it yields once more.
+    expect(order).toEqual([]);
+    resumes.shift()?.();
+    await search;
+    expect(order).toEqual(['search:todo']);
+
+    await vi.waitFor(() => expect(resumes).toHaveLength(1));
+    resumes.shift()?.();
+    await replayed;
+    expect(order).toEqual(['search:todo', 'read:replayed']);
+
+    // A typed search that arrives alone starts at once.
+    const alone = core.handleRequest(port, {
+      id: 4,
+      kind: 'search',
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'alone',
+        limit: 20,
+        nowMs: 1,
+      },
+    });
+    expect(resumes).toHaveLength(0);
+    await alone;
+    expect(order.at(-1)).toBe('search:alone');
+  });
+
+  it('keeps the queue moving when it cannot yield between requests', async () => {
+    const order: string[] = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(opId);
+          return { kind: 'miss' };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: () => {
+        throw new Error('MessageChannel is not available');
+      },
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await Promise.all(
+      ['first', 'second', 'third'].map((opId, index) =>
+        core.handleRequest(port, {
+          id: index + 2,
+          kind: 'read',
+          opId,
+          query: 'query Read { read }',
+        })
+      )
+    );
+    expect(order).toEqual(['first', 'second', 'third']);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
@@ -2133,6 +2241,15 @@ describe('CacheWorkerCore', () => {
       id: 3,
       kind: 'read',
       query: 'query Read { value }',
+    });
+    // The read is only picked up a task later; it must still be held then.
+    await new Promise<void>((resolve) => {
+      const { port1, port2 } = new MessageChannel();
+      port1.onmessage = () => {
+        port1.close();
+        resolve();
+      };
+      port2.postMessage(undefined);
     });
     expect(readQuery).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(20);

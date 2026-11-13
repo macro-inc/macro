@@ -43,6 +43,9 @@ pub const SYMBOLS: &[&str] = &[
     "RoutineNamespace.list",
     "AgentNamespace.list",
     "DatabaseNamespace.list",
+    "EmailThread.drafts",
+    "EmailNamespace.createDraft",
+    "Suggestion.attachDraft",
     "AiNamespace.structuredCompletion",
 ];
 
@@ -78,6 +81,11 @@ pub fn brief(
         GenerationTrigger::Nightly => {
             "This is the nightly run, while the user sleeps: research their whole workspace \
              again, then bring the feed up to date for their morning."
+        }
+        GenerationTrigger::Manual => {
+            "The user asked for fresh suggestions just now: research their whole workspace \
+             again, then bring the feed up to date. They are watching it refresh, so write \
+             the suggestions that matter most first."
         }
     };
     let task = TASK

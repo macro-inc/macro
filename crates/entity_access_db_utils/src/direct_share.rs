@@ -101,6 +101,12 @@ pub async fn set(
     upgrade_only: bool,
 ) -> anyhow::Result<()> {
     if let Some(level) = level {
+        let grant = crate::scoped_grants::Grant {
+            source_id: user.as_ref(),
+            source_type: crate::EntityAccessSourceType::User,
+            access_level: level,
+        };
+        crate::scoped_grants::refuse_added_access(tx.as_mut(), id, kind, &[grant]).await?;
         sqlx::query!(r#"INSERT INTO entity_access(entity_id, entity_type, source_id, source_type, access_level)
             VALUES ($1, $2, $3, 'user', $4)
             ON CONFLICT (entity_id, entity_type, source_id, source_type) WHERE granted_from_project_id IS NULL

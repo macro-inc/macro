@@ -478,7 +478,7 @@ export const SoupView = (props: SoupViewProps) => {
                 }
               >
                 <Show when={props.filterBarVariant !== 'tag'}>
-                  <HeaderActionGroup label="Filters">
+                  <HeaderActionGroup label="Filters" size="md">
                     <UnifiedFilterDropdown
                       grouped
                       hideLabel
@@ -488,7 +488,7 @@ export const SoupView = (props: SoupViewProps) => {
                     />
                   </HeaderActionGroup>
                 </Show>
-                <HeaderActionGroup label="View options">
+                <HeaderActionGroup label="View options" size="md">
                   <Show when={!isComponentListView('home')}>
                     <SoupViewContextSort grouped />
                   </Show>

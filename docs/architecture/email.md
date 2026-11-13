@@ -694,7 +694,12 @@ attachment handles retain the generation captured at reservation.
 
 The status panel combines device intents with actor/inbox-authorized, cursor-paged
 `pendingEmailSends`, with batched message hydration. Server listing grants observation and cancellation authority,
-never automatic resubmission. Delivery state distinguishes local queueing,
+never automatic resubmission. `queries/email/server-sends.ts` reads that list
+at sign-in, when the tab is shown or comes online, when this browser's send
+journal gains or loses a send, and on a timer only while the tab is visible:
+every 10 seconds while a send is in motion, once a minute otherwise. No realtime
+event announces a send attempt, so the minute is how soon an idle tab learns of
+another device's send. Delivery state distinguishes local queueing,
 server acceptance, provider processing, sent, failed, and unconfirmed outcomes,
 but the panel stays silent for routine delivery: it lists a send only while it
 waits on this device, needs attention, or is scheduled. Thread surfaces project

@@ -213,6 +213,16 @@ export const enableMacroComputers = defineFlag({
   env: 'ENABLE_MACRO_COMPUTERS',
 });
 
+/**
+ * Agent teammates: team admins invite an AI agent, with its own account and
+ * Macro computer, from Settings → Team → Members.
+ */
+export const enableAgentTeammates = defineFlag({
+  key: 'enable-agent-teammates',
+  env: 'ENABLE_AGENT_TEAMMATES',
+  default: DEV_MODE_ENV || undefined,
+});
+
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',

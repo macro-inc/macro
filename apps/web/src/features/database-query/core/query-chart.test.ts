@@ -393,6 +393,7 @@ describe('chart data', () => {
           kind: 'entity',
           source: {
             markdown: false,
+            link: false,
             options: [],
             tag: false,
             target: 'DATABASE_ROW',
