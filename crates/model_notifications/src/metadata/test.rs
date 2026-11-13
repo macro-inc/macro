@@ -662,6 +662,7 @@ fn channel_reply_title_uses_reply_sender_from_metadata() {
         message_id: Uuid::nil().to_string(),
         user_id: Some(uid("macro|reply.sender@macro.com")),
         sender_display_name: None,
+        sender_client_kind: None,
         message_content: "hello".to_string(),
         has_attachments: false,
         thread_parent_sender_id: None,
@@ -683,6 +684,7 @@ fn bot_channel_message_send() -> ChannelMessageSendMetadata {
     ChannelMessageSendMetadata {
         sender: None,
         sender_display_name: Some("Helper Bot".to_string()),
+        sender_client_kind: None,
         message_content: "hello".to_string(),
         message_id: Uuid::nil().to_string(),
         has_attachments: false,
@@ -717,6 +719,7 @@ fn channel_message_send_title_falls_back_to_bot_display_name() {
 fn channel_message_send_title_errors_without_any_sender() {
     let notification = ChannelMessageSendMetadata {
         sender_display_name: None,
+        sender_client_kind: None,
         ..bot_channel_message_send()
     };
 
@@ -730,6 +733,7 @@ fn channel_reply_title_falls_back_to_bot_display_name() {
         message_id: Uuid::nil().to_string(),
         user_id: None,
         sender_display_name: Some("Helper Bot".to_string()),
+        sender_client_kind: None,
         message_content: "hello".to_string(),
         has_attachments: false,
         thread_parent_sender_id: None,
@@ -753,6 +757,7 @@ fn channel_mention_title_falls_back_to_bot_display_name() {
         has_attachments: false,
         thread_id: None,
         sender_display_name: Some("Helper Bot".to_string()),
+        sender_client_kind: None,
         common: CommonChannelMetadata {
             channel_type: ChannelType::Public,
             channel_name: "general".to_string(),
@@ -770,6 +775,7 @@ fn channel_message_body_renders_mentioned_agent_by_its_own_name() {
     let notification = ChannelMessageSendMetadata {
         sender: Some(uid("macro|teo@macro.com")),
         sender_display_name: None,
+        sender_client_kind: None,
         message_content: r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention> push notifications resolve mentions wrong"#.to_string(),
         message_id: Uuid::nil().to_string(),
         has_attachments: false,
@@ -798,6 +804,7 @@ fn document_mention(sub_type: Option<NotificationDocumentSubType>) -> DocumentMe
             has_attachments: false,
             thread_id: None,
             sender_display_name: None,
+            sender_client_kind: None,
             common: CommonChannelMetadata {
                 channel_type: ChannelType::Public,
                 channel_name: "general".to_string(),
@@ -863,6 +870,21 @@ fn channel_message_send_bot_json_serializes_explicit_null_sender_and_round_trips
     assert_eq!(
         round_trip.sender_display_name.as_deref(),
         Some("Helper Bot")
+    );
+}
+
+#[test]
+fn channel_message_send_carries_the_mcp_client_kind_of_a_bot_sender() {
+    let mut bot = bot_channel_message_send();
+    bot.sender_client_kind = Some(McpClientKind::ClaudeCode);
+
+    let value = serde_json::to_value(&bot).unwrap();
+
+    assert_eq!(value["senderClientKind"], "claude_code");
+    let round_trip: ChannelMessageSendMetadata = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        round_trip.sender_client_kind,
+        Some(McpClientKind::ClaudeCode)
     );
 }
 

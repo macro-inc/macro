@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelMentionMetadataAllOfSenderClientKind } from './channelMentionMetadataAllOfSenderClientKind';
 import type { ChannelMentionMetadataAllOfSenderDisplayName } from './channelMentionMetadataAllOfSenderDisplayName';
 import type { ChannelMentionMetadataAllOfSenderProfilePictureUrl } from './channelMentionMetadataAllOfSenderProfilePictureUrl';
 import type { ChannelMentionMetadataAllOfThreadId } from './channelMentionMetadataAllOfThreadId';
@@ -13,6 +14,7 @@ export type ChannelMentionMetadataAllOf = {
   messageContent: string;
   /** The message you were mentioned in */
   messageId: string;
+  senderClientKind?: ChannelMentionMetadataAllOfSenderClientKind;
   /** Display name for non-user senders such as bots */
   senderDisplayName?: ChannelMentionMetadataAllOfSenderDisplayName;
   senderProfilePictureUrl?: ChannelMentionMetadataAllOfSenderProfilePictureUrl;

@@ -3526,6 +3526,11 @@ type GraphqlChannelMentionMetadata {
 	"""
 	senderDisplayName: String
 	"""
+	The verified product of the MCP client a bot sender posted through,
+	whose mark clients show.
+	"""
+	senderClientKind: GraphqlMcpClientKind
+	"""
 	Channel type.
 	"""
 	channelType: GraphqlNotificationChannelType!
@@ -3585,6 +3590,11 @@ type GraphqlChannelMessageSendMetadata {
 	Display name for a non-user sender.
 	"""
 	senderDisplayName: String
+	"""
+	The verified product of the MCP client a bot sender posted through,
+	whose mark clients show.
+	"""
+	senderClientKind: GraphqlMcpClientKind
 	"""
 	Message content.
 	"""
@@ -3649,6 +3659,11 @@ type GraphqlChannelReplyMetadata {
 	Display name for a non-user sender.
 	"""
 	senderDisplayName: String
+	"""
+	The verified product of the MCP client a bot sender posted through,
+	whose mark clients show.
+	"""
+	senderClientKind: GraphqlMcpClientKind
 	"""
 	Reply content.
 	"""
@@ -3918,6 +3933,11 @@ type GraphqlCommentedOnDocumentMetadata {
 	Display name for a non-user sender.
 	"""
 	senderDisplayName: String
+	"""
+	The verified product of the MCP client a bot sender posted through,
+	whose mark clients show.
+	"""
+	senderClientKind: GraphqlMcpClientKind
 }
 
 """
@@ -4141,6 +4161,10 @@ type GraphqlCrmDiscussionMetadata {
 	Public bot display name, if applicable.
 	"""
 	senderDisplayName: String
+	"""
+	Verified product of the MCP client a bot sender posted through.
+	"""
+	senderClientKind: GraphqlMcpClientKind
 	"""
 	Sender avatar URL.
 	"""
@@ -4589,6 +4613,11 @@ type GraphqlDocumentMentionMetadata {
 	Display name for a non-user sender.
 	"""
 	senderDisplayName: String
+	"""
+	The verified product of the MCP client a bot sender posted through,
+	whose mark clients show.
+	"""
+	senderClientKind: GraphqlMcpClientKind
 	"""
 	Channel type.
 	"""
@@ -6382,6 +6411,10 @@ type GraphqlInitiativeDiscussionMetadata {
 	"""
 	senderDisplayName: String
 	"""
+	Verified product of the MCP client a bot sender posted through.
+	"""
+	senderClientKind: GraphqlMcpClientKind
+	"""
 	Sender avatar URL.
 	"""
 	senderProfilePictureUrl: String
@@ -6633,6 +6666,37 @@ type GraphqlMailPreviewMessage {
 }
 
 """
+A known MCP client product a bot sender posted through, verified by the
+public MCP's OAuth broker.
+"""
+enum GraphqlMcpClientKind {
+	"""
+	Claude on claude.ai, the desktop and mobile apps.
+	"""
+	CLAUDE
+	"""
+	Anthropic's Claude Code CLI.
+	"""
+	CLAUDE_CODE
+	"""
+	OpenAI's ChatGPT.
+	"""
+	CHATGPT
+	"""
+	The Cursor editor.
+	"""
+	CURSOR
+	"""
+	OpenAI's Codex CLI.
+	"""
+	CODEX
+	"""
+	The OpenCode CLI.
+	"""
+	OPENCODE
+}
+
+"""
 Metadata for a mention in a document comment.
 """
 type GraphqlMentionedInDocumentCommentMetadata {
@@ -6678,6 +6742,11 @@ type GraphqlMentionedInDocumentCommentMetadata {
 	Display name for a non-user sender.
 	"""
 	senderDisplayName: String
+	"""
+	The verified product of the MCP client a bot sender posted through,
+	whose mark clients show.
+	"""
+	senderClientKind: GraphqlMcpClientKind
 }
 
 """
@@ -7587,6 +7656,11 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 	Display name for a non-user sender.
 	"""
 	senderDisplayName: String
+	"""
+	The verified product of the MCP client a bot sender posted through,
+	whose mark clients show.
+	"""
+	senderClientKind: GraphqlMcpClientKind
 }
 
 """

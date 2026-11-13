@@ -2290,10 +2290,10 @@ impl ToolServiceContext {
 
     /// Label the posts the tools make with the client the user works
     /// through.
-    fn with_via(mut self, client: &str) -> Self {
-        self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
-        self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
-        self.document_tool_context = self.document_tool_context.with_via(client.to_owned());
+    fn with_via(mut self, client: messages::domain::models::McpClientLabel) -> Self {
+        self.message_tool_context = self.message_tool_context.with_via(client.clone());
+        self.channel_tool_context = self.channel_tool_context.with_via(client.clone());
+        self.document_tool_context = self.document_tool_context.with_via(client);
         self
     }
 

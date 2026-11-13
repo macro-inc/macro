@@ -1,3 +1,5 @@
+import { BotMarkAvatar } from '@core/component/BotMarkAvatar';
+import type { FirstPartyBotMark } from '@core/component/firstPartyBotMark';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { Avatar, type AvatarSize } from '@ui';
 import { Show } from 'solid-js';
@@ -7,6 +9,8 @@ type BotIconProps = {
   name?: string | null;
   /** Bot avatar URL. */
   avatarUrl?: string | null;
+  /** A product's brand mark, drawn in place of the avatar and initial. */
+  mark?: FirstPartyBotMark;
   size?: AvatarSize;
   class?: string;
 };
@@ -17,6 +21,20 @@ type BotIconProps = {
  * those only make sense for people.
  */
 export function BotIcon(props: BotIconProps) {
+  return (
+    <Show when={props.mark} fallback={<BotAvatar {...props} />} keyed>
+      {(mark) => (
+        <BotMarkAvatar
+          mark={mark}
+          size={props.size ?? 'md'}
+          class={props.class}
+        />
+      )}
+    </Show>
+  );
+}
+
+function BotAvatar(props: BotIconProps) {
   const initial = () => props.name?.trim().charAt(0).toUpperCase() || 'B';
 
   return (

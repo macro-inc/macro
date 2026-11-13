@@ -166,7 +166,7 @@ pub struct DocumentToolContext<
 
     /// The client the requesting user drives these tools through, such as an
     /// MCP client, set with [`Self::with_via`]; comments carry it as a label.
-    via: Option<String>,
+    via: Option<messages::domain::models::McpClientLabel>,
 }
 
 impl<
@@ -360,7 +360,7 @@ impl<
 
     /// Label the comments these tools post with the client the requesting
     /// user works through, such as an MCP client.
-    pub fn with_via(mut self, client: String) -> Self {
+    pub fn with_via(mut self, client: messages::domain::models::McpClientLabel) -> Self {
         self.via = Some(client);
         self
     }

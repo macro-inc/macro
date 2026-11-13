@@ -34,6 +34,13 @@ export function shouldGroupWithPreviousMessage(
   ) {
     return false;
   }
+  // Each MCP client a user posts through is shown as its own author.
+  if (
+    (current.sender?.triggered_via ?? null) !==
+    (previous.sender?.triggered_via ?? null)
+  ) {
+    return false;
+  }
   if (isDeleted(current) || isDeleted(previous)) return false;
   if (hasThreadReplies(previous)) return false;
 

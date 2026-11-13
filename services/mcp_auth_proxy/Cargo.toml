@@ -44,6 +44,7 @@ macro_auth = { path = "../../crates/macro_auth", optional = true }
 macro_tower_layers = { path = "../../crates/macro_tower_layers", optional = true }
 macro_user_id = { path = "../../crates/macro_user_id", optional = true }
 model = { path = "../../crates/model", optional = true }
+mcp_client_label = { path = "../../crates/mcp_client_label" }
 rand = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest = { workspace = true, optional = true }

@@ -420,14 +420,19 @@ verify that its tool response includes the matching attachment URLs.
 A message, comment, or thread reply a user's MCP client (Claude Code, Cursor,
 ChatGPT) posts through Macro MCP, with a direct tool such as
 `SendChannelMessage` or from code mode (`ExecuteCode`), shows the client as its
-sender: **Claude Code · Agent** with the client's initial as its avatar and a
-**from <user>** pill underneath. The client is the name it registered with
-Macro's OAuth broker, or "MCP client" if it registered none. Notifications name
-the client as the sender too. A self-hosted agent's message shows the agent as
+sender: **Claude Code · Agent** and a **from <user>** pill underneath. The
+client is the name it registered with Macro's OAuth broker, or "MCP client" if
+it registered none. Its avatar is the product's mark (Claude, ChatGPT, Cursor,
+Codex, OpenCode) when the broker recognized the client, and the client's initial
+otherwise. A client is recognized only when every redirect URI it registered
+fits the product, so a client calling itself "Claude" with its own callback
+host keeps a letter. In-app notifications, for channel messages as well as
+comments, name the client as the sender and show the same avatar. A self-hosted agent's message shows the agent as
 the sender with **from <user>**, and a message sent with a pasted Macro API key
 shows the Macro bot with **from <user>**. To check this, connect an MCP client
 over OAuth, ask it to post in a channel and to comment on a document, and
-confirm both show the client and the user on desktop and at phone width.
+confirm both show the client, its mark, and the user on desktop and at phone
+width.
 
 ## Account manager requests
 

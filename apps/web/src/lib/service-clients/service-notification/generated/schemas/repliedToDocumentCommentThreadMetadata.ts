@@ -6,6 +6,7 @@
  */
 import type { CommentRef } from './commentRef';
 import type { RepliedToDocumentCommentThreadMetadataFileType } from './repliedToDocumentCommentThreadMetadataFileType';
+import type { RepliedToDocumentCommentThreadMetadataSenderClientKind } from './repliedToDocumentCommentThreadMetadataSenderClientKind';
 import type { RepliedToDocumentCommentThreadMetadataSenderDisplayName } from './repliedToDocumentCommentThreadMetadataSenderDisplayName';
 import type { RepliedToDocumentCommentThreadMetadataSenderProfilePictureUrl } from './repliedToDocumentCommentThreadMetadataSenderProfilePictureUrl';
 import type { RepliedToDocumentCommentThreadMetadataSubType } from './repliedToDocumentCommentThreadMetadataSubType';
@@ -22,6 +23,7 @@ export interface RepliedToDocumentCommentThreadMetadata {
   fileType?: RepliedToDocumentCommentThreadMetadataFileType;
   /** The owner of the document. */
   owner: string;
+  senderClientKind?: RepliedToDocumentCommentThreadMetadataSenderClientKind;
   /** Public bot name when the author is an agent rather than a Macro user. */
   senderDisplayName?: RepliedToDocumentCommentThreadMetadataSenderDisplayName;
   senderProfilePictureUrl?: RepliedToDocumentCommentThreadMetadataSenderProfilePictureUrl;

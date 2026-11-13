@@ -17,6 +17,9 @@ in front of FusionAuth, which doesn't support DCR itself.
   logic (registration, authorize, token/refresh).
 - `src/domain/redirect_uri.rs`: the redirect URI policy from the README: trusted,
   needs consent, or refused.
+- `src/domain/client_kind.rs`: which known product (Claude, ChatGPT, ...) a
+  registration is, for the mark its posts wear; README "Which product a client
+  is".
 - `src/domain/resource.rs`: the RFC 8707 resources the broker signs in for (the
   ChatGPT MCP Worker by its exact URL, the harness's public MCP for anything
   else) and which token each gets; see README "Which MCP server a token is for".
@@ -59,6 +62,9 @@ in front of FusionAuth, which doesn't support DCR itself.
 - Support a new HTTPS MCP client: nothing; users approve it on the consent
   screen. Add its host to `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` only to skip that
   screen for a client Macro has vetted.
+- Recognize a new MCP client product: a variant in `crates/mcp_client_label` →
+  its name and redirect evidence in `src/domain/client_kind.rs` → its mark in
+  `apps/web/src/lib/core/component/mcpClientMark.ts`.
 - Sign clients in for another MCP server: a `McpResource` variant and its URL
   in `McpResources` (from `macro_service_urls`) → the token it gets in
   `access_token_for` (`src/domain/service.rs`) → `public_mcp.rs` wiring → README.

@@ -1,5 +1,6 @@
 use super::*;
 use crate::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
+use mcp_client_label::{McpClientKind, McpClientLabel};
 
 #[test]
 fn signed_execution_token_preserves_owner_agent_and_lifetime() {
@@ -14,7 +15,10 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         private_key: tests::PRIVATE_KEY.into(),
         expiry_seconds: 60,
         agent_id: Some(agent),
-        agent_via: Some("Claude Code".into()),
+        agent_via: Some(McpClientLabel {
+            name: "Claude Code".into(),
+            kind: Some(McpClientKind::ClaudeCode),
+        }),
         routine_id: None,
     })
     .unwrap();
@@ -37,6 +41,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
     );
     assert_eq!(claims.agent_session_id, Some(uuid::Uuid::from_u128(456)));
     assert_eq!(claims.agent_via.as_deref(), Some("Claude Code"));
+    assert_eq!(claims.agent_via_kind, Some(McpClientKind::ClaudeCode));
     assert_eq!(claims.macro_user_id, "macro|owner@example.com");
     assert_eq!(claims.macro_organization_id, Some(42));
     let now = std::time::SystemTime::now()

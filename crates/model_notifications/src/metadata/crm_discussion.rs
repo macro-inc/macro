@@ -2,6 +2,7 @@
 //! message/thread identities.
 
 use super::*;
+use mcp_client_label::McpClientKind;
 
 #[cfg(test)]
 mod test;
@@ -35,6 +36,10 @@ pub struct CrmDiscussionMetadata {
     pub text: String,
     /// Public display name for a bot author.
     pub sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot author posted through, whose
+    /// mark clients show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_client_kind: Option<McpClientKind>,
     /// Optional avatar for push notification attachments.
     pub sender_profile_picture_url: Option<String>,
 }

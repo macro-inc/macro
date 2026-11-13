@@ -1,3 +1,4 @@
+import type { FirstPartyBotMark } from '@core/component/firstPartyBotMark';
 import { CURSOR_BOT_PRINCIPAL_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
@@ -29,8 +30,16 @@ vi.mock('@core/component/UserIcon', () => ({
   ),
 }));
 vi.mock('./BotIcon', () => ({
-  BotIcon: (props: { name?: string | null; avatarUrl?: string | null }) => (
-    <span data-testid="bot-icon" data-avatar={props.avatarUrl ?? ''}>
+  BotIcon: (props: {
+    name?: string | null;
+    avatarUrl?: string | null;
+    mark?: FirstPartyBotMark;
+  }) => (
+    <span
+      data-testid="bot-icon"
+      data-avatar={props.avatarUrl ?? ''}
+      data-mark={props.mark ? 'mark' : ''}
+    >
       {props.name}
     </span>
   ),
@@ -82,6 +91,36 @@ describe('SenderIcon', () => {
     expect(getByTestId('bot-icon').textContent).toBe('Claude Code');
     expect(getByTestId('user-card').dataset.name).toBe('Claude Code');
     expect(queryByTestId('user-icon')).toBeNull();
+  });
+
+  it('draws a verified MCP client with its product mark', () => {
+    const { getByTestId } = renderSender(
+      message(MACRO_AGENT_PRINCIPAL_ID, {
+        type: 'bot',
+        id: '00000000-0000-0000-0000-00000000a1a1',
+        name: 'Macro',
+        triggered_by: 'macro|alice@example.com',
+        triggered_via: 'Claude Code (macro)',
+        triggered_via_kind: 'claude_code',
+      })
+    );
+    const icon = getByTestId('bot-icon');
+    expect(icon.textContent).toBe('Claude Code (macro)');
+    expect(icon.dataset.mark).toBe('mark');
+  });
+
+  it('draws an unrecognized MCP client with its initial', () => {
+    const { getByTestId } = renderSender(
+      message(MACRO_AGENT_PRINCIPAL_ID, {
+        type: 'bot',
+        id: '00000000-0000-0000-0000-00000000a1a1',
+        name: 'Macro',
+        triggered_by: 'macro|alice@example.com',
+        triggered_via: 'Claude',
+        triggered_via_kind: null,
+      })
+    );
+    expect(getByTestId('bot-icon').dataset.mark).toBe('');
   });
 
   it('draws a team bot with its own uploaded avatar', () => {

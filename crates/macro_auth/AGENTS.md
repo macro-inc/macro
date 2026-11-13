@@ -33,10 +33,11 @@ internal API key, and the Axum JWT-decode middleware.
 - `cargo test -p macro_auth` (`SQLX_OFFLINE` unset).
 
 Macro API tokens may include a signed `agent_id` for SDK message attribution,
-and with it an `agent_via` client label ("Claude Code"), plus a signed
-`routine_id` naming the routine whose run the token acts for (loop protection,
-see `agent_correlation`). Ordinary user token producers leave them absent; only
-key-holders signing for a verified context set them, never from request input.
+and with it an `agent_via` client label ("Claude Code") and its verified
+`agent_via_kind`, plus a signed `routine_id` naming the routine whose run the
+token acts for (loop protection, see `agent_correlation`). Ordinary user token
+producers leave them absent; only key-holders signing for a verified context set
+them, never from request input.
 
 ## Gotchas
 

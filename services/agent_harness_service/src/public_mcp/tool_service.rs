@@ -188,8 +188,10 @@ const HIDDEN_FROM_CHATGPT: [&str; 5] = [
 /// the same data the SDK does, and loses the tools above.
 fn may_be_chatgpt(caller: &ToolCaller) -> bool {
     match caller {
-        ToolCaller::McpClient { name: None } => true,
-        ToolCaller::McpClient { name: Some(name) } => name.eq_ignore_ascii_case("chatgpt"),
+        ToolCaller::McpClient { client: None } => true,
+        ToolCaller::McpClient {
+            client: Some(client),
+        } => client.name.eq_ignore_ascii_case("chatgpt"),
         ToolCaller::Agent(_) | ToolCaller::ApiKey => false,
     }
 }

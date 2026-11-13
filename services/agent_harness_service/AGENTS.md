@@ -343,13 +343,13 @@ listener failure shuts down the process so ECS can replace the task.
   `agent_session.bot_id`) writes as that agent, under the bot's own name (read
   per call, so its document edits label their live cursors with it);
   `McpClient` (OAuth) writes as the Macro bot labelled with the client's name
-  (shown as the author); `ApiKey` writes as the Macro bot. Public `ExecuteCode`
-  builds its context per call from the caller and signs the same attribution
-  into its SDK token: the agent, or the Macro bot plus the client name as
-  `agent_via`. The OAuth broker signs the same Macro bot attribution into the
-  tokens it issues for the ChatGPT MCP Worker's resource
-  (`McpChatgptServiceUrl`; `public_mcp/macro_api_tokens.rs`). Never read a bot
-  id or client name from the request itself.
+  and verified kind (shown as the author and its mark); `ApiKey` writes as the
+  Macro bot. Public `ExecuteCode` builds its context per call from the caller
+  and signs the same attribution into its SDK token: the agent, or the Macro bot
+  plus the client label as `agent_via` / `agent_via_kind`. The OAuth broker
+  signs the Macro bot attribution into the tokens it issues for the ChatGPT MCP
+  Worker's resource (`McpChatgptServiceUrl`; `public_mcp/macro_api_tokens.rs`).
+  Never read a bot id or client name from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.

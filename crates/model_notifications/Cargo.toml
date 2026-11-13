@@ -17,6 +17,7 @@ notification = { path = "../notification", default-features = false }
 paste = { workspace = true }
 invite_email = { path = "../invite_email" }
 rootcause = { workspace = true }
+mcp_client_label = { path = "../mcp_client_label", features = ["schema"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

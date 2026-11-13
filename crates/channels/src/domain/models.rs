@@ -8,6 +8,7 @@ use item_filters::ast::{
 #[cfg(any(feature = "list", feature = "outbound"))]
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::McpClientKind;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -905,6 +906,8 @@ pub struct MutatedMessage {
     pub triggered_by: Option<String>,
     /// The client the user triggered it through, such as "Claude Code".
     pub triggered_via: Option<String>,
+    /// The product `triggered_via` was verified as, if any.
+    pub triggered_via_kind: Option<McpClientKind>,
     /// Message body.
     pub content: String,
     /// Created timestamp.

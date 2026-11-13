@@ -108,7 +108,7 @@ impl UserExecutionCredentials for UserRunCredentials {
                 user,
                 60,
                 Some(agent.as_uuid()),
-                caller.via().map(str::to_owned),
+                caller.via(),
                 None,
                 correlation,
             )
