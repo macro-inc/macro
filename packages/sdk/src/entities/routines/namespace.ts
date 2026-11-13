@@ -60,11 +60,13 @@ export class RoutineNamespace {
   }
 
   /**
-   * Create a routine: one agent task (`prompt`, with `model`, `agent`, or
-   * both), or code and Ask AI `steps`. Set `dangerouslyOperateAsUser` only
-   * when the user explicitly asked for it to act, send or post as them. To
-   * check on something later, such as a spawned session or a long job, create
-   * a routine instead of waiting in a program. A cron `schedule` has 6 fields
+   * Create a routine from `steps`: code steps and at most one Ask AI
+   * (`agent`) step. The older single agent task (`prompt`, with `model`,
+   * `agent`, or both) still saves and runs as one Ask AI step; write new
+   * routines as steps. Set `dangerouslyOperateAsUser` only when the user
+   * explicitly asked for it to act, send or post as them. To check on
+   * something later, such as a spawned session or a long job, create a
+   * routine instead of waiting in a program. A cron `schedule` has 6 fields
    * (second minute hour day-of-month month day-of-week) or 7 with a year; a
    * 7-field schedule that names one date runs once. A code step's `source`
    * exports `async function main({ macro, run, trigger, steps, knobs })` and
@@ -83,22 +85,30 @@ export class RoutineNamespace {
    * // Every ten minutes, in New York time.
    * const routine = await macro.routines.create({
    *   name: 'Check the import',
-   *   prompt: 'Read the import task and post its status in the channel.',
-   *   userPrompt: 'Check on the import every ten minutes.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: {
    *     type: 'cron',
    *     schedule: '0 0/10 * * * *',
    *     timezone: 'America/New_York',
    *   },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the import task and post its status in the channel.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
    * // Once, at 14:30 on 3 November 2027.
    * await macro.routines.create({
    *   name: 'Follow up on the review',
-   *   prompt: 'Read the review session and summarize its outcome.',
-   *   userPrompt: 'Follow up on the review on 3 November 2027.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: { type: 'cron', schedule: '0 30 14 3 11 * 2027', timezone: 'UTC' },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the review session and summarize its outcome.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
    * // A code step that posts in a channel, disabled until turned on. The
    * // user asked for the post to come from them.
@@ -121,10 +131,14 @@ export class RoutineNamespace {
    * await macro.routines.create(
    *   {
    *     name: `Check on ${taskName}`,
-   *     prompt: `Read task ${taskId} and post its status in the channel.`,
-   *     userPrompt: 'Check on each open task tomorrow.',
-   *     model: 'anthropic/claude-sonnet-5-5',
    *     trigger: { type: 'once', at: tomorrow },
+   *     steps: [
+   *       {
+   *         type: 'agent',
+   *         instructions: `Read task ${taskId} and post its status in the channel.`,
+   *         model: 'anthropic/claude-sonnet-5-5',
+   *       },
+   *     ],
    *   },
    *   { key: `check-${taskId}` },
    * );
