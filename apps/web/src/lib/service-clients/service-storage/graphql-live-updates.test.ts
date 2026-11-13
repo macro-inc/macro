@@ -413,6 +413,57 @@ describe('liveUpdatesGateExchange', () => {
     ]);
   });
 
+  it('shows a cached result at once while its read waits', async () => {
+    const { gate } = await pingedGate();
+    const host = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      readQuery: async () => ({
+        kind: 'hit' as const,
+        data: { feed: [{ id: 'cached' }] },
+      }),
+    };
+    const reads: string[] = [];
+    const network: Exchange = () => (operations$) =>
+      pipe(
+        operations$,
+        filter((operation) => operation.kind === 'query'),
+        onPush(() => reads.push('Feed')),
+        map((operation) =>
+          makeResult(operation, { data: { feed: [{ id: 'server' }] } })
+        )
+      );
+    const client = createClient({
+      url: 'https://dss.test/graphql',
+      exchanges: [
+        normalizedCacheExchange(host),
+        liveUpdatesGateExchange(gate),
+        network,
+      ],
+    });
+    const results: OperationResult[] = [];
+    pipe(
+      client.executeQuery(createRequest(FEED, {}), {
+        requestPolicy: 'cache-and-network',
+        ...FOLLOWS_LIVE_UPDATES,
+      }),
+      subscribe((result) => results.push(result))
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reads).toEqual([]);
+    expect(results.map(({ data, stale }) => ({ data, stale }))).toEqual([
+      { data: { feed: [{ id: 'cached' }] }, stale: true },
+    ]);
+
+    gate.pong(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reads).toEqual(['Feed']);
+    expect(results.at(-1)).toMatchObject({
+      data: { feed: [{ id: 'server' }] },
+      stale: false,
+    });
+  });
+
   it('leaves the normalized cache with no request in flight once held reads answer', async () => {
     const run = async (gated: boolean) => {
       const { gate } = await pingedGate();
