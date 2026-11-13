@@ -7,10 +7,12 @@
 // metrics ship separately from this file: the monitor and the pool graphs
 // have no data until that cloud-storage-service release is deployed.
 //
-// - `db.client.connection.wait_time`: seconds a probe waited for a connection
-//   (histogram). Each task acquires and releases one connection per pool every
-//   second, tagged `outcome` (`acquired`, `timed_out` or `failed`); a timed-out
-//   sample reads the pool's acquire timeout.
+// - `db.client.connection.wait_time`: seconds a probe waited in the pool's
+//   queue (histogram). Each task samples each pool every second, tagged
+//   `outcome` (`acquired`, `timed_out` or `failed`). It records 0 while the
+//   pool has an idle connection and queues for one only when none is idle, so
+//   it measures an exhausted pool and nothing else; a timed-out sample reads
+//   the pool's acquire timeout (about 10 s on `readonly`, 30 s on `primary`).
 // - `db.client.connection.count`: connections by `db.client.connection.state`
 //   (`idle` or `used`).
 // - `db.client.connection.max`: the pool's maximum.
@@ -28,9 +30,11 @@
 // two-minute burst on 2026-11-11, and 1.3-2.3 s on 2026-11-09 (prod, primary
 // overloaded) and 2026-11-13 (dev, one task out of CPU with the database
 // idle). The warning would have fired in all three and the critical within
-// about two minutes of the start of the last two. Retune once the metrics
-// have a week of data: indexed spans over-represent slow requests, and the
-// span is weighted by request where the probe is weighted by time.
+// about two minutes of the start of the last two, by the span. The span is
+// only a guide: it is weighted by request where the probe is weighted by
+// time, indexed spans over-represent slow requests, and the span also counts
+// waits while connections were idle, which the probe reads as 0. Retune once
+// the metrics have a week of data.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
 
@@ -251,7 +255,7 @@ prodMonitor('storage-pool-wait', {
   query: `avg(last_10m):avg:db.client.connection.wait_time{env:prod,service:cloud-storage-service} by {${POOL}} > 0.25`,
   monitorThresholds: { critical: '0.25', warning: '0.025' },
   pages: false,
-  description: `The prod cloud-storage-service \`{{[${POOL}].name}}\` pool took {{value}} s on average to hand out a database connection over 10 minutes. Normal is under 5 ms. This is time queued inside the service before any SQL runs, not query time. Two causes look the same here. Connections in use at the pool maximum: the pool is the queue, because the database is slow and connections come back late (active sessions per vCPU or I/O credits on the dashboard are off, task CPU normal or low). Connections in use below the maximum: the service is starved and cannot get to the connections it has (busiest task CPU near 100%, database idle).`,
+  description: `The prod cloud-storage-service \`{{[${POOL}].name}}\` pool took {{value}} s on average to hand out a database connection over 10 minutes. Normal is under 5 ms. It is above zero only while every connection in the pool is in use, and it is time queued inside the service before any SQL runs, not query time. Two causes look the same here. The database is slow, so connections come back late: active sessions per vCPU or I/O credits on the dashboard are off and task CPU is normal or low. Or the service is starved, so its tasks hold connections they are not using: the busiest task's CPU is near 100% and the database is idle.`,
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/macrodb.md#pool-waits',
 });

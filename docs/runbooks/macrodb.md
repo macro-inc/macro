@@ -105,29 +105,30 @@ at 40%.
 
 cloud-storage-service took long to hand out a connection from one of its sqlx
 pools (`primary`, or `readonly` for the replica). The alert names the pool.
-Each task measures this by acquiring one connection per pool every second.
-This is time queued inside the service before any SQL runs; slow SQL shows in
+Each task samples each pool every second and records a wait only when no
+connection is idle, so the alert means the pool was exhausted. This is time queued inside the service before any SQL runs; slow SQL shows in
 the `sqlx::query` slow-statement logs and Database Monitoring instead. Open the
 [Search and database saturation](../../infra/stacks/monitoring/monitors/storage-pool.ts)
 dashboard, linked from the alert, and decide which of two causes it is:
 
-- **The database is slow**, so connections come back late and the pool is the
-  queue. Connections in use sit at the pool maximum, active sessions per vCPU
-  on that pool's instance are above 1 or its I/O credits are low, and task CPU
-  is normal or low. On 2026-11-09 the primary ran at 11 sessions per
+- **The database is slow**, so connections come back late. Active sessions per
+  vCPU on that pool's instance are above 1 or its I/O credits are low, and task
+  CPU is normal or low. On 2026-11-09 the primary ran at 11 sessions per
   vCPU for an hour while task CPU fell to 2%. Go to [Load](#load),
   [Locks](#locks) or [I/O credits](#io-credits).
-- **The service is starved**, so it cannot get to the connections it has.
-  Connections in use stay below the pool maximum, the busiest task's CPU is
-  near 100% and the database is idle. On 2026-11-13 in dev one task sat at 95-99% CPU
+- **The service is starved**, so its tasks hold connections they are not
+  using. The busiest task's CPU is near 100% and the database is idle. On 2026-11-13 in dev one task sat at 95-99% CPU
   with one active query on the database. Find what is burning CPU (a large
   response, a retry loop); more tasks help, a larger pool does not.
 
-If connections in use sit at the pool maximum and the database is idle, a
-caller is holding connections across slow work; find the longest
-`soup.pool.acquire` and request spans in APM. Probes that time out read the
-pool's acquire timeout, so a flat line at that value means nothing is getting
-a connection at all.
+If neither holds, a caller is holding connections across slow work; find the
+longest `soup.pool.acquire` and request spans in APM. Probes that time out
+read the pool's acquire timeout (about 10 s on `readonly`, 30 s on `primary`),
+so a flat line there means nothing is getting a connection at all.
+
+A starved task that still has idle connections does not raise this alert:
+requests are slow but the pool is not the queue. It shows as task CPU and as
+slow-acquire warnings on the same dashboard.
 
 ## Storage
 
