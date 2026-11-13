@@ -39,7 +39,7 @@ export function HomepageTrustBadges(props: { revealOnScroll?: boolean } = {}) {
     >
       <div class="homepage-open-source-backing">
         <LogoA16z aria-label="Andreessen Horowitz" viewBox="0 0 169 40" />
-        <span>Backed by a16z · $30M+ raised</span>
+        <span>Led by a16z · $30M+ raised</span>
       </div>
       <div class="homepage-open-source-security">
         <div aria-label="Security certifications">

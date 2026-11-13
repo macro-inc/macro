@@ -17,10 +17,10 @@
   .macro-home-hero .homepage-open-source-badges { min-height: 176.25px; }
 }
 
-.macro-home-hero .homepage-open-source-badges > div { transition: opacity 600ms ease, transform 600ms ease; }
+.macro-home-hero .homepage-open-source-badges > div { opacity: .85; transition: opacity 600ms ease, transform 600ms ease; }
 .macro-home-hero .homepage-open-source-badges[data-revealed=false] > div { opacity: .4; transform: translateY(0); }
 @media (prefers-reduced-motion: reduce) {
-  .macro-home-hero .homepage-open-source-badges > div { transition: none; transform: none; }
+  .macro-home-hero .homepage-open-source-badges > div { opacity: .85; transition: none; transform: none; }
 }
 
 @media (max-width: 699px) {
