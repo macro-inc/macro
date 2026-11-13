@@ -666,8 +666,6 @@ export default {
     create: 'Tạo',
     getMobileApp: 'Tải ứng dụng di động',
     signedInAs: 'Đã đăng nhập với tên {{name}}',
-    commandMenu: 'Menu lệnh',
-    searchEverything: 'Tìm kiếm mọi thứ',
     customizeSidebar: 'Tùy chỉnh thanh bên',
     customizeSidebarDescription:
       'Chọn ứng dụng hiển thị trên thanh bên và kéo để sắp xếp lại. Trang chủ luôn ở đầu tiên.',

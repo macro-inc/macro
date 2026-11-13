@@ -644,8 +644,6 @@ export default {
     create: '新建',
     getMobileApp: '获取移动应用',
     signedInAs: '已登录为 {{name}}',
-    commandMenu: '命令菜单',
-    searchEverything: '全局搜索',
     customizeSidebar: '自定义侧边栏',
     customizeSidebarDescription:
       '选择要在侧边栏中显示的应用，拖动可调整顺序。首页始终位于最前。',

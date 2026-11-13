@@ -662,8 +662,6 @@ export default {
     create: '만들기',
     getMobileApp: '모바일 앱 받기',
     signedInAs: '{{name}}(으)로 로그인됨',
-    commandMenu: '명령 메뉴',
-    searchEverything: '모든 항목 검색',
     customizeSidebar: '사이드바 맞춤 설정',
     customizeSidebarDescription:
       '사이드바에 표시할 앱을 선택하고 드래그해 순서를 바꾸세요. 홈은 항상 맨 위에 표시됩니다.',

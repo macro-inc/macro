@@ -664,8 +664,6 @@ export default {
     create: '作成',
     getMobileApp: 'モバイルアプリを入手',
     signedInAs: '{{name}}としてログイン中',
-    commandMenu: 'コマンドメニュー',
-    searchEverything: 'すべてを検索',
     customizeSidebar: 'サイドバーをカスタマイズ',
     customizeSidebarDescription:
       'サイドバーに表示するアプリを選択し、ドラッグして並べ替えます。ホームは常に先頭に表示されます。',

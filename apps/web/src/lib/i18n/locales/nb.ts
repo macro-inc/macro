@@ -691,8 +691,6 @@ export default {
     create: 'Opprett',
     getMobileApp: 'Last ned mobilappen',
     signedInAs: 'Logget på som {{name}}',
-    commandMenu: 'Kommandomeny',
-    searchEverything: 'Søk i alt',
     customizeSidebar: 'Tilpass sidefeltet',
     customizeSidebarDescription:
       'Velg hvilke apper som vises i sidefeltet, og dra for å endre rekkefølgen. Hjem er alltid først.',

@@ -722,8 +722,6 @@ export default {
     create: 'Criar',
     getMobileApp: 'Obter a app para dispositivos móveis',
     signedInAs: 'Sessão iniciada como {{name}}',
-    commandMenu: 'Menu de comandos',
-    searchEverything: 'Pesquisar tudo',
     customizeSidebar: 'Personalizar barra lateral',
     customizeSidebarDescription:
       'Escolha as apps que aparecem na barra lateral e arraste para as reordenar. Início fica sempre em primeiro.',
