@@ -1,0 +1,22 @@
+apps/web/src/features/block-canvas/views/canvas-read-only-view.tsx
+  s_39eee246ac6b4a::t_a1d8e0c8ea5eef 9,14,108
+apps/web/src/features/block-canvas/views/static-item-renderers.tsx
+  s_39eee246ac6b4a::t_117d8d0e9fa39a 1-14,16-32
+  s_39eee246ac6b4a::t_a1d8e0c8ea5eef 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8fd28e9e16c1fe6abba602b75963dc89a3886127",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
