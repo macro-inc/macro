@@ -275,7 +275,8 @@ export default {
   importError_missing_export_data: 'The archive is not a 1Password export.',
   importError_encrypted_bitwarden:
     'This Bitwarden export is encrypted. Export again as unencrypted JSON or CSV.',
-  importError_unsupported_version: 'This export version is not supported.',
+  importError_unsupported_version:
+    'This export version is not supported. From 1Password, export a .1pux file or a 1Password 8 CSV; from Bitwarden, an unencrypted JSON or CSV.',
   importError_invalid_json: 'The file is not valid JSON (line {{line}}).',
   importError_invalid_csv: 'The file is not valid CSV (row {{row}}).',
   importError_unreadable: 'The file could not be read. Try again.',

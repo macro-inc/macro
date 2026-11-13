@@ -225,3 +225,18 @@ it('continues an unfinished import of the same file with the same import id', as
   const ids = new Set(requests.map((request) => request.items[0]?.sourceKey));
   expect(ids.has('bw-1')).toBe(true);
 });
+
+it('asks for a supported export when the layout is too old', async () => {
+  mount(createFakePasswordSource(), {
+    outcome: 'failed',
+    error: { code: 'unsupported_version' },
+  });
+  chooseFileOnClick(new File(['{}'], 'export.csv'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toContain(
+      'export a .1pux file or a 1Password 8 CSV'
+    )
+  );
+});
