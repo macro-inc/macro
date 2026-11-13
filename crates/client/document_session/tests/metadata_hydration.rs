@@ -1402,6 +1402,25 @@ type Opened = (EditorSurface, loro::LoroDoc, Vec<Vec<OpShape>>);
 /// Open the captured received snapshot `snapshot` for editing with the search-text policy
 /// and return the surface, the document and the op shapes of each local commit the open made.
 fn open_stored(snapshot: &[u8]) -> Result<Opened, Box<dyn std::error::Error>> {
+    open_stored_in(snapshot, EditorConfig::default())
+}
+
+/// Open `snapshot` as the browser does: a view-attached editor with browser history
+/// awareness (application_editor_config enables it for a non-native view host).
+fn open_stored_in_browser(snapshot: &[u8]) -> Result<Opened, Box<dyn std::error::Error>> {
+    open_stored_in(
+        snapshot,
+        EditorConfig {
+            mode: lexical_model::EditorMode::ViewAttached,
+            ..EditorConfig::default()
+        },
+    )
+}
+
+fn open_stored_in(
+    snapshot: &[u8],
+    editor: EditorConfig,
+) -> Result<Opened, Box<dyn std::error::Error>> {
     use std::sync::Mutex;
     let doc = lexical_loro::new_doc(50)?;
     doc.import(snapshot)?;
@@ -1415,7 +1434,7 @@ fn open_stored(snapshot: &[u8]) -> Result<Opened, Box<dyn std::error::Error>> {
         true
     }));
     let mut config = application_editor_config(
-        EditorConfig::default(),
+        editor,
         Arc::new(AtomicI64::new(0)),
         EditorType::MarkdownSync,
     );
@@ -1581,6 +1600,134 @@ fn stored_fields_are_rewritten_like_source_at_the_first_local_sync()
         }
     }
     assert!(mismatches.is_empty(), "{mismatches:#?}");
+    Ok(())
+}
+
+/// G counted h-undo-typed-run (q-counted-20261113T203337Z, first diff eeabbec4): in a
+/// UI-created document (current metadata), typing a run and undoing it restores the first
+/// paragraph from Loro, and Source's reconcile carries the stored `$.searchText` ('' from the
+/// load group) into the live model.
+#[test]
+fn undo_restores_the_stored_search_text_into_the_live_model_like_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let (mut surface, doc, _) = open_stored_in_browser(&snapshot)?;
+    assert_eq!(
+        stored_root(&doc)["children"][0]["$"]["searchText"],
+        json!("")
+    );
+    // One input per keystroke, as the browser sends them.
+    for (index, character) in "hello".chars().enumerate() {
+        type_text(
+            &mut surface,
+            &doc,
+            &character.to_string(),
+            2000 + 8 * u32::try_from(index)?,
+        )?;
+    }
+    assert_eq!(
+        stored_root(&doc)["children"][0]["$"]["searchText"],
+        json!("hello")
+    );
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        3000,
+    )?;
+    assert_eq!(
+        stored_root(&doc)["children"][0]["$"]["searchText"],
+        json!("")
+    );
+    let live = serde_json::to_value(surface.state().to_json()?)?;
+    assert_eq!(live["root"]["children"][0]["children"], json!([]));
+    assert_eq!(
+        live["root"]["children"][0]["$"],
+        json!({"id": "Ts1gplV5", "searchText": ""}),
+        "the restored paragraph keeps the stored searchText, as Source's reconcile does"
+    );
+    // The browser's serializedState uses the streaming writer.
+    let streamed: serde_json::Value = serde_json::from_str(&surface.state().to_json_string()?)?;
+    assert_eq!(
+        streamed["root"]["children"][0]["$"],
+        live["root"]["children"][0]["$"]
+    );
+    Ok(())
+}
+
+/// G counted h-undo-stops-at-enter (q-counted-20261113T203337Z, first diff 032573d4): after
+/// 'ab', Enter, 'cd' and one undo, Source's reconcile walks the whole stored state, so the
+/// untouched first paragraph's stored `$.searchText` ('ab') also reaches the live model.
+#[test]
+fn undo_brings_stored_search_text_into_untouched_blocks_like_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let (mut surface, doc, _) = open_stored_in_browser(&snapshot)?;
+    type_text(&mut surface, &doc, "ab", 2000)?;
+    let first = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let end = Point::text(
+        surface.state().view().first_child(first).expect("text"),
+        Utf16Offset(2),
+    );
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::InsertParagraph,
+            selection: ViewSelection::Range {
+                anchor: end,
+                focus: end,
+                resolution_dirty: false,
+            },
+        },
+        3000,
+    )?;
+    type_text(&mut surface, &doc, "cd", 4000)?;
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        5000,
+    )?;
+    let live = serde_json::to_value(surface.state().to_json()?)?;
+    assert_eq!(live["root"]["children"][1]["children"], json!([]));
+    assert_eq!(
+        live["root"]["children"][0]["$"]["searchText"],
+        json!("ab"),
+        "the untouched first paragraph carries its stored searchText, as Source's reconcile does: {}",
+        live["root"]["children"][0]["$"]
+    );
+    let streamed: serde_json::Value = serde_json::from_str(&surface.state().to_json_string()?)?;
+    assert_eq!(
+        streamed["root"]["children"][0]["$"],
+        live["root"]["children"][0]["$"]
+    );
     Ok(())
 }
 
