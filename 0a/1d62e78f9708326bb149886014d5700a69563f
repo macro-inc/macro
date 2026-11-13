@@ -1,0 +1,23 @@
+rules/ast-grep-tests/rust-exposure-no-wildcard-arm-test.yml
+  s_800cdee5095ae4::t_b6d260e934ba53 1-57
+rules/ast-grep/rust-exposure-no-wildcard-arm.yml
+  s_800cdee5095ae4::t_b6d260e934ba53 1-25
+rules/ast-grep-tests/__snapshots__/rust-exposure-no-wildcard-arm-snapshot.yml
+  s_800cdee5095ae4::t_8ad0ab0d5a0864 1-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0a1d62e78f9708326bb149886014d5700a69563f",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
