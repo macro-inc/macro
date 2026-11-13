@@ -90,6 +90,65 @@
         }
       }
     },
+    "/search/names": {
+      "post": {
+        "tags": ["search::names"],
+        "summary": "Look up names: per name, the items of the kinds asked for that the caller\ncan access whose name is that name, ignoring case and one leading `#` or\n`@`, then a few whose name contains it.",
+        "operationId": "search_names",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NameSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NameSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search/simple": {
       "post": {
         "tags": ["search::simple::simple_unified"],
@@ -2824,9 +2883,304 @@
           }
         }
       },
+      "MacroUserIdStr": {
+        "type": "string"
+      },
       "MatchType": {
         "type": "string",
         "enum": ["exact", "partial", "regexp", "query"]
+      },
+      "NameKind": {
+        "type": "string",
+        "description": "A kind of item a name can name.",
+        "enum": [
+          "channel",
+          "person",
+          "project",
+          "initiative",
+          "document",
+          "task",
+          "database",
+          "agent",
+          "label",
+          "tag",
+          "channel_label"
+        ]
+      },
+      "NameMatch": {
+        "type": "object",
+        "description": "An item a name matched.",
+        "required": ["name", "exact", "item"],
+        "properties": {
+          "exact": {
+            "type": "boolean",
+            "description": "Whether its name is the name looked up, ignoring case, surrounding\nspace and one leading `#` or `@`. For a person, their full name, first\nname or email address counts."
+          },
+          "item": {
+            "$ref": "#/components/schemas/NamedItem",
+            "description": "The item."
+          },
+          "name": {
+            "type": "string",
+            "description": "The item's name as stored."
+          }
+        }
+      },
+      "NameQuery": {
+        "type": "object",
+        "description": "One name to look up.",
+        "required": ["name"],
+        "properties": {
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameKind"
+            },
+            "description": "The kinds of item to look in; empty looks in every kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name as the request uses it, such as `#design-feedback` or\n`Q4 Launch`. Case and one leading `#` or `@` are ignored."
+          }
+        }
+      },
+      "NameResult": {
+        "type": "object",
+        "description": "What one name matched.",
+        "required": ["name", "matches"],
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameMatch"
+            },
+            "description": "At most [`MAX_EXACT_MATCHES`] exact matches first, then at most\n[`MAX_NEAR_MATCHES`] items whose name contains it, those starting with\nit first."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name as it was asked for."
+          }
+        }
+      },
+      "NameSearchRequest": {
+        "type": "object",
+        "description": "Names to look up, at most [`MAX_NAMES`].",
+        "required": ["names"],
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameQuery"
+            },
+            "description": "The names, each looked up on its own."
+          }
+        }
+      },
+      "NameSearchResponse": {
+        "type": "object",
+        "description": "What each name matched, in the order asked.",
+        "required": ["results", "unavailable"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameResult"
+            },
+            "description": "One result per name asked for."
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameKind"
+            },
+            "description": "The kinds that couldn't be looked in this time. A name that matched\nnothing may still name an item of one of these kinds."
+          }
+        }
+      },
+      "NamedItem": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The channel's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A person.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The person's Macro user id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["person"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A folder.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The folder's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["project"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An initiative.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The initiative's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["initiative"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The document's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A task.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The task's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["task"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A database.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The database's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["database"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The agent's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["agent"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An email label.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The label's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["label"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A tag.",
+            "required": ["id", "definitionId", "kind"],
+            "properties": {
+              "definitionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The tag set's property definition."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The tag's id, an option of its tag set's property."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["tag"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A channel label.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The label's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["channel_label"]
+              }
+            }
+          }
+        ],
+        "description": "An item a name matched, by kind."
       },
       "NotificationFilters": {
         "type": "object",

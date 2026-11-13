@@ -34,6 +34,9 @@ use models_search::project::{
     ProjectSearchResult, SimpleProjectSearchResponse, SimpleProjectSearchResponseItem,
 };
 
+use models_search::names::{
+    NameKind, NameMatch, NameQuery, NameResult, NameSearchRequest, NameSearchResponse, NamedItem,
+};
 use models_search::{MatchType, SearchHighlight, TermMatching};
 
 #[derive(OpenApi)]
@@ -47,6 +50,9 @@ use models_search::{MatchType, SearchHighlight, TermMatching};
 
                 /// /search/simple
                 search::simple::simple_unified::handler,
+
+                /// /search/names
+                search::names::handler,
         ),
         components(
             schemas(
@@ -55,6 +61,9 @@ use models_search::{MatchType, SearchHighlight, TermMatching};
                         TermMatching,
                         SearchHighlight,
                         DocumentSubType,
+
+                        // Name lookup
+                        NameKind, NameQuery, NameSearchRequest, NamedItem, NameMatch, NameResult, NameSearchResponse,
 
                         // Document
                         FileType, DocumentSearchRequest, DocumentSearchResult, DocumentSearchResponseItem, DocumentSearchResponse,

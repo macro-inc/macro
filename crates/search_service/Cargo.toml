@@ -14,9 +14,9 @@ path = "src/openapi.rs"
 
 [dependencies]
 agent_session = { path = "../agent_session", default-features = false }
-async-trait = { workspace = true }
 rootcause = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 axum = { workspace = true }
 calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
@@ -26,6 +26,7 @@ crm = { path = "../crm", default-features = false, features = ["search"] }
 document_sub_type = { path = "../document_sub_type" }
 email_db_client = { path = "../email_db_client" }
 feature_flags = { path = "../feature_flags" }
+futures = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "outbound",
 ] }
@@ -51,6 +52,7 @@ opensearch_client = { path = "../opensearch_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -59,4 +61,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 tracing-subscriber = { workspace = true }

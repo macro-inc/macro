@@ -223,6 +223,7 @@ models_pagination = { path = "../../crates/models_pagination", features = [
 ] }
 models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
+models_search = { path = "../../crates/models_search" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
 notification_inbox = { path = "../../crates/notification_inbox" }

@@ -13,7 +13,15 @@ use crate::{
         self, CalEventTypeContentNamesKey, CalWebhookSecretKey, Config, Environment,
         MetaAccessToken, MetaPixelId, MetaTestEventCode,
     },
-    db_pools, outbound,
+    db_pools,
+    outbound::{
+        self,
+        name_sources::{
+            agents::AgentNames, channel_labels::ChannelLabelNames, databases::DatabaseNames,
+            email_labels::EmailLabelNames, folders::FolderNames, initiatives::InitiativeNames,
+            people::PeopleNames, tags::TagNames,
+        },
+    },
     service::{self, s3::S3},
 };
 use account_manager::{
@@ -1904,7 +1912,7 @@ async fn run_server() -> anyhow::Result<()> {
     // Keep membership and names on the primary, matching the legacy contacts read.
     let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
         contacts::domain::service::directory::ContactsDirectoryService::new(
-            contacts_service,
+            contacts_service.clone(),
             contacts::outbound::names::DbContactNames::new(db.clone()),
         ),
     ));
@@ -2462,7 +2470,23 @@ async fn run_server() -> anyhow::Result<()> {
             event_broker_tracker.clone(),
         ),
     ));
+    let channel_labels_service = Arc::new(ChannelLabelsServiceImpl::new(PgChannelLabelsRepo::new(
+        db.clone(),
+    )));
+    // `POST /search/names` finds the kinds this service hosts through each
+    // kind's own domain service, with the access its own routes apply.
+    let name_sources: Vec<Arc<dyn search_service::names::NameSource>> = vec![
+        Arc::new(PeopleNames::new(contacts_service)),
+        Arc::new(FolderNames::new(project_service.clone())),
+        Arc::new(InitiativeNames::new(initiative_service.clone())),
+        Arc::new(DatabaseNames::new(databases_service.clone())),
+        Arc::new(AgentNames::new(Arc::new(bots_service.clone()))),
+        Arc::new(EmailLabelNames::new(Arc::new(email_service.clone()))),
+        Arc::new(TagNames::new(properties_service.clone())),
+        Arc::new(ChannelLabelNames::new(channel_labels_service.clone())),
+    ];
     let api_context = ApiContext {
+        name_sources,
         search_term_matching,
         saved_views,
         sync_sessions,
@@ -2488,9 +2512,7 @@ async fn run_server() -> anyhow::Result<()> {
         favorites_service,
         favorites_mutation_service,
         channel_labels_state: ChannelLabelsRouterState::new(
-            Arc::new(ChannelLabelsServiceImpl::new(PgChannelLabelsRepo::new(
-                db.clone(),
-            ))),
+            channel_labels_service,
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

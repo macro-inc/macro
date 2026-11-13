@@ -40,6 +40,10 @@ pub struct SearchHandlerState {
     /// Says whose calendar each event hit is on and what the caller is there,
     /// by the rule every calendar reader shares.
     pub calendar_event_labels: Arc<dyn CalendarEventLabelReader>,
+    /// Name sources for the kinds the host app owns (people, folders,
+    /// initiatives, databases, agents, labels, tags, channel labels), beside
+    /// the channel and document sources this crate reads itself.
+    pub name_sources: Vec<Arc<dyn crate::domain::names::NameSource>>,
     /// Which callers get dynamic multi-term matching on document content.
     pub term_matching_rollout: Arc<dyn crate::TermMatchingRollout>,
 }

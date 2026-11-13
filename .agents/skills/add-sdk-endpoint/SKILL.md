@@ -24,7 +24,11 @@ A wrapped endpoint also needs a verb in `src/utils/verbs.ts`, from the closed
 `SdkVerb` set: what it does to a resource (`edited`), or `read`, `listed`,
 `searched`, `queried` or `checked` when it changes nothing, including a POST that
 only reads. `just coverage` fails on a wrapped method with no verb or a verb for a
-method that no longer exists. Don't grow the set; pick the closest.
+method that no longer exists. Don't grow the set; pick the closest. A POST that
+only reads also goes in `postReads` in `packages/code-mode-sdk/scripts/generate.ts`
+(code mode counts every other POST as a write, so a dry run answers it empty) and
+in `POST_READS` in `crates/agent_correlation/src/scope.rs` (a generation session
+is refused any POST not listed there).
 
 ## 1. Skip or wrap?
 

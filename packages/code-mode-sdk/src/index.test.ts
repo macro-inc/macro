@@ -1,8 +1,12 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import * as publicSdk from '../../sdk/src/macro';
 import { Macro as PublicMacro } from '../../sdk/src/macro';
 import * as preinstalledSdk from './index';
 import { Macro } from './index';
+
+// Written by `bun run generate`, which `bun run test` runs first.
+const OPERATIONS = new URL('../dist/operations.json', import.meta.url);
 
 describe('preinstalled SDK', () => {
   it('preserves every public runtime export, including documented helpers', () => {
@@ -32,5 +36,12 @@ describe('preinstalled SDK', () => {
     expect(execution.session()).toBe(session);
     expect(typeof macro.email.search).toBe('function');
     expect(typeof macro.ai.decide).toBe('function');
+  });
+  it('marks POST lookups as reads, so a dry run still sends them', async () => {
+    const operations: Record<string, { method: string; write: boolean }> =
+      JSON.parse(await readFile(OPERATIONS, 'utf8'));
+    for (const key of ['search.searchNames', 'search.unifiedSearch']) {
+      expect(operations[key]).toMatchObject({ method: 'POST', write: false });
+    }
   });
 });

@@ -2,7 +2,7 @@ use super::DbContactsRepository;
 use crate::domain::{
     models::{
         contact::{Contact, ContactId, ContactName},
-        people::{PeopleSearchLimit, PersonMatch},
+        people::{PeopleSearchLimit, PeopleSearchRanking, PersonMatch},
     },
     ports::PeopleSearchRepository,
 };
@@ -13,15 +13,24 @@ impl PeopleSearchRepository for DbContactsRepository {
     #[tracing::instrument(
         name = "contacts.people_search.read",
         skip_all,
-        fields(limit = i64::from(limit.get()), result_count = tracing::field::Empty),
+        fields(
+            limit = i64::from(limit.get()),
+            ranking = ?ranking,
+            result_count = tracing::field::Empty,
+        ),
         err
     )]
     async fn search_people(
         &self,
         viewer: MacroUserIdStr<'_>,
         needle: &str,
+        ranking: PeopleSearchRanking,
         limit: PeopleSearchLimit,
     ) -> Result<Vec<PersonMatch>, Report> {
+        let exact_first = match ranking {
+            PeopleSearchRanking::TeammatesFirst => false,
+            PeopleSearchRanking::ExactFirst => true,
+        };
         // The read's cost follows the viewer's contact count, so bound it.
         let mut transaction = self.db.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '5s'")
@@ -32,6 +41,7 @@ impl PeopleSearchRepository for DbContactsRepository {
             viewer.as_ref(),
             needle,
             i64::from(limit.get()),
+            exact_first,
         )
         .fetch_all(&mut *transaction)
         .await?;

@@ -12,6 +12,7 @@ pub(in crate::api) mod crm_company;
 pub(in crate::api) mod document;
 pub(in crate::api) mod email;
 pub(in crate::api::search) mod enrich;
+pub(in crate::api) mod names;
 pub(in crate::api) mod project;
 pub mod simple;
 #[cfg(test)]
@@ -24,6 +25,7 @@ pub fn router() -> Router<SearchHandlerState> {
         .route("/", post(unified::handler))
         .nest("/simple", simple::router())
         .nest("/channel", channel::router())
+        .route("/names", post(names::handler))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

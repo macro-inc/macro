@@ -563,6 +563,14 @@ export {
   SavedView,
   type SavedViewConfig,
 } from './entities/saved-views/saved-view';
+export type {
+  NamedEntity,
+  NameKind,
+  NameMatch,
+  NameQuery,
+  NameResult,
+  NamesLookup,
+} from './entities/search/names';
 export type { SearchOn, SearchOpts } from './entities/search/options';
 export type {
   SearchOptions,

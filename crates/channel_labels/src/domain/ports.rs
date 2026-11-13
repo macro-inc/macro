@@ -4,8 +4,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ChannelLabel, ChannelLabelRule, ChannelLabelsError, ChannelLabelsReceipt, ChannelLabelsScope,
-    LabelWriteOutcome, NewChannelLabel, SetChannelLabelOutcome, SmartTagPreview,
+    ChannelLabel, ChannelLabelName, ChannelLabelRule, ChannelLabelsError, ChannelLabelsReceipt,
+    ChannelLabelsScope, LabelWriteOutcome, NewChannelLabel, SetChannelLabelOutcome,
+    SmartTagPreview,
 };
 
 /// Outbound persistence port for channel labels.
@@ -24,6 +25,13 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
         scope: &ChannelLabelsScope,
         viewer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<ChannelLabel>, Self::Err>> + Send;
+
+    /// Every label of the scope in manual order, by id and name only: none
+    /// of the channel resolution [`Self::list_labels`] does.
+    fn list_label_names(
+        &self,
+        scope: &ChannelLabelsScope,
+    ) -> impl Future<Output = Result<Vec<ChannelLabelName>, Self::Err>> + Send;
 
     /// One label of the scope, viewer-relative like [`Self::list_labels`].
     fn get_label(
@@ -117,6 +125,13 @@ pub trait ChannelLabelsService: Send + Sync + 'static {
         &self,
         receipt: &ChannelLabelsReceipt,
     ) -> impl Future<Output = Result<Vec<ChannelLabel>, ChannelLabelsError>> + Send;
+
+    /// Every label of the caller's authorized scope, in manual order, by id
+    /// and name only.
+    fn list_label_names(
+        &self,
+        receipt: &ChannelLabelsReceipt,
+    ) -> impl Future<Output = Result<Vec<ChannelLabelName>, ChannelLabelsError>> + Send;
 
     /// Create a label for the caller's authorized scope and move the given channels into it.
     fn create_label(

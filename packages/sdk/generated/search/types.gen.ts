@@ -1529,7 +1529,165 @@ export type InitiativeFilters = {
     owners?: Array<string>;
 };
 
+export type MacroUserIdStr = string;
+
 export type MatchType = 'exact' | 'partial' | 'regexp' | 'query';
+
+/**
+ * A kind of item a name can name.
+ */
+export type NameKind = 'channel' | 'person' | 'project' | 'initiative' | 'document' | 'task' | 'database' | 'agent' | 'label' | 'tag' | 'channel_label';
+
+/**
+ * An item a name matched.
+ */
+export type NameMatch = {
+    /**
+     * Whether its name is the name looked up, ignoring case, surrounding
+     * space and one leading `#` or `@`. For a person, their full name, first
+     * name or email address counts.
+     */
+    exact: boolean;
+    /**
+     * The item.
+     */
+    item: NamedItem;
+    /**
+     * The item's name as stored.
+     */
+    name: string;
+};
+
+/**
+ * One name to look up.
+ */
+export type NameQuery = {
+    /**
+     * The kinds of item to look in; empty looks in every kind.
+     */
+    kinds?: Array<NameKind>;
+    /**
+     * The name as the request uses it, such as `#design-feedback` or
+     * `Q4 Launch`. Case and one leading `#` or `@` are ignored.
+     */
+    name: string;
+};
+
+/**
+ * What one name matched.
+ */
+export type NameResult = {
+    /**
+     * At most [`MAX_EXACT_MATCHES`] exact matches first, then at most
+     * [`MAX_NEAR_MATCHES`] items whose name contains it, those starting with
+     * it first.
+     */
+    matches: Array<NameMatch>;
+    /**
+     * The name as it was asked for.
+     */
+    name: string;
+};
+
+/**
+ * Names to look up, at most [`MAX_NAMES`].
+ */
+export type NameSearchRequest = {
+    /**
+     * The names, each looked up on its own.
+     */
+    names: Array<NameQuery>;
+};
+
+/**
+ * What each name matched, in the order asked.
+ */
+export type NameSearchResponse = {
+    /**
+     * One result per name asked for.
+     */
+    results: Array<NameResult>;
+    /**
+     * The kinds that couldn't be looked in this time. A name that matched
+     * nothing may still name an item of one of these kinds.
+     */
+    unavailable: Array<NameKind>;
+};
+
+/**
+ * An item a name matched, by kind.
+ */
+export type NamedItem = {
+    /**
+     * The channel's id.
+     */
+    id: string;
+    kind: 'channel';
+} | {
+    /**
+     * The person's Macro user id.
+     */
+    id: MacroUserIdStr;
+    kind: 'person';
+} | {
+    /**
+     * The folder's id.
+     */
+    id: string;
+    kind: 'project';
+} | {
+    /**
+     * The initiative's id.
+     */
+    id: string;
+    kind: 'initiative';
+} | {
+    /**
+     * The document's id.
+     */
+    id: string;
+    kind: 'document';
+} | {
+    /**
+     * The task's id.
+     */
+    id: string;
+    kind: 'task';
+} | {
+    /**
+     * The database's id.
+     */
+    id: string;
+    kind: 'database';
+} | {
+    /**
+     * The agent's id.
+     */
+    id: string;
+    kind: 'agent';
+} | {
+    /**
+     * The label's id.
+     */
+    id: string;
+    kind: 'label';
+} | {
+    /**
+     * The tag set's property definition.
+     */
+    definitionId: string;
+    /**
+     * The tag's id, an option of its tag set's property.
+     */
+    id: string;
+    kind: 'tag';
+} | {
+    /**
+     * The label's id.
+     */
+    id: string;
+    kind: 'channel_label';
+};
 
 /**
  * Notification-level filters that apply to an entity type.
@@ -2605,6 +2763,27 @@ export type UnifiedSearchResponses = {
 };
 
 export type UnifiedSearchResponse2 = UnifiedSearchResponses[keyof UnifiedSearchResponses];
+
+export type SearchNamesData = {
+    body: NameSearchRequest;
+    path?: never;
+    query?: never;
+    url: '/search/names';
+};
+
+export type SearchNamesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SearchNamesError = SearchNamesErrors[keyof SearchNamesErrors];
+
+export type SearchNamesResponses = {
+    200: NameSearchResponse;
+};
+
+export type SearchNamesResponse = SearchNamesResponses[keyof SearchNamesResponses];
 
 export type SimpleUnifiedSearchData = {
     body: UnifiedSearchRequest;

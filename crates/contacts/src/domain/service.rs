@@ -150,7 +150,7 @@ impl<R: PeopleSearchRepository, N: ContactsNotifier> PeopleSearchService
         };
         let people = self
             .repository
-            .search_people(viewer, needle, limit)
+            .search_people(viewer, needle, query.ranking(), limit)
             .await
             .inspect_err(|_| {
                 span.record("outcome", "error");

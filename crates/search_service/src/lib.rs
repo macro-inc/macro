@@ -8,5 +8,8 @@ mod outbound;
 pub use api::context::SearchHandlerState;
 pub use api::router as search_router;
 pub use api::swagger::ApiDoc as SearchApiDoc;
+/// Name lookup across every kind of item: the port each kind's source
+/// implements, and the lookup the `/names` route runs.
+pub use domain::names;
 pub use domain::term_matching::TermMatchingRollout;
 pub use outbound::term_matching::{FlaggedTermMatching, LocalTermMatching};

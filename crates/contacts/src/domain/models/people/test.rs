@@ -29,3 +29,12 @@ fn limit_defaults_caps_and_rejects_zero() {
     assert_eq!(PeopleSearchLimit::new(u32::MAX).unwrap().get(), 50);
     assert!(PeopleSearchLimit::new(0).is_none());
 }
+
+#[test]
+fn a_query_ranks_teammates_first_unless_asked_for_exact_matches() {
+    let query = PeopleSearchQuery::new(" Sam ").unwrap();
+    assert_eq!(query.ranking(), PeopleSearchRanking::TeammatesFirst);
+    let exact = query.exact_first();
+    assert_eq!(exact.ranking(), PeopleSearchRanking::ExactFirst);
+    assert_eq!(exact.searchable(), Some("sam"));
+}

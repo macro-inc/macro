@@ -19,6 +19,19 @@ per-entity-type search plus a unified search across them — mounted into
   every other type name-searches in OpenSearch. `simple_unified.rs` merges
   them and keeps one cursor slot per source.
 - `src/api/context.rs`: `SearchHandlerState`, the shared handler state.
+- Name lookup (`POST /names`, not OpenSearch ranking): `src/domain/names.rs`
+  holds `NameLookup`, which asks each `NameSource` the names concern in
+  parallel under a timeout, ranks exact matches first and reports failed
+  kinds as `unavailable`. This crate's own sources are channels
+  (`src/outbound/names.rs`, Postgres) and documents and tasks
+  (`IndexedDocuments` in `src/api/search/names.rs`, the name index); the host
+  supplies every other kind through `SearchHandlerState::name_sources`. A
+  source that queries once per name runs at most `READS_PER_SOURCE` of them
+  at a time, so one lookup can't drain a connection pool. A read capped at a
+  row count returns the newest matches, so it can miss an older exact name:
+  the channel source reads exact names on their own when its substring read
+  fills, one anchored pattern per comma-separated part so an unnamed private
+  channel still matches by its members' names.
 - `src/outbound.rs` + `src/outbound/agent_session.rs`: the OpenSearch query
   builders.
 

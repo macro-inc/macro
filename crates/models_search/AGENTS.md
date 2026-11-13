@@ -15,6 +15,8 @@ cross-entity response.
   `src/agent_session.rs`, `src/project.rs`: per-entity response item types.
 - `src/score.rs`: relevance scoring types.
 - `src/simple.rs`: the simpler "goto" search response variants.
+- `src/names.rs`: name lookup (`NameSearchRequest` / `NameSearchResponse`):
+  names in, the items of every kind each one names, exact matches first.
 
 ## Scope
 
@@ -25,8 +27,8 @@ cross-entity response.
 
 ## Boundaries
 
-- Depends on: `item_filters`, `model_file_type`, `models_opensearch`,
-  `models_soup`, `opensearch_client`, `document_sub_type`.
+- Depends on: `item_filters`, `macro_user_id`, `model_file_type`,
+  `models_opensearch`, `models_soup`, `opensearch_client`, `document_sub_type`.
 - Used by: `ai_tools`, `search_processing_service`, `search_service(_client)`,
   `skills`.
 
