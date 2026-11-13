@@ -612,6 +612,7 @@ dependencies = [
  "channels",
  "chat",
  "chrono",
+ "chrono-tz",
  "clap",
  "code_execution",
  "codex_cloud_agents",
@@ -17492,6 +17493,7 @@ name = "routine_program"
 version = "0.1.0"
 dependencies = [
  "bots",
+ "nom 8.0.0",
  "serde",
  "serde_json",
  "sha2 0.10.9",

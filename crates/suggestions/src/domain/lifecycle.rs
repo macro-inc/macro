@@ -23,6 +23,13 @@
 //! a background prompt suggestion starts a run only while none is unsettled;
 //! and taking on an accepted suggestion or completing a done one changes
 //! nothing.
+//!
+//! A routine suggestion doesn't follow this table: it moves only with its
+//! routine suggestion, as `RoutineSuggestionState::card` in
+//! `crates/scheduled_action` says, through
+//! `suggestions_db_utils::move_routine_card`. That also moves a retired one
+//! to dismissed, and a dismissed or retired one to done when the person saves
+//! its routine. Here it is never accepted, restored or undismissed.
 
 use strum::IntoEnumIterator;
 

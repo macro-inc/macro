@@ -355,8 +355,9 @@ export class Sdk extends HeyApiClient {
     /**
      * The caller, or someone acting for them, acts on a suggestion: a background
      * prompt suggestion starts its run when the person accepts it in the app (anyone
-     * else only takes it on); any other is done once they act on it (open its
-     * item, the composer, the routine), and shows in the feed's `done`.
+     * else only takes it on); a note or prompt is done once they act on it (open its
+     * item or the composer), and shows in the feed's `done`. A routine suggestion is
+     * refused: the person saves its routine in the app, which makes it done.
      */
     public acceptSuggestion<ThrowOnError extends boolean = false>(options: Options<AcceptSuggestionData, ThrowOnError>): RequestResult<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError>({
