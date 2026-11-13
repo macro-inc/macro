@@ -460,9 +460,13 @@ test.describe('desktop agent access', () => {
     await expect(
       page.getByRole('heading', { name: 'Agent requested login' })
     ).toBeVisible();
-    await expect(section.getByText(/asked to edit this item/)).toBeVisible();
+    await expect(
+      section.getByText('deploy-agent@example.test asked to edit this item')
+    ).toBeVisible();
     await section.getByRole('button', { name: 'Allow edit' }).click();
-    await expect(section.getByText(/can edit this item/)).toBeVisible();
+    await expect(
+      section.getByText('deploy-agent@example.test can edit this item')
+    ).toBeVisible();
     await section.getByRole('button', { name: /^Revoke access for/ }).click();
     await page.getByRole('menuitem', { name: 'Remove access' }).click();
     await expect(section).toHaveCount(0);

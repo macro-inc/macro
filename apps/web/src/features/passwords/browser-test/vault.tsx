@@ -86,7 +86,7 @@ const search = new URLSearchParams(location.search);
 let agentState: PasswordAgentAccessRequestState = {
   requestId: AGENT_REQUEST,
   itemId: AGENT_ITEM,
-  agentAccountId: 'fixture-agent',
+  agentAccountId: 'macro|deploy-agent@example.test',
   permission: 'edit',
   status: 'pending',
   revision: 3,
