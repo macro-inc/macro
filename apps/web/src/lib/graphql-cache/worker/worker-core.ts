@@ -101,7 +101,8 @@ export interface CacheWorkerCoreOptions {
   afterArrivedMessages?: (resume: () => void) => void;
 }
 
-/** A message posted now is handled after the ones already waiting. */
+/** A message posted now is normally handled after the ones already waiting;
+ * where a browser orders them otherwise, the queue only keeps arrival order. */
 function afterArrivedMessages(resume: () => void): void {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = () => {
@@ -527,12 +528,18 @@ export class CacheWorkerCore {
         // loop, so requests that arrived meanwhile are not in the queue yet.
         // Picking the next one now would run the whole backlog in arrival
         // order whatever their priority.
-        this.yielding = true;
-        this.afterArrivedMessages(() => {
+        const resume = () => {
           this.yielding = false;
           this.drainQueue();
           this.resolveDrainWaitersIfIdle();
-        });
+        };
+        this.yielding = true;
+        try {
+          this.afterArrivedMessages(resume);
+        } catch {
+          // Without a way to yield, keep the queue moving in arrival order.
+          resume();
+        }
       });
   }
 

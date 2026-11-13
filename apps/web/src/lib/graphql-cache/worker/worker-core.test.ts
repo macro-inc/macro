@@ -1146,6 +1146,36 @@ describe('CacheWorkerCore', () => {
     expect(order).toEqual(['read:blocker', 'search:todo', 'read:replayed']);
   });
 
+  it('keeps the queue moving when it cannot yield between requests', async () => {
+    const order: string[] = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(opId);
+          return { kind: 'miss' };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: () => {
+        throw new Error('MessageChannel is not available');
+      },
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await Promise.all(
+      ['first', 'second', 'third'].map((opId, index) =>
+        core.handleRequest(port, {
+          id: index + 2,
+          kind: 'read',
+          opId,
+          query: 'query Read { read }',
+        })
+      )
+    );
+    expect(order).toEqual(['first', 'second', 'third']);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
