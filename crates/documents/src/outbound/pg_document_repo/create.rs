@@ -482,6 +482,16 @@ pub async fn insert_new_document<B: BotFacts>(
         .await
         .map_err(|error| DocumentError::Internal(error.into()))?;
 
+    if let Some(project_id) = project_id.as_ref() {
+        entity_access_db_utils::project_grants::refuse_filing(
+            transaction,
+            &document_id,
+            model_entity::EntityType::Document,
+            project_id,
+        )
+        .await?;
+    }
+
     if share_with_team {
         let document_id_string = document_id.to_string();
         let entity = model_entity::EntityType::Document.with_entity_str(&document_id_string);

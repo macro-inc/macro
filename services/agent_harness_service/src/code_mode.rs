@@ -3,7 +3,7 @@ use agent_code_mode::domain::{
     CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
 };
 use agent_correlation::domain::{CorrelationRepository, SessionScope};
-use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
+use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
 use code_execution::domain::{RunEnvironment, SdkEndpoints};
@@ -142,7 +142,10 @@ impl ExecutionCredentials for RunCredentials {
                 Some(identity.agent_id.as_uuid()),
                 None,
                 None,
-                Some(correlation),
+                Some(SignedCorrelation {
+                    id: correlation,
+                    scope,
+                }),
             )
             .await
             .map_err(|error| {
@@ -188,19 +191,18 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
         };
         let correlation = match session {
-            Some(session) => Some(
-                self.correlations
-                    .create(
-                        session,
-                        agent.as_uuid(),
-                        scope_of(self.scopes.as_ref(), session).await?,
-                    )
+            Some(session) => {
+                let scope = scope_of(self.scopes.as_ref(), session).await?;
+                let id = self
+                    .correlations
+                    .create(session, agent.as_uuid(), scope)
                     .await
                     .map_err(|error| {
                         tracing::error!(?error, "could not persist code-mode correlation");
                         CodeModeError::Unavailable
-                    })?,
-            ),
+                    })?;
+                Some(SignedCorrelation { id, scope })
+            }
             None => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
@@ -247,40 +249,70 @@ pub(crate) fn trace_headers() -> BTreeMap<String, String> {
 
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
 
+/// A host code mode's SDK reaches, named as the SDK names it. The test
+/// `every_sdk_host_holds_a_scoped_credential_to_its_scope` says how each
+/// host's service holds a scoped session's credential to its scope, and fails
+/// for a host the SDK can reach that is missing here.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, strum::EnumIter, strum::EnumString, strum::IntoStaticStr,
+)]
+#[strum(serialize_all = "kebab-case")]
+enum SdkHost {
+    DocumentContent,
+    StaticContent,
+    EditingWorker,
+    Storage,
+    Search,
+    Properties,
+    Auth,
+    AgentHarness,
+    Email,
+    Calendar,
+    Cognition,
+    Notification,
+    ScheduledAction,
+    StaticFiles,
+    Connection,
+    Contacts,
+    Unfurl,
+}
+
+impl SdkHost {
+    /// Its base URL in this environment.
+    fn url(self) -> anyhow::Result<String> {
+        use macro_service_urls::*;
+        Ok(match self {
+            Self::DocumentContent => {
+                DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string()
+            }
+            Self::StaticContent => StaticFilePublicUrl::new()?.to_string(),
+            Self::EditingWorker => AiEditingWorkerUrl::new()?.to_string(),
+            Self::Storage | Self::Search | Self::Properties => {
+                DocumentStorageServiceUrl::new()?.to_string()
+            }
+            Self::Auth => AuthServiceUrl::new()?.to_string(),
+            Self::AgentHarness => AgentHarnessServiceUrl::new()?.to_string(),
+            Self::Email => EmailServiceUrl::new()?.to_string(),
+            Self::Calendar => CalendarServiceUrl::new()?.to_string(),
+            Self::Cognition => DocumentCognitionServiceUrl::new()?.to_string(),
+            Self::Notification => NotificationServiceUrl::new()?.to_string(),
+            Self::ScheduledAction => ScheduledActionServiceUrl::new()?.to_string(),
+            Self::StaticFiles => StaticFileServiceUrl::new()?.to_string(),
+            Self::Connection => ConnectionGatewayUrl::new()?.to_string(),
+            Self::Contacts => ContactsServiceUrl::new()?.to_string(),
+            Self::Unfurl => UnfurlServiceUrl::new()?.to_string(),
+        })
+    }
+}
+
 pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
-    use macro_service_urls::*;
-    let storage = DocumentStorageServiceUrl::new()?.to_string();
-    let hosts = [
-        (
-            "document-content",
-            DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string(),
-        ),
-        ("static-content", StaticFilePublicUrl::new()?.to_string()),
-        ("editing-worker", AiEditingWorkerUrl::new()?.to_string()),
-        ("storage", storage.clone()),
-        ("search", storage.clone()),
-        ("properties", storage),
-        ("auth", AuthServiceUrl::new()?.to_string()),
-        ("agent-harness", AgentHarnessServiceUrl::new()?.to_string()),
-        ("email", EmailServiceUrl::new()?.to_string()),
-        ("calendar", CalendarServiceUrl::new()?.to_string()),
-        ("cognition", DocumentCognitionServiceUrl::new()?.to_string()),
-        ("notification", NotificationServiceUrl::new()?.to_string()),
-        (
-            "scheduled-action",
-            ScheduledActionServiceUrl::new()?.to_string(),
-        ),
-        ("static-files", StaticFileServiceUrl::new()?.to_string()),
-        ("connection", ConnectionGatewayUrl::new()?.to_string()),
-        ("contacts", ContactsServiceUrl::new()?.to_string()),
-        ("unfurl", UnfurlServiceUrl::new()?.to_string()),
-    ]
-    .into_iter()
-    .map(|(name, url)| (name.into(), url))
-    .collect();
+    use strum::IntoEnumIterator;
+    let hosts = SdkHost::iter()
+        .map(|host| Ok((<&'static str>::from(host).to_owned(), host.url()?)))
+        .collect::<anyhow::Result<_>>()?;
     Ok(SdkEndpoints {
         hosts,
-        web_app_url: AppServiceUrl::new()?.to_string(),
+        web_app_url: macro_service_urls::AppServiceUrl::new()?.to_string(),
     })
 }
 
