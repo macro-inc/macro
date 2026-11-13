@@ -404,6 +404,7 @@ dependencies = [
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",

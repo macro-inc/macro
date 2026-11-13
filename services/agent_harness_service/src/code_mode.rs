@@ -3,7 +3,7 @@ use agent_code_mode::domain::{
     CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
 };
 use agent_correlation::domain::{CorrelationRepository, SessionScope};
-use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
+use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
 use code_execution::domain::{RunEnvironment, SdkEndpoints};
@@ -141,7 +141,10 @@ impl ExecutionCredentials for RunCredentials {
                 Some(identity.agent_id.as_uuid()),
                 None,
                 None,
-                Some(correlation),
+                Some(SignedCorrelation {
+                    id: correlation,
+                    scope,
+                }),
             )
             .await
             .map_err(|error| {
@@ -187,19 +190,18 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
         };
         let correlation = match session {
-            Some(session) => Some(
-                self.correlations
-                    .create(
-                        session,
-                        agent.as_uuid(),
-                        scope_of(self.scopes.as_ref(), session).await?,
-                    )
+            Some(session) => {
+                let scope = scope_of(self.scopes.as_ref(), session).await?;
+                let id = self
+                    .correlations
+                    .create(session, agent.as_uuid(), scope)
                     .await
                     .map_err(|error| {
                         tracing::error!(?error, "could not persist code-mode correlation");
                         CodeModeError::Unavailable
-                    })?,
-            ),
+                    })?;
+                Some(SignedCorrelation { id, scope })
+            }
             None => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
