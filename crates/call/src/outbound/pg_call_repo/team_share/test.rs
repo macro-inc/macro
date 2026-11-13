@@ -880,3 +880,56 @@ async fn list_read_reports_live_toggle_and_canonical_state(
 
     Ok(())
 }
+
+// -- private by default -------------------------------------------------------
+
+async fn channel_of_type(pool: &Pool<Postgres>, channel_type: &str) -> Uuid {
+    let id = Uuid::now_v7();
+    let name = (channel_type != "direct_message").then_some("named");
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, name, channel_type, owner_id, created_at, updated_at)
+         VALUES ($1, $2, $3::text::comms_channel_type, $4, now(), now())",
+        id,
+        name,
+        channel_type,
+        USER_A.as_ref(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn calls_in_dms_and_private_channels_start_private(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    for (channel_type, expected) in [
+        ("direct_message", false),
+        ("private", false),
+        ("public", true),
+    ] {
+        let channel_id = channel_of_type(&pool, channel_type).await;
+        let call_id = Uuid::now_v7();
+        repo.create_call(
+            &call_id,
+            &channel_id,
+            &call_id.to_string(),
+            USER_A.copied(),
+            false,
+        )
+        .await?
+        .expect("call created");
+        assert_eq!(
+            live_toggle(&pool, call_id).await,
+            expected,
+            "{channel_type}"
+        );
+    }
+    Ok(())
+}

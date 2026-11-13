@@ -501,13 +501,17 @@ impl CallRepository for PgCallRepo {
         )
         .await?;
 
-        // `share_with_team` keeps its column default (on): it is the pending
-        // intent participants toggle during the call, translated into
-        // canonical team sharing when the call is archived.
+        // `share_with_team` is the pending intent participants toggle during
+        // the call, translated into canonical team sharing when the call is
+        // archived. Calls in DMs and private channels start private; calls in
+        // team and public channels start shared.
         let row = sqlx::query!(
             r#"
-            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team)
+            VALUES (
+                $1, $2, $3, $4, $5,
+                (SELECT c.channel_type NOT IN ('direct_message', 'private') FROM comms_channels c WHERE c.id = $2)
+            )
             ON CONFLICT (channel_id) DO NOTHING
             RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
