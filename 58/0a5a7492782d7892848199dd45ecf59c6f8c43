@@ -1,0 +1,22 @@
+crates/chat/src/domain/events/test.rs
+  s_800cdee5095ae4::t_a46b89d7b69854 298-439
+crates/chat/src/domain/events.rs
+  s_800cdee5095ae4::t_9761c8b0f1d356 103,183-285,291,299-320,322-361,363-369,371-386
+  s_800cdee5095ae4::t_a46b89d7b69854 321
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "580a5a7492782d7892848199dd45ecf59c6f8c43",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
