@@ -1,6 +1,7 @@
 import {
   EntityDetail,
   entityDetailBlockType,
+  entityDetailHostsSplitHeader,
 } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbItem } from '@app/components/entity-detail/EntityDetailBreadcrumbItem';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
@@ -12,10 +13,12 @@ import {
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import type { MarkdownDocumentKind } from '@block-md/types';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
 import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
@@ -126,6 +129,16 @@ function StackEntityDetail(props: {
       : undefined;
   };
 
+  const duplicate = (target: DocumentDetailTarget, id: string, name: string) =>
+    navigationStack.navigate(
+      entityDetailTarget.document({
+        id,
+        fileType: 'md',
+        subType: target.subType,
+        fallbackName: name,
+      })
+    );
+
   return (
     <Switch>
       <Match when={markdownTarget()}>
@@ -136,6 +149,8 @@ function StackEntityDetail(props: {
               documentId={target().id}
               kind={kind()}
               fallbackName={target().fallbackName}
+              onDuplicate={(id, name) => duplicate(target(), id, name)}
+              onDelete={navigationStack.pop}
             >
               {(context) => (
                 <MarkdownDetailBreadcrumbItem
@@ -148,16 +163,7 @@ function StackEntityDetail(props: {
                   ownerId={context.data.metadata.owner}
                   projectId={context.data.metadata.projectId ?? undefined}
                   onClose={navigationStack.pop}
-                  onDuplicate={(id, name) =>
-                    navigationStack.navigate(
-                      entityDetailTarget.document({
-                        id,
-                        fileType: 'md',
-                        subType: target().subType,
-                        fallbackName: name,
-                      })
-                    )
-                  }
+                  onDuplicate={(id, name) => duplicate(target(), id, name)}
                 />
               )}
             </MarkdownDetail>
@@ -227,40 +233,56 @@ export function DriveDetailView() {
     const target = navigationStack.active()?.data;
     return target !== undefined && hasBlockHeader(target);
   };
+  // Touch shows a document's own split header, as its standalone view does.
+  const hostsSplitHeader = () => {
+    const target = navigationStack.active()?.data;
+    return (
+      isTouchDevice() &&
+      target !== undefined &&
+      entityDetailHostsSplitHeader(target)
+    );
+  };
 
   return (
     <>
       <DriveDetailAncestorBreadcrumbs orderOffset={breadcrumbOrderOffset()} />
       <SidePanel.Root floating>
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <Show when={!activeHasBlockHeader()}>
-            <DriveDetailTopBar />
-          </Show>
-          <div class="relative min-h-0 min-w-0 flex-1">
-            <Show when={navigationStack.active()}>
-              {(entry) => (
-                <ErrorBoundary
-                  fallback={(error, reset) => (
-                    <MarkdownDetailBodyState
-                      error={error}
-                      actionLabel="Reset"
-                      onAction={reset}
+        <SplitHeaderScope.Root when={hostsSplitHeader()}>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <Switch>
+              <Match when={hostsSplitHeader()}>
+                <SplitHeaderScope.TopBar />
+              </Match>
+              <Match when={!activeHasBlockHeader()}>
+                <DriveDetailTopBar />
+              </Match>
+            </Switch>
+            <div class="relative min-h-0 min-w-0 flex-1">
+              <Show when={navigationStack.active()}>
+                {(entry) => (
+                  <ErrorBoundary
+                    fallback={(error, reset) => (
+                      <MarkdownDetailBodyState
+                        error={error}
+                        actionLabel="Reset"
+                        onAction={reset}
+                      />
+                    )}
+                  >
+                    <StackEntityDetail
+                      entry={entry()}
+                      order={
+                        breadcrumbOrderOffset() +
+                        navigationStack.entries().length -
+                        1
+                      }
                     />
-                  )}
-                >
-                  <StackEntityDetail
-                    entry={entry()}
-                    order={
-                      breadcrumbOrderOffset() +
-                      navigationStack.entries().length -
-                      1
-                    }
-                  />
-                </ErrorBoundary>
-              )}
-            </Show>
+                  </ErrorBoundary>
+                )}
+              </Show>
+            </div>
           </div>
-        </div>
+        </SplitHeaderScope.Root>
       </SidePanel.Root>
     </>
   );

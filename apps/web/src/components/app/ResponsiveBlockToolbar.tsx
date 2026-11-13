@@ -1,6 +1,12 @@
+import {
+  type BlockAlias,
+  type BlockName,
+  useBlockAliasedName,
+} from '@core/block';
 import type { Permissions } from '@core/component/SharePermissions';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useGetPermissions } from '@core/signal/permissions';
 import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import { Button, ButtonGroup, cn } from '@ui';
@@ -10,14 +16,15 @@ import { HeaderActionGroup } from './HeaderActionGroup';
 import { SidePanel } from './side-panel';
 import { HeaderIsland } from './split-layout/components/HeaderIsland';
 import {
-  BlockSplitFileMenu,
   type FileOperation,
+  SplitFileMenu,
 } from './split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from './split-layout/components/SplitHeader';
 import {
+  AccessBadge,
   SplitPermissionsBadge,
   SplitTitleFileMenu,
 } from './split-layout/components/SplitLabel';
@@ -73,22 +80,45 @@ function getToolLabel(tool: BlockTool) {
   return typeof tool.label === 'function' ? tool.label() : tool.label;
 }
 
-export function ResponsivePermissionsBadge() {
+/** An access badge: after the title island on touch, among actions on desktop. */
+function ResponsiveBadge(props: { children: JSX.Element }) {
   return (
     <Show
       when={isTouchDevice()}
-      fallback={
-        <SplitHeaderRight>
-          <SplitPermissionsBadge />
-        </SplitHeaderRight>
-      }
+      fallback={<SplitHeaderRight>{props.children}</SplitHeaderRight>}
     >
       <SplitHeaderLeft>
-        <HeaderIsland>
-          <SplitPermissionsBadge />
-        </HeaderIsland>
+        <HeaderIsland>{props.children}</HeaderIsland>
       </SplitHeaderLeft>
     </Show>
+  );
+}
+
+/** Block-free {@link ResponsivePermissionsBadge}. */
+export function ResponsiveAccessBadge(props: {
+  canEdit: boolean;
+  canComment: boolean;
+  canView: boolean;
+}) {
+  return (
+    <Show when={!props.canEdit}>
+      <ResponsiveBadge>
+        <AccessBadge
+          canEdit={props.canEdit}
+          canComment={props.canComment}
+          canView={props.canView}
+        />
+      </ResponsiveBadge>
+    </Show>
+  );
+}
+
+/** Reads access from the enclosing legacy Block. */
+export function ResponsivePermissionsBadge() {
+  return (
+    <ResponsiveBadge>
+      <SplitPermissionsBadge />
+    </ResponsiveBadge>
   );
 }
 
@@ -110,10 +140,32 @@ interface BlockToolbarProps {
   permissions?: Permissions;
 }
 
-/**
- * Handles the standard arrangement of file ops and block tools on desktop and mobile. On mobile, they are condensed together into a dropdown menu in the SplitHeader.
- */
+type DocumentToolbarProps = Omit<BlockToolbarProps, 'permissions'> & {
+  entityKind: BlockName | BlockAlias;
+  permissions: Permissions;
+  onDuplicate?: (id: string) => void;
+  onDelete?: () => void;
+};
+
+/** Reads the entity kind and access from the enclosing legacy Block. */
 export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
+  return (
+    <ResponsiveDocumentToolbar
+      {...props}
+      entityKind={entityKind}
+      permissions={props.permissions ?? permissions()}
+    />
+  );
+}
+
+/**
+ * Handles the standard arrangement of file ops and block tools on desktop and
+ * mobile. On mobile, they are condensed together into a dropdown menu in the
+ * SplitHeader. Block-free; {@link ResponsiveBlockToolbar} adapts it.
+ */
+export function ResponsiveDocumentToolbar(props: DocumentToolbarProps) {
   const isShareTool = (tool: BlockTool) => getToolLabel(tool) === 'Share';
   const isHiddenTool = (tool: BlockTool) => {
     const label = getToolLabel(tool);
@@ -175,7 +227,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
             </div>
           </SplitHeaderRight>
           <SplitTitleFileMenu>
-            <BlockSplitFileMenu
+            <SplitFileMenu
               id={props.id}
               itemType={props.itemType}
               name={props.name}
@@ -183,7 +235,10 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
               ops={props.ops}
               tools={fileMenuTools()}
               entity={props.entity}
+              entityKind={props.entityKind}
               permissions={props.permissions}
+              onDuplicate={props.onDuplicate}
+              onDelete={props.onDelete}
               buttonClass="order-first"
             />
           </SplitTitleFileMenu>
@@ -196,7 +251,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
         </HeaderIsland>
       </SplitHeaderRight>
       <SplitTitleFileMenu>
-        <BlockSplitFileMenu
+        <SplitFileMenu
           id={props.id}
           itemType={props.itemType}
           name={props.name}
@@ -204,7 +259,10 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
           ops={props.ops}
           tools={fileMenuTools()}
           entity={props.entity}
+          entityKind={props.entityKind}
           permissions={props.permissions}
+          onDuplicate={props.onDuplicate}
+          onDelete={props.onDelete}
           buttonClass="order-last"
         />
       </SplitTitleFileMenu>

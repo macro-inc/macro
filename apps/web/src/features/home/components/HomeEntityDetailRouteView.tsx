@@ -2,6 +2,7 @@ import {
   EntityDetail,
   type EntityDetailContext,
   entityDetailBlockType,
+  entityDetailHostsSplitHeader,
 } from '@app/components/entity-detail/EntityDetail';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
@@ -17,6 +18,7 @@ import { arrivalFocusesComposer } from '@channel/composer-arrival-focus';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import {
   type FileOperation,
@@ -31,6 +33,7 @@ import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type Accessor,
   createMemo,
@@ -246,111 +249,121 @@ function HomeEntityDetailBody(props: {
       : undefined;
   };
   const openShare = useDocumentShareModal(documentShareTarget);
+  // Touch shows a document's own split header, as its standalone view does.
+  const hostsSplitHeader = () =>
+    isTouchDevice() && entityDetailHostsSplitHeader(props.target);
 
   return (
-    <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <Show when={props.target.type !== 'channel'}>
-        <ViewShell.TopBar class="touch:flex">
-          <ViewShell.TopBarTitle>
-            <ViewBreadcrumbs.Outlet aria-label="Home location" />
-          </ViewShell.TopBarTitle>
-          <ViewShell.TopBarActions>
-            <SidePanel.HeaderActionsOutlet />
-            <Show when={documentShareTarget()}>
-              {(target) => (
-                <ShareTrigger
-                  onClick={openShare}
-                  id={target().documentId}
-                  blockType={target().blockAlias}
-                  hotkeyScope={panel.splitHotkeyScope}
-                />
-              )}
-            </Show>
-            <SidePanel.Toggle />
-          </ViewShell.TopBarActions>
-        </ViewShell.TopBar>
-      </Show>
-      <div class="relative min-h-0 min-w-0 flex-1">
-        <EntityDetail
-          target={props.target}
-          navigationRequest={props.navigationRequest}
-          channel={{
-            // Read as the composer connects, for the row that opened it.
-            autofocus: arrivalFocusesComposer(panel.handle),
-            composerFocusRequest: composerFocusRequest(),
-            onEscapeToList: home.focusList,
-          }}
-        >
-          {(context) => {
-            const name = () => {
-              switch (context.type) {
-                case 'channel':
-                  return context.name();
-                case 'document':
-                  return (
-                    context.documentMetadata.documentName ||
-                    blockNameToDefaultFile(entityDetailBlockType(props.target))
-                  );
-              }
-            };
-            const channel = () =>
-              context.type === 'channel' ? context : undefined;
-            const document = () =>
-              context.type === 'document' ? context : undefined;
-            const blockType = entityDetailBlockType(props.target);
-            const isMarkdown =
-              context.type === 'document' &&
-              (blockType === 'md' ||
-                blockType === 'task' ||
-                blockType === 'snippet' ||
-                blockType === 'skill');
-
-            return (
-              <>
-                <Show
-                  when={isMarkdown}
-                  fallback={
-                    <Show
-                      when={document()}
-                      fallback={
-                        <HomeEntityBreadcrumb
-                          name={name}
-                          target={props.target}
-                          value={props.value}
-                        />
-                      }
-                    >
-                      {(current) => (
-                        <HomeDocumentBreadcrumb
-                          context={current()}
-                          target={props.target}
-                          value={props.value}
-                        />
-                      )}
-                    </Show>
-                  }
-                >
-                  <HomeMarkdownBreadcrumb
-                    target={props.target}
-                    value={props.value}
+    <SplitHeaderScope.Root when={hostsSplitHeader()}>
+      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+        <Show when={hostsSplitHeader()}>
+          <SplitHeaderScope.TopBar />
+        </Show>
+        <Show when={props.target.type !== 'channel' && !hostsSplitHeader()}>
+          <ViewShell.TopBar class="touch:flex">
+            <ViewShell.TopBarTitle>
+              <ViewBreadcrumbs.Outlet aria-label="Home location" />
+            </ViewShell.TopBarTitle>
+            <ViewShell.TopBarActions>
+              <SidePanel.HeaderActionsOutlet />
+              <Show when={documentShareTarget()}>
+                {(target) => (
+                  <ShareTrigger
+                    onClick={openShare}
+                    id={target().documentId}
+                    blockType={target().blockAlias}
+                    hotkeyScope={panel.splitHotkeyScope}
                   />
-                </Show>
-                <Show when={channel()}>
-                  {(current) => (
-                    <ChannelDetailTopBar
-                      channelId={current().channelId}
-                      leading={
-                        <ViewBreadcrumbs.Outlet aria-label="Channel location" />
-                      }
+                )}
+              </Show>
+              <SidePanel.Toggle />
+            </ViewShell.TopBarActions>
+          </ViewShell.TopBar>
+        </Show>
+        <div class="relative min-h-0 min-w-0 flex-1">
+          <EntityDetail
+            target={props.target}
+            navigationRequest={props.navigationRequest}
+            channel={{
+              // Read as the composer connects, for the row that opened it.
+              autofocus: arrivalFocusesComposer(panel.handle),
+              composerFocusRequest: composerFocusRequest(),
+              onEscapeToList: home.focusList,
+            }}
+          >
+            {(context) => {
+              const name = () => {
+                switch (context.type) {
+                  case 'channel':
+                    return context.name();
+                  case 'document':
+                    return (
+                      context.documentMetadata.documentName ||
+                      blockNameToDefaultFile(
+                        entityDetailBlockType(props.target)
+                      )
+                    );
+                }
+              };
+              const channel = () =>
+                context.type === 'channel' ? context : undefined;
+              const document = () =>
+                context.type === 'document' ? context : undefined;
+              const blockType = entityDetailBlockType(props.target);
+              const isMarkdown =
+                context.type === 'document' &&
+                (blockType === 'md' ||
+                  blockType === 'task' ||
+                  blockType === 'snippet' ||
+                  blockType === 'skill');
+
+              return (
+                <>
+                  <Show
+                    when={isMarkdown}
+                    fallback={
+                      <Show
+                        when={document()}
+                        fallback={
+                          <HomeEntityBreadcrumb
+                            name={name}
+                            target={props.target}
+                            value={props.value}
+                          />
+                        }
+                      >
+                        {(current) => (
+                          <HomeDocumentBreadcrumb
+                            context={current()}
+                            target={props.target}
+                            value={props.value}
+                          />
+                        )}
+                      </Show>
+                    }
+                  >
+                    <HomeMarkdownBreadcrumb
+                      target={props.target}
+                      value={props.value}
                     />
-                  )}
-                </Show>
-              </>
-            );
-          }}
-        </EntityDetail>
+                  </Show>
+                  <Show when={channel()}>
+                    {(current) => (
+                      <ChannelDetailTopBar
+                        channelId={current().channelId}
+                        leading={
+                          <ViewBreadcrumbs.Outlet aria-label="Channel location" />
+                        }
+                      />
+                    )}
+                  </Show>
+                </>
+              );
+            }}
+          </EntityDetail>
+        </div>
       </div>
-    </div>
+    </SplitHeaderScope.Root>
   );
 }
 

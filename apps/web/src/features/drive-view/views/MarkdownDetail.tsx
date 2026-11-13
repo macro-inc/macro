@@ -3,6 +3,7 @@ import {
   MarkdownDocument,
   MarkdownDocumentContent,
 } from '@block-md/component/MarkdownDocument';
+import { MarkdownSplitHeader } from '@block-md/component/MarkdownSplitHeader';
 import { ModalsProvider } from '@block-md/component/ModalsProvider';
 import { MarkdownSidePanelSections } from '@block-md/component/sidepanel/MarkdownSidePanelSections';
 import { createMarkdownDocumentState } from '@block-md/context/markdown-document-state';
@@ -17,6 +18,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
@@ -36,6 +38,9 @@ export type MarkdownDetailProps = {
   documentId: string;
   kind?: MarkdownDocumentKind;
   fallbackName?: string;
+  /** The file menu's Duplicate and Delete in a hosted split header. */
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 };
 
@@ -79,9 +84,13 @@ function MarkdownDetailContent(props: {
   kind: MarkdownDocumentKind;
   fallbackName: string;
   data: MarkdownDocumentData;
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
+  // A host that shows hosted split headers gets the standalone header.
+  const hostedHeader = useSplitHeaderScope();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
   const state = createMarkdownDocumentState();
@@ -120,7 +129,20 @@ function MarkdownDetailContent(props: {
           documentMetadata: props.data.metadata,
           userAccessLevel: props.data.userAccessLevel,
         })}
-        <SidePanel.Layout headerToggle={false} floating>
+        <Show when={hostedHeader}>
+          <MarkdownSplitHeader
+            document={{
+              documentId: props.documentId,
+              ownerId: props.data.metadata.owner,
+              createdAt: props.data.metadata.createdAt,
+              updatedAt: props.data.metadata.updatedAt,
+            }}
+            collaborationStatus={props.data.source.status()}
+            onDuplicate={props.onDuplicate}
+            onDelete={props.onDelete}
+          />
+        </Show>
+        <SidePanel.Layout headerToggle={!!hostedHeader} floating>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
           </Show>
@@ -167,6 +189,8 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
             )
           }
           data={data}
+          onDuplicate={props.onDuplicate}
+          onDelete={props.onDelete}
           children={props.children}
         />
       )}

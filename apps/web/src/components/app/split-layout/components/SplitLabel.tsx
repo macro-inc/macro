@@ -21,6 +21,7 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import type { DateValue } from '@core/util/date';
 import type { BuildEntityDataArgs } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -203,35 +204,62 @@ export function SplitHeaderBadge(props: { text: string; tooltip?: string }) {
   );
 }
 
-export function SplitPermissionsBadge() {
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const canView = useCanView();
-  const showBadge = () => !canEdit();
-
+/** Access the viewer lacks to edit, shown beside a document's title. */
+export function AccessBadge(props: {
+  canEdit: boolean;
+  canComment: boolean;
+  canView: boolean;
+}) {
   const tooltip = () => {
-    if (!canView()) return t('splitMenu.noAccess');
-    if (canComment()) return t('splitMenu.commentOnly');
+    if (!props.canView) return t('splitMenu.noAccess');
+    if (props.canComment) return t('splitMenu.commentOnly');
     return t('splitMenu.viewOnly');
   };
 
   const text = () => {
-    if (!canView()) return t('splitMenu.badgeNoAccess');
-    if (canComment()) return t('splitMenu.badgeCommentOnly');
+    if (!props.canView) return t('splitMenu.badgeNoAccess');
+    if (props.canComment) return t('splitMenu.badgeCommentOnly');
     return t('splitMenu.badgeViewer');
   };
 
   return (
-    <Show when={showBadge()}>
+    <Show when={!props.canEdit}>
       <SplitHeaderBadge text={text()} tooltip={tooltip()} />
     </Show>
   );
 }
 
-export function BlockItemSplitLabel(props: {
+/** Reads access from the enclosing legacy Block. */
+export function SplitPermissionsBadge() {
+  const canEdit = useCanEdit();
+  const canComment = useCanComment();
+  const canView = useCanView();
+  return (
+    <AccessBadge
+      canEdit={canEdit()}
+      canComment={canComment()}
+      canView={canView()}
+    />
+  );
+}
+
+/** What a document title's hover card shows. */
+export type SplitLabelDocument = {
+  documentId: string;
+  ownerId?: string;
+  createdAt?: DateValue | null;
+  updatedAt?: DateValue | null;
+};
+
+/**
+ * A split's title island: icon, name, and the title file menu. On touch the
+ * island opens that menu. Block-free; {@link BlockItemSplitLabel} adapts it.
+ */
+export function EntitySplitLabel(props: {
+  targetType: EntityIconSelector;
+  name: string;
+  document?: SplitLabelDocument;
   icon?: JSX.Element;
-  fallbackName?: string;
-  name?: Accessor<string | undefined>;
   lockRename?: boolean;
   badges?: JSX.Element;
   /** Rendered after the file name. */
@@ -240,22 +268,7 @@ export function BlockItemSplitLabel(props: {
   title?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
-  if (!isInBlock())
-    throw new Error('<BlockItemSplitLabel> must be used within a Block');
-
-  const fileName = useBlockDocumentName(props.fallbackName);
-  const displayName = () => props.name?.() ?? fileName();
-  const blockName = useBlockAliasedName();
-  const isOwner = useIsDocumentOwner();
-
-  const targetType = () => {
-    if (blockName === 'unknown') {
-      return blockMetadataSignal()?.fileType ?? blockName;
-    }
-    return blockName;
-  };
-
-  useSplitDisplayName(displayName);
+  useSplitDisplayName(() => props.name);
 
   const openTitleFileMenu = (e: MouseEvent) => {
     if (!isTouchDevice()) return;
@@ -275,7 +288,7 @@ export function BlockItemSplitLabel(props: {
             fallback={
               <EntityIcon
                 class="shrink-0"
-                targetType={targetType()}
+                targetType={props.targetType}
                 size="xs"
               />
             }
@@ -287,25 +300,25 @@ export function BlockItemSplitLabel(props: {
             when={props.title}
             fallback={
               <Show
-                when={blockMetadataSignal()}
+                when={props.document}
                 fallback={
                   <SplitLabel
-                    label={displayName() ?? ''}
-                    lockRename={!isOwner() || props.lockRename}
+                    label={props.name}
+                    lockRename={props.lockRename}
                   />
                 }
               >
-                {(metadata) => (
+                {(document) => (
                   <DocumentTitleHoverCard
-                    documentId={metadata().documentId}
-                    name={displayName() ?? ''}
-                    ownerId={metadata().owner}
-                    createdAt={metadata().createdAt}
-                    updatedAt={metadata().updatedAt}
+                    documentId={document().documentId}
+                    name={props.name}
+                    ownerId={document().ownerId}
+                    createdAt={document().createdAt}
+                    updatedAt={document().updatedAt}
                   >
                     <SplitLabel
-                      label={displayName() ?? ''}
-                      lockRename={!isOwner() || props.lockRename}
+                      label={props.name}
+                      lockRename={props.lockRename}
                     />
                   </DocumentTitleHoverCard>
                 )}
@@ -322,6 +335,57 @@ export function BlockItemSplitLabel(props: {
         </div>
       </HeaderIsland>
     </SplitLabelContextMenu>
+  );
+}
+
+/** Reads the title, icon, owner, and hover-card metadata from the legacy Block. */
+export function BlockItemSplitLabel(props: {
+  icon?: JSX.Element;
+  fallbackName?: string;
+  name?: Accessor<string | undefined>;
+  lockRename?: boolean;
+  badges?: JSX.Element;
+  /** Rendered after the file name. */
+  trailingBadges?: JSX.Element;
+  /** Replaces the static name, e.g. with an inline title editor. */
+  title?: JSX.Element;
+}) {
+  if (!isInBlock())
+    throw new Error('<BlockItemSplitLabel> must be used within a Block');
+
+  const fileName = useBlockDocumentName(props.fallbackName);
+  const displayName = () => props.name?.() ?? fileName();
+  const blockName = useBlockAliasedName();
+  const isOwner = useIsDocumentOwner();
+
+  const targetType = () => {
+    if (blockName === 'unknown') {
+      return blockMetadataSignal()?.fileType ?? blockName;
+    }
+    return blockName;
+  };
+  const document = (): SplitLabelDocument | undefined => {
+    const metadata = blockMetadataSignal();
+    if (!metadata) return;
+    return {
+      documentId: metadata.documentId,
+      ownerId: metadata.owner,
+      createdAt: metadata.createdAt,
+      updatedAt: metadata.updatedAt,
+    };
+  };
+
+  return (
+    <EntitySplitLabel
+      targetType={targetType()}
+      name={displayName() ?? ''}
+      document={document()}
+      icon={props.icon}
+      lockRename={!isOwner() || props.lockRename}
+      badges={props.badges}
+      trailingBadges={props.trailingBadges}
+      title={props.title}
+    />
   );
 }
 

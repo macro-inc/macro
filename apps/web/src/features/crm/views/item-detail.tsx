@@ -1,6 +1,7 @@
 import {
   EntityDetail,
   entityDetailBlockType,
+  entityDetailHostsSplitHeader,
 } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
@@ -8,11 +9,13 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { FileDetailBreadcrumbItem } from '@app/features/drive-view/views/FileDetailBreadcrumbItem';
 import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { For, type JSX, onCleanup, Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import { useCrmWorkspace } from '../context/workspace-context';
@@ -59,6 +62,15 @@ export function CrmItemDetail(props: {
     return current && blockType && blockType !== 'spreadsheet'
       ? { target: current, blockType }
       : undefined;
+  };
+  // Touch shows a document's own split header, as its standalone view does.
+  const hostsSplitHeader = () => {
+    const current = document();
+    return (
+      isTouchDevice() &&
+      current !== undefined &&
+      entityDetailHostsSplitHeader(current)
+    );
   };
   const openShare = useDocumentShareModal(() => {
     const current = nativeDocument();
@@ -123,65 +135,70 @@ export function CrmItemDetail(props: {
         }}
       </For>
       <SidePanel.Root floating>
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <Show when={nativeDocument()}>
-            {(current) => (
-              <ViewShell.TopBar class="touch:flex">
-                {props.navigation}
-                <ViewShell.TopBarTitle>
-                  <ViewBreadcrumbs.Outlet
-                    aria-label="CRM item location"
-                    fallback={<EntityDetailBreadcrumbSkeleton />}
-                  />
-                </ViewShell.TopBarTitle>
-                <ViewShell.TopBarActions>
-                  <SidePanel.HeaderActionsOutlet />
-                  <ShareTrigger
-                    onClick={openShare}
-                    id={current().target.id}
-                    blockType={current().blockType}
-                    hotkeyScope={panel.splitHotkeyScope}
-                  />
-                  <SidePanel.Toggle />
-                </ViewShell.TopBarActions>
-              </ViewShell.TopBar>
-            )}
-          </Show>
-          <div class="relative min-h-0 min-w-0 flex-1">
-            {/* Preview headers own the live item title and menu after this source prefix. */}
-            <Show
-              when={document()}
-              fallback={
-                <EntityDetail
-                  target={target()}
-                  previewHeaderLeading={
-                    <>
-                      {props.navigation}
-                      <ViewBreadcrumbs.Outlet
-                        aria-label="CRM item location"
-                        class="max-w-[min(40vw,24rem)] overflow-hidden"
-                      />
-                    </>
-                  }
-                />
-              }
-            >
+        <SplitHeaderScope.Root when={hostsSplitHeader()}>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <Show when={hostsSplitHeader()}>
+              <SplitHeaderScope.TopBar leading={props.navigation} />
+            </Show>
+            <Show when={!hostsSplitHeader() && nativeDocument()}>
               {(current) => (
-                <CrmDocumentDetail
-                  target={current()}
-                  value={value()}
-                  order={records().length + 1}
-                  headerLeading={
-                    <>
-                      {props.navigation}
-                      <ViewBreadcrumbs.Outlet aria-label="CRM item location" />
-                    </>
-                  }
-                />
+                <ViewShell.TopBar class="touch:flex">
+                  {props.navigation}
+                  <ViewShell.TopBarTitle>
+                    <ViewBreadcrumbs.Outlet
+                      aria-label="CRM item location"
+                      fallback={<EntityDetailBreadcrumbSkeleton />}
+                    />
+                  </ViewShell.TopBarTitle>
+                  <ViewShell.TopBarActions>
+                    <SidePanel.HeaderActionsOutlet />
+                    <ShareTrigger
+                      onClick={openShare}
+                      id={current().target.id}
+                      blockType={current().blockType}
+                      hotkeyScope={panel.splitHotkeyScope}
+                    />
+                    <SidePanel.Toggle />
+                  </ViewShell.TopBarActions>
+                </ViewShell.TopBar>
               )}
             </Show>
+            <div class="relative min-h-0 min-w-0 flex-1">
+              {/* Preview headers own the live item title and menu after this source prefix. */}
+              <Show
+                when={document()}
+                fallback={
+                  <EntityDetail
+                    target={target()}
+                    previewHeaderLeading={
+                      <>
+                        {props.navigation}
+                        <ViewBreadcrumbs.Outlet
+                          aria-label="CRM item location"
+                          class="max-w-[min(40vw,24rem)] overflow-hidden"
+                        />
+                      </>
+                    }
+                  />
+                }
+              >
+                {(current) => (
+                  <CrmDocumentDetail
+                    target={current()}
+                    value={value()}
+                    order={records().length + 1}
+                    headerLeading={
+                      <>
+                        {props.navigation}
+                        <ViewBreadcrumbs.Outlet aria-label="CRM item location" />
+                      </>
+                    }
+                  />
+                )}
+              </Show>
+            </div>
           </div>
-        </div>
+        </SplitHeaderScope.Root>
       </SidePanel.Root>
     </ViewBreadcrumbs.Root>
   );
@@ -194,15 +211,8 @@ function CrmDocumentDetail(props: {
   headerLeading: JSX.Element;
 }) {
   const route = useCrmWorkspace().host.record;
-  const markdown = () => {
-    const blockType = entityDetailBlockType(props.target);
-    return blockType === 'md' ||
-      blockType === 'task' ||
-      blockType === 'snippet' ||
-      blockType === 'skill'
-      ? props.target
-      : undefined;
-  };
+  const markdown = () =>
+    entityDetailHostsSplitHeader(props.target) ? props.target : undefined;
   const duplicate = (id: string, name: string) =>
     route.openItem({ ...props.target, name, id });
   return (
@@ -239,6 +249,8 @@ function CrmDocumentDetail(props: {
           documentId={current().id}
           kind={current().subType?.type ?? 'document'}
           fallbackName={current().fallbackName}
+          onDuplicate={duplicate}
+          onDelete={route.closeItem}
         >
           {(context) => (
             <MarkdownDetailBreadcrumbItem

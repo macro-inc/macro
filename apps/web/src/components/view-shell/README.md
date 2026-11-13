@@ -97,6 +97,16 @@ beneath it. A bar nested in a hosted detail stacks below the bars before it.
 Content under a bar that does not float (no enclosing pane) keeps resetting the
 inset; check with `useTouchTopBarsFloat`.
 
+A detail whose standalone view has a split header shows that same header in a
+touch preview. The host wraps the pane in `SplitHeaderScope.Root` and renders
+`SplitHeaderScope.TopBar`; the detail contributes through `SplitHeaderLeft`,
+`SplitHeaderRight`, and the title file menu as it does in its own split
+(`MarkdownSplitHeader` for documents and tasks). `entityDetailHostsSplitHeader`
+lists the detail types that do; add a type there once its detail renders its
+standalone header from block-free parts (`EntitySplitLabel`,
+`ResponsiveDocumentToolbar`, `ResponsiveAccessBadge`). Inline block previews
+(`PreviewFrame`) use the same scope.
+
 Touch collection navigation uses the global modal sheet at every width so its
 surface and backdrop cover floating list controls and app chrome. On narrow
 layouts it retains the configured navigation width, capped by the workspace.

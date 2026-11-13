@@ -6,11 +6,14 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useRouteParams } from '@app/lib/split-router';
 import { taskDetailRoute } from '@app/routes/routes';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Show } from 'solid-js';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
 import { TaskDetail } from './TaskDetail';
@@ -82,27 +85,41 @@ export function TasksDetailView(props: {
 
   return (
     <SidePanel.Root floating>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <TaskDetailTopBar documentId={props.task.id} />
-        <div class="relative min-h-0 min-w-0 flex-1">
-          <TaskDetail task={props.task}>
-            {(context) => (
-              <MarkdownDetailBreadcrumbItem
-                value={breadcrumbValue()}
-                metadata={metadata()}
-                order={props.breadcrumbOrder ?? 1}
-                documentId={props.task.id}
-                kind="task"
-                fallbackName={props.task.fallbackName}
-                ownerId={context.data.metadata.owner}
-                projectId={context.data.metadata.projectId ?? undefined}
-                onClose={props.onClose ?? closeTask}
-                onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
-              />
-            )}
-          </TaskDetail>
+      {/* Touch shows the task's own split header, as a standalone task does. */}
+      <SplitHeaderScope.Root when={isTouchDevice()}>
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <Show
+            when={isTouchDevice()}
+            fallback={<TaskDetailTopBar documentId={props.task.id} />}
+          >
+            <SplitHeaderScope.TopBar />
+          </Show>
+          <div class="relative min-h-0 min-w-0 flex-1">
+            <TaskDetail
+              task={props.task}
+              onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
+              onDelete={props.onClose ?? closeTask}
+            >
+              {(context) => (
+                <MarkdownDetailBreadcrumbItem
+                  value={breadcrumbValue()}
+                  metadata={metadata()}
+                  order={props.breadcrumbOrder ?? 1}
+                  documentId={props.task.id}
+                  kind="task"
+                  fallbackName={props.task.fallbackName}
+                  ownerId={context.data.metadata.owner}
+                  projectId={context.data.metadata.projectId ?? undefined}
+                  onClose={props.onClose ?? closeTask}
+                  onDuplicate={(id, name) =>
+                    openTask({ id, fallbackName: name })
+                  }
+                />
+              )}
+            </TaskDetail>
+          </div>
         </div>
-      </div>
+      </SplitHeaderScope.Root>
     </SidePanel.Root>
   );
 }

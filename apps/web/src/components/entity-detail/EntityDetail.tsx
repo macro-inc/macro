@@ -141,6 +141,21 @@ export function entityDetailBlockType(
   }
 }
 
+/**
+ * Whether the target's detail contributes a split header, so a touch host
+ * shows it in a `SplitHeaderScope` like the standalone view does. Add a type
+ * here once its detail renders its standalone header.
+ */
+export function entityDetailHostsSplitHeader(target: EntityDetailTarget) {
+  const blockType = entityDetailBlockType(target);
+  return (
+    blockType === 'md' ||
+    blockType === 'task' ||
+    blockType === 'snippet' ||
+    blockType === 'skill'
+  );
+}
+
 type ChannelDetailTarget = {
   channelId: string;
   target: ChannelTargetRequest | undefined;
