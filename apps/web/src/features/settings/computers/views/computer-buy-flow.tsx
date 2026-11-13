@@ -71,7 +71,7 @@ function ResumingStep(props: { step: SetupStepId; onClose: () => void }) {
 
 /**
  * Guided setup in one modal, from Buy to Try it: Buy computer → Configure
- * agent → Bring your AI → Ready. Opened from Settings → Machines, the Agents
+ * agent → Bring your AI → Create agent. Opened from Settings → Machines, the Agents
  * list and an agent's Where it runs, or with `computerId` from a row's Finish
  * setup.
  *
@@ -86,6 +86,8 @@ export function ComputerBuyFlow(props: {
   computerId?: string;
   onClose: () => void;
   onFinished?: (computer: ComputerStatus) => void;
+  /** Opened from an agent's Where it runs, which `onFinished` updates. */
+  selectsForAgent?: boolean;
 }) {
   const firstName = useViewerFirstName();
   const offers = useComputerOffersQuery(() => props.open && !props.computerId);
@@ -260,6 +262,7 @@ export function ComputerBuyFlow(props: {
                 onChoice={setChoice}
                 onStep={setStep}
                 onClose={close}
+                selectsForAgent={props.selectsForAgent}
               />
             )}
           </Show>

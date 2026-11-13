@@ -165,6 +165,7 @@ export function ComputerWhereItRuns(props: {
         open={buying()}
         onClose={() => setBuying(false)}
         onFinished={(computer) => setBought(computer.harnessId ?? undefined)}
+        selectsForAgent
       />
     </>
   );

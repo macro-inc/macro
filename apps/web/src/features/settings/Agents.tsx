@@ -172,6 +172,7 @@ export function Agents(props: {
   const creatingFromLink = () => searchParams.createAgent === 'true';
   const closeCreateAgent = () => {
     setCreating(false);
+    setCreateHarnessId(undefined);
     setEditingAgent(undefined);
     setDeletingAgent(undefined);
     props.onCloseCreate?.();
@@ -283,11 +284,23 @@ export function Agents(props: {
     agents().filter((agent) => agent.share === 'Private')
   );
 
+  // A machine chosen elsewhere, such as a Macro computer just set up.
+  const [createHarnessId, setCreateHarnessId] = createSignal<string>();
+  createEffect(
+    on(agentSettingsRequest, (request) => {
+      if (request?.type !== 'create') return;
+      setEditingAgent(undefined);
+      setCreateHarnessId(request.harnessId);
+      setCreating(true);
+      consumeAgentSettingsRequest(request.id);
+    })
+  );
+
   // Opened from an agent's user card: wait for the list, then show that
   // agent's editor if it is one the viewer manages.
   createEffect(
     on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
-      if (!request || agentsQuery.isPending) return;
+      if (request?.type !== 'edit' || agentsQuery.isPending) return;
       const agent = agents().find(
         (candidate) => candidate.id === request.agentId
       );
@@ -436,6 +449,7 @@ export function Agents(props: {
       <Show keyed when={props.createKind ?? (creating() || creatingFromLink())}>
         <AgentEditorPage
           initialKind={props.createKind}
+          initialHarnessId={createHarnessId()}
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -672,6 +686,8 @@ function AgentDeleteDialog(props: {
 
 function AgentEditorPage(props: {
   initialKind?: AgentKind;
+  /** The machine a new agent starts on under Where it runs. */
+  initialHarnessId?: string;
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
@@ -698,6 +714,7 @@ function AgentEditorPage(props: {
   const [harnessId, setHarnessId] = createSignal(
     props.agent?.harness_id ??
       props.agent?.harness ??
+      props.initialHarnessId ??
       (props.initialKind === 'coder'
         ? props.connectedHarnesses.find((harness) =>
             isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
