@@ -10,15 +10,27 @@ only, behind `enable-suggestions`.
 
 - `queries/suggestions-source.ts` reads the feed (`GET /suggestions`: open suggestions and
   those done in the last day) from the scheduler service and decodes it into
-  `core/suggestion.ts`; it reads again after each write and every few seconds
-  while a run is under way. Views only see the `SuggestionsSource` contract in
+  `core/suggestion.ts`. Views only see the `SuggestionsSource` contract in
   `context/`.
+- Polling is narrow on purpose. `queries/generation.ts` reads
+  `GET /suggestions/generation` once, then every 3 s only while a generation
+  runs. The feed is read again after each write, every 10 s while a card's
+  run or a generation is under way, and once when a generation ends. Nothing
+  else polls; `queries/polling.test.tsx` holds these numbers.
+- `primitives/refresh.ts` and `components/refresh-suggestions.tsx` are the
+  header's Refresh control (`POST /suggestions/regenerate`): running while a
+  generation runs, "Available at h:mm" during the hourly cooldown (one timer
+  ends it), hidden where the server has no status to give.
 - `primitives/feed.ts` decides what a card's action does for its kind: a
   composer prompt accepts, then opens the composer; a background prompt only
   accepts, which starts its run; an entity suggestion accepts, then opens its item
-  or draft; a routine suggestion saves its suggestion.
+  or draft; a routine suggestion saves its drafted routine.
 - `suggestion-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
+- The first generation starts in onboarding, not here: connecting an inbox
+  calls `/suggestions/generate` once when either the person's suggestions or
+  routine suggestions are on (`features/onboarding`,
+  `useSuggestionGenerationEnabled`).
 
 ## Start here
 
@@ -46,7 +58,9 @@ only, behind `enable-suggestions`.
 - The server has no un-dismiss. A dismissal is held with Undo and sent a few
   seconds after the last one, or when the person leaves (`sendDismissals`,
   with `keepalive` on unload). Splits can stay mounted after navigating away,
-  so leaving alone would not send it.
+  so leaving alone would not send it. A refused dismissal puts the card
+  back with the failed-action line. Dismissing a running suggestion stops its
+  run, and the control and the dismissed row say so.
 - The feed keeps the server's order (most important first); only done suggestions
   move, to the end. The server decides what is done: accepting anything but a
   background suggestion makes it `done`. An `accepted` background suggestion with no run
