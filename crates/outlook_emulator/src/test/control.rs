@@ -345,3 +345,40 @@ async fn a_link_bound_to_another_mailbox_gets_that_mailboxs_token() {
     assert_eq!(second["cached"], false);
     assert_eq!(owner(&second).await, BOB);
 }
+
+#[tokio::test]
+async fn each_principal_holds_their_own_grant_for_a_mailbox() {
+    let (emulator, _) = start("mailboxes:\n  - email: ada@example.com\n").await;
+    let http = reqwest::Client::new();
+    let service = format!("{}/internal", emulator.authentication_service_url());
+    let link = "0195a000-0000-7000-8000-00000000a11c";
+    emulator.link_mailbox(link, ADA).unwrap();
+
+    let grant = async |owner: &str| {
+        let url = format!("{service}/microsoft_grant?attempt_id={link}&owner={owner}");
+        body(http.get(url).send().await.unwrap()).await["grant_id"].clone()
+    };
+    let revoke = async |grant_id: &Value| {
+        http.post(format!("{service}/revoke_microsoft_grant"))
+            .json(&json!({ "grant_id": grant_id }))
+            .send()
+            .await
+            .unwrap()
+    };
+    let token_status = async || {
+        let url = format!("{service}/microsoft_access_token?link_id={link}&force_refresh=true");
+        http.get(url).send().await.unwrap().status()
+    };
+
+    let first = grant("first").await;
+    let second = grant("second").await;
+    assert_ne!(first, second);
+
+    // One principal letting go leaves the other's access to the mailbox.
+    revoke(&first).await;
+    assert_eq!(token_status().await, 200);
+
+    // The mailbox is revoked with its last grant.
+    revoke(&second).await;
+    assert_eq!(token_status().await, 401);
+}

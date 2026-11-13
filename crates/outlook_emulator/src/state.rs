@@ -116,6 +116,9 @@ pub(crate) struct State {
     /// The mailbox of each Macro email link the authentication-service
     /// stand-in answers for.
     pub(crate) links: HashMap<String, String>,
+    /// The mailbox of each grant the authentication-service stand-in
+    /// described, by grant id: one per principal who signed in to it.
+    pub(crate) grants: HashMap<uuid::Uuid, String>,
     /// The access token last handed out for each link.
     link_tokens: HashMap<String, String>,
     /// Authorization codes not yet redeemed.
