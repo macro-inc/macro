@@ -19,6 +19,6 @@ rule:
     - pattern: async_graphql::dataloader::DataLoader::with_cache($LOADER, $SPAWN, $CACHE)
 constraints:
   # `tokio::spawn` or `tokio::task::spawn`, passed as is or wrapped in a closure
-  # that forwards the batch unchanged.
+  # that forwards the batch unchanged, with or without a block body.
   SPAWN:
-    regex: '^(\|\s*\w+\s*\|\s*)?(::)?tokio::(task::)?spawn(\(\s*\w+\s*\))?$'
+    regex: '^(move\s+)?(\|\s*\w+\s*\|\s*)?(\{\s*)?(::)?tokio::(task::)?spawn(\(\s*\w+\s*\))?(\s*;)?(\s*\})?$'
