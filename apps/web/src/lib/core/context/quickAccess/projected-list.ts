@@ -4,7 +4,10 @@ import type {
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
-import { isOwnerHandoffBlockedError } from '@graphql-cache/protocol';
+import {
+  isOwnerEpochLostError,
+  isOwnerHandoffBlockedError,
+} from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -50,7 +53,10 @@ type Request = {
 };
 
 function isRefusedFirstAnswer(request: Request, error: unknown): boolean {
-  return !request.answered && isOwnerHandoffBlockedError(error);
+  // Either way the cache was changing owner and a replacement engine follows.
+  const ownerChanging =
+    isOwnerHandoffBlockedError(error) || isOwnerEpochLostError(error);
+  return !request.answered && ownerChanging;
 }
 
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
@@ -91,6 +97,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     untrack(loading) === 'initial'
   );
   let current: Request | undefined;
+  let engineReplacements = 0;
   onCleanup(() => {
     current = undefined;
   });
@@ -134,6 +141,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     let foundNewRow = false;
     let cursor = append ? request.cursor : undefined;
     let pages = append ? request.pages : 0;
+    const replacementsAtStart = engineReplacements;
     const span = Telemetry.span('quick_access.search');
     span.setAttr('search.buckets', request.buckets.join(','));
     span.setAttr('search.query_length', request.query.length);
@@ -206,6 +214,10 @@ export function createProjectedList<T extends { id: string }>(options: {
       setHasMore(request.cursor !== undefined);
       console.warn('Quick Access cache search failed', error);
     } finally {
+      span.setAttr(
+        'search.engine_restarted',
+        engineReplacements !== replacementsAtStart
+      );
       span.end();
       finishRequest(request);
     }
@@ -214,6 +226,7 @@ export function createProjectedList<T extends { id: string }>(options: {
   // Nothing else replays a refused first answer: cache-change refreshes only
   // follow a write, and the menu would list no documents until one happened.
   const stopWatchingEngine = options.host.onCacheGenerationChanged?.(() => {
+    engineReplacements += 1;
     // The host reports the replacement before it starts reinitializing, so
     // read after the notification returns.
     queueMicrotask(() => {

@@ -7,6 +7,16 @@ set -euo pipefail
 REGION="__REGION__"
 PRIVATE_KEY_PARAMETER="__PRIVATE_KEY_PARAMETER__"
 
+# dnf's metadata alone outgrows a t4g.nano's 512 MiB; without swap the
+# OOM killer stops the install.
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=1024
+  chmod 600 /swapfile
+  mkswap /swapfile
+  echo '/swapfile none swap defaults 0 0' >> /etc/fstab
+fi
+swapon -a
+
 dnf install -y wireguard-tools nftables
 
 cat > /etc/sysctl.d/90-wireguard-gateway.conf <<'SYSCTL'
