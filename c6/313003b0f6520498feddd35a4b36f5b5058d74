@@ -1,0 +1,40 @@
+services/ai-editing-worker/src/canvas/editor.ts
+  s_467ffae7bfc0ed::t_daebeb89262212 115-123
+services/ai-editing-worker/src/canvas/agent.ts
+  s_467ffae7bfc0ed::t_43723738a40a2e 196-202,206-207
+services/ai-editing-worker/src/canvas/overview.ts
+  s_467ffae7bfc0ed::t_43723738a40a2e 6,13-18,48-52,59-61
+services/ai-editing-worker/src/canvas/operations.ts
+  s_467ffae7bfc0ed::t_daebeb89262212 15-18,53-60,157,181-187
+services/ai-editing-worker/src/canvas/schema.ts
+  s_467ffae7bfc0ed::t_daebeb89262212 1-8,66-78,177,188-189,215-220,234
+services/ai-editing-worker/src/canvas/transitions.test.ts
+  s_467ffae7bfc0ed::t_865d51f440e477 1-233
+services/ai-editing-worker/src/canvas/session.ts
+  s_467ffae7bfc0ed::t_43723738a40a2e 25,42-46,206,208-210,214-215,351-355,398,446-448,513-514
+services/ai-editing-worker/src/canvas/dependencies.ts
+  s_467ffae7bfc0ed::t_daebeb89262212 135
+services/ai-editing-worker/src/canvas/render.ts
+  s_467ffae7bfc0ed::t_0351d3010a7e34 9
+  s_467ffae7bfc0ed::t_43723738a40a2e 65-66
+services/ai-editing-worker/src/canvas/sandbox-code.ts
+  s_467ffae7bfc0ed::t_6bdb4ca8386d71 3
+services/ai-editing-worker/src/canvas/artifact-prompt.md
+  s_467ffae7bfc0ed::t_20a0563ec25bb0 5-6,11-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c6313003b0f6520498feddd35a4b36f5b5058d74",
+  "prompts": {},
+  "sessions": {
+    "s_467ffae7bfc0ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08f1dd5d-1128-4aba-b991-7dd6dce0c816",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
