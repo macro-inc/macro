@@ -110,6 +110,9 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+harness_id = { path = "../harness_id" }
+model_user = { path = "../model_user" }
+tower = { workspace = true }
 bot_id = { path = "../bot_id" }
 trigger_context = { path = "../trigger_context" }
 model_owner = { path = "../model_owner" }
