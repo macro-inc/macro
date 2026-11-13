@@ -1,5 +1,5 @@
 import type { ActivityEventFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import { liveUpdatesGateExchange } from '@service-storage/graphql-live-updates';
+import { liveUpdatesGateExchanges } from '@service-storage/graphql-live-updates';
 // ast-grep-ignore: ts-feature-layers-use-context -- The test drives the feed through the app's real websocket wiring on purpose.
 import * as soupWebsocket from '@service-storage/graphql-soup-websocket';
 import {
@@ -187,16 +187,13 @@ function startApp(options: {
       },
     }),
   });
+  const live = liveUpdatesGateExchanges(lifecycle.liveUpdates, {
+    cached: options.cached,
+  });
   const client = createClient({
     url: 'https://dss.test/items/soup/graphql',
     exchanges: [
-      ...(options.gated
-        ? [
-            liveUpdatesGateExchange(lifecycle.liveUpdates, {
-              cached: options.cached,
-            }),
-          ]
-        : []),
+      ...(options.gated ? [live.rereads, live.holds] : []),
       subscriptions,
       server.httpExchange,
     ],

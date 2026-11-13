@@ -836,16 +836,19 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   nothing that waited for it. A read its subscriptions keep current (its view
   registers an activity revalidator or a channel notification reader) passes
   `context: FOLLOWS_LIVE_UPDATES` and registers with `followsLiveUpdates: true`;
-  always set both or neither. `liveUpdatesGateExchange` holds such reads until
+  always set both or neither. `liveUpdatesGateExchanges` holds such reads until
   a pong after the subscribe frames (at most `LIVE_UPDATES_HOLD_MS`), so nothing
   published in between is lost, but only behind a cached result: a read the
   normalized cache reports as a miss (`onCacheMiss`), and every one on the
   uncached client or on a cache whose scope this page created
   (`cacheScopeStartsEmpty`; its misses would come only once it opens), goes at
-  once and is read again once live, after its answer
-  (`graphql_soup.live_updates.reread`). A `cache-first` read sets neither and
-  is read again when the subscriptions go live, unless a held read of the same
-  operation key went out then; every read is read again if the hold gave up.
+  once and is read again once live, after the client has its answer
+  (`graphql_soup.live_updates.reread`): its `rereads` exchange goes first,
+  since the cache publishes an answer only once written and urql drops a read
+  of a query whose answer it has not received. A `cache-first` read sets
+  neither and is read again when the subscriptions go live, unless a held read
+  of the same operation key went out then; every read is read again if the
+  hold gave up.
   The gate sends every held operation, because the normalized cache counts
   each one it forwards until its result arrives. A held operation
   records a `graphql_soup.live_updates.wait` span unless its one-shot trace

@@ -85,7 +85,7 @@ import {
   FOLLOWS_LIVE_UPDATES,
   LIVE_UPDATES_HOLD_MS,
   type LiveUpdatesGate,
-  liveUpdatesGateExchange,
+  liveUpdatesGateExchanges,
 } from './graphql-live-updates';
 
 const FEED = gql`
@@ -341,19 +341,26 @@ function gatedClient(
           onPush((operation) => forwarded.push(operation))
         )
       );
+  const live = liveUpdatesGateExchanges(gate, { cached: options.cached });
   const client = createClient({
     url: 'https://dss.test/graphql',
-    exchanges: [
-      liveUpdatesGateExchange(gate, { cached: options.cached }),
-      record,
-      options.network ?? answer,
-    ],
+    exchanges: [live.rereads, live.holds, record, options.network ?? answer],
   });
   const sent = () =>
     forwarded
       .filter(({ kind }) => kind !== 'teardown')
       .map(({ query }) => getOperationName(query));
   return { client, forwarded, sent };
+}
+
+/** The gate's exchanges around a normalized cache, as the cached client has them. */
+function aroundCache(
+  gate: LiveUpdatesGate,
+  cache: Exchange,
+  network: Exchange
+): Exchange[] {
+  const live = liveUpdatesGateExchanges(gate);
+  return [live.rereads, cache, live.holds, network];
 }
 
 function read(
@@ -367,7 +374,7 @@ function read(
   );
 }
 
-describe('liveUpdatesGateExchange', () => {
+describe('liveUpdatesGateExchanges', () => {
   it('holds reads that follow live updates until the gate opens', async () => {
     const { gate } = await pingedGate();
     const { client, sent } = gatedClient(gate);
@@ -463,7 +470,7 @@ describe('liveUpdatesGateExchange', () => {
     const { source: operations$, next: dispatch } = makeSubject<Operation>();
     const forwarded: Operation[] = [];
     pipe(
-      liveUpdatesGateExchange(gate)({
+      liveUpdatesGateExchanges(gate).holds({
         client: {} as Client,
         dispatchDebug: () => undefined,
         forward: (forward$) =>
@@ -533,11 +540,7 @@ describe('liveUpdatesGateExchange', () => {
       );
     const client = createClient({
       url: 'https://dss.test/graphql',
-      exchanges: [
-        normalizedCacheExchange(host),
-        liveUpdatesGateExchange(gate),
-        network,
-      ],
+      exchanges: aroundCache(gate, normalizedCacheExchange(host), network),
     });
     const results: OperationResult[] = [];
     pipe(
@@ -592,11 +595,9 @@ describe('liveUpdatesGateExchange', () => {
         );
       const client = createClient({
         url: 'https://dss.test/graphql',
-        exchanges: [
-          normalizedCacheExchange(host),
-          ...(gated ? [liveUpdatesGateExchange(gate)] : []),
-          network,
-        ],
+        exchanges: gated
+          ? aroundCache(gate, normalizedCacheExchange(host), network)
+          : [normalizedCacheExchange(host), network],
       });
       const observe = () => {
         const results: OperationResult[] = [];
@@ -657,13 +658,13 @@ describe('liveUpdatesGateExchange', () => {
       );
     const client = createClient({
       url: 'https://dss.test/graphql',
-      exchanges: [
+      exchanges: aroundCache(
+        gate,
         normalizedCacheExchange(host, {
           onCacheMiss: (operation) => gate.missed(operation.key),
         }),
-        liveUpdatesGateExchange(gate),
-        network,
-      ],
+        network
+      ),
     });
     const observe = (query: typeof FEED) => {
       const results: OperationResult[] = [];
@@ -787,6 +788,68 @@ describe('liveUpdatesGateExchange', () => {
     const [again] = requests.splice(0);
     if (again) answer(makeResult(again, { data: {} }));
     expect(telemetry.spans).toMatchObject([{ ended: true }]);
+  });
+
+  it('reads a cache miss again once the cache has published its later answer', async () => {
+    const { gate } = await pingedGate();
+    const host = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      readQuery: async () => ({ kind: 'miss' as const }),
+    };
+    const requests: Operation[] = [];
+    const { source: answers$, next: answer } = makeSubject<OperationResult>();
+    const network: Exchange = () => (operations$) =>
+      merge([
+        pipe(
+          operations$,
+          onPush((operation) => {
+            if (operation.kind === 'query') requests.push(operation);
+          }),
+          filter(() => false),
+          map((operation) => makeResult(operation, { data: {} }))
+        ),
+        answers$,
+      ]);
+    const client = createClient({
+      url: 'https://dss.test/graphql',
+      exchanges: aroundCache(
+        gate,
+        normalizedCacheExchange(host, {
+          onCacheMiss: (operation) => gate.missed(operation.key),
+        }),
+        network
+      ),
+    });
+    const results: OperationResult[] = [];
+    pipe(
+      client.executeQuery(createRequest(FEED, {}), {
+        requestPolicy: 'cache-and-network',
+        ...FOLLOWS_LIVE_UPDATES,
+      }),
+      subscribe((result) => results.push(result))
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(requests).toHaveLength(1);
+
+    gate.pong(true);
+    await vi.advanceTimersByTimeAsync(0);
+    // The miss answers after the subscriptions went live. The cache publishes
+    // that answer only once it has written it; urql drops a read sent before.
+    const [first] = requests.splice(0);
+    if (first) answer(makeResult(first, { data: { feed: [{ id: 'early' }] } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.context.requestPolicy).toBe('network-only');
+
+    const [again] = requests.splice(0);
+    if (again) answer(makeResult(again, { data: { feed: [{ id: 'live' }] } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(results.at(-1)?.data).toEqual({ feed: [{ id: 'live' }] });
+    expect(telemetry.spans.at(-1)).toMatchObject({
+      name: 'graphql_soup.live_updates.reread',
+      ended: true,
+    });
   });
 
   it('does not read a query again once it is torn down', async () => {

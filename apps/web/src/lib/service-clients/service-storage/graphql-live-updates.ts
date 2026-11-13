@@ -216,13 +216,19 @@ type HeldRead = { operations: HeldOperation[]; cancel: () => void };
 
 /**
  * A query whose read went out before the subscriptions started. Once they are
- * live it is read again, after every request sent for it has answered, so the
- * newer answer is the one that stays.
+ * live it is read again, after every request sent for it has answered and the
+ * client has the last answer, so the newer answer is the one that stays.
  */
 type EarlyRead = {
   operation: Operation;
   /** Requests sent for it that have not answered. */
   pending: number;
+  /**
+   * An answer came back that has not reached the client: the normalized
+   * cache publishes it only once written, and urql drops another read of the
+   * query until then.
+   */
+  unpublished: boolean;
   /** From the live that asked for the read again until it answers. */
   reread?: Span;
   rereadSent: boolean;
@@ -269,23 +275,100 @@ function resumed({ operation, parent }: HeldOperation): Operation {
 }
 
 /**
- * After the normalized cache, so a cached result still shows at once: holds
- * the network reads of queries marked {@link FOLLOWS_LIVE_UPDATES} while
- * `gate` waits, and sends them, in order, when it opens. A read the cache
- * reports as a miss ({@link LiveUpdatesGate.missed}) goes at once instead,
- * and is read again once the subscriptions are live. Without a cache, or
- * with one that starts empty (`cached: false`), every such read is a miss.
+ * The two exchanges that read the queries marked {@link FOLLOWS_LIVE_UPDATES}
+ * around `gate`. `holds` goes after the normalized cache, so a cached result
+ * still shows at once: it holds their network reads while `gate` waits, and
+ * sends them, in order, when it opens. A read the cache reports as a miss
+ * ({@link LiveUpdatesGate.missed}) goes at once instead, and is read again
+ * once the subscriptions are live. Without a cache, or with one that starts
+ * empty (`cached: false`), every such read is a miss. `rereads` goes first,
+ * where results reach the client, and sends that second read only once the
+ * client has the first one's answer. A client needs both.
  */
-export function liveUpdatesGateExchange(
+export function liveUpdatesGateExchanges(
   gate: LiveUpdatesGate,
   options: { cached?: boolean } = {}
-): Exchange {
+): { rereads: Exchange; holds: Exchange } {
   const cached = options.cached ?? true;
-  return ({ client, forward }) =>
+  const early = new Map<number, EarlyRead>();
+  let reexecute: (operation: Operation) => void = () => undefined;
+
+  const forget = (key: number) => {
+    const read = early.get(key);
+    if (!read) return;
+    early.delete(key);
+    read.cancel();
+    read.reread?.end();
+  };
+  const rereadIfAnswered = (read: EarlyRead) => {
+    if (!read.reread || read.rereadSent) return;
+    if (read.pending > 0 || read.unpublished) return;
+    read.rereadSent = true;
+    const { operation, reread } = read;
+    reexecute(
+      makeOperation('query', operation, {
+        ...operation.context,
+        requestPolicy: 'network-only',
+        [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(reread),
+      })
+    );
+  };
+  const sentEarly = (operation: Operation) => {
+    const { key } = operation;
+    const current = early.get(key);
+    if (current) {
+      current.operation = operation;
+      current.pending += 1;
+      return;
+    }
+    const read: EarlyRead = {
+      operation,
+      pending: 1,
+      unpublished: false,
+      rereadSent: false,
+      cancel: () => undefined,
+    };
+    early.set(key, read);
+    read.cancel = gate.sentEarly(key, (again) => {
+      read.cancel = () => undefined;
+      if (early.get(key) !== read) return;
+      if (!again) {
+        forget(key);
+        return;
+      }
+      read.reread = operationSpan(
+        'graphql_soup.live_updates.reread',
+        read.operation
+      );
+      read.reread.setAttr(
+        'live_updates.answer_pending',
+        read.pending > 0 || read.unpublished
+      );
+      rereadIfAnswered(read);
+    });
+  };
+
+  const rereads: Exchange = ({ client, forward }) => {
+    reexecute = (operation) => client.reexecuteOperation(operation);
+    return (operations$) =>
+      pipe(
+        forward(operations$),
+        // urql takes the read again once this result reaches it, before the
+        // reexecution it schedules goes out.
+        onPush((result) => {
+          const read = early.get(result.operation.key);
+          if (!read?.unpublished || result.hasNext) return;
+          read.unpublished = false;
+          rereadIfAnswered(read);
+        })
+      );
+  };
+
+  const holds: Exchange =
+    ({ forward }) =>
     (operations$) => {
       const { source: resumed$, next: send } = makeSubject<Operation>();
       const held = new Map<number, HeldRead>();
-      const early = new Map<number, EarlyRead>();
 
       const finish = (key: number, outcome: HoldOutcome | 'torn_down') => {
         const read = held.get(key);
@@ -298,55 +381,6 @@ export function liveUpdatesGateExchange(
         }
         return read.operations;
       };
-      const forget = (key: number) => {
-        const read = early.get(key);
-        if (!read) return;
-        early.delete(key);
-        read.cancel();
-        read.reread?.end();
-      };
-      const rereadIfAnswered = (read: EarlyRead) => {
-        if (!read.reread || read.rereadSent || read.pending > 0) return;
-        read.rereadSent = true;
-        const { operation, reread } = read;
-        client.reexecuteOperation(
-          makeOperation('query', operation, {
-            ...operation.context,
-            requestPolicy: 'network-only',
-            [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(reread),
-          })
-        );
-      };
-      const sentEarly = (operation: Operation) => {
-        const { key } = operation;
-        const current = early.get(key);
-        if (current) {
-          current.operation = operation;
-          current.pending += 1;
-          return;
-        }
-        const read: EarlyRead = {
-          operation,
-          pending: 1,
-          rereadSent: false,
-          cancel: () => undefined,
-        };
-        early.set(key, read);
-        read.cancel = gate.sentEarly(key, (again) => {
-          read.cancel = () => undefined;
-          if (early.get(key) !== read) return;
-          if (!again) {
-            forget(key);
-            return;
-          }
-          read.reread = operationSpan(
-            'graphql_soup.live_updates.reread',
-            read.operation
-          );
-          read.reread.setAttr('live_updates.answer_pending', read.pending > 0);
-          rereadIfAnswered(read);
-        });
-      };
       const answered = (result: OperationResult) => {
         const read = early.get(result.operation.key);
         if (!read || result.hasNext) return;
@@ -355,7 +389,7 @@ export function liveUpdatesGateExchange(
           return;
         }
         read.pending = Math.max(0, read.pending - 1);
-        rereadIfAnswered(read);
+        read.unpublished = true;
       };
       const hold = (operation: Operation) => {
         const read: HeldRead = {
@@ -401,4 +435,6 @@ export function liveUpdatesGateExchange(
       );
       return pipe(forward(merge([passed$, resumed$])), onPush(answered));
     };
+
+  return { rereads, holds };
 }

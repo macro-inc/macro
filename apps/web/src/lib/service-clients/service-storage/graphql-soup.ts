@@ -117,7 +117,7 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
-import { liveUpdatesGateExchange } from './graphql-live-updates';
+import { liveUpdatesGateExchanges } from './graphql-live-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
@@ -541,15 +541,18 @@ function getUncachedRealtimeClient(): Client {
   const websocketClient = createGraphqlSoupWebSocketClient(
     subscriptionsLifecycle
   );
+  const liveUpdates = liveUpdatesGateExchanges(
+    subscriptionsLifecycle.liveUpdates,
+    { cached: false }
+  );
   const client = createClient({
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
+      liveUpdates.rereads,
       captureTraceParentExchange,
       networkRevalidationExchange(),
-      liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates, {
-        cached: false,
-      }),
+      liveUpdates.holds,
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
       traceParentExchange,
@@ -882,11 +885,21 @@ export function getGraphqlSoupClient(): Client {
           websocket: websocketState,
         }),
       });
+      // A cache this page created has nothing to show, and its first reads
+      // resolve only once it opens, so nothing waits for it.
+      const liveUpdates = liveUpdatesGateExchanges(
+        subscriptionsLifecycle.liveUpdates,
+        { cached: !cacheScopeStartsEmpty(scope) }
+      );
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
+          // First, so a miss is read again only once the client has its answer:
+          // the cache publishes an answer once written, and urql drops another
+          // read of the query until then.
+          liveUpdates.rereads,
           captureTraceParentExchange,
           optimisticResolversExchange(soupOptimisticResolvers),
           networkRevalidationExchange(() => host?.disabled === true),
@@ -925,12 +938,8 @@ export function getGraphqlSoupClient(): Client {
             externalWriteTypes: resolveCrmExternalWriteTypes,
           }),
           // After the cache, so cached results still show at once; it reports
-          // misses to the gate so their reads are not held. A cache this page
-          // created has nothing to show, and its first reads resolve only once
-          // it opens, so nothing waits for it.
-          liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates, {
-            cached: !cacheScopeStartsEmpty(scope),
-          }),
+          // misses to the gate so their reads are not held.
+          liveUpdates.holds,
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           traceParentExchange,

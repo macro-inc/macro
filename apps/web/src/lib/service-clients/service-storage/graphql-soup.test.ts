@@ -366,9 +366,10 @@ const mocks = vi.hoisted(() => {
     set scopeStartsEmpty(value: boolean) {
       scopeStartsEmpty = value;
     },
-    liveUpdatesGateExchange: vi.fn(
+    liveUpdatesGateExchanges: vi.fn(
       (_gate: unknown, _options?: { cached?: boolean }) => ({
-        kind: 'live-updates',
+        rereads: { kind: 'live-updates-rereads' },
+        holds: { kind: 'live-updates' },
       })
     ),
     host,
@@ -514,7 +515,7 @@ vi.mock('./graphql/generated/graphql', () => ({
   SoupDocument: {},
 }));
 vi.mock('./graphql-live-updates', () => ({
-  liveUpdatesGateExchange: mocks.liveUpdatesGateExchange,
+  liveUpdatesGateExchanges: mocks.liveUpdatesGateExchanges,
 }));
 vi.mock('./graphql-notification-receipt', () => ({
   notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
@@ -558,6 +559,8 @@ vi.mock('@urql/core', () => ({
       );
       expect(gateIndex).toBeGreaterThan(cacheIndex);
       expect(gateIndex).toBeLessThan(receiptIndex);
+      // Rereads see answers as the client gets them.
+      expect(options.exchanges[0]).toEqual({ kind: 'live-updates-rereads' });
     }
     const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
@@ -851,7 +854,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       const soup = await import('./graphql-soup');
       soup.getGraphqlSoupClient();
       expect(
-        mocks.liveUpdatesGateExchange.mock.calls.map(([, options]) => options)
+        mocks.liveUpdatesGateExchanges.mock.calls.map(([, options]) => options)
       ).toEqual([{ cached }]);
     }
   );
