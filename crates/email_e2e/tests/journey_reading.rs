@@ -5,7 +5,7 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use email_e2e::{Inbox, Mail, Provider, Report, Stack, gmail_emulator, outlook_emulator};
+use email_e2e::{Inbox, Provider, Report, Stack, gmail_emulator, outlook_emulator};
 use serde_json::{Value, json};
 
 const AGENDA: &[u8] = b"%PDF-1.4 the agenda for the site visit";
