@@ -4,21 +4,11 @@ import {
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockAliasedName, useBlockId } from '@core/block';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import {
@@ -30,17 +20,16 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import Download from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import type { Component } from 'solid-js';
-import { Show } from 'solid-js';
-import type { CodeBlockMode } from './CodeContent';
-import { CodeFileTypeChip } from './CodeFileTypeChip';
-import { CodeModeControl } from './CodeModeControl';
+import type { CodeBlockMode } from '../../component/CodeContent';
 
-export const TopBar: Component<{
+export interface CodeHeaderProps {
   isHtmlFile: boolean;
   mode: CodeBlockMode;
   onModeChange: (mode: CodeBlockMode) => void;
-}> = (props) => {
+}
+
+/** The code block's title menu operations and named header actions. */
+export function useCodeHeaderTools() {
   const analytics = useAnalytics();
 
   const blockId = useBlockId();
@@ -87,52 +76,26 @@ export const TopBar: Component<{
     fileType: 'code',
   });
 
-  const tools: BlockTool[] = [
-    {
-      label: 'Ask Macro',
-      icon: ChatWithAgentIcon,
-      action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: (control) => (
-        <ChatWithAgentButton
-          grouped={control.grouped}
-          entity={chatEntity()}
-          label="Ask Macro"
-        />
-      ),
-    },
-    {
-      group: 'sharing',
-      label: 'Share',
-      icon: IconShared,
-      action: openShare,
-      buttonComponent: () => <ShareTrigger onClick={openShare} />,
-      focusTarget: getShareDrawerRecipientInput,
-    },
-  ];
-
-  return (
-    <>
-      <SplitHeaderLeft>
-        <BlockItemSplitLabel badges={<CodeFileTypeChip />} />
-        <Show when={props.isHtmlFile && !isMobile()}>
-          <div class="ph-no-capture mx-2 h-full min-w-0 shrink-0">
-            <CodeModeControl
-              mode={props.mode}
-              onModeChange={props.onModeChange}
-            />
-          </div>
-        </Show>
-      </SplitHeaderLeft>
-
-      <ResponsivePermissionsBadge />
-
-      <ResponsiveBlockToolbar
-        tools={tools}
-        ops={ops}
-        id={blockId}
-        itemType="document"
-        name={name()}
+  const askMacro: BlockTool = {
+    label: 'Ask Macro',
+    icon: ChatWithAgentIcon,
+    action: () => openChatWithAgent(chatEntity()),
+    buttonComponent: (control) => (
+      <ChatWithAgentButton
+        grouped={control.grouped}
+        entity={chatEntity()}
+        label="Ask Macro"
       />
-    </>
-  );
-};
+    ),
+  };
+
+  const share: BlockTool = {
+    group: 'sharing',
+    label: 'Share',
+    icon: IconShared,
+    action: openShare,
+    focusTarget: getShareDrawerRecipientInput,
+  };
+
+  return { ops, openShare, actions: { askMacro, share } };
+}

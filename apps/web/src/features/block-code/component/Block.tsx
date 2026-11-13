@@ -2,6 +2,7 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   blockMetadataSignal,
   blockTextSignal,
@@ -20,9 +21,10 @@ import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/Spreadsh
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
+import { CodeHeader } from '../views/code-header';
+import { MobileCodeHeader } from '../views/mobile/code-header';
 import { type CodeBlockMode, CodeContent } from './CodeContent';
 import { CodeMarkdown } from './CodeMarkdown';
-import { TopBar } from './TopBar';
 
 const UploadedWorkbook = lazy(
   () => import('../../block-spreadsheet/views/UploadedWorkbook')
@@ -60,11 +62,22 @@ export default function BlockCode() {
           <SidePanel.Layout defaultOpen={false} floating>
             <FileSidePanelSections />
             <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
-              <TopBar
-                isHtmlFile={isHtmlFile()}
-                mode={mode()}
-                onModeChange={setMode}
-              />
+              <Show
+                when={isTouchDevice()}
+                fallback={
+                  <CodeHeader
+                    isHtmlFile={isHtmlFile()}
+                    mode={mode()}
+                    onModeChange={setMode}
+                  />
+                }
+              >
+                <MobileCodeHeader
+                  isHtmlFile={isHtmlFile()}
+                  mode={mode()}
+                  onModeChange={setMode}
+                />
+              </Show>
               <div class="relative min-h-0 min-w-0 w-full flex-1 overflow-hidden">
                 <Show
                   when={spreadsheet()}
