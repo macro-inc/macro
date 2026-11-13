@@ -404,6 +404,37 @@ pub const LOOKUP_WINDOW_MINUTES: i32 = 60;
 /// A lookup still pending this long after it started has failed.
 pub const LOOKUP_EXPIRY_SECONDS: i32 = 60;
 
+/// Profile-picture queries one account may make per hour, and per day.
+/// WhatsApp bans accounts that query many pictures of strangers; these are
+/// cautious first numbers, not WhatsApp's published limits.
+pub const PICTURE_QUERIES_PER_HOUR: i64 = 60;
+/// See [`PICTURE_QUERIES_PER_HOUR`].
+pub const PICTURE_QUERIES_PER_DAY: i64 = 100;
+/// Largest preview picture staged for DSS.
+pub const PICTURE_LIMIT_BYTES: usize = 1024 * 1024;
+/// Longest WhatsApp picture id stored.
+pub const PICTURE_ID_LIMIT_BYTES: usize = 64;
+/// Longest picture content type stored.
+pub const PICTURE_MIME_LIMIT_BYTES: usize = 64;
+
+/// A downloaded profile picture waiting for DSS to store it as a static file
+/// owned by the account's owner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedPicture {
+    /// The account that sees the picture.
+    pub account_id: Uuid,
+    /// The account's owner, who owns the static file.
+    pub user_id: String,
+    /// The person or group.
+    pub jid: String,
+    /// WhatsApp's id of the picture; pass it back to `picture_stored`.
+    pub picture_id: String,
+    /// The image.
+    pub bytes: Vec<u8>,
+    /// Its `image/*` type.
+    pub mime: String,
+}
+
 /// Most people one text send may @-mention.
 pub const MENTION_LIMIT: usize = 64;
 

@@ -39,6 +39,10 @@ pub struct ExternalChatSummary {
     pub backfill: Option<Backfill>,
     /// The community (a WhatsApp community) this group belongs to, if any.
     pub community: Option<CommunityReference>,
+    /// The group's picture, or a direct chat's person's, as the owner's
+    /// account sees it: a static file id; `null` when hidden, unset or not
+    /// fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 /// Full chat detail and current viewer capabilities.
 #[derive(Debug, Clone, Serialize)]
@@ -94,6 +98,9 @@ pub struct ExternalChatParticipant {
     pub name: String,
     /// Group admin.
     pub admin: bool,
+    /// Their profile picture as the chat owner's account sees it: a static
+    /// file id; `null` when hidden, unset or not fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 
 /// Message sender from protocol-verified identity evidence.
@@ -107,6 +114,9 @@ pub struct ExternalChatSender {
     pub user_id: Option<String>,
     /// Display name, never authentication evidence.
     pub name: String,
+    /// Their profile picture as the chat owner's account sees it: a static
+    /// file id; `null` when hidden, unset or not fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 /// Grouped reactions.
 #[derive(Debug, Clone, Serialize)]
@@ -199,6 +209,9 @@ pub struct ExternalChatPersonRef {
     pub name: String,
     /// Verified Macro user, if any.
     pub user_id: Option<String>,
+    /// Their profile picture as the chat owner's account sees it: a static
+    /// file id; `null` when hidden, unset or not fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 
 /// An @-mention in a message body.
@@ -347,6 +360,7 @@ impl ChatFacts {
         self,
         send_reason: Option<ReplyBlock>,
         community: Option<CommunityReference>,
+        picture_file_id: Option<Uuid>,
     ) -> ExternalChatSummary {
         ExternalChatSummary {
             id: self.id,
@@ -360,6 +374,7 @@ impl ChatFacts {
             send_reason,
             backfill: self.backfill,
             community,
+            picture_file_id,
         }
     }
 }

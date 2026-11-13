@@ -26,6 +26,7 @@ impl ExternalChatService {
                 providers.push(record.chat.provider);
             }
         }
+        let mut pictures = vec![None; records.len()];
         for kind in providers {
             let provider = self.providers.get(kind);
             let (indices, chats): (Vec<usize>, Vec<ChatRef>) = records
@@ -42,17 +43,24 @@ impl ExternalChatService {
                 _ => vec![],
             };
             let found = provider.communities(&chats).await?;
-            for ((position, index), community) in indices.into_iter().enumerate().zip(found) {
+            let seen = provider.pictures(&chats).await?;
+            for (((position, index), community), picture) in
+                indices.into_iter().enumerate().zip(found).zip(seen)
+            {
                 reasons[index] =
                     reply_block(account.as_ref(), &chats[position], sending.get(position));
                 communities[index] = community;
+                pictures[index] = picture;
             }
         }
         Ok(records
             .into_iter()
             .zip(reasons)
             .zip(communities)
-            .map(|((record, reason), community)| record.facts.summary(reason, community))
+            .zip(pictures)
+            .map(|(((record, reason), community), picture)| {
+                record.facts.summary(reason, community, picture)
+            })
             .collect())
     }
     /// Authorized chat detail, standard sharing and own sending identity.
@@ -82,9 +90,14 @@ impl ExternalChatService {
             .await?
             .pop()
             .flatten();
+        let picture = provider
+            .pictures(std::slice::from_ref(&chat))
+            .await?
+            .pop()
+            .flatten();
         let members = provider.members(&chat).await?;
         Ok(ExternalChatDetail {
-            chat: facts.summary(reason, community),
+            chat: facts.summary(reason, community, picture),
             share_permission: self.timeline.permissions(id).await?,
             access_level,
             disappearing_seconds: members.as_ref().and_then(|m| m.disappearing_seconds),

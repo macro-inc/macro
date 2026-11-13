@@ -14,6 +14,7 @@ fn person(name: &str, user: Option<&str>) -> ExternalChatPersonRef {
     ExternalChatPersonRef {
         name: name.to_owned(),
         user_id: user.map(str::to_owned),
+        picture_file_id: None,
     }
 }
 
@@ -109,8 +110,8 @@ fn a_poll_tallies_current_votes_per_option_and_marks_the_viewers() {
         },
     };
     let mut people = People::new(|_| None, UNKNOWN_PERSON);
-    people.name_person(Uuid::from_u128(10), "Ana".to_owned());
-    people.name_person(Uuid::from_u128(11), "Ben".to_owned());
+    people.name_person(Uuid::from_u128(10), "Ana".to_owned(), None);
+    people.name_person(Uuid::from_u128(11), "Ben".to_owned(), None);
 
     let view = rich_view(
         poll,
@@ -262,5 +263,41 @@ fn a_stored_group_created_line_holding_creation_metadata_names_no_subject() {
             value: None,
             call: None,
         }))
+    );
+}
+
+#[test]
+fn stored_people_carry_their_picture_and_unknown_ones_have_none() {
+    let mut people = People::new(|_| None, UNKNOWN_PERSON);
+    people.name_person(
+        Uuid::from_u128(10),
+        "Ana".to_owned(),
+        Some(Uuid::from_u128(99)),
+    );
+
+    let ana = people.person(&StoredPerson {
+        person_id: Uuid::from_u128(10),
+        user_id: None,
+    });
+    let stranger = people.person(&StoredPerson {
+        person_id: Uuid::from_u128(11),
+        user_id: None,
+    });
+
+    assert_eq!(
+        ana,
+        ExternalChatPersonRef {
+            name: "Ana".to_owned(),
+            user_id: None,
+            picture_file_id: Some(Uuid::from_u128(99)),
+        }
+    );
+    assert_eq!(
+        stranger,
+        ExternalChatPersonRef {
+            name: UNKNOWN_PERSON.to_owned(),
+            user_id: None,
+            picture_file_id: None,
+        }
     );
 }

@@ -118,6 +118,28 @@ polls `GET /whatsapp/lookups/{id}`, then adds and opens the chat. A lookup still
 pending after 60 seconds reads as `failed`. Lookups are deleted an hour later,
 and with the account's consent.
 
+Profile pictures are stored per observing account and JID
+(`whatsapp_profile_picture`), because WhatsApp's privacy settings show a
+picture to some accounts and not others; a chat shows the pictures its
+owner's account sees, as it shows that account's contact names. Only added
+chats are tracked: the group or direct chat when it is added and each new
+sender who is not a Macro user, never the unadded chat list (bulk picture
+queries for strangers get accounts banned). Chats and people added before
+pictures were tracked are backfilled the same way, all due at once for the
+budget to pace. Detaching a chat stops tracking (and deletes the files of)
+the pictures no other added chat of the owner shows. The session holding the account
+checks due pictures one at a time, 3 s apart, within 60 per hour and 100 per
+day per account (counted in Postgres, so the budget survives a replica move),
+and pauses 15 minutes, doubling up to 6 hours, when WhatsApp answers 429. It
+asks for the preview with the id it already stores, so an unchanged picture
+downloads nothing, and downloads a new one at once (its URL expires),
+staging the bytes on the row. DSS stores them as a static file owned by the
+account's owner (`static_file_id`, the only column the read path joins on);
+a replaced, hidden or removed picture's file is deleted like a released
+attachment. Hidden (401) and unset (404) pictures show initials. Pictures
+are checked again about weekly (hidden ones fortnightly), and at once when a
+`picture` notification brings another id.
+
 Direct chats are added like groups (`external_chat.kind = 'direct'`,
 `remote_id` the other person's JID, by phone number when known) and named after the
 person as the chat list names them. The owner's account is the only member: it

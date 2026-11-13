@@ -15,12 +15,22 @@ struct StoredFile {
     bytes: Vec<u8>,
 }
 
+/// A stored profile picture: its id, owner, type and bytes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct StoredPicture {
+    pub(super) file_id: Uuid,
+    pub(super) owner: String,
+    pub(super) mime: String,
+    pub(super) bytes: Vec<u8>,
+}
+
 /// Records the static files stored and deleted; fails the first `fail` stores.
 #[derive(Default)]
-struct Files {
+pub(super) struct Files {
     stored: Mutex<Vec<StoredFile>>,
+    pub(super) pictures: Mutex<Vec<StoredPicture>>,
     deleted: Mutex<Vec<Uuid>>,
-    fail: Mutex<u32>,
+    pub(super) fail: Mutex<u32>,
 }
 
 #[async_trait]
@@ -36,6 +46,27 @@ impl FileStore for Files {
             file_id,
             blob_id: import.blob_id,
             owner: import.owner.clone(),
+            bytes,
+        });
+        Ok(file_id)
+    }
+
+    async fn store_picture(
+        &self,
+        owner: &str,
+        mime: &str,
+        bytes: Vec<u8>,
+    ) -> ExternalChatResult<Uuid> {
+        let mut fail = self.fail.lock().unwrap();
+        if *fail > 0 {
+            *fail -= 1;
+            return Err(ExternalChatError::Unavailable.into());
+        }
+        let file_id = Uuid::now_v7();
+        self.pictures.lock().unwrap().push(StoredPicture {
+            file_id,
+            owner: owner.to_owned(),
+            mime: mime.to_owned(),
             bytes,
         });
         Ok(file_id)

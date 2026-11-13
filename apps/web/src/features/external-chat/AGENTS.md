@@ -137,7 +137,11 @@ belong to `features/external-view`. Architecture:
   show their Macro name and avatar; everyone else shows the name DSS gives
   (`imported_author`; reactors through the reaction's `names`, which
   `ReactionChip` reads for ids outside Macro). DSS supplies sender and member
-  names; render them as sent without client-side fallbacks.
+  names; render them as sent without client-side fallbacks. Their pictures
+  (and a chat's, in the header and External's sidebar) are the static files
+  DSS gives (`pictureFileId` → `pictureUrl`), drawn by
+  `components/provider-picture.tsx` over the initials or icon shown without
+  one.
 - Spans are `external_chat.*` with `external_chat.id`; provider account
   operations stay `whatsapp.*` in `lib/queries/whatsapp-linked`.
 - Use backend limits for text, files, edits and deletes.

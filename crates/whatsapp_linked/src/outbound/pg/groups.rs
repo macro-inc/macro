@@ -1,7 +1,7 @@
 //! Group metadata observed by accounts, and membership reconciliation.
 
 use super::*;
-use crate::domain::people::{ChatNames, SeenPerson};
+use crate::domain::people::{ChatNames, ChatRoster, SeenPerson};
 use crate::domain::ports::{GroupRepository, StoredChat, VisibleAdoption};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -381,11 +381,20 @@ impl PgWhatsAppRepository {
         .await
         .map_err(failure)?
         .into_iter()
-        .map(|row| SeenPerson {
-            person_id: row.id,
-            user_id: row.user_id,
-            whatsapp_name: row.display_name,
-            jids: row.jids,
+        .map(|row| {
+            // The stand-in writes as the chat's remote id, so it goes by it:
+            // in a direct chat that is the other person, whose picture the
+            // chat's is.
+            let mut jids = row.jids;
+            if row.id == super::ingest::chat_stand_in(chat.id) {
+                jids.push(chat.remote_id.clone());
+            }
+            SeenPerson {
+                person_id: row.id,
+                user_id: row.user_id,
+                whatsapp_name: row.display_name,
+                jids,
+            }
         })
         .collect();
         let mut named: Vec<String> = seen
@@ -407,7 +416,21 @@ impl PgWhatsAppRepository {
         .into_iter()
         .map(|row| (row.chat_jid, row.name))
         .collect();
-        Ok(ChatNames::new(contacts, seen))
+        let pictures = sqlx::query!(
+            r#"SELECT p.jid, p.static_file_id AS "static_file_id!" FROM whatsapp_profile_picture p
+            JOIN whatsapp_linked_account o ON o.id = p.account_id
+            JOIN external_chat g ON g.user_id = o.user_id
+            WHERE g.id = $1 AND p.static_file_id IS NOT NULL AND p.jid = ANY($2)"#,
+            chat.id,
+            &named
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| (row.jid, row.static_file_id))
+        .collect();
+        Ok(ChatNames::new(contacts, pictures, seen))
     }
 }
 
@@ -489,7 +512,7 @@ impl GroupRepository for PgWhatsAppRepository {
         .map_err(failure)
     }
 
-    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<GroupInfo>> {
+    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<ChatRoster>> {
         let roster = sqlx::query_scalar!(
             r#"SELECT r.metadata FROM whatsapp_roster r
             JOIN whatsapp_chat_membership m ON m.account_id = r.account_id
@@ -503,7 +526,7 @@ impl GroupRepository for PgWhatsAppRepository {
         .map_err(failure)?
         .map(decode::<GroupInfo>)
         .transpose()?;
-        let Some(mut roster) = roster else {
+        let Some(roster) = roster else {
             return Ok(None);
         };
         // WhatsApp's group metadata has no names.
@@ -518,10 +541,11 @@ impl GroupRepository for PgWhatsAppRepository {
             })
             .flatten()
             .collect();
-        self.chat_names(chat, &jids, &[])
-            .await?
-            .name_members(&mut roster);
-        Ok(Some(roster))
+        Ok(Some(
+            self.chat_names(chat, &jids, &[])
+                .await?
+                .name_members(roster),
+        ))
     }
 
     async fn account_rosters(
@@ -575,6 +599,29 @@ impl GroupRepository for PgWhatsAppRepository {
                     row.community_announcements.unwrap_or(false),
                 ))
             })
+            .collect())
+    }
+
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
+        let ids: Vec<Uuid> = chats.iter().map(|chat| chat.id).collect();
+        let rows = sqlx::query!(
+            r#"SELECT g.id AS "id!", p.static_file_id AS "static_file_id!"
+            FROM external_chat g
+            JOIN whatsapp_linked_account o ON o.user_id = g.user_id
+            JOIN whatsapp_profile_picture p ON p.account_id = o.id AND p.jid = g.remote_id
+            WHERE g.id = ANY($1) AND g.provider = 'whatsapp' AND p.static_file_id IS NOT NULL"#,
+            &ids
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?;
+        let pictures: std::collections::HashMap<Uuid, Uuid> = rows
+            .into_iter()
+            .map(|row| (row.id, row.static_file_id))
+            .collect();
+        Ok(chats
+            .iter()
+            .map(|chat| pictures.get(&chat.id).copied())
             .collect())
     }
 

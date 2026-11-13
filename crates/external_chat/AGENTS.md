@@ -15,11 +15,12 @@ over it, which routes every call by the chat's or request's provider.
 ## Start here
 
 - `src/domain/ports.rs`: `ChatProvider` (accounts and their owners, who can
-  send, members, names, communities, adopt/detach, the provider's send
-  outbox, `read_advanced` for the owner's read positions), `ChatProviders`
-  (a new provider is a field and an arm in `get`), `UnconfiguredProvider`
-  (feature `test-support`) for test slots, and the repository, publisher,
-  file store and rate limiter ports.
+  send, members, names, communities, pictures, adopt/detach, the provider's
+  send outbox, `read_advanced` for the owner's read positions),
+  `ChatProviders` (a new provider is a field and an arm in `get`),
+  `UnconfiguredProvider` (feature `test-support`) for test slots, and the
+  repository, publisher, file store (attachments and provider pictures,
+  `store_picture`) and rate limiter ports.
 - `src/domain/service.rs` + `service/timeline.rs`: the use cases. The
   `ReplyBlock` decision (`reply_block`) combines `SendAuthority`, the
   provider account and its `SendingFacts`.

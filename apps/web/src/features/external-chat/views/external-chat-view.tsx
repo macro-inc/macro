@@ -627,6 +627,7 @@ export function ExternalChatView(props: {
       <ExternalChatHeader
         title={source.chat.data ? chatTitle(source.chat.data) : 'Chat'}
         provider={provider()}
+        pictureUrl={source.chat.data?.pictureUrl}
         leading={props.leading}
         share={props.share}
         details={<SidePanel.Toggle />}

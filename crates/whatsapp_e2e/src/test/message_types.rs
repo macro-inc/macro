@@ -460,6 +460,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
             person: ExternalChatPersonRef {
                 name: "Customer".to_owned(),
                 user_id: None,
+                picture_file_id: None,
             },
         }]
     );
@@ -520,6 +521,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     let bob = ExternalChatPersonRef {
         name: "Bob".to_owned(),
         user_id: None,
+        picture_file_id: None,
     };
     let voted = wait_for_rows(&world.pool, TIMEOUT, || async {
         let shown = shown(&world, &binding, &poll_id).await;
@@ -751,6 +753,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
             actor: Some(ExternalChatPersonRef {
                 name: "Customer".to_owned(),
                 user_id: None,
+                picture_file_id: None,
             }),
             participants: vec![],
             value: None,
@@ -922,10 +925,12 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     let customer = ExternalChatPersonRef {
         name: "Customer".to_owned(),
         user_id: None,
+        picture_file_id: None,
     };
     let dana_ref = ExternalChatPersonRef {
         name: "Dana".to_owned(),
         user_id: None,
+        picture_file_id: None,
     };
     let system: Vec<ExternalChatSystemLine> = page
         .iter()

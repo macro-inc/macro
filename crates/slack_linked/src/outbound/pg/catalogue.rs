@@ -264,6 +264,7 @@ impl CatalogueRepository for PgSlackRepository {
                 ExternalChatPersonRef {
                     name: person.name.clone(),
                     user_id: None,
+                    picture_file_id: None,
                 },
             );
         }
@@ -275,7 +276,7 @@ impl CatalogueRepository for PgSlackRepository {
                 .map(|person| person.name.clone())
                 .or(row.display_name);
             if let Some(name) = name {
-                people.name_person(row.id, name);
+                people.name_person(row.id, name, None);
             }
         }
         Ok(people)

@@ -973,28 +973,38 @@ To buy one as a team admin:
    would cover the sheet's footer; the progress list says the same. Either way the modal moves
    straight to **Configure agent**.
 
-While the computer provisions, a **Setup progress** list under the step bar
-follows the same phases the row shows (Updating billing…, Creating the
+While the computer provisions, one progress line sits under the step bar: the current stage and how long it has taken, "Starting
+up · 0:24" (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
+else from when the step was first seen here, the billing wait from the
+purchase; "Waiting for space on the host" while it waits for capacity; "Sign
+in to Claude", without a timer, once the computer is up). Pressing it
+(`aria-expanded`) opens the **Setup progress** list, which stays open across
+steps: the same phases the row shows (Updating billing…, Creating the
 computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
 on every step, the sign-in marked with a dash as "Sign in to Claude · skipped",
-"Not needed", once Macro's Claude is chosen): done stages carry a check and
-read as done (Billing updated, Computer created, Started up, Connected to
-Macro, Signed in to Claude), the current one a spinner and how long it
-has taken (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
-else from when the step was first seen here, the billing wait from the
-purchase), and a stuck one says why (waiting for capacity, or
-`failed` with "The computer could not be set up…" and **Retry setup**, which is
-`POST .../retry`; a server `failureReason`, once the API sends one, is shown
-before that copy). No control in the flow is disabled without a line beside it
-saying why (**Continue**: name the agent / choose which Claude; **Buy**: sizes
-loading; **Complete sign-in**: paste the code; **Try it** and **Create an
-agent on this computer**: setup finishing). The row in Machines shows the same live line, `Setting up ·
+"Not needed", once Macro credits is chosen), done stages with a check and
+worded as done (Billing updated, Computer created, Started up, Connected to
+Macro, Signed in to Claude), the current one a spinner and its time. A
+stopped setup replaces the line with one banner at the top of the dialog:
+`failed` says which stage failed and why on one line ("Couldn't create the
+computer: the host ran out of disk", the server's `failureReason` in lower
+case after the colon), with **Retry setup** (`POST .../retry`) and
+**Details** ("Retry sets it up again at no extra charge. Contact support if
+it fails again."); `needs_attention` reads "Needs attention — contact
+support" with neither. The agent form below stays usable. Disabled controls
+say why beside them (**Buy**: sizes loading; **Complete sign-in**: paste the
+code; **Try it** and **Create an agent on this computer**: setup finishing),
+except **Continue**, whose two fields sit right above it. The row in Machines shows the same live line, `Setting up ·
 Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
 carries on; the row's **Finish setup** reopens the same dialog where it left
-off. **Let's set up an agent on it** names the agent Macro
+off. **Let's set up an agent on it** (no subtitle) names the agent Macro
 creates on the computer ("<buyer first name>'s Agent", a coding agent that
-bypasses permission prompts) and asks for an explicit choice between **Your
-Claude account** and **Macro's Claude**; nothing is preselected. The name and
+bypasses permission prompts) and asks **Which Claude should it use?** with a
+two-option segmented control, **Your Claude account** or **Macro credits**
+(each option's hint is its description and desktop tooltip); nothing is
+preselected. Both options must stay reachable at any viewport height: the
+step's body scrolls above a footer that never covers it, and the buy-flow
+browser test checks both options at 1280x720/600/480 and 390x664/560. The name and
 choice apply once the computer is up: the rename (`PATCH /bots/{bot_id}`), then
 Claude, then setup-complete.
 
@@ -1007,12 +1017,13 @@ Claude, then setup-complete.
   instead**. Once connected, **Open claude.ai** appears and the tab title
   becomes "● Sign in to Claude — Macro". Closed meanwhile, the setup notice
   (below) reopens the modal on that step. The code is pasted in the same modal.
-- **Macro's Claude** skips **Bring your AI**, shown muted with a dash as
+- **Macro credits** skips **Bring your AI**, shown muted with a dash as
   "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
   through. Choosing **Use Macro credits instead** after opening **Bring your
   AI** marks it done instead: a check and "Bring your AI · Macro credits".
 - A **failed** or stuck setup stops the **Bring your AI** step: it says setup
-  stopped before the computer came up and to use **Retry setup** above, with
+  stopped before the computer came up and to use the banner's **Retry setup**
+  above, with
   no spinner, no elapsed time, no shared-sign-in note and no **Use Macro
   credits instead**.
 

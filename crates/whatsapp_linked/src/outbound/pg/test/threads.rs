@@ -221,6 +221,9 @@ impl ChatProvider for RecordingReads {
     ) -> ExternalChatResult<Vec<Option<CommunityReference>>> {
         self.whatsapp.communities(chats).await
     }
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
+        self.whatsapp.pictures(chats).await
+    }
     async fn members(&self, chat: &ChatRef) -> ExternalChatResult<Option<Members>> {
         self.whatsapp.members(chat).await
     }

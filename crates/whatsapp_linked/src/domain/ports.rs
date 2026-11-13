@@ -132,8 +132,12 @@ pub trait GroupRepository: Send + Sync {
         groups: &[String],
     ) -> ExternalChatResult<Vec<VisibleAdoption>>;
     /// Latest metadata for a chat's group from any account consenting to it,
-    /// with names of people who wrote in it.
-    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<GroupInfo>>;
+    /// with names of people who wrote in it and the pictures the chat
+    /// owner's account sees.
+    async fn chat_roster(
+        &self,
+        chat: &ChatRef,
+    ) -> ExternalChatResult<Option<super::people::ChatRoster>>;
     /// The account's own rosters of these groups, by group JID.
     async fn account_rosters(
         &self,
@@ -146,6 +150,10 @@ pub trait GroupRepository: Send + Sync {
         &self,
         chats: &[ChatRef],
     ) -> ExternalChatResult<Vec<Option<CommunityReference>>>;
+    /// Each chat's picture as its owner's account sees it, in order: the
+    /// one stored under the chat's remote id (the group, or the direct
+    /// chat's person).
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>>;
     /// Names for WhatsApp ids and stored people in a chat
     /// ([`super::people::ChatNames`]).
     async fn people(
@@ -384,6 +392,40 @@ pub trait SessionRepository: Send + Sync {
         answer: &LookupAnswer,
     ) -> ExternalChatResult<()>;
 
+    /// Due profile-picture checks, at most `limit` and only while the
+    /// account's budget ([`PICTURE_QUERIES_PER_HOUR`],
+    /// [`PICTURE_QUERIES_PER_DAY`]) lasts. Each claimed check counts against
+    /// the budget and is held for five minutes; answer it with
+    /// [`SessionRepository::complete_picture_check`].
+    async fn claim_picture_checks(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<PictureCheck>>;
+
+    /// Record WhatsApp's answer to a claimed check and schedule the next one:
+    /// a new picture is staged for DSS; hidden and not set drop the stored
+    /// picture; an unchanged one is kept. Failures back off and give up after
+    /// a few. Ignored when the claim was overtaken (the picture was removed
+    /// or changed again, or consent ended) or the account is not connected.
+    async fn complete_picture_check(
+        &self,
+        scope: SessionScope,
+        check: &PictureCheck,
+        answer: &PictureAnswer,
+    ) -> ExternalChatResult<()>;
+
+    /// WhatsApp says the picture of the person or group at these addresses
+    /// (a JID and its phone-number/LID other half) changed to `picture_id`,
+    /// or was removed (`None`). A tracked picture with another id is checked
+    /// again now; a removed one is dropped. Untracked JIDs are ignored.
+    async fn picture_changed(
+        &self,
+        scope: SessionScope,
+        jids: &[String],
+        picture_id: Option<&str>,
+    ) -> ExternalChatResult<()>;
+
     /// No message of the chat is known to start from (`waiting_for_message`).
     async fn backfill_waiting_for_message(
         &self,
@@ -438,5 +480,32 @@ pub trait SessionRepository: Send + Sync {
         scope: SessionScope,
         send: Uuid,
         outcome: &SendOutcome,
+    ) -> ExternalChatResult<()>;
+}
+
+/// Profile pictures DSS stores as static files.
+#[async_trait]
+pub trait PictureRepository: Send + Sync {
+    /// Staged pictures whose import is due, oldest first.
+    async fn staged_pictures(&self, limit: i64) -> ExternalChatResult<Vec<StagedPicture>>;
+    /// The staged picture is stored as `static_file_id`. Returns false, and
+    /// queues the new file for deletion, when the row moved on meanwhile
+    /// (another picture, removed, or the account went away). The file it
+    /// replaces is queued for deletion. Repeating a call that succeeded is a
+    /// success that changes nothing. Signals the owner's chats.
+    async fn picture_stored(
+        &self,
+        account: Uuid,
+        jid: &str,
+        picture_id: &str,
+        static_file_id: Uuid,
+    ) -> ExternalChatResult<bool>;
+    /// Storing the staged picture failed; it is retried later, and dropped
+    /// after a few attempts.
+    async fn picture_store_failed(
+        &self,
+        account: Uuid,
+        jid: &str,
+        picture_id: &str,
     ) -> ExternalChatResult<()>;
 }

@@ -19,6 +19,7 @@ use whatsmeow::{Dialer, Signal};
 use crate::domain::account::{
     AccountConfig, AccountSessions, BACKFILL_TIMEOUT, GROUPS_REFRESH_INTERVAL,
 };
+use crate::domain::pictures::{PICTURE_BACKOFF, PICTURE_SPACING, PICTURE_WARMUP, PicturePacing};
 use crate::domain::ports::LeaseError;
 use crate::outbound::lease::PgAccountDirectory;
 use crate::outbound::signals;
@@ -52,6 +53,8 @@ pub struct Timings {
     /// A history page request the phone has not answered after this waits
     /// for the owner to start it again.
     pub backfill_timeout: Duration,
+    /// Pacing of each account's profile-picture queries.
+    pub pictures: PicturePacing,
 }
 
 impl Timings {
@@ -70,6 +73,11 @@ impl Timings {
             health_every: Duration::from_secs(60),
             groups_refresh_interval: GROUPS_REFRESH_INTERVAL,
             backfill_timeout: BACKFILL_TIMEOUT,
+            pictures: PicturePacing {
+                spacing: PICTURE_SPACING,
+                warmup: PICTURE_WARMUP,
+                backoff: PICTURE_BACKOFF,
+            },
         }
     }
 }
@@ -101,6 +109,9 @@ pub struct ReplicaDeps<Kms> {
 /// Errors starting or running a replica.
 #[derive(Debug, thiserror::Error)]
 pub enum ReplicaError {
+    /// Building the profile-picture download client failed.
+    #[error("building the picture download client failed: {0}")]
+    PictureClient(#[from] reqwest::Error),
     /// Subscribing to signals failed.
     #[error(transparent)]
     Listen(#[from] ListenError),
@@ -166,13 +177,14 @@ pub async fn start<Kms: EnvelopeKms + 'static>(
             deps.dialer,
             deps.media_base_url,
             timings.send_timeout,
-        ),
+        )?,
         AccountConfig {
             send_timeout: timings.send_timeout,
             send_batch: 16,
             tick_every: timings.tick_every,
             groups_refresh_interval: timings.groups_refresh_interval,
             backfill_timeout: timings.backfill_timeout,
+            pictures: timings.pictures,
         },
     );
     let supervisor = Supervisor::new(

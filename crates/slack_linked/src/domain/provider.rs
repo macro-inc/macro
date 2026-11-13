@@ -136,6 +136,11 @@ impl ChatProvider for SlackProvider {
         Ok(vec![None; chats.len()])
     }
 
+    /// Slack pictures aren't imported yet: initials.
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
+        Ok(vec![None; chats.len()])
+    }
+
     async fn members(&self, chat: &ChatRef) -> ExternalChatResult<Option<Members>> {
         Ok(self.catalogue.members(chat).await?.map(|members| Members {
             disappearing_seconds: None,
@@ -153,6 +158,7 @@ impl ChatProvider for SlackProvider {
                             None => person.name,
                         },
                         admin: false,
+                        picture_file_id: None,
                     })
                     .collect(),
                 announce: false,

@@ -3,6 +3,7 @@
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use agent_credentials::AgentCreators;
 use feature_flags::FeatureFlags;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -33,31 +34,33 @@ pub(crate) trait BrainAuthenticator: Send + Sync + 'static {
 type Evaluate =
     dyn Fn(MacroUserIdStr<'static>) -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync;
 
-/// `enable-agent-teammates` for the agent's own account. No provider, a
-/// failed load or the flag off all refuse the brain route.
+/// `enable-agent-teammates` for the agent's creator
+/// ([`agent_credentials::rollout`]). No provider, no creator, a failed load
+/// or the flag off all refuse the brain route.
 #[derive(Clone, Default)]
 pub(crate) struct BrainRollout {
     evaluate: Option<Arc<Evaluate>>,
 }
 
 impl BrainRollout {
-    pub(crate) fn new<Flags: FeatureFlags + 'static>(flags: Flags) -> Self {
+    pub(crate) fn new<Creators, Flags>(creators: Creators, flags: Flags) -> Self
+    where
+        Creators: AgentCreators + 'static,
+        Flags: FeatureFlags + 'static,
+    {
+        let creators = Arc::new(creators);
         let flags = Arc::new(flags);
         Self {
-            evaluate: Some(Arc::new(move |user| {
+            evaluate: Some(Arc::new(move |agent| {
+                let creators = Arc::clone(&creators);
                 let flags = Arc::clone(&flags);
                 Box::pin(async move {
-                    flags
-                        .load(&user)
-                        .await
-                        .inspect_err(|error| {
-                            tracing::warn!(
-                                ?error,
-                                "agent teammates rollout unavailable; refusing the brain"
-                            );
-                        })
-                        .unwrap_or_default()
-                        .is_enabled(agent_credentials::AGENT_TEAMMATES_FLAG)
+                    agent_credentials::agent_teammates_enabled(
+                        creators.as_ref(),
+                        Some(flags.as_ref()),
+                        &agent,
+                    )
+                    .await
                 })
             })),
         }

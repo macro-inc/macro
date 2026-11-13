@@ -28,6 +28,8 @@ mod deletion;
 mod media;
 mod names;
 mod pairing;
+mod picture_reads;
+mod pictures;
 mod rich;
 mod threads;
 mod timeline;

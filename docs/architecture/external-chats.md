@@ -14,7 +14,8 @@ how WhatsApp accounts are linked and their messages reach Macro is in
 | Provider | `model_entity::ExternalChatProvider` (`whatsapp`); `label()` names it for people |
 | Kind | `model_entity::ExternalChatKind` (`group`, `direct`) |
 | Chat | `external_chat`: `provider`, `remote_id` (the provider's id; WhatsApp: a JID), `kind`, name, owner, `state`, history import (`backfill_*`) |
-| People | `external_chat_person` (the provider's display name, verified Macro user); the provider names them for reads (`ChatProvider::people`) |
+| People | `external_chat_person` (the provider's display name, verified Macro user); the provider names them and gives their picture for reads (`ChatProvider::people`) |
+| Pictures | `picture_file_id` (a static file) on senders, people, members and the chat (`ChatProvider::pictures`): what the chat owner's provider account sees, `null` for initials. WhatsApp: `whatsapp_profile_picture`, imported to static files in DSS (`whatsapp_linked::domain::pictures`); Slack: none yet |
 | Messages | `external_chat_message`: one row per `(chat, person, source id)`; `origin` is `remote`, `macro` or `history`; `kind` `message` or `system`; structured `rich` content and `mentions` (provider ids); a thread reply names its root in `thread_root` (`thread_broadcast` when also sent to the chat) |
 | Reactions | `external_chat_reaction`, keyed by message, person and emoji: a provider that lists `remove_reaction` in its `limits.mutations` lets a person hold several (a `reaction` adds one, `remove_reaction` removes one); WhatsApp lists none and keeps one, replaced by a new `reaction` and removed by an empty one. The service refuses operations a provider doesn't list. |
 | Poll votes | `external_chat_poll_vote` (per person, latest revision wins) |

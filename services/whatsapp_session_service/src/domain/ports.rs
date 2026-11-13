@@ -15,7 +15,7 @@ pub use session_fleet::ports::{
 };
 use whatsapp_linked::domain::events::{
     ChatUpdate, ClaimedSend, HistoryPage, InboundEvent, LookupAnswer, MediaImport, MessageAnchor,
-    OutboundMedia, SessionScope,
+    OutboundMedia, PictureAnswer, PictureCheck, SessionScope,
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::GroupInfo;
@@ -82,6 +82,15 @@ pub enum SessionEvent {
     /// The phone answered a request for a chat's earlier messages; the
     /// messages themselves went to the [`InboundSink`] as history.
     HistoryPage(HistoryPage),
+    /// A person's or group's profile picture changed to `picture_id`, or
+    /// was removed (`None`).
+    PictureChanged {
+        /// The JID and, for a person, the other half of its phone-number/LID
+        /// pair when known.
+        jids: Vec<String>,
+        /// WhatsApp's id of the new picture.
+        picture_id: Option<String>,
+    },
     /// The account joined a group, or a group's name or participants changed.
     GroupChanged {
         /// The group.
@@ -238,6 +247,15 @@ pub trait WhatsAppSession: Send + Sync + 'static {
         &self,
         phone: &PhoneNumber,
     ) -> impl Future<Output = Result<LookupAnswer, SessionError>> + Send;
+
+    /// Asks WhatsApp for a person's or group's preview picture (one
+    /// `w:profile:picture` query) and downloads a new one at once, since its
+    /// URL expires. A query WhatsApp throttles is `RateLimited`; a download
+    /// that fails, is too large or is not an image is `Failed`.
+    fn profile_picture(
+        &self,
+        check: &PictureCheck,
+    ) -> impl Future<Output = Result<PictureAnswer, SessionError>> + Send;
 
     /// Unlinks the device at WhatsApp.
     fn logout(&self) -> impl Future<Output = ()> + Send;
