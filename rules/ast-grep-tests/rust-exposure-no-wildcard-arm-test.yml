@@ -1,0 +1,57 @@
+id: rust-exposure-no-wildcard-arm
+valid:
+  - |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) | Self::B { .. } => Exposure::internal_by_design("a"),
+                Self::C(m) if m.hidden => Exposure::internal_by_design("c"),
+                Self::C(_) => Exposure::internal_by_design("c"),
+            })
+        }
+    }
+  - |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            match &self.origin {
+                Some(origin) => todo_free(origin),
+                None => other(),
+            }
+        }
+    }
+  - |
+    fn classify(event: &E) -> u8 {
+        match event {
+            E::A => 1,
+            _ => 0,
+        }
+    }
+invalid:
+  - |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) => Exposure::internal_by_design("a"),
+                _ => Exposure::internal_by_design("everything else"),
+            })
+        }
+    }
+  - |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) => Exposure::internal_by_design("a"),
+                other => Exposure::internal_by_design("everything else"),
+            })
+        }
+    }
+  - |
+    impl TopicEvent for E {
+        fn exposure(&self) -> Result<Exposure<'_, Self>, ExposureError> {
+            Ok(match self {
+                Self::A(_) => Exposure::internal_by_design("a"),
+                _ if true => Exposure::internal_by_design("guarded"),
+                Self::B => Exposure::internal_by_design("b"),
+            })
+        }
+    }

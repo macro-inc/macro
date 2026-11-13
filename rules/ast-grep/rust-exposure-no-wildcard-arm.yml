@@ -1,0 +1,25 @@
+id: rust-exposure-no-wildcard-arm
+language: rust
+severity: error
+message: A `TopicEvent::exposure` match has a catch-all arm; list every variant so a new one must be classified.
+note: |-
+  `exposure()` has no default so that every broker event declares who may see
+  it. A `_ =>` or bare-binding arm would silently classify a future variant
+  (usually as internal, sometimes as public). Name each variant, grouping
+  variants that share a declaration with `|`. See
+  `docs/guides/add-kafka-event.md`, "Declare exposure".
+files:
+  - crates/**
+  - services/**
+rule:
+  kind: match_arm
+  has:
+    field: pattern
+    kind: match_pattern
+    regex: '^(_|[a-z][A-Za-z0-9_]*)(\s+if\b[\s\S]*)?$'
+  inside:
+    kind: function_item
+    stopBy: end
+    has:
+      field: name
+      regex: '^exposure$'
