@@ -93,13 +93,18 @@ pub(super) async fn get_filtered_entity_notifications(
             FROM (
                 SELECT viewer_match.*
                 FROM (
-                    SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
+                    (SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
                     FROM user_notification un
                     WHERE un.user_id = $1 AND un.deleted_at IS NULL
                       AND un.state = ANY($4::notification_state[])
                       AND un.event_item_type = requested.entity_type
                       AND un.event_item_id = requested.entity_id
                       AND (cardinality($5::text[]) = 0 OR un.notification_event_type = ANY($5))
+                    -- Match the covering index order even when stale statistics
+                    -- overestimate this viewer/entity. Fence the ordered branch;
+                    -- only the final filtered union may apply the entity limit.
+                    ORDER BY un.state, un.created_at DESC, un.notification_id DESC
+                    OFFSET 0)
                     UNION
                     SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
                     FROM notification n
