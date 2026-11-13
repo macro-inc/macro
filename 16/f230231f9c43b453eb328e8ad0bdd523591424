@@ -1,0 +1,19 @@
+scratch/agent-dashboards-seed/seed.ts
+  s_48270cd6f8d6f1::t_f90b6abaeec8b9 610-613,641-654,702
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "16f230231f9c43b453eb328e8ad0bdd523591424",
+  "prompts": {},
+  "sessions": {
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
