@@ -26,6 +26,9 @@ it with `@mcp-exclude <reason>` (see `packages/sdk-mcp/AGENTS.md`).
 Every wrapped generated method has a verb in `src/utils/verbs.ts`; `just coverage`
 enforces it. Code mode sends it with each call, and agent activity shows it.
 
+A change that adds or changes public SDK API bumps `packages/sdk`'s version in
+the same PR (`just bump`, see `packages/sdk/RELEASING.md`); merging it publishes.
+
 Separate the import block, top-level declarations, and class members with blank lines; place JSDoc above the member it documents.
 
 Details and conventions: the `add-sdk-endpoint` skill.
