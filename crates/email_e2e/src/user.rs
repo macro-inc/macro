@@ -7,7 +7,7 @@
 
 use reqwest::Method;
 use rootcause::prelude::*;
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -221,6 +221,54 @@ impl User {
         body: Option<&Value>,
     ) -> Result<ApiResponse, Report> {
         self.api.request(method, path, link, body).await
+    }
+
+    /// Any request as the user to the document storage service (the item
+    /// lists, CRM and document routes the web app calls). Needs a stack
+    /// started with `document_storage: true`.
+    pub async fn document_storage_request(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<ApiResponse, Report> {
+        self.api.document_storage_request(method, path, body).await
+    }
+
+    /// One page of the email threads an item list shows the user, as the
+    /// web app asks for them (`POST /items/soup/ast` on document storage,
+    /// every other kind of item left out). `request` adds to the body: the
+    /// email filter `ef`, a CRM scope `ecd`, `emailView`, `limit`,
+    /// `sort_method`. `cursor` is the `next_cursor` of the page before.
+    /// The threads are the answer's `items`, each with its `data`.
+    pub async fn email_list_page(
+        &self,
+        request: &Value,
+        cursor: Option<&str>,
+    ) -> Result<ApiResponse, Report> {
+        const NOTHING: &str = "00000000-0000-0000-0000-000000000000";
+        let leave_out = json!({ "l": { "id": NOTHING } });
+        let mut body = json!({
+            "calf": leave_out,
+            "df": leave_out,
+            "ccf": leave_out,
+            "fef": leave_out,
+            "cf": { "l": { "cid": NOTHING } },
+            "chanf": { "l": { "ChannelId": NOTHING } },
+            "cthf": { "l": { "ThreadId": NOTHING } },
+            "pf": { "l": { "pid": NOTHING } },
+            "callf": { "l": { "CallId": NOTHING } },
+            "sort_method": "updated_at",
+        });
+        if let (Some(body), Some(request)) = (body.as_object_mut(), request.as_object()) {
+            body.extend(request.clone());
+        }
+        let path = match cursor {
+            Some(cursor) => format!("/items/soup/ast?cursor={}", urlencoding::encode(cursor)),
+            None => "/items/soup/ast".to_owned(),
+        };
+        self.document_storage_request(Method::POST, &path, Some(&body))
+            .await
     }
 
     pub(crate) fn http(&self) -> &reqwest::Client {

@@ -94,9 +94,42 @@ impl ApiClient {
         link: Option<Uuid>,
         body: Option<&Value>,
     ) -> Result<ApiResponse, Report> {
+        self.request_at(&self.api_url, method, path, link, body)
+            .await
+    }
+
+    /// Makes one request as the user to the document storage service, in a
+    /// stack that started it.
+    pub(crate) async fn document_storage_request(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<ApiResponse, Report> {
+        let Some(base) = self
+            .graphql_url
+            .as_deref()
+            .and_then(|url| url.strip_suffix(crate::stack::GRAPHQL_PATH))
+        else {
+            bail!(
+                "this stack does not start document storage: start it with \
+                 `StackOptions {{ document_storage: true, ..Default::default() }}`"
+            );
+        };
+        self.request_at(base, method, path, None, body).await
+    }
+
+    async fn request_at(
+        &self,
+        base: &str,
+        method: Method,
+        path: &str,
+        link: Option<Uuid>,
+        body: Option<&Value>,
+    ) -> Result<ApiResponse, Report> {
         let mut request = self
             .http
-            .request(method.clone(), format!("{}{path}", self.api_url))
+            .request(method.clone(), format!("{base}{path}"))
             .header("x-internal-auth-key", &self.internal_api_key)
             .header("x-internal-macro-user-id", &self.macro_user_id)
             .header(

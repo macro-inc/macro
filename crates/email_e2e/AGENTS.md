@@ -83,6 +83,21 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   undo window is `SENT_UNDO_DELAY_SECS` (1 s); a scenario that undoes sets
   it longer through `StackOptions.env`. Any other query or mutation:
   `user.graphql(query, &variables)`. See `tests/send_attempt.rs`.
+- The lists and item routes document storage serves (a stack with
+  `document_storage`): `user.email_list_page(request, cursor)` is the email
+  threads of an item list as the web app asks for them (filter `ef`, CRM
+  scope `ecd`, `emailView`, `limit`); any other route:
+  `user.document_storage_request(method, path, body)`. See `tests/lists.rs`
+  and `tests/crm.rs`, which seeds a team and its CRM rows in the database
+  because the services that create them are not started.
+- The email tools an AI agent calls: `stack.email_tools()?.call(&user,
+  "GetThread", &json!({ .. }))` runs a tool in the test process on the
+  scenario's database and queues, and the scenario's workers carry out what
+  it stages. No model and no tool host is involved: a host's own wiring
+  (which queues it configures) is not exercised. `SendEmail` defers to a
+  composer; `SendConfirmedEmail` sends. Give a sending tool the base64url
+  HTML a composer exports, since no Markdown renderer is started. The test
+  file needs `#![recursion_limit = "256"]`. See `tests/ai_tools.rs`.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
 - A user at an address that matters (a staff domain): `stack.user_at`.
 - Failures of what the services depend on: a provider fault on the emulator,
