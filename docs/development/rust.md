@@ -49,7 +49,10 @@ when the cache is current. Do not export it for a session that will run tests.
 Local `nix develop` shells build workspace crates incrementally, keep only line
 tables as debug info, and link with mold on Linux, which makes rebuilds after an
 edit much faster. To use a debugger, run `export CARGO_PROFILE_DEV_DEBUG=full`
-first. CI sets `CI` and keeps none of these.
+first. They compile through [kache](https://github.com/kunobi-ninja/kache) when
+`kache` is on your PATH (the shell does not install it) and through sccache
+otherwise; set `MACRO_RUST_CACHE` to `kache`, `sccache` or `none` to choose. CI
+sets `CI` and keeps none of these: it always uses sccache.
 
 For deployable Lambda artifacts, use `just build_lambdas` or the relevant
 service's build recipe, e.g. `just services/document_text_extractor/build`.
