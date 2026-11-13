@@ -185,8 +185,7 @@ function revisionAdvancementCategory(
 function requestPriority(request: CacheRequest): number {
   if (request.kind === 'hydrate' || request.kind === 'people-update')
     return BACKGROUND_HYDRATION_PRIORITY;
-  if (isTypedSearch(request) || isTypedSearchRowRead(request))
-    return TYPED_SEARCH_PRIORITY;
+  if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
       ? USER_VISIBLE_READ_PRIORITY
@@ -410,9 +409,27 @@ export class CacheWorkerCore {
     }
   }
 
+  /**
+   * The rows a typed search named rank with it, as the search is not answered
+   * for the person waiting until they list. Unlike the search's own result
+   * they stay listed until the next refresh, so one that arrives behind a
+   * queued write, or behind a change to an optimistic layer, orders like any
+   * other record read instead.
+   */
+  private arrivalPriority(request: CacheRequest): number {
+    if (!isTypedSearchRowRead(request)) return requestPriority(request);
+
+    const changeAhead = this.queue.some(
+      (queued) =>
+        queued.priority === CACHE_WRITE_PRIORITY ||
+        queued.request.kind === 'defer-optimistic-write'
+    );
+    return changeAhead ? NORMAL_READ_PRIORITY : TYPED_SEARCH_PRIORITY;
+  }
+
   private enqueue(request: CacheRequest): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const priority = requestPriority(request);
+      const priority = this.arrivalPriority(request);
       const signature = readSignature(request);
 
       // Coalesce only within the current lifecycle segment. In particular, a
@@ -514,8 +531,8 @@ export class CacheWorkerCore {
    * After an engine restart those fences sit between it and the head of the
    * replayed backlog. It can then run before a write queued ahead of it:
    * its rows are only older, and that write's cache change refreshes them.
-   * The rows that search named cross the same fences, but they are kept by
-   * the list, so they never run before a write sent ahead of them.
+   * A row read that ranks with the search crosses the same fences; it carries
+   * no operation, and no write was queued ahead of it when it arrived.
    */
   private pickPastFences(selectedIndex: number, segmentEnd: number): number {
     let index = selectedIndex;
@@ -523,19 +540,17 @@ export class CacheWorkerCore {
       stopsTypedSearch(queued.request)
     );
     if (searchEnd === -1) searchEnd = this.queue.length;
-    let writeAhead = this.queue
-      .slice(0, segmentEnd)
-      .some((queued) => queued.priority === CACHE_WRITE_PRIORITY);
     for (let i = segmentEnd; i < searchEnd; i += 1) {
       const candidate = this.queue[i];
       const selected = this.queue[index];
-      if (!candidate || !selected) continue;
-
-      const crossesFences =
-        isTypedSearch(candidate.request) ||
-        (!writeAhead && isTypedSearchRowRead(candidate.request));
-      if (crossesFences && candidate.priority > selected.priority) index = i;
-      writeAhead ||= candidate.priority === CACHE_WRITE_PRIORITY;
+      if (
+        candidate &&
+        selected &&
+        candidate.priority === TYPED_SEARCH_PRIORITY &&
+        candidate.priority > selected.priority
+      ) {
+        index = i;
+      }
     }
     return index;
   }

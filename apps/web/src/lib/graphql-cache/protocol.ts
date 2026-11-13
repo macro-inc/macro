@@ -927,7 +927,7 @@ export type CacheRequest = { id: number } & (
       document: string;
       fragmentName: string;
       keys: string[];
-      /** May overtake reads and their fences, never a write sent before it. */
+      /** May overtake reads and their fences, unless a write was queued first. */
       priority?: RecordReadPriority;
     }
   | PeopleRequest

@@ -1068,7 +1068,7 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
-  it('runs the rows of a typed search ahead of queued reads and their fences, but never before a write sent first', async () => {
+  it('runs the rows of a typed search ahead of queued reads and their fences, unless a write was queued first', async () => {
     const order: string[] = [];
     const blocker = Promise.withResolvers<void>();
     const started = Promise.withResolvers<void>();
@@ -1141,7 +1141,15 @@ describe('CacheWorkerCore', () => {
         query: 'query Current { document { id } }',
         data: { document: { id: 'doc-1' } },
       }),
-      rows(9, 'typed-after-write', true),
+      core.handleRequest(port, { id: 9, kind: 'current-storage-generation' }),
+      core.handleRequest(port, {
+        id: 10,
+        kind: 'read',
+        opId: 'later',
+        query: 'query Later { later }',
+        priority: 'user-visible',
+      }),
+      rows(11, 'typed-after-write', true),
     ];
     blocker.resolve();
     await Promise.all([running, ...queued]);
@@ -1153,6 +1161,8 @@ describe('CacheWorkerCore', () => {
       'rows:GraphqlSoupDocument:plain',
       'teardown',
       'write',
+      'generation',
+      'read:later',
       'rows:GraphqlSoupDocument:typed-after-write',
     ]);
   });

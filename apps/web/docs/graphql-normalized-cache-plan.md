@@ -289,7 +289,8 @@ The record reads that load the rows a typed search named (`read-records-by-keys`
 with `priority: 'typed-search'`, set by Quick Access through `searchRowHost`)
 rank with it: they run ahead of list rereads and past the same fences, since the
 search is not answered for the user until its rows list. The list keeps those
-rows, so unlike the search they never run before a write sent ahead of them.
+rows until its next refresh, so one that arrives while a write or a deferred
+optimistic write is queued orders like any other record read instead.
 The desktop host ignores the field.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request
