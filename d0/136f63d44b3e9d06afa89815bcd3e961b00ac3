@@ -1,0 +1,45 @@
+infra/stacks/gitai-service/Pulumi.yaml
+  s_9b1603f4fd6889::t_8738e036f05dfb 1-3
+infra/stacks/gitai-service/Pulumi.dev.yaml
+  s_9b1603f4fd6889::t_8738e036f05dfb 1-3
+infra/stacks/gitai-service/index.ts
+  s_9b1603f4fd6889::t_9e089091500ffd 1-54
+infra/packages/resources/src/resources/bucket.ts
+  s_9b1603f4fd6889::t_45e7c690265901 80,89-90,105-122
+infra/stacks/gitai-service/storage.ts
+  s_9b1603f4fd6889::t_654b4c785a8146 1-298
+infra/stacks/gitai-service/package.json
+  s_9b1603f4fd6889::t_8738e036f05dfb 1-7
+infra/packages/service/src/index.ts
+  s_9b1603f4fd6889::t_45e7c690265901 2
+infra/packages/shared/src/service_urls.ts
+  s_9b1603f4fd6889::t_115e02dff1d178 30,70,101
+infra/stacks/gitai-service/tsconfig.json
+  s_9b1603f4fd6889::t_8738e036f05dfb 1-3
+infra/stacks/doppler-projects/index.ts
+  s_9b1603f4fd6889::t_115e02dff1d178 24
+infra/stacks/gitai-service/Pulumi.prod.yaml
+  s_9b1603f4fd6889::t_8738e036f05dfb 1-3
+infra/stacks/gitai-service/service.ts
+  s_9b1603f4fd6889::t_dbecd83a59b45b 1-356
+infra/packages/shared/src/gateway_priorities.ts
+  s_9b1603f4fd6889::t_115e02dff1d178 26,59-60
+infra/bun.lock
+  s_9b1603f4fd6889::t_0b1e97bc2ba065 158-161,655-656
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d0136f63d44b3e9d06afa89815bcd3e961b00ac3",
+  "prompts": {},
+  "sessions": {
+    "s_9b1603f4fd6889": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512eab67-c98d-4202-9de7-c6977f772667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
