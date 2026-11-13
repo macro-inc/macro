@@ -170,7 +170,13 @@ impl SessionRepository for PgSlackRepository {
     ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope, false).await?;
-        for team in &catalogue.teams {
+        // slack_team and slack_user are shared by every account: upsert in key
+        // order so replicas refreshing overlapping workspaces never deadlock.
+        let mut teams: Vec<_> = catalogue.teams.iter().collect();
+        teams.sort_by(|left, right| left.team_id.cmp(&right.team_id));
+        let mut users: Vec<_> = catalogue.users.iter().collect();
+        users.sort_by(|left, right| left.slack_user_id.cmp(&right.slack_user_id));
+        for team in teams {
             sqlx::query!(
                 r#"INSERT INTO slack_team (team_id, name, domain, icon_url) VALUES ($1, $2, $3, $4)
                 ON CONFLICT (team_id) DO UPDATE SET name = excluded.name, domain = excluded.domain,
@@ -184,7 +190,7 @@ impl SessionRepository for PgSlackRepository {
             .await
             .map_err(failure)?;
         }
-        for user in &catalogue.users {
+        for user in users {
             sqlx::query!(
                 r#"INSERT INTO slack_user (slack_user_id, team_id, display_name, real_name, avatar_url, is_bot, deleted)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)

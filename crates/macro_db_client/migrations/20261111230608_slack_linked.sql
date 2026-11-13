@@ -72,6 +72,8 @@ CREATE TABLE slack_account (
 -- codes), sealed under the attempt's data key (purpose slack-login).
 CREATE INDEX slack_account_ended_unnotified ON slack_account(updated_at)
     WHERE state = 'logged_out' AND ended_notified_generation IS DISTINCT FROM generation;
+-- Resolves a sender who is one of the person's own Slack accounts.
+CREATE INDEX slack_account_slack_user ON slack_account(slack_user_id) WHERE slack_user_id IS NOT NULL;
 
 CREATE TABLE slack_login_attempt (
     id uuid PRIMARY KEY,
@@ -103,7 +105,9 @@ CREATE UNIQUE INDEX slack_login_attempt_open ON slack_login_attempt(user_id)
     WHERE step NOT IN ('done', 'failed', 'cancelled');
 CREATE INDEX slack_login_attempt_work ON slack_login_attempt(updated_at)
     WHERE step = 'working';
-CREATE INDEX slack_login_attempt_expiry ON slack_login_attempt(expires_at);
+CREATE INDEX slack_login_attempt_expiry ON slack_login_attempt(expires_at)
+    WHERE step NOT IN ('done', 'failed', 'cancelled');
+CREATE INDEX slack_login_attempt_user ON slack_login_attempt(user_id);
 
 -- A Slack team seen from a conversation: a workspace of the person, or an
 -- organization a Slack Connect conversation is shared with.
@@ -176,6 +180,7 @@ CREATE TABLE slack_user_alias (
     PRIMARY KEY (chat_id, slack_user_id),
     FOREIGN KEY (person_id, chat_id) REFERENCES external_chat_person(id, chat_id) ON DELETE CASCADE
 );
+CREATE INDEX slack_user_alias_person ON slack_user_alias(person_id, chat_id);
 
 -- A deliberate send from Macro, as whatsapp_send. allocated_source_id is the
 -- client_msg_id given to Slack at dispatch; remote_ts the message's Slack ts
@@ -207,6 +212,7 @@ CREATE TABLE slack_send (
 );
 CREATE UNIQUE INDEX slack_send_source ON slack_send(account_id, allocated_source_id) WHERE allocated_source_id IS NOT NULL;
 CREATE INDEX slack_send_work ON slack_send(account_id, created_at, id) WHERE state IN ('pending', 'sending');
+CREATE INDEX slack_send_account ON slack_send(account_id);
 CREATE INDEX slack_send_message ON slack_send(message_id, user_id, created_at DESC) WHERE message_id IS NOT NULL;
 
 -- Websocket events kept before they are ingested, so a crash between
