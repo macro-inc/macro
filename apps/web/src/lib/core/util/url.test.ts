@@ -16,14 +16,12 @@ import {
 const platform = vi.hoisted(() => ({
   tauri: false,
   mobile: undefined as 'ios' | 'android' | undefined,
-  os: 'macos',
 }));
 vi.mock('./platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./platform')>()),
   isTauri: () => platform.tauri,
   getNativeMobilePlatform: () => platform.mobile,
 }));
-vi.mock('@tauri-apps/plugin-os', () => ({ type: () => platform.os }));
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 
@@ -52,7 +50,6 @@ describe('openExternalUrl', () => {
   afterEach(() => {
     platform.tauri = false;
     platform.mobile = undefined;
-    platform.os = 'macos';
     invoke.mockReset();
     for (const dispose of disposers.splice(0)) dispose();
     openSpy.mockRestore();
@@ -121,8 +118,7 @@ describe('openExternalUrl', () => {
     expect(invoke).toHaveBeenCalledWith('open_external_url', {
       url: 'https://example.com',
     });
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalled());
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve));
     expect(openSpy).not.toHaveBeenCalled();
   });
 
@@ -142,22 +138,23 @@ describe('openExternalUrl', () => {
   });
 
   it.each([
-    ['macos', '_blank'],
-    ['linux', '_self'],
-  ])(
-    'falls back on a %s shell without the command to %s',
-    async (os, target) => {
-      platform.tauri = true;
-      platform.os = os;
-      invoke.mockRejectedValue(new Error('unknown command'));
+    'Command open_external_url not found',
+    'invalid args `url` for command `open_external_url`',
+  ])('opens a popup when the command rejects: %s', async (error) => {
+    platform.tauri = true;
+    invoke.mockRejectedValue(error);
 
-      openExternalUrl('https://example.com');
+    openExternalUrl('example.com');
 
-      await vi.waitFor(() =>
-        expect(openSpy).toHaveBeenCalledWith('https://example.com', target)
-      );
-    }
-  );
+    await vi.waitFor(() =>
+      expect(openSpy).toHaveBeenCalledWith(
+        'example.com',
+        '_blank',
+        'noopener,noreferrer'
+      )
+    );
+    expect(openSpy).not.toHaveBeenCalledWith('example.com', '_self');
+  });
 
   it('navigates in place on mobile, where only navigation reaches native', () => {
     platform.tauri = true;

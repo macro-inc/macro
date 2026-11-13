@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { type as osType } from '@tauri-apps/plugin-os';
 import shortuuid from 'short-uuid';
 import { fireAndForget } from './fireAndForget';
 import { getNativeMobilePlatform, isTauri } from './platform';
@@ -79,12 +78,13 @@ async function openFromDesktop(url: string) {
   let opened: boolean;
   try {
     opened = await invoke<boolean>('open_external_url', { url });
-  } catch {
-    // A native shell older than the command. Chromium (macOS) sends a popup
-    // request to the new-window hook without a gesture; elsewhere keep the
-    // navigation the hook has always cancelled.
-    window.open(url, osType() === 'macos' ? '_blank' : '_self');
-    return;
+  } catch (error) {
+    // The command is missing on a native shell older than it, and rejects a
+    // string that is not an absolute URL. Either way a popup request reaches
+    // the new-window hook, which keeps the app page in place.
+    window.open(url, '_blank', 'noopener,noreferrer');
+    if (error === 'Command open_external_url not found') return;
+    throw error;
   }
   // A standalone document on the app's origin needs a popup webview.
   if (!opened) window.open(url, '_blank', 'noopener,noreferrer');
