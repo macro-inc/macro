@@ -1,0 +1,21 @@
+tooling/gitai/gitai-enroll
+  s_43c623c93b57b4::t_406da47121c9af 165-166
+tooling/gitai/README.md
+  s_43c623c93b57b4::t_406da47121c9af 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c4c14439a807eabbd4b6e96d59d0bb3572b5f6e0",
+  "prompts": {},
+  "sessions": {
+    "s_43c623c93b57b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aff80564-c43c-4d6f-81b3-ed39a94729d2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
