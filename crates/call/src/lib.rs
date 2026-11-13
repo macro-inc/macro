@@ -10,5 +10,5 @@ pub mod domain;
 #[cfg(any(feature = "inbound", feature = "ai_tools"))]
 pub mod inbound;
 /// Outbound layer: LiveKit RTC client adapter.
-#[cfg(feature = "outbound")]
+#[cfg(any(feature = "outbound", feature = "attendance"))]
 pub mod outbound;

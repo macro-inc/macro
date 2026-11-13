@@ -284,6 +284,13 @@ impl PgCallRepo {
                RETURNING id, channel_id, room_name, created_by, created_at, egress_id"#,
             call_id, room_name, meeting.user_id, share_permission_id, meeting_id,
         ).fetch_one(tx.as_mut()).await?;
+        // Opt in only sessions created by a writer that records actual RTC connections.
+        sqlx::query!(
+            "UPDATE call_entities SET attendance_tracked = true WHERE id = $1",
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
         sqlx::query!(
             "UPDATE call_meetings SET active_call_id = $1 WHERE id = $2",
             call_id,

@@ -1645,6 +1645,9 @@ impl<
     #[tracing::instrument(err, skip(self, body, auth_token))]
     async fn process_webhook_event(&self, body: &str, auth_token: &str) -> Result<(), CallError> {
         let event = self.rtc_client.receive_webhook(body, auth_token)?;
+        if event.attendance.is_some() {
+            self.repo.record_attendance(&event).await?;
+        }
         if matches!(event.event.as_str(), "egress_started" | "egress_ended") {
             self.link_meeting_recording_webhook(
                 event.room_name.as_deref(),

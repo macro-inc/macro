@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
+attendance = ["dep:sqlx"]
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "ports"]
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [

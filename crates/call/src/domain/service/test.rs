@@ -1191,6 +1191,7 @@ fn archived_call_for_event(
 
 fn egress_ended_rtc_client(egress_id: Option<&str>, file_url: Option<&str>) -> MockCallRtcClient {
     let event = CallWebhookEvent {
+        attendance: None,
         guest_identity: None,
         event: "egress_ended".to_string(),
         id: "egress-ended-event-id".to_string(),
@@ -1218,6 +1219,7 @@ fn webhook_rtc_client(
     participant_identity: Option<&'static str>,
 ) -> MockCallRtcClient {
     let event = CallWebhookEvent {
+        attendance: None,
         guest_identity: None,
         event: event_type.to_string(),
         id: format!("{event_type}-event-id"),
@@ -4284,6 +4286,7 @@ async fn guest_webhook_events_reconcile_join_and_leave() {
                 .returning(|_| Box::pin(async { Ok(1) }));
         }
         let event = CallWebhookEvent {
+            attendance: None,
             event: event_type.to_string(),
             id: "evt".to_string(),
             room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
@@ -4345,6 +4348,7 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
         .return_once(move |_| Box::pin(async move { Ok(Some(archived)) }));
 
     let user_left = CallWebhookEvent {
+        attendance: None,
         event: "participant_left".to_string(),
         id: "evt-user".to_string(),
         room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),

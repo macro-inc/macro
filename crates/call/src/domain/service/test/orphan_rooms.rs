@@ -22,6 +22,7 @@ fn joined_webhook(
     guest_identity: Option<GuestId>,
 ) -> MockCallRtcClient {
     let event = CallWebhookEvent {
+        attendance: None,
         guest_identity,
         event: "participant_joined".to_string(),
         id: "participant-joined-event-id".to_string(),
@@ -113,6 +114,7 @@ async fn bot_joining_an_archived_call_room_is_removed_without_attendance() {
     let room_name = ORPHAN_CALL_ID.to_string();
     let bot_id = bot_id::BotId::new_from_uuid(ORPHAN_GUEST_ID);
     let event = CallWebhookEvent {
+        attendance: None,
         event: "participant_joined".to_string(),
         id: "bot-joined".to_string(),
         room_name: Some(room_name.clone()),

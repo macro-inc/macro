@@ -435,3 +435,210 @@ async fn invitations_do_not_make_empty_cancelled_or_scheduled_calls_live(pool: P
             .is_empty()
     );
 }
+
+fn attendance_event(
+    call_id: Uuid,
+    participant_sid: &str,
+    user_id: Option<&str>,
+    joined_at: chrono::DateTime<Utc>,
+    left_at: Option<chrono::DateTime<Utc>>,
+) -> crate::domain::models::CallWebhookEvent {
+    crate::domain::models::CallWebhookEvent {
+        event: if left_at.is_some() {
+            "participant_left"
+        } else {
+            "participant_joined"
+        }
+        .into(),
+        id: "attendance-event".into(),
+        room_name: Some(call_id.to_string()),
+        participant_identity: user_id.map(|id| MacroUserIdStr::try_from(id.to_owned()).unwrap()),
+        guest_identity: user_id.is_none().then(GuestId::generate),
+        bot_identity: None,
+        egress_id: None,
+        file_url: None,
+        created_at: left_at.unwrap_or(joined_at).timestamp(),
+        attendance: Some(crate::domain::attendance::RtcAttendance {
+            participant_sid: participant_sid.into(),
+            joined_at,
+            left_at,
+        }),
+    }
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn rtc_attendance_requires_finished_tracked_sessions_and_survives_archival(pool: PgPool) {
+    use crate::domain::attendance::{MeetingAttendanceReader, MeetingAttendanceRequest};
+    use crate::outbound::meeting_attendance::PgMeetingAttendanceReader;
+    let repo = repo(pool.clone()).await;
+    let meeting = repo.create_meeting(meeting()).await.unwrap();
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await
+        .unwrap();
+    let start: chrono::DateTime<Utc> = "2026-11-01T10:00:00Z".parse().unwrap();
+    let end = start + Duration::minutes(30);
+    sqlx::query!(
+        "UPDATE calls SET created_at = $2 WHERE id = $1",
+        call.id,
+        start - Duration::minutes(10)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let requests = [MeetingAttendanceRequest {
+        token: meeting.share_token.clone(),
+        starts_at: start,
+        ends_at: end,
+    }];
+    let reader = PgMeetingAttendanceReader::new(pool.clone());
+    // Allocating a call and issuing a join token are not proof of connection.
+    repo.add_meeting_participant(
+        &call.id,
+        MacroUserIdStr::try_from_email(PARTICIPANT_EMAIL).unwrap(),
+    )
+    .await
+    .unwrap();
+    assert!(reader.read(&requests).await.unwrap()[0].is_none());
+    repo.archive_call(&call.id).await.unwrap();
+    let empty = reader
+        .read(&requests)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .unwrap();
+    assert!(empty.user_ids.is_empty());
+    assert!(!empty.guest_present);
+
+    let host = attendance_event(
+        call.id,
+        "PA_host",
+        Some(OWNER),
+        start - Duration::minutes(5),
+        None,
+    );
+    repo.record_attendance(&host).await.unwrap();
+    let guest_left = attendance_event(
+        call.id,
+        "PA_guest",
+        None,
+        start + Duration::minutes(5),
+        Some(start + Duration::minutes(15)),
+    );
+    repo.record_attendance(&guest_left).await.unwrap();
+    // A delayed join and duplicates cannot erase the already-observed departure.
+    let mut guest_joined = guest_left.clone();
+    guest_joined.attendance.as_mut().unwrap().left_at = None;
+    repo.record_attendance(&guest_joined).await.unwrap();
+    repo.record_attendance(&guest_left).await.unwrap();
+    let observed = reader
+        .read(&requests)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .unwrap();
+    assert_eq!(observed.user_ids.len(), 1);
+    assert_eq!(observed.user_ids[0].as_ref(), OWNER);
+    assert!(observed.guest_present);
+    repo.cancel_meeting(&meeting.id, OWNER).await.unwrap();
+    assert!(
+        reader.read(&requests).await.unwrap()[0]
+            .as_ref()
+            .unwrap()
+            .guest_present
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM call_rtc_attendance WHERE call_id = $1",
+            call.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(2)
+    );
+
+    let later = [MeetingAttendanceRequest {
+        token: meeting.share_token.clone(),
+        starts_at: start + Duration::minutes(16),
+        ends_at: end,
+    }];
+    assert!(
+        !reader.read(&later).await.unwrap()[0]
+            .as_ref()
+            .unwrap()
+            .guest_present
+    );
+    sqlx::query!(
+        "UPDATE call_entities SET attendance_tracked = false WHERE id = $1",
+        call.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(reader.read(&requests).await.unwrap()[0].is_none());
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn rtc_attendance_uses_half_open_windows_and_ignores_recreated_archived_rooms(pool: PgPool) {
+    use crate::domain::attendance::{MeetingAttendanceReader, MeetingAttendanceRequest};
+    use crate::outbound::meeting_attendance::PgMeetingAttendanceReader;
+    let repo = repo(pool.clone()).await;
+    let meeting = repo.create_meeting(meeting()).await.unwrap();
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await
+        .unwrap();
+    let start: chrono::DateTime<Utc> = "2026-11-01T10:00:00Z".parse().unwrap();
+    let end = start + Duration::minutes(30);
+    sqlx::query!(
+        "UPDATE calls SET created_at = $2 WHERE id = $1",
+        call.id,
+        start - Duration::minutes(10)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.archive_call(&call.id).await.unwrap();
+    for (sid, joined, left) in [
+        ("PA_before", start - Duration::minutes(5), Some(start)),
+        ("PA_after", end, Some(end + Duration::minutes(5))),
+        ("PA_recreated", Utc::now() + Duration::days(1), None),
+    ] {
+        repo.record_attendance(&attendance_event(call.id, sid, None, joined, left))
+            .await
+            .unwrap();
+    }
+    let reader = PgMeetingAttendanceReader::new(pool.clone());
+    let requests = [MeetingAttendanceRequest {
+        token: meeting.share_token.clone(),
+        starts_at: start,
+        ends_at: end,
+    }];
+    assert!(
+        !reader.read(&requests).await.unwrap()[0]
+            .as_ref()
+            .unwrap()
+            .guest_present
+    );
+    repo.delete_call_record(&call.id).await.unwrap();
+    assert!(reader.read(&requests).await.unwrap()[0].is_none());
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM call_rtc_attendance WHERE call_id = $1",
+            call.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}

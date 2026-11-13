@@ -46,6 +46,12 @@ pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
 
+    /// Persist actual human RTC participation independently of token-issued membership.
+    fn record_attendance(
+        &self,
+        event: &CallWebhookEvent,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
     /// Whether this account may enter this live call as a participant.
     fn can_join_call(
         &self,
