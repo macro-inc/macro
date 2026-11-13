@@ -4,8 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
+use gitai::domain::models::SharedKey;
 use gitai::domain::service::GitaiService;
-use gitai::outbound::{dynamodb::DynamoIndex, s3::S3Storage};
+use gitai::outbound::{dynamodb::DynamoIndex, otel_metrics::OtelMetrics, s3::S3Storage};
 use gitai_service::config::Config;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
@@ -28,6 +29,9 @@ async fn main() -> Result<(), rootcause::Report> {
 async fn run() -> Result<(), rootcause::Report> {
     let config = macro_config::ConfigLoader::load::<Config>()?;
 
+    let shared_key = SharedKey::new(config.gitai_shared_key.to_string())
+        .map_err(|error| rootcause::report!("GITAI_SHARED_KEY: {error}"))?;
+
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let service = Arc::new(GitaiService::new(
         S3Storage::new(
@@ -39,6 +43,8 @@ async fn run() -> Result<(), rootcause::Report> {
             aws_sdk_dynamodb::Client::new(&aws_config),
             config.gitai_table.to_string(),
         ),
+        OtelMetrics::new(),
+        shared_key,
     ));
 
     let routes = gitai::inbound::http::router(service).layer(

@@ -8,3 +8,6 @@ pub mod domain;
 pub mod inbound;
 /// S3 and DynamoDB adapters that implement the domain ports.
 pub mod outbound;
+
+#[cfg(test)]
+mod fakes;
