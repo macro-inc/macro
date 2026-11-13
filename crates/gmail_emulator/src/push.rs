@@ -1,5 +1,7 @@
 //! Push notifications: what Pub/Sub posts to a push subscription's webhook
-//! when a watched mailbox changes, with the signed token Pub/Sub attaches.
+//! when a watched mailbox changes, with the signed token Pub/Sub attaches,
+//! and what Google Calendar posts to a channel's address when a watched
+//! calendar changes.
 
 use std::time::Duration;
 
@@ -14,13 +16,14 @@ use serde::Serialize;
 use serde_json::json;
 use tokio::sync::mpsc;
 
+use crate::calendar::ChannelNotification;
 use crate::seed::PushConfig;
 use crate::state::PushJob;
-use crate::{GmailEmulator, PushDelivery};
+use crate::{ChannelDelivery, GmailEmulator, PushDelivery};
 
 const SIGNING_KEY_ID: &str = "gmail-emulator-push-key-1";
 const SIGNING_KEY_BITS: usize = 2048;
-const ISSUER: &str = "https://accounts.google.com";
+pub(crate) const ISSUER: &str = "https://accounts.google.com";
 const SERVICE_ACCOUNT: &str = "gmail-emulator-push@emulator.example.com";
 const SERVICE_ACCOUNT_ID: &str = "100000000000000000001";
 const TOKEN_LIFETIME_SECONDS: i64 = 3600;
@@ -30,6 +33,9 @@ const FIRST_RETRY_DELAY: Duration = Duration::from_millis(250);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// The statuses Pub/Sub takes as an acknowledgement.
 const ACKNOWLEDGED: [u16; 5] = [102, 200, 201, 202, 204];
+/// The statuses after which Google Calendar sends a notification again.
+const CHANNEL_RETRIED: [u16; 4] = [500, 502, 503, 504];
+const CHANNEL_EXPIRATION: &str = "%a, %d %b %Y %H:%M:%S GMT";
 
 /// The key that signs push tokens, and its public half as Google's
 /// certificates endpoint would serve it.
@@ -74,6 +80,16 @@ impl SigningKey {
             jwks: jwks.to_string(),
         })
     }
+
+    /// Signs a token the certificates endpoint's key verifies.
+    pub(crate) fn sign(
+        &self,
+        claims: &impl Serialize,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(SIGNING_KEY_ID.to_string());
+        jsonwebtoken::encode(&header, claims, &self.encoding)
+    }
 }
 
 #[derive(Serialize)]
@@ -94,32 +110,26 @@ pub(crate) fn signed_token(
     key: &SigningKey,
     audience: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    let mut header = Header::new(Algorithm::RS256);
-    header.kid = Some(SIGNING_KEY_ID.to_string());
     let issued_at = Utc::now().timestamp();
 
-    jsonwebtoken::encode(
-        &header,
-        &Claims {
-            iss: ISSUER,
-            aud: audience,
-            azp: SERVICE_ACCOUNT_ID,
-            sub: SERVICE_ACCOUNT_ID,
-            email: SERVICE_ACCOUNT,
-            email_verified: true,
-            iat: issued_at,
-            exp: issued_at + TOKEN_LIFETIME_SECONDS,
-        },
-        &key.encoding,
-    )
+    key.sign(&Claims {
+        iss: ISSUER,
+        aud: audience,
+        azp: SERVICE_ACCOUNT_ID,
+        sub: SERVICE_ACCOUNT_ID,
+        email: SERVICE_ACCOUNT,
+        email_verified: true,
+        iat: issued_at,
+        exp: issued_at + TOKEN_LIFETIME_SECONDS,
+    })
 }
 
 /// The body Pub/Sub posts for a Gmail watch notification.
-fn envelope(job: &PushJob, sequence: u64) -> serde_json::Value {
-    let data = json!({ "emailAddress": job.email, "historyId": job.history_id });
+fn envelope(email: &str, history_id: u64, topic: &str, sequence: u64) -> serde_json::Value {
+    let data = json!({ "emailAddress": email, "historyId": history_id });
     let message_id = sequence.to_string();
     let publish_time = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    let subscription = format!("{}-push", job.topic.replace("/topics/", "/subscriptions/"));
+    let subscription = format!("{}-push", topic.replace("/topics/", "/subscriptions/"));
 
     json!({
         "message": {
@@ -177,12 +187,28 @@ pub(crate) async fn deliver_jobs(
                 None => return,
             },
         };
+        let (email, history_id, topic) = match job {
+            PushJob::Mailbox {
+                email,
+                history_id,
+                topic,
+            } => (email, history_id, topic),
+            PushJob::Channel(notification) => {
+                if notify_channel(&http, &emulator, notification)
+                    .await
+                    .is_none()
+                {
+                    return;
+                }
+                continue;
+            }
+        };
         let Some(config) = emulator.push_config() else {
             continue;
         };
 
         sequence += 1;
-        let body = envelope(&job, sequence);
+        let body = envelope(&email, history_id, &topic, sequence);
         let mut attempts = 0;
         let mut delay = FIRST_RETRY_DELAY;
         let outcome = loop {
@@ -204,8 +230,8 @@ pub(crate) async fn deliver_jobs(
             let at = state.now();
             state.deliveries.push(PushDelivery {
                 at,
-                mailbox: job.email,
-                history_id: job.history_id,
+                mailbox: email,
+                history_id,
                 endpoint: config.endpoint,
                 status: outcome.as_ref().ok().copied(),
                 error: outcome.err(),
@@ -213,4 +239,76 @@ pub(crate) async fn deliver_jobs(
             });
         });
     }
+}
+
+/// Posts one Calendar notification the way Google does: no body, the
+/// channel and resource in `X-Goog-` headers, and the token the client gave
+/// the channel. Returns `None` when the emulator is shutting down.
+async fn notify_channel(
+    http: &reqwest::Client,
+    emulator: &GmailEmulator,
+    notification: ChannelNotification,
+) -> Option<()> {
+    let cancel = emulator.inner.cancel.clone();
+    let expiration = chrono::DateTime::from_timestamp_millis(notification.expires_at_ms)
+        .unwrap_or_else(Utc::now)
+        .format(CHANNEL_EXPIRATION)
+        .to_string();
+    let mut attempts = 0;
+    let mut delay = FIRST_RETRY_DELAY;
+
+    let outcome = loop {
+        attempts += 1;
+        let mut request = http
+            .post(&notification.address)
+            .header("X-Goog-Channel-ID", &notification.channel_id)
+            .header("X-Goog-Channel-Expiration", &expiration)
+            .header("X-Goog-Resource-ID", &notification.resource_id)
+            .header("X-Goog-Resource-URI", &notification.resource_uri)
+            .header("X-Goog-Resource-State", notification.state.to_string())
+            .header(
+                "X-Goog-Message-Number",
+                notification.message_number.to_string(),
+            )
+            .header(reqwest::header::CONTENT_LENGTH, 0);
+        if let Some(token) = &notification.token {
+            request = request.header("X-Goog-Channel-Token", token);
+        }
+        let outcome = request
+            .send()
+            .await
+            .map(|response| response.status().as_u16())
+            .map_err(|error| error.without_url().to_string());
+
+        let retried = match &outcome {
+            Ok(status) => CHANNEL_RETRIED.contains(status),
+            Err(_) => true,
+        };
+        if !retried || attempts == MAX_ATTEMPTS {
+            break outcome;
+        }
+        tokio::select! {
+            () = cancel.cancelled() => return None,
+            () = tokio::time::sleep(delay) => {}
+        }
+        delay *= 2;
+    };
+
+    emulator.with_state(|state| {
+        let at = state.now();
+        state.channel_deliveries.push(ChannelDelivery {
+            at,
+            mailbox: notification.mailbox,
+            calendar_id: notification.calendar_id,
+            channel_id: notification.channel_id,
+            resource_id: notification.resource_id,
+            resource_state: notification.state,
+            message_number: notification.message_number,
+            address: notification.address,
+            status: outcome.as_ref().ok().copied(),
+            error: outcome.err(),
+            attempts,
+        });
+    });
+    Some(())
 }
