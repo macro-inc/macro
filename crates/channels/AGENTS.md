@@ -71,6 +71,9 @@ DMs, and the shared message store other domains discuss things on.
   timeline entry keeps its outcome. Approval adds the member in the request's
   transaction, then dispatches `ParticipantsAdded`; the announcement reaches the
   timeline through `macro.channels` and the activity consumer.
+  The announcement stores the requester's profile name as it was when they asked
+  (`requester_name`, optional), so the timeline entry mounts at its final height;
+  the web app swaps in the current name once it loads.
   Withdrawal starts the one-minute retry cooldown at `resolved_at`, even when
   the request has been pending longer than a minute.
   Completing a resolved request's notification attempts every recipient before

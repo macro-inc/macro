@@ -480,6 +480,7 @@ export * from './channel';
 export * from './channelAccessDecision';
 export * from './channelAccessRequest';
 export * from './channelAccessRequestedMetadata';
+export * from './channelAccessRequestedMetadataRequesterName';
 export * from './channelAccessRequestResolvedAt';
 export * from './channelAccessRequestResolvedBy';
 export * from './channelAccessRequestState';
