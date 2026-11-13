@@ -407,7 +407,9 @@ and the channel message hover menu, open the Agents workspace's new-conversation
 composer in a new split, the same centered composer as Home and **Create → Agent**,
 with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
 mention fills the composer as an unsent draft; an Agents split that is already open
-returns to its composer with that draft. Spreadsheet mentions retain the current
+returns to its composer with that draft. The mention fills the composer once: after
+sending, Back, Forward, or returning to Agents from the dock or sidebar shows the
+composer without it, while text still unsent comes back. Spreadsheet mentions retain the current
 sheet and selected range; channel-message actions retain the referenced message. On
 phones, the channel message long-press drawer offers the same action as **Ask Macro**.
 Add a question and press Send to start the conversation. Handoffs that carry hidden
@@ -439,8 +441,9 @@ and start it with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })
 omitting `agent` for the default persona.
 
 Ask a chat agent what your coding agents need from you and it calls
-`ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
-question, or tool approval, plus sessions running with no activity for 20
+`ListAgentUpdates` (in code mode, `macro.agentSessions.updates()`, presented
+as an `agentUpdates` view): your non-archived coding sessions waiting on a
+permission, question, or tool approval, plus sessions running with no activity for 20
 minutes (at most 25 sessions; the result says when it was truncated). The
 result shows the same live cards as the Agents home, so you answer in place;
 agents cannot answer for you. To send a coding agent instructions the chat uses
@@ -467,6 +470,8 @@ the shimmer.
   **Agents** in the sidebar opens the same roster as the composer’s
   **Create agent** action. **Connections** manages MCP integrations (including
   app authentication and disconnection), also available under Settings → Integrations.
+  Every agent composer's **+** button, including a session opened in a split,
+  lists the connected apps with **Add connections** and **Manage connections**.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
 - Ask the agent to connect an MCP server by URL (for example "connect the MCP
@@ -949,6 +954,24 @@ removed. Saving checks every id again. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
 
+With `enable-routine-background-drafts` (PostHog, on in development builds),
+Draft it starts the same draft in the background instead
+(`POST /scheduled-actions/draft-jobs`), answered once its session is admitted.
+The box gives way to the request, three milestones (**Read your request** or
+**Found what it names**, **Writing the steps**, **Check that it runs**, with
+**Fixing a problem the check found** while it fixes one) and **Cancel draft**,
+which puts the request back in the box. **Close this anytime**: the draft
+carries on. While New routine is closed, a **Drafting routine** pill sits at
+the bottom right (above the dock on phones) with the current stage, and opens
+New routine. A finished draft gets a toast: **Routine draft ready** with
+**Review**, or **Couldn’t draft that routine** with the reason and **Edit
+request**, which reopens New routine with the request back in the box and the
+reason under it. A ready draft waits until it is opened or discarded, also
+across reloads and devices: New routine shows **Your draft is ready** with
+**Discard** and **Review**, and closing its toast only closes the toast.
+Reloading mid-draft brings the pill back. Off, the dialog waits on the
+blocking request as before; older clients keep using it.
+
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
 with each knob in place: values underlined, and what AI decides dotted with a
@@ -1306,8 +1329,8 @@ tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
-Sessions without a user owner, or whose turn lacks the code-mode MCP tools,
-keep the standard toolset. Summary/compaction calls advertise no tools. The mode
+Sessions without a user owner can't run in-process turns at all.
+Summary/compaction calls advertise no tools. The mode
 controls presentation, not authorization; SDK requests retain normal user
 permissions, and issuing the run credential requires execution approval.
 External coding harnesses keep their own tool selection. A runner that fails
@@ -1337,9 +1360,13 @@ The transcript never shows that code mode exists: no program, source, raw
 returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
 of its turn segment and shows only its observed SDK operations, each a compact
 row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
-`DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group with
-a program never opens on its own, so a step that failed and was recovered from
-shows only in the expanded list. There is no
+`DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group
+never opens on its own, so a step that failed and was recovered from is counted
+on the finished row (**Used 6 tools · 1 failed**) and shown in the expanded
+list; a program that failed or timed out before reporting a step is one failed
+step, one that reported steps counts the ones that failed, and one that was
+cancelled is not counted as failed. While the program
+runs, the group's live line names its observed operations. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
 survives reload, and is capped at the first 128 requests. These are advisory
@@ -1412,8 +1439,11 @@ request”. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
-If a reused execution ID refers to different source, the card reports that tool
-results are unavailable and does not display the other program's saved results.
+`execution_id` is optional: without one the server assigns an ID. If a
+requested ID is already taken (another session's record, or a different
+source, actor or turn in this one), the program also runs under a fresh
+server-minted ID. The receipt always reports the ID used; the card follows the
+receipt and never displays another program's saved results.
 An unfinished saved record is explicitly labeled as an unconfirmed outcome on
 reads and retries. It may still be running or have been interrupted; reading or
 retrying its ID does not replay the program or infer which writes completed.
@@ -1651,8 +1681,8 @@ behavior. Model-provider credentials, repository/git access, previews, billing,
 and memory retain their
 existing session identities. ExecuteCode chooses one account for every SDK call
 in that execution. It must echo the server-issued `turn_id` from its originating
-prompt; delayed calls cannot adopt a newer requester’s turn. Retrying an execution ID requires the same source, actor
-selection, and original turn; use a new ID for another turn or account.
+prompt; delayed calls cannot adopt a newer requester’s turn. Retrying an execution ID returns the saved receipt only for the same source, actor
+selection, and original turn; any other reuse runs as a new execution under a fresh ID.
 
 When another person requests owner access, the session view shows what the agent
 wants to do. The owner sees `Approval needed` with `Decline`, `Always allow`, and
@@ -1740,7 +1770,7 @@ video previews that open the same lightbox as channel media; file chips that
 open the file). A prompt may be files only, including the
 first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
-Expanded queued prompts
+Open queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
 
 On a local stack, the in-memory agent reads uploaded image attachments from local
@@ -1841,19 +1871,29 @@ Only tools with a supported result view can expand. Unknown tools, unsupported
 drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
-Tool runs keep one group from their first call. Historical runs start collapsed;
-live calls get a 150 ms buffer, so fast parallel bursts can finish as **Used N
-tools** without flashing a list. Ongoing work (except a run with an `ExecuteCode`
-program) opens a scrollable window of at
-most five compact rows. The window follows unfinished calls first, keeping slow
-work visible even when later calls finish, until you scroll or interact with it;
-scrolling back to the bottom resumes following. An automatically opened window
-stays visible for at least 600 ms and waits for 150 ms without an active call
-before collapsing smoothly. These delays are shared by the group, never queued
-per call, and do not delay answer text or tool execution. Manually opening,
-closing, or interacting with a group overrides automatic collapse. Subagents
-and tools requiring user input remain outside these groups so they stay visible
-during other tool bursts. Nested agent activity uses the same peek window.
+Consecutive tool calls, programs and thoughts between two pieces of the agent's
+text form one group, with the thoughts before, between and after its calls; a
+run of thoughts with no call stays as separate rows. Subagents, tools requiring user input, presented views and tools that
+render their own answer stay outside groups so they stay visible during other
+tool bursts. A group never opens on its own and has no scrolling window: opened,
+it lists every call in full, and that stays open as the group settles.
+
+Only one group of a turn is live: the last one, while it closes the message,
+or while one of its calls is still out and only a prompt waiting on the person
+about it follows. Its row is the turn's one
+working indicator, the same activity line a channel reply shows: the working
+dots and the step the agent is on (**Reading AgentMessage.tsx**, **Running bun
+run check**), taking turns every 2s among steps running at once and otherwise
+naming the latest; **Thinking** while the trailing thought streams. No working
+row stacks under it, and an earlier group never shows as working. Once the turn
+moves on, the group settles to **Used N tools**, with failed steps counted in
+the failure color (**· 2 failed**).
+
+A subagent row is titled by the call's short description, else the first line
+of its brief, and says **Running**, **Done**, or **Failed**; expanding it shows
+the **Instructions** and the **Result**, its own steps in a bounded scrolling
+area inside its card. A long title truncates before the state, never over it,
+on phones too.
 
 The group and thought carets sit immediately after their labels and appear on
 hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
@@ -1894,9 +1934,9 @@ with no view shows **Couldn't render dashboard**; failed calls show a
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
-ongoing rows accumulate in the five-row window, completed calls stop shimmering,
-fast batches stay compact, and the group collapses smoothly after completion.
-Its carets should still expand the results, and reduced motion disables animation.
+the group stays one live line naming the running step, never opens on its own,
+and settles to **Used N tools**. Its carets should still expand the results,
+and reduced motion disables animation.
 Check that rich result controls still work and a presented view stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
@@ -1905,11 +1945,11 @@ in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
 While a turn runs tool calls, the server words them as one live status line
-("Searching your workspace…", "Reading 12 emails…") with a cheap model and
-pushes it to every viewer (`agent_session_activity`). It replaces the
-**Using N tools** label of the run the turn is in: one with a call in flight,
-or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls; a settled run reads **Used N tools**.
+("Searching your workspace…", "Reading your emails…") with a cheap model and
+pushes it to every viewer (`agent_session_activity`). It replaces the steps on
+the live line of the group the turn is in. The line carries no count (the
+server drops a trailing "(N)" the model adds), and nothing stands beside it;
+the caret still opens the calls, and a settled group reads **Used N tools**.
 It also replaces the
 open activity line of an agent reply in a channel, and shows under a working
 session's row in the Agents list. It is
@@ -1922,10 +1962,11 @@ off for an owner.
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
-trailing thought at the end of a message stays outside the tool group so live
-reasoning stays visible; thoughts followed by prose stay inside the group.
+thought after a tool call belongs to that call's group, at the end of a message
+too: the group's live line says **Thinking** while it streams. A run of
+thoughts with no call in it stays as separate rows.
 Only the newest turn can be live: once the composer stops showing the
-agent as working, every Thinking label, **Using N tools** row, shimmering
+agent as working, every Thinking label, live group line, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
@@ -2243,23 +2284,33 @@ must stay hidden; subsequent live messages must still appear.
   messages. Each prompt starts as a single-line preview, including long messages.
   The preview is rendered markdown: links and `@` mention chips appear as they do
   in the transcript, never as their `<m-link>` / `<m-document-mention>` markup, and
-  clicking one opens the row rather than the link. The expanded editor has the
+  clicking one opens the row rather than the link. The open editor has the
   composer's `@` mentions, links, emoji, and code.
-  Click a preview (or press Enter/Space on it) to open its editor; opening another
-  row collapses the previous one. The expanded editor scrolls within the smaller of
-  32% of the viewport and 16rem. Click the preview again or press Escape to collapse
-  it, retaining edits and editor state. Each row shows a `Queued` label (with `by
-  {user}` when someone else queued it —
-  several users can stack prompts in one session's queue), an always-visible remove
-  (`X`) button, and, while a turn is in flight, a `Steer` button. Steering moves
-  that message to the front of the queue and cancels the current turn, so it runs
-  next, ahead of anything queued before it. Type in the expanded editor — changes
-  autosave (debounced, and on blur) with no save button. Editing and removal are
-  possible only until the entry dispatches; after that the row simply becomes the next
-  user message in the transcript.
-- Keyboard: Up at the very start of the composer input moves focus into the
-  bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
-  walks back and past the bottom row returns to the input. With an empty composer the
+  Click a preview (or press Enter/Space on it) to edit the message in place: the
+  editor takes the preview's spot in the row, so the text appears exactly once,
+  with the row's `Queued` label, `Steer`, and remove controls still beside it.
+  Opening another row closes the previous one. The editor scrolls within the
+  smaller of 32% of the viewport and 16rem. Enter saves the edit and closes the
+  row (Shift+Enter is a newline); Escape throws the typing away, shows the saved
+  text again, and closes the row; both return focus to the composer. Focus moving
+  to another control outside the row (the composer, another row) saves and
+  closes it too, while the editor's own link menu keeps it open; on a touch
+  keyboard Enter is a newline and tapping the composer is how a tapped row
+  closes. Escape with a mention
+  or emoji menu or the link popup open closes that menu only. Opening and closing an untouched row
+  never sends an edit, and emptying a row brings its saved text back rather than
+  saving nothing. Each row shows a `Queued` label (with `by {user}` when someone else
+  queued it — several users can stack prompts in one session's queue), an
+  always-visible remove (`X`) button, and, while a turn is in flight, a `Steer`
+  button. Steering moves that message to the front of the queue and cancels the
+  current turn, so it runs next, ahead of anything queued before it. Editing and
+  removal are possible only until the entry dispatches; after that the row simply
+  becomes the next user message in the transcript.
+- Keyboard: Up at the very start of the composer input opens the bottom
+  (next-to-send) queue row for editing; further Up presses walk toward newer entries,
+  Down walks back and past the bottom row returns to the input. The queued-message
+  fixture at `apps/web/src/features/block-agent/browser-test/queued.html` renders
+  these rows over the real composer, with `?count=N` entries. With an empty composer the
   busy action is Stop, and Enter does nothing; the queue drains in order, oldest first,
   as each turn ends. Steer on a queued row is the interrupt for that one message. Each
   Steer shows its message as a pending bubble at once and drops its row; consecutive

@@ -1,6 +1,7 @@
 //! Shared composition for the HTTP API and background workers.
 
 pub(crate) mod api;
+pub mod workers;
 
 use crate::outbound::{
     email_api::{GmailApi, MicrosoftCredentialsClient},

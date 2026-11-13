@@ -350,6 +350,244 @@
         }
       }
     },
+    "/scheduled-actions/draft-jobs": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_routine_draft_jobs",
+        "responses": {
+          "200": {
+            "description": "The caller's drafts that are drafting, or finished and not yet discarded, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DraftJob"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "start_routine_draft_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartDraftJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Drafting in the background; read it, or follow `routine_draft_update` messages, until it is ready or failed. A request that can't be drafted at all comes back failed. Sent again with the same `clientId`, the job that start began, as it is now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "AI usage limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Too many drafts are drafting already",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/draft-jobs/{id}": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "get_routine_draft_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the draft",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The draft, with its routine or step when ready, or why it failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such draft of the caller's",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["scheduled actions"],
+        "operationId": "discard_routine_draft_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the draft",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelled while drafting, or discarded once finished"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such draft of the caller's",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/drafts": {
       "post": {
         "tags": ["scheduled actions"],
@@ -2026,6 +2264,43 @@
         },
         "additionalProperties": false
       },
+      "CheckSummary": {
+        "type": "object",
+        "description": "A routine the session handed back, as a person watching reads it: never\nits code.",
+        "required": ["checks", "ok", "problems", "name", "trigger", "steps"],
+        "properties": {
+          "checks": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many checks the session made so far, this one included.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Whether it passed."
+          },
+          "problems": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many problems it has, its code's included.",
+            "minimum": 0
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepTitle"
+            },
+            "description": "Its steps, in order."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger",
+            "description": "When it would run."
+          }
+        }
+      },
       "CheckedStepProblems": {
         "type": "object",
         "description": "A code step that doesn't type-check.",
@@ -2308,6 +2583,20 @@
         ],
         "description": "What AI drafted, or why it couldn't."
       },
+      "DraftAsked": {
+        "type": "object",
+        "description": "What a job was asked to draft, as its owner reads it back: the kind of\nrequest and the words they typed, nothing it was sent with them.",
+        "required": ["kind", "description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "The words they typed: the description, or the change asked for."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/DraftKind"
+          }
+        }
+      },
       "DraftContext": {
         "type": "object",
         "description": "What the drafter may write. It looks up the items the person's words\nname itself, with their access.",
@@ -2382,6 +2671,125 @@
             "description": "Whether the drafted routine uses it. One it doesn't use was made for\nnothing, or is the routine's own work done early."
           }
         }
+      },
+      "DraftJob": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DraftJobState"
+          },
+          {
+            "type": "object",
+            "required": ["id", "request", "progress", "createdAt"],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Its id: its hidden session's."
+              },
+              "progress": {
+                "$ref": "#/components/schemas/DraftJobProgress"
+              },
+              "request": {
+                "$ref": "#/components/schemas/DraftAsked"
+              }
+            }
+          }
+        ],
+        "description": "A background draft, as its owner reads it."
+      },
+      "DraftJobProgress": {
+        "type": "object",
+        "description": "How far a draft has got: its latest stage, and what it reported on the\nway.",
+        "required": ["stage"],
+        "properties": {
+          "check": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CheckSummary",
+                "description": "The latest routine handed back; absent before the first check."
+              }
+            ]
+          },
+          "found": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "How many items the words name were found; absent before they were\nlooked up.",
+            "minimum": 0
+          },
+          "stage": {
+            "$ref": "#/components/schemas/DraftStage"
+          }
+        }
+      },
+      "DraftJobState": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Still drafting; its progress says how far it got.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["drafting"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine or step to review before saving.",
+            "required": ["draft", "finishedAt", "state"],
+            "properties": {
+              "draft": {
+                "$ref": "#/components/schemas/Draft"
+              },
+              "finishedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "state": {
+                "type": "string",
+                "enum": ["ready"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Why AI couldn't draft it, for the person, and anything it created\nbefore it gave up.",
+            "required": ["message", "created", "finishedAt", "state"],
+            "properties": {
+              "created": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DraftCreated"
+                }
+              },
+              "finishedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "message": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "Where a background draft is."
+      },
+      "DraftKind": {
+        "type": "string",
+        "description": "What kind of draft was asked for.",
+        "enum": ["routine", "add_step", "change_step"]
       },
       "DraftRequest": {
         "oneOf": [
@@ -2463,6 +2871,33 @@
           }
         },
         "additionalProperties": false
+      },
+      "DraftStage": {
+        "type": "string",
+        "description": "The stage a draft is at.",
+        "enum": ["started", "found", "writing", "checked", "fixing"]
+      },
+      "DraftUpdate": {
+        "type": "object",
+        "description": "How a background draft is going, for its owner's open apps.",
+        "required": ["draftId", "state", "progress"],
+        "properties": {
+          "draftId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/DraftJobProgress"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DraftUpdateState"
+          }
+        }
+      },
+      "DraftUpdateState": {
+        "type": "string",
+        "description": "Where a background draft is now; `removed` once cancelled or discarded.",
+        "enum": ["drafting", "ready", "failed", "removed"]
       },
       "DraftedRoutine": {
         "type": "object",
@@ -3701,6 +4136,25 @@
         },
         "additionalProperties": false
       },
+      "StartDraftJobRequest": {
+        "type": "object",
+        "description": "A background draft to start: what the blocking route takes, and the id\nthe client made for this start.",
+        "required": ["clientId", "draft", "context"],
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Made by the client, once per start. Sent again with it (as when the\nconnection drops before the answer), the start answers with the job\nit began, starting nothing, until that job is discarded."
+          },
+          "context": {
+            "$ref": "#/components/schemas/DraftContext"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/DraftRequest"
+          }
+        },
+        "additionalProperties": false
+      },
       "StepId": {
         "type": "string",
         "description": "Names a step's output: a lowercase letter, then up to 31 lowercase\nletters, digits or underscores."
@@ -3725,6 +4179,20 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "StepTitle": {
+        "type": "object",
+        "description": "A step of a routine handed back.",
+        "required": ["kind", "title"],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StepKind"
+          },
+          "title": {
+            "type": "string",
+            "description": "Its title; empty when it has none."
           }
         }
       },
