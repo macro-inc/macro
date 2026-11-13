@@ -7,7 +7,7 @@
  */
 import type { SuggestionKindOneOf } from './suggestionKindOneOf';
 import type { SuggestionKindOneOfFour } from './suggestionKindOneOfFour';
-import type { SuggestionKindOneOfSeven } from './suggestionKindOneOfSeven';
+import type { SuggestionKindOneOfNine } from './suggestionKindOneOfNine';
 
 /**
  * What kind of suggestion it is, with that kind's data. A kind never changes.
@@ -15,4 +15,4 @@ import type { SuggestionKindOneOfSeven } from './suggestionKindOneOfSeven';
 export type SuggestionKind =
   | SuggestionKindOneOf
   | SuggestionKindOneOfFour
-  | SuggestionKindOneOfSeven;
+  | SuggestionKindOneOfNine;

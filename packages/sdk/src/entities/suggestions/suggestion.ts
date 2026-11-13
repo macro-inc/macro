@@ -2,17 +2,20 @@ import type {
   Category,
   EntityAction,
   RunMode,
-  RunProgress,
+  RunStateName,
   Suggestion as SuggestionRecord,
   SuggestionState,
+  SuggestionStatus,
   SuggestionWriteOutcome as SuggestionWriteRecord,
   Target,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { activityEntity } from '../activity/entity';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { EmailDraft } from '../email/draft';
 import type { MacroEntityType } from '../entity';
+import type { EntityReference } from '../reference';
 
 /** An item a suggestion is about: any handle with an entity type, such as an `EmailThread`, and optionally a part of it, such as one message in a channel. */
 export interface SuggestionItem {
@@ -132,6 +135,16 @@ export class Suggestion {
     return this.record.state;
   }
 
+  /**
+   * What its card shows: `open` to act on, `running` while its background run
+   * is under way (or, restored after a dismissal, still being stopped),
+   * `failed` when that run failed (the user can run it again from the app),
+   * `done`, or `closed` (dismissed, resolved or retired; never in the feed).
+   */
+  get status(): SuggestionStatus {
+    return this.record.status;
+  }
+
   /** When its state last changed, such as when the user dismissed it, as RFC 3339. */
   get stateChangedAt(): string {
     return this.record.stateChangedAt;
@@ -165,27 +178,61 @@ export class Suggestion {
 
   /**
    * A background prompt suggestion's latest run: its hidden agent `session`
-   * (open it to see the result), when it started, and its `progress`
-   * (`running`, `finished`, `failed`, or `unknown` when the session
-   * couldn't be read; `needs_approval` and `needs_input` only if it ever
-   * waits, which a run is told never to).
+   * (open it to see the result), when it started, its `state` as last
+   * recorded (`starting`, `running`, `waiting`, `stopping` or `cancelling`
+   * while under way; `finished`, `failed` or `cancelled` once settled), and
+   * when it entered that state.
    */
   get run():
-    | { session: AgentSession; startedAt: string; progress: RunProgress }
+    | {
+        session: AgentSession;
+        startedAt: string;
+        state: RunStateName;
+        stateChangedAt: string;
+      }
     | undefined {
     const run = this.record.run;
     return run
       ? {
           session: AgentSession.byId(this.client, run.sessionId),
           startedAt: run.startedAt,
-          progress: run.progress,
+          state: run.state,
+          stateChangedAt: run.stateChangedAt,
         }
+      : undefined;
+  }
+
+  /**
+   * What came of it, as a handle, while its `status` is `done` or `failed`:
+   * what its finished run made (else its agent session), its failed run's
+   * session, or without a run what acting on it made, such as a saved
+   * routine. Undefined otherwise, and for a kind of item the SDK has no
+   * handle for.
+   */
+  get result(): EntityReference | undefined {
+    const result = this.record.result;
+    return result
+      ? activityEntity(this.client, result.entityType, result.entityId)
       : undefined;
   }
 
   /** An entity suggestion's action. */
   get action(): EntityAction | undefined {
     return this.record.kind === 'entity' ? this.record.action : undefined;
+  }
+
+  /** When the message a reply suggestion answers came, as RFC 3339; undefined once the user replied, or when unknown. */
+  get waitingSince(): string | undefined {
+    return this.record.kind === 'entity'
+      ? (this.record.waitingSince ?? undefined)
+      : undefined;
+  }
+
+  /** Who sent the message a reply suggestion answers, by name; never an address. */
+  get from(): string | undefined {
+    return this.record.kind === 'entity'
+      ? (this.record.from ?? undefined)
+      : undefined;
   }
 
   /** A reply suggestion's draft, once a session attached one; it no longer loads once the user deleted it. */
@@ -195,11 +242,19 @@ export class Suggestion {
     return partId ? EmailDraft.byId(this.client, partId) : undefined;
   }
 
+  /** The start of a reply suggestion's draft as plain text, as it was when attached, without loading the draft. */
+  get draftPreview(): string | undefined {
+    return this.record.kind === 'entity'
+      ? (this.record.draft?.preview ?? undefined)
+      : undefined;
+  }
+
   /**
    * Mark this suggestion as taken up for the user. Only the user starts a
    * background prompt suggestion's run, from the app: accepting one here only
    * takes it on (`state` becomes `accepted`, no run), so tell the user it is
-   * ready for them to run. Any other suggestion becomes done, so do what it
+   * ready for them to run. A routine suggestion fails with 400: the user saves
+   * its routine from the app. Any other suggestion becomes done, so do what it
    * suggests yourself. Fails with 409 when the suggestion changed since it was
    * read: read it again. For the user's own agent; a generation session
    * gets a 403.
@@ -221,6 +276,22 @@ export class Suggestion {
   async dismiss(): Promise<void> {
     unwrap(
       await this.client.scheduledAction.dismissSuggestion({
+        path: { id: this.id },
+      }),
+    );
+  }
+
+  /**
+   * Take back the user's dismissal of this suggestion: it is open again. Only
+   * within five minutes of the dismissal, by the same user; fails with 409
+   * later, and for a routine suggestion. A background run the dismissal
+   * stopped stays stopped: the suggestion shows `running` until it has, then
+   * the user runs it again from the app. For the user's own agent; a
+   * generation session gets a 403.
+   */
+  async restore(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.restoreSuggestion({
         path: { id: this.id },
       }),
     );

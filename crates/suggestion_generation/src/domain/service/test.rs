@@ -237,6 +237,15 @@ impl RoutineSuggestionApi for FakeRoutines {
         Ok(format!("routines {} {surfaces:?}", trigger.as_ref()))
     }
 
+    async fn texts(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &[Uuid],
+        _: chrono_tz::Tz,
+    ) -> anyhow::Result<Vec<(Uuid, suggestions::domain::model::RoutineText)>> {
+        Ok(Vec::new())
+    }
+
     async fn suggested(&self, _: &MacroUserIdStr<'static>, session: Uuid) -> anyhow::Result<u32> {
         Ok(self.counts.count(&self.repo, session))
     }
@@ -293,6 +302,7 @@ impl SuggestionApi for FakeSuggestions {
         _: &MacroUserIdStr<'static>,
         _: SuggestionCaller,
         _: Option<Tz>,
+        _: Option<usize>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         unused()
     }
@@ -324,7 +334,12 @@ impl SuggestionApi for FakeSuggestions {
         unused()
     }
 
-    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
+    async fn restore(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
+        _: Uuid,
+    ) -> Result<(), SuggestionError> {
         unused()
     }
 

@@ -74,6 +74,7 @@ call = { path = "../../crates/call", default-features = false, features = ["outb
 channels = { path = "../../crates/channels", features = ["attachment", "outbound", "ports"] }
 chat = { path = "../../crates/chat", features = ["ai_tools", "attachment", "outbound"] }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 code_execution = { path = "../../crates/code_execution" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
