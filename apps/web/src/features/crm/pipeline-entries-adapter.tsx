@@ -79,11 +79,12 @@ export function createCrmPipelineEntries(
               wrap={display.fit !== 'line'}
               emptyLabel={display.emptyLabel}
               canEdit={entry().pipeline.canEdit}
+              layout="property"
               renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
               renderTextValue={(value) => (
                 <DatabaseTextValue
                   value={value}
-                  paragraphs={display.fit === 'line' ? undefined : display.fit}
+                  fit={display.fit}
                 />
               )}
               renderLinkValue={(url) => <DatabaseLinkValue url={url} />}

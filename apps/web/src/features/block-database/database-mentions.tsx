@@ -134,34 +134,35 @@ export function DatabaseTextEditor(props: DatabaseTextEditorProps) {
 }
 
 /**
- * A text cell's Markdown: its first paragraph on one line, or with
- * `paragraphs`, every paragraph, cut to two lines or in full.
+ * A text cell's Markdown: its first paragraph on one line, as a grid shows
+ * it. A `fit` is for a property list: `line` lets a cut value end in an
+ * ellipsis, and `clamp` and `full` show every paragraph, cut to two lines or
+ * in full.
  */
 export function DatabaseTextValue(props: {
   value: string;
-  paragraphs?: 'clamp' | 'full';
+  fit?: 'line' | 'clamp' | 'full';
 }) {
   return (
     <Show
-      when={props.paragraphs}
+      when={props.fit === 'clamp' || props.fit === 'full'}
       fallback={
         <span
           class="[&_.markdown]:inline [&_p]:inline [&_p]:m-0 [&_p]:leading-normal"
+          classList={{ '[&_.markdown-content]:inline': props.fit === 'line' }}
           onPointerDown={stopLinkPointerDown}
         >
           <StaticMarkdown markdown={props.value} singleLine target="internal" />
         </span>
       }
     >
-      {(paragraphs) => (
-        <span
-          class="[&_p]:my-0! [&_p+p]:mt-2!"
-          classList={{ 'line-clamp-2': paragraphs() === 'clamp' }}
-          onPointerDown={stopLinkPointerDown}
-        >
-          <StaticMarkdown markdown={props.value} target="internal" />
-        </span>
-      )}
+      <span
+        class="[&_p]:my-0! [&_p+p]:mt-2!"
+        classList={{ 'line-clamp-2': props.fit === 'clamp' }}
+        onPointerDown={stopLinkPointerDown}
+      >
+        <StaticMarkdown markdown={props.value} target="internal" />
+      </span>
     </Show>
   );
 }

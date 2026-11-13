@@ -51,7 +51,7 @@ function rows(page: Page): Promise<RowLayout[]> {
   return page.evaluate(() => {
     const contentLeft = (display: Element) => {
       // A pill's edge is where its value starts, not the dot inside it.
-      const pill = display.querySelector('[data-option-pill]');
+      const pill = display.querySelector('[data-slot="badge"]');
       if (pill) return pill.getBoundingClientRect().left;
       const lefts: number[] = [];
       const walker = document.createTreeWalker(

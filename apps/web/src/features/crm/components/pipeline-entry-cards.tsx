@@ -35,6 +35,7 @@ export type PipelineCellDisplay = {
 /** One card per pipeline row that references the record. */
 export function PipelineEntryCards(props: {
   entries: PipelineEntry[];
+  /** One field's value: a `GridCell` in its `property` layout. */
   renderCell: (
     entry: Accessor<PipelineEntry>,
     cell: Accessor<PipelineEntryCell>,
@@ -176,16 +177,9 @@ function PipelineEntryCard(props: {
           )}
         </Show>
       </header>
-      {/* Cells pad their own hit area and size it for a grid; the list sets
-          one 32px row and value colour for every kind of cell. */}
-      <div
-        ref={list}
-        class="@container/card flex flex-col px-2 pb-2 pt-1.5 [&_[data-cell-display]]:min-h-8 [&_[data-cell-display]]:border-0 [&_[data-cell-display]]:px-2.5 [&_[data-cell-display]]:font-normal [&_[data-cell-empty]]:text-ink-placeholder [&_[data-cell-empty]]:opacity-100 [&_[data-cell-text-editor]]:min-h-8"
-        classList={{
-          '[&_[data-cell-display]]:text-ink [&_[data-option-pill]]:text-ink':
-            props.entry.pipeline.canEdit,
-        }}
-      >
+      {/* Each value is a property-layout cell from renderCell: 32px rows, with
+          its own hit area padded to line up with the label column. */}
+      <div ref={list} class="@container/card flex flex-col px-2 pb-2 pt-1.5">
         <Key each={fields().shown} by={(cell) => cell.column.id}>
           {(cell) => {
             const long = () => isLongText(cell());
@@ -218,14 +212,10 @@ function PipelineEntryCard(props: {
                   />
                   <span class="truncate">{cell().column.name}</span>
                 </div>
-                {/* Pull the cell's padding out so values line up with the column.
-                    A one-line value's Markdown flows inline, so a cut address ends in an ellipsis. */}
+                {/* Pull the cell's padding out so values line up with the column. */}
                 <div
                   class="-mx-2.5 min-w-0"
-                  classList={{
-                    '@max-[520px]/card:-mt-1': long(),
-                    '[&_.markdown-content]:inline': !long(),
-                  }}
+                  classList={{ '@max-[520px]/card:-mt-1': long() }}
                 >
                   {props.renderCell(cell, {
                     get fit() {
