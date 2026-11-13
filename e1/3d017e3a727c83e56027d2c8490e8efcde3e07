@@ -1,0 +1,38 @@
+crates/gitai/tests/fixtures/github/blame-app-build.json
+  s_6dd028f21c9ecc::t_18cc627676fe62 1-34
+crates/gitai/src/outbound.rs
+  s_6dd028f21c9ecc::t_d07351da346488 3-6
+crates/gitai/tests/fixtures/github/commit-squash-10651.json
+  s_6dd028f21c9ecc::t_75ddf2a10e06d6 1-6
+crates/gitai/src/outbound/github/test.rs
+  s_6dd028f21c9ecc::t_a8159f7bdb5133 1,3-221
+  s_6dd028f21c9ecc::t_41fe27036dc7b8 2
+crates/gitai/src/outbound/dynamodb_read.rs
+  s_6dd028f21c9ecc::t_d07351da346488 199-201,320,355
+  s_6dd028f21c9ecc::t_662dd332b38302 1-198,202-319,321-354,356-377
+crates/gitai/tests/fixtures/github/pull-request-10651.json
+  s_6dd028f21c9ecc::t_75ddf2a10e06d6 1-6
+crates/gitai/tests/fixtures/github/pull-request-10651-commits.json
+  s_6dd028f21c9ecc::t_75ddf2a10e06d6 1-20
+crates/gitai/tests/fixtures/github/README.md
+  s_6dd028f21c9ecc::t_46005c9c92b7b5 1-12
+crates/gitai/src/outbound/github.rs
+  s_6dd028f21c9ecc::t_ebd936528a5ffd 1-320,324,326,329-357
+  s_6dd028f21c9ecc::t_826fea615d8a2f 321-323,325,327-328
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e13d017e3a727c83e56027d2c8490e8efcde3e07",
+  "prompts": {},
+  "sessions": {
+    "s_6dd028f21c9ecc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12ca901f-69ea-43d0-ba06-391ff7d83e32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
