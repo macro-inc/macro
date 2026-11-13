@@ -67,11 +67,12 @@ pub const CI_CACHE_TAG: &str = "sccache-ci";
 /// the workspace dependency checks.
 pub const CI_SCCACHE_NAME: &str = "sccache-ci";
 
-/// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
-/// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
-/// gives the frontend its own volume — isolated both from the Rust CI volume
-/// ([`CI_CACHE_TAG`]) and from the deploy workflows' heavily-churned default
-/// `linux-mid` volume.
+/// Namespace cache tag for the web-app jobs: PR checks, preview deploys, and
+/// the web build and deploy jobs of dev and prod deploys. Cache volumes are
+/// keyed workspace-wide by tag alone, so a dedicated tag gives the frontend its
+/// own volume — isolated both from the Rust CI volume ([`CI_CACHE_TAG`]) and
+/// from the other deploy workflows' heavily-churned default `linux-mid`
+/// volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
 /// Nix-only PR checks. They read a Nix store back, so they stay off the small
@@ -100,6 +101,10 @@ pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-mod
 /// Browser wasm packages keyed by their inputs, so the PR build reuses a package
 /// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
 pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
+
+/// The deploy build's wasm packages, kept in a GitHub Actions cache rather than
+/// on the cache volume, which PR jobs write. Off the volume on purpose.
+pub const DEPLOY_WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs-deploy";
 
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
