@@ -1,3 +1,7 @@
+import {
+  AGENT_DASHBOARD_ROUTE_ID,
+  DASHBOARD_ROUTE_ID,
+} from '@app/features/agent-dashboards/dashboard-navigation';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
@@ -630,7 +634,7 @@ export const routineDetailRoute = defineRoute({
  */
 export const agentDashboardRoute = defineRoute({
   info: OPEN_TO_AGENTS,
-  id: 'agent-dashboard',
+  id: AGENT_DASHBOARD_ROUTE_ID,
   path: 'agent-accounts/:userId',
   params: z.object({ userId: z.string().min(1) }),
   remountKey: ({ userId }) => userId,
@@ -640,7 +644,7 @@ export const agentDashboardRoute = defineRoute({
 /** Any dashboard by id, read-only. */
 export const dashboardRoute = defineRoute({
   info: OPEN_TO_AGENTS,
-  id: 'dashboard',
+  id: DASHBOARD_ROUTE_ID,
   path: 'dashboard/:dashboardId',
   params: z.object({ dashboardId: z.string().min(1) }),
   remountKey: ({ dashboardId }) => dashboardId,

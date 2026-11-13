@@ -40,6 +40,14 @@ const PasswordsRouteView = lazyNamed(
   () => import('@app/features/passwords/route-views'),
   'PasswordsRouteView'
 );
+const AgentDashboardRouteView = lazyNamed(
+  () => import('@app/features/agent-dashboards/route-views'),
+  'AgentDashboardRouteView'
+);
+const DashboardRouteView = lazyNamed(
+  () => import('@app/features/agent-dashboards/route-views'),
+  'DashboardRouteView'
+);
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
@@ -338,6 +346,16 @@ registerComponent(
 registerComponent(
   'notifications',
   () => <NotificationsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'agent-dashboard',
+  () => <AgentDashboardRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'dashboard',
+  () => <DashboardRouteView />,
   () => composableLayout()
 );
 registerComponent('routines', () => <AgentsRouteView />, {
