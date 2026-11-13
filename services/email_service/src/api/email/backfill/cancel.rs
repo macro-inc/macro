@@ -5,9 +5,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::backfill_jobs::{BackfillCancelError, BackfillJobAccess};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
-use models_email::email::service::backfill::BackfillJobStatus;
 use models_email::email::service::link::Link;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
@@ -38,78 +38,30 @@ pub async fn handler(
     link: Extension<Link>,
     Json(req_body): Json<CancelBackfillParams>,
 ) -> Result<Response, Response> {
-    let job = email_db_client::backfill::job::get::get_backfill_job_with_link_id(
-        &ctx.db,
-        req_body.job_id,
-        link.id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::warn!(error=?e, "error fetching backfill job");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "error fetching job".into(),
-            }),
-        )
-            .into_response()
-    })?
-    .ok_or_else(|| {
-        tracing::warn!(
-            "job not found during cancel backfill request for link_id {} job_id {}",
-            link.id,
-            req_body.job_id
-        );
-        (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                message: "job does not exist".into(),
-            }),
-        )
-            .into_response()
-    })?;
-
-    match job.status {
-        BackfillJobStatus::Cancelled => Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                message: "job already cancelled".into(),
-            }),
-        )
-            .into_response()),
-        BackfillJobStatus::Complete => Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                message: "job already completed".into(),
-            }),
-        )
-            .into_response()),
-        BackfillJobStatus::Failed => Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                message: "job already failed".into(),
-            }),
-        )
-            .into_response()),
-        _ => Ok(()),
-    }?;
-
-    email_db_client::backfill::job::update::update_backfill_job_status(
-        &ctx.db,
-        job.id,
-        BackfillJobStatus::Cancelled,
-    )
-    .await
-    .map_err(|e| {
-        tracing::warn!(error=?e, "error updating backfill job status");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "error updating job status".into(),
-            }),
-        )
-            .into_response()
-    })?;
-
+    ctx.backfill_jobs
+        .cancel(req_body.job_id, BackfillJobAccess::Inbox(link.id))
+        .await
+        .map_err(cancel_error_response)?;
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+/// Render cancellation outcomes identically for public and internal requests.
+pub(crate) fn cancel_error_response<E>(error: BackfillCancelError<E>) -> Response {
+    let (status, message) = match error {
+        BackfillCancelError::Lookup(error) => return super::get::job_error_response(error),
+        BackfillCancelError::AlreadyCancelled => (StatusCode::BAD_REQUEST, "job already cancelled"),
+        BackfillCancelError::AlreadyComplete => (StatusCode::BAD_REQUEST, "job already completed"),
+        BackfillCancelError::AlreadyFailed => (StatusCode::BAD_REQUEST, "job already failed"),
+        BackfillCancelError::Update(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "error updating job status",
+        ),
+    };
+    (
+        status,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
 }

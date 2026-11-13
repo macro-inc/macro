@@ -23,6 +23,76 @@ beforeEach(() => {
 });
 
 describe('meeting transport authorization', () => {
+  it('uses only the scoped bearer for every guest thread route', async () => {
+    await callServiceClient.getGuestChatThread('call/id', 'room-token');
+    await callServiceClient.postGuestChatMessage('call/id', 'room-token', {
+      id: 'new-id',
+      content: 'Hello',
+    });
+    await callServiceClient.patchGuestChatMessage(
+      'call/id',
+      'room-token',
+      'message/id',
+      { content: 'Edited' }
+    );
+    await callServiceClient.deleteGuestChatMessage(
+      'call/id',
+      'room-token',
+      'message/id'
+    );
+    await callServiceClient.reactGuestChatMessage(
+      'call/id',
+      'room-token',
+      'message/id',
+      { emoji: '👍', add: true }
+    );
+    const base = 'https://gateway.example/dss/call/guest-chat/call%2Fid';
+    expect(requests.public.mock.calls).toEqual([
+      [
+        `${base}/thread`,
+        {
+          credentials: 'omit',
+          headers: { Authorization: 'Bearer room-token' },
+        },
+      ],
+      [
+        `${base}/messages`,
+        {
+          method: 'POST',
+          credentials: 'omit',
+          headers: { Authorization: 'Bearer room-token' },
+          body: JSON.stringify({ id: 'new-id', content: 'Hello' }),
+        },
+      ],
+      [
+        `${base}/messages/message%2Fid`,
+        {
+          method: 'PATCH',
+          credentials: 'omit',
+          headers: { Authorization: 'Bearer room-token' },
+          body: JSON.stringify({ content: 'Edited' }),
+        },
+      ],
+      [
+        `${base}/messages/message%2Fid`,
+        {
+          method: 'DELETE',
+          credentials: 'omit',
+          headers: { Authorization: 'Bearer room-token' },
+        },
+      ],
+      [
+        `${base}/messages/message%2Fid/reactions`,
+        {
+          method: 'POST',
+          credentials: 'omit',
+          headers: { Authorization: 'Bearer room-token' },
+          body: JSON.stringify({ emoji: '👍', add: true }),
+        },
+      ],
+    ]);
+    expect(requests.authenticated).not.toHaveBeenCalled();
+  });
   it('reads and posts guest chat with only the scoped RTC bearer', async () => {
     await callServiceClient.getGuestChat('call-id', 'room-token');
     await callServiceClient.postGuestChat('call-id', 'room-token', {

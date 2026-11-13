@@ -69,6 +69,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 
 ## Gotchas
 
+- Preserve the Docker worker's empty OTLP default and explicit launcher `--var` forwarding; local tracing policy and shell-precedence controls are documented in `docs/development/running-locally.md`.
+
 - Bumping `loro-crdt` touches three lockfiles: `bun.lock`, the workspace
   `Cargo.lock`, and this directory's `package-lock.json` — update all three.
 - Durable Object in-memory state (including the loro document) evicts after

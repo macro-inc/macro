@@ -919,7 +919,7 @@ pub async fn build(
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
-        activity_tool_context: ai_tools::build_activity_tool_context(
+        activity_service: ai_tools::build_activity_read_service(
             db.clone(),
             properties_service,
             entity_access_service.clone(),

@@ -12,6 +12,7 @@ use serde_json::Value;
 
 use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
+use super::google_emulator;
 use super::instance::Port;
 use super::inventory::services_for_mode;
 use super::local_env::Tunnels;
@@ -65,16 +66,13 @@ fn local_compose_flavor(
             computers,
         },
     )?;
-    let gmail_forwarder = resolved
-        .merged
-        .get("GMAIL_FORWARDER_SA_KEY")
-        .is_some_and(|key| !key.trim().is_empty());
+    let sidecars = gen_compose::Sidecars::from_env(mode, &resolved.merged);
     gen_compose::generate(
         mode,
         instance,
         &binaries,
         static_frontend,
-        gmail_forwarder,
+        sidecars,
         computers,
     )?;
 
@@ -131,7 +129,19 @@ fn local_compose_flavor(
     }
     // The sidecar is not in `services_for_mode` (modes-less inventory entry) —
     // assert its presence and runtime-image shape when the env gates it in.
-    if gmail_forwarder {
+    if sidecars.gmail_emulator {
+        match services.get(google_emulator::SERVICE) {
+            None => failures.push(
+                "gmail_emulator sidecar is absent although no real Google client is configured"
+                    .into(),
+            ),
+            Some(node) if !has_app_out_mount(node) => {
+                failures.push("gmail_emulator is missing the /app/out bind mount".into());
+            }
+            Some(_) => {}
+        }
+    }
+    if sidecars.gmail_forwarder {
         match services.get("gmail_forwarder") {
             None => failures.push(
                 "gmail_forwarder sidecar is absent although GMAIL_FORWARDER_SA_KEY is set".into(),
@@ -156,7 +166,9 @@ fn local_compose_flavor(
         "validate-local-compose ({}): OK ({} Rust services{}, computers {:?})",
         flavor_label(static_frontend),
         services_for_mode(mode).count(),
-        if gmail_forwarder {
+        if sidecars.gmail_emulator {
+            " + gmail_emulator"
+        } else if sidecars.gmail_forwarder {
             " + gmail_forwarder"
         } else {
             ""
