@@ -1,0 +1,25 @@
+apps/web/src/features/agents-view/components/ChatComposer.tsx
+  s_37f8afe51098dd::t_78c2b80b31b9ca 264
+apps/web/src/features/channel/Input/Layout.tsx
+  s_37f8afe51098dd::t_78c2b80b31b9ca 46
+apps/web/src/components/app/mobile/SwipeDownDismissKeyboard.test.tsx
+  s_37f8afe51098dd::t_dfa83f26ecb07a 1-95
+apps/web/src/components/app/mobile/SwipeDownDismissKeyboard.tsx
+  s_37f8afe51098dd::t_78c2b80b31b9ca 17-27,57,65,73-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "77b280a748e9654221f10f1620d666bac917db68",
+  "prompts": {},
+  "sessions": {
+    "s_37f8afe51098dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7a23327-45dc-49e8-a50b-c18a75448505",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
