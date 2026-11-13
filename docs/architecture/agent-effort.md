@@ -44,6 +44,8 @@ Sources checked September 21, 2026:
 [Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort),
 [GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5), and
 [OpenAI reasoning](https://developers.openai.com/api/docs/guides/reasoning).
+Sonnet 5.5's thinking off (`between_tools`) checked November 12, 2026:
+[Anthropic thinking](https://platform.claude.com/docs/en/build-with-claude/thinking).
 
 ## Session lifecycle
 
@@ -60,10 +62,11 @@ Sources checked September 21, 2026:
   HTTP queue acceptance alone is insufficient. Rejection or timeout stops startup.
 - New/resumed sessions and setting changes return the complete configuration.
   Clients replace their previous options, including removing unsupported controls.
-- A routine session's prompt may carry an effort (drafts send `none`). It is
-  sent ahead of the prompt on the session's command queue and not confirmed:
-  a model that doesn't offer the value refuses it and the turn runs at its
-  default. In-memory sessions only.
+- A routine session's prompt may carry an effort (drafts on Sonnet 5.5 send
+  `none`). It is sent ahead of the prompt on the session's command queue and
+  not confirmed: if the model doesn't offer the value or it can't be
+  delivered, the turn runs at its default. Only a draft's background session
+  may carry one, since the change takes the session's first turn.
 - In-memory rejects unsupported models and effort values. A model change resets
   an incompatible effort to Default. Replay restores confirmed snapshots only;
   failed or unanswered requests do not become session settings.
