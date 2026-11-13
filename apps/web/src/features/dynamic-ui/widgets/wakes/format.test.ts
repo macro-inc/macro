@@ -2,10 +2,14 @@ import type { AgentWake, WakeTrace } from '@service-agent-harness/agent-wakes';
 import { describe, expect, it } from 'vitest';
 import {
   formatDuration,
+  LIVE_REFRESH_MS,
   LOST_AFTER_MS,
+  LOST_REFRESH_MS,
   traceIsLive,
+  traceRefreshMs,
   wakeDuration,
   wakeState,
+  wakesRefreshMs,
   waterfall,
 } from './format';
 
@@ -54,6 +58,12 @@ describe('a wake', () => {
     expect(wakeState(wake({ phase: 'end', status: 'ok' }), late)).toBe('ok');
     // Its duration stops where it was last heard from.
     expect(wakeDuration(wake({ phase: 'session' }), late)).toBe(0);
+    // A list refreshes often while one runs, rarely while one is lost.
+    const running = wake({ phase: 'session' });
+    const ended = wake({ phase: 'end', status: 'ok' });
+    expect(wakesRefreshMs([ended, running], received)).toBe(LIVE_REFRESH_MS);
+    expect(wakesRefreshMs([ended, running], late)).toBe(LOST_REFRESH_MS);
+    expect(wakesRefreshMs([ended], late)).toBe(false);
   });
 
   it('grows while running and keeps its recorded duration once ended', () => {
@@ -119,5 +129,8 @@ describe('a trace waterfall', () => {
     expect(traceIsLive(trace, now)).toBe(true);
     expect(traceIsLive(trace, stale)).toBe(false);
     expect(waterfall(trace, stale).rows[2]?.running).toBe(false);
+    expect(traceRefreshMs(trace, now)).toBe(LIVE_REFRESH_MS);
+    expect(traceRefreshMs(trace, stale)).toBe(LOST_REFRESH_MS);
+    expect(traceRefreshMs({ ...trace, live: false }, now)).toBe(false);
   });
 });

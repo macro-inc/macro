@@ -1,6 +1,6 @@
 import {
-  traceIsLive,
-  wakeState,
+  traceRefreshMs,
+  wakesRefreshMs,
 } from '@app/features/dynamic-ui/widgets/wakes/format';
 import {
   type AgentWakesFilter,
@@ -10,9 +10,6 @@ import {
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentWakeKeys } from './keys';
-
-/** While a wake runs, its row is re-read this often to show it ending. */
-const LIVE_REFRESH_MS = 15_000;
 
 function agentWakesQueryOptions(agentId: string, filter: AgentWakesFilter) {
   return queryOptions({
@@ -27,10 +24,8 @@ function agentWakesQueryOptions(agentId: string, filter: AgentWakesFilter) {
       return result.value;
     },
     refetchInterval: (query) =>
-      query.state.data?.wakes.some(
-        (wake) => wakeState(wake, Date.now()) === 'running'
-      )
-        ? LIVE_REFRESH_MS
+      query.state.data
+        ? wakesRefreshMs(query.state.data.wakes, Date.now())
         : false,
   });
 }
@@ -47,9 +42,7 @@ function agentWakeTraceQueryOptions(agentId: string, wakeId: string) {
       return result.value;
     },
     refetchInterval: (query) =>
-      query.state.data && traceIsLive(query.state.data, Date.now())
-        ? LIVE_REFRESH_MS
-        : false,
+      query.state.data ? traceRefreshMs(query.state.data, Date.now()) : false,
   });
 }
 
@@ -57,7 +50,7 @@ function agentWakeTraceQueryOptions(agentId: string, wakeId: string) {
  * The newest page of an agent account's wakes, or `null` when the viewer may
  * not read them. Refreshes while any listed wake is still running, so
  * liveness follows the wakes' `end` records; a wake that stopped reporting
- * (`wakeState` `lost`) no longer keeps it refreshing.
+ * (`wakeState` `lost`) keeps only a slow refresh, in case its end still comes.
  */
 export function useAgentWakesQuery(
   agentId: Accessor<string>,

@@ -46,6 +46,32 @@ export function traceIsLive(trace: WakeTrace, now: number): boolean {
   return trace.live && now - Date.parse(trace.endedAt) <= LOST_AFTER_MS;
 }
 
+/** While a wake runs, its row is re-read this often to show it ending. */
+export const LIVE_REFRESH_MS = 15_000;
+
+/**
+ * A wake that stopped reporting is re-read this rarely, in case it was only
+ * quiet and its `end` record still comes.
+ */
+export const LOST_REFRESH_MS = 5 * 60_000;
+
+/** How often a list of wakes is re-read: often while one runs, rarely while one is lost, else never. */
+export function wakesRefreshMs(
+  wakes: readonly AgentWake[],
+  now: number
+): number | false {
+  const states = wakes.map((wake) => wakeState(wake, now));
+  if (states.includes('running')) return LIVE_REFRESH_MS;
+  if (states.includes('lost')) return LOST_REFRESH_MS;
+  return false;
+}
+
+/** How often a trace is re-read: often while live, rarely once a live one goes quiet, else never. */
+export function traceRefreshMs(trace: WakeTrace, now: number): number | false {
+  if (traceIsLive(trace, now)) return LIVE_REFRESH_MS;
+  return trace.live ? LOST_REFRESH_MS : false;
+}
+
 /** `1.2s`, `14s`, `3m 05s`, `1h 02m`. */
 export function formatDuration(ms: number): string {
   if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`;
