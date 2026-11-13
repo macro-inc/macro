@@ -3,7 +3,7 @@
 //! domain state that disagrees with Stripe. It records and logs findings and
 //! never changes anything; fixing one is an operator's replay.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -48,6 +48,9 @@ pub enum MismatchKind {
     TeamBilling,
     /// A person's plan roles disagree with their subscription.
     PersonalPlan,
+    /// Macro's side of a subscription could not be read, so it was not
+    /// checked.
+    Unchecked,
 }
 
 /// One finding.
@@ -143,6 +146,15 @@ where
         Ok(Some(report))
     }
 
+    /// Logs `stripe inbox dead cursors` per consumer while any cursor is
+    /// dead-lettered, so its alert holds until the cursor is replayed.
+    pub async fn report_dead_cursors(&self) -> Result<(), rootcause::Report> {
+        for (consumer, dead) in self.repo.dead_cursors().await.map_err(storage)? {
+            tracing::error!(consumer = %consumer, dead, "stripe inbox dead cursors");
+        }
+        Ok(())
+    }
+
     async fn missing_events(
         &self,
         now: DateTime<Utc>,
@@ -172,11 +184,18 @@ where
                 .map_err(storage)?
                 .into_iter()
                 .collect();
+            // Stripe lists every event of the account; only the types a
+            // consumer applies are sent to the webhook.
             mismatches.extend(
                 listed
                     .iter()
                     .filter(|event| {
-                        !stored.contains(&event.id) && event.created_at < now - IN_FLIGHT
+                        event
+                            .type_name
+                            .parse::<EventType>()
+                            .is_ok_and(|event_type| !event_type.consumers().is_empty())
+                            && !stored.contains(&event.id)
+                            && event.created_at < now - IN_FLIGHT
                     })
                     .map(|event| Mismatch {
                         kind: MismatchKind::MissingEvent,
@@ -264,31 +283,53 @@ where
                 }
             }
             for facts in &listed {
-                mismatches.extend(self.domains.check(facts).await?);
+                let last_invoice_failed = self
+                    .repo
+                    .last_invoice_failed(&facts.customer)
+                    .await
+                    .map_err(storage)?;
+                mismatches.extend(self.domains.check(facts, last_invoice_failed).await?);
             }
 
-            starting_after = ids.last().cloned();
-            if !page.has_more || starting_after.is_none() {
+            // Page on the raw objects, so a page Macro cannot read is not
+            // mistaken for the end of the list.
+            if !page.has_more {
                 return Ok(mismatches);
             }
+            let last = page
+                .data
+                .last()
+                .and_then(|object| object["id"].as_str())
+                .ok_or_else(|| rootcause::report!("stripe subscription page has no last id"))?;
+            starting_after =
+                Some(last.parse().map_err(|_| {
+                    rootcause::report!("stripe subscription page has an invalid id")
+                })?);
         }
     }
 }
 
 /// Whether the held snapshot disagrees with Stripe on what consumers act
-/// on: the status, or any item's price or quantity.
+/// on: the status, or an item's price or quantity. Items both sides show
+/// are compared; the item sets only when both lists are complete.
 pub fn snapshot_drifted(stripe: &SubscriptionFacts, held: &SubscriptionFacts) -> bool {
-    let items = |facts: &SubscriptionFacts| -> Vec<(String, String, Option<u64>)> {
-        let mut items: Vec<_> = facts
+    let items = |facts: &SubscriptionFacts| -> HashMap<String, (String, Option<u64>)> {
+        facts
             .items
             .iter()
-            .map(|item| (item.id.to_string(), item.price.to_string(), item.quantity))
-            .collect();
-        items.sort();
-        items
+            .map(|item| (item.id.to_string(), (item.price.to_string(), item.quantity)))
+            .collect()
     };
+    let (stripe_items, held_items) = (items(stripe), items(held));
+    let known_differ = stripe_items
+        .iter()
+        .any(|(id, item)| held_items.get(id).is_some_and(|held| held != item));
+    let both_complete = stripe.items_complete && held.items_complete;
     stripe.status != held.status
-        || (stripe.items_complete && held.items_complete && items(stripe) != items(held))
+        || known_differ
+        || (both_complete
+            && stripe_items.keys().collect::<HashSet<_>>()
+                != held_items.keys().collect::<HashSet<_>>())
 }
 
 fn storage(error: impl std::error::Error + Send + Sync + 'static) -> rootcause::Report {

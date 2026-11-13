@@ -21,7 +21,8 @@ CREATE TYPE stripe_audit_mismatch_kind AS ENUM (
     'unconsumed_event_type',
     'stale_snapshot',
     'team_billing',
-    'personal_plan'
+    'personal_plan',
+    'unchecked'
 );
 
 -- One row per received event; the primary key dedupes redeliveries.
@@ -71,6 +72,9 @@ CREATE TABLE stripe_event_cursor (
 
 CREATE INDEX stripe_event_cursor_ready_idx ON stripe_event_cursor (next_attempt_at)
     WHERE state IN ('dirty', 'failing');
+-- Dead cursors are counted every check so their alert holds until replayed.
+CREATE INDEX stripe_event_cursor_dead_idx ON stripe_event_cursor (consumer)
+    WHERE state = 'dead';
 
 -- The newest snapshot held of each Stripe object, from an event or an API
 -- read; replaces per-event retrieves.

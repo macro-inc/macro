@@ -56,5 +56,6 @@ pub(crate) async fn handler(
     match replayed {
         Replayed::Rearmed => Ok(StatusCode::OK.into_response()),
         Replayed::NotFound => Err(StatusCode::NOT_FOUND.into_response()),
+        Replayed::Leased => Err(StatusCode::CONFLICT.into_response()),
     }
 }

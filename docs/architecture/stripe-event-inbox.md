@@ -45,18 +45,28 @@ writes carry `Idempotency-Key = <consumer>:<event_id>:<action>`.
 
 - Ordering key: the Stripe customer, or the object id of an event naming
   none (credit checkouts). Within a key, events apply by `(created, id)`.
+- Stripe does not deliver in order. An event created before what a cursor
+  already applied moves that cursor back to just before it, so it and every
+  later event apply again in order. A worker holding the lease cannot
+  advance past the rewind; it releases and the cursor runs again.
+- One apply is cut off after 40 s (a retry), well inside the 60 s lease that
+  every applied event extends, so no two replicas apply one cursor at once.
 - `stripe_events.id` dedupes redeliveries.
 - `invoice.paid` and `invoice.payment_succeeded` are one fact: a paid
   outcome already seen for the invoice skips the next, and a
   `payment_failed` after it.
-- `computers` and `gtm` act on the newest snapshot only and skip one a newer
+- `computers` acts on the newest snapshot only and skips one a newer
   received event supersedes. The others apply every snapshot in order, since
-  they react to the change itself (an upgrade, a first activation).
+  they react to the change itself (an upgrade, a first activation, a
+  conversion while live).
+- A paid invoice of a subscription that already ended grants nothing back.
+  A team bound to another subscription ignores the old one's lapse.
 - `stripe_objects` holds the newest snapshot of each subscription and
   customer. An invoice reads its subscription from there, and a personal plan
   decision reads all of the customer's subscriptions; the inbox reads Stripe
   only to fill a snapshot it never held, to list a customer's subscriptions
-  once, to page items past ten, or to find the email of a customer no
+  once, to page items past ten (for every consumer that reads periods,
+  value or computers), or to find the email of a customer no
   account names.
 
 ## Identity
@@ -73,9 +83,12 @@ carry customer, subscription, team and event ids, never emails.
 - `Reject` (never going to work: an unknown seat price, an unsupported API
   version, a bad id, a customer that belongs to no account): dead at once.
 - A dead cursor stops that consumer for that customer and logs
-  `stripe inbox cursor dead-lettered`, which pages. New events do not re-arm
-  it. Replay with `POST /internal/stripe_inbox/replay`
-  (`{"consumer", "orderingKey", "skipDeadEvent"}`).
+  `stripe inbox cursor dead-lettered`, which pages; every 15 minutes each
+  replica logs `stripe inbox dead cursors` while any is dead, so the page
+  holds until it is replayed. New events do not re-arm it. Replay with
+  `POST /internal/stripe_inbox/replay`
+  (`{"consumer", "orderingKey", "skipDeadEvent"}`); it answers 409 while a
+  worker holds the cursor's lease.
 - An event applied more than five minutes after it arrived logs
   `stripe inbox backlog`.
 
@@ -83,12 +96,15 @@ carry customer, subscription, team and event ids, never emails.
 
 Once a day one replica (row lease in `stripe_audit_run`), paced at 5 req/s:
 
-- lists the last 26 hours of Stripe events and records each one never
-  received (`missing_event`);
+- lists the last 26 hours of Stripe events and records each one of a type a
+  consumer applies that was never received (`missing_event`);
 - records event types received that no consumer applies;
 - lists every subscription and records snapshot drift (status, item prices
   and quantities) and domain disagreement: a team's subscription id and
-  `paying`, and a live personal subscriber without the subscriber role;
+  `paying`, and a live personal subscriber without the subscriber role
+  (a subscription whose customer's last invoice payment failed counts as not
+  paying); a subscription whose Macro side could not be read is recorded as
+  `unchecked`;
 - clears payloads after 30 days and deletes events after 90.
 
 Findings go to `stripe_audit_mismatch` and the `stripe audit mismatch` log.

@@ -52,8 +52,11 @@ holds. Design: `docs/architecture/stripe-event-inbox.md`.
 - `ApplyError::Reject` dead-letters at once; `Retry` backs off from 5 s,
   doubling to 1 h, and dead-letters after `MAX_ATTEMPTS` (about six hours).
   A new event never re-arms a dead cursor; replay does.
+- An event arriving behind a cursor rewinds it, so later events apply
+  again; that is why consumers must be idempotent beyond crash replays.
 - Same-second events order by event id, which is not Stripe's order; the
   projection keeps the later-received snapshot on a tie.
-- Log messages `stripe inbox cursor dead-lettered`, `stripe inbox backlog`
-  and `stripe audit mismatch` are monitor contracts
+- Log messages `stripe inbox cursor dead-lettered`, `stripe inbox dead
+  cursors`, `stripe inbox backlog` and `stripe audit mismatch` are monitor
+  contracts
   (`infra/stacks/monitoring/monitors/stripe-inbox.ts`).

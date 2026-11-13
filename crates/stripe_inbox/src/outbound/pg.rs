@@ -177,6 +177,36 @@ impl InboxRepo for PgInbox {
         .execute(&mut *transaction)
         .await?;
 
+        // Stripe does not deliver in order: an event created before what a
+        // cursor already applied moves the cursor back to just before it,
+        // so it and everything after it apply again, in order (consumers
+        // are idempotent). With nothing before it, the cursor starts over:
+        // every event of the key sorts after this one.
+        sqlx::query!(
+            r#"
+            UPDATE stripe_event_cursor cursor
+            SET applied_at = before.created_at,
+                applied_event_id = before.id,
+                updated_at = now()
+            FROM (SELECT 1) one
+            LEFT JOIN LATERAL (
+                SELECT created_at, id FROM stripe_events
+                WHERE ordering_key = $1 AND (created_at, id) < ($3, $4)
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) before ON true
+            WHERE cursor.ordering_key = $1
+              AND cursor.consumer = ANY($2::text[]::stripe_consumer[])
+              AND (cursor.applied_at, cursor.applied_event_id) > ($3, $4)
+            "#,
+            event.ordering_key.0,
+            &consumers,
+            event.created_at,
+            event.id.as_str(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
         if !wakes.is_empty() {
             notify(&mut transaction).await?;
         }
@@ -346,6 +376,8 @@ impl InboxRepo for PgInbox {
                 locked_until = now() + $6::bigint * interval '1 second',
                 updated_at = now()
             WHERE consumer = ($1::text)::stripe_consumer AND ordering_key = $2 AND locked_by = $3
+              AND applied_at IS NOT DISTINCT FROM $7
+              AND applied_event_id IS NOT DISTINCT FROM $8
             "#,
             cursor.consumer.as_ref(),
             cursor.key.0,
@@ -353,6 +385,8 @@ impl InboxRepo for PgInbox {
             to.at,
             to.event_id.as_str(),
             seconds(lease),
+            cursor.applied.as_ref().map(|position| position.at),
+            cursor.applied.as_ref().map(|position| position.event_id.as_str()),
         )
         .execute(&self.pool)
         .await?
@@ -522,6 +556,7 @@ impl InboxRepo for PgInbox {
             LEFT JOIN stripe_events dead ON dead.id = current.dead_event_id
             WHERE current.consumer = cursor.consumer AND current.ordering_key = cursor.ordering_key
               AND cursor.consumer = ($1::text)::stripe_consumer AND cursor.ordering_key = $2
+              AND (cursor.locked_until IS NULL OR cursor.locked_until < now())
             "#,
             consumer.as_ref(),
             key.0,
@@ -531,7 +566,23 @@ impl InboxRepo for PgInbox {
         .await?
         .rows_affected();
         if updated == 0 {
-            return Ok(Replayed::NotFound);
+            let exists = sqlx::query_scalar!(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1 FROM stripe_event_cursor
+                    WHERE consumer = ($1::text)::stripe_consumer AND ordering_key = $2
+                ) AS "exists!"
+                "#,
+                consumer.as_ref(),
+                key.0,
+            )
+            .fetch_one(&mut *transaction)
+            .await?;
+            return Ok(if exists {
+                Replayed::Leased
+            } else {
+                Replayed::NotFound
+            });
         }
         notify(&mut transaction).await?;
         transaction.commit().await?;
@@ -620,6 +671,44 @@ impl AuditRepo for PgInbox {
             .into_iter()
             .map(|row| (row.snapshot, row.observed_at))
             .collect())
+    }
+
+    async fn last_invoice_failed(&self, customer: &CustomerId) -> Result<bool, Self::Err> {
+        let last = sqlx::query_scalar!(
+            r#"
+            SELECT type FROM stripe_events
+            WHERE ordering_key = $1
+              AND type IN ('invoice.paid', 'invoice.payment_succeeded', 'invoice.payment_failed')
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            "#,
+            customer.as_str(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(last.as_deref() == Some(EventType::InvoicePaymentFailed.as_ref()))
+    }
+
+    async fn dead_cursors(&self) -> Result<Vec<(Consumer, u64)>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT consumer::text AS "consumer!", count(*) AS "count!"
+            FROM stripe_event_cursor
+            WHERE state = 'dead'
+            GROUP BY consumer
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    Consumer::from_str(&row.consumer)
+                        .map_err(|_| PgInboxError::Invalid("consumer"))?,
+                    u64::try_from(row.count).unwrap_or(0),
+                ))
+            })
+            .collect()
     }
 
     async fn record(&self, run_id: Uuid, mismatches: &[Mismatch]) -> Result<(), Self::Err> {

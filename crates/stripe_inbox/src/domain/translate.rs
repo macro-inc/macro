@@ -211,7 +211,6 @@ pub fn translate(event_type: EventType, payload: &Value) -> Result<Translated, T
 
 #[derive(Deserialize)]
 struct RawList<T> {
-    #[serde(default = "Vec::new")]
     data: Vec<T>,
     has_more: Option<bool>,
 }

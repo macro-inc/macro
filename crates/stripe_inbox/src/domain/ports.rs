@@ -48,6 +48,8 @@ pub enum Replayed {
     Rearmed,
     /// There is no such cursor.
     NotFound,
+    /// A worker is applying the cursor's events; try again once it is done.
+    Leased,
 }
 
 /// The inbox tables.
@@ -97,8 +99,9 @@ pub trait InboxRepo: Clone + Send + Sync + 'static {
         after: &Position,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Moves the cursor past `to` and extends the lease. `false` when the
-    /// lease was lost.
+    /// Moves the cursor from `cursor.applied` past `to` and extends the
+    /// lease. `false` when the lease was lost, or a late event moved the
+    /// cursor back meanwhile.
     fn advance(
         &self,
         cursor: &ClaimedCursor,
@@ -271,6 +274,17 @@ pub trait AuditRepo: Clone + Send + Sync + 'static {
         ids: &[SubscriptionId],
     ) -> impl Future<Output = Result<Vec<(serde_json::Value, DateTime<Utc>)>, Self::Err>> + Send;
 
+    /// Whether the customer's latest invoice outcome held is a failed
+    /// payment (which revokes access while Stripe may still show the
+    /// subscription live).
+    fn last_invoice_failed(
+        &self,
+        customer: &CustomerId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// How many cursors of each consumer are dead-lettered.
+    fn dead_cursors(&self) -> impl Future<Output = Result<Vec<(Consumer, u64)>, Self::Err>> + Send;
+
     /// Records a run's findings.
     fn record(
         &self,
@@ -289,9 +303,15 @@ pub trait AuditRepo: Clone + Send + Sync + 'static {
 
 /// Compares one Stripe subscription with the owning domains' state.
 pub trait DomainAudit: Send + Sync + 'static {
-    /// The mismatches found; never changes anything.
+    /// The mismatches found; never changes anything. A domain that cannot
+    /// be read yields a [`MismatchKind::Unchecked`](super::audit::MismatchKind::Unchecked)
+    /// finding, not an error, so one unreadable account never stops the
+    /// sweep. `last_invoice_failed`: the customer's latest invoice payment
+    /// failed, so access is revoked while the subscription may still be
+    /// live.
     fn check(
         &self,
         subscription: &SubscriptionFacts,
+        last_invoice_failed: bool,
     ) -> impl Future<Output = Result<Vec<Mismatch>, rootcause::Report>> + Send;
 }

@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use stripe::CustomerId;
 
 use super::*;
+use crate::domain::model::Consumer;
 use crate::domain::ports::{Page, StripeReadError};
 
 #[derive(Debug, thiserror::Error)]
@@ -80,6 +81,14 @@ impl AuditRepo for Held {
             .collect())
     }
 
+    async fn dead_cursors(&self) -> Result<Vec<(Consumer, u64)>, Never> {
+        Ok(Vec::new())
+    }
+
+    async fn last_invoice_failed(&self, _customer: &CustomerId) -> Result<bool, Never> {
+        Ok(false)
+    }
+
     async fn record(&self, _run_id: Uuid, mismatches: &[Mismatch]) -> Result<(), Never> {
         self.recorded.lock().unwrap().extend_from_slice(mismatches);
         Ok(())
@@ -132,6 +141,8 @@ impl StripeReader for Listed {
                 data: vec![
                     json!({"id": "evt_Stored", "type": "invoice.paid", "created": old}),
                     json!({"id": "evt_InFlight", "type": "invoice.paid", "created": fresh}),
+                    // The webhook is not sent types no consumer applies.
+                    json!({"id": "evt_Unsent", "type": "payment_intent.succeeded", "created": old}),
                 ],
                 has_more: true,
             },
@@ -148,9 +159,15 @@ impl StripeReader for Listed {
         &self,
         starting_after: Option<&SubscriptionId>,
     ) -> Result<Page, StripeReadError> {
-        Ok(match starting_after {
+        Ok(match starting_after.map(SubscriptionId::as_str) {
             None => Page {
                 data: vec![subscription("sub_Drifted", "canceled", "price_premium")],
+                has_more: true,
+            },
+            // A page of subscriptions the translator cannot read does not
+            // end the sweep.
+            Some("sub_Drifted") => Page {
+                data: vec![json!({"id": "sub_Unreadable", "object": "subscription"})],
                 has_more: true,
             },
             Some(_) => Page {
@@ -168,6 +185,7 @@ impl DomainAudit for Domains {
     async fn check(
         &self,
         subscription: &SubscriptionFacts,
+        _last_invoice_failed: bool,
     ) -> Result<Vec<Mismatch>, rootcause::Report> {
         Ok(if subscription.id.as_str() == "sub_Current" {
             vec![Mismatch {
@@ -189,7 +207,7 @@ async fn the_audit_records_missing_events_unconsumed_types_drift_and_domain_find
 
     let report = audit.run_if_due().await.unwrap().unwrap();
 
-    assert_eq!(report.events, 3);
+    assert_eq!(report.events, 4);
     assert_eq!(report.subscriptions, 2);
     let recorded: Vec<(MismatchKind, String)> = held
         .recorded
@@ -228,4 +246,20 @@ fn snapshot_drift_compares_status_and_item_prices() {
     assert!(!snapshot_drifted(&same, &held));
     assert!(snapshot_drifted(&canceled, &held));
     assert!(snapshot_drifted(&upgraded, &held));
+}
+
+#[test]
+fn snapshot_drift_compares_the_items_both_sides_show_when_a_list_is_incomplete() {
+    let held =
+        translate::subscription_facts(&subscription("sub_A", "active", "price_premium")).unwrap();
+    let mut repriced =
+        translate::subscription_facts(&subscription("sub_A", "active", "price_max")).unwrap();
+    repriced.items_complete = false;
+    let mut more_items = held.clone();
+    more_items.items_complete = false;
+    more_items.items.clear();
+
+    assert!(snapshot_drifted(&repriced, &held));
+    // A partial list is no evidence an item is gone.
+    assert!(!snapshot_drifted(&more_items, &held));
 }

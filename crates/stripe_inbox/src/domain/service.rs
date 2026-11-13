@@ -27,6 +27,9 @@ pub const CLAIM_BATCH: u32 = 8;
 /// How long a lease hides a cursor from other replicas; every applied event
 /// extends it.
 pub const LEASE: chrono::Duration = chrono::Duration::seconds(60);
+/// The longest one apply may take; well inside [`LEASE`], which every
+/// applied event extends.
+const APPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(40);
 /// Events loaded per query while a cursor is leased.
 const EVENT_PAGE: u32 = 100;
 /// Failed attempts after which a cursor is dead-lettered: about six hours
@@ -193,10 +196,18 @@ where
                     outcome = tracing::field::Empty,
                 );
                 crate::telemetry::link(&span, event.traceparent.as_deref());
-                let result = self
-                    .apply(cursor.consumer, &event)
-                    .instrument(span.clone())
-                    .await;
+                // An apply must end well inside the lease, or another
+                // replica could claim the cursor while it still writes.
+                let result = tokio::time::timeout(
+                    APPLY_TIMEOUT,
+                    self.apply(cursor.consumer, &event).instrument(span.clone()),
+                )
+                .await
+                .unwrap_or_else(|_| {
+                    Err(ApplyError::Retry(
+                        rootcause::report!("apply took longer than its timeout").into_dynamic(),
+                    ))
+                });
 
                 let position = event.position();
                 match result {
@@ -214,7 +225,11 @@ where
                             .advance(&cursor, self.replica, &position, LEASE)
                             .await?
                         {
-                            tracing::warn!(parent: &span, "stripe inbox lease lost");
+                            // Lost the lease, or a late event moved the
+                            // cursor back: release (a no-op without the
+                            // lease) so the cursor runs again from there.
+                            tracing::info!(parent: &span, "stripe inbox cursor moved or lease lost");
+                            self.repo.release(&cursor, self.replica).await?;
                             return Ok(());
                         }
                         cursor.applied = Some(position);
@@ -322,7 +337,13 @@ where
                     Some(_) if !consumer.reads_invoice_subscription() => {
                         return Ok(ApplyOutcome::Skipped);
                     }
-                    Some(id) => Some(self.subscription(id).await?),
+                    Some(id) => {
+                        let mut subscription = self.subscription(id).await?;
+                        if consumer.needs_every_item() && !subscription.items_complete {
+                            self.fill_items(&mut subscription).await?;
+                        }
+                        Some(subscription)
+                    }
                     None => None,
                 };
                 let customer = invoice.customer.clone();

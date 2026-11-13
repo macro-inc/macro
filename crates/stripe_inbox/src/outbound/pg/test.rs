@@ -277,6 +277,117 @@ async fn events_apply_in_created_order_whatever_order_they_arrive_in(pool: PgPoo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_event_arriving_after_a_later_one_applied_reapplies_from_it_in_order(pool: PgPool) {
+    let (inbox, _, recorder) = inbox(&pool);
+    inbox
+        .receive(&event(
+            "evt_Later",
+            "customer.subscription.updated",
+            1_800_000_100,
+            subscription("sub_Ordered", "canceled", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    inbox.run_pass().await.unwrap();
+    assert_eq!(
+        recorder.applied(Consumer::TeamSubscription),
+        vec!["evt_Later"]
+    );
+
+    inbox
+        .receive(&event(
+            "evt_Earlier",
+            "invoice.paid",
+            1_800_000_050,
+            invoice("in_Late", None, Some("ai_overage")),
+        ))
+        .await
+        .unwrap();
+    inbox.run_pass().await.unwrap();
+
+    assert_eq!(
+        recorder.applied(Consumer::TeamSubscription),
+        vec!["evt_Later", "evt_Earlier", "evt_Later"]
+    );
+    assert_eq!(recorder.applied(Consumer::AiCredits), vec!["evt_Earlier"]);
+    // A consumer the late event is not for keeps its place.
+    assert_eq!(recorder.applied(Consumer::Computers), vec!["evt_Later"]);
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await,
+        ("idle".to_owned(), 0, Some("evt_Later".to_owned()), None)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_late_event_during_a_lease_stops_the_holder_from_moving_past_it(pool: PgPool) {
+    let (inbox, _, _) = inbox(&pool);
+    inbox
+        .receive(&event(
+            "evt_Later",
+            "customer.subscription.updated",
+            1_800_000_100,
+            subscription("sub_Ordered", "active", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    let repo = PgInbox::new(pool.clone());
+    let replica = Uuid::now_v7();
+    let claimed = repo.claim(replica, 100, LEASE).await.unwrap();
+    let mut personal = claimed
+        .iter()
+        .find(|cursor| cursor.consumer == Consumer::PersonalPlan)
+        .unwrap()
+        .clone();
+    let later = Position {
+        at: DateTime::from_timestamp(1_800_000_100, 0).unwrap(),
+        event_id: "evt_Later".parse().unwrap(),
+    };
+    assert!(
+        repo.advance(&personal, replica, &later, LEASE)
+            .await
+            .unwrap()
+    );
+    personal.applied = Some(later.clone());
+
+    // An operator cannot re-arm it while it is leased.
+    assert_eq!(
+        repo.replay(
+            Consumer::PersonalPlan,
+            &OrderingKey("cus_Ordered".to_owned()),
+            false
+        )
+        .await
+        .unwrap(),
+        Replayed::Leased
+    );
+
+    inbox
+        .receive(&event(
+            "evt_Earlier",
+            "customer.subscription.updated",
+            1_800_000_050,
+            subscription("sub_Ordered", "trialing", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    let next = Position {
+        at: DateTime::from_timestamp(1_800_000_200, 0).unwrap(),
+        event_id: "evt_Next".parse().unwrap(),
+    };
+    assert!(
+        !repo
+            .advance(&personal, replica, &next, LEASE)
+            .await
+            .unwrap()
+    );
+    assert!(repo.release(&personal, replica).await.unwrap());
+    assert_eq!(
+        cursor_state(&pool, Consumer::PersonalPlan).await,
+        ("dirty".to_owned(), 0, None, None)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_superseded_snapshot_is_skipped_only_by_consumers_of_the_latest(pool: PgPool) {
     let (inbox, _, recorder) = inbox(&pool);
     for (id, created, status) in [

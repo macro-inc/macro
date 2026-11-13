@@ -67,6 +67,9 @@ pub async fn run_audit<Repo, Reader, Domains>(
             () = stop.cancelled() => return,
             () = tokio::time::sleep(interval) => {}
         }
+        if let Err(error) = audit.report_dead_cursors().await {
+            tracing::error!(error = ?error, "stripe inbox dead cursor count failed");
+        }
         if let Err(error) = audit.run_if_due().await {
             tracing::error!(error = ?error, "stripe audit failed");
         }

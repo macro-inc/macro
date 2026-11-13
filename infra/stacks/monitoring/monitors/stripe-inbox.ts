@@ -10,6 +10,9 @@
 //   an unsupported API version) or after about six hours of retries. That
 //   consumer stops for that customer until replayed. Fields: `consumer`,
 //   `customer_id`, `event_id`, `attempts`.
+// - `stripe inbox dead cursors` (error): every replica logs it every 15
+//   minutes while any cursor is dead-lettered, so the alert holds until the
+//   cursor is replayed. Fields: `consumer`, `dead`.
 // - `stripe inbox backlog` (warn): an event applied more than five minutes
 //   after the webhook stored it. Field: `consumer`.
 // - `stripe audit mismatch` (warn): the daily audit found Stripe and Macro
@@ -29,7 +32,8 @@ for (const environment of ['dev', 'prod'] as const) {
     {
       name: `[${environment.toUpperCase()}] Stripe inbox: {{consumer.name}} dead-lettered an event`,
       type: 'log alert',
-      query: `logs("service:authentication-service status:error \\"stripe inbox cursor dead-lettered\\" ${env}").index("*").rollup("count").by("@consumer").last("15m") > 0`,
+      // The periodic count keeps it alerting until the cursor recovers.
+      query: `logs("service:authentication-service status:error (\\"stripe inbox cursor dead-lettered\\" OR \\"stripe inbox dead cursors\\") ${env}").index("*").rollup("count").by("@consumer").last("30m") > 0`,
       message: `The {{consumer.name}} consumer stopped applying Stripe events for a customer. Its billing state (roles, team seats, credits or computers) stays as it was until the cursor is replayed.
 
 Search "stripe inbox cursor dead-lettered" @consumer:{{consumer.name}} for the customer, event and error. ${REPLAY}

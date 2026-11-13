@@ -26,5 +26,6 @@ fn a_cursor_dead_letters_after_about_six_hours_of_retries() {
     let total: i64 = (1..MAX_ATTEMPTS)
         .map(|attempts| backoff(attempts).num_seconds())
         .sum();
-    assert!((19_935..=23_922).contains(&total), "{total} seconds");
+    // Attempts 1–14 wait 19 515 s before jitter and at most a fifth more.
+    assert!((19_515..=23_418).contains(&total), "{total} seconds");
 }

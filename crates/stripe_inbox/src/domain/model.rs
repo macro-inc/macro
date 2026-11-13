@@ -55,13 +55,16 @@ impl Consumer {
     /// Whether only the newest snapshot of a subscription matters to this
     /// consumer, so an older snapshot already superseded by a received one
     /// is skipped. Consumers that react to a change itself (an upgrade, a
-    /// first activation) apply every snapshot in order instead.
+    /// first activation, a conversion while live) apply every snapshot in
+    /// order instead.
     pub fn acts_on_latest_snapshot(self) -> bool {
         match self {
-            Self::Computers | Self::Gtm => true,
-            Self::PersonalPlan | Self::TeamSubscription | Self::AiCredits | Self::Analytics => {
-                false
-            }
+            Self::Computers => true,
+            Self::PersonalPlan
+            | Self::TeamSubscription
+            | Self::AiCredits
+            | Self::Analytics
+            | Self::Gtm => false,
         }
     }
 
@@ -84,15 +87,12 @@ impl Consumer {
     }
 
     /// Whether this consumer needs every item of a subscription, paging
-    /// past the ten a snapshot carries.
+    /// past the ten a snapshot carries: periods, usage policy, value and
+    /// computers are per item.
     pub fn needs_every_item(self) -> bool {
         match self {
-            Self::Computers => true,
-            Self::PersonalPlan
-            | Self::TeamSubscription
-            | Self::AiCredits
-            | Self::Analytics
-            | Self::Gtm => false,
+            Self::PersonalPlan | Self::TeamSubscription | Self::Computers | Self::Analytics => true,
+            Self::AiCredits | Self::Gtm => false,
         }
     }
 }

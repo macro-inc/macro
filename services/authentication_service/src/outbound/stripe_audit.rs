@@ -27,23 +27,35 @@ where
     async fn check(
         &self,
         subscription: &SubscriptionFacts,
+        last_invoice_failed: bool,
     ) -> Result<Vec<Mismatch>, rootcause::Report> {
+        // A failed payment revokes access while Stripe may still show the
+        // subscription live.
+        let pays = subscription.is_live() && !last_invoice_failed;
         let found = match subscription.team_id {
-            Some(team_id) => self.check_team(team_id, subscription).await,
-            None => self.check_personal(subscription).await,
+            Some(team_id) => self.check_team(team_id, subscription, pays).await,
+            None => self.check_personal(subscription, pays).await,
         };
-        // One unreadable team or account never stops the sweep.
-        Ok(found
-            .inspect_err(|error| {
+        // One unreadable team or account never stops the sweep; it is
+        // recorded as unchecked, not as verified.
+        Ok(match found {
+            Ok(found) => found.into_iter().collect(),
+            Err(error) => {
                 tracing::warn!(
                     subscription_id = %subscription.id,
                     error = ?error,
                     "stripe audit could not read domain state"
                 );
-            })
-            .unwrap_or_default()
-            .into_iter()
-            .collect())
+                vec![Mismatch {
+                    kind: MismatchKind::Unchecked,
+                    object_id: subscription.id.to_string(),
+                    stripe_value: Some(
+                        serde_json::json!({ "status": subscription.status.as_str() }),
+                    ),
+                    macro_value: None,
+                }]
+            }
+        })
     }
 }
 
@@ -53,11 +65,13 @@ where
     Roles: UserRolesAndPermissionsService,
 {
     /// The team's current subscription must be this one while it is live,
-    /// and the team pays exactly while its current subscription is live.
+    /// and the team pays exactly while its current subscription `pays`
+    /// (live, its last payment not failed).
     async fn check_team(
         &self,
         team_id: uuid::Uuid,
         subscription: &SubscriptionFacts,
+        pays: bool,
     ) -> anyhow::Result<Option<Mismatch>> {
         let bound = self
             .teams
@@ -73,7 +87,7 @@ where
             .get_team_payment_status(&team_id)
             .await
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        if is_current && paying == subscription.is_live() {
+        if is_current && paying == pays {
             return Ok(None);
         }
         Ok(Some(Mismatch {
@@ -90,12 +104,13 @@ where
         }))
     }
 
-    /// A live personal subscription's account holds the subscriber role.
+    /// A paying personal subscription's account holds the subscriber role.
     async fn check_personal(
         &self,
         subscription: &SubscriptionFacts,
+        pays: bool,
     ) -> anyhow::Result<Option<Mismatch>> {
-        if !subscription.is_live() {
+        if !pays {
             return Ok(None);
         }
         let Some(user) = self

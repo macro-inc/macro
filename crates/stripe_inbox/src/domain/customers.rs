@@ -65,6 +65,7 @@ where
             )
             .await
             .map_err(|error| ApplyError::Retry(rootcause::Report::new(error).into_dynamic()))?;
-        Ok(facts)
+        // A `customer.deleted` stored during the read is newer and wins.
+        Ok(self.held(customer).await?.unwrap_or(facts))
     }
 }
