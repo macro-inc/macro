@@ -152,6 +152,12 @@ tools/HTTP/GraphQL surfaces over them.
   (NULL `enriched_at`) that `CrmServiceImpl::enrich_pending_domains` resolves
   later with bounded retries. Never store an empty entry for a domain no
   resolver answered for: resolved entries are permanent.
+- `claim_pending_domains` marks pending entries it walks past as
+  `enrichment_exhausted` or `enrichment_untracked` so they leave
+  `crm_domain_directory_claimable_idx`. Any path that starts tracking a
+  domain must clear `enrichment_untracked` on its pending entry, as
+  `insert_company_with_domain` does; keep claim predicates matching that
+  index's `WHERE` and key expressions.
 - Apollo enrichment has been removed. Historical provider fields in the
   directory remain readable; do not clear existing metadata or drop columns
   as part of provider removal.

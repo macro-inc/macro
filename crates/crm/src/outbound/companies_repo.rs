@@ -40,6 +40,12 @@ fn lock_timeout_as_contended(error: CrmError) -> CrmError {
     }
 }
 
+/// Most entries one [`CompaniesRepository::claim_pending_domains`] checks for
+/// exhaustion or an untracked domain among those it walked past. Bounds a
+/// claim's cost when many entries are still unchecked, e.g. right after the
+/// domains of a large team are untracked.
+const UNCLAIMABLE_CHECK_WINDOW: i64 = 1_000;
+
 /// The contact `depopulate_contact` acts on, with the flags that decide
 /// how far its teardown cascades.
 struct DepopulateTarget {
@@ -1011,6 +1017,22 @@ impl CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         if domain_insert.rows_affected() > 0 {
+            // A pending directory entry the enrichment claim marked untracked
+            // becomes claimable again. Update the entry even when it isn't
+            // marked, so a claim checking it concurrently either skips it or
+            // marks it first and has the mark cleared here.
+            sqlx::query!(
+                r#"
+                UPDATE crm_domain_directory
+                SET enrichment_untracked = false
+                WHERE LOWER(domain) = LOWER($1)
+                  AND enriched_at IS NULL
+                "#,
+                normalized_domain,
+            )
+            .execute(&mut **tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
             return Ok((new_company.id, true));
         }
 
@@ -1926,18 +1948,32 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         max_attempts: i16,
         attempted_before: DateTime<Utc>,
     ) -> Result<Vec<String>, CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // A claim walks every unmarked unclaimable entry ahead of its batch,
+        // so its cost follows how many are still unmarked.
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
         // `crm_domains.domain` and directory domains are both stored
         // lower-cased, so plain equality uses `crm_domains_domain_idx`.
-        sqlx::query_scalar!(
+        let claimed = sqlx::query!(
             r#"
             WITH candidate AS (
-                SELECT dd.id
+                SELECT dd.id, dd.enrichment_attempted_at, dd.created_at
                 FROM crm_domain_directory dd
                 WHERE dd.enriched_at IS NULL
+                  AND NOT dd.enrichment_exhausted
+                  AND NOT dd.enrichment_untracked
                   AND dd.enrichment_attempts < $2
-                  AND (dd.enrichment_attempted_at IS NULL OR dd.enrichment_attempted_at < $3)
+                  AND COALESCE(dd.enrichment_attempted_at, '-infinity') < $3
                   AND EXISTS (SELECT 1 FROM crm_domains d WHERE d.domain = dd.domain)
-                ORDER BY dd.enrichment_attempted_at NULLS FIRST, dd.created_at
+                ORDER BY COALESCE(dd.enrichment_attempted_at, '-infinity'), dd.created_at
                 LIMIT $1
                 FOR UPDATE OF dd SKIP LOCKED
             )
@@ -1946,15 +1982,89 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 enrichment_attempted_at = now()
             FROM candidate c
             WHERE dd.id = c.id
-            RETURNING dd.domain
+            RETURNING dd.domain,
+                      c.enrichment_attempted_at AS "claimed_attempted_at?",
+                      c.created_at AS "claimed_created_at!"
             "#,
             limit,
             max_attempts,
             attempted_before,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Entries that can't be claimed any more leave
+        // `crm_domain_directory_claimable_idx`, so claims stop walking past
+        // them. The claim walked every entry ordered before its last claimed
+        // one, or all of them when it claimed fewer than `limit`; check those,
+        // locked, then mark them in a later statement: its snapshot sees every
+        // domain tracked before the lock, and `insert_company_with_domain`
+        // clears the mark of a domain tracked after it. A NULL bound is
+        // `-infinity`, the claim order's NULLS FIRST.
+        let last_claimed = claimed
+            .iter()
+            .map(|row| (row.claimed_attempted_at, row.claimed_created_at))
+            .max();
+        let (walked_attempted_at, walked_created_at) = match last_claimed {
+            Some((attempted_at, created_at))
+                if usize::try_from(limit).is_ok_and(|limit| claimed.len() >= limit) =>
+            {
+                (attempted_at, Some(created_at))
+            }
+            _ => (Some(attempted_before), None),
+        };
+        let unclaimable = sqlx::query_scalar!(
+            r#"
+            SELECT dd.id
+            FROM crm_domain_directory dd
+            WHERE dd.id IN (
+                    SELECT w.id
+                    FROM crm_domain_directory w
+                    WHERE w.enriched_at IS NULL
+                      AND NOT w.enrichment_exhausted
+                      AND NOT w.enrichment_untracked
+                      AND (COALESCE(w.enrichment_attempted_at, '-infinity'), w.created_at)
+                          < (COALESCE($3::timestamptz, '-infinity'),
+                             COALESCE($4::timestamptz, '-infinity'))
+                    ORDER BY COALESCE(w.enrichment_attempted_at, '-infinity'), w.created_at
+                    LIMIT $1
+                )
+              AND (dd.enrichment_attempts >= $2
+                   OR NOT EXISTS (SELECT 1 FROM crm_domains d WHERE d.domain = dd.domain))
+            FOR UPDATE SKIP LOCKED
+            "#,
+            UNCLAIMABLE_CHECK_WINDOW,
+            max_attempts,
+            walked_attempted_at,
+            walked_created_at,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if !unclaimable.is_empty() {
+            sqlx::query!(
+                r#"
+                UPDATE crm_domain_directory dd
+                SET enrichment_exhausted = dd.enrichment_attempts >= $2,
+                    enrichment_untracked = NOT EXISTS (
+                        SELECT 1 FROM crm_domains d WHERE d.domain = dd.domain
+                    )
+                WHERE dd.id = ANY($1)
+                "#,
+                &unclaimable,
+                max_attempts,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(claimed.into_iter().map(|row| row.domain).collect())
     }
 
     #[tracing::instrument(skip(self), err)]

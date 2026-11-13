@@ -123,6 +123,58 @@ async fn claim_pending_domains_is_bounded(pool: PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A claim marks entries it can never take so later claims skip them: an
+/// exhausted entry stays out, an untracked one returns once a team tracks its
+/// domain again.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn claim_pending_domains_marks_unclaimable_entries(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
+    insert_company(&pool, team_id, true, &["exhausted.com"]).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.insert_pending_domain("orphan.com").await?;
+    repo.insert_pending_domain("exhausted.com").await?;
+    sqlx::query(
+        "UPDATE crm_domain_directory SET enrichment_attempts = 5 WHERE domain = 'exhausted.com'",
+    )
+    .execute(&pool)
+    .await?;
+
+    let retry_cutoff = Utc::now() - TimeDelta::hours(6);
+    assert!(
+        repo.claim_pending_domains(10, 5, retry_cutoff)
+            .await?
+            .is_empty()
+    );
+    let marks: Vec<(String, bool, bool)> = sqlx::query_as(
+        r#"SELECT domain, enrichment_exhausted, enrichment_untracked
+           FROM crm_domain_directory ORDER BY domain"#,
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(
+        marks,
+        vec![
+            ("exhausted.com".to_string(), true, false),
+            ("orphan.com".to_string(), false, true),
+        ]
+    );
+
+    repo.create_company_for_team(&team_id, Some("orphan.com"), "Orphan", Utc::now())
+        .await?;
+    assert_eq!(
+        repo.claim_pending_domains(10, 5, retry_cutoff).await?,
+        vec!["orphan.com".to_string()]
+    );
+    let after_gap = Utc::now() + TimeDelta::seconds(1);
+    assert_eq!(
+        repo.claim_pending_domains(10, 5, after_gap).await?,
+        vec!["orphan.com".to_string()]
+    );
+    Ok(())
+}
+
 /// A company created where no resolver is available (DSS, MCP, agent tools)
 /// leaves a pending entry instead of a permanent empty one, and the
 /// enrichment worker later fills it for every team tracking the domain —
