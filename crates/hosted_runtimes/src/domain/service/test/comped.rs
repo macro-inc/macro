@@ -205,7 +205,7 @@ impl CompPolicy for UnavailablePolicy {
     type Err = crate::domain::fakes::FakeError;
 
     async fn comp_reason(&self, _team_id: Uuid) -> Result<Option<String>, Self::Err> {
-        Err(crate::domain::fakes::FakeError)
+        Err(crate::domain::fakes::FakeError::Storage)
     }
 }
 

@@ -4,6 +4,7 @@ import {
   type CacheRequest,
   type CacheResponse,
   type CacheResponseErrorCode,
+  isTypedSearch,
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
 } from '../protocol';
@@ -150,6 +151,24 @@ function isMutationSettlement(request: CacheRequest): boolean {
     request.kind === 'rollback-optimistic-write' ||
     request.kind === 'defer-optimistic-write'
   );
+}
+
+/**
+ * The order held requests reach a new engine. The engine starts on the first
+ * one before it has seen the rest, so a typed search someone is waiting on
+ * goes ahead of the reads and hydration replayed around a restart. It never
+ * passes a `clear`, whose result it would otherwise predate.
+ */
+function inEngineArrivalOrder(held: QueuedRequest[]): QueuedRequest[] {
+  let clearIndex = held.findIndex((queued) => queued.request.kind === 'clear');
+  if (clearIndex === -1) clearIndex = held.length;
+
+  const beforeClear = held.slice(0, clearIndex);
+  return [
+    ...beforeClear.filter((queued) => isTypedSearch(queued.request)),
+    ...beforeClear.filter((queued) => !isTypedSearch(queued.request)),
+    ...held.slice(clearIndex),
+  ];
 }
 
 /** Pure election, epoch, routing, drain, and abrupt-loss state machine. */
@@ -428,12 +447,11 @@ export class CoordinatorCore {
     // Notify hosts of that outcome, but leave queued work for its successor.
     const handoff = this.handoffIfNeeded();
     if (handoff.length > 0) return [...actions, ...handoff];
-    while (this.queuedRequests.length > 0) {
-      const queued = this.queuedRequests.shift();
+    const held = this.queuedRequests.splice(0);
+    for (const queued of inEngineArrivalOrder(held)) {
       if (
-        queued &&
-        (this.tabs.includes(queued.tabId) ||
-          isMutationSettlement(queued.request))
+        this.tabs.includes(queued.tabId) ||
+        isMutationSettlement(queued.request)
       ) {
         actions.push(this.route(queued, this.stateValue));
       }

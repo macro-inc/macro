@@ -12,7 +12,7 @@ import { ComputerBuyFlow } from './computer-buy-flow';
 import {
   fromPriceText,
   GetComputerRow,
-  offersBlockedByTrial,
+  offersBlockedByPlan,
 } from './MacroComputers';
 
 /**
@@ -33,8 +33,9 @@ export function useComputerOffer() {
     return price && `${price} · ${t('computers.readyInMinutes')}`;
   };
   return {
-    // A trialing team can't buy; Settings → Machines says why.
-    canBuy: () => canBuy() && !offersBlockedByTrial(offers),
+    // A trialing team, or one with no paid plan, can't buy; Settings →
+    // Machines says why.
+    canBuy: () => canBuy() && !offersBlockedByPlan(offers),
     fromLine,
     hasComputers: () => computers().length > 0,
   };
