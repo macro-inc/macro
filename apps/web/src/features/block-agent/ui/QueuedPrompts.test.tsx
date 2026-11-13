@@ -363,6 +363,67 @@ describe('queued prompt keys', () => {
     ).toBeTruthy();
   });
 
+  it('applies a snapshot skipped over an open row once the row is left', () => {
+    const [items, setItems] = createSignal([
+      { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+    ]);
+    render(() => (
+      <QueuedPrompts items={items()} onEdit={vi.fn()} onRemove={vi.fn()} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    editor.markdown = 'Queued request, half typed';
+    editor.change?.(editor.markdown);
+    // Another user's edit arrives over the unsaved typing: not applied.
+    setItems([
+      { actionId: 'first', kind: 'prompt', prompt: 'Queued request, theirs' },
+    ]);
+    expect(editor.setMarkdown).not.toHaveBeenCalled();
+
+    // Escape drops the typing; the next list snapshot catches the row up.
+    editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }));
+    setItems([
+      { actionId: 'first', kind: 'prompt', prompt: 'Queued request, theirs' },
+      { actionId: 'second', kind: 'prompt', prompt: 'Another request' },
+    ]);
+    expect(editor.setMarkdown).toHaveBeenLastCalledWith(
+      'Queued request, theirs'
+    );
+    expect(
+      screen
+        .getAllByTestId('static-markdown')
+        .map((preview) => preview.textContent)
+    ).toContain('Queued request, theirs');
+  });
+
+  it('shows the server text again when a save is refused', async () => {
+    const onEdit = vi.fn(() => Promise.resolve(false));
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    editor.markdown = 'Refused request';
+    editor.change?.(editor.markdown);
+    editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(onEdit).toHaveBeenCalledExactlyOnceWith('first', 'Refused request');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(editor.setMarkdown).toHaveBeenLastCalledWith('Queued request');
+    expect(screen.getByRole('button', { name: 'Queued request' })).toBeTruthy();
+
+    // The same text can be sent again.
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    editor.markdown = 'Refused request';
+    editor.change?.(editor.markdown);
+    editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(onEdit).toHaveBeenCalledTimes(2);
+  });
+
   it('still sends an edit typed after an in-row restore', () => {
     const onEdit = vi.fn();
     render(() => (

@@ -230,13 +230,13 @@ function QueuedInFlightDemo() {
       <p class="text-xs text-ink-muted">{note()}</p>
       <QueuedPrompts
         items={items()}
-        onEdit={(id, prompt) =>
+        onEdit={(id, prompt) => {
           setItems((current) =>
             current.map((item) =>
               item.actionId === id ? { ...item, prompt } : item
             )
-          )
-        }
+          );
+        }}
         onRemove={(id) =>
           setItems((current) => current.filter((item) => item.actionId !== id))
         }
