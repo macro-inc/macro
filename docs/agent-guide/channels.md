@@ -1847,6 +1847,31 @@ and viewer actions; focusing Download explicitly still allows keyboard downloads
 With the video focused, Escape closes the viewer and returns focus to the
 thumbnail that opened it.
 
+## Private threads and ephemeral agents
+
+Thread privacy is automatic and comes only from the mentioned agent's
+**Ephemeral agent** setting. When a person @mentions an ephemeral agent, the
+mentioning message, agent replies, and further messages in that thread are
+visible only to that person and stay saved in their channel history.
+
+Desktop and phone composers have no audience picker or visibility labels.
+Mentioning a normal agent or a person behaves as before. Removing the ephemeral
+agent mention before sending leaves an ordinary shared message. Replies to an
+existing ephemeral thread retain its private audience without another mention.
+Mentioning an ephemeral agent while replying to a shared thread starts a separate
+private thread and preserves the original shared thread's audience.
+
+Verify with two local accounts in the same channel: mention an ephemeral agent and reopen its
+thread as the sender, then check that the other account cannot see it, fetch its
+root or replies by URL/id, receive notifications, or find its contents in shared
+search. Verify a normal shared send afterward. Private attachments must not be
+shared with the channel. Changing an agent's checkbox affects future threads;
+existing private threads remain private. See
+[the privacy architecture](../architecture/private-message-threads.md).
+
+A public message edit cannot introduce an ephemeral agent. Start a new private
+thread so the existing conversation keeps its original audience.
+
 ## Pending message drafts
 
 Sending clears the composer immediately while delivery is pending. If delivery

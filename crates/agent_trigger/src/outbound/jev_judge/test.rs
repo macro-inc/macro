@@ -50,6 +50,7 @@ impl YesNoClassifier for FakeClassifier {
 
 fn posted(sender: channel_sender::ChannelSender<'static>) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent: MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: Some(Uuid::from_u128(3)),

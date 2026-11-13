@@ -11,6 +11,7 @@ import type { UpdateAgentRequestAutoAcceptPermissions } from './updateAgentReque
 import type { UpdateAgentRequestAvatarUrl } from './updateAgentRequestAvatarUrl';
 import type { UpdateAgentRequestDescription } from './updateAgentRequestDescription';
 import type { UpdateAgentRequestHarnessId } from './updateAgentRequestHarnessId';
+import type { UpdateAgentRequestIsEphemeral } from './updateAgentRequestIsEphemeral';
 import type { UpdateAgentRequestTeamId } from './updateAgentRequestTeamId';
 
 /**
@@ -40,6 +41,8 @@ asking. Omit to always prompt. */
   /** Whether the agent is a coding agent: a mention is answered with a magic
 chip into its live session (`true`) or a reply in the thread (`false`). */
   is_coding: boolean;
+  /** New mention privacy. Omit to preserve the saved setting. */
+  is_ephemeral?: UpdateAgentRequestIsEphemeral;
   /** Which MCP servers sessions of this agent are handed. */
   mcp?: AgentMcpServers;
   /** Display name. */

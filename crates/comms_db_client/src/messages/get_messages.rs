@@ -35,7 +35,7 @@ pub async fn get_channel_messages_for_search_backfill(
         r#"
         SELECT parent_entity_id::uuid AS "channel_id!", id AS message_id, created_at
         FROM comms_messages
-        WHERE parent_entity_type = 'channel'
+        WHERE comms_messages.visibility->>'type' = 'public' AND parent_entity_type = 'channel'
           AND ($2::timestamptz IS NULL OR (created_at, id) > ($2, $3::uuid))
           AND ($4::text[] IS NULL OR parent_entity_id = ANY($4))
           AND (
@@ -75,7 +75,7 @@ pub async fn get_channel_messages(
             parent_entity_id::uuid AS "channel_id!",
             id
         FROM comms_messages
-        WHERE parent_entity_type = 'channel'
+        WHERE comms_messages.visibility->>'type' = 'public' AND parent_entity_type = 'channel'
         AND (
             $3::bool IS NULL
             OR ($3 AND deleted_at IS NOT NULL)

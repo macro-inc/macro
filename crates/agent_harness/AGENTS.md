@@ -194,6 +194,7 @@ disconnect's `other_live_connections` above 0 is a stale close that changed noth
   sender's (else owner's) primary calendar time zone, via the
   `UserTimeZones` port, or UTC when unknown. Models have no other source
   for the date, so never drop it from a composition path.
+- Private-thread sessions must not grant access through prompt mentions or emit lifecycle notifications; preserve their root audience in lifecycle facts.
 
 ## Related
 

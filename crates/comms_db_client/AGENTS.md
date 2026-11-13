@@ -47,6 +47,7 @@ channel/document conversations.
 - This crate has no `migrations/` of its own — `comms_messages` and related
   tables are defined in `crates/macro_db_client/migrations`; keep query
   columns in sync with that schema, not the other way around.
+- Shared search/backfill reads exclude private message rows; private user history is served by the viewer-scoped `messages` domain.
 
 ## Related
 

@@ -130,6 +130,7 @@ function makeOptimisticTopLevelMessage(
     parent: vars.parent,
     sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
+    visibility: { type: 'public' },
     mentions: vars.mentions ?? [],
     thread_id: vars.thread_id ?? null,
     content: vars.content,
@@ -141,6 +142,7 @@ function makeOptimisticTopLevelMessage(
     reactions: [],
     state: {
       root_id: vars.optimisticId,
+      visibility: { type: 'public' },
       user_id: vars.senderId,
       created_at: now,
       updated_at: now,
@@ -165,6 +167,7 @@ function makeOptimisticThreadReply(
     parent: vars.parent,
     sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
+    visibility: { type: 'public' },
     mentions: vars.mentions ?? [],
     thread_id: vars.thread_id ?? null,
     content: vars.content,

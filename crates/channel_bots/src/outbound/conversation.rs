@@ -73,6 +73,10 @@ impl MessageEventPublisher for LocalBotPublisher {
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
         if let Some(candidate) = event.agent_trigger()
             && candidate.invoking_user().is_some()
+            && (candidate.visibility.is_public()
+                || candidate
+                    .visibility
+                    .permits(bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()))
         {
             self.triggers
                 .send(candidate)

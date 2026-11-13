@@ -504,6 +504,7 @@ async fn run_server() -> anyhow::Result<()> {
                 ),
             ),
         )
+        .with_ephemeral_agents(bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()))
         .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
             PgChannelsRepo::new(db.clone()),
         ))

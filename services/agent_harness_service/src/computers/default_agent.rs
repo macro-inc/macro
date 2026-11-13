@@ -139,6 +139,7 @@ where
                     mcp: AgentMcpServers::default(),
                     auto_accept_permissions: None,
                     is_coding: true,
+                    is_ephemeral: false,
                 },
             )
             .await?;

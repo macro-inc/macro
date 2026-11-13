@@ -626,6 +626,7 @@ fn posted(
     mentions: Vec<SimpleMention>,
 ) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent,
         message_id,
         thread_id: None,

@@ -44,6 +44,7 @@ fn attachment(id: u128) -> MessageAttachment {
 fn reply(parent: MessageParent, attachments: Vec<MessageAttachment>) -> Message {
     Message {
         kind: crate::domain::models::MessageKind::Message,
+        visibility: Default::default(),
         id: REPLY,
         parent,
         thread_id: Some(ROOT),
@@ -210,12 +211,14 @@ async fn deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_to
             added: true,
         },
         MessageChange::Typing {
+            visibility: Default::default(),
             thread_id: Some(ROOT),
             active: true,
             agent: None,
         },
         MessageChange::ThreadUpdated {
             state: crate::domain::models::ThreadState {
+                visibility: Default::default(),
                 root_id: ROOT,
                 user_id: SENDER.into(),
                 resolved: true,
@@ -279,4 +282,30 @@ fn only_finalized_bot_replies_reach_agent_triggers_with_or_without_a_mention() {
         };
         assert_eq!(patched.completed_reply, expected.then_some(expected_post));
     }
+}
+
+#[tokio::test]
+async fn private_posts_publish_only_the_audience_aware_fact() {
+    let parent = MessageParent::Channel(Uuid::from_u128(20));
+    let mut private = reply(parent.clone(), vec![attachment(5)]);
+    private.visibility = crate::domain::models::MessageVisibility::Private {
+        user_id: SENDER.into(),
+        bot_ids: vec![],
+    };
+    let published = publish(
+        parent.clone(),
+        MessageChange::Posted {
+            notification_policy: Default::default(),
+            message: private.clone(),
+            mentions: vec![mention("user", "macro|other@example.com")],
+        },
+    )
+    .await;
+    assert_eq!(event_types(&published), ["message.posted"]);
+    assert_eq!(published[0].2["metadata"]["visibility"]["user_id"], SENDER);
+    assert!(
+        publish(parent, MessageChange::MessageDeleted { message: private })
+            .await
+            .is_empty()
+    );
 }

@@ -68,6 +68,7 @@ the entity-access domain service.
   as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
   new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
+- Do not inherit document/call permissions for a session whose source thread is private, or document access for a file attached in a private discussion; explicit grants govern access.
 
 ## Related
 

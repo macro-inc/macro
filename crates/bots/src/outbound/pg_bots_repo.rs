@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests;
 
+mod message_privacy;
 mod owner_grants;
 mod team_roster;
 
@@ -161,6 +162,7 @@ struct AgentRow {
     mcp_server_names: Vec<String>,
     auto_accept_permissions: Option<bool>,
     is_coding: bool,
+    is_ephemeral: bool,
     runtime_stopped: bool,
 }
 
@@ -213,6 +215,7 @@ impl TryFrom<AgentRow> for Agent {
             mcp,
             auto_accept_permissions: row.auto_accept_permissions,
             is_coding: row.is_coding,
+            is_ephemeral: row.is_ephemeral,
             stopped_reason: row
                 .runtime_stopped
                 .then_some(AgentStoppedReason::NoRuntimeAccess),
@@ -409,9 +412,9 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions, is_coding
+                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions, is_coding, is_ephemeral
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -422,6 +425,7 @@ impl BotRepo for PgBotsRepo {
             req.mcp.scope_str(),
             req.auto_accept_permissions,
             req.is_coding,
+            req.is_ephemeral,
         )
         .execute(&mut *tx)
         .await
@@ -458,6 +462,7 @@ impl BotRepo for PgBotsRepo {
             channel_scope: req.channel_scope,
             auto_accept_permissions: req.auto_accept_permissions,
             is_coding: req.is_coding,
+            is_ephemeral: req.is_ephemeral,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
             // Creating one checks that its owner may run on its runtime.
@@ -527,7 +532,7 @@ impl BotRepo for PgBotsRepo {
         if let Some(harness_id) = req.harness_id {
             hold_live_harness(&mut tx, harness_id).await?;
         }
-        sqlx::query!(
+        let is_ephemeral = sqlx::query_scalar!(
             r#"
             UPDATE agent_configs
             SET instructions = $2,
@@ -538,8 +543,10 @@ impl BotRepo for PgBotsRepo {
                 mcp_scope = $7,
                 auto_accept_permissions = $8,
                 is_coding = $9,
+                is_ephemeral = COALESCE($10, is_ephemeral),
                 updated_at = now()
             WHERE bot_id = $1
+            RETURNING is_ephemeral
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -550,8 +557,9 @@ impl BotRepo for PgBotsRepo {
             req.mcp.scope_str(),
             req.auto_accept_permissions,
             req.is_coding,
+            req.is_ephemeral,
         )
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await
         .context("failed to update agent config")?;
 
@@ -622,6 +630,7 @@ impl BotRepo for PgBotsRepo {
             mcp: req.mcp,
             auto_accept_permissions: req.auto_accept_permissions,
             is_coding: req.is_coding,
+            is_ephemeral,
             // Saving one checks that its owner may run on its runtime.
             stopped_reason: None,
         }))
@@ -655,6 +664,7 @@ impl BotRepo for PgBotsRepo {
                 a.channel_scope,
                 a.auto_accept_permissions,
                 a.is_coding,
+                a.is_ephemeral,
                 (
                     a.harness_id IS NOT NULL
                     AND NOT a.is_coding
@@ -1103,6 +1113,7 @@ impl BotRepo for PgBotsRepo {
                 a.channel_scope,
                 a.auto_accept_permissions,
                 a.is_coding,
+                a.is_ephemeral,
                 (
                     a.harness_id IS NOT NULL
                     AND NOT a.is_coding

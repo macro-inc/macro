@@ -244,7 +244,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
                     ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text
                     AND cp.user_id = $1
                     AND cp.left_at IS NULL
-                WHERE m.id = {id_sql}::uuid
+                WHERE m.visibility->>'type' = 'public' AND m.id = {id_sql}::uuid
                 AND m.thread_id IS NULL
                 AND m.deleted_at IS NULL
                 {implied}

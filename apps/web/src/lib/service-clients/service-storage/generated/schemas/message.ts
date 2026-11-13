@@ -17,6 +17,7 @@ import type { MessageParent } from './messageParent';
 import type { MessageThreadId } from './messageThreadId';
 import type { MessageTriggeredBy } from './messageTriggeredBy';
 import type { MessageTriggeredVia } from './messageTriggeredVia';
+import type { MessageVisibility } from './messageVisibility';
 import type { SimpleMention } from './simpleMention';
 
 /**
@@ -58,4 +59,6 @@ as "Claude Code"; a display label only. */
   triggered_via?: MessageTriggeredVia;
   /** Last persisted update. */
   updated_at: string;
+  /** Audience fixed when the thread was created. */
+  visibility?: MessageVisibility;
 }

@@ -223,6 +223,7 @@ skips the turn before any model call; unset or unreadable, summaries run.
   (`moves_session_list`: starting/running/stopping/blocked) and metadata
   the viewer asked to change. Do not bump it for claim, release, recovery,
   ACP session id, or system events (`acp_ready`, `disconnected`).
+- Copy the originating message's audience into immutable session storage at creation and retain it after root deletion. Use it for lifecycle delivery and sharing, keep it on identity when origin metadata is incomplete, and fail closed if it is unavailable. See `docs/architecture/private-message-threads.md`.
 
 ## Related
 

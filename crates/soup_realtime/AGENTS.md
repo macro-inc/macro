@@ -62,6 +62,7 @@ tasks itself.
   `macro.calls` are ignored. The web cache has no local call projection, so a
   call patch makes mounted lists that can contain calls refetch
   (`apps/web/src/lib/queries/soup/graphql/call-list-revalidation.ts`).
+- Ignore private message facts when generating shared channel/thread patches; their content and existence are not a channel-wide event.
 
 ## Related
 

@@ -35,6 +35,8 @@ export type AgentPatch = {
   autoAcceptPermissions?: boolean;
   /** A coding agent (`true`) or a chat agent (`false`). */
   isCoding?: boolean;
+  /** Mentions start a private thread (`true`) or a shared one (`false`). */
+  isEphemeral?: boolean;
 };
 
 /** Agent creation and replacement settings. */
@@ -48,6 +50,7 @@ export type AgentOptions = Omit<
   | 'channel_scope'
   | 'default_model'
   | 'is_coding'
+  | 'is_ephemeral'
 > & {
   /** Channels the agent can access. */
   channels?: Channel[];
@@ -65,6 +68,8 @@ export type AgentOptions = Omit<
   defaultModel: string;
   /** Whether this is a coding agent. */
   isCoding: boolean;
+  /** Mentions start a private thread saved only in the invoking user's history. */
+  isEphemeral?: boolean;
 };
 
 /** The connected apps an agent's sessions are handed. */
@@ -160,6 +165,9 @@ export class Agent extends MacroEntity<AgentRecord> {
   /** Default model. */
   readonly defaultModel = this.field('default_model');
 
+  /** Whether mentions start private, durable threads. */
+  readonly isEphemeral = this.field('is_ephemeral');
+
   /** Visible channels. */
   readonly channels = this.mappedField('channel_ids', (ids) =>
     ids.map((id) => Channel.byId(this.client, id)),
@@ -245,6 +253,7 @@ function agentPatchBody(patch: AgentPatch): PatchAgentRequest {
     body.auto_accept_permissions = patch.autoAcceptPermissions;
   }
   if (patch.isCoding !== undefined) body.is_coding = patch.isCoding;
+  if (patch.isEphemeral !== undefined) body.is_ephemeral = patch.isEphemeral;
   return body;
 }
 
@@ -272,6 +281,7 @@ export function agentBody(options: AgentOptions): CreateAgentRequest {
     channelScope,
     defaultModel,
     isCoding,
+    isEphemeral,
     ...rest
   } = options;
   return {
@@ -284,5 +294,6 @@ export function agentBody(options: AgentOptions): CreateAgentRequest {
     channel_scope: channelScope,
     default_model: defaultModel,
     is_coding: isCoding,
+    is_ephemeral: isEphemeral,
   };
 }

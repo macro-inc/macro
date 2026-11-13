@@ -337,6 +337,7 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   no stamp.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
+- Do not dispatch ordinary message event routines from private thread posts.
 
 ## Related
 

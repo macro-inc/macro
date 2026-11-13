@@ -10,6 +10,7 @@ import type { PatchAgentRequestDefaultModel } from './patchAgentRequestDefaultMo
 import type { PatchAgentRequestHarness } from './patchAgentRequestHarness';
 import type { PatchAgentRequestInstructions } from './patchAgentRequestInstructions';
 import type { PatchAgentRequestIsCoding } from './patchAgentRequestIsCoding';
+import type { PatchAgentRequestIsEphemeral } from './patchAgentRequestIsEphemeral';
 import type { PatchAgentRequestMcp } from './patchAgentRequestMcp';
 
 /**
@@ -34,5 +35,8 @@ explicit `false` prompts exactly as unset does. */
   instructions?: PatchAgentRequestInstructions;
   /** Replacement coding choice. */
   is_coding?: PatchAgentRequestIsCoding;
+  /** Replacement privacy choice: mentions start private threads (`true`)
+or shared ones (`false`). */
+  is_ephemeral?: PatchAgentRequestIsEphemeral;
   mcp?: PatchAgentRequestMcp;
 }

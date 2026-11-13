@@ -61,6 +61,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).
+- Persist ephemeral mention defaults in `agent_configs.is_ephemeral`; preserve omitted values in updates and unrelated patches. The bots-owned `EphemeralAgentReader` adapter supplies message audience facts.
 
 ## Related
 

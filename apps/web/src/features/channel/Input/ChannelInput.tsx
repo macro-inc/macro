@@ -65,6 +65,7 @@ import {
 } from '../../dictation/components/dictation-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
 import type { DictationController } from '../../dictation/core/types';
+import { useEphemeralMentionAgent } from '../queries/message-privacy';
 import { useAgentMentionUserTransform } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
@@ -285,7 +286,7 @@ export function ChannelInput(props: ChannelInputProps) {
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
     restoreEditor: (snapshot) => restoreFailedSend(snapshot),
-    trackTyping: () => acceptTyping,
+    trackTyping: () => acceptTyping && !isPrivate(),
     attachFiles: async (files) => {
       if (!features().attachments) return;
       await uploadInputAttachments({
@@ -308,6 +309,12 @@ export function ChannelInput(props: ChannelInputProps) {
 
   let isEditorConnected = false;
   let acceptTyping = false;
+  const ephemeralAgent = useEphemeralMentionAgent(
+    mentionsTracker.mentions,
+    () => props.parent !== undefined
+  );
+  const isPrivate = () =>
+    props.input.privateThread === true || !!ephemeralAgent();
   let pendingRestore:
     | {
         snapshot: InputSnapshot;

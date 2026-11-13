@@ -281,6 +281,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   returns one. It answers 429 for one issued under 30 s ago, so client retries
   (websocket reconnects refresh on every attempt) can't turn a lambda outage
   into a FusionAuth refresh per retry.
+- The shared welcome-message writer supplies the bots-owned ephemeral settings reader, matching the other production message compositions.
 
 ## Related
 

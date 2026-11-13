@@ -10,6 +10,7 @@ import type { ThreadState } from './generated/schemas/threadState';
 
 export type { CountedReaction } from './generated/schemas/countedReaction';
 export type { MessageAttachment } from './generated/schemas/messageAttachment';
+export type { MessageVisibility } from './generated/schemas/messageVisibility';
 export type { MessageParent, PostMessage, ThreadPatch };
 
 /**

@@ -64,6 +64,7 @@ fn posted(input: &PostMessage) -> Message {
         attachments: vec![],
         reactions: vec![],
         kind: messages::domain::models::MessageKind::Message,
+        visibility: Default::default(),
     }
 }
 

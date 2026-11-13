@@ -209,7 +209,7 @@ async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<St
         r#"
         SELECT sender_id
         FROM comms_messages
-        WHERE id = $1 AND kind = 'message'
+        WHERE comms_messages.visibility->>'type' = 'public' AND id = $1 AND kind = 'message'
         ORDER BY created_at ASC
         "#,
         message_id,
@@ -225,7 +225,7 @@ async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::R
         r#"
         SELECT COUNT(id) AS "count!"
         FROM comms_messages
-        WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text
+        WHERE comms_messages.visibility->>'type' = 'public' AND parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text
           AND kind = 'message'
         "#,
         channel_id,
@@ -273,7 +273,7 @@ async fn get_channel_participants_for_thread_id(
             FROM comms_messages m
             JOIN comms_channel_participants cp
               ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
-            WHERE (m.id = $1 OR m.thread_id = $1)
+            WHERE m.visibility->>'type' = 'public' AND (m.id = $1 OR m.thread_id = $1)
               AND m.deleted_at IS NULL
               AND m.kind = 'message'
               AND cp.left_at IS NULL
@@ -283,7 +283,7 @@ async fn get_channel_participants_for_thread_id(
             JOIN comms_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
               ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = em.entity_id
-            WHERE (m.id = $1 OR m.thread_id = $1)
+            WHERE m.visibility->>'type' = 'public' AND (m.id = $1 OR m.thread_id = $1)
               AND m.deleted_at IS NULL
               AND em.source_entity_type = 'message'
               AND em.entity_type = 'user'

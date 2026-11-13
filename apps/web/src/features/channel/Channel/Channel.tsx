@@ -1336,6 +1336,10 @@ export function Channel(props: ChannelProps) {
                               botId={channel()?.agent_dm?.bot_id}
                             >
                               <ChannelInput
+                                parent={{
+                                  type: 'channel',
+                                  id: props.channelId,
+                                }}
                                 autofocus={props.autofocus}
                                 onEscape={focusMessageList}
                                 collapsible

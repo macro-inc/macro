@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT parent_entity_id::uuid AS \"channel_id!\" FROM comms_messages WHERE parent_entity_type = 'channel' AND id = $1 AND visibility->>'type' = 'public'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4472279a9958d8ca44a3cc5e73012cc67047af999a589015e8d186631d8a6567"
+}

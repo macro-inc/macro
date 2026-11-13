@@ -143,6 +143,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   accessible set first scans `entity_access` once per source, so cost grows
   with the table and the caller's channels, not the page. A listing `EXISTS`
   also needs `PER_CANDIDATE`, or Postgres hashes it back into the whole set.
+- Keep private message roots out of shared channel-thread candidates and out of the parent-thread grant that opens agent sessions; private channel history is read through `messages`.
 
 ## Related
 
