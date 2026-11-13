@@ -1,4 +1,4 @@
-import { createRoot, getOwner, type Owner } from 'solid-js';
+import { createMemo, createRoot, getOwner, type Owner } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   RoutineListSource,
@@ -98,6 +98,14 @@ function deleteFromList() {
   return { owner, dispose };
 }
 
+/** The note as the open dialog shows it: read in a tracked scope. */
+function shownNote(session: DeleteSession) {
+  return createRoot((dispose) => ({
+    note: createMemo(() => session.note),
+    dispose,
+  }));
+}
+
 const opened = () => {
   expect(mocks.openDelete).toHaveBeenCalledOnce();
   const [session, owner] = mocks.openDelete.mock.calls[0] as [
@@ -116,14 +124,17 @@ describe('routine row Delete', () => {
     const { session, owner } = opened();
     // Under the list's owner, so it stacks on a sheet the list is in.
     expect(owner).toBe(list.owner);
-    expect(session.note).toBe('The 1 routine it created will be deleted too.');
+    const shown = shownNote(session);
+    expect(shown.note()).toBe('The 1 routine it created will be deleted too.');
     // Finished one-time routines count too, though the list doesn't hold them.
+    // The dialog is already open, so its note follows.
     mocks.answerCount(3);
     await vi.waitFor(() =>
-      expect(session.note).toBe(
+      expect(shown.note()).toBe(
         'The 3 routines it created will be deleted too.'
       )
     );
+    shown.dispose();
     list.dispose();
   });
 

@@ -171,6 +171,7 @@ function choose(name: string) {
 beforeEach(() => {
   device.setMobile(false);
   device.tabs = true;
+  device.pressable = 0;
 });
 afterEach(cleanup);
 
@@ -249,6 +250,34 @@ describe('routine row menu', () => {
         .getByRole('menuitem', { name: 'Turn off' })
         .hasAttribute('data-disabled')
     ).toBe(false);
+  });
+
+  it('disables Run now while a run starts, with the menu open', async () => {
+    const [pending, setPending] = createSignal(false);
+    setup([briefing], menuActions({ runPending: () => pending() }));
+    await openMenu('Morning briefing');
+    const runNow = screen.getByRole('menuitem', { name: 'Run now' });
+    expect(runNow.hasAttribute('data-disabled')).toBe(false);
+    setPending(true);
+    expect(runNow.hasAttribute('data-disabled')).toBe(true);
+    setPending(false);
+    expect(runNow.hasAttribute('data-disabled')).toBe(false);
+    // The same item throughout, so focus stays on it.
+    expect(screen.getByRole('menuitem', { name: 'Run now' })).toBe(runNow);
+  });
+
+  it('disables Run now in the phone drawer while a run starts', async () => {
+    device.setMobile(true);
+    const [pending, setPending] = createSignal(false);
+    setup([briefing], menuActions({ runPending: () => pending() }));
+    fireEvent.contextMenu(
+      screen.getByRole('button', { name: 'Morning briefing' })
+    );
+    await screen.findByRole('dialog', { name: 'Entity actions' });
+    const runNow = screen.getByRole('button', { name: 'Run now' });
+    expect(runNow).toHaveProperty('disabled', false);
+    setPending(true);
+    expect(runNow).toHaveProperty('disabled', true);
   });
 
   it('gives a routine someone else owns opening and links only', async () => {
@@ -374,6 +403,9 @@ describe('routine row menu', () => {
         new Event('test-long-press')
       );
     await screen.findByRole('dialog', { name: 'Entity actions' });
+    // Gone with the list: no handler outlives its row.
+    cleanup();
+    expect(device.pressable).toBe(0);
   });
 
   it('opens the drawer for a phone’s own context menu event', async () => {
