@@ -17,16 +17,18 @@ pub const CODE_STEPS: &str = include_str!("code_steps.md");
 
 /// How to write a routine short of its code steps: its triggers and the
 /// events they start on, when a step is code and when it is Ask AI, and how it
-/// uses the items a request names. It begins [`WRITING`]; a host whose
-/// routine tool already carries [`CODE_STEPS`] carries this alone.
+/// uses the items a request names. It begins [`WRITING`]. A host whose
+/// routine tool already carries [`CODE_STEPS`] carries this alone, and the
+/// drafter and suggestions add [`CODE_STEPS`] only when code steps can be
+/// written.
 pub const ROUTINE_RULES: &str = include_str!("writing.md");
 
 /// How to write a whole routine: its triggers and the events they start on,
 /// when a step is code and when it is Ask AI, how it uses the items a request
-/// names, and [`CODE_STEPS`]. The one text every writer of routines follows:
-/// the Compose Routines skill a chat session reads, the drafter, and the
-/// writer that answers in JSON. It names no tool, says nothing of how a
-/// trigger's filter spells its items, and is the same for every request, so
+/// names, and [`CODE_STEPS`]. The one text every writer of routines follows,
+/// as the Compose Routines skill a chat session reads carries it; the drafter
+/// and suggestions carry its two parts. It names no tool, says nothing of how
+/// a trigger's filter spells its items, and is the same for every request, so
 /// each writer adds only how it works.
 pub const WRITING: &str = concat!(include_str!("writing.md"), include_str!("code_steps.md"));
 

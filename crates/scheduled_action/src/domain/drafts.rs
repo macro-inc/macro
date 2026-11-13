@@ -25,7 +25,7 @@ use anyhow::Result;
 use bot_id::BotId;
 use chrono::{SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CATALOG, RoutineProgram, STEP_CONTEXT, Step};
+use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -222,9 +222,10 @@ pub struct InvalidDraft(pub String);
 pub struct DraftAgent {
     /// The in-process Macro agent.
     pub bot: BotId,
-    /// How to write a routine: `routine_program::WRITING`, the text the
-    /// Compose Routines skill also carries. The brief adds only what is
-    /// particular to drafting.
+    /// How to write a routine: `routine_program::ROUTINE_RULES`, the text the
+    /// Compose Routines skill also carries. The brief adds the code-step
+    /// contract when code steps can be written, and what is particular to
+    /// drafting.
     pub guide: &'static str,
 }
 
@@ -782,7 +783,7 @@ fn brief(
     let model = &context.agent_model;
     let steps = if code {
         format!(
-            "An Ask AI step is `{{type: 'agent', model: '{model}', instructions}}`.\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
+            "An Ask AI step is `{{type: 'agent', model: '{model}', instructions}}`.\n\n{CODE_STEPS}\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
             catalog_examples(context.conditions)
         )
     } else {
