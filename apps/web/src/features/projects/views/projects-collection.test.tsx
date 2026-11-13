@@ -102,7 +102,7 @@ vi.mock('@entity', () => ({
   InlineEntity: (props: { entity: { name: string } }) => props.entity.name,
 }));
 // Rows portal their property editors, as the real cells do.
-vi.mock('../components/project-row', async () => {
+vi.mock('../project-row', async () => {
   const { Portal } = await import('solid-js/web');
   return {
     ProjectListHeader: () => null,

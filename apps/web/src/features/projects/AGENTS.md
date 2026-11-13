@@ -12,8 +12,8 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - `views/project-saved-views.tsx`: shared saved-view lists, menus, dialogs, and explicit saves.
 - `views/projects-collection.tsx`: desktop collection; `projects-mobile-tabs.tsx` and `projects-filter-drawer.tsx` compose phone controls.
 - `add-project-tasks.tsx`: shared creation/assignment state; `views/add-project-tasks.tsx` and `views/mobile/add-project-tasks.tsx` compose the menus.
-- `project-detail.tsx` and `components/project-title-menu.tsx`: shared sources and actions above desktop/mobile header compositions.
-- `components/project-row.tsx`: row entry; `views/project-row.tsx`, `views/mobile/project-row.tsx`, and `views/shared/` own responsive presentation.
+- `project-detail.tsx` and `project-title-menu.tsx`: shared sources and actions above desktop/mobile header compositions.
+- `project-row.tsx`: row entry; `views/project-row.tsx`, `views/mobile/project-row.tsx`, and `views/shared/` own responsive presentation.
 
 ## Gotchas
 

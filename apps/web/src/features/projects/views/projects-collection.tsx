@@ -51,11 +51,6 @@ import {
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
-import {
-  PROJECT_GRID_COLUMNS,
-  ProjectListHeader,
-  ProjectRow,
-} from '../components/project-row';
 import { ProjectRowMenu } from '../components/project-row-menu';
 import { ProjectsEmptyState } from '../components/projects-empty-state';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
@@ -72,6 +67,11 @@ import type {
   ProjectListEntity,
 } from '../primitives/project-collection';
 import { createProjectGanttRows } from '../primitives/project-gantt-rows';
+import {
+  PROJECT_GRID_COLUMNS,
+  ProjectListHeader,
+  ProjectRow,
+} from '../project-row';
 import {
   projectGroupMoveValue,
   projectGroupPropertyId,

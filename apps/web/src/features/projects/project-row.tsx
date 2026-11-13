@@ -12,13 +12,13 @@ import { PropertiesProvider } from '@property/context/PropertiesContext';
 import type { Property, PropertyApiValues } from '@property/types';
 import { cn } from '@ui';
 import { Show, Suspense } from 'solid-js';
-import type { ProjectRow as ProjectRowData } from '../context/projects-context';
-import { canEditProject } from '../core/project';
-import { MobileProjectRow } from '../views/mobile/project-row';
-import { DesktopProjectRow } from '../views/project-row';
-import { GRID_STYLE } from '../views/shared/project-row-content';
+import type { ProjectRow as ProjectRowData } from './context/projects-context';
+import { canEditProject } from './core/project';
+import { MobileProjectRow } from './views/mobile/project-row';
+import { DesktopProjectRow } from './views/project-row';
+import { GRID_STYLE } from './views/shared/project-row-content';
 
-export { PROJECT_GRID_COLUMNS } from '../views/shared/project-row-content';
+export { PROJECT_GRID_COLUMNS } from './views/shared/project-row-content';
 export function ProjectListHeader(props: {
   onSortUpdated?: () => void;
   updatedSelected?: boolean;

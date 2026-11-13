@@ -4,8 +4,8 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isMobile } from '@core/mobile/isMobile';
 import { Show } from 'solid-js';
 import { ProjectProgress } from '../../components/project-progress';
-import { ProjectTitleMenu } from '../../components/project-title-menu';
 import type { ProjectDetailHeaderProps } from '../../project-detail';
+import { ProjectTitleMenu } from '../../project-title-menu';
 import { ProjectSectionTabs } from '../shared/project-section-tabs';
 
 export function MobileProjectDetailHeader(props: ProjectDetailHeaderProps) {

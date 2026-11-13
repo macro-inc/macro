@@ -5,8 +5,8 @@ import { Property as PropertyControl } from '@property';
 import { PropertyIconControl } from '@property/component/PropertyIconControl';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { Show } from 'solid-js';
-import type { ProjectRowProps } from '../../components/project-row';
 import { canEditProject } from '../../core/project';
+import type { ProjectRowProps } from '../../project-row';
 import {
   ProjectRowColumns,
   ProjectRowName,

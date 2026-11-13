@@ -1,4 +1,4 @@
-import type { ProjectTitleMenuViewProps } from '../components/project-title-menu';
+import type { ProjectTitleMenuViewProps } from '../project-title-menu';
 import {
   ProjectTitleActions,
   ProjectTitleLabel,

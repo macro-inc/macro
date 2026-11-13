@@ -15,22 +15,22 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { formatOptionValue } from '@property/utils/formatting';
 import { createSignal, Show } from 'solid-js';
+import { DeleteProjectsDialog } from './components/delete-projects-dialog';
+import { RenameProjectDialog } from './components/rename-project-dialog';
 import {
   type ProjectSource,
   type ProjectsContext,
   useProjectsContext,
-} from '../context/projects-context';
+} from './context/projects-context';
 import {
   canDeleteProject,
   canEditProject,
   type ProjectDetail,
   type ProjectSection,
-} from '../core/project';
-import { openProject } from '../open-project';
-import { MobileProjectTitleMenu } from '../views/mobile/project-title-menu';
-import { ProjectTitleMenuView } from '../views/project-title-menu';
-import { DeleteProjectsDialog } from './delete-projects-dialog';
-import { RenameProjectDialog } from './rename-project-dialog';
+} from './core/project';
+import { openProject } from './open-project';
+import { MobileProjectTitleMenu } from './views/mobile/project-title-menu';
+import { ProjectTitleMenuView } from './views/project-title-menu';
 
 type ProjectTitleMenuProps = {
   project: ProjectDetail;

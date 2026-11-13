@@ -10,7 +10,7 @@ import type {
   ProjectsContext,
 } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
-import { ProjectTitleMenu } from './project-title-menu';
+import { ProjectTitleMenu } from '../project-title-menu';
 
 const mocks = vi.hoisted(() => ({
   mobile: true,

@@ -2,7 +2,7 @@ import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import type { ProjectTitleMenuViewProps } from '../../components/project-title-menu';
+import type { ProjectTitleMenuViewProps } from '../../project-title-menu';
 import {
   ProjectTitleActions,
   ProjectTitleLabel,

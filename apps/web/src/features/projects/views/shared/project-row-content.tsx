@@ -8,9 +8,9 @@ import { Entity, MultiSelectCheckbox } from '@entity';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { For, Show } from 'solid-js';
 import { ProjectProgress } from '../../components/project-progress';
-import type { ProjectRowProps } from '../../components/project-row';
 import type { ProjectRow as ProjectRowData } from '../../context/projects-context';
 import { canEditProject } from '../../core/project';
+import type { ProjectRowProps } from '../../project-row';
 
 export const PROJECT_GRID_COLUMNS = [
   'indicator',

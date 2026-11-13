@@ -26,13 +26,13 @@ import { Button, Tabs } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { z } from 'zod';
-import { ProjectTitleMenu } from '../components/project-title-menu';
 import {
   type ProjectSource,
   type ProjectsContext,
   ProjectsProvider,
 } from '../context/projects-context';
 import type { ProjectDetail, ProjectSection } from '../core/project';
+import { ProjectTitleMenu } from '../project-title-menu';
 import { MobileProjectDetailHeader } from '../views/mobile/project-detail-header';
 import { priority, status } from './collection-data';
 
