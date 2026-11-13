@@ -8,7 +8,7 @@ use model_entity::EntityType;
 use sqlx::PgPool;
 
 use super::*;
-use crate::domain::model::{Category, EntityAction, RunMode};
+use crate::domain::model::{Category, EntityAction, RoutineSentencePart, RunMode};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
 pub(crate) const OWNER: &str = "macro|suggestions-owner@macro.com";
@@ -127,19 +127,43 @@ impl SuggestionAudience for FakeAudience {
     }
 }
 
-/// Routine suggestions dismissed through the port.
+/// Routine suggestions: those dismissed through the port, and how the ones
+/// the test words read, in the zones they were asked for. Reading fails
+/// while `unreadable` is set.
 #[derive(Default)]
-struct FakeDismissal(Mutex<Vec<Uuid>>);
+struct FakeRoutineSuggestions {
+    dismissed: Mutex<Vec<Uuid>>,
+    texts: Mutex<HashMap<Uuid, RoutineText>>,
+    zones: Mutex<Vec<chrono_tz::Tz>>,
+    unreadable: std::sync::atomic::AtomicBool,
+}
 
 #[async_trait::async_trait]
-impl RoutineSuggestionDismissal for FakeDismissal {
+impl RoutineSuggestions for FakeRoutineSuggestions {
     async fn dismiss_suggestion(
         &self,
         _: &MacroUserIdStr<'static>,
         suggestion: Uuid,
     ) -> Result<bool, rootcause::Report> {
-        self.0.lock().unwrap().push(suggestion);
+        self.dismissed.lock().unwrap().push(suggestion);
         Ok(true)
+    }
+
+    async fn texts(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        suggestions: &[Uuid],
+        timezone: chrono_tz::Tz,
+    ) -> Result<Vec<(Uuid, RoutineText)>, rootcause::Report> {
+        self.zones.lock().unwrap().push(timezone);
+        if self.unreadable.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(rootcause::report!("routine suggestions are unreadable"));
+        }
+        let texts = self.texts.lock().unwrap();
+        Ok(suggestions
+            .iter()
+            .filter_map(|id| Some((*id, texts.get(id)?.clone())))
+            .collect())
     }
 }
 
@@ -151,7 +175,7 @@ pub(crate) struct Harness {
     access: Arc<FakeAccess>,
     drafts: Arc<FakeDrafts>,
     audience: Arc<FakeAudience>,
-    dismissal: Arc<FakeDismissal>,
+    routines: Arc<FakeRoutineSuggestions>,
     pool: PgPool,
 }
 
@@ -172,7 +196,7 @@ pub(crate) async fn harness(pool: PgPool, flag: bool) -> Harness {
     let access = Arc::new(FakeAccess::default());
     let drafts = Arc::new(FakeDrafts::default());
     let audience = Arc::new(FakeAudience::default());
-    let dismissal = Arc::new(FakeDismissal::default());
+    let routines = Arc::new(FakeRoutineSuggestions::default());
     Harness {
         service: SuggestionService::new(
             Arc::new(PgSuggestionRepo::new(pool.clone())),
@@ -181,13 +205,13 @@ pub(crate) async fn harness(pool: PgPool, flag: bool) -> Harness {
             Arc::new(SameSession),
             Arc::new(RowSessions(pool.clone())),
             audience.clone(),
-            dismissal.clone(),
+            routines.clone(),
             Some(flags),
         ),
         access,
         drafts,
         audience,
-        dismissal,
+        routines,
         pool,
     }
 }
@@ -1042,18 +1066,64 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
     .unwrap();
     tx.commit().await.unwrap();
 
+    // The feed shows how its drafted routine reads, one-off times in the
+    // reader's zone.
+    let text = RoutineText {
+        sentence: vec![
+            RoutineSentencePart {
+                text: "Plan ".to_owned(),
+                picked: false,
+            },
+            RoutineSentencePart {
+                text: "the week".to_owned(),
+                picked: true,
+            },
+        ],
+        when: "Mondays at 9:00 AM".to_owned(),
+    };
+    h.routines
+        .texts
+        .lock()
+        .unwrap()
+        .insert(suggestion, text.clone());
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(
+            &user(OWNER),
+            SuggestionCaller::User,
+            Some(chrono_tz::Europe::Paris),
+        )
         .await
         .unwrap();
     let card = feed.suggestions[0].clone();
     assert_eq!(
         card.kind,
         SuggestionKind::Routine {
-            routine_suggestion_id: suggestion
+            routine_suggestion_id: suggestion,
+            routine: Some(text),
         }
     );
+    assert_eq!(
+        *h.routines.zones.lock().unwrap(),
+        [chrono_tz::Europe::Paris]
+    );
+    // When its routine can't be read, the card still shows, without it.
+    h.routines
+        .unreadable
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        feed.suggestions[0].kind,
+        SuggestionKind::Routine {
+            routine_suggestion_id: suggestion,
+            routine: None,
+        }
+    );
+    assert_eq!(h.routines.zones.lock().unwrap()[1], chrono_tz::UTC);
     // Sessions never rewrite or retire it here; its suggestion decides.
     let rewrite = h
         .service
@@ -1113,7 +1183,7 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
         .dismiss(&user(OWNER), SuggestionCaller::User, card.id)
         .await
         .unwrap();
-    assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
+    assert_eq!(*h.routines.dismissed.lock().unwrap(), [suggestion]);
 }
 
 /// How the fake's next start goes.

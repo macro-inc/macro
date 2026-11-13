@@ -28,6 +28,7 @@ pub mod model;
 pub mod ports;
 pub mod prompt;
 pub mod state;
+pub mod text;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -40,7 +41,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
 use routine_program::{CATALOG, Surface};
-use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
+use suggestions::domain::model::{GenerationSession, GenerationTrigger, RoutineText, SessionKind};
 use suggestions::domain::ports::GenerationSessions;
 
 use self::model::{
@@ -445,6 +446,28 @@ where
             code,
             guide: self.briefing.guide,
         }))
+    }
+
+    #[tracing::instrument(name = "routine.suggestions.texts", skip_all, fields(
+        routine.suggestions.asked = ids.len(),
+        routine.suggestions.drafted = tracing::field::Empty,
+    ), err)]
+    async fn texts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        ids: &[Uuid],
+        timezone: Tz,
+    ) -> Result<Vec<(Uuid, RoutineText)>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let drafted = self.repo.drafted(user, ids).await?;
+        tracing::Span::current().record("routine.suggestions.drafted", drafted.len());
+        let now = Utc::now();
+        Ok(drafted
+            .into_iter()
+            .map(|(id, routine)| (id, text::routine_text(&routine, timezone, now)))
+            .collect())
     }
 
     async fn kept(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<u32> {

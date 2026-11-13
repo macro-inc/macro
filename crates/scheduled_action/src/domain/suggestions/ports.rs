@@ -10,13 +10,14 @@ use macro_uuid::Uuid;
 use routine_program::Surface;
 use serde::Serialize;
 
-use suggestions::domain::model::GenerationTrigger;
+use suggestions::domain::model::{GenerationTrigger, RoutineText};
 
 use super::model::{
     CheckedSuggestion, GenerationStatus, RetireSuggestion, RoutineGenerationReport,
     RoutineSuggestions, StoredSuggestion, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
 use super::state::Transition;
+use crate::domain::models::ActionConfiguration;
 
 /// What AI suggested for each person, and what became of it.
 pub trait SuggestionRepo: Send + Sync + 'static {
@@ -96,6 +97,14 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Uuid>>> + Send;
+
+    /// The routines AI drafted in the person's suggestions `ids`, by
+    /// suggestion; catalog picks and suggestions not theirs are left out.
+    fn drafted(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<(Uuid, ActionConfiguration)>>> + Send;
 }
 
 /// One of the newest messages in an inbox, read from the provider.
@@ -151,6 +160,17 @@ pub trait RoutineSuggestionApi: Send + Sync + 'static {
         trigger: GenerationTrigger,
         timezone: chrono_tz::Tz,
     ) -> impl Future<Output = Result<String>> + Send;
+
+    /// How the person's suggestions `ids` that drafted a routine read on
+    /// their cards in the Suggestions feed, with one-off times in
+    /// `timezone`; the rest are left out. For the feed, which checked its
+    /// own flag.
+    fn texts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        ids: &[Uuid],
+        timezone: chrono_tz::Tz,
+    ) -> impl Future<Output = Result<Vec<(Uuid, RoutineText)>>> + Send;
 
     /// How many suggestions the person's routines session `session` kept.
     fn kept(

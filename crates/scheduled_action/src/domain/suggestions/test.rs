@@ -156,6 +156,24 @@ impl SuggestionRepo for FakeRepo {
     async fn saved_from(&self, _: &MacroUserIdStr<'_>) -> Result<Vec<Uuid>> {
         Ok(self.saved.lock().unwrap().clone())
     }
+
+    async fn drafted(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, crate::domain::models::ActionConfiguration)>> {
+        Ok(self
+            .suggestions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|suggestion| ids.contains(&suggestion.id))
+            .filter_map(|suggestion| match &suggestion.pick {
+                StoredPick::Routine { routine } => Some((suggestion.id, routine.clone())),
+                StoredPick::Catalog { .. } => None,
+            })
+            .collect())
+    }
 }
 
 /// Mail anyone could have written, including an injection attempt.

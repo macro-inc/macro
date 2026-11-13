@@ -157,6 +157,11 @@ each run.
   suggestion in one transaction (`suggestions_db_utils`), refused when that
   would pass the suggestion limits. A catalog pick takes no `card`. Every
   kept and retired suggestion is logged in `suggestion_change`.
+  `RoutineSuggestionApi::texts` words drafted routines for the suggestions
+  feed (`suggestions/text.rs`): the first code step whose `sentence` reads
+  with its knobs (`routine_program::sentence_runs`), else the description or
+  name, and `ActionTrigger::describe` (`event_trigger/describe.rs`), the
+  first trigger worded as the web app's routine editor words it, in English.
   `suggestions/decode.rs` is the trust boundary: a catalog key with knob values that fit their knob, or a drafted routine that
   passes saving's checks, kept switched off and never acting as the user; a
   one-line reason; no email address, phone number or street address in the
@@ -171,7 +176,7 @@ each run.
   `status` is the person's latest
   generation's (`GenerationStatuses`). `onByDefault` marks at most two safe
   catalog picks AI rated likely kept, never one that affects others. Spans:
-  `routine.suggestions.brief`, `.suggest`, `.review`, `.retire`; log events
+  `routine.suggestions.brief`, `.suggest`, `.review`, `.retire`, `.texts`; log events
   `routine_suggestions.generated` and `.surface` (from `record`, after a
   generation's routines sessions), `.suggested`, `.retired`, `.dismissed`,
   `.saved`.
@@ -226,6 +231,8 @@ each run.
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
   property change filters take, matched on the values a change adds.
+- `src/domain/event_trigger/describe.rs`: a trigger in words for a routine
+  suggestion's card; a schedule it can't word reads as its cron.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
 - `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a

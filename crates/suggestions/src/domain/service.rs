@@ -7,6 +7,7 @@
 //! problems the session can read and fix. Every accepted write is logged in
 //! the change log with the values before and after and the session's reason.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -20,14 +21,15 @@ use model_owner::CreationPrincipal;
 use super::check;
 use super::model::{
     Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger,
-    KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, RunProgress,
-    RunSettled, RunStartError, SessionKind, SessionReadError, SessionState, StoredRun, Suggestion,
-    SuggestionCaller, SuggestionContent, SuggestionError, SuggestionFeed, SuggestionKind,
-    SuggestionRun, SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
+    KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RoutineText, RunMode,
+    RunProgress, RunSettled, RunStartError, SessionKind, SessionReadError, SessionState, StoredRun,
+    Suggestion, SuggestionCaller, SuggestionContent, SuggestionError, SuggestionFeed,
+    SuggestionKind, SuggestionRun, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
+    Target,
 };
 use super::ports::{
-    GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, RunSessions,
-    SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
+    GenerationSessions, Limits, RequestSessions, RoutineSuggestions, RunSessions, SuggestionAccess,
+    SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
 };
 use super::prompt;
 
@@ -66,7 +68,7 @@ pub struct SuggestionService<Repo, Access, Drafts, Flags> {
     request_sessions: Arc<dyn RequestSessions>,
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
-    routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
+    routine_suggestions: Arc<dyn RoutineSuggestions>,
     runs: Option<Runs>,
     flags: Option<Flags>,
     /// The SDK reference a suggestions session's brief carries.
@@ -105,7 +107,7 @@ where
         request_sessions: Arc<dyn RequestSessions>,
         generation_sessions: Arc<dyn GenerationSessions>,
         audience: Arc<dyn SuggestionAudience>,
-        routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
+        routine_suggestions: Arc<dyn RoutineSuggestions>,
         flags: Option<Flags>,
     ) -> Self {
         Self {
@@ -193,6 +195,52 @@ where
             });
         }
         Ok(())
+    }
+
+    /// Attach how each routine suggestion's drafted routine reads, with
+    /// one-off times in `timezone`. A failed read leaves them without it:
+    /// each card still has its title and summary. How many are left without.
+    async fn attach_routine_texts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+        suggestions: &mut [Suggestion],
+    ) -> usize {
+        let ids: Vec<Uuid> = suggestions
+            .iter()
+            .filter_map(|suggestion| match suggestion.kind {
+                SuggestionKind::Routine {
+                    routine_suggestion_id,
+                    ..
+                } => Some(routine_suggestion_id),
+                _ => None,
+            })
+            .collect();
+        if ids.is_empty() {
+            return 0;
+        }
+        let mut texts: HashMap<Uuid, RoutineText> = self
+            .routine_suggestions
+            .texts(user, &ids, timezone)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "could not read routine suggestions' routines")
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        let mut without = 0;
+        for suggestion in suggestions.iter_mut() {
+            if let SuggestionKind::Routine {
+                routine_suggestion_id,
+                routine,
+            } = &mut suggestion.kind
+            {
+                *routine = texts.remove(routine_suggestion_id);
+                without += usize::from(routine.is_none());
+            }
+        }
+        without
     }
 
     /// Move `suggestion` from one of `from` to `to` if it is still as `accept`
@@ -521,6 +569,7 @@ where
         suggestions.open = tracing::field::Empty,
         suggestions.done = tracing::field::Empty,
         suggestions.hidden = tracing::field::Empty,
+        suggestions.routines_unread = tracing::field::Empty,
     ), err)]
     async fn feed(
         &self,
@@ -565,6 +614,9 @@ where
         // One read of runs for the open and the done suggestions.
         let mut viewable = viewable;
         self.attach_runs(user, &mut viewable).await?;
+        let routines_unread = self
+            .attach_routine_texts(user, timezone.unwrap_or(chrono_tz::UTC), &mut viewable)
+            .await;
         let (mut suggestions, mut done): (Vec<Suggestion>, Vec<Suggestion>) = viewable
             .into_iter()
             .partition(|suggestion| suggestion.state.is_open());
@@ -578,6 +630,7 @@ where
         span.record("suggestions.open", suggestions.len());
         span.record("suggestions.done", done.len());
         span.record("suggestions.hidden", hidden);
+        span.record("suggestions.routines_unread", routines_unread);
         Ok(SuggestionFeed { suggestions, done })
     }
 
@@ -795,6 +848,7 @@ where
         // the suggestion is kept.
         if let SuggestionKind::Routine {
             routine_suggestion_id,
+            ..
         } = suggestion.kind
         {
             let dismissed = self

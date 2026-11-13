@@ -8,6 +8,7 @@ use routine_program::Surface;
 use serde_json::Value;
 use sqlx::{PgConnection, PgPool};
 
+use crate::domain::models::ActionConfiguration;
 use crate::domain::suggestions::MAX_KEPT_PER_SESSION;
 use crate::domain::suggestions::model::{CheckedSuggestion, StoredPick, StoredSuggestion};
 use crate::domain::suggestions::ports::{Kept, SuggestionRepo};
@@ -438,5 +439,23 @@ impl SuggestionRepo for PgSuggestionRepo {
         )
         .fetch_all(&self.pool)
         .await?)
+    }
+
+    async fn drafted(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, ActionConfiguration)>> {
+        let rows = sqlx::query!(
+            r#"SELECT id, routine AS "routine!" FROM routine_suggestion
+               WHERE id = ANY($1) AND user_id = $2 AND routine IS NOT NULL"#,
+            ids,
+            user.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| Ok((row.id, serde_json::from_value(row.routine)?)))
+            .collect()
     }
 }

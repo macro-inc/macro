@@ -347,12 +347,13 @@ where
     }
 }
 
-/// A routine suggestion is dismissed by dismissing its routine suggestion, which
-/// dismisses both together.
-struct SuggestionDismissal<S>(Arc<S>);
+/// A routine suggestion's card, through the routine suggestions service: it
+/// is dismissed by dismissing its routine suggestion, which dismisses both
+/// together, and reads as its drafted routine.
+struct RoutineCards<S>(Arc<S>);
 
 #[async_trait::async_trait]
-impl<S> suggestions::domain::ports::RoutineSuggestionDismissal for SuggestionDismissal<S>
+impl<S> suggestions::domain::ports::RoutineSuggestions for RoutineCards<S>
 where
     S: scheduled_action::domain::suggestions::ports::RoutineSuggestionApi,
 {
@@ -373,6 +374,18 @@ where
             }
             Err(error) => Err(rootcause::report!("{error:?}")),
         }
+    }
+
+    async fn texts(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        suggestions: &[uuid::Uuid],
+        timezone: chrono_tz::Tz,
+    ) -> Result<Vec<(uuid::Uuid, suggestions::domain::model::RoutineText)>, rootcause::Report> {
+        self.0
+            .texts(user, suggestions, timezone)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
     }
 }
 
@@ -756,7 +769,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             generations.clone(),
             // Reading the feed counts paid readers in for nightly runs.
             Arc::new(PaidAudience::new(generations.clone(), Arc::clone(&plans))),
-            Arc::new(SuggestionDismissal(Arc::clone(&suggestions))),
+            Arc::new(RoutineCards(Arc::clone(&suggestions))),
             routine_flags.clone(),
         )
         // Accepting a background prompt suggestion runs it in a hidden session of the

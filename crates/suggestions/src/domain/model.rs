@@ -199,7 +199,32 @@ pub enum SuggestionKind {
         /// The suggestion it shows.
         #[schema(value_type = String, format = Uuid)]
         routine_suggestion_id: Uuid,
+        /// How its drafted routine reads, in the feed only; absent when the
+        /// routine suggestion couldn't be read.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        routine: Option<RoutineText>,
     },
+}
+
+/// How a routine suggestion's drafted routine reads on its card.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineText {
+    /// What it does: a step's sentence with the values AI picked marked, or
+    /// its description (else its name) as one unmarked part.
+    pub sentence: Vec<RoutineSentencePart>,
+    /// When it runs, e.g. "Fridays at 9:00 AM" or "New email received".
+    pub when: String,
+}
+
+/// A part of a routine's sentence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineSentencePart {
+    /// What it says.
+    pub text: String,
+    /// It is a value AI picked, which the person can change.
+    pub picked: bool,
 }
 
 impl SuggestionKind {

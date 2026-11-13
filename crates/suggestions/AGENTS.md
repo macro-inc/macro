@@ -100,7 +100,13 @@ scheduler's spec.
   `RoutineSuggestionState::on` in `crates/scheduled_action`: `proposed` while
   open, then `dismissed`, `retired`, or `done` with the saved routine as
   `produced`. Dismissing it in the feed dismisses the routine suggestion
-  through `RoutineSuggestionDismissal`. Accepting it is refused (400
+  through `RoutineSuggestions` (the harness's `RoutineCards`). The feed
+  words each drafted routine through the same port as `kind.routine`:
+  `sentence`, its first code step's sentence as parts with the knob values
+  `picked` (else its description or name), and `when`, its first trigger in
+  words, a one-off time in the feed's `timezone`. English, like the rest of
+  the card. A failed read leaves `routine` out and counts
+  `suggestions.routines_unread` on the feed's span. Accepting it is refused (400
   `RoutineNotAccepted`): the person saves its routine in the app, switched
   off until they turn it on, and that save is what makes it done. Suggestions
   sessions never add, rewrite or retire routine suggestions.
