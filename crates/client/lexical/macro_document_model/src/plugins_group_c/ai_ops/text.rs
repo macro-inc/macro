@@ -4,7 +4,7 @@
 //!
 //! Each op is planned against a read-only transaction and returns its writes,
 //! so a refusal is decided before the handler touches selection, tags or nodes.
-use super::{AiOpRefusal, OpResult, Scope, block_by_id, by_id, text_block};
+use super::{AiOpRefusal, BlockType, OpResult, Scope, block_by_id, by_id, text_block};
 use lexical_model::*;
 
 /// One planned model write, executed in order by [`execute`].
@@ -28,6 +28,22 @@ pub(crate) enum Write {
     Move { key: NodeKey, to: Place },
     /// Replace a text node's format.
     SetFormat { key: NodeKey, format: TextFormat },
+    /// Source `$retypeContainer`: replace `key` with a new block of `block`,
+    /// keeping its children, and give the replacement `id`.
+    Retype {
+        key: NodeKey,
+        block: BlockType,
+        id: Option<String>,
+    },
+    /// Set a list item's indent (Lexical `ListItemNode.setIndent`).
+    SetIndent { key: NodeKey, indent: u32 },
+    /// Source `$mergeBlocks`: each of `rest`, in order, appends a `separator`
+    /// run and its children into `first` when it is an element, then goes.
+    MergeInto {
+        first: NodeKey,
+        rest: Vec<NodeKey>,
+        separator: String,
+    },
 }
 
 /// Where [`Write::Move`] places a node, resolved after its removal.
@@ -89,6 +105,56 @@ pub(crate) fn execute(tx: &mut Transaction<'_>, writes: Vec<Write>) -> Result<()
             }
             Write::SetFormat { key, format } => {
                 tx.text(key)?.set_format(format)?;
+            }
+            Write::Retype { key, block, id } => {
+                // Rich-node constructors only wrap a model error.
+                let rich = |lexical_rich_nodes::Error::Model(error)| error;
+                let replacement = match block {
+                    BlockType::Paragraph => tx.create(Paragraph {})?.key(),
+                    BlockType::Heading(tag) => {
+                        lexical_rich_nodes::heading::create_heading_node(tx, tag)
+                            .map_err(rich)?
+                            .key()
+                    }
+                    BlockType::Quote => lexical_rich_nodes::quote::create_quote_node(tx)
+                        .map_err(rich)?
+                        .key(),
+                    // Through the registry, as `$createCodeNode` with the app's
+                    // replacement (CustomCodeNode) builds it.
+                    BlockType::Code(language) => {
+                        lexical_rich_nodes::code::create_code_node(tx, language.as_deref(), None)
+                            .map_err(rich)?
+                            .key()
+                    }
+                };
+                tx.replace(key, replacement, true)?;
+                if let Some(id) = id {
+                    let id = lexical_node_id::LexicalNodeId::try_new(id)
+                        .map_err(|_| Error::Invariant("group-c.ai-op versioned id is empty"))?;
+                    crate::node_ids::set_id(tx, replacement, Some(id))?;
+                }
+            }
+            Write::SetIndent { key, indent } => {
+                tx.set_indent(key, indent)?;
+            }
+            Write::MergeInto {
+                first,
+                rest,
+                separator,
+            } => {
+                for node in rest {
+                    if tx.view().kind(node) == Some(NodeKind::Element) {
+                        if !separator.is_empty() {
+                            let run = tx.create_text(&separator)?;
+                            tx.append(first, &[run.key()])?;
+                        }
+                        let children = tx.children_keys(node)?;
+                        if !children.is_empty() {
+                            tx.append(first, &children)?;
+                        }
+                    }
+                    tx.remove(node, false)?;
+                }
             }
         }
     }

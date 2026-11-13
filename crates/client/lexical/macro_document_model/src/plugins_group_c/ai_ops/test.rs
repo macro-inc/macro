@@ -621,6 +621,35 @@ fn block_editor() -> Editor {
 struct SourcePrismReplay(std::collections::HashMap<(String, String), Vec<CodeToken>>);
 
 impl SourcePrismReplay {
+    /// Every code block in `state`, as (language, text).
+    fn code_blocks(state: &Value) -> Vec<(String, String)> {
+        fn walk(value: &Value, out: &mut Vec<(String, String)>) {
+            let Some(children) = value.get("children").and_then(Value::as_array) else {
+                return;
+            };
+            if matches!(value["type"].as_str(), Some("custom-code" | "code")) {
+                let text = children
+                    .iter()
+                    .map(|child| match child["type"].as_str() {
+                        Some("linebreak") => "\n",
+                        Some("tab") => "\t",
+                        _ => child["text"].as_str().unwrap_or_default(),
+                    })
+                    .collect();
+                out.push((
+                    value["language"].as_str().unwrap_or_default().to_owned(),
+                    text,
+                ));
+            }
+            for child in children {
+                walk(child, out);
+            }
+        }
+        let mut out = Vec::new();
+        walk(&state["root"], &mut out);
+        out
+    }
+
     fn from_corpus(corpus: &[BlockEntry]) -> Self {
         fn walk(
             value: &Value,
@@ -854,6 +883,15 @@ fn block_ops_reach_the_source_doc_state() {
                 "refused native {refused:?} source {:?}",
                 entry.refused
             ));
+        }
+        // The plain-run fallback may cover intermediate states only: every
+        // final code block must be one Source tokenized.
+        for (language, text) in SourcePrismReplay::code_blocks(&exported) {
+            if !replay.0.contains_key(&(language.clone(), text.clone())) {
+                problems.push(format!(
+                    "code {language:?} {text:?} was never tokenized by Source"
+                ));
+            }
         }
         let mut stable = kept.clone();
         stable.extend(refs);

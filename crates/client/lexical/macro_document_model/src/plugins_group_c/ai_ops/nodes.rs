@@ -1,10 +1,12 @@
-//! Source Doc node ops (phase B1a): `removeNode`, `moveNode`, `formatNode` and
-//! `clearNodeFormat`. Planned against a read-only transaction like the text
+//! Source Doc node ops: `removeNode`, `moveNode`, `formatNode`,
+//! `clearNodeFormat` (phase B1a) and `setBlockType`, `setIndent`, `mergeBlocks`
+//! (phase B1b). Planned against a read-only transaction like the text
 //! ops, so a refusal is decided before any write.
 use super::text::{Place, Write};
-use super::{AiOpRefusal, OpResult, Position, by_id};
+use super::{AiOpRefusal, BlockType, Indent, OpResult, Position, by_id, text_block};
 use lexical_model::*;
 use lexical_rich_nodes::list::ListItemNode;
+use lexical_rich_nodes::list::item::get_indent;
 use lexical_rich_nodes::list::utils::is_nested_list_node;
 
 /// Resolve a typed lookup, or return its refusal from the calling planner.
@@ -156,5 +158,89 @@ pub(super) fn clear_node_format(tx: &Transaction<'_>, node: &str) -> OpResult<Ve
     Ok(Ok(vec![Write::SetFormat {
         key,
         format: TextFormat::empty(),
+    }]))
+}
+
+/// Source `nextVersionId`: `id~v1`, or the next version of `base~vN`.
+fn next_version_id(id: &str) -> String {
+    if let Some((base, version)) = id.rsplit_once("~v")
+        && !version.is_empty()
+        && version.bytes().all(|byte| byte.is_ascii_digit())
+        && let Ok(version) = version.parse::<u64>()
+    {
+        return format!("{base}~v{}", version.saturating_add(1));
+    }
+    format!("{id}~v1")
+}
+
+/// Source `setBlockType`: `Doc.textBlock` refuses containers, then
+/// `$retypeContainer` swaps in a fresh block under the next version id.
+pub(super) fn set_block_type(
+    tx: &Transaction<'_>,
+    node: &str,
+    block: &BlockType,
+) -> OpResult<Vec<Write>> {
+    let key = resolve!(text_block(tx, node));
+    let id = crate::node_ids::get_id(tx.view(), key)?.map(|id| next_version_id(id.as_str()));
+    Ok(Ok(vec![Write::Retype {
+        key,
+        block: block.clone(),
+        id,
+    }]))
+}
+
+/// Source `setIndent`: the nearest list item at or above the id
+/// (`$asListItem`), stepped or set; a paragraph has none and is refused.
+pub(super) fn set_indent(tx: &Transaction<'_>, node: &str, indent: Indent) -> OpResult<Vec<Write>> {
+    let found = resolve!(by_id(tx, node));
+    let view = tx.view();
+    let Some(item) = std::iter::once(found)
+        .chain(view.ancestors(found))
+        .find_map(|key| view.cast::<ListItemNode>(key))
+    else {
+        return Ok(Err(AiOpRefusal::WrongTarget));
+    };
+    let current = get_indent(tx, item);
+    let target = match indent {
+        Indent::In => current.saturating_add(1),
+        Indent::Out => current.saturating_sub(1),
+        Indent::Level(level) => level,
+    };
+    // Lexical's loop runs zero steps, writing nothing, at the current level.
+    Ok(Ok(if target == current {
+        Vec::new()
+    } else {
+        vec![Write::SetIndent {
+            key: item.key(),
+            indent: target,
+        }]
+    }))
+}
+
+/// Source `mergeBlocks`: every id resolves first; the first must be an element.
+pub(super) fn merge_blocks(
+    tx: &Transaction<'_>,
+    nodes: &[String],
+    separator: &str,
+) -> OpResult<Vec<Write>> {
+    let mut keys = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        keys.push(resolve!(by_id(tx, node)));
+    }
+    let view = tx.view();
+    let Some((&first, rest)) = keys.split_first() else {
+        return Ok(Err(AiOpRefusal::WrongTarget));
+    };
+    if view.kind(first) != Some(NodeKind::Element) {
+        return Ok(Err(AiOpRefusal::WrongTarget));
+    }
+    // Appending an ancestor's children into its own descendant throws in Lexical.
+    if rest.iter().any(|key| view.has_ancestor(first, *key)) {
+        return Ok(Err(AiOpRefusal::WrongTarget));
+    }
+    Ok(Ok(vec![Write::MergeInto {
+        first,
+        rest: rest.to_vec(),
+        separator: separator.to_owned(),
     }]))
 }

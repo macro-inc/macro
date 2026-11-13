@@ -11,6 +11,7 @@
 //! The op types and appliers depend only on the model, so the worker could
 //! adopt them later.
 use lexical_model::*;
+use lexical_rich_nodes::heading::HeadingTagType;
 
 mod nodes;
 mod text;
@@ -76,6 +77,48 @@ impl From<WirePosition> for Position {
     }
 }
 
+/// Source `BlockType` for `setBlockType`.
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WireBlockType {
+    Paragraph,
+    Heading,
+    Quote,
+    Code,
+}
+
+/// Source `setIndent.indent`: a step or an absolute level.
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(untagged)]
+enum WireIndent {
+    Step(WireStep),
+    Level(f64),
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WireStep {
+    In,
+    Out,
+}
+
+/// A block type `setBlockType` builds (Source `blocks.$blockNode`).
+#[derive(Clone, Debug)]
+pub(crate) enum BlockType {
+    Paragraph,
+    Heading(HeadingTagType),
+    Quote,
+    Code(Option<String>),
+}
+
+/// A validated `setIndent` target.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Indent {
+    In,
+    Out,
+    Level(u32),
+}
+
 /// The wire shape of the `DocumentOp`s this applier implements.
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -123,10 +166,24 @@ enum WireOp {
     ClearNodeFormat {
         node: String,
     },
+    SetBlockType {
+        node: String,
+        block: WireBlockType,
+        level: Option<f64>,
+        language: Option<String>,
+    },
+    SetIndent {
+        node: String,
+        indent: WireIndent,
+    },
+    MergeBlocks {
+        nodes: Vec<String>,
+        separator: String,
+    },
 }
 
 /// Kinds `WireOp` decodes; any other Source kind is refused as unsupported.
-const SUPPORTED_KINDS: [&str; 10] = [
+const SUPPORTED_KINDS: [&str; 13] = [
     "insertText",
     "removeText",
     "setText",
@@ -137,6 +194,9 @@ const SUPPORTED_KINDS: [&str; 10] = [
     "moveNode",
     "formatNode",
     "clearNodeFormat",
+    "setBlockType",
+    "setIndent",
+    "mergeBlocks",
 ];
 
 /// A validated op: offsets and lengths are safe integers (UTF-16 units).
@@ -185,6 +245,18 @@ pub(crate) enum AiOp {
     ClearNodeFormat {
         node: String,
     },
+    SetBlockType {
+        node: String,
+        block: BlockType,
+    },
+    SetIndent {
+        node: String,
+        indent: Indent,
+    },
+    MergeBlocks {
+        nodes: Vec<String>,
+        separator: String,
+    },
 }
 
 /// The numeric op field a refusal names.
@@ -195,6 +267,10 @@ pub enum NumberField {
     At,
     /// `removeText.len`.
     Len,
+    /// `setIndent.indent`.
+    Indent,
+    /// `setBlockType.level`.
+    Level,
 }
 
 /// Why a number is outside the AI-edit domain (finite non-negative safe integers).
@@ -212,6 +288,10 @@ pub enum NumberProblem {
     Fractional,
     /// Above `Number.MAX_SAFE_INTEGER`.
     AboveMaxSafeInteger,
+    /// Outside the values the native model can represent: a heading level other
+    /// than 1-6 (Source would build an invalid `h7`-style heading) or an indent
+    /// above `u32::MAX` (Source would loop for each level).
+    OutOfRange,
 }
 
 /// Why an AI op was refused. The document, selection and history are unchanged.
@@ -312,6 +392,69 @@ fn validate(op: WireOp) -> Result<AiOp, AiOpRefusal> {
             on,
         },
         WireOp::ClearNodeFormat { node } => AiOp::ClearNodeFormat { node },
+        WireOp::SetBlockType {
+            node,
+            block,
+            level,
+            language,
+        } => AiOp::SetBlockType {
+            node,
+            block: match block {
+                WireBlockType::Paragraph => BlockType::Paragraph,
+                // Source `h${level ?? 1}`.
+                WireBlockType::Heading => BlockType::Heading(heading_tag(level.unwrap_or(1.0))?),
+                WireBlockType::Quote => BlockType::Quote,
+                WireBlockType::Code => BlockType::Code(language),
+            },
+        },
+        WireOp::SetIndent { node, indent } => AiOp::SetIndent {
+            node,
+            indent: match indent {
+                WireIndent::Step(WireStep::In) => Indent::In,
+                WireIndent::Step(WireStep::Out) => Indent::Out,
+                WireIndent::Level(level) => Indent::Level(indent_level(level)?),
+            },
+        },
+        WireOp::MergeBlocks { nodes, separator } => AiOp::MergeBlocks { nodes, separator },
+    })
+}
+
+/// Lexical `ListItemNode.setIndent`: a fraction is floored; a negative or
+/// non-finite value throws there and is refused here.
+fn indent_level(level: f64) -> Result<u32, AiOpRefusal> {
+    let refuse = |problem| AiOpRefusal::InvalidNumber {
+        field: NumberField::Indent,
+        problem,
+    };
+    if !level.is_finite() {
+        return Err(refuse(NumberProblem::NonFinite));
+    }
+    let floored = level.floor();
+    if floored < 0.0 {
+        return Err(refuse(NumberProblem::Negative));
+    }
+    if floored > f64::from(u32::MAX) {
+        return Err(refuse(NumberProblem::OutOfRange));
+    }
+    // Exact: a non-negative integral f64 at or below u32::MAX.
+    Ok(floored as u32)
+}
+
+/// A heading level 1-6 as its tag.
+fn heading_tag(level: f64) -> Result<HeadingTagType, AiOpRefusal> {
+    let refuse = |problem| AiOpRefusal::InvalidNumber {
+        field: NumberField::Level,
+        problem,
+    };
+    let level = safe_integer(level, NumberField::Level)?;
+    Ok(match level {
+        1 => HeadingTagType::H1,
+        2 => HeadingTagType::H2,
+        3 => HeadingTagType::H3,
+        4 => HeadingTagType::H4,
+        5 => HeadingTagType::H5,
+        6 => HeadingTagType::H6,
+        _ => return Err(refuse(NumberProblem::OutOfRange)),
     })
 }
 
@@ -484,6 +627,9 @@ pub(crate) fn plan(tx: &Transaction<'_>, op: &AiOp) -> OpResult<Vec<text::Write>
         AiOp::MoveNode { node, at } => nodes::move_node(tx, node, at),
         AiOp::FormatNode { node, format, on } => nodes::format_node(tx, node, *format, *on),
         AiOp::ClearNodeFormat { node } => nodes::clear_node_format(tx, node),
+        AiOp::SetBlockType { node, block } => nodes::set_block_type(tx, node, block),
+        AiOp::SetIndent { node, indent } => nodes::set_indent(tx, node, *indent),
+        AiOp::MergeBlocks { nodes, separator } => nodes::merge_blocks(tx, nodes, separator),
     }
 }
 
