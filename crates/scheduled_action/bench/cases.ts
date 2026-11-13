@@ -227,10 +227,11 @@ const once = (daysAhead: number, hour: number, minute: number): Expectation => (
       const got = local(new Date(trigger.at), timezone);
       return (['year', 'month', 'day', 'hour', 'minute'] as const).every((key) => got[key] === want[key]);
     }
-    // A seven-field cron that names one date also runs once.
+    // A seven-field cron that names one date and one second also runs once.
     return schedules(trigger, timezone).some((fields) => {
-      const [, min, hr, dom, month, , year] = fields;
+      const [sec, min, hr, dom, month, , year] = fields;
       return (
+        /^\d+$/.test(sec) &&
         Number(min) === minute &&
         Number(hr) === hour &&
         Number(dom) === want.day &&
