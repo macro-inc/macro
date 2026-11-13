@@ -31,8 +31,8 @@ export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {
   list(): Promise<PasswordItem[]>;
   /**
-   * Items named like one of `names` (ignoring case and surrounding spaces),
-   * metadata only, at most 500; the names go in a request body, never a URL.
+   * Items whose lower-cased name is one of `names` (already trimmed and lower
+   * case), metadata only, at most 500; the names go in a request body, never a URL.
    */
   matchNames(names: string[]): PasswordResult<PasswordItem[]>;
   folders(): Promise<PasswordFolder[]>;
@@ -122,11 +122,13 @@ export type ImportPreview = {
   duplicatesPartial: boolean;
   /** An earlier, unfinished import of this file is being continued. */
   resumed: boolean;
+  /** An earlier import of this file was dropped: the folder it used is gone. */
+  restarted: boolean;
   newFolderName: string;
 };
 /**
  * An unfinished import, kept per file so a rerun continues it with the same
- * destination and privacy. Ids only: the items it created, never names.
+ * destination and privacy. Ids only: source keys and item ids, never names.
  */
 export type ImportResume = {
   importId: string;
@@ -134,8 +136,12 @@ export type ImportResume = {
   startedAt: string;
   destination: ImportDestination;
   private: boolean;
-  /** Vault items this import created; a rerun resends them, not skips them. */
-  itemIds: string[];
+  /**
+   * Source keys whose item this import created but could not finish (it
+   * failed with an item id, e.g. its verification code), with that id. A
+   * rerun resends them rather than skipping them as duplicates.
+   */
+  unfinished: Record<string, string>;
 };
 export type ImportResumeStore = {
   get(key: string): ImportResume | undefined;

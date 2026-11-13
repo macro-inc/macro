@@ -310,7 +310,7 @@ it('lists the skipped items behind Show items, counting each reason once', async
   expect(screen.queryByText('1 item')).toBeNull();
 });
 
-it('finishes a verification code an earlier run of the same file could not set up', async () => {
+it('finishes a verification code an earlier run could not set up, even beside a look-alike', async () => {
   const totpExport: ParsedImport = {
     ...EXPORT,
     items: EXPORT.items
@@ -319,10 +319,22 @@ it('finishes a verification code an earlier run of the same file could not set u
     skipped: [],
     dropped: [],
   };
-  const source = createFakePasswordSource([], {
+  // An older item the export's item looks like (same kind, name and host).
+  const lookAlike: PasswordItem = {
+    ...EXISTING,
+    name: 'Fixture Mail',
+    url: 'https://mail.example.test',
+  };
+  const source = createFakePasswordSource(
+    [
+      {
+        item: lookAlike,
+        values: { username: '', password: '', notes: '', fields: [] },
+      },
+    ],
     // Fails in every retry round of the first run, then works.
-    totpFailures: new Map([['bw-1', 3]]),
-  });
+    { totpFailures: new Map([['bw-1', 3]]) }
+  );
   const resume = createMemoryImportResume();
   const reply = {
     outcome: 'parsed',
@@ -330,7 +342,7 @@ it('finishes a verification code an earlier run of the same file could not set u
     fileHash: 'b'.repeat(64),
   } as const;
   // The vault list the dialog sees, as the view refreshes it after a run.
-  const [vaultItems, setVaultItems] = createSignal<PasswordItem[]>([]);
+  const [vaultItems, setVaultItems] = createSignal<PasswordItem[]>([lookAlike]);
   const mountWithVault = () =>
     render(() => (
       <PasswordsProvider
@@ -357,22 +369,28 @@ it('finishes a verification code an earlier run of the same file could not set u
       </PasswordsProvider>
     ));
   chooseFileOnClick(new File(['{}'], 'export.json'));
+  const imported = async () =>
+    (await source.list()).find((item) => item.id !== lookAlike.id);
 
   mountWithVault();
   fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Import 1 item' }));
+  // Imported next to the look-alike on purpose.
+  fireEvent.click(
+    await screen.findByRole('checkbox', { name: 'Skip items I already have' })
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Import 1 item' }));
   await screen.findByText('1 failed', undefined, { timeout: 5000 });
-  expect((await source.list())[0]?.hasTotp).toBe(false);
+  expect((await imported())?.hasTotp).toBe(false);
   cleanup();
 
   mountWithVault();
   fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
   await screen.findByText(/^Continuing an earlier import of this file/);
-  // The item it created is not a duplicate of itself: it is sent again.
+  // Skip is on again, but the unfinished item is never taken for a duplicate.
   expect(screen.queryByText(/look like ones you already have/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Import 1 item' }));
   await screen.findByText('1 already present');
-  expect((await source.list())[0]?.hasTotp).toBe(true);
+  expect((await imported())?.hasTotp).toBe(true);
 });
 
 it('keeps the destination and privacy of the import it continues', async () => {
@@ -426,7 +444,45 @@ it('matches names in the vault, in a request body, when its list is capped', asy
 
   await screen.findByText('1 item looks like one you already have.');
   expect(matchRequests).toEqual([
-    ['Fixture Mail', 'Fixture Wiki', 'Fixture note'],
+    ['fixture mail', 'fixture wiki', 'fixture note'],
   ]);
   expect(screen.queryByText(/first 500/)).toBeNull();
+});
+
+it('starts over when the folder a continued import used is gone', async () => {
+  const folder = { id: 'chosen-folder', name: 'Chosen', parentId: null };
+  const source = createFakePasswordSource([], { busy: new Map([['bw-3', 3]]) });
+  const resume = createMemoryImportResume();
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  mount(source, PARSED, resume, { items: [], folders: [folder] });
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText('Bitwarden JSON');
+  // Into the existing folder.
+  const change = screen.getByRole('button', { name: 'Change' });
+  change.focus();
+  fireEvent.keyDown(change, { key: 'Enter' });
+  const chosen = await screen.findByRole('menuitem', { name: 'Chosen' });
+  chosen.focus();
+  fireEvent.keyDown(chosen, { key: 'Enter' });
+  await waitFor(() =>
+    expect(
+      document.querySelector('[data-passwords-import-target]')?.textContent
+    ).toBe('Chosen')
+  );
+  fireEvent.click(screen.getByText('Import 3 items'));
+  await screen.findByText('1 failed', undefined, { timeout: 5000 });
+  cleanup();
+
+  // The folder was deleted since.
+  mount(source, PARSED, resume, { items: [], folders: [] });
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText(
+    'The folder an earlier import of this file used is gone, so this is a new import.'
+  );
+  expect(screen.queryByText(/^Continuing an earlier import/)).toBeNull();
+  expect(
+    (screen.getByRole('button', { name: 'Change' }) as HTMLButtonElement)
+      .disabled
+  ).toBe(false);
+  expect(screen.getByText(/^New folder “Imported from Bitwarden/)).toBeTruthy();
 });

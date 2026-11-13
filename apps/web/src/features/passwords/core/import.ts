@@ -5,6 +5,11 @@ import { folderPath, type PasswordFolder, type PasswordItem } from './types';
 export const VAULT_LIST_CAP = 500;
 /** Most names one duplicate-match request carries (and items it returns). */
 export const MATCH_NAMES = 500;
+/**
+ * Most bytes of names (as JSON) in one match request: under the vault's
+ * 256 KiB body limit for ordinary routes, which escaped names could pass.
+ */
+export const MATCH_BYTES = 192 * 1024;
 
 /**
  * Vault folder limits: per team, and depth from the root. These and the batch
@@ -61,15 +66,54 @@ export function uniqueRootFolderName(
   }
 }
 
-/** Distinct item names, for searching the vault when its list is capped. */
+/**
+ * An item name as duplicates compare it: outer whitespace trimmed, lower case
+ * (not locale-dependent). Names sent to the vault's match are already in this
+ * form, and the vault compares them with `lower(name)`.
+ */
+export function normalizedName(name: string) {
+  return name.trim().toLowerCase();
+}
+
+/** Distinct normalized item names, for matching in the vault when its list is capped. */
 export function candidateNames(items: readonly ImportCandidate[]) {
-  const names = new Map<string, string>();
+  const names = new Set<string>();
   for (const item of items) {
-    const name = item.name.trim();
-    const key = name.toLocaleLowerCase();
-    if (name && !names.has(key)) names.set(key, name);
+    const name = normalizedName(item.name);
+    if (name) names.add(name);
   }
-  return [...names.values()];
+  return [...names];
+}
+
+/**
+ * `names` in request-sized chunks: at most `maxCount` names and `maxBytes` of
+ * them as JSON strings each. A name over `maxBytes` on its own goes alone.
+ */
+export function chunkNames(
+  names: readonly string[],
+  maxCount: number,
+  maxBytes: number
+) {
+  const encoder = new TextEncoder();
+  const chunks: string[][] = [];
+  let chunk: string[] = [];
+  let bytes = 0;
+  for (const name of names) {
+    // The name as a JSON string, plus its separating comma.
+    const size = encoder.encode(JSON.stringify(name)).length + 1;
+    if (
+      chunk.length > 0 &&
+      (chunk.length >= maxCount || bytes + size > maxBytes)
+    ) {
+      chunks.push(chunk);
+      chunk = [];
+      bytes = 0;
+    }
+    chunk.push(name);
+    bytes += size;
+  }
+  if (chunk.length > 0) chunks.push(chunk);
+  return chunks;
 }
 
 function host(url: string | null) {
@@ -82,7 +126,7 @@ function host(url: string | null) {
 }
 
 function identity(kind: string, name: string, url: string | null) {
-  return `${kind}\u0000${name.trim().toLocaleLowerCase()}\u0000${host(url)}`;
+  return `${kind}\u0000${normalizedName(name)}\u0000${host(url)}`;
 }
 
 /**

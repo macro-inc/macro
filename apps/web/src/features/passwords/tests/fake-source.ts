@@ -51,10 +51,9 @@ export function createFakePasswordSource(
     },
     async matchNames(names) {
       script.matchRequests?.push([...names]);
-      const wanted = new Set(names.map((name) => name.trim().toLowerCase()));
-      return ok(
-        items.filter((item) => wanted.has(item.name.trim().toLowerCase()))
-      );
+      // As the vault does: lower(name) against names the client normalized.
+      const wanted = new Set(names);
+      return ok(items.filter((item) => wanted.has(item.name.toLowerCase())));
     },
     async folders() {
       return [...folders];

@@ -77910,7 +77910,7 @@ export const passwordsMatchBody = zod
     names: zod
       .array(zod.string())
       .describe(
-        'Names compared ignoring case and surrounding spaces; at most 500\n(`password_import::vault::MAX_IMPORT_MATCH_NAMES`).'
+        "Names trimmed and lower-cased by the caller, compared with each item's\nlower-cased name; at most 500 (`password_import::vault::MAX_IMPORT_MATCH_NAMES`)."
       ),
   })
   .describe(

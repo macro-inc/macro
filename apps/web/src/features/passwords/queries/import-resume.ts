@@ -21,14 +21,16 @@ const RESUME_SCHEMA = z.object({
     z.templateLiteral(['folder:', z.uuid()]),
   ]),
   private: z.boolean(),
-  itemIds: z.array(z.uuid()).max(20_000),
+  unfinished: z
+    .record(z.string().min(1).max(200), z.uuid())
+    .refine((entries) => Object.keys(entries).length <= 20_000),
 });
 
 /**
  * Unfinished imports in this tab's sessionStorage, keyed by a hash of the
  * viewer and the file's contents. Holds the import id, format, start time,
- * destination, privacy and the ids of items it created: never names, values
- * or anything from the file.
+ * destination, privacy and, for items it could not finish, their source keys
+ * and item ids: never names, values or anything else from the file.
  */
 export function createSessionImportResume(): ImportResumeStore {
   return {

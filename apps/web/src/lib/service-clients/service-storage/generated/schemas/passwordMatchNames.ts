@@ -10,7 +10,7 @@
 URLs and access logs.
  */
 export interface PasswordMatchNames {
-  /** Names compared ignoring case and surrounding spaces; at most 500
-(`password_import::vault::MAX_IMPORT_MATCH_NAMES`). */
+  /** Names trimmed and lower-cased by the caller, compared with each item's
+lower-cased name; at most 500 (`password_import::vault::MAX_IMPORT_MATCH_NAMES`). */
   names: string[];
 }

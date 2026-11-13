@@ -172,18 +172,24 @@ async fn account_classification_and_current_role_facts_come_from_postgres(pool: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn matching_compares_whole_names_ignoring_case_and_spaces_for_members_only(pool: PgPool) {
+async fn matching_compares_lowercased_whole_names_for_members_only(pool: PgPool) {
     let other_pool = pool.clone();
     let (repository, actor, record) = folder_fixture(pool).await;
     let team = record.metadata.team_id;
     let found = repository
-        .matching(&actor, team, &["  LITERAL %_\\ login ".to_owned()])
+        .matching(&actor, team, &["literal %_\\ login".to_owned()])
         .await
         .expect("match");
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].metadata.id, record.metadata.id);
-    // Whole names only: no pattern or prefix matching.
-    for names in [vec!["literal".to_owned()], vec!["%".to_owned()], vec![]] {
+    // Whole names only, as the caller normalized them: no pattern or prefix
+    // matching, and no trimming here.
+    for names in [
+        vec!["literal".to_owned()],
+        vec!["%".to_owned()],
+        vec![" literal %_\\ login".to_owned()],
+        vec![],
+    ] {
         assert!(
             repository
                 .matching(&actor, team, &names)

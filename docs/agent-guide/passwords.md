@@ -85,8 +85,9 @@ look like ones the vault has (same kind, name ignoring case, website host).
 Skip items I already have is on by default; when it would leave nothing to
 import, the preview says so (turn it off to import copies) and offers Done. When the vault list is at its
 500-item cap, the export's distinct names are matched in the vault with
-`POST …/items/match` (names in the body, never a URL; 500 per request,
-metadata only); if a request fails or an answer is capped, the preview says
+`POST …/items/match` (names trimmed and lower-cased once on the client, in
+the body, never a URL; at most 500 names and 192 KiB per request, metadata
+only); if a request fails or an answer is capped, the preview says
 duplicates were checked against the first 500. Import into shows the full destination and a Change menu: a new folder
 "Imported from <source> <date>" (default; numbered " (2)", " (3)"… when a root
 folder already has that name, except when continuing an import, which reuses
@@ -99,12 +100,14 @@ Import sends batches of at most 25 items and 3.5 MiB, one at a time, to
 answers busy are resent after a backoff. The result counts imported, already
 present, skipped and failed items and offers Open folder. The import id is
 kept in sessionStorage under a hash of the viewer and the file's contents
-(hashed in the worker), with the destination, privacy and the ids of items it
-created (ids only). Importing the same file again in the tab continues the
-import with the same destination and privacy (locked in the preview), resends
-its own items rather than skipping them as duplicates (finishing a
-verification code an earlier run could not set up), and counts them as
-already present. A batch request is resent only after no answer, a busy vault
+(hashed in the worker), with the destination, privacy and, for items it
+created but could not finish, their source keys and item ids (written only
+when that set changes). Importing the same file again in the tab continues the
+import with the same destination and privacy (locked in the preview) and
+resends those unfinished items rather than skipping them as duplicates, which
+finishes a verification code an earlier run could not set up. If the folder
+the import used is gone, the entry is dropped and the preview says it starts a
+new import. A batch request is resent only after no answer, a busy vault
 or a server error; items answered busy, unavailable or folder missing go into
 a later round. A file over the parser's 50 MB limit is refused before it is
 read. Spans: `passwords.import.parse`,

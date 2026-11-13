@@ -135,8 +135,8 @@ when a folder was deleted after the batch ensured it); a failed TOTP setup
 returns the created item id so retrying can finish enrollment. Items recheck
 membership once, after their lease (`admit_member`); the batch checked it first.
 `POST /teams/{team}/items/match` takes up to 500 names in the body (never a
-URL) and returns visible metadata with an equal name, for the client's
-duplicate check. Both routes answer a malformed JSON body with the fixed
+URL), already trimmed and lower-cased by the client, and returns visible
+metadata whose `lower(name)` equals one, for the client's duplicate check. Both routes answer a malformed JSON body with the fixed
 `invalid_request` failure, never serde's message. Limits (item, folders, batch,
 match) are `password_import::vault` constants; don't write them out here.
 `password_import_activity` records one counts-and-format entry per completed

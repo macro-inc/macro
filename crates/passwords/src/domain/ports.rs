@@ -74,8 +74,8 @@ pub trait Repository: Send + Sync {
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error>;
     /// Search metadata visible to the actor within the team.
     async fn list(&self, actor: &Actor, team: TeamId, search: &str) -> Result<Vec<Record>, Error>;
-    /// Metadata visible to the actor whose name equals one of `names`, ignoring
-    /// case and surrounding spaces; at most 500 records.
+    /// Metadata visible to the actor whose lower-cased name is one of `names`
+    /// (which callers send trimmed and lower case); at most 500 records.
     async fn matching(
         &self,
         actor: &Actor,

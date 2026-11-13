@@ -430,7 +430,7 @@ async fn match_names_finds_visible_items_by_name_and_bounds_the_request() {
         .match_names(
             &actor,
             team,
-            vec!["  SYNTHETIC-NAME-SENTINEL ".into(), "absent".into()],
+            vec!["synthetic-name-sentinel".into(), "absent".into()],
         )
         .await
         .unwrap();

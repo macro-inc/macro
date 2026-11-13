@@ -12,6 +12,7 @@ import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type ImportBatchBody,
+  type ImportBatchResult,
   type ImportDestination,
   type ImportErrorCode,
   type ImportFileFailure,
@@ -23,10 +24,12 @@ import {
 import {
   candidateNames,
   checkFolders,
+  chunkNames,
   duplicateKeys,
   foldersFor,
   type ImportTally,
   type ImportTarget,
+  MATCH_BYTES,
   MATCH_NAMES,
   planBatches,
   uniqueRootFolderName,
@@ -133,8 +136,8 @@ export async function sendImport(
   options: {
     span: Span;
     onProgress: (done: number) => void;
-    /** Ids of the items each batch created or found, for resuming. */
-    onLanded?: (itemIds: string[]) => void;
+    /** Each batch's per-item answers (outcomes and ids, never values), for resuming. */
+    onAnswered?: (answers: ImportBatchResult['items']) => void;
     wait?: (ms: number) => Promise<void>;
   }
 ): Promise<RunOutcome> {
@@ -189,11 +192,7 @@ export async function sendImport(
       // Later batches reuse the folder the first one ensured.
       if (target.kind === 'new' && result.value.targetFolderId)
         target = { kind: 'existing', folderId: result.value.targetFolderId };
-      options.onLanded?.(
-        result.value.items.flatMap((answer) =>
-          answer.itemId ? [answer.itemId] : []
-        )
-      );
+      options.onAnswered?.(result.value.items);
       const bySource = new Map(items.map((item) => [item.sourceKey, item]));
       for (const answer of result.value.items) {
         const item = bySource.get(answer.sourceKey);
@@ -285,7 +284,8 @@ export function createPasswordImport(props: {
   /**
    * Vault metadata to match duplicates against. The list stops at 500 items;
    * past that, the export's distinct names are matched in the vault (metadata
-   * only), in requests of at most `MATCH_NAMES` names sent in the body.
+   * only), in requests of at most `MATCH_NAMES` names and `MATCH_BYTES` sent
+   * in the body.
    */
   async function knownItems(items: ParsedImportItem[]) {
     const loaded = props.items();
@@ -297,8 +297,7 @@ export function createPasswordImport(props: {
     await Telemetry.span('passwords.import.duplicates', async (span) => {
       span.setAttr('passwords.import.names', names.length);
       let requests = 0;
-      for (let start = 0; start < names.length; start += MATCH_NAMES) {
-        const chunk = names.slice(start, start + MATCH_NAMES);
+      for (const chunk of chunkNames(names, MATCH_NAMES, MATCH_BYTES)) {
         requests++;
         const result = await span.run(() => source.matchNames(chunk));
         if (result.isErr()) {
@@ -353,23 +352,27 @@ export function createPasswordImport(props: {
     const key = await resumeKey(scope.key, reply.fileHash);
     if (run !== generation) return;
     const stored = importResume.get(key);
-    const earlier = stored?.format === parsed.format ? stored : undefined;
+    // A continued import is locked to its folder; if that folder is gone,
+    // start a new import rather than one that can only fail.
+    const folderGone =
+      stored !== undefined && !destinationExists(stored.destination);
+    if (folderGone) importResume.remove(key);
+    const earlier =
+      !folderGone && stored?.format === parsed.format ? stored : undefined;
     const known = await knownItems(parsed.items);
     if (run !== generation || !scope.isCurrent()) return;
-    // Items this import already created are resent, not skipped: the vault
-    // answers already present and finishes what an earlier run left undone.
-    const own = new Set(earlier?.itemIds);
-    duplicates = duplicateKeys(
-      parsed.items,
-      known.items.filter((item) => !own.has(item.id))
-    );
+    duplicates = duplicateKeys(parsed.items, known.items);
+    // Items an earlier run created but could not finish are resent, never
+    // skipped: the vault answers already present and finishes them.
+    for (const sourceKey of Object.keys(earlier?.unfinished ?? {}))
+      duplicates.delete(sourceKey);
     const entry: ImportResume = earlier ?? {
       importId: uuidv7(),
       format: parsed.format,
       startedAt: new Date().toISOString(),
       destination: 'new',
       private: false,
-      itemIds: [],
+      unfinished: {},
     };
     // A continued import keeps the destination and privacy it started with.
     setDestination(entry.destination);
@@ -387,12 +390,20 @@ export function createPasswordImport(props: {
         duplicates: duplicates.size,
         duplicatesPartial: known.partial,
         resumed: entry === earlier,
+        restarted: folderGone,
         newFolderName: newFolderName(
           importFolderName(parsed.format, new Date(entry.startedAt)),
           entry === earlier
         ),
       },
     });
+  }
+
+  /** Whether a stored destination still exists: the root, a new folder, or a live folder. */
+  function destinationExists(stored: ImportDestination) {
+    if (!stored.startsWith('folder:')) return true;
+    const id = stored.slice('folder:'.length);
+    return props.folders().some((folder) => folder.id === id);
   }
 
   /**
@@ -419,7 +430,7 @@ export function createPasswordImport(props: {
     const chosenTarget = target();
     const folders = parsed.folders;
     const { key } = resume;
-    const landed = new Set(resume.entry.itemIds);
+    const unfinished = new Map(Object.entries(resume.entry.unfinished));
     const entry: ImportResume = {
       ...resume.entry,
       destination: destination(),
@@ -427,7 +438,10 @@ export function createPasswordImport(props: {
     };
     // Ids only: lets a rerun with the same file continue this import.
     const remember = () =>
-      importResume.set(key, { ...entry, itemIds: [...landed] });
+      importResume.set(key, {
+        ...entry,
+        unfinished: Object.fromEntries(unfinished),
+      });
     remember();
     setStep({ step: 'importing', done: 0, total: items.length });
     const outcome = await Telemetry.span('passwords.import', async (span) => {
@@ -451,9 +465,18 @@ export function createPasswordImport(props: {
             if (run === generation)
               setStep({ step: 'importing', done, total: items.length });
           },
-          onLanded: (itemIds) => {
-            for (const id of itemIds) landed.add(id);
-            remember();
+          onAnswered: (answers) => {
+            // Written only when an item starts or stops needing a rerun.
+            let changed = false;
+            for (const answer of answers) {
+              if (answer.outcome === 'failed' && answer.itemId) {
+                changed ||= unfinished.get(answer.sourceKey) !== answer.itemId;
+                unfinished.set(answer.sourceKey, answer.itemId);
+              } else if (answer.outcome !== 'failed') {
+                changed ||= unfinished.delete(answer.sourceKey);
+              }
+            }
+            if (changed) remember();
           },
         }
       );

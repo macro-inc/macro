@@ -198,6 +198,8 @@ export default {
   importFolderCount: { one: '{{count}} folder', other: '{{count}} folders' },
   importResumed:
     'Continuing an earlier import of this file, into the same place and with the same privacy. Items already imported are not added again.',
+  importRestarted:
+    'The folder an earlier import of this file used is gone, so this is a new import.',
   importDuplicates: {
     one: '{{count}} item looks like one you already have.',
     other: '{{count}} items look like ones you already have.',

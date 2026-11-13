@@ -95,6 +95,11 @@ fn decode(
         totp_key_id: totp_key_id.map(TotpKeyId),
     })
 }
+// `list` and `matching` spell their row cap (500) as a literal, which sqlx
+// needs; keep it the vault's list and match limits.
+const _: () = assert!(password_import::vault::MAX_LIST_ITEMS == 500);
+const _: () = assert!(password_import::vault::MAX_IMPORT_MATCH_NAMES == 500);
+
 #[async_trait]
 impl Repository for PgRepository {
     async fn is_human(
@@ -397,7 +402,7 @@ impl Repository for PgRepository {
         let mut transaction = self.bounded_transaction().await?;
         let user_grant = serde_json::json!([{"kind":"user","id":actor.user_id.as_ref()}]);
         let team_grant = serde_json::json!([{"kind":"team","id":team.0.to_string()}]);
-        let rows=sqlx::query!(r#"SELECT metadata,user_id,grants,deleting,revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND deleted_at IS NULL AND NOT deleting AND EXISTS(SELECT 1 FROM team_user membership JOIN "User" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$3 AND NOT profile."isAgent") AND (user_id=$3 OR grants @> $4 OR grants @> $5 OR EXISTS(SELECT 1 FROM team_user WHERE team_id=$1 AND user_id=$3 AND team_role IN ('owner','admin'))) AND lower(btrim(metadata->>'name')) IN (SELECT lower(btrim(name)) FROM unnest($2::text[]) AS name) ORDER BY id DESC LIMIT 500"#,team.0,names,actor.user_id.as_ref(),user_grant,team_grant).fetch_all(&mut *transaction).await.map_err(database_error)?;
+        let rows=sqlx::query!(r#"SELECT metadata,user_id,grants,deleting,revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND deleted_at IS NULL AND NOT deleting AND EXISTS(SELECT 1 FROM team_user membership JOIN "User" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$3 AND NOT profile."isAgent") AND (user_id=$3 OR grants @> $4 OR grants @> $5 OR EXISTS(SELECT 1 FROM team_user WHERE team_id=$1 AND user_id=$3 AND team_role IN ('owner','admin'))) AND lower(metadata->>'name') = ANY($2::text[]) ORDER BY id DESC LIMIT 500"#,team.0,names,actor.user_id.as_ref(),user_grant,team_grant).fetch_all(&mut *transaction).await.map_err(database_error)?;
         transaction.commit().await.map_err(database_error)?;
         rows.into_iter()
             .map(|row| {

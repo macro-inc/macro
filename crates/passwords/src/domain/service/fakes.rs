@@ -374,10 +374,7 @@ impl Repository for FakeRepository {
         names: &[String],
     ) -> Result<Vec<Record>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let wanted: HashSet<String> = names
-            .iter()
-            .map(|name| name.trim().to_lowercase())
-            .collect();
+        let wanted: HashSet<&str> = names.iter().map(String::as_str).collect();
         Ok(self
             .records
             .lock()
@@ -386,7 +383,7 @@ impl Repository for FakeRepository {
             .filter(|record| {
                 record.metadata.team_id == team
                     && !record.deleting
-                    && wanted.contains(&record.metadata.name.trim().to_lowercase())
+                    && wanted.contains(record.metadata.name.to_lowercase().as_str())
             })
             .cloned()
             .collect())

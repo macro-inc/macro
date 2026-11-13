@@ -228,6 +228,9 @@ export function ImportPreviewStep(props: {
       <Show when={props.preview.resumed}>
         <p class="text-sm text-ink-muted">{t('passwords.importResumed')}</p>
       </Show>
+      <Show when={props.preview.restarted}>
+        <p class="text-sm text-ink-muted">{t('passwords.importRestarted')}</p>
+      </Show>
       <ul class="flex flex-wrap gap-2" aria-label={t('passwords.kind')}>
         <For each={kinds()}>
           {([kind, count]) => (

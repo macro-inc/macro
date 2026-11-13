@@ -10,6 +10,7 @@ import {
   BATCH_BYTES,
   BATCH_ITEMS,
   checkFolders,
+  chunkNames,
   duplicateKeys,
   foldersFor,
   MATCH_NAMES,
@@ -17,6 +18,7 @@ import {
   MAX_TEAM_FOLDERS,
   planBatches,
   uniqueRootFolderName,
+  VAULT_LIST_CAP,
 } from '../core/import';
 import type { PasswordItem } from '../core/types';
 import { sendImport } from '../primitives/import';
@@ -155,12 +157,30 @@ describe('duplicateKeys', () => {
 
 describe('limits', () => {
   it('match the vault limits the Rust crates check', () => {
+    expect(VAULT_LIST_CAP).toBe(LIMITS.maxListItems);
     expect(MAX_TEAM_FOLDERS).toBe(LIMITS.maxTeamFolders);
     expect(MAX_FOLDER_DEPTH).toBe(LIMITS.maxFolderDepth);
     expect(BATCH_ITEMS).toBe(LIMITS.maxImportBatchItems);
     expect(MATCH_NAMES).toBe(LIMITS.maxImportMatchNames);
     // A budget under the body limit leaves room for the folder tree and JSON.
     expect(BATCH_BYTES).toBeLessThan(LIMITS.maxImportBatchBytes);
+  });
+});
+
+describe('chunkNames', () => {
+  it('splits by count and by bytes as JSON, keeping order', () => {
+    expect(chunkNames(['a', 'b', 'c'], 2, 1000)).toEqual([['a', 'b'], ['c']]);
+    // Each "aaaa" is 6 bytes as JSON plus a comma: two fit in 14, three don't.
+    expect(chunkNames(['aaaa', 'aaaa', 'aaaa'], 10, 14)).toEqual([
+      ['aaaa', 'aaaa'],
+      ['aaaa'],
+    ]);
+    // Quotes are escaped, so they count twice.
+    expect(chunkNames(['""', 'x'], 10, 7)).toEqual([['""'], ['x']]);
+    expect(chunkNames(['too long on its own'], 10, 3)).toEqual([
+      ['too long on its own'],
+    ]);
+    expect(chunkNames([], 10, 10)).toEqual([]);
   });
 });
 
