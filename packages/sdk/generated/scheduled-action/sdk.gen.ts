@@ -273,7 +273,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller's feed.
+     * The caller's feed, for them or their own agent.
      */
     public listSuggestions<ThrowOnError extends boolean = false>(options?: Options<ListSuggestionsData, ThrowOnError>): RequestResult<ListSuggestionsResponses, ListSuggestionsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListSuggestionsResponses, ListSuggestionsErrors, ThrowOnError>({ url: '/suggestions', ...options });
@@ -330,9 +330,10 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller acts on a suggestion: a background prompt suggestion is taken on; any
-     * other is done once they act on it (open its item, the composer, the
-     * routine), and shows in the feed's `done`.
+     * The caller, or someone acting for them, acts on a suggestion: a background
+     * prompt suggestion starts its run when the person accepts it in the app (anyone
+     * else only takes it on); any other is done once they act on it (open its
+     * item, the composer, the routine), and shows in the feed's `done`.
      */
     public acceptSuggestion<ThrowOnError extends boolean = false>(options: Options<AcceptSuggestionData, ThrowOnError>): RequestResult<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError>({
@@ -346,7 +347,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller isn't interested in an open suggestion.
+     * The caller, or their own agent, isn't interested in an open suggestion.
      */
     public dismissSuggestion<ThrowOnError extends boolean = false>(options: Options<DismissSuggestionData, ThrowOnError>): RequestResult<DismissSuggestionResponses, DismissSuggestionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DismissSuggestionResponses, DismissSuggestionErrors, ThrowOnError>({ url: '/suggestions/{id}/dismiss', ...options });

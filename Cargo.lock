@@ -20163,6 +20163,7 @@ dependencies = [
  "agent_correlation",
  "async-trait",
  "axum",
+ "bot_id",
  "channels",
  "chrono",
  "chrono-tz",

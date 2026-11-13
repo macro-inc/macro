@@ -1,5 +1,5 @@
-//! The suggestions routes: the person's feed and what they do with a suggestion, and
-//! the tools generation sessions call from code mode.
+//! The suggestions routes: the person's feed and what they, or their own agent,
+//! do with a suggestion, and the tools generation sessions call from code mode.
 
 use std::sync::Arc;
 
@@ -11,7 +11,8 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroUserAuthentication, UserOnly,
 };
 use macro_uuid::Uuid;
 use serde::Deserialize;
@@ -19,7 +20,7 @@ use utoipa::IntoParams;
 
 use crate::domain::model::{
     Accept, AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
-    SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
+    SuggestionCaller, SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 use crate::domain::ports::SuggestionApi;
 
@@ -117,9 +118,9 @@ impl IntoResponse for SuggestionApiError {
             Self::Service(error @ SuggestionError::NotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
-            Self::Service(error @ SuggestionError::NotGenerating) => {
-                (StatusCode::FORBIDDEN, error.to_string()).into_response()
-            }
+            Self::Service(
+                error @ (SuggestionError::NotGenerating | SuggestionError::Generating),
+            ) => (StatusCode::FORBIDDEN, error.to_string()).into_response(),
             Self::Service(error @ SuggestionError::Changed(_)) => {
                 let message = error.to_string();
                 let SuggestionError::Changed(suggestion) = error else {
@@ -160,13 +161,21 @@ pub struct AcceptSuggestionRequest {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Whether a request is the person's own, in the app: their own session's
-/// credential, not a program's (a code-mode invocation, an API token or an
-/// agent's). Anything else counts as acting for them.
-fn by_person(user: &macro_authorization::MacroUserAuthentication, headers: &HeaderMap) -> bool {
-    user.is_human_session()
+/// Who is at the feed. Only the person's own session in the app, with no
+/// program's marks (a code-mode invocation, the code-execution header), is
+/// the person; any other credential (an agent's, an API token, a program)
+/// acts for them. When it can't be told, it is someone acting for them.
+fn caller(user: &MacroUserAuthentication, headers: &HeaderMap) -> SuggestionCaller {
+    // Validated against its session at the router's boundary.
+    let correlation = agent_correlation::context::current();
+    if correlation.is_none()
+        && user.is_human_session()
         && !headers.contains_key(macro_authorization::CODE_EXECUTION_HEADER)
-        && agent_correlation::context::current().is_none()
+    {
+        SuggestionCaller::User
+    } else {
+        SuggestionCaller::Agent { correlation }
+    }
 }
 
 /// The reader's time zone.
@@ -189,24 +198,27 @@ pub struct FeedQuery {
     responses(
         (status = 200, body = SuggestionFeed, description = "The caller's open suggestions they can open every item of, best first"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not read the feed"),
         (status = 404, body = String, description = "Suggestions are off for the caller"),
         (status = 500, body = String),
     )
 )]
-/// The caller's feed.
+/// The caller's feed, for them or their own agent.
 pub async fn list_suggestions<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Query(query): Query<FeedQuery>,
 ) -> Result<Json<SuggestionFeed>, SuggestionApiError>
 where
     S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
+    let caller = caller(&user.authorization, &headers);
     Ok(Json(
         state
             .service
-            .feed(&user.authorization.macro_user_id, query.timezone)
+            .feed(&user.authorization.macro_user_id, caller, query.timezone)
             .await?,
     ))
 }
@@ -222,14 +234,16 @@ where
         (status = 204, description = "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"),
         (status = 400, body = String),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not accept"),
         (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it: the body has it as it is now"),
         (status = 404, body = String, description = "No open or done suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller acts on a suggestion: a background prompt suggestion is taken on; any
-/// other is done once they act on it (open its item, the composer, the
-/// routine), and shows in the feed's `done`.
+/// The caller, or someone acting for them, acts on a suggestion: a background
+/// prompt suggestion starts its run when the person accepts it in the app (anyone
+/// else only takes it on); any other is done once they act on it (open its
+/// item, the composer, the routine), and shows in the feed's `done`.
 pub async fn accept_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -242,13 +256,14 @@ where
     Auth: MacroAuthorizationService,
 {
     let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    let caller = caller(&user.authorization, &headers);
     let accept = Accept {
         shown_updated_at: request.updated_at,
-        by_person: by_person(&user.authorization, &headers),
+        by_person: caller == SuggestionCaller::User,
     };
     state
         .service
-        .accept(&user.authorization.macro_user_id, id, accept)
+        .accept(&user.authorization.macro_user_id, caller, id, accept)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -262,23 +277,26 @@ where
     responses(
         (status = 204, description = "Dismissed; generation sessions see when"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not dismiss"),
         (status = 404, body = String, description = "No open suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller isn't interested in an open suggestion.
+/// The caller, or their own agent, isn't interested in an open suggestion.
 pub async fn dismiss_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, SuggestionApiError>
 where
     S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
+    let caller = caller(&user.authorization, &headers);
     state
         .service
-        .dismiss(&user.authorization.macro_user_id, id)
+        .dismiss(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
