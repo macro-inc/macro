@@ -19,6 +19,7 @@ import {
   computerFailureMessage,
   offersFailure,
 } from '../core/computer-display';
+import { showComputerSetupNotice } from '../primitives/setup-notice';
 import { useTeamComputers } from '../primitives/team-computers';
 import {
   ComputerSetupSteps,
@@ -84,6 +85,8 @@ export function ComputerBuyFlow(props: {
   open: boolean;
   /** Resume setup of this computer instead of buying one. */
   computerId?: string;
+  /** Where resuming starts; Configure agent unless a link names a step. */
+  resumeStep?: Exclude<SetupStepId, 'computer'>;
   onClose: () => void;
   onFinished?: (computer: ComputerStatus) => void;
   /** Opened from an agent's Where it runs, which `onFinished` updates. */
@@ -133,12 +136,19 @@ export function ComputerBuyFlow(props: {
     })
   );
 
-  // Opening from Finish setup starts on the agent step.
+  // Resuming starts on the agent step, or where a setup link points; a
+  // link for another computer than the one shown moves there too.
   createEffect(
     on(
-      () => props.open,
-      (open) => {
-        if (open && props.computerId && step() === 'computer') setStep('agent');
+      () => [props.open, props.computerId, props.resumeStep] as const,
+      ([open, computerId, resumeStep], previous) => {
+        if (!open || !computerId) return;
+        if (
+          resumeStep &&
+          (resumeStep !== previous?.[2] || computerId !== previous?.[1])
+        )
+          setStep(resumeStep);
+        else if (step() === 'computer') setStep('agent');
       }
     )
   );
@@ -167,20 +177,20 @@ export function ComputerBuyFlow(props: {
     const current = computer();
     if (!waitingForLink() || visible() || !current || !up()) return;
     setWaitingForLink(false);
-    toast.success(t('computers.signInReadyToast', { name: current.name }), {
-      // Long enough for someone who switched tabs to come back to it.
-      duration: 60_000,
-      actions: [
-        {
-          label: t('computers.signInReadyAction'),
-          variant: 'primary',
-          onClick: () => {
-            setStep('claude');
-            setReopened(true);
-          },
-        },
-      ],
-    });
+    // The same notice the computer's setup notification shows, so the two
+    // never stack; this one reopens this dialog in place.
+    showComputerSetupNotice(
+      {
+        computerId: current.id,
+        harnessId: current.harnessId ?? null,
+        computerName: current.name,
+        outcome: { kind: 'ready' },
+      },
+      () => {
+        setStep('claude');
+        setReopened(true);
+      }
+    );
   });
 
   const buy = async (offer: SizeOffer, computerName: string | undefined) => {

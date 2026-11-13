@@ -1,7 +1,7 @@
 use super::*;
 
 fn computer(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
     id: ComputerId,
 ) -> Computer {
     operator
@@ -14,7 +14,9 @@ fn computer(
         .clone()
 }
 
-async fn run_effects(operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>) {
+async fn run_effects(
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
+) {
     while operator.run_fleet_effects().await.unwrap() > 0 {}
 }
 

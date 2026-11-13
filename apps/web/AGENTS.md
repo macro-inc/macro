@@ -1506,9 +1506,13 @@ over the real computers client and answers `/auth/team/computers/*` from
 Playwright, covering the size skeleton, every step, each offers failure (422,
 403, 502, 503, dropped connection, timeout), and the two endings (Try it into
 the real composer with the agent selected, Create an agent on this computer into
-the real create form with the computer chosen) on desktop and phone:
+the real create form with the computer chosen), and the setup notices (close
+after Buy, the "ready" notice reopens the dialog on Bring your AI through to
+Create agent; the failure notice reopens it on Retry setup) on desktop and
+phone:
 `bunx playwright test --config src/features/settings/computers/browser-test/playwright.config.ts`.
-Set `COMPUTERS_SCREENSHOT_DIR` to also save each step's screenshot there.
+Set `COMPUTERS_SCREENSHOT_DIR` to also save each step's screenshot there; the setup
+notice test then also records a video of its path (`test-results/*/video.webm`).
 
 Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
 computer, total and next-invoice amounts; never calculate a bill from catalog

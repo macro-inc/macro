@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { render } from 'solid-js/web';
 import '@fontsource-variable/inter';
 import '../../../../index.css';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { Route, Router } from '@solidjs/router';
 import { Layer } from '@ui/components/Layer';
 import { ErrorBoundary, lazy, Match, Switch } from 'solid-js';
@@ -28,6 +29,26 @@ const AgentSettings = lazy(() => import('./agent-settings'));
 // Both are large module graphs; start loading them while the flow runs.
 fireAndForget(Composer.preload(), 'computers-fixture');
 fireAndForget(AgentSettings.preload(), 'computers-fixture');
+
+// A computer setup notification arriving, as the realtime feed delivers it.
+// It goes through the app's own handler: the computers list refreshes and
+// the notice shows.
+window.computerFixture.notify = async (content) => {
+  const { handleNotificationUpdate } = await import(
+    '../../../notifications/use-notification-updates'
+  );
+  handleNotificationUpdate({
+    id: `setup-${content.computerId}-${content.outcome.kind}`,
+    entity_id: 'team-1',
+    entity_type: 'team',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    state: 'unseen',
+    sent: true,
+    notification_event_type: 'computer_setup',
+    notification_metadata: { tag: 'computer_setup', content },
+  });
+};
 
 function Fixture() {
   return (
@@ -58,6 +79,7 @@ function Fixture() {
             </ErrorBoundary>
           </Match>
         </Switch>
+        <ToastRegion />
       </Layer>
     </QueryClientProvider>
   );

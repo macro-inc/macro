@@ -99,7 +99,12 @@ export default defineConfig({
     // The composer and Agents settings load lazily, after Try it or Create
     // agent; scan them up front so their dependencies never re-optimize (and
     // reload the page) mid-test.
-    entries: ['index.html', 'composer.tsx', 'agent-settings.tsx'],
+    entries: [
+      'index.html',
+      'composer.tsx',
+      'agent-settings.tsx',
+      '../../../notifications/use-notification-updates.ts',
+    ],
   },
   server: { host: '127.0.0.1', strictPort: true },
 });

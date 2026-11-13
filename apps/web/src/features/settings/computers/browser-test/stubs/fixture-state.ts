@@ -1,5 +1,12 @@
+import type { NotifEvent } from '@service-notification/generated/schemas/notifEvent';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { createSignal } from 'solid-js';
+
+/** What a computer setup notification carries. */
+export type ComputerSetupContent = Extract<
+  NotifEvent,
+  { tag: 'computer_setup' }
+>['content'];
 
 /** The computer's runtime, once the test says it registered. */
 export const [harnesses, setHarnesses] = createSignal<RegisteredHarness[]>([]);
@@ -29,6 +36,8 @@ declare global {
       agentsPageOpened: typeof agentsPageOpened;
       setAgentsPageOpened: typeof setAgentsPageOpened;
       setSettingsOpened: typeof setSettingsOpened;
+      /** Set by the fixture once its notice code loads. */
+      notify: (content: ComputerSetupContent) => Promise<void>;
     };
   }
 }
@@ -40,4 +49,5 @@ window.computerFixture = {
   agentsPageOpened,
   setAgentsPageOpened,
   setSettingsOpened,
+  notify: async () => {},
 };
