@@ -108,6 +108,9 @@ fn outside_signed_scope(token: Option<&MacroApiToken>, parts: &Parts) -> bool {
         tracing::warn!(
             ?scope,
             method = %parts.method,
+            path = parts.uri.path(),
+            agent_correlation_id = ?token.and_then(|token| token.agent_correlation_id),
+            agent_session_id = ?token.and_then(|token| token.agent_session_id),
             "refused a request outside its credential's signed scope"
         );
     }
@@ -196,13 +199,16 @@ async fn propagate_request(
     };
     // A session minted with a scope makes only the requests inside it, on
     // every service that accepts its credential.
-    if let Some((_, correlation)) = correlation
+    if let Some((id, correlation)) = correlation
         && let Some(scope) = correlation.scope
         && !scope.allows(parts.method.as_str(), parts.uri.path())
     {
         tracing::warn!(
             scope = scope.as_str(),
             method = %parts.method,
+            path = parts.uri.path(),
+            agent_correlation_id = %id,
+            agent_session_id = %correlation.session_id,
             "refused a request outside its session's scope"
         );
         return CorrelationRejection(CorrelationError::OutOfScope).into_response();
