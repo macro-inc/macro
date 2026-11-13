@@ -26,6 +26,12 @@ export function getTableElement(element: Element): HTMLTableElement | null {
   const table = element.closest('table');
   return table instanceof HTMLTableElement ? table : null;
 }
+/** A table node's own DOM: the table, or the table inside its scrollable wrapper (pinned getTableElement). */
+export function tableElementOf(dom: Element | null): HTMLTableElement | null {
+  if (dom instanceof HTMLTableElement) return dom;
+  const inner = dom?.querySelector('table') ?? null;
+  return inner instanceof HTMLTableElement ? inner : null;
+}
 export function getTableObserverFromTableElement(
   table: HTMLTableElement
 ): TableObserver | null {

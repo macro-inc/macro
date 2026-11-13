@@ -371,6 +371,35 @@ export function registerMacroElementViews(
       return replace;
     },
   });
+  // Macro editors register Source tables with hasHorizontalScroll, so
+  // TableNode.createDOM wraps each table in theme.tableScrollableWrapper
+  // (inline overflow-x: auto without that class); the table stays the slot.
+  const table = registry.get('table');
+  const innerTable = (dom: HTMLElement) => {
+    const inner = dom.querySelector(':scope > table');
+    if (!(inner instanceof HTMLElement))
+      throw new Error('Missing scrollable table element');
+    return inner;
+  };
+  registry.replace('table', {
+    createDOM(node, ctx) {
+      const wrapper = ctx.document.createElement('div');
+      const classes = themeClass(ctx.theme, 'tableScrollableWrapper');
+      if (classes) wrapper.className = classes;
+      else wrapper.style.overflowX = 'auto';
+      wrapper.appendChild(table.createDOM(node, ctx));
+      return wrapper;
+    },
+    updateDOM(previous, next, dom, ctx) {
+      return table.updateDOM(previous, next, innerTable(dom), ctx);
+    },
+    getDOMSlot(node, dom) {
+      const inner = innerTable(dom);
+      return table.getDOMSlot
+        ? table.getDOMSlot(node, inner)
+        : { element: inner, after: null };
+    },
+  });
   registry.register('custom-code', customCodeView(options.svgPreview));
   return registry;
 }

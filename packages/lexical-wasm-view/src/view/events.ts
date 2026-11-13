@@ -24,7 +24,10 @@ import {
 } from './selection';
 import { consumeSelectionChangeFromDOMUpdate } from './selection-change';
 import { selectionMessage } from './session-port';
-import { getTableObserverFromTableElement } from './table/observer';
+import {
+  getTableObserverFromTableElement,
+  tableElementOf,
+} from './table/observer';
 import type { ViewSelection } from './types';
 
 const documents = new WeakMap<
@@ -793,9 +796,9 @@ export function registerEvents(view: EditorView): {
     // the DOM range, unless a mouse press asked for a new range.
     if (current.kind === 'node' && !fromMouseDown) return;
     if (current.kind === 'table') {
-      const table = view.getElementByKey(current.table);
+      const table = tableElementOf(view.getElementByKey(current.table));
       if (
-        table instanceof HTMLTableElement &&
+        table &&
         getTableObserverFromTableElement(table)?.preserveDragSelection(dom)
       )
         return;

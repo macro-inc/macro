@@ -60,7 +60,7 @@ import {
   writeSelection,
 } from './selection';
 import { selectionMessage } from './session-port';
-import { TableObserver } from './table/observer';
+import { TableObserver, tableElementOf } from './table/observer';
 import type {
   AppliedDiff,
   JsonValue,
@@ -618,9 +618,8 @@ export class EditorView implements ViewSink {
         dirtyTables.set(row.parent, rows);
       }
       for (const [key, rows] of dirtyTables) {
-        const dom = this.dom.get(key);
-        if (!(dom instanceof HTMLTableElement))
-          throw new Error('Table view must mount a table');
+        const dom = tableElementOf(this.dom.get(key) ?? null);
+        if (!dom) throw new Error('Table view must mount a table');
         const observer = this.tables.get(key);
         if (observer && observer.table === dom) observer.refresh(rows);
         else {
