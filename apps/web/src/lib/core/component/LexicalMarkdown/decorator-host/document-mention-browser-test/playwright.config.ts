@@ -1,5 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
+import { checkDecoratorBrowserWasm } from '../../../../../../../scripts/decorator-browser-wasm';
+
+const WASM_HASHES = checkDecoratorBrowserWasm();
 
 const webDirectory = fileURLToPath(
   new URL('../../../../../../../', import.meta.url)
@@ -7,6 +10,7 @@ const webDirectory = fileURLToPath(
 const port = process.env.DOCUMENT_MENTION_PORT ?? '40771';
 
 export default defineConfig({
+  metadata: { documentSessionWasm: WASM_HASHES },
   testDir: '.',
   testMatch: 'document-mention.browser.e2e.ts',
   workers: 1,

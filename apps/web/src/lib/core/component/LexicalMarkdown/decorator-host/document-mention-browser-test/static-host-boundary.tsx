@@ -52,7 +52,9 @@ export function StaticHostBoundary(props: { native: boolean }) {
     };
     async function start() {
       try {
-        const module = await import('./wasm/document_session_wasm.js');
+        const module = await import(
+          '@core/document-session/wasm/document_session_wasm.js'
+        );
         await module.default();
         if (disposed) return;
         if (!root) throw new Error('Missing actual native boundary root');

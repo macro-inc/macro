@@ -33,7 +33,9 @@ export function NativeReferenceFixture(props: {
   let disposed = false;
   onMount(() => {
     async function start() {
-      const native = await import('./wasm-root-id/document_session_wasm.js');
+      const native = await import(
+        '@core/document-session/wasm/document_session_wasm.js'
+      );
       await native.default();
       if (disposed) return;
       if (!root || !window.documentReferenceInitial)

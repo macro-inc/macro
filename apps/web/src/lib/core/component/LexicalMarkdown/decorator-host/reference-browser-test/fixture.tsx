@@ -4,6 +4,7 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
+import initialize, * as native from '@core/document-session/wasm/document_session_wasm.js';
 import { $dfs } from '@lexical/utils';
 import {
   ABI_MAJOR,
@@ -61,7 +62,6 @@ import {
   createNativeSnapshotContext,
   createNativeSnapshotViews,
 } from '../native-snapshot-views';
-import initialize, * as native from './wasm/document_session_wasm.js';
 
 initializeLexical();
 queryClient.setQueryData(authKeys.userInfo.queryKey, {

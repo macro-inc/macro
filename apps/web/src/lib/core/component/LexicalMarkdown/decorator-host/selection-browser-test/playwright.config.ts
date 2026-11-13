@@ -1,29 +1,9 @@
 /// <reference types="node" />
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
+import { checkDecoratorBrowserWasm } from '../../../../../../../scripts/decorator-browser-wasm';
 
-// This fixture is qualified only for the sealed native component artifact.
-const artifactHashes = {
-  'document_session_wasm.js':
-    'f11205af185b86acae361721b8d4f1d70e81b325e8e1f0e1b0cea024a3ce00f7',
-  'document_session_wasm_bg.wasm':
-    '6dca1f84b0b20bf30472befe0a7765f401120de61b85f7deb84f941f38134c8a',
-  'document_session_wasm.d.ts':
-    '01b749595faf5ec15be94281e24a8057827c29b2f454a071e81176529a63c46c',
-  'document_session_wasm_bg.wasm.d.ts':
-    'ec458e74f2cf76bf34d4c48fa9d9e3e7217907fde5408d4aff8682aaccbe255a',
-  'package.json':
-    'af2c9938e67104d499b97c8f8225e52fcd2f2b0a0212e7a154ed16ba048dd0a5',
-};
-for (const [name, expected] of Object.entries(artifactHashes)) {
-  const actual = createHash('sha256')
-    .update(readFileSync(new URL(`./wasm/${name}`, import.meta.url)))
-    .digest('hex');
-  if (actual !== expected)
-    throw new Error(`Unqualified selection fixture artifact: ${name}`);
-}
+const WASM_HASHES = checkDecoratorBrowserWasm();
 
 const webDirectory = fileURLToPath(
   new URL('../../../../../../../', import.meta.url)
@@ -31,6 +11,7 @@ const webDirectory = fileURLToPath(
 const port = process.env.FAST_DECORATOR_TEST_PORT ?? '40539';
 
 export default defineConfig({
+  metadata: { documentSessionWasm: WASM_HASHES },
   testDir: '.',
   testMatch: '*.browser.e2e.ts',
   workers: 1,

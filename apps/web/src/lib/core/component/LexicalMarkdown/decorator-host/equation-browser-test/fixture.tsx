@@ -4,6 +4,9 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
+import initialize, {
+  EditorSession,
+} from '@core/document-session/wasm/document_session_wasm.js';
 import { $dfs } from '@lexical/utils';
 import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
 import { $createEquationNode } from '@macro-inc/lexical-core';
@@ -39,7 +42,6 @@ import { trailingParagraphPlugin } from '../../plugins/trailing-paragraph/traili
 import { theme } from '../../theme';
 import { createNativeEquationContext } from '../native-equation-host';
 import { createNativeEquationViews } from '../native-equation-views';
-import initialize, { EditorSession } from './wasm/document_session_wasm.js';
 
 initializeLexical();
 queryClient.setQueryData(authKeys.userInfo.queryKey, {

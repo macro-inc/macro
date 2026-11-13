@@ -1,3 +1,6 @@
+import initialize, {
+  EditorSession,
+} from '@core/document-session/wasm/document_session_wasm.js';
 import {
   ABI_MAJOR,
   Access,
@@ -20,7 +23,6 @@ import { theme } from '../../theme';
 import { createNativeFastSelectionDecoratorViews } from '../fast-selection-views';
 import { createNativeFastStaticDecoratorViews } from '../fast-static-views';
 import { createNativeSelectionDecoratorContext } from '../native-selection-host';
-import initialize, { EditorSession } from './wasm/document_session_wasm.js';
 
 /** Actual production WASM, execution port, and Diff-driven mounted view. */
 export async function mountNativeSurface(

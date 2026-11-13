@@ -5,6 +5,9 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
+import initialize, {
+  EditorSession,
+} from '@core/document-session/wasm/document_session_wasm.js';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { CodeNode } from '@lexical/code-core';
 import { $dfs } from '@lexical/utils';
@@ -63,7 +66,6 @@ import {
   createNativeVideoContext,
   createNativeVideoDecoratorViews,
 } from '../native-video-views';
-import initialize, { EditorSession } from './wasm/document_session_wasm.js';
 
 initializeLexical();
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
