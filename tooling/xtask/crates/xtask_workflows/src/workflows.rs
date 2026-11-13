@@ -9,6 +9,7 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod advisory_db_bump;
 mod android_apk_on_release;
 mod android_build;
 mod android_play_publish;
@@ -480,6 +481,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_tauri_lockfiles",
         file_name: "check_tauri_lockfiles.yml",
         render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
+    },
+    WorkflowFile {
+        slug: "advisory_db_bump",
+        file_name: "advisory_db_bump.yml",
+        render_yaml: || render_gh_workflow(advisory_db_bump::advisory_db_bump)(),
     },
     WorkflowFile {
         slug: "check_generated",

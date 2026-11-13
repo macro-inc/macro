@@ -18,3 +18,21 @@ The [`run-ci` skill](../../.agents/skills/run-ci/SKILL.md) has the commands,
 what each `CI gate` state means, re-runs, and fork PRs. The workflows are
 generated from Rust; see the
 [workflows rule](../../.agents/rules/infra/github-workflows.md).
+
+## RustSec advisories
+
+The `cargo deny` check reads the RustSec advisory database at the commit in
+`.github/advisory-db-rev`, not the live one, so a newly published advisory
+can't fail every PR that touches Cargo files. Each day the `Advisory DB Bump`
+workflow moves the pin to the latest commit, in one PR from the
+`ci/advisory-db-bump` branch, and writes into its description whether
+cargo-deny passes on the new pin. Whoever owns CI health owns that PR: if it
+fails, push the fix (update the crate, or ignore the advisory in `deny.toml`
+with a reason) to that branch, add `run-ci`, and merge. Its later runs add
+commits on top of yours.
+
+To check the pinned database locally from the repository root, clone the
+commit into `target/advisory-dbs/advisory-db-3157b0e258782691`, as the
+workflow does, and run `cargo deny check --disable-fetch`. A plain
+`cargo deny check` fetches the latest database, which is what the next bump
+will see.
