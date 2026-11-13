@@ -154,6 +154,7 @@ impl<T> SoupItem<T> {
             SoupItem::AgentSession(session) => Some(session.name.as_str()),
             SoupItem::CrmCompany(company) => company.name.as_deref(),
             SoupItem::CrmContact(contact) => contact.name.as_deref(),
+            SoupItem::Harness(harness) => Some(harness.name.as_str()),
             SoupItem::EmailThread(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
