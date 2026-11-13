@@ -239,12 +239,20 @@ function QueuedRow(props: QueuedRowProps) {
           )
             props.onExpandedChange(false);
         }}
+        // Escape inside the editor or one of its menus is theirs (the
+        // editor's own Escape command decides); this only serves focus the
+        // row holds elsewhere: a compact row, a viewer's body, the buttons.
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !event.defaultPrevented) {
-            event.preventDefault();
-            event.stopPropagation();
-            close();
-          }
+          if (event.key !== 'Escape' || event.defaultPrevented) return;
+          const target = event.target;
+          if (
+            target instanceof Element &&
+            target.closest('[data-lexical-editor], .menu-surface')
+          )
+            return;
+          event.preventDefault();
+          event.stopPropagation();
+          close();
         }}
       >
         {/* One slot, one text: the preview and the editor take turns in it. */}
@@ -376,16 +384,15 @@ function PromptBody(
   // can differ from `synced` in markup alone, so a save compares against it
   // to tell a real edit from an untouched round trip. After the editor is
   // set from outside (a restore, a server snapshot) it is unknown until the
-  // next read, since the editor may not have applied the text yet.
+  // editor reports the applied text through `onChange`, since a read right
+  // after `setMarkdown` can still be stale.
   let baseline: string | undefined;
 
   const save = () => {
     if (props.disabled) return;
     const text = editor.controls.getMarkdown();
-    if (baseline === undefined) {
-      baseline = text;
-      return;
-    }
+    // Restored text not applied yet, so nothing has been typed since.
+    if (baseline === undefined) return;
     // An emptied row is not an edit to send — the server refuses empty
     // prompts and "delete the text" has the remove affordance for it — so
     // the saved text comes back.
@@ -403,9 +410,10 @@ function PromptBody(
   };
 
   const restore = () => {
-    if (editor.controls.getMarkdown() !== synced)
+    if (editor.controls.getMarkdown() !== synced) {
       editor.controls.setMarkdown(synced);
-    baseline = undefined;
+      baseline = undefined;
+    }
     props.onDraftChange(synced);
   };
 
@@ -418,7 +426,10 @@ function PromptBody(
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .onChange((markdown) => props.onDraftChange(markdown))
+    .onChange((markdown) => {
+      if (baseline === undefined) baseline = markdown;
+      props.onDraftChange(markdown);
+    })
     .onEnter((event) => {
       // Enter that confirms an IME composition is not a save.
       if (event.isComposing || event.keyCode === 229) return false;
@@ -436,7 +447,6 @@ function PromptBody(
       lexical.registerCommand(
         KEY_ESCAPE_COMMAND,
         (event) => {
-          // Consumed here, so the row's own Escape handler does not run.
           event?.preventDefault();
           restore();
           props.onClose();
@@ -492,16 +502,6 @@ function PromptBody(
       tabindex="-1"
       class="text-sm text-ink outline-none"
       onFocusOut={save}
-      // Escape inside the editor or one of its menus is theirs (the command
-      // above decides); the row's handler only serves focus the body holds.
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape') return;
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-        const root = editor.lexical.getRootElement();
-        if (root?.contains(target) || target.closest('.menu-surface'))
-          event.stopPropagation();
-      }}
     >
       <MarkdownShell
         config={editor}

@@ -304,6 +304,41 @@ describe('queued prompt keys', () => {
     expect(screen.getByRole('textbox')).toBeTruthy();
   });
 
+  it('still sends an edit typed after an in-row restore', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+        onSteer={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    const textbox = screen.getByRole('textbox');
+    // Emptied, then focus moves within the row: the text is restored and
+    // the row stays open.
+    editor.markdown = '';
+    editor.change?.(editor.markdown);
+    fireEvent.focusOut(textbox, {
+      relatedTarget: screen.getByRole('button', { name: 'Steer' }),
+    });
+    expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
+      'Queued request'
+    );
+    expect(screen.getByRole('textbox')).toBe(textbox);
+    // The editor applies the restored text, then the user types anew.
+    editor.change?.('Queued request');
+    editor.markdown = 'New request';
+    editor.change?.(editor.markdown);
+    expect(editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(
+      true
+    );
+    expect(onEdit).toHaveBeenCalledExactlyOnceWith('first', 'New request');
+  });
+
   it('lets Enter stay a newline on touch and saves when focus leaves', () => {
     touch.value = true;
     const onEdit = vi.fn();

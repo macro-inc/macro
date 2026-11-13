@@ -138,9 +138,10 @@ test('Escape closes an open editor menu before it closes the row', async ({
   await expect(editor).toContainText(':bir');
   await expect(log(page)).toHaveText('');
 
-  // The link popup takes the first Escape too, and keeps the typing.
   await page.keyboard.press('Escape');
   await expect(editor).toBeHidden();
+
+  // The link popup takes the first Escape too, and keeps the typing.
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
   await expect(editor).toContainText('the field guide');
@@ -152,10 +153,23 @@ test('Escape closes an open editor menu before it closes the row', async ({
   await expect(page.locator('.menu-surface')).toBeHidden();
   await expect(editor).toBeVisible();
   await expect(editor).toContainText('kept');
+  // Escape from inside the popup's URL field closes only the popup. Focus
+  // moving into the field saved the text, as leaving the editor always does.
+  await editor.getByText('the field guide').click();
+  // The popup's second button is Edit link (icon-only).
+  await page.locator('.menu-surface button').nth(1).click();
+  await expect(page.locator('.menu-surface input').first()).toBeFocused();
+  await expect(log(page).locator('li')).toHaveCount(1);
+  await expect(log(page)).toContainText('kept');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.menu-surface')).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(editor).toContainText('kept');
+  await editor.click();
   await page.keyboard.press('Escape');
   await expect(editor).toBeHidden();
-  await expect(queue(page)).not.toContainText('kept');
-  await expect(log(page)).toHaveText('');
+  await expect(composer(page)).toBeFocused();
+  await expect(log(page).locator('li')).toHaveCount(1);
 });
 
 test('tapping a queued message edits it in place and saves on leaving', async ({
