@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -83,7 +84,7 @@ function createAuthorizedProjectQuery<
   Result,
 >(
   document: DocumentInput<QueryData, InitiativeQueryVariables>,
-  select: (data: QueryData) => Result,
+  select: (data: QueryData, failedRead: boolean) => Result,
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
@@ -136,7 +137,7 @@ function createAuthorizedProjectQuery<
           if (result.data && result.data.user.id !== current.viewerId) return;
           auth.onResult(result);
         },
-        select: (data) => ({ viewerId: data.user.id, value: select(data) }),
+        select: (data) => ({ viewerId: data.user.id, value: data }),
       };
     }
   );
@@ -177,7 +178,7 @@ function createAuthorizedProjectQuery<
       result.viewerId !== userId()
     )
       return undefined;
-    return result.value;
+    return select(result.value, Boolean(query.error));
   });
   return {
     get data() {
@@ -215,9 +216,22 @@ export function createProjectDetailQuery(
   projectId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ) {
+  const pendingAppearance = usePendingEntityAppearance();
   return createAuthorizedProjectQuery(
     InitiativeDocument,
-    (data) => projectDetailData(mapInitiativeDetail(data.user.initiative)),
+    (data, failedRead) => {
+      const result = projectDetailData(
+        mapInitiativeDetail(data.user.initiative)
+      );
+      const appearance = pendingAppearance(
+        'initiative',
+        result.project.id,
+        failedRead
+      );
+      return appearance
+        ? { ...result, project: { ...result.project, appearance } }
+        : result;
+    },
     client,
     userId,
     projectId,
@@ -225,20 +239,24 @@ export function createProjectDetailQuery(
   );
 }
 
-/** Chips, previews, and labels read only id, name, and the viewer's access. */
+/** Chips, previews, and labels read only id, name, appearance, and viewer access. */
 export function createProjectIdentityQuery(
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ) {
+  const pendingAppearance = usePendingEntityAppearance();
   return createAuthorizedProjectQuery(
     InitiativeIdentityDocument,
-    (data): ProjectIdentity => {
+    (data, failedRead): ProjectIdentity => {
       const project = mapInitiativeIdentity(data.user.initiative);
       return {
         id: project.id,
         name: project.name,
+        appearance:
+          pendingAppearance('initiative', project.id, failedRead) ??
+          project.appearance,
         access: project.userAccessLevel,
       };
     },

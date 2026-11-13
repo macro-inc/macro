@@ -347,7 +347,13 @@ where
     Models: AgentModelsService,
     Changes: AgentChanges,
 {
-    let correlation = states.correlation.clone();
+    // Every request's agent attribution is validated here: routes that tell
+    // an agent from the person (suggestions, session scopes) rely on it, so the
+    // service never serves without it.
+    let correlation = states
+        .correlation
+        .clone()
+        .context("agent correlation validation is not configured")?;
     let listening = states.listening.clone();
     let public_mcp = states.public_mcp.clone();
     let cognition = states.cognition.clone();
@@ -377,13 +383,10 @@ where
             swagger::ApiDoc::openapi(),
         ));
 
-    let app = match correlation {
-        Some(state) => app.layer(axum::middleware::from_fn_with_state(
-            state,
-            agent_correlation::inbound::propagate,
-        )),
-        None => app,
-    };
+    let app = app.layer(axum::middleware::from_fn_with_state(
+        correlation,
+        agent_correlation::inbound::propagate,
+    ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await

@@ -11,13 +11,16 @@ viewer pattern), which apply to every type defined here.
 ## Gotchas
 
 - `PROJECT` grouping forwards the Project property (initiative membership) to Soup; legacy folder IDs are not grouping keys.
+- Document and initiative `appearance` fields carry entity-owned JSON overrides; the shared Soup reads supply them without changing sort timestamps.
 
 - `SoupItemLoader` (single-entity lookups, `soupUpdates` hydration) resolves
   email threads through entity-access view receipts, the rule the REST thread
   route applies, not through the viewer's inbox scope; Soup's email leg only
   serves lists. A thread shared through a team's CRM, a project, or a share
   therefore opens through `emailThread` even though it lives in a teammate's
-  inbox.
+  inbox. Spam-only and trash-only threads render as their folder rows; the
+  mutation reply reader (`mutation_thread.rs`) reads through the same rule
+  with the email service's ownership check.
 - Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
   which rechecks the viewer's team. PRs are stored for the team; without it,
   a session row reads `pullRequestState: null` and overwrites the list's

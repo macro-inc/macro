@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -19,6 +20,7 @@ import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ProjectRow, ProjectsSource } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
 import { projectProperties } from './project-properties';
@@ -102,6 +104,7 @@ export function projectSoupRows(
         project: {
           id: item.id,
           name: item.displayName ?? 'Untitled project',
+          appearance: readEntityAppearance(item.appearance),
           updatedAt: item.metadata.updatedAt ?? '',
           createdAt: item.metadata.createdAt ?? undefined,
           taskCount: item.taskCount,
@@ -122,6 +125,7 @@ export function createProjectSoupSource(
   filters: Accessor<ProjectFilters>,
   enabled: Accessor<boolean>
 ): ProjectsSource {
+  const pendingAppearance = usePendingEntityAppearance();
   const input = createMemo(() => projectSoupInput(filters()));
   const client = createMemo(soupClient);
   const query = createUrqlInfiniteQuery<
@@ -193,7 +197,18 @@ export function createProjectSoupSource(
       // last authorized pages without triggering a Solid resource suspension.
       const data = query.data;
       return data
-        ? projectSoupRows(data.pages.flatMap((page) => page.user.soup.items))
+        ? projectSoupRows(
+            data.pages.flatMap((page) => page.user.soup.items)
+          ).map((row) => {
+            const appearance = pendingAppearance(
+              'initiative',
+              row.project.id,
+              Boolean(query.error)
+            );
+            return appearance
+              ? { ...row, project: { ...row.project, appearance } }
+              : row;
+          })
         : undefined;
     },
     loading: () => enabled() && query.isPending,

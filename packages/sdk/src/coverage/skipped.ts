@@ -291,10 +291,18 @@ export const propertiesBacklog =
 
 export const scheduledActionExcluded = [
   'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
+  'startRoutineDraftJob', // The routine editor's background drafting.
+  'listRoutineDraftJobs', // The routine editor's background drafting.
+  'getRoutineDraftJob', // The routine editor's background drafting.
+  'discardRoutineDraftJob', // The routine editor's background drafting.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
-  'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
+  'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
+  'recordSuggestionsSeen', // The app records each load; agents have no use for it.
+  'getSuggestionGeneration', // The app polls it while fresh suggestions generate.
+  'regenerateSuggestions', // The app's refresh button, at most hourly; generation sessions may not call it.
+  'recordSuggestionsViewed', // The app records the person opening the feed; an agent's read is not a visit.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
@@ -320,6 +328,9 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Superseded in the SDK by createCrmPipelineWithFields, which also takes
+  // stages and fields.
+  'createCrmPipeline',
   // Chat sidebar section editing and discovery remain app-only navigation.
   'createChannelSection',
   'deleteChannelSection',
@@ -385,11 +396,18 @@ export const storageExcluded = [
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Status of the web app's own folder upload; uploads aren't an SDK surface.
+  'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',
   'getViewsHandler',
   // Guest chat uses a live RTC session token, not SDK account credentials.
+  'guestCallChatDeleteMessage',
+  'guestCallChatPatchMessage',
   'guestCallChatPost',
+  'guestCallChatPostMessage',
+  'guestCallChatReactMessage',
   'guestCallChatRead',
+  'guestCallChatReadThread',
   'handler',
   'healthHandler',
   'ingestTranscript',

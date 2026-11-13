@@ -59,7 +59,15 @@ import { EntityType } from '@service-storage/generated/schemas';
 import { Key } from '@solid-primitives/keyed';
 import { Avatar, cn, Tooltip } from '@ui';
 import { parseISO } from 'date-fns';
-import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  children,
+  createMemo,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard } from './InboxCard';
@@ -274,7 +282,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('routine_run_finished', () => () => (
       <ClockIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with('agent_sign_in_expiry', () => () => (
+    .with('agent_sign_in_expiry', 'computer_setup', () => () => (
       <HardDrivesIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
@@ -540,8 +548,11 @@ function BaseCard(props: {
   /** Adornment before the title text (e.g. draft badge, block-type icon). */
   titleLeading?: JSX.Element;
   trailing?: JSX.Element;
+  /** A count under the trailing slot, such as unread mentions. */
+  badge?: JSX.Element;
   children?: JSX.Element;
 }) {
+  const badge = children(() => props.badge);
   return (
     <InboxCard.Root
       class={props.class}
@@ -582,6 +593,11 @@ function BaseCard(props: {
       >
         <div class="col-start-3 row-start-1 self-center justify-self-end">
           {props.trailing}
+        </div>
+      </Show>
+      <Show when={badge()}>
+        <div class="col-start-3 row-start-2 self-center justify-self-end">
+          {badge()}
         </div>
       </Show>
     </InboxCard.Root>
@@ -646,6 +662,7 @@ export function ChannelCardLayout(
   props: InboxCardLayoutProps & {
     icon?: JSX.Element;
     trailing?: JSX.Element;
+    badge?: JSX.Element;
     preview?: JSX.Element;
   }
 ) {
@@ -1063,6 +1080,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
             <EntityIcon
               class={AVATAR_GLYPH_CLASS}
               targetType={getEntityIconType(props.item.entity)}
+              appearance={props.item.entity.appearance}
               size="fill"
             />
           }
@@ -1073,6 +1091,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
       titleLeading={
         <EntityIcon
           targetType={getEntityIconType(props.item.entity)}
+          appearance={props.item.entity.appearance}
           size="xs"
           class="shrink-0"
         />
@@ -1605,6 +1624,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
           targetType={getEntityIconType(props.item.entity)}
+          appearance={props.item.entity.appearance}
           size="fill"
           theme="monochrome"
         />

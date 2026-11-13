@@ -2,7 +2,7 @@
 use agent_code_mode::domain::{
     CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
 };
-use agent_correlation::domain::CorrelationRepository;
+use agent_correlation::domain::{CorrelationRepository, SessionScope};
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
@@ -16,6 +16,98 @@ pub struct RunCredentials {
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
     pub endpoints: SdkEndpoints,
+    pub scopes: Arc<dyn SessionScopes>,
+}
+
+/// Which narrower scope a session's code runs in, decided where its
+/// credential is minted. Every service that accepts the credential refuses
+/// requests outside it.
+#[async_trait]
+pub trait SessionScopes: Send + Sync + 'static {
+    /// The scope of `session`'s code, if narrower than its person's access.
+    async fn scope(&self, session: uuid::Uuid) -> Result<Option<SessionScope>, rootcause::Report>;
+}
+
+/// Suggestion generation sessions read, and write only through their own
+/// tools and email drafts, until they are deleted: one whose turn ended but
+/// is still being stopped, or whose delete was given up, keeps the scope. A
+/// background run whose suggestion sends nothing reaches nobody.
+pub struct HarnessScopes {
+    pub generations: Arc<dyn suggestions::domain::ports::GenerationSessions>,
+    pub runs: Arc<dyn suggestions::domain::ports::RunScopes>,
+}
+
+#[async_trait]
+impl SessionScopes for HarnessScopes {
+    async fn scope(&self, session: uuid::Uuid) -> Result<Option<SessionScope>, rootcause::Report> {
+        if self.generations.undeleted(session).await? {
+            return Ok(Some(SessionScope::Generation));
+        }
+        Ok(self
+            .runs
+            .sends_nothing(session)
+            .await?
+            .then_some(SessionScope::NoSend))
+    }
+}
+
+/// The scope of `session`'s code; when it can't be told, no code runs.
+async fn scope_of(
+    scopes: &dyn SessionScopes,
+    session: uuid::Uuid,
+) -> Result<Option<SessionScope>, CodeModeError> {
+    scopes.scope(session).await.map_err(|error| {
+        tracing::error!(?error, "could not read a session's scope");
+        CodeModeError::Unavailable
+    })
+}
+
+/// Native tools a scoped session may call: code mode's, which reach the API
+/// through its scoped credential, and finding and reading tools.
+fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
+    match scope {
+        SessionScope::Generation | SessionScope::NoSend => matches!(
+            tool,
+            "ExecuteCode"
+                | "DescribeCodeTools"
+                | "ReadCodeDocs"
+                | "SearchTools"
+                | "LoadTools"
+                | "ReadToolResult"
+        ),
+    }
+}
+
+/// [`NativeToolGate`] that refuses a scoped session's native tools outside
+/// its scope before asking `inner`.
+pub struct ScopedToolGate {
+    pub inner: Arc<dyn NativeToolGate>,
+    pub scopes: Arc<dyn SessionScopes>,
+}
+
+impl NativeToolGate for ScopedToolGate {
+    fn check<'a>(
+        &'a self,
+        session: agent_session::domain::model::AgentSessionId,
+        tool: &'a str,
+        arguments: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async move {
+            match self.scopes.scope(session.as_uuid()).await {
+                Ok(Some(scope)) if !native_tool_allowed(scope, tool) => NativeToolVerdict::Refuse(
+                    format!("This session can't use {tool}; it works through code only."),
+                ),
+                Ok(_) => self.inner.check(session, tool, arguments).await,
+                Err(error) => {
+                    tracing::error!(?error, "could not read a session's scope");
+                    NativeToolVerdict::Refuse(
+                        "Whether this tool may run could not be checked; nothing was done."
+                            .to_owned(),
+                    )
+                }
+            }
+        })
+    }
 }
 
 #[async_trait]
@@ -27,9 +119,14 @@ impl ExecutionCredentials for RunCredentials {
         cancel: CancellationToken,
     ) -> Result<RunEnvironment, CodeModeError> {
         let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
             .correlations
-            .create(identity.session.as_uuid(), identity.agent_id.as_uuid())
+            .create(
+                identity.session.as_uuid(),
+                identity.agent_id.as_uuid(),
+                scope,
+            )
             .await
             .map_err(|error| {
                 tracing::error!(?error, "could not persist code-mode correlation");
@@ -73,6 +170,7 @@ pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub endpoints: SdkEndpoints,
+    pub scopes: Arc<dyn SessionScopes>,
 }
 
 #[async_trait]
@@ -92,7 +190,11 @@ impl UserExecutionCredentials for UserRunCredentials {
         let correlation = match session {
             Some(session) => Some(
                 self.correlations
-                    .create(session, agent.as_uuid())
+                    .create(
+                        session,
+                        agent.as_uuid(),
+                        scope_of(self.scopes.as_ref(), session).await?,
+                    )
                     .await
                     .map_err(|error| {
                         tracing::error!(?error, "could not persist code-mode correlation");

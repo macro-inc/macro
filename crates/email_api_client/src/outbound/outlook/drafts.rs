@@ -150,7 +150,8 @@ impl OutlookApiClientRepository {
                 url.host_str(),
                 Some("outlook.office.com" | "outlook.office365.com" | "graph.microsoft.com")
             );
-        #[cfg(test)]
+        // The configured Graph root is Microsoft's own unless it was
+        // overridden to an emulator, which serves its upload URLs itself.
         let allowed = allowed || url.origin() == self.root.origin();
         if !allowed
             || !url.username().is_empty()

@@ -9,6 +9,8 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod android_apk_on_release;
+mod android_build;
 mod android_play_publish;
 mod android_play_release;
 mod android_release_drift;
@@ -63,6 +65,7 @@ mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
 mod release_label_check;
+mod release_production;
 mod release_sdk;
 mod reusable_deploy_service;
 mod reusable_preview_service;
@@ -314,6 +317,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
     },
     WorkflowFile {
+        slug: "release_production",
+        file_name: "release-production.yml",
+        render_yaml: || {
+            render_patched(
+                release_production::release_production,
+                release_production::patch,
+            )
+        },
+    },
+    WorkflowFile {
         slug: "deploy_website",
         file_name: "deploy_website.yml",
         render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
@@ -397,6 +410,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "android_play_release",
         file_name: "android-play-release.yml",
         render_yaml: || render_gh_workflow(android_play_release::android_play_release)(),
+    },
+    WorkflowFile {
+        slug: "android_apk_on_release",
+        file_name: "android-apk-on-release.yml",
+        render_yaml: || render_gh_workflow(android_apk_on_release::android_apk_on_release)(),
     },
     WorkflowFile {
         slug: "android_play_publish",
