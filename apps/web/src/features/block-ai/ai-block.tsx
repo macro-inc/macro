@@ -1,4 +1,6 @@
 import { reloadApp } from '@app/observability/reload';
+import { AiHeader } from './views/ai-header';
+import { MobileAiHeader } from './views/mobile/ai-header';
 /**
  * The `.ai` block: app chrome (header, file menu, sharing) around the
  * Illustrator editor, wired to the worker engine, document storage, and
@@ -7,28 +9,14 @@ import { reloadApp } from '@app/observability/reload';
 
 import { createFontSource } from '@app/features/block-fig/queries/font-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { AiEngine } from '@core/ai-engine/client';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { FileTypeChip } from '@core/component/FileTypeChip';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -38,7 +26,6 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/share.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import type { LoroDoc } from 'loro-crdt';
@@ -339,40 +326,12 @@ export default function AiBlock(props: { share?: string }) {
   return (
     <DocumentBlockContainer>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <SplitHeaderLeft>
-          <BlockItemSplitLabel badges={<FileTypeChip />} />
-        </SplitHeaderLeft>
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-        </SplitHeaderRight>
-        <ResponsivePermissionsBadge />
-        <ResponsiveBlockToolbar
-          id={documentId}
-          itemType="document"
-          name={name()}
-          ops={[
-            { op: 'rename' },
-            { op: 'copy' },
-            { op: 'moveToProject' },
-            {
-              group: 'file',
-              label: 'Download',
-              icon: DownloadSimple,
-              action: () => fireAndForget(download(), 'ai-editor'),
-            },
-            { op: 'delete' },
-          ]}
-          tools={[
-            {
-              group: 'sharing',
-              label: 'Share',
-              icon: IconShared,
-              action: openShare,
-              buttonComponent: () => <ShareTrigger onClick={openShare} />,
-              focusTarget: getShareDrawerRecipientInput,
-            },
-          ]}
-        />
+        <Show
+          when={isTouchDevice()}
+          fallback={<AiHeader openShare={openShare} download={download} />}
+        >
+          <MobileAiHeader openShare={openShare} download={download} />
+        </Show>
         <div class="min-h-0 flex-1">
           <Show when={data()} keyed>
             {(d) => (
