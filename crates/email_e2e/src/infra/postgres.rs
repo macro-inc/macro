@@ -42,13 +42,20 @@ impl Database {
         .execute(&mut admin)
         .await
         .context("could not create the scenario database")?;
-        admin.close().await.ok();
 
         let pool = PgPoolOptions::new()
             .max_connections(4)
             .connect_with(server.clone().database(&name))
-            .await
-            .context("could not connect to the scenario database")?;
+            .await;
+        if pool.is_err() {
+            // Nothing else knows the name, so nothing else would drop it.
+            sqlx::query(&format!(r#"DROP DATABASE IF EXISTS "{name}" WITH (FORCE)"#))
+                .execute(&mut admin)
+                .await
+                .ok();
+        }
+        let pool = pool.context("could not connect to the scenario database")?;
+        admin.close().await.ok();
 
         Ok(Self { name, server, pool })
     }
