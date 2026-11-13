@@ -30,7 +30,8 @@ per-entity-type search plus a unified search across them — mounted into
   at a time, so one lookup can't drain a connection pool. A read capped at a
   row count returns the newest matches, so it can miss an older exact name:
   the channel source reads exact names on their own when its substring read
-  fills.
+  fills, one anchored pattern per comma-separated part so an unnamed private
+  channel still matches by its members' names.
 - `src/outbound.rs` + `src/outbound/agent_session.rs`: the OpenSearch query
   builders.
 

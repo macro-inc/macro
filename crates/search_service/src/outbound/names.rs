@@ -44,7 +44,7 @@ impl ChannelNames {
         // The read returns the newest matches, so a full one may have left out
         // an older channel named exactly this; read those on their own.
         if ids.len() >= CHANNELS_PER_NAME as usize {
-            ids.extend(self.read(viewer, &[exact_pattern(needle)], true).await?);
+            ids.extend(self.read(viewer, &exact_patterns(needle), true).await?);
         }
         Ok(ids)
     }
@@ -73,16 +73,37 @@ impl ChannelNames {
     }
 }
 
-/// A case-insensitive regex for a name the lookup would call `needle`
-/// exactly: surrounding space, one leading `#` or `@`, any run of space
-/// between words.
-fn exact_pattern(needle: &Needle) -> String {
-    let words: Vec<String> = needle
+/// Case-insensitive regexes, one per comma-separated part of `needle`, that
+/// together match every channel the lookup would call `needle` exactly:
+/// surrounding space, one leading `#` or `@`, any run of space between
+/// words. Each part is anchored at the name's ends or a comma, because an
+/// unnamed private channel's name lists its members with commas and the
+/// read matches each part against one member's name.
+fn exact_patterns(needle: &Needle) -> Vec<String> {
+    let parts: Vec<Vec<String>> = needle
         .as_str()
-        .split_whitespace()
-        .map(name_search::escape_regex)
+        .split(',')
+        .map(|part| {
+            part.split_whitespace()
+                .map(name_search::escape_regex)
+                .collect::<Vec<_>>()
+        })
+        .filter(|words| !words.is_empty())
         .collect();
-    format!(r"^\s*[#@]?\s*{}\s*$", words.join(r"\s+"))
+    let last = parts.len().saturating_sub(1);
+    parts
+        .iter()
+        .enumerate()
+        .map(|(index, words)| {
+            let start = if index == 0 {
+                r"^\s*[#@]?\s*"
+            } else {
+                r"(^|,)\s*"
+            };
+            let end = if index == last { r"\s*$" } else { r"\s*(,|$)" };
+            format!("{start}{}{end}", words.join(r"\s+"))
+        })
+        .collect()
 }
 
 #[async_trait::async_trait]
