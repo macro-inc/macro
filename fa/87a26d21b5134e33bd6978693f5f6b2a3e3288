@@ -1,0 +1,27 @@
+apps/web/justfile
+  s_7f65392b5f68c8::t_b9dbe2a53390a6 536-541
+apps/web/package.json
+  s_7f65392b5f68c8::t_e727b5c737959e 16
+apps/web/scripts/cached-wasm-build.sh
+  s_7f65392b5f68c8::t_329dc0560555a4 99-106
+docker/docker-compose-databases.yml
+  s_7f65392b5f68c8::t_e0b8d3b8252a75 14-22
+nix/cloud-storage.nix
+  s_7f65392b5f68c8::t_fad9206f74e589 66-67,72-73,1270-1276,1284-1303
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fa87a26d21b5134e33bd6978693f5f6b2a3e3288",
+  "prompts": {},
+  "sessions": {
+    "s_7f65392b5f68c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c668b76c-1e3f-4598-b60a-4b8d2d51fda7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
