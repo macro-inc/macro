@@ -126,6 +126,9 @@ impl Machine {
             initial_telemetry: capture.finish(),
             constructor_clock: None,
             view_commands: None,
+            entry: 0,
+            code_tokens: None,
+            code_token_failure: None,
             pending_checklist_output: vec![],
             #[cfg(test)]
             fail_next_output_generation: false,
