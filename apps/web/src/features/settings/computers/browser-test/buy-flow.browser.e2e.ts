@@ -144,9 +144,19 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
     releaseOffers = resolve;
   });
   let computers: ComputerStatus[] = [];
+  let chargeConfirmedAt = Number.POSITIVE_INFINITY;
   await page.route('**/auth/team/computers', async (route) => {
-    if (route.request().method() === 'GET') return json(route, 200, computers);
-    computers = [computer];
+    if (route.request().method() === 'GET') {
+      // The charge is confirmed a few seconds after the purchase.
+      if (
+        computers[0]?.status === 'purchasing' &&
+        Date.now() >= chargeConfirmedAt
+      )
+        computers = [computer];
+      return json(route, 200, computers);
+    }
+    computers = [{ ...computer, status: 'purchasing', billing: 'purchasing' }];
+    chargeConfirmedAt = Date.now() + 4_000;
     return json(route, 202, { computerId: 'computer-1', state: 'confirming' });
   });
   await page.route('**/auth/team/computers/offers', async (route) => {
@@ -202,14 +212,26 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
   ).toHaveAttribute('aria-current', 'step');
   await shoot(page, 'buy-agent');
 
-  // Setup carries on behind the step, with the stage and its elapsed time.
+  // Billing comes first, then setup carries on behind the step, with the
+  // stage and its elapsed time.
   const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
-  await expect(progress.getByRole('listitem')).toHaveText([
-    /Creating the computer\s*\d+:\d\d/,
-    'Starting up',
-    'Connecting to Macro',
-    'Sign in to Claude',
-  ]);
+  await expect(progress.getByRole('listitem').first()).toHaveText(
+    /Updating billing…\s*\d+:\d\d/
+  );
+  await expect(
+    page.locator('[data-runtime-row="Maya\'s Agent Box"]')
+  ).toContainText(/Setting up · Updating billing… · \d+:\d\d/);
+  await shoot(page, 'buy-billing');
+  await expect(progress.getByRole('listitem')).toHaveText(
+    [
+      'Updating billing…',
+      /Creating the computer\s*\d+:\d\d/,
+      'Starting up',
+      'Connecting to Macro',
+      'Sign in to Claude',
+    ],
+    { timeout: 10_000 }
+  );
   // Continue is disabled until a Claude is chosen, and says so.
   await expect(
     dialog(page).getByRole('button', { name: 'Continue' })
@@ -231,12 +253,12 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
   // Nothing greyed out: the step says what it waits for, and the sign-in
   // stage is listed as a later one that unlocks by itself.
   await expect(dialog(page).getByRole('status')).toHaveText(
-    /Preparing sign-in… creating the computer · \d+:\d\d/
+    /Preparing sign-in… Creating the computer · \d+:\d\d/
   );
   await expect(
     dialog(page).getByRole('button', { disabled: true })
   ).toHaveCount(0);
-  await expect(progress.getByRole('listitem').nth(3)).toContainText(
+  await expect(progress.getByRole('listitem').nth(4)).toContainText(
     'Sign in to Claude'
   );
   await shoot(page, 'buy-claude-waiting');
@@ -297,9 +319,12 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
   page,
 }) => {
   let computers: ComputerStatus[] = [];
+  // The fail-fast state's reason, as the API will send it.
+  const failedWithReason = { ...computer, status: 'failed' as const };
+  Reflect.set(failedWithReason, 'failureReason', 'The host ran out of disk.');
   await page.route('**/auth/team/computers', async (route) => {
     if (route.request().method() === 'GET') return json(route, 200, computers);
-    computers = [{ ...computer, status: 'failed' }];
+    computers = [failedWithReason];
     return json(route, 200, { computerId: 'computer-1', state: 'ready' });
   });
   await page.route('**/auth/team/computers/offers', (route) =>
@@ -317,8 +342,10 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
     .click();
 
   const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
-  const stuck = progress.getByRole('listitem').first();
-  await expect(stuck).toContainText('The computer could not be set up');
+  const stuck = progress.getByRole('listitem').nth(1);
+  await expect(stuck).toContainText(
+    'The host ran out of disk. The computer could not be set up'
+  );
   await expect(
     page.locator('[data-runtime-row="Maya\'s Agent Box"]')
   ).toContainText('Failed');

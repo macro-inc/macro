@@ -52,10 +52,22 @@ impl FleetAttachmentSource for StaticFleetAttachment {
     }
 }
 
-/// Classifies a fleet failure that requires replacing a lost guest.
+/// Storage could not be reached at all right now (no connection to be had
+/// from the pool). An adapter reports it as the source of its error; the
+/// passes skip that tick and retry on the next, never counting it as a
+/// failed attempt. See [`crate::domain::service::ComputerError::is_storage_unavailable`].
+#[derive(Debug, thiserror::Error)]
+#[error("computer storage is unavailable right now")]
+pub struct StorageUnavailable(#[source] pub Box<dyn std::error::Error + Send + Sync + 'static>);
+
+/// Classifies a fleet failure: a lost guest is replaced, a permanent
+/// failure fails the computer at once, anything else is retried.
 pub trait FleetError: std::error::Error + Send + Sync + 'static {
     /// True only when the addressed instance no longer exists.
     fn is_missing(&self) -> bool;
+    /// True when retrying the same request cannot succeed, such as a
+    /// request the fleet rejected as invalid.
+    fn is_permanent(&self) -> bool;
 }
 
 /// An effect waiting in the outbox.

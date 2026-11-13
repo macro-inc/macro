@@ -43,6 +43,7 @@ fn authorized_threads_render_in_their_owning_inboxes_with_an_exact_id_filter() {
 
     let request = authorized_threads_request(
         viewer.clone(),
+        PreviewViewStandardLabel::Spam,
         vec![first, second],
         vec![own_link, teammate_link],
     );
@@ -52,7 +53,7 @@ fn authorized_threads_render_in_their_owning_inboxes_with_an_exact_id_filter() {
     assert_eq!(request.limit, Some(2));
     assert!(matches!(
         request.view,
-        PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Spam)
     ));
     assert!(!request.include_frecency);
     assert!(request.team_receipt.is_none());
