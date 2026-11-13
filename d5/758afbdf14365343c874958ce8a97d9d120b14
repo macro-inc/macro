@@ -1,0 +1,31 @@
+crates/agent_wakes/src/outbound/postgres.rs
+  s_fcbfa0c2313f05::t_0772d0fe705e9c 16-17,218,244
+crates/macro_db_client/migrations/20261113040504_agent_wakes.up.sql
+  s_fcbfa0c2313f05::t_0772d0fe705e9c 9-10
+crates/agent_wakes/src/outbound/postgres/test.rs
+  s_39eee246ac6b4a::t_cb58ad1e4f231d 230,267,278,283-284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d5758afbdf14365343c874958ce8a97d9d120b14",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
