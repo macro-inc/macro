@@ -159,7 +159,7 @@ export default {
   setupFailureDetails: 'Details',
   retrySetup: 'Retry setup',
   setupFailedTitle: 'Setup failed',
-  signInSkipped: "Not needed: the agent runs on Macro credits.",
+  signInSkipped: 'Not needed: the agent runs on Macro credits.',
   tryItAfterSetup: 'Try it and creating agents unlock once setup finishes.',
   pasteCodeToContinue: 'Paste the code from claude.ai to complete sign-in.',
   buyAfterSizesLoad: 'Buy unlocks once the sizes have loaded.',
