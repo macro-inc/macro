@@ -1,4 +1,10 @@
-import { expect, type Page, type Route, test } from '@playwright/test';
+import {
+  expect,
+  type Locator,
+  type Page,
+  type Route,
+  test,
+} from '@playwright/test';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 
@@ -425,6 +431,119 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     });
     await shoot(page, 'create-agent-form');
   });
+
+/**
+ * Whether the element is fully on screen: inside the viewport and every
+ * scrolling ancestor, and on top at its centre and corners, so no footer
+ * or other layer covers any of it.
+ */
+async function fullyInView(option: Locator) {
+  return option.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const inside = (outer: DOMRect) =>
+      box.top >= outer.top - 0.5 &&
+      box.bottom <= outer.bottom + 0.5 &&
+      box.left >= outer.left - 0.5 &&
+      box.right <= outer.right + 0.5;
+    if (!inside(new DOMRect(0, 0, window.innerWidth, window.innerHeight)))
+      return 'outside the viewport';
+    for (
+      let parent = element.parentElement;
+      parent;
+      parent = parent.parentElement
+    ) {
+      const { overflowY } = getComputedStyle(parent);
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        !inside(parent.getBoundingClientRect())
+      )
+        return 'clipped by its scroll area';
+    }
+    // Pills round their corners off, so sample the ends at mid-height and
+    // the middle at its top and bottom edges.
+    const middleX = box.left + box.width / 2;
+    const middleY = box.top + box.height / 2;
+    const radius = Math.min(box.height / 2, box.width / 4);
+    const points = [
+      [middleX, middleY],
+      [box.left + radius, middleY],
+      [box.right - radius, middleY],
+      [middleX, box.top + 2],
+      [middleX, box.bottom - 2],
+    ];
+    for (const [x, y] of points) {
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || !element.contains(hit))
+        return `covered at ${Math.round(x)},${Math.round(y)} by ${hit?.outerHTML.slice(0, 160)}`;
+    }
+    return 'in view';
+  });
+}
+
+test('keeps both Claude options reachable above the footer at short heights, with progress collapsed', async ({
+  page,
+}) => {
+  let computers: ComputerStatus[] = [];
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, computers);
+    computers = [computer];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await expect(
+    dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
+  ).toBeVisible();
+
+  // Progress starts as the one collapsed line.
+  const progressLine = dialog(page).getByRole('button', {
+    name: /^Creating the computer · \d+:\d\d$/,
+  });
+  await expect(progressLine).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    dialog(page).getByRole('list', { name: 'Setup progress' })
+  ).toHaveCount(0);
+
+  // The purchase toast is its own layer; let it go before checking cover.
+  await expect(
+    page.getByText('Computer purchased. Provisioning now.')
+  ).toHaveCount(0, { timeout: 15_000 });
+  const claudeChoice = dialog(page).getByRole('radiogroup', {
+    name: 'Which Claude should it use?',
+  });
+  const heights =
+    test.info().project.name === 'phone' ? [664, 560] : [720, 600, 480];
+  for (const height of heights) {
+    await page.setViewportSize({
+      width: page.viewportSize()?.width ?? 1280,
+      height,
+    });
+    for (const name of ['Your Claude account', 'Macro credits']) {
+      // The option is the segment around its visually hidden radio.
+      const option = claudeChoice.getByRole('radio', { name }).locator('..');
+      await option.scrollIntoViewIfNeeded();
+      expect(await fullyInView(option), `${name} at ${height}px`).toBe(
+        'in view'
+      );
+    }
+    // The footer's actions stay reachable too.
+    const footerContinue = dialog(page).getByRole('button', {
+      name: 'Continue',
+    });
+    await footerContinue.scrollIntoViewIfNeeded();
+    expect(await fullyInView(footerContinue), `Continue at ${height}px`).toBe(
+      'in view'
+    );
+    await shoot(page, `claude-choice-${height}`);
+  }
+});
 
 test('a failed setup says why, offers Retry, and carries on after it', async ({
   page,

@@ -1002,7 +1002,9 @@ creates on the computer ("<buyer first name>'s Agent", a coding agent that
 bypasses permission prompts) and asks **Which Claude should it use?** with a
 two-option segmented control, **Your Claude account** or **Macro credits**
 (each option's hint is its description and desktop tooltip); nothing is
-preselected. The name and
+preselected. Both options must stay reachable at any viewport height: the
+step's body scrolls above a footer that never covers it, and the buy-flow
+browser test checks both options at 1280x720/600/480 and 390x664/560. The name and
 choice apply once the computer is up: the rename (`PATCH /bots/{bot_id}`), then
 Claude, then setup-complete.
 
