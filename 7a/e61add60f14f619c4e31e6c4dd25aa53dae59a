@@ -1,0 +1,36 @@
+packages/sdk/src/events/subscribe.ts
+  s_1656893481611a::t_af2020a8f3e730 43-56,90-94,282-290
+packages/sdk/src/events/receiver.ts
+  s_1656893481611a::t_af2020a8f3e730 26,58-64,331-333,337-341,347-349,351-353
+  s_1656893481611a::t_5919ea5793c71c 302-306
+packages/sdk/src/macro.ts
+  s_1656893481611a::t_5919ea5793c71c 136
+packages/sdk/README.md
+  s_1656893481611a::t_5919ea5793c71c 886-889
+packages/sdk/tests/events.test.ts
+  s_3c6362fd17dcc4::t_c5fb8bcb67c7e5 2,152-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7ae61add60f14f619c4e31e6c4dd25aa53dae59a",
+  "prompts": {},
+  "sessions": {
+    "s_1656893481611a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b222a84f-15df-400c-9f06-1a0c64e2aa0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_3c6362fd17dcc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02467add-a007-41c9-9280-bad5f33c09fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
