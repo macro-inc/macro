@@ -213,11 +213,7 @@ pub async fn get_document_access(
 /// (from [`get_user_source_ids`](super::get_user_source_ids)), which always
 /// include the user id: the anonymous public-link-only check stays in
 /// [`get_document_access`].
-#[tracing::instrument(
-    err,
-    skip_all,
-    fields(document_count = document_ids.len(), source_id_count = source_ids.0.len())
-)]
+#[tracing::instrument(err, skip_all, fields(document_count = document_ids.len()))]
 pub async fn get_documents_access(
     pool: &PgPool,
     document_ids: &[uuid::Uuid],

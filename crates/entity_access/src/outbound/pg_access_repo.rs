@@ -94,7 +94,11 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip_all, fields(document_count = document_ids.len()))]
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(document_count = document_ids.len(), source_id_count = tracing::field::Empty)
+    )]
     async fn get_documents_access(
         &self,
         document_ids: &[String],
@@ -107,6 +111,8 @@ impl AccessRepository for PgAccessRepository {
         let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
             .await
             .map_err(anyhow_access_error)?;
+        // Every statement below binds the whole list, so its length predicts the cost.
+        tracing::Span::current().record("source_id_count", source_ids.0.len());
         // The ids `get_document_access` would parse as UUIDs share one
         // statement per batch; the rest take its legacy path, one at a time.
         let mut by_uuid: HashMap<Uuid, Vec<&String>> = HashMap::new();

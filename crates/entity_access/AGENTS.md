@@ -66,7 +66,6 @@ the entity-access domain service.
   (`queries/document_access/documents_access.sql`) and must answer each one as
   `get_document_access` does: change their sources together, and extend
   `test/documents_access.rs` and its fixture, which compare the two.
-
 - `get_user_source_ids` is cached for 10 s per process and concurrent misses
   for one user share one query through `single_flight`. A failure then arrives
   as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
