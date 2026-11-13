@@ -1,9 +1,10 @@
 //! System skill for writing a routine, or changing one, from a conversation.
 //!
-//! Its second half is `routine_program::WRITING`, the text every writer of
-//! routines follows; this module adds only how a session finds the items,
-//! checks and saves the routine, and answers: in code ([`PROMPT`], the skill
-//! itself), or with the routine tools ([`DIRECT`]).
+//! It ends with `routine_program::WRITING`, the text every writer of routines
+//! follows; this module adds only how a session finds the items, checks and
+//! saves the routine, and answers. The skill ([`PROMPT`]) says that for code,
+//! then briefly for the routine tools; [`DIRECT`] is the routine-tools part
+//! alone, for hosts without code.
 
 use prompt::{ComposedPrompt, StaticPrompt};
 
@@ -17,8 +18,8 @@ Be quick. Usually one program finds what the request names, checks the routine a
 
 ## Find what it names
 
-- Look up every item the request names (a channel, person, project or folder, document, database, label or tag) with one `macro.search.names([...])` call, each name as written. The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
-- When a name has no exact match, or several and the request doesn't say which kind it means, ask which one with `AskUser` before saving.
+- Look up every item the request names (a channel, person, project or folder, document, database, label or tag) with one `macro.search.names([...])` call, each name as written, as `{ name, kinds }` when the request says its kind (a #name is a channel). The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
+- When a name has no exact match, or several and the request doesn't say which kind it means, ask which one (with `AskUser` where you have it) before saving.
 - When they mean a routine they have (attached, or "my invoice routine"), change it rather than adding another. Find it by name in `await macro.routines.list({ includeEvents: true })`, or with `macro.routines.byId(id)` when it is attached. Return `routine.toJSON().detail` (after `await routine.name()` for one from `byId`) to read its `trigger` and `task` as stored.
 
 ## Write it
@@ -29,7 +30,7 @@ Write it as `macro.routines.create` takes it:
 - `steps`: code steps `{ type: 'code', title, summary, knobs, sentence, source }`, then an Ask AI step `{ type: 'agent', instructions, model: 'anthropic/claude-sonnet-5-5' }` only when the work needs one.
 - A knob for an item the request names holds the name it matched, and the step looks it up when it runs, as in the example.
 - Create beforehand only what the routine needs to exist before it runs, when the request asks for something new that the routine then uses (a database it adds rows to, a folder it files into): create it with the name given, put its id in the knob, and pass its handle in `created`. Create nothing else.
-- To change a routine, `routine.update(options)` replaces all of it, so pass everything as stored with only the change asked for: each code step with its `id`, an Ask AI step's `model` and agent (`macro.agents.byId(step.agent.bot_id)`), `dangerouslyOperateAsUser` from `task.dangerously_operate_as_user`, and every filter's items again as `entities` (`macro.channels.byId(id)`, `macro.tasks.byId(id)`): a filter passed back with its stored `ids` loses them and watches everything. A routine with apps (`task.mcp_servers`) can't be changed here: say so, with its link.
+- To change a routine, `routine.update(options)` replaces all of it, so pass everything as stored with only the change asked for: each code step with its `id`, an Ask AI step's `model` and agent (`macro.agents.byId(step.agent.bot_id)`), `dangerouslyOperateAsUser` from `task.dangerously_operate_as_user`, and each filter with every field kept (such as a `property` or `github` selector) but its `ids` given again as `entities` (`macro.channels.byId(id)`, `macro.tasks.byId(id)`): a filter passed back with its stored `ids` loses them and watches everything. A routine stored as one agent task (`task.prompt`) is passed back the same way, as `prompt`, `userPrompt`, `model` and `agent`. A routine with apps (`task.mcp_servers`) can't be changed here: say so, with its link.
 
 ## Check, then save, in the same program
 
@@ -45,7 +46,10 @@ In one or two sentences, say when it runs and what each run does, with its link 
 
 ```js
 export async function main({ macro }) {
-  const { results } = await macro.search.names(['#customer-feedback', '#bug-triage']);
+  const { results } = await macro.search.names([
+    { name: '#customer-feedback', kinds: ['channel'] },
+    { name: '#bug-triage', kinds: ['channel'] },
+  ]);
   const exact = results.map((result) => result.matches.filter((match) => match.exact));
   if (exact.some((matches) => matches.length !== 1)) {
     const options = results.map(({ name, matches }) => ({ name, matches: matches.map(({ type, name, exact }) => ({ type, name, exact })) }));
@@ -97,15 +101,26 @@ static INTENT: &str = "A request for a routine, or a change to one, becomes a ch
 
 static SESSION: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
+static DIRECT_INSTRUCTIONS: &str = r##"With the routine tools instead of code: find every item the request names with the tool for its kind, comparing names exactly: `NameSearch` for a channel, document or folder, and `ListLabels`, `ListTags`, `ListTeamMembers`, `ListDatabases`, `ListInitiatives` or `ListAgents` for the others. Ask in your reply about a name with no exact match, or several. Find a routine they mean to change with `ListRoutines` and `ReadRoutine`, and change it rather than adding another. Save with `CreateRoutine`, or `UpdateRoutine` (`"type": "configuration"`, the whole configuration with only the change asked for): their descriptions give the configuration's shape, in which a filter lists its items' ids in `ids`. Saving checks it: fix what a refusal names and save again. Then say in one or two sentences when it runs and what each run does, with its link."##;
+
+static WITHOUT_CODE: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Without code",
+    DIRECT_INSTRUCTIONS,
+    "A session that can't run programs saves the routine with the routine tools.",
+);
+
 static WRITING: StaticPrompt<'static> = StaticPrompt::borrowed(
     "Writing the routine",
     routine_program::WRITING,
     "Triggers, steps, items and code steps, the same for every writer of routines.",
 );
 
+static SESSION_WITHOUT_CODE: ComposedPrompt = SESSION.compose(&WITHOUT_CODE);
+
 /// The skill's instructions as a composable prompt section: how a code-mode
-/// session finds, checks, saves and reports a routine, then how to write one.
-pub static PROMPT: ComposedPrompt = SESSION.compose(&WRITING);
+/// session finds, checks, saves and reports a routine, what a session without
+/// code does instead, then how to write one.
+pub static PROMPT: ComposedPrompt = SESSION_WITHOUT_CODE.compose(&WRITING);
 
 /// The compose-routines system skill.
 pub static SKILL: SystemSkill = SystemSkill {
@@ -113,8 +128,6 @@ pub static SKILL: SystemSkill = SystemSkill {
     name: "Compose Routines",
     content: &PROMPT,
 };
-
-static DIRECT_INSTRUCTIONS: &str = r##"Follow this when someone asks for a routine, or to change one. Find every item the request names with `NameSearch`: the item is the exact match, and a name with none or several is asked about in your reply. Find a routine they mean to change with `ListRoutines` and `ReadRoutine`, and change it rather than adding another. Save with `CreateRoutine`, or `UpdateRoutine` (`"type": "configuration"`, the whole configuration with only the change asked for): their descriptions give the configuration's shape, in which a filter lists its items' ids in `ids`. Saving checks it: fix what a refusal names and save again. Then say in one or two sentences when it runs and what each run does, with its link."##;
 
 static DIRECT_INTENT: &str = "A request for a routine, or a change to one, is saved with the routine \
      tools in one call when nothing is unsettled, and reported in a sentence or two.";
@@ -128,7 +141,8 @@ static RULES: StaticPrompt<'static> = StaticPrompt::borrowed(
     "Triggers, steps and items, the same for every writer of routines.",
 );
 
-/// The skill for hosts that save routines with the routine tools rather than
-/// code: how to find, save and report a routine, then how to write one,
-/// without the code-step contract `CreateRoutine`'s description carries.
+/// The skill as hosts that save routines with the routine tools carry it
+/// after the routines guide: its without-code part, then how to write a
+/// routine, short of the code-step contract `CreateRoutine`'s description
+/// carries.
 pub static DIRECT: ComposedPrompt = DIRECT_SESSION.compose(&RULES);
