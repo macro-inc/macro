@@ -9,6 +9,9 @@ import type {
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { getItemPreview } from '@queries/preview/preview';
+import { isAccessiblePreviewItem } from '@queries/preview/types';
 import type { SuggestionActions } from './context/suggestions-source';
 import type { SuggestionTarget } from './core/suggestion';
 
@@ -63,10 +66,32 @@ export function createSuggestionActions(
       return;
     }
 
+    if (target.entityType === 'document') {
+      fireAndForget(openDocument(target.entityId), 'suggestions');
+      return;
+    }
+
     const content = targetContent(target);
     if (!content) return;
 
     layout.openWithSplit(content, { activate: true, preferNewSplit: true });
+  };
+  /**
+   * A document's view depends on its file type, which a suggestion doesn't
+   * carry: read it, then open that view. One the person can't read opens as
+   * a note, whose view says so.
+   */
+  const openDocument = async (id: string) => {
+    const preview = await getItemPreview({ id, type: 'document' });
+    const fileType = isAccessiblePreviewItem(preview)
+      ? preview.fileType
+      : undefined;
+    const block = fileTypeToBlockName(fileType ?? 'md');
+
+    layout.openWithSplit(
+      { type: block === 'unknown' ? 'md' : block, id },
+      { activate: true, preferNewSplit: true }
+    );
   };
 
   return {
