@@ -17,8 +17,9 @@ no I/O.
 - `src/contract.rs`: what a code step receives and returns. `WRITING`
   (`src/writing.md` then `src/code_steps.md`: how to write a routine, the one
   text the Compose Routines skill, the drafter and suggestions carry; it names
-  no tool and no filter spelling), `CODE_STEPS` (`src/code_steps.md` alone,
-  which CreateRoutine's description appends), `STEP_CONTEXT` (the type of
+  no tool and no filter spelling), `ROUTINE_RULES` (`src/writing.md` alone,
+  which the skill's routine-tools form carries), `CODE_STEPS`
+  (`src/code_steps.md` alone, which CreateRoutine's description appends), `STEP_CONTEXT` (the type of
   `main`'s argument: `run`, `routine`, `trigger`, `steps`, `knobs`), `code_version`
   (the SDK fingerprint plus a hash of `STEP_CONTEXT`, recorded as `sdk`),
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
@@ -49,7 +50,8 @@ no I/O.
 ## Boundaries
 
 - Depends on: `bots` (`AgentMcpServer`).
-- Used by: `scheduled_action`, `routines` (agent tools), and through the
+- Used by: `scheduled_action`, `routines` (agent tools), `system_skills`
+  (Compose Routines), and through the
   scheduler's generated clients the SDK (`macro.routines`) and the web app's
   routines editor (`core/routine-steps.ts`).
 
