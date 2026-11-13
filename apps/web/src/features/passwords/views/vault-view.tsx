@@ -21,6 +21,7 @@ import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
+import TrayArrowDownIcon from '@icon/system/regular/tray-arrow-down.svg';
 import { Button, Dropdown } from '@ui';
 import { err } from 'neverthrow';
 import {
@@ -58,6 +59,7 @@ import {
 } from '../core/types';
 import { createPasswordFolderDrag } from '../primitives/folder-drag';
 import { createVault, type VaultController } from '../primitives/vault';
+import { ImportDialog } from './import-dialog';
 
 type MobileTab = 'all' | 'favorites' | 'recent' | 'shared' | 'folders';
 
@@ -435,6 +437,7 @@ function ListChrome(props: { children: JSX.Element }) {
 function MobileNew(props: {
   hasSelection: boolean;
   onCreate: (kind: PasswordKind) => void;
+  onImport: () => void;
 }) {
   const shell = useViewShell();
   return (
@@ -447,11 +450,18 @@ function MobileNew(props: {
       <div class="pointer-events-auto flex justify-end px-(--mobile-chrome-gutter)">
         <MobileCreateMenu
           label={t('passwords.new')}
-          items={PASSWORD_KINDS.map((kind) => ({
-            label: t(`passwords.${kind}`),
-            icon: KIND_ICONS[kind],
-            onSelect: () => props.onCreate(kind),
-          }))}
+          items={[
+            ...PASSWORD_KINDS.map((kind) => ({
+              label: t(`passwords.${kind}`),
+              icon: KIND_ICONS[kind],
+              onSelect: () => props.onCreate(kind),
+            })),
+            {
+              label: t('passwords.import'),
+              icon: TrayArrowDownIcon,
+              onSelect: props.onImport,
+            },
+          ]}
         />
       </div>
     </FloatRegion>
@@ -507,6 +517,8 @@ export function VaultView(props: {
   /** A name field chosen in the header menu, opened when the menu closes. */
   let headerEditor: FolderEditing | undefined;
   const [mobileFolders, setMobileFolders] = createSignal(false);
+  const [importing, setImporting] = createSignal(false);
+  const openImport = () => setImporting(true);
   const [leave, setLeave] = createSignal<(allow: boolean) => void>();
   const [now, setNow] = createSignal(Date.now());
   const ticker = setInterval(() => {
@@ -682,6 +694,7 @@ export function VaultView(props: {
             onSearch={vault.setSearch}
             destination={destination()}
             onCreate={create}
+            onImport={openImport}
             onLock={vault.lock}
           />
         </ViewShell.Aside>
@@ -759,6 +772,7 @@ export function VaultView(props: {
                   presentation="toolbar"
                   destination={destination()}
                   onCreate={create}
+                  onImport={openImport}
                 />
                 <ListHeaderSearch
                   label={t('passwords.search')}
@@ -797,7 +811,11 @@ export function VaultView(props: {
                 </div>
               </ViewShell.Header>
             </ListChrome>
-            <MobileNew hasSelection={!!selection()} onCreate={create} />
+            <MobileNew
+              hasSelection={!!selection()}
+              onCreate={create}
+              onImport={openImport}
+            />
           </Show>
           <ViewShell.Content>
             <div class="h-full overflow-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]">
@@ -880,6 +898,20 @@ export function VaultView(props: {
           </Switch>
         </ViewShell.Detail>
       </ViewShell.Root>
+      <Show when={importing()}>
+        <ImportDialog
+          items={vault.availableItems}
+          folders={vault.loadedFolders}
+          refresh={async () => {
+            await Promise.all([vault.items.refetch(), vault.folders.refetch()]);
+          }}
+          onOpenFolder={(folderId) => {
+            setImporting(false);
+            selectFilter(folderId ? `folder:${folderId}` : 'all');
+          }}
+          onClose={() => setImporting(false)}
+        />
+      </Show>
     </div>
   );
 }

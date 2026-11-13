@@ -67,6 +67,65 @@ reveals an explicitly selected version. The generator
 picks a length (12–128) and character classes; every selected class is always
 present, and characters are drawn uniformly with rejection sampling.
 
+## Importing from 1Password or Bitwarden
+
+The New menu (desktop sidebar and list header) and the phone's floating New end
+with Import…, which opens the import dialog (a full-screen sheet on phones).
+Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON or
+CSV export. The file is parsed on the device: `crates/password_import`
+compiled to wasm (`crates/password_import_wasm`, built by
+`just ensure-password-import-wasm`) runs in a worker started for that file and
+terminated after it answers; the raw file is never uploaded or stored. An
+unreadable or encrypted file shows the reason in place.
+
+The dialog is a `Panel` with a header close button (disabled only while
+items are being sent), like the invite and customize-sidebar dialogs; reading
+the file shows a spinner. The preview shows the format, counts per kind, the
+source folder tree, one Not carried over section (whole items left out by
+reason, parts of imported items such as passkeys and previous passwords, and
+one Files and attachments line for both file items and attachments; Show
+items lists the left-out items by name), and how many items
+look like ones the vault has (same kind, name ignoring case, website host).
+Skip items I already have is on by default; when it would leave nothing to
+import, the preview says so (turn it off to import copies) and offers Done. When the vault list is at its
+500-item cap, or still loading or failed, the export's distinct names are matched in the vault with
+`POST …/items/match` (names trimmed and lower-cased once on the client, in
+the body, never a URL; at most 500 names and 192 KiB per request, metadata
+only); if a request fails the preview says the vault could not be checked
+for duplicates, and if an answer is capped it says some may not be
+recognized. Import into shows the full destination with a Change menu beside it: a new folder
+"Imported from <source> <date>" (default; numbered " (2)", " (3)"… when a root
+folder already has that name, except when continuing an import, which reuses
+its folder), an existing folder, or the root; source folders nest under it. Keep imported
+items private to me, under Who can see them, leaves out the team grant. The 500-folder team limit and
+the 8-level depth limit are checked here and block the import.
+
+Import sends batches of at most 25 items and 3.5 MiB, one at a time, to
+`POST /passwords/teams/{team}/imports/{importId}/items`; items the vault
+answers busy are resent after a backoff. While sending, a progress bar, an
+estimate from the rate so far, and a note to keep the page open (or import
+the same file again in this tab to finish) show, and leaving the page asks
+first. The result counts imported, already present, skipped and failed items,
+lists the failed ones by reason (couldn't reach the server, which includes a
+gateway's 502-504, server error, busy, folder deleted, not accepted, not
+allowed, no answer, account changed) and offers Open folder. The import id is
+kept in sessionStorage under a hash of the viewer and the file's contents
+(hashed in the worker), with the destination, privacy and the source keys of
+items that may be unfinished: failed with an item id, or verification-code
+items sent without an answer yet (written only when that set changes). Importing the same file again in the tab continues the
+import with the same destination and privacy (locked in the preview) and
+resends those unfinished items rather than skipping them as duplicates, which
+finishes a verification code an earlier run could not set up. If the folder
+the import used is gone, the entry is dropped and the preview says it starts a
+new import. A batch request is resent only after no answer, a busy vault
+or a server error; items answered busy, unavailable or folder missing go into
+a later round. A file over the parser's 50 MB limit is refused before it is
+read. Spans: `passwords.import.parse`,
+`passwords.import.duplicates`, and `passwords.import` around the batches, with
+counts, format and import id only.
+
+## Checks
+
 The backend-free desktop and phone interaction suite mounts the actual vault
 with an injected fake source:
 
@@ -75,4 +134,6 @@ bunx playwright test --config src/features/passwords/browser-test/playwright.con
 ```
 
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the Nix Chrome binary when required.
+Its import case uses the real wasm parser: run `just ensure-password-import-wasm`
+in `apps/web` first.
 The fixture suite complements authenticated local-stack verification.

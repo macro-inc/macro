@@ -19,6 +19,7 @@ import { useQueryAccount } from '@queries/auth/use-query-account';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { PasswordsProvider } from './context/passwords-context';
+import { createSessionImportResume } from './queries/import-resume';
 import { passwordRecipients } from './queries/recipients';
 import { createPasswordSource } from './queries/source';
 import { VaultView } from './views/vault-view';
@@ -146,6 +147,12 @@ function PasswordsTeamView() {
                       names().some((name) => Boolean(name.error)),
                     writeClipboard: (value) =>
                       navigator.clipboard.writeText(value),
+                    // The parser and its worker load only when a file is chosen.
+                    parseExport: async (file) =>
+                      (
+                        await import('@core/password-import/client')
+                      ).parseExportFile(file),
+                    importResume: createSessionImportResume(),
                   }}
                 >
                   <VaultView

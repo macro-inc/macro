@@ -115,6 +115,16 @@ fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
         ("GET", "/teams".into(), serde_json::json!({})),
         ("GET", format!("/teams/{team}/items"), serde_json::json!({})),
         ("POST", format!("/teams/{team}/items"), create),
+        (
+            "POST",
+            format!("/teams/{team}/items/match"),
+            serde_json::json!({"names":["Synthetic"]}),
+        ),
+        (
+            "POST",
+            format!("/teams/{team}/imports/{}/items", Uuid::from_u128(4)),
+            serde_json::json!({"format":"bitwarden_json","target":{"kind":"root"},"private":false,"folders":[],"items":[]}),
+        ),
         ("GET", item.clone(), serde_json::json!({})),
         ("GET", format!("{item}/username"), serde_json::json!({})),
         (

@@ -34,6 +34,9 @@ stack generator owns the container, instance volumes, and generated credentials.
 
 ## Gotchas
 
+- Make the bind-mounted public `start.sh` and `local.hcl` readable by the
+  container's `openbao` user; private checkouts may need temporary read permission.
+
 - Preserve `/openbao/file/data`, `seal.key`, and `bootstrap.json` together on the
   named volume; Postgres stores metadata only and cannot reconstruct lost
   credentials or TOTP seeds.

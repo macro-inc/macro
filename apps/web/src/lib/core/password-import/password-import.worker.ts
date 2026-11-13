@@ -1,0 +1,38 @@
+/// <reference lib="webworker" />
+
+/**
+ * Parses one password-manager export off the main thread. The client starts
+ * a worker per file and terminates it after the reply, which frees the wasm
+ * memory that held the file and its values.
+ */
+import type { ParseReply } from './types';
+import { loadPasswordImportWasm } from './wasm-module';
+
+const scope = self as unknown as DedicatedWorkerGlobalScope;
+
+async function sha256Hex(buffer: ArrayBuffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('');
+}
+
+async function parse(buffer: ArrayBuffer): Promise<ParseReply> {
+  try {
+    const wasm = await loadPasswordImportWasm();
+    const bytes = new Uint8Array(buffer);
+    const detected = wasm.detect(bytes);
+    if (detected.outcome === 'failed') return detected;
+    const parsed = wasm.parse(bytes, detected.format);
+    if (parsed.outcome === 'failed') return parsed;
+    return { ...parsed, fileHash: await sha256Hex(buffer) };
+  } catch {
+    // Never forward the error: it could quote the file.
+    return { outcome: 'unreadable' };
+  }
+}
+
+// `parse` never rejects, so the handler always answers.
+scope.onmessage = async (event: MessageEvent<ArrayBuffer>) => {
+  scope.postMessage(await parse(event.data));
+};

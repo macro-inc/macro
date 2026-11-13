@@ -10,7 +10,10 @@ import { PasswordErrorCode } from '@service-storage/generated/schemas/passwordEr
 import type { PasswordFolder as FolderDto } from '@service-storage/generated/schemas/passwordFolder';
 import type { PasswordFolderBody } from '@service-storage/generated/schemas/passwordFolderBody';
 import type { PasswordGrant as GrantDto } from '@service-storage/generated/schemas/passwordGrant';
+import type { PasswordImportBatch } from '@service-storage/generated/schemas/passwordImportBatch';
+import type { PasswordImportBatchResult } from '@service-storage/generated/schemas/passwordImportBatchResult';
 import type { PasswordItemMetadata } from '@service-storage/generated/schemas/passwordItemMetadata';
+import type { PasswordMatchNames } from '@service-storage/generated/schemas/passwordMatchNames';
 import type { PasswordMoveFolderBody } from '@service-storage/generated/schemas/passwordMoveFolderBody';
 import type { PasswordPatchItem } from '@service-storage/generated/schemas/passwordPatchItem';
 import type { PasswordRevealBody } from '@service-storage/generated/schemas/passwordRevealBody';
@@ -21,8 +24,10 @@ import type { PasswordTotpCode } from '@service-storage/generated/schemas/passwo
 import type { PasswordUsername } from '@service-storage/generated/schemas/passwordUsername';
 import type { PasswordVersion as VersionDto } from '@service-storage/generated/schemas/passwordVersion';
 import type { PasswordWriteItem } from '@service-storage/generated/schemas/passwordWriteItem';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type {
+  ImportBatchResult,
+  ImportRequestFailure,
   PasswordFailure,
   PasswordResult,
   PasswordSource,
@@ -56,9 +61,31 @@ function folder(dto: FolderDto): PasswordFolder {
 const BUSY_RETRIES = 4;
 const BUSY_BACKOFF_MS = 200;
 
-function failure(codes: readonly (string | undefined)[]): PasswordFailure {
+function failure(codes: readonly string[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
   return 'failed';
+}
+
+/** The viewer changed: the request was dropped and must not be retried. */
+const SCOPE_CHANGED = 'SCOPE_CHANGED';
+
+/**
+ * Why a batch request failed, and whether to send it again: no answer, a busy
+ * vault (after the request's own busy retries) or a server error are worth
+ * resending; a rejected request would fail the same way.
+ */
+function importFailure(codes: readonly string[]): ImportRequestFailure {
+  const has = (code: string) => codes.includes(code);
+  if (has('NETWORK_ERROR')) return { retryable: true, reason: 'unreachable' };
+  if (has(PasswordErrorCode.vault_busy))
+    return { retryable: true, reason: 'busy' };
+  if (has('SERVER_ERROR') || has(PasswordErrorCode.vault_unavailable))
+    return { retryable: true, reason: 'server_error' };
+  if (has(SCOPE_CHANGED))
+    return { retryable: false, reason: 'account_changed' };
+  if (has(PasswordErrorCode.invalid_request))
+    return { retryable: false, reason: 'invalid' };
+  return { retryable: false, reason: 'refused' };
 }
 
 /**
@@ -82,11 +109,19 @@ export function createPasswordSource(
     method: string,
     body?: object
   ): PasswordResult<T> {
+    return (await requestCodes<T>(path, method, body)).mapErr(failure);
+  }
+  /** `request`, keeping the error codes: `NETWORK_ERROR` (no answer, or a gateway's 502-504), `SERVER_ERROR` (other 5xx), or the vault's. */
+  async function requestCodes<T extends object>(
+    path: string,
+    method: string,
+    body?: object
+  ): Promise<Result<T, string[]>> {
     const payload = body ? JSON.stringify(body) : undefined;
     return Telemetry.span('passwords.request', async (span) => {
       for (let retries = 0; ; retries++) {
         // Never send or finish a request for a viewer that has since changed.
-        if (!isCurrent()) return err('failed' as const);
+        if (!isCurrent()) return err([SCOPE_CHANGED]);
         span.setAttr('retry.count', retries);
         const response = await fetchWithToken<T, PasswordErrorCode>(
           `${root}${path}`,
@@ -101,6 +136,11 @@ export function createPasswordSource(
             retry: { maxTries: 1 },
             trace: { parentSpan: span },
             errorResponseHandler: async (response) => {
+              // A gateway that could not reach the service: no answer, as offline.
+              if ([502, 503, 504].includes(response.status))
+                return { code: 'NETWORK_ERROR', message: 'Unreachable' };
+              if (response.status >= 500)
+                return { code: 'SERVER_ERROR', message: 'Server error' };
               const fallback = statusError(response.status);
               if (response.status !== 403 && response.status !== 409)
                 return fallback;
@@ -121,7 +161,7 @@ export function createPasswordSource(
           }
         );
         // A response for a viewer that has since changed is dropped, busy or not.
-        if (!isCurrent()) return err('failed' as const);
+        if (!isCurrent()) return err([SCOPE_CHANGED]);
         if (
           response.isErr() &&
           retries < BUSY_RETRIES &&
@@ -132,9 +172,7 @@ export function createPasswordSource(
           await sleep(BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random()));
           continue;
         }
-        return response.mapErr((errors) =>
-          failure(errors.map((error) => error.code))
-        );
+        return response.mapErr((errors) => errors.map((error) => error.code));
       }
     });
   }
@@ -186,6 +224,14 @@ export function createPasswordSource(
       );
       if (!isCurrent()) throw new PasswordScopeChangedError();
       return items.map(metadata);
+    },
+    async matchNames(names) {
+      // Spanned by the caller's `passwords.import.duplicates`; names never reach attributes.
+      return (
+        await request<PasswordItemMetadata[]>('/items/match', 'POST', {
+          names,
+        } satisfies PasswordMatchNames)
+      ).map((items) => items.map(metadata));
     },
     async folders() {
       if (!isCurrent()) throw new PasswordScopeChangedError();
@@ -334,6 +380,29 @@ export function createPasswordSource(
     },
     totp(id) {
       return currentCode(id);
+    },
+    async importBatch(importId, batch) {
+      // Spanned by the caller's `passwords.import`; values never reach attributes.
+      return (
+        await requestCodes<PasswordImportBatchResult>(
+          `/imports/${encodeURIComponent(importId)}/items`,
+          'POST',
+          batch satisfies PasswordImportBatch
+        )
+      )
+        .mapErr(importFailure)
+        .map(
+          (result): ImportBatchResult => ({
+            targetFolderId: result.targetFolderId ?? null,
+            folders: result.folders,
+            items: result.items.map((item) => ({
+              sourceKey: item.sourceKey,
+              outcome: item.outcome,
+              errorCode: item.errorCode ?? undefined,
+              itemId: item.itemId ?? undefined,
+            })),
+          })
+        );
     },
     async logo(domain) {
       const response = await fetchWithToken<Uint8Array>(

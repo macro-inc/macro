@@ -515,6 +515,7 @@ export function VaultSidebar(
     onSearch: (value: string) => void;
     destination: string;
     onCreate: (kind: PasswordKind) => void;
+    onImport: () => void;
   }
 ) {
   return (
@@ -540,6 +541,7 @@ export function VaultSidebar(
           presentation="sidebar"
           destination={props.destination}
           onCreate={props.onCreate}
+          onImport={props.onImport}
         />
       </ViewSidebar.Primary>
       <ViewSidebar.Content>

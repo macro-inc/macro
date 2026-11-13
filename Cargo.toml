@@ -1,10 +1,13 @@
 [workspace]
 resolver = "2"
-# Patched third-party crates ([patch.crates-io]), not workspace members.
-exclude = ["vendor"]
+# Patched third-party crates ([patch.crates-io]) and nightly-only cargo-fuzz
+# crates, not workspace members.
+exclude = ["vendor", "crates/password_import/fuzz"]
 
 members = [
   "crates/passwords",
+  "crates/password_import",
+  "crates/password_import_wasm",
   "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
@@ -303,6 +306,7 @@ crossterm = "0.28"
 cookie = "0.18.1"
 cron = "0.16.0"
 csv = "1"
+csv-core = "0.1.13"
 dashmap = "6.1.0"
 dateparser = "0.2.1"
 determinator = "0.12.0"
@@ -348,6 +352,7 @@ indexmap = "2"
 infer = "0.19.0"
 indoc = "2"
 inquire = "0.7"
+insta = { version = "1.48.0", features = ["json"] }
 itertools = "0.14"
 jsonschema = { version = "0.58.6", default-features = false }
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
@@ -562,6 +567,11 @@ zip = { version = "9.0.5", default-features = false, features = [
   "time",
   "xz",
   "zstd",
+] }
+# Inflate-only zip for code that also builds for wasm32 (password_import): the
+# full `zip` entry above pulls C codecs (bzip2, zstd, lzma) that don't build there.
+zip-inflate = { package = "zip", version = "9.0.5", default-features = false, features = [
+  "deflate-flate2-zlib-rs",
 ] }
 ammonia = "4.1.9"
 html-escape = "0.2"

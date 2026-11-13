@@ -1,5 +1,6 @@
 //! Validated vault identities and metadata; secret buffers erase themselves on drop.
 use chrono::{DateTime, Utc};
+use password_import::vault;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -174,17 +175,19 @@ impl WriteItem {
         if self.operation_id.get_version_num() != 7 {
             return Err(Error::Invalid);
         }
-        if self.name.trim().is_empty() || self.name.len() > 200 || self.values.fields.len() > 50 {
+        if self.name.trim().is_empty()
+            || self.name.len() > vault::MAX_NAME_BYTES
+            || self.values.fields.len() > vault::MAX_FIELDS
+        {
             return Err(Error::Invalid);
         }
-        if self.values.password.0.len() > 65536
-            || self.values.username.0.len() > 65536
-            || self.values.notes.0.len() > 65536
-            || self
-                .values
-                .fields
-                .iter()
-                .any(|field| field.label.len() > 200 || field.value.0.len() > 65536)
+        if self.values.password.0.len() > vault::MAX_VALUE_BYTES
+            || self.values.username.0.len() > vault::MAX_VALUE_BYTES
+            || self.values.notes.0.len() > vault::MAX_VALUE_BYTES
+            || self.values.fields.iter().any(|field| {
+                field.label.len() > vault::MAX_LABEL_BYTES
+                    || field.value.0.len() > vault::MAX_VALUE_BYTES
+            })
         {
             return Err(Error::Invalid);
         }
@@ -387,15 +390,8 @@ pub struct LoginUrl(String);
 impl TryFrom<String> for LoginUrl {
     type Error = Error;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.len() > 2048 {
-            return Err(Error::Invalid);
-        }
-        let parsed = url::Url::parse(&value).map_err(|_| Error::Invalid)?;
-        if !matches!(parsed.scheme(), "http" | "https")
-            || parsed.host_str().is_none()
-            || !parsed.username().is_empty()
-            || parsed.password().is_some()
-        {
+        // The import preview applies the same rule, so its counts hold here.
+        if !vault::is_login_url(&value) {
             return Err(Error::Invalid);
         }
         Ok(Self(value))
@@ -421,3 +417,6 @@ pub struct TotpCleanup {
     /// Unique generation that may be erased after rechecking its retirement.
     pub key_id: TotpKeyId,
 }
+
+mod import;
+pub use import::*;

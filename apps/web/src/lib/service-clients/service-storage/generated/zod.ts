@@ -77376,6 +77376,260 @@ export const passwordsMoveFolderResponse = zod
   .describe('Folder names are metadata only.');
 
 /**
+ * @summary Import normalized credentials with independently retryable per-item outcomes.
+ */
+export const passwordsImportBatchParams = zod.object({
+  team: zod.uuid(),
+  import_id: zod.uuid(),
+});
+
+export const passwordsImportBatchHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsImportBatchBody = zod
+  .object({
+    folders: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .string()
+              .describe(
+                'Opaque source identity, bounded before hashing or returning it to a caller.'
+              ),
+            name: zod
+              .string()
+              .describe('Validated using ordinary vault folder rules.'),
+            parentKey: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Opaque source identity, bounded before hashing or returning it to a caller.'
+                  ),
+              ])
+              .optional(),
+          })
+          .describe(
+            'Source folder; parents must precede children in every batch.'
+          )
+      )
+      .describe('Source folder tree, parents first; resend with each batch.'),
+    format: zod
+      .enum([
+        'one_password_pux',
+        'one_password_csv',
+        'bitwarden_json',
+        'bitwarden_csv',
+      ])
+      .describe(
+        'Recognized client-side source parser; contains no export contents.'
+      ),
+    items: zod
+      .array(
+        zod
+          .object({
+            favorite: zod.boolean().describe('Favorite state from the export.'),
+            folderKey: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Opaque source identity, bounded before hashing or returning it to a caller.'
+                  ),
+              ])
+              .optional(),
+            kind: zod
+              .enum([
+                'login',
+                'card',
+                'note',
+                'identity',
+                'api',
+                'verification_code',
+              ])
+              .describe(
+                'Product template. Values use the same protected representation for every template.'
+              ),
+            name: zod
+              .string()
+              .describe('Display name, validated by the ordinary create path.'),
+            sourceKey: zod
+              .string()
+              .describe(
+                'Opaque source identity, bounded before hashing or returning it to a caller.'
+              ),
+            totp: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              ])
+              .optional(),
+            url: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+                  ),
+              ])
+              .optional(),
+            values: zod
+              .object({
+                fields: zod
+                  .array(
+                    zod
+                      .object({
+                        label: zod
+                          .string()
+                          .describe(
+                            'Private field label, stored alongside its value in OpenBao.'
+                          ),
+                        value: zod
+                          .string()
+                          .describe(
+                            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                          ),
+                      })
+                      .describe('One private custom field.')
+                  )
+                  .describe(
+                    'Additional private fields, including their labels.'
+                  ),
+                notes: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+                password: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+                username: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe(
+                'Secret payload; never persisted in the metadata database or traced.'
+              ),
+          })
+          .describe(
+            'One normalized credential; intentionally has no Debug implementation.'
+          )
+      )
+      .describe('Independently validated credentials.'),
+    private: zod
+      .boolean()
+      .describe('Omit the default team Edit grant on newly created items.'),
+    target: zod
+      .union([
+        zod
+          .object({
+            folderId: zod.uuid().describe('Destination folder identity.'),
+            kind: zod.enum(['existing']),
+          })
+          .describe('Validate and use a folder already in this team.'),
+        zod
+          .object({
+            kind: zod.enum(['new']),
+            name: zod
+              .string()
+              .describe('Validated using ordinary vault folder rules.'),
+          })
+          .describe('Idempotently create a top-level destination folder.'),
+        zod
+          .object({
+            kind: zod.enum(['root']),
+          })
+          .describe('Import directly into the team vault root.'),
+      ])
+      .describe('Destination under which source folders are nested.'),
+  })
+  .describe(
+    'At most 25 credentials and 200 source folders in a request bounded to 4 MiB.'
+  );
+
+export const passwordsImportBatchResponse = zod
+  .object({
+    folders: zod
+      .array(
+        zod
+          .object({
+            folderId: zod
+              .uuid()
+              .describe('Existing or ensured folder identity.'),
+            key: zod
+              .string()
+              .describe(
+                'Opaque source identity, bounded before hashing or returning it to a caller.'
+              ),
+          })
+          .describe('Source-to-vault folder identity without display names.')
+      )
+      .describe('Ensured source folders, in request order.'),
+    items: zod
+      .array(
+        zod
+          .object({
+            errorCode: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'not_found',
+                    'forbidden',
+                    'invalid_request',
+                    'version_conflict',
+                    'folder_missing',
+                    'busy',
+                    'vault_unavailable',
+                  ])
+                  .describe('Closed, sanitized per-item failure categories.'),
+              ])
+              .optional(),
+            itemId: zod
+              .union([
+                zod.null(),
+                zod
+                  .uuid()
+                  .describe('Vault item identity, UUIDv7 for new items.'),
+              ])
+              .optional(),
+            outcome: zod
+              .enum(['created', 'already_present', 'failed'])
+              .describe('Fixed per-item outcome.'),
+            sourceKey: zod
+              .string()
+              .describe(
+                'Opaque source identity, bounded before hashing or returning it to a caller.'
+              ),
+          })
+          .describe(
+            'Result for a single item; failed TOTP enrollment can still return the created item id.'
+          )
+      )
+      .describe('One result per input item, in request order.'),
+    targetFolderId: zod
+      .uuid()
+      .nullish()
+      .describe('Destination folder; null for the vault root.'),
+  })
+  .describe(
+    'Partial batch success without credential values or display metadata.'
+  );
+
+/**
  * @summary Search authorized metadata without resolving private values.
  */
 export const passwordsListParams = zod.object({
@@ -77638,6 +77892,108 @@ export const passwordsCreateResponse = zod
   .describe(
     'Actor-specific response capabilities, never part of persisted metadata or write intents.'
   );
+
+/**
+ * @summary Visible items named like the given names, for an import's duplicate check;
+names travel in the body so they stay out of URLs and access logs.
+ */
+export const passwordsMatchParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsMatchHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsMatchBody = zod
+  .object({
+    names: zod
+      .array(zod.string())
+      .describe(
+        "Names trimmed and lower-cased by the caller, compared with each item's\nlower-cased name; at most 500 (`password_import::vault::MAX_IMPORT_MATCH_NAMES`)."
+      ),
+  })
+  .describe(
+    'Item names to look for before an import, in the body so they stay out of\nURLs and access logs.'
+  );
+
+export const passwordsMatchResponseShareCountMin = 0;
+
+export const passwordsMatchResponseItem = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsMatchResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+export const passwordsMatchResponse = zod.array(passwordsMatchResponseItem);
 
 /**
  * @summary Read authorized item metadata only.
