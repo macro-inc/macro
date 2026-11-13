@@ -269,7 +269,10 @@ fn part(mail: &ParsedMail<'_>, part_id: String) -> Part {
     // Gmail lists the message a `message/rfc822` part wraps, such as the
     // original a bounce returns, as that part's one child.
     let wrapped = match mime_type == "message/rfc822" && !is_attachment {
-        true => mail.get_body_raw().ok(),
+        true => mail
+            .get_body_raw()
+            .ok()
+            .filter(|raw| !raw.trim_ascii().is_empty()),
         false => None,
     };
     if let Some(inner) = wrapped
@@ -312,6 +315,11 @@ fn collect_text(
         html.push(String::from_utf8_lossy(&part.body).into_owned());
     }
 
+    // The snippet, search text and attachment mark are the message's own,
+    // not those of a message it wraps.
+    if part.mime_type == "message/rfc822" {
+        return;
+    }
     for child in &part.parts {
         collect_text(child, texts, html, has_attachment);
     }

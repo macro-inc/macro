@@ -67,3 +67,22 @@ fn a_wrapped_message_is_the_child_of_its_part() {
         encode_body(b"<p>The original</p>")
     );
 }
+
+#[test]
+fn a_wrapped_message_does_not_give_the_snippet_or_the_attachment_mark() {
+    let raw = b"From: mailer-daemon@example.com\r\nTo: a@example.com\r\nSubject: Undeliverable\r\n\
+        Content-Type: multipart/report; boundary=\"b\"\r\n\r\n\
+        --b\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>Not delivered.</p>\r\n\
+        --b\r\nContent-Type: message/rfc822\r\n\r\n\
+        From: a@example.com\r\nSubject: Offer\r\n\
+        Content-Type: multipart/mixed; boundary=\"c\"\r\n\r\n\
+        --c\r\nContent-Type: text/plain\r\n\r\nThe original\r\n\
+        --c\r\nContent-Type: application/pdf; name=\"a.pdf\"\r\n\
+        Content-Disposition: attachment; filename=\"a.pdf\"\r\n\r\nx\r\n--c--\r\n--b--\r\n";
+
+    let parsed = parse(raw).unwrap();
+
+    assert_eq!(parsed.snippet, "Not delivered.");
+    assert!(!parsed.has_attachment);
+    assert!(!parsed.search_text.contains("original"));
+}
