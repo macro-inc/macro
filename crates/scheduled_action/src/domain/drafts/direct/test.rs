@@ -1215,6 +1215,50 @@ async fn setup_changing_something_after_a_failed_check_still_says_so() {
 }
 
 #[tokio::test]
+async fn a_failing_check_after_setup_changed_something_still_says_so() {
+    let code = Arc::new(SetsUp::returning(json!({})));
+    code.fails.lock().unwrap().push_back(true);
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            written(posted_in(&[]), json!([code_step("Make a task", "bad")])),
+            json!({ "setup": "first", "steps": { "0": add_row("good", ORDERS) } }).to_string(),
+            json!({ "steps": { "0": code_step("Make a task", "bad") } }).to_string(),
+        ],
+    ));
+    let drafts = setting_up(&code, &model);
+    let milestones = Milestones::default();
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &milestones,
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    // Its fixes ran out on a check made after setup failed partway: that
+    // check isn't the draft either.
+    assert_eq!(milestones.stages().last(), Some(&"failed"));
+    assert_eq!(
+        model.purposes(),
+        [
+            CallPurpose::Find,
+            CallPurpose::Write,
+            CallPurpose::Fix,
+            CallPurpose::Fix
+        ]
+    );
+    assert!(
+        matches!(&draft, Draft::Failed { message, .. } if message == SETUP_FAILED_PARTWAY),
+        "{draft:?}"
+    );
+}
+
+#[tokio::test]
 async fn a_draft_cancelled_while_setup_runs_stops_when_setup_ends() {
     let rows = Arc::new(Rows::default());
     let code = Arc::new(SetsUp {

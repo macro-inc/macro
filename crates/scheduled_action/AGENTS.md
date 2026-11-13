@@ -79,8 +79,8 @@ each run.
   whose trigger isn't one yet, is checked on a passing stand-in. Cut off by `DRAFT_TIMEOUT` or shutdown, a
   draft still hands back its last check and what setup made
   (`DirectSoFar`); cut off while setup runs, it fails saying it may have
-  made something, as does a draft that ends with no check since its setup
-  failed partway through. The calls are admitted and billed as the person's
+  made something, as does a draft whose setup failed partway through and
+  that ends before a check passes. The calls are admitted and billed as the person's
   automation usage (`DraftModel`, `AiFeature::Automation`). Progress
   reports the admission (`DraftMilestone::Admitted`, which answers a
   background start before anything is looked up), what was found and

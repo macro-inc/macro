@@ -942,6 +942,8 @@ struct DirectSoFar {
     setup: Setup,
     /// Setup is running: a draft cut off now can't know what it made.
     setting_up: bool,
+    /// The last check needs no fix.
+    passed: bool,
     checks: u32,
     fixes: u8,
 }
@@ -949,7 +951,9 @@ struct DirectSoFar {
 impl DirectSoFar {
     /// The draft, ended for the reason `ended` names: its last check, or
     /// else the failure, `failure` unless setup failed partway. Cut off
-    /// while setup ran, it fails saying so, whatever its last check.
+    /// while setup ran, or after setup failed partway and before a check
+    /// passed, it fails saying setup may have made something, whatever its
+    /// last check.
     fn ended(
         self,
         ended: &'static str,
@@ -967,9 +971,10 @@ impl DirectSoFar {
             "routine.draft.created_unused",
             created.iter().filter(|item| !item.used).count(),
         );
-        let partway = self.setting_up || matches!(self.setup, Setup::Failed { wrote: true, .. });
+        let partway = self.setting_up
+            || (!self.passed && matches!(self.setup, Setup::Failed { wrote: true, .. }));
         match self.last {
-            Some(check) if !self.setting_up => drafted(request, program, check, created),
+            Some(check) if !partway => drafted(request, program, check, created),
             _ if partway => super::failed_with(SETUP_FAILED_PARTWAY, created),
             _ => super::failed_with(failure, created),
         }
@@ -1163,12 +1168,6 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                                 None
                             }
                             Err(failed) => {
-                                // An earlier check no longer describes what
-                                // the draft did: ending now says setup made
-                                // something.
-                                if failed.wrote {
-                                    so_far.last = None;
-                                }
                                 let problem = failed.for_writer();
                                 so_far.setup = Setup::Failed {
                                     source,
@@ -1221,6 +1220,7 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                         };
                         let text = problems_for_writer(&check, shape, &declarations, &so_far.setup);
                         so_far.last = Some(check);
+                        so_far.passed = !fix;
                         if !fix {
                             break "checked";
                         }
