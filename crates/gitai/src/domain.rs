@@ -10,6 +10,8 @@ pub mod models;
 pub mod note;
 /// Capabilities the domain needs from storage and telemetry.
 pub mod ports;
+/// The read API over stored commits, notes and sessions.
+pub mod read;
 /// The server-side secret redaction pass.
 pub mod redaction;
 /// Repository URL normalization and the allowlist check.

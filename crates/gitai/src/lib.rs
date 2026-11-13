@@ -11,3 +11,5 @@ pub mod outbound;
 
 #[cfg(test)]
 mod fakes;
+#[cfg(test)]
+mod read_fakes;

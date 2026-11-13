@@ -14,9 +14,12 @@ constant_time_eq = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 lazy-regex = { workspace = true }
+macro_tower_layers = { path = "../macro_tower_layers" }
+nom = { workspace = true }
 opentelemetry = { workspace = true, features = ["metrics"] }
 rand = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true }
 rootcause = { workspace = true }
 ruzstd = { workspace = true }
 serde = { workspace = true }
@@ -26,6 +29,7 @@ sha2 = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+upstream_error = { path = "../upstream_error" }
 url = { workspace = true }
 uuid = { workspace = true, features = ["v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -33,3 +37,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+wiremock = { workspace = true }
