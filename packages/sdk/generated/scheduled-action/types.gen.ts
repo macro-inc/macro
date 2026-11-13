@@ -250,6 +250,11 @@ export type CatalogEntry = {
 };
 
 /**
+ * A filter on the feed. Not kinds: a suggestion may have several.
+ */
+export type Category = 'important' | 'revisit' | 'save_money' | 'make_money';
+
+/**
  * A routine to check, as the create body takes it.
  */
 export type CheckRoutineRequest = {
@@ -259,6 +264,34 @@ export type CheckRoutineRequest = {
      */
     created?: Array<CreatedItem>;
     routine: ActionConfiguration;
+};
+
+/**
+ * A routine the session handed back, as a person watching reads it: never
+ * its code.
+ */
+export type CheckSummary = {
+    /**
+     * How many checks the session made so far, this one included.
+     */
+    checks: number;
+    name: string;
+    /**
+     * Whether it passed.
+     */
+    ok: boolean;
+    /**
+     * How many problems it has, its code's included.
+     */
+    problems: number;
+    /**
+     * Its steps, in order.
+     */
+    steps: Array<StepTitle>;
+    /**
+     * When it would run.
+     */
+    trigger: ActionTrigger;
 };
 
 /**
@@ -399,6 +432,18 @@ export type Draft = (DraftedRoutine & {
 };
 
 /**
+ * What a job was asked to draft, as its owner reads it back: the kind of
+ * request and the words they typed, nothing it was sent with them.
+ */
+export type DraftAsked = {
+    /**
+     * The words they typed: the description, or the change asked for.
+     */
+    description: string;
+    kind: DraftKind;
+};
+
+/**
  * What the drafter may write. It looks up the items the person's words
  * name itself, with their access.
  */
@@ -444,6 +489,54 @@ export type DraftCreated = {
 };
 
 /**
+ * A background draft, as its owner reads it.
+ */
+export type DraftJob = DraftJobState & {
+    createdAt: string;
+    /**
+     * Its id: its hidden session's.
+     */
+    id: string;
+    progress: DraftJobProgress;
+    request: DraftAsked;
+};
+
+/**
+ * How far a draft has got: its latest stage, and what it reported on the
+ * way.
+ */
+export type DraftJobProgress = {
+    check?: null | CheckSummary;
+    /**
+     * How many items the words name were found; absent before they were
+     * looked up.
+     */
+    found?: number | null;
+    stage: DraftStage;
+};
+
+/**
+ * Where a background draft is.
+ */
+export type DraftJobState = {
+    state: 'drafting';
+} | {
+    draft: Draft;
+    finishedAt: string;
+    state: 'ready';
+} | {
+    created: Array<DraftCreated>;
+    finishedAt: string;
+    message: string;
+    state: 'failed';
+};
+
+/**
+ * What kind of draft was asked for.
+ */
+export type DraftKind = 'routine' | 'add_step' | 'change_step';
+
+/**
  * What to draft.
  */
 export type DraftRequest = {
@@ -468,6 +561,25 @@ export type DraftRoutineRequest = {
     context: DraftContext;
     draft: DraftRequest;
 };
+
+/**
+ * The stage a draft is at.
+ */
+export type DraftStage = 'started' | 'found' | 'writing' | 'checked' | 'fixing';
+
+/**
+ * How a background draft is going, for its owner's open apps.
+ */
+export type DraftUpdate = {
+    draftId: string;
+    progress: DraftJobProgress;
+    state: DraftUpdateState;
+};
+
+/**
+ * Where a background draft is now; `removed` once cancelled or discarded.
+ */
+export type DraftUpdateState = 'drafting' | 'ready' | 'failed' | 'removed';
 
 /**
  * A drafted routine.
@@ -523,12 +635,22 @@ export type EmptyResponse = {
 };
 
 /**
+ * What an entity suggestion suggests doing about its items.
+ */
+export type EntityAction = 'reply' | 'review' | 'follow_up';
+
+/**
  * An entity's optional icon and tint overrides; absent values retain type defaults.
  */
 export type EntityAppearance = {
     color?: null | AppearanceColor;
     icon?: null | AppearanceIcon;
 };
+
+/**
+ * The type of an entity in Macro
+ */
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * An event name AND an entity ID must match within the same filter. A
@@ -648,6 +770,11 @@ export type InProgressExecution = {
 };
 
 /**
+ * A suggestion's kind, without its data.
+ */
+export type KindName = 'prompt' | 'entity' | 'routine';
+
+/**
  * How code reads a knob: a lowercase letter, then up to 31 letters or
  * digits, e.g. `dueWithinDays`.
  */
@@ -658,6 +785,52 @@ export type KnobName = string;
  * matches by name or lets them pick.
  */
 export type NamedItemKind = 'tag' | 'channel' | 'label';
+
+/**
+ * A new suggestion, or a new version of one with the same `dedupKey`, as a
+ * generation session hands it back through `macro.suggestions.suggest`.
+ */
+export type NewSuggestion = {
+    /**
+     * The items it is about.
+     */
+    about?: Array<Target>;
+    action?: null | EntityAction;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * Names the suggestion across nights; the same key updates the same suggestion.
+     */
+    dedupKey: string;
+    /**
+     * 0 to 100.
+     */
+    importance: number;
+    /**
+     * `prompt` or `entity`; routine suggestions come from `macro.routines.suggest`.
+     */
+    kind: KindName;
+    /**
+     * A prompt suggestion's prompt.
+     */
+    prompt?: string | null;
+    /**
+     * Why, for the change log; required to bring back a suggestion the person
+     * dismissed.
+     */
+    reason?: string | null;
+    runMode?: null | RunMode;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+};
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -707,6 +880,50 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * Retiring an open suggestion that no longer matters.
+ */
+export type RetireSuggestionRequest = {
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+};
+
+/**
+ * Changes to an open suggestion; fields left out stay.
+ */
+export type RewriteSuggestion = {
+    /**
+     * New items it is about.
+     */
+    about?: Array<Target> | null;
+    /**
+     * New categories.
+     */
+    categories?: Array<Category> | null;
+    /**
+     * A new importance.
+     */
+    importance?: number | null;
+    /**
+     * Only on prompt suggestions.
+     */
+    prompt?: string | null;
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+    /**
+     * A new summary.
+     */
+    summary?: string | null;
+    /**
+     * A new title.
+     */
+    title?: string | null;
 };
 
 /**
@@ -1008,6 +1225,11 @@ export type RunInfo = {
 };
 
 /**
+ * How a prompt suggestion runs.
+ */
+export type RunMode = 'composer' | 'background';
+
+/**
  * What started a run, for its page.
  */
 export type RunStart = {
@@ -1168,6 +1390,21 @@ export type ShareRoutineTemplate = {
 };
 
 /**
+ * A background draft to start: what the blocking route takes, and the id
+ * the client made for this start.
+ */
+export type StartDraftJobRequest = {
+    /**
+     * Made by the client, once per start. Sent again with it (as when the
+     * connection drops before the answer), the start answers with the job
+     * it began, starting nothing, until that job is discarded.
+     */
+    clientId: string;
+    context: DraftContext;
+    draft: DraftRequest;
+};
+
+/**
  * Names a step's output: a lowercase letter, then up to 31 lowercase
  * letters, digits or underscores.
  */
@@ -1187,6 +1424,17 @@ export type StepProblem = {
      */
     index: number;
     problems: Array<string>;
+};
+
+/**
+ * A step of a routine handed back.
+ */
+export type StepTitle = {
+    kind: StepKind;
+    /**
+     * Its title; empty when it has none.
+     */
+    title: string;
 };
 
 /**
@@ -1279,14 +1527,178 @@ export type SuggestedPick = {
 };
 
 /**
+ * One proactive suggestion for one person.
+ */
+export type Suggestion = SuggestionKind & {
+    /**
+     * The items it is about.
+     */
+    about: Array<Target>;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories: Array<Category>;
+    /**
+     * When it was first proposed.
+     */
+    createdAt: string;
+    /**
+     * Names the suggestion across nights: proposing the same key again changes
+     * this suggestion instead of adding one.
+     */
+    dedupKey: string;
+    /**
+     * The suggestion's id.
+     */
+    id: string;
+    /**
+     * 0 to 100, for ordering.
+     */
+    importance: number;
+    /**
+     * What acting on it produced.
+     */
+    produced: Array<Target>;
+    /**
+     * Where it is for the person.
+     */
+    state: SuggestionState;
+    /**
+     * When its state last changed, such as when it was dismissed.
+     */
+    stateChangedAt: string;
+    /**
+     * Why it was resolved; only on resolved suggestions.
+     */
+    stateReason?: string | null;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * A person's feed: their open suggestions, best first, and the ones they
+ * finished in the last day, newest first.
+ */
+export type SuggestionFeed = {
+    /**
+     * Suggestions done in the last 24 hours, with what they produced.
+     */
+    done: Array<Suggestion>;
+    /**
+     * The open suggestions.
+     */
+    suggestions: Array<Suggestion>;
+};
+
+/**
  * Who suggests a routine.
  */
 export type SuggestionFrom = 'for_you' | 'macro';
 
 /**
+ * What kind of suggestion it is, with that kind's data. A kind never changes.
+ */
+export type SuggestionKind = {
+    kind: 'prompt';
+    /**
+     * What the agent is asked to do.
+     */
+    prompt: string;
+    /**
+     * How it runs.
+     */
+    runMode: RunMode;
+} | {
+    /**
+     * What to do about the items.
+     */
+    action: EntityAction;
+    draft?: null | Target;
+    kind: 'entity';
+} | {
+    kind: 'routine';
+    /**
+     * The suggestion it shows.
+     */
+    routineSuggestionId: string;
+};
+
+/**
+ * Where a suggestion is for the person.
+ */
+export type SuggestionState = 'proposed' | 'accepted' | 'done' | 'dismissed' | 'resolved' | 'retired';
+
+/**
+ * What became of a session's write.
+ */
+export type SuggestionWriteOutcome = {
+    /**
+     * Whether it was applied.
+     */
+    ok: boolean;
+    /**
+     * Why it wasn't, to fix and try again.
+     */
+    problems: Array<string>;
+    suggestion?: null | Suggestion;
+};
+
+/**
+ * What a generation session reads before managing the person's suggestions:
+ * every suggestion they have, open or not, and how many more it may add.
+ */
+export type SuggestionsReview = {
+    /**
+     * Suggestions this generation may still add or bring back.
+     */
+    newLeft: number;
+    /**
+     * Open suggestions the person has, and the most they may have.
+     */
+    open: number;
+    /**
+     * The most open suggestions a person may have.
+     */
+    openLimit: number;
+    /**
+     * Open suggestions first, best first, then closed ones newest first. A
+     * dismissed suggestion's `stateChangedAt` is when the person dismissed it.
+     */
+    suggestions: Array<Suggestion>;
+};
+
+/**
  * The part of the app a routine is about, where it is offered.
  */
 export type Surface = 'email' | 'calendar' | 'tasks' | 'files' | 'crm' | 'chat' | 'calls' | 'reviews' | 'agents';
+
+/**
+ * An item, or a part of one such as a message in a thread.
+ */
+export type Target = {
+    /**
+     * The item's id.
+     */
+    entityId: string;
+    /**
+     * The item's type.
+     */
+    entityType: EntityType;
+    /**
+     * A part of it, such as one message in a channel.
+     */
+    partId?: string | null;
+};
 
 /**
  * A user-specific part of a shared routine.
@@ -1468,6 +1880,129 @@ export type CheckScheduledActionResponses = {
 };
 
 export type CheckScheduledActionResponse = CheckScheduledActionResponses[keyof CheckScheduledActionResponses];
+
+export type ListRoutineDraftJobsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/draft-jobs';
+};
+
+export type ListRoutineDraftJobsErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListRoutineDraftJobsError = ListRoutineDraftJobsErrors[keyof ListRoutineDraftJobsErrors];
+
+export type ListRoutineDraftJobsResponses = {
+    /**
+     * The caller's drafts that are drafting, or finished and not yet discarded, newest first
+     */
+    200: Array<DraftJob>;
+};
+
+export type ListRoutineDraftJobsResponse = ListRoutineDraftJobsResponses[keyof ListRoutineDraftJobsResponses];
+
+export type StartRoutineDraftJobData = {
+    body: StartDraftJobRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/draft-jobs';
+};
+
+export type StartRoutineDraftJobErrors = {
+    400: string;
+    401: string;
+    /**
+     * AI usage limit reached
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Too many drafts are drafting already
+     */
+    409: string;
+    500: string;
+    /**
+     * AI usage validation unavailable
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type StartRoutineDraftJobError = StartRoutineDraftJobErrors[keyof StartRoutineDraftJobErrors];
+
+export type StartRoutineDraftJobResponses = {
+    /**
+     * Drafting in the background; read it, or follow `routine_draft_update` messages, until it is ready or failed. A request that can't be drafted at all comes back failed. Sent again with the same `clientId`, the job that start began, as it is now
+     */
+    202: DraftJob;
+};
+
+export type StartRoutineDraftJobResponse = StartRoutineDraftJobResponses[keyof StartRoutineDraftJobResponses];
+
+export type DiscardRoutineDraftJobData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the draft
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/draft-jobs/{id}';
+};
+
+export type DiscardRoutineDraftJobErrors = {
+    401: string;
+    /**
+     * No such draft of the caller's
+     */
+    404: string;
+    500: string;
+};
+
+export type DiscardRoutineDraftJobError = DiscardRoutineDraftJobErrors[keyof DiscardRoutineDraftJobErrors];
+
+export type DiscardRoutineDraftJobResponses = {
+    /**
+     * Cancelled while drafting, or discarded once finished
+     */
+    204: void;
+};
+
+export type DiscardRoutineDraftJobResponse = DiscardRoutineDraftJobResponses[keyof DiscardRoutineDraftJobResponses];
+
+export type GetRoutineDraftJobData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the draft
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/draft-jobs/{id}';
+};
+
+export type GetRoutineDraftJobErrors = {
+    401: string;
+    /**
+     * No such draft of the caller's
+     */
+    404: string;
+    500: string;
+};
+
+export type GetRoutineDraftJobError = GetRoutineDraftJobErrors[keyof GetRoutineDraftJobErrors];
+
+export type GetRoutineDraftJobResponses = {
+    /**
+     * The draft, with its routine or step when ready, or why it failed
+     */
+    200: DraftJob;
+};
+
+export type GetRoutineDraftJobResponse = GetRoutineDraftJobResponses[keyof GetRoutineDraftJobResponses];
 
 export type DraftRoutineData = {
     body: DraftRoutineRequest;
@@ -1999,3 +2534,231 @@ export type ActivateScheduledActionTemplateResponses = {
 };
 
 export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];
+
+export type ListSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions';
+};
+
+export type ListSuggestionsErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type ListSuggestionsError = ListSuggestionsErrors[keyof ListSuggestionsErrors];
+
+export type ListSuggestionsResponses = {
+    /**
+     * The caller's open suggestions they can open every item of, best first
+     */
+    200: SuggestionFeed;
+};
+
+export type ListSuggestionsResponse = ListSuggestionsResponses[keyof ListSuggestionsResponses];
+
+export type AddSuggestionData = {
+    body: NewSuggestion;
+    path?: never;
+    query?: never;
+    url: '/suggestions';
+};
+
+export type AddSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may suggest
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type AddSuggestionError = AddSuggestionErrors[keyof AddSuggestionErrors];
+
+export type AddSuggestionResponses = {
+    /**
+     * Whether the suggestion was added or updated, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type AddSuggestionResponse = AddSuggestionResponses[keyof AddSuggestionResponses];
+
+export type ReviewSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/review';
+};
+
+export type ReviewSuggestionsErrors = {
+    401: string;
+    /**
+     * Only a suggestions generation session may review
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type ReviewSuggestionsError = ReviewSuggestionsErrors[keyof ReviewSuggestionsErrors];
+
+export type ReviewSuggestionsResponses = {
+    /**
+     * Every suggestion of the user's, open first, and how many more this generation may add
+     */
+    200: SuggestionsReview;
+};
+
+export type ReviewSuggestionsResponse = ReviewSuggestionsResponses[keyof ReviewSuggestionsResponses];
+
+export type RewriteSuggestionData = {
+    body: RewriteSuggestion;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}';
+};
+
+export type RewriteSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may rewrite
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type RewriteSuggestionError = RewriteSuggestionErrors[keyof RewriteSuggestionErrors];
+
+export type RewriteSuggestionResponses = {
+    /**
+     * Whether the suggestion was rewritten, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type RewriteSuggestionResponse = RewriteSuggestionResponses[keyof RewriteSuggestionResponses];
+
+export type AcceptSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/accept';
+};
+
+export type AcceptSuggestionErrors = {
+    401: string;
+    /**
+     * No open or done suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type AcceptSuggestionError = AcceptSuggestionErrors[keyof AcceptSuggestionErrors];
+
+export type AcceptSuggestionResponses = {
+    /**
+     * Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing
+     */
+    204: void;
+};
+
+export type AcceptSuggestionResponse = AcceptSuggestionResponses[keyof AcceptSuggestionResponses];
+
+export type DismissSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/dismiss';
+};
+
+export type DismissSuggestionErrors = {
+    401: string;
+    /**
+     * No open suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type DismissSuggestionError = DismissSuggestionErrors[keyof DismissSuggestionErrors];
+
+export type DismissSuggestionResponses = {
+    /**
+     * Dismissed; generation sessions see when
+     */
+    204: void;
+};
+
+export type DismissSuggestionResponse = DismissSuggestionResponses[keyof DismissSuggestionResponses];
+
+export type RetireSuggestionData = {
+    body: RetireSuggestionRequest;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/retire';
+};
+
+export type RetireSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may retire
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type RetireSuggestionError = RetireSuggestionErrors[keyof RetireSuggestionErrors];
+
+export type RetireSuggestionResponses = {
+    /**
+     * Whether the suggestion was retired, and why not when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type RetireSuggestionResponse = RetireSuggestionResponses[keyof RetireSuggestionResponses];

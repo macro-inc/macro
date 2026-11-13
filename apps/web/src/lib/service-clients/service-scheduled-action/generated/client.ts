@@ -14,6 +14,7 @@ import type {
   CodeUpgrade,
   CreateScheduledActionParams,
   Draft,
+  DraftJob,
   DraftRoutineRequest,
   EmptyResponse,
   EntityAppearance,
@@ -22,6 +23,9 @@ import type {
   InProgressExecution,
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
+  NewSuggestion,
+  RetireSuggestionRequest,
+  RewriteSuggestion,
   RoutineCatalogParams,
   RoutineCheck,
   RoutineSuggestions,
@@ -29,6 +33,10 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StartDraftJobRequest,
+  SuggestionFeed,
+  SuggestionsReview,
+  SuggestionWriteOutcome,
   SuggestOutcome,
   SuggestRequest,
 } from './schemas';
@@ -389,6 +397,261 @@ export const checkScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as checkScheduledActionResponse;
+};
+
+export type listRoutineDraftJobsResponse200 = {
+  data: DraftJob[];
+  status: 200;
+};
+
+export type listRoutineDraftJobsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listRoutineDraftJobsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listRoutineDraftJobsResponseSuccess =
+  listRoutineDraftJobsResponse200 & {
+    headers: Headers;
+  };
+export type listRoutineDraftJobsResponseError = (
+  | listRoutineDraftJobsResponse401
+  | listRoutineDraftJobsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listRoutineDraftJobsResponse =
+  | listRoutineDraftJobsResponseSuccess
+  | listRoutineDraftJobsResponseError;
+
+export const getListRoutineDraftJobsUrl = () => {
+  return `/scheduled-actions/draft-jobs`;
+};
+
+export const listRoutineDraftJobs = async (
+  options?: RequestInit
+): Promise<listRoutineDraftJobsResponse> => {
+  const res = await fetch(getListRoutineDraftJobsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listRoutineDraftJobsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listRoutineDraftJobsResponse;
+};
+
+export type startRoutineDraftJobResponse202 = {
+  data: DraftJob;
+  status: 202;
+};
+
+export type startRoutineDraftJobResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type startRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type startRoutineDraftJobResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
+export type startRoutineDraftJobResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type startRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type startRoutineDraftJobResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
+export type startRoutineDraftJobResponseSuccess =
+  startRoutineDraftJobResponse202 & {
+    headers: Headers;
+  };
+export type startRoutineDraftJobResponseError = (
+  | startRoutineDraftJobResponse400
+  | startRoutineDraftJobResponse401
+  | startRoutineDraftJobResponse402
+  | startRoutineDraftJobResponse409
+  | startRoutineDraftJobResponse500
+  | startRoutineDraftJobResponse503
+) & {
+  headers: Headers;
+};
+
+export type startRoutineDraftJobResponse =
+  | startRoutineDraftJobResponseSuccess
+  | startRoutineDraftJobResponseError;
+
+export const getStartRoutineDraftJobUrl = () => {
+  return `/scheduled-actions/draft-jobs`;
+};
+
+export const startRoutineDraftJob = async (
+  startDraftJobRequest: StartDraftJobRequest,
+  options?: RequestInit
+): Promise<startRoutineDraftJobResponse> => {
+  const res = await fetch(getStartRoutineDraftJobUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(startDraftJobRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startRoutineDraftJobResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startRoutineDraftJobResponse;
+};
+
+export type getRoutineDraftJobResponse200 = {
+  data: DraftJob;
+  status: 200;
+};
+
+export type getRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getRoutineDraftJobResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getRoutineDraftJobResponseSuccess =
+  getRoutineDraftJobResponse200 & {
+    headers: Headers;
+  };
+export type getRoutineDraftJobResponseError = (
+  | getRoutineDraftJobResponse401
+  | getRoutineDraftJobResponse404
+  | getRoutineDraftJobResponse500
+) & {
+  headers: Headers;
+};
+
+export type getRoutineDraftJobResponse =
+  | getRoutineDraftJobResponseSuccess
+  | getRoutineDraftJobResponseError;
+
+export const getGetRoutineDraftJobUrl = (id: string) => {
+  return `/scheduled-actions/draft-jobs/${id}`;
+};
+
+export const getRoutineDraftJob = async (
+  id: string,
+  options?: RequestInit
+): Promise<getRoutineDraftJobResponse> => {
+  const res = await fetch(getGetRoutineDraftJobUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getRoutineDraftJobResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getRoutineDraftJobResponse;
+};
+
+export type discardRoutineDraftJobResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type discardRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type discardRoutineDraftJobResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type discardRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type discardRoutineDraftJobResponseSuccess =
+  discardRoutineDraftJobResponse204 & {
+    headers: Headers;
+  };
+export type discardRoutineDraftJobResponseError = (
+  | discardRoutineDraftJobResponse401
+  | discardRoutineDraftJobResponse404
+  | discardRoutineDraftJobResponse500
+) & {
+  headers: Headers;
+};
+
+export type discardRoutineDraftJobResponse =
+  | discardRoutineDraftJobResponseSuccess
+  | discardRoutineDraftJobResponseError;
+
+export const getDiscardRoutineDraftJobUrl = (id: string) => {
+  return `/scheduled-actions/draft-jobs/${id}`;
+};
+
+export const discardRoutineDraftJob = async (
+  id: string,
+  options?: RequestInit
+): Promise<discardRoutineDraftJobResponse> => {
+  const res = await fetch(getDiscardRoutineDraftJobUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discardRoutineDraftJobResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discardRoutineDraftJobResponse;
 };
 
 export type draftRoutineResponse200 = {
@@ -1625,4 +1888,482 @@ export const activateScheduledActionTemplate = async (
     status: res.status,
     headers: res.headers,
   } as activateScheduledActionTemplateResponse;
+};
+
+/**
+ * @summary The caller's feed.
+ */
+export type listSuggestionsResponse200 = {
+  data: SuggestionFeed;
+  status: 200;
+};
+
+export type listSuggestionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listSuggestionsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type listSuggestionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listSuggestionsResponseSuccess = listSuggestionsResponse200 & {
+  headers: Headers;
+};
+export type listSuggestionsResponseError = (
+  | listSuggestionsResponse401
+  | listSuggestionsResponse404
+  | listSuggestionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listSuggestionsResponse =
+  | listSuggestionsResponseSuccess
+  | listSuggestionsResponseError;
+
+export const getListSuggestionsUrl = () => {
+  return `/suggestions`;
+};
+
+export const listSuggestions = async (
+  options?: RequestInit
+): Promise<listSuggestionsResponse> => {
+  const res = await fetch(getListSuggestionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSuggestionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSuggestionsResponse;
+};
+
+/**
+ * @summary Add a suggestion from a suggestions generation session, or a new version of the
+one with its dedup key.
+ */
+export type addSuggestionResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type addSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type addSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type addSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type addSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type addSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type addSuggestionResponseSuccess = addSuggestionResponse200 & {
+  headers: Headers;
+};
+export type addSuggestionResponseError = (
+  | addSuggestionResponse400
+  | addSuggestionResponse401
+  | addSuggestionResponse403
+  | addSuggestionResponse404
+  | addSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type addSuggestionResponse =
+  | addSuggestionResponseSuccess
+  | addSuggestionResponseError;
+
+export const getAddSuggestionUrl = () => {
+  return `/suggestions`;
+};
+
+export const addSuggestion = async (
+  newSuggestion: NewSuggestion,
+  options?: RequestInit
+): Promise<addSuggestionResponse> => {
+  const res = await fetch(getAddSuggestionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(newSuggestion),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addSuggestionResponse;
+};
+
+/**
+ * @summary What a suggestions generation session reads before managing suggestions.
+ */
+export type reviewSuggestionsResponse200 = {
+  data: SuggestionsReview;
+  status: 200;
+};
+
+export type reviewSuggestionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reviewSuggestionsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reviewSuggestionsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type reviewSuggestionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reviewSuggestionsResponseSuccess = reviewSuggestionsResponse200 & {
+  headers: Headers;
+};
+export type reviewSuggestionsResponseError = (
+  | reviewSuggestionsResponse401
+  | reviewSuggestionsResponse403
+  | reviewSuggestionsResponse404
+  | reviewSuggestionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type reviewSuggestionsResponse =
+  | reviewSuggestionsResponseSuccess
+  | reviewSuggestionsResponseError;
+
+export const getReviewSuggestionsUrl = () => {
+  return `/suggestions/review`;
+};
+
+export const reviewSuggestions = async (
+  options?: RequestInit
+): Promise<reviewSuggestionsResponse> => {
+  const res = await fetch(getReviewSuggestionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reviewSuggestionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reviewSuggestionsResponse;
+};
+
+/**
+ * @summary Change an open suggestion from a suggestions generation session.
+ */
+export type rewriteSuggestionResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type rewriteSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type rewriteSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type rewriteSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type rewriteSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type rewriteSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type rewriteSuggestionResponseSuccess = rewriteSuggestionResponse200 & {
+  headers: Headers;
+};
+export type rewriteSuggestionResponseError = (
+  | rewriteSuggestionResponse400
+  | rewriteSuggestionResponse401
+  | rewriteSuggestionResponse403
+  | rewriteSuggestionResponse404
+  | rewriteSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type rewriteSuggestionResponse =
+  | rewriteSuggestionResponseSuccess
+  | rewriteSuggestionResponseError;
+
+export const getRewriteSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}`;
+};
+
+export const rewriteSuggestion = async (
+  id: string,
+  rewriteSuggestion: RewriteSuggestion,
+  options?: RequestInit
+): Promise<rewriteSuggestionResponse> => {
+  const res = await fetch(getRewriteSuggestionUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rewriteSuggestion),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: rewriteSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as rewriteSuggestionResponse;
+};
+
+/**
+ * @summary The caller acts on a suggestion: a background prompt suggestion is taken on; any
+other is done once they act on it (open its item, the composer, the
+routine), and shows in the feed's `done`.
+ */
+export type acceptSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type acceptSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type acceptSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type acceptSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type acceptSuggestionResponseSuccess = acceptSuggestionResponse204 & {
+  headers: Headers;
+};
+export type acceptSuggestionResponseError = (
+  | acceptSuggestionResponse401
+  | acceptSuggestionResponse404
+  | acceptSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type acceptSuggestionResponse =
+  | acceptSuggestionResponseSuccess
+  | acceptSuggestionResponseError;
+
+export const getAcceptSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/accept`;
+};
+
+export const acceptSuggestion = async (
+  id: string,
+  options?: RequestInit
+): Promise<acceptSuggestionResponse> => {
+  const res = await fetch(getAcceptSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: acceptSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as acceptSuggestionResponse;
+};
+
+/**
+ * @summary The caller isn't interested in an open suggestion.
+ */
+export type dismissSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type dismissSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type dismissSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type dismissSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type dismissSuggestionResponseSuccess = dismissSuggestionResponse204 & {
+  headers: Headers;
+};
+export type dismissSuggestionResponseError = (
+  | dismissSuggestionResponse401
+  | dismissSuggestionResponse404
+  | dismissSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type dismissSuggestionResponse =
+  | dismissSuggestionResponseSuccess
+  | dismissSuggestionResponseError;
+
+export const getDismissSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/dismiss`;
+};
+
+export const dismissSuggestion = async (
+  id: string,
+  options?: RequestInit
+): Promise<dismissSuggestionResponse> => {
+  const res = await fetch(getDismissSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as dismissSuggestionResponse;
+};
+
+/**
+ * @summary Retire an open suggestion from a suggestions generation session.
+ */
+export type retireSuggestionResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type retireSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type retireSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type retireSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type retireSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type retireSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type retireSuggestionResponseSuccess = retireSuggestionResponse200 & {
+  headers: Headers;
+};
+export type retireSuggestionResponseError = (
+  | retireSuggestionResponse400
+  | retireSuggestionResponse401
+  | retireSuggestionResponse403
+  | retireSuggestionResponse404
+  | retireSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type retireSuggestionResponse =
+  | retireSuggestionResponseSuccess
+  | retireSuggestionResponseError;
+
+export const getRetireSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/retire`;
+};
+
+export const retireSuggestion = async (
+  id: string,
+  retireSuggestionRequest: RetireSuggestionRequest,
+  options?: RequestInit
+): Promise<retireSuggestionResponse> => {
+  const res = await fetch(getRetireSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retireSuggestionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retireSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retireSuggestionResponse;
 };

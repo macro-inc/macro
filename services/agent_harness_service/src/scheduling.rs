@@ -22,6 +22,7 @@ mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::jobs::DraftJobs;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
 use scheduled_action::domain::event_runs::{
@@ -30,7 +31,7 @@ use scheduled_action::domain::event_runs::{
 };
 use scheduled_action::domain::models::CreatedItem;
 use scheduled_action::domain::ports::{
-    DraftHandBacks, RequestSessions, ScheduledActionDispatcher, SessionCreations,
+    DraftHandBacks, DraftJobStore, RequestSessions, ScheduledActionDispatcher, SessionCreations,
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
@@ -41,6 +42,9 @@ use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
+use scheduled_action::inbound::draft_job_router::{
+    RoutineDraftJobRouterState, routine_draft_job_router,
+};
 use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
@@ -63,8 +67,12 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
-use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
+use suggestions::domain::service::SuggestionService;
+use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -137,6 +145,18 @@ impl RequestSessions for CorrelationSessions {
     }
 }
 
+#[async_trait::async_trait]
+impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
+    async fn session_of(
+        &self,
+        correlation: uuid::Uuid,
+    ) -> Result<Option<uuid::Uuid>, rootcause::Report> {
+        RequestSessions::session_of(self, correlation)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
+    }
+}
+
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
     pub router: Router,
@@ -180,6 +200,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let live_updates = Arc::new(ConnGatewayLiveUpdates::new(Arc::clone(
         &conn_gateway_client,
     )));
+    let draft_updates = Arc::clone(&live_updates);
 
     let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
@@ -389,7 +410,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // the model the person's Ask AI steps use, admitted and billed as their
     // agent session usage. A draft's session hands its routine back by checking
     // it; the check is kept on the draft's row, so any replica can read it.
-    let hand_backs: Arc<dyn DraftHandBacks> = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let draft_rows = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let hand_backs: Arc<dyn DraftHandBacks> = Arc::clone(&draft_rows) as _;
     let drafts = Arc::new(
         RoutineDrafts::new(
             Arc::clone(&code),
@@ -406,9 +428,21 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )))
         .with_conditions_enabled(conditions_enabled),
     );
-    // Drafts a stopped process left behind lose their session and row.
+    // Background drafts run here, on the replica they were started on, and
+    // keep their state on the same row, so a reload or any replica reads
+    // it. Shutdown fails the ones still drafting as interrupted.
+    let draft_jobs = Arc::new(DraftJobs::new(
+        Arc::clone(&drafts),
+        draft_rows as Arc<dyn DraftJobStore>,
+        draft_updates,
+        lifecycle.workers.clone(),
+        lifecycle.stop_workers.clone(),
+    ));
+    // Drafts a stopped process left behind lose their session and row, and
+    // background drafts whose drafter stopped fail.
     {
         let drafts = Arc::clone(&drafts);
+        let draft_jobs = Arc::clone(&draft_jobs);
         let stop = lifecycle.stop_workers.clone();
         lifecycle.workers.spawn(async move {
             let mut every = tokio::time::interval(DRAFT_SWEEP_INTERVAL);
@@ -418,18 +452,20 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     _ = stop.cancelled() => return,
                     _ = every.tick() => {}
                 }
-                // Logged by the sweep's span.
+                // Logged by the sweeps' spans.
                 let _ = drafts.sweep().await;
+                let _ = draft_jobs.sweep().await;
             }
         });
     }
     let suggestion_code = Arc::clone(&code);
     // Which agent session a code-mode request came from, for drafts' checks
     // and suggestion sessions' suggestions.
-    let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
+    let correlation_sessions = Arc::new(CorrelationSessions(
         agent_correlation::outbound::PgCorrelationRepository(db.clone()),
     ));
-    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
+    let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
+    let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -500,6 +536,22 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: suggestions,
         authorization_state: authorization_state.clone(),
     };
+    // Suggestions: written and managed by hidden generation sessions through
+    // `macro.suggestions.*`, read and acted on by the person. Served here, under
+    // the scheduler's prefix, next to the routine suggestions they share
+    // generation with.
+    let feed_state = SuggestionRouterState {
+        service: Arc::new(SuggestionService::new(
+            Arc::new(PgSuggestionRepo::new(db.clone())),
+            Arc::new(EntitySuggestionAccess {
+                access: access.as_ref().clone(),
+                pool: db.clone(),
+            }),
+            correlation_sessions,
+            routine_flags.clone(),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
@@ -513,6 +565,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: drafts,
         authorization_state: authorization_state.clone(),
     };
+    let draft_job_state = RoutineDraftJobRouterState {
+        service: draft_jobs,
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
@@ -521,7 +577,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
-        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
+        .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
+        .merge(suggestion_router::<_, _, ()>(feed_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
@@ -535,8 +593,16 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 fn mount_router(routes: Router) -> Router {
     Router::new().nest(GATEWAY_PATH_PREFIX, routes).merge(
         SwaggerUi::new("/scheduled-action/docs")
-            .url("/scheduled-action/api-doc/openapi.json", ApiDoc::openapi()),
+            .url("/scheduled-action/api-doc/openapi.json", openapi()),
     )
+}
+
+/// The scheduler's OpenAPI, with the suggestions routes it also serves, as
+/// `scheduling_openapi` prints it.
+fn openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = ApiDoc::openapi();
+    openapi.merge(suggestions::swagger::SuggestionsApiDoc::openapi());
+    openapi
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for

@@ -159,6 +159,18 @@ where
         .await
 }
 
+/// Run a mutation on its own task and wait for it. If the request is dropped
+/// while it runs, the task carries on to completion instead of being cancelled
+/// partway.
+async fn run_on_own_task<F>(work: F) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>
+where
+    F: Future<Output = Result<Vec<EntityMutationEffect>, EntityMutationErrorCode>> + Send + 'static,
+{
+    tokio::spawn(agent_correlation::context::capture(work.in_current_span()))
+        .await
+        .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
+}
+
 /// Unified entity mutation router wired from the domain services.
 #[derive(Clone)]
 pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L> {
@@ -612,7 +624,7 @@ where
         let result = match requested.entity_type {
             EntityType::Document => self.trash_with(&*self.documents, actor, &requested).await,
             EntityType::Chat => self.trash_with(&*self.chats, actor, &requested).await,
-            EntityType::Project => self.trash_with(&*self.projects, actor, &requested).await,
+            EntityType::Project => self.trash_project(actor, &requested).await,
             EntityType::Database => self.trash_with(&*self.databases, actor, &requested).await,
             EntityType::Form => self.trash_with(&*self.forms, actor, &requested).await,
             EntityType::User
@@ -651,7 +663,7 @@ where
         let result = match requested.entity_type {
             EntityType::Document => self.restore_document(actor, &requested).await,
             EntityType::Chat => self.restore_with(&*self.chats, actor, &requested).await,
-            EntityType::Project => self.restore_with(&*self.projects, actor, &requested).await,
+            EntityType::Project => self.restore_project(actor, &requested).await,
             EntityType::Database => self.restore_with(&*self.databases, actor, &requested).await,
             EntityType::Form => self.restore_with(&*self.forms, actor, &requested).await,
             EntityType::User
@@ -712,7 +724,7 @@ where
             EntityType::Chat => self.delete_with(&*self.chats, actor, &requested).await,
             EntityType::Channel => self.delete_with(&*self.channels, actor, &requested).await,
             EntityType::Call => self.delete_with(&*self.calls, actor, &requested).await,
-            EntityType::Project => self.delete_with(&*self.projects, actor, &requested).await,
+            EntityType::Project => self.delete_project_permanently(actor, &requested).await,
             EntityType::Database => self.delete_with(&*self.databases, actor, &requested).await,
             EntityType::Form => self.delete_with(&*self.forms, actor, &requested).await,
             EntityType::User
@@ -782,16 +794,59 @@ where
         let receipt = self.receipt(actor, requested).await?;
         let requested = requested.clone();
         let user_id = actor.user_id.clone();
-        tokio::spawn(agent_correlation::context::capture(
-            async move {
-                duplicator
-                    .duplicate_entity(requested, receipt, user_id, display_name)
-                    .await
-            }
-            .in_current_span(),
-        ))
+        run_on_own_task(async move {
+            duplicator
+                .duplicate_entity(requested, receipt, user_id, display_name)
+                .await
+        })
         .await
-        .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
+    }
+
+    /// Trash a folder with everything in it. Folder trash, restore and purge
+    /// write every item in the tree, so they run on their own task: a dropped
+    /// request then cannot roll the work back, or stop a purge between its
+    /// commit and the document cleanup that follows it.
+    async fn trash_project(
+        &self,
+        actor: &EntityMutationActor,
+        requested: &Entity<'static>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let receipt = self
+            .receipt::<<P as TrashEntity>::Receipt>(actor, requested)
+            .await?;
+        let projects = Arc::clone(&self.projects);
+        let requested = requested.clone();
+        run_on_own_task(async move { projects.trash_entity(requested, receipt).await }).await
+    }
+
+    /// Restore a trashed folder tree on its own task, like [`Self::trash_project`].
+    async fn restore_project(
+        &self,
+        actor: &EntityMutationActor,
+        requested: &Entity<'static>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let receipt = self
+            .receipt::<<P as RestoreEntity>::Receipt>(actor, requested)
+            .await?;
+        let projects = Arc::clone(&self.projects);
+        let requested = requested.clone();
+        run_on_own_task(async move { projects.restore_entity(requested, receipt).await }).await
+    }
+
+    /// Permanently delete a trashed folder tree on its own task, like
+    /// [`Self::trash_project`].
+    async fn delete_project_permanently(
+        &self,
+        actor: &EntityMutationActor,
+        requested: &Entity<'static>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let receipt = self
+            .receipt::<<P as DeleteEntityPermanently>::Receipt>(actor, requested)
+            .await?;
+        let projects = Arc::clone(&self.projects);
+        let requested = requested.clone();
+        run_on_own_task(async move { projects.delete_entity_permanently(requested, receipt).await })
+            .await
     }
 
     #[tracing::instrument(skip_all, fields(entity_type = %request.entity.entity_type, entity_id = %request.entity.entity_id))]

@@ -1837,6 +1837,62 @@
           }
         }
       },
+      "ComputerSetupMetadata": {
+        "type": "object",
+        "description": "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow.",
+        "required": ["computerId", "computerName", "outcome"],
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The computer that was set up."
+          },
+          "computerName": {
+            "type": "string",
+            "description": "The computer's name when the notice was sent."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The computer's harness, once macrod has connected."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ComputerSetupOutcome",
+            "description": "Ready, or why setup failed."
+          }
+        }
+      },
+      "ComputerSetupOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "macrod connected for the first time: the computer is ready.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["ready"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Setup gave up before the computer was ready.",
+            "required": ["failureReason", "kind"],
+            "properties": {
+              "failureReason": {
+                "type": "string",
+                "description": "Why, in the words the computer's status shows."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "How a computer's first setup ended."
+      },
       "ConnGatewayNotificationPayload": {
         "$ref": "#/components/schemas/RealtimeNotif_TaggedContent_Value",
         "description": "Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.\n\nUsed for OpenAPI schema generation — serializes identically to\n`RealtimeNotif<serde_json::Value>`."
@@ -3219,6 +3275,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["agent_sign_in_expiry"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A Macro computer the user bought finished first-time setup, or\ncould not be set up.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ComputerSetupMetadata",
+                "description": "A Macro computer the user bought finished first-time setup, or\ncould not be set up."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["computer_setup"]
               }
             }
           },

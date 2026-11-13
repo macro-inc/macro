@@ -356,7 +356,7 @@ describe('UserTooltip settings action', () => {
     await user.click(screen.getByRole('button', { name: 'Settings' }));
 
     expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
-    expect(agentSettingsRequest()?.agentId).toBe(agentId);
+    expect(agentSettingsRequest()).toMatchObject({ type: 'edit', agentId });
     expect(mocks.onClose).toHaveBeenCalledOnce();
   });
 

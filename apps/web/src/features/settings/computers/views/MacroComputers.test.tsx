@@ -7,6 +7,10 @@ import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { For } from 'solid-js';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import {
+  computerSetupRequest,
+  requestComputerSetup,
+} from '../primitives/setup-request';
 import { MacroComputers } from './MacroComputers';
 
 const mocks = vi.hoisted(() => ({
@@ -85,7 +89,9 @@ vi.mock('@queries/computers/claude', () => ({
 }));
 
 vi.mock('./computer-setup-dialog', () => ({
-  ComputerSetupSteps: () => null,
+  ComputerSetupSteps: (props: { step: string; computer: { id: string } }) => (
+    <p data-testid="setup-step">{`${props.computer.id}:${props.step}`}</p>
+  ),
   StepHeader: () => null,
   computerConnected: () => false,
 }));
@@ -553,4 +559,37 @@ it('offers an account outside the rollout nothing but Close', async () => {
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Go to Billing' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+});
+
+it("reopens a computer's setup at Bring your AI when a notification asks", async () => {
+  mocks.computers = [
+    {
+      id: 'computer-1',
+      name: 'Build machine',
+      size: 'standard',
+      vcpus: 4,
+      memoryGib: 8,
+      diskGib: 100,
+      catalogEntry: 'standard@2026-11',
+      status: 'ready',
+      billing: 'active',
+      poweredOn: true,
+      agentCount: 1,
+      canUndoCancel: false,
+      canRestore: false,
+      purchasedBy: 'viewer',
+      createdAt: '2026-01-01T00:00:00Z',
+      harnessId: 'harness-build',
+      setupCompletedAt: null,
+    },
+  ];
+  render(() => <MacroComputers harnesses={[]} />);
+  expect(screen.queryByTestId('setup-step')).toBeNull();
+
+  requestComputerSetup('computer-1');
+
+  expect((await screen.findByTestId('setup-step')).textContent).toBe(
+    'computer-1:claude'
+  );
+  expect(computerSetupRequest()).toBeUndefined();
 });
