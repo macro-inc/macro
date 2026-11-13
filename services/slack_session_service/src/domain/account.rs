@@ -287,6 +287,9 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
                     return Err(Stop::Exit(AccountExit::Released));
                 }
                 self.refresh_catalogue().await?;
+                // A chat added again resumes where it stopped: bring in what
+                // Slack got while no account observed it.
+                self.catch_up().await?;
                 self.work().await
             }
         }

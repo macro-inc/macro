@@ -225,6 +225,22 @@ impl FakeSlack {
         ts
     }
 
+    /// Adds a message to `channel`'s history without telling any socket, as
+    /// Slack keeps one that arrives while a client isn't connected. Returns
+    /// its `ts`.
+    pub fn receive_message_offline(&self, channel: &str, mut message: Value) -> String {
+        let mut state = self.shared.lock();
+        let ts = state.next_ts();
+        if let Some(object) = message.as_object_mut() {
+            object.insert("type".to_owned(), Value::from("message"));
+            object.insert("ts".to_owned(), Value::from(ts.clone()));
+        }
+        web_api::store_message(&mut state, channel, message);
+        drop(state);
+        self.shared.changed();
+        ts
+    }
+
     /// Sends a raw event to every socket of `user_id`.
     pub fn push_event(&self, user_id: &str, event: Value) {
         self.shared.lock().push_to_user(user_id, &event);

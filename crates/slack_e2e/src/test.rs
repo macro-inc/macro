@@ -584,6 +584,11 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     .await
     .expect("the channel can be added again");
     assert!(offered.added.is_none());
+    // Slack got a message no socket saw; resuming the chat brings it in.
+    slack.receive_message_offline(
+        CHANNEL,
+        json!({"type": "message", "user": PARTNER_SLACK, "user_team": PARTNER_TEAM, "text": "while you were away"}),
+    );
     let resumed = chats
         .add(
             &alice,
@@ -604,6 +609,18 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
         .find(|c| c.remote_id == CHANNEL)
         .unwrap();
     assert_eq!(listed.added.as_ref().map(|added| added.id), Some(chat.id));
+    wait_for_rows(&pool, WAIT, || async {
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM external_chat_message WHERE chat_id = $1 AND body = 'while you were away'"#,
+            chat.id
+        )
+        .fetch_one(&pool)
+        .await
+        .ok()
+        .filter(|count| *count == 1)
+    })
+    .await
+    .expect("the message Slack got meanwhile arrives once");
 
     // Slack revokes the session: logged out, credentials wiped, chat kept.
     slack.end_session(TOKEN, "token_revoked");

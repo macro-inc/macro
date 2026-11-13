@@ -458,8 +458,16 @@ fn post_message(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
 /// Stores a message, updates its thread root, and pushes the `message`
 /// event to the conversation's members.
 pub(crate) fn add_message(state: &mut State, channel: &str, message: Value) {
+    if let Some(event) = store_message(state, channel, message) {
+        state.push_to_members(channel, &event);
+    }
+}
+
+/// Adds a message to a conversation's history and returns it as the
+/// websocket event its members would get; `None` for an unknown channel.
+pub(crate) fn store_message(state: &mut State, channel: &str, message: Value) -> Option<Value> {
     let Some(conversation) = state.conversations.get_mut(channel) else {
-        return;
+        return None;
     };
     let thread_ts = message
         .get("thread_ts")
@@ -499,7 +507,7 @@ pub(crate) fn add_message(state: &mut State, channel: &str, message: Value) {
         object.insert("channel".to_owned(), json!(channel));
         object.insert("event_ts".to_owned(), json!(ts));
     }
-    state.push_to_members(channel, &event);
+    Some(event)
 }
 
 fn update_message(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
