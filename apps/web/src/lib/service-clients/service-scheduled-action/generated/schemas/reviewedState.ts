@@ -7,8 +7,7 @@
  */
 
 /**
- * Where one of the person's suggestions is, for a routines session
-managing them.
+ * Where one of the person's routine suggestions is.
  */
 export type ReviewedState = (typeof ReviewedState)[keyof typeof ReviewedState];
 

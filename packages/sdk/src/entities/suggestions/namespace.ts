@@ -84,7 +84,7 @@ export type SuggestionInput =
  * ### For the user
  *
  * - Read their feed with `macro.suggestions.list()`: their open suggestions, best first, then those done in the last day. Each one's `status` says where it is: `open`, `running` (its background run is under way), `failed` (its last run failed; the user can run it again from the app) or `done`. When they just dismissed one by mistake, `suggestion.restore()` brings it back within five minutes.
- * - When they take one up, call `suggestion.accept()`. A background prompt suggestion is then only taken on: the user starts its run from the app, so tell them it is ready to run there; never try to run it another way. Any other suggestion becomes done, so do it yourself: run a composer prompt suggestion's `prompt`, or do an entity suggestion's `action` on the items in `about`, using its `draft` when it has one.
+ * - When they take one up, call `suggestion.accept()`. A background prompt suggestion is then only taken on: the user starts its run from the app, so tell them it is ready to run there; never try to run it another way. Any other suggestion becomes done, so do it yourself: run a composer prompt suggestion's `prompt`, or do an entity suggestion's `action` on the items in `about`, using its `draft` when it has one. A routine suggestion can't be accepted (400): the user saves its routine from the app.
  * - When they don't want one, call `suggestion.dismiss()`.
  * - Never suggest, rewrite or retire suggestions for the user: only a suggestions generation session may, and any other session gets a 403.
  *

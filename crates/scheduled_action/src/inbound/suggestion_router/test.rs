@@ -63,6 +63,15 @@ impl RoutineSuggestionApi for Suggestions {
         unreachable!("routes never brief")
     }
 
+    async fn texts(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &[Uuid],
+        _: chrono_tz::Tz,
+    ) -> Result<Vec<(Uuid, suggestions::domain::model::RoutineText)>> {
+        unreachable!("routes never word cards")
+    }
+
     async fn suggested(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<u32> {
         unreachable!("routes never count")
     }

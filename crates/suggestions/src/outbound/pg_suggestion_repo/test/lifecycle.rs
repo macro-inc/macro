@@ -235,56 +235,40 @@ async fn routine_in(f: &Fixture, state: SuggestionState) -> (Uuid, Uuid) {
     (routine_suggestion, id)
 }
 
-/// Routine suggestions close and complete through `suggestions_db_utils`,
-/// which writes for `crates/scheduled_action`; its guards allow exactly the
-/// table's sources too.
+/// Routine suggestions are outside the table: one moves with its routine
+/// suggestion (`RoutineSuggestionState::card` in `crates/scheduled_action`),
+/// through `suggestions_db_utils::move_routine_card`, from exactly the state
+/// that transition read it in, whatever state it is in.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn routine_suggestion_moves_follow_the_table(pool: PgPool) {
+async fn a_routine_suggestion_moves_only_from_the_state_named(pool: PgPool) {
     let f = fixture(pool).await;
-    for event in [
-        LifecycleEvent::Dismiss,
-        LifecycleEvent::Retire,
-        LifecycleEvent::Complete,
-    ] {
+    for named in SuggestionState::iter() {
         for from in SuggestionState::iter() {
+            let to = if named == SuggestionState::Done {
+                SuggestionState::Dismissed
+            } else {
+                SuggestionState::Done
+            };
             let (routine_suggestion, id) = routine_in(&f, from).await;
             let mut conn = f.pool.acquire().await.unwrap();
-            let moved = match event {
-                LifecycleEvent::Complete => suggestions_db_utils::complete_routine_card(
-                    &mut conn,
-                    OWNER,
-                    routine_suggestion,
-                    Uuid::now_v7(),
-                    Utc::now(),
-                )
-                .await
-                .unwrap(),
-                _ => {
-                    let to = if event == LifecycleEvent::Dismiss {
-                        SuggestionState::Dismissed
-                    } else {
-                        SuggestionState::Retired
-                    };
-                    suggestions_db_utils::close_routine_card(
-                        &mut conn,
-                        routine_suggestion,
-                        to.as_ref(),
-                        None,
-                        Utc::now(),
-                    )
-                    .await
-                    .unwrap()
-                }
-            };
+            let moved = suggestions_db_utils::move_routine_card(
+                &mut conn,
+                routine_suggestion,
+                named.as_ref(),
+                to.as_ref(),
+                Utc::now(),
+            )
+            .await
+            .unwrap();
             assert_eq!(
                 moved,
-                transition(from, event).is_some(),
-                "{event:?} from {from:?}"
+                (from == named).then_some(id),
+                "{from:?} named {named:?}"
             );
             assert_eq!(
                 f.state(id).await,
-                after(from, event),
-                "{event:?} from {from:?}"
+                if from == named { to } else { from },
+                "{from:?} named {named:?}"
             );
         }
     }

@@ -1072,8 +1072,7 @@ export type RetireSuggestionRequest = {
 };
 
 /**
- * Where one of the person's suggestions is, for a routines session
- * managing them.
+ * Where one of the person's routine suggestions is.
  */
 export type ReviewedState = 'open' | 'dismissed' | 'retired' | 'saved';
 
@@ -1284,6 +1283,20 @@ export type RoutineProgram = {
 };
 
 /**
+ * A part of a routine's sentence.
+ */
+export type RoutineSentencePart = {
+    /**
+     * It is a value AI picked, which the person can change.
+     */
+    picked: boolean;
+    /**
+     * What it says.
+     */
+    text: string;
+};
+
+/**
  * The routine a step is added to or changed in.
  */
 export type RoutineSoFar = {
@@ -1407,6 +1420,21 @@ export type RoutineTemplate = {
     trigger: ActionTrigger;
     updated_at: string;
     variables: Array<TemplateVariable>;
+};
+
+/**
+ * How a routine suggestion's drafted routine reads on its card.
+ */
+export type RoutineText = {
+    /**
+     * What it does: a step's sentence with the values AI picked marked, or
+     * its description (else its name) as one unmarked part.
+     */
+    sentence: Array<RoutineSentencePart>;
+    /**
+     * When it runs, e.g. "Fridays at 9:00 AM" or "New email received".
+     */
+    when: string;
 };
 
 /**
@@ -1930,6 +1958,7 @@ export type SuggestionKind = {
     waitingSince?: string | null;
 } | {
     kind: 'routine';
+    routine?: null | RoutineText;
     /**
      * The suggestion it shows.
      */
@@ -3259,6 +3288,9 @@ export type AcceptSuggestionData = {
 };
 
 export type AcceptSuggestionErrors = {
+    /**
+     * A routine suggestion: the person saves its routine in the app instead
+     */
     400: string;
     401: string;
     /**

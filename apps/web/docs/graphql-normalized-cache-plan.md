@@ -311,6 +311,13 @@ including parked-storage waits) to that receipt, even after its immediate span
 ends. Cache failures mark the application phase without recording payloads or
 replaying delivery. This context never enters GraphQL extensions or the wire.
 
+A subscription whose payloads no reader takes from the cache opts out of these
+effects with the exchange's `isUncachedSubscription` option; its results are
+delivered unchanged. `ActivityUpdates` is one: a push only tells mounted
+activity queries to refetch, and a bulk upload or delete sends one push per
+item to everyone with access. Writing each would advance the revision and make
+open lists and broadly registered live queries read again.
+
 Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
 or defer requests wait for storage and retain their position ahead of later
 claims. Accepted settlement requests survive their caller disconnecting; their

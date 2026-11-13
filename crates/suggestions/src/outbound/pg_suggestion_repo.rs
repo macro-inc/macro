@@ -284,6 +284,7 @@ impl PgSuggestionRepo {
                     ("routine", None, None, None, Some(routine_suggestion_id)) => {
                         SuggestionKind::Routine {
                             routine_suggestion_id,
+                            routine: None,
                         }
                     }
                     (kind, ..) => {
