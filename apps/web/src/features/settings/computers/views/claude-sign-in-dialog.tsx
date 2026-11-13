@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ClaudeSignInEntry,
+  useClaudeModeQuery,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
 import { ActionDialogShell, Dialog } from '@ui';
@@ -15,7 +16,13 @@ export function ClaudeSignInDialog(props: {
   onClose: () => void;
 }) {
   const signOut = useClaudeSignOutMutation();
+  const mode = useClaudeModeQuery(() => props.harnessId);
   const useCredits = async () => {
+    // Already on credits: nothing to sign out of.
+    if (mode.data?.mode === 'macro_credits') {
+      props.onClose();
+      return;
+    }
     try {
       await signOut.mutateAsync(props.harnessId);
       props.onClose();

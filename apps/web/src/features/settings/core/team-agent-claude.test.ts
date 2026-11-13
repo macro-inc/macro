@@ -1,6 +1,10 @@
 import type { Harness } from '@service-storage/client';
 import { describe, expect, it } from 'vitest';
-import { agentClaudeState, agentComputerHarness } from './team-agent-claude';
+import {
+  agentClaudeMode,
+  agentClaudeState,
+  agentComputerHarness,
+} from './team-agent-claude';
 
 const computerHarness: Harness = {
   allow_permission_bypass: false,
@@ -94,5 +98,34 @@ describe('agentClaudeState', () => {
         now
       )
     ).toBe('expired');
+  });
+});
+
+describe('agentClaudeMode', () => {
+  const login = {
+    mode: 'own_account' as const,
+    account: {
+      signedInAt: '2026-11-01T12:00:00Z',
+      expiresAt: '2026-11-20T12:00:00Z',
+    },
+  };
+
+  it('follows the harness list, which polls, over a cached sign-in', () => {
+    // Signed out elsewhere: the cached login no longer applies.
+    expect(agentClaudeMode('macro_credits', login)).toEqual({
+      mode: 'macro_credits',
+    });
+    expect(agentClaudeMode(undefined, login)).toBeUndefined();
+  });
+
+  it("reads the sign-in's expiry while the harness uses its own account", () => {
+    expect(agentClaudeMode('own_account', login)).toBe(login);
+    // The login is still loading, or was cached from Macro credits.
+    expect(agentClaudeMode('own_account', undefined)).toEqual({
+      mode: 'own_account',
+    });
+    expect(agentClaudeMode('own_account', { mode: 'macro_credits' })).toEqual({
+      mode: 'own_account',
+    });
   });
 });

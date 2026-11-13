@@ -499,7 +499,9 @@ export function InviteToTeamDialog(props: {
   const computersFlag = useFeatureFlag(enableMacroComputers);
   const [invitedAgent, setInvitedAgent] = createSignal<TeamAgent>();
   const agentInvited = (agent: TeamAgent) => {
-    if (computersFlag().enabled) setInvitedAgent(agent);
+    // Still loading: offer it, and let the server's rollout decide.
+    const flag = computersFlag();
+    if (flag.enabled || flag.loading) setInvitedAgent(agent);
     else close();
   };
   // The addresses just invited; set once sending succeeds to show the

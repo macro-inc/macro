@@ -27,12 +27,11 @@ export function AgentClaudeStep(props: {
     () => true
   );
   const harnesses = useHarnessesQuery();
-  const computerId = () => {
-    const live = agents.data?.agents.find(
-      (agent) => agent.userId === props.agent.userId
-    );
-    return live?.computerId ?? props.agent.computerId;
-  };
+  const live = () =>
+    agents.data?.agents.find((agent) => agent.userId === props.agent.userId);
+  const computerId = () => live()?.computerId ?? props.agent.computerId;
+  // Setup stopped: nothing will connect until someone acts on the computer.
+  const failed = () => live()?.status === 'failed';
 
   // Once connected, stay on the sign-in even if a poll misses the computer,
   // so a half-pasted code is not thrown away.
@@ -55,16 +54,20 @@ export function AgentClaudeStep(props: {
             <ActionDialogShell.Header>
               <ActionDialogShell.Title>{title()}</ActionDialogShell.Title>
               <ActionDialogShell.Description>
-                {t('teamAgents.bringAiWaiting', { name: props.agent.name })}
+                {failed()
+                  ? t('teamAgents.bringAiFailed', { name: props.agent.name })
+                  : t('teamAgents.bringAiWaiting', { name: props.agent.name })}
               </ActionDialogShell.Description>
             </ActionDialogShell.Header>
-            <p
-              role="status"
-              class="flex items-center gap-2 text-sm font-medium text-ink"
-            >
-              <Spinner size="sm" decorative />
-              {t('computers.preparingSignIn')}
-            </p>
+            <Show when={!failed()}>
+              <p
+                role="status"
+                class="flex items-center gap-2 text-sm font-medium text-ink"
+              >
+                <Spinner size="sm" decorative />
+                {t('computers.preparingSignIn')}
+              </p>
+            </Show>
           </ActionDialogShell.Body>
           <ActionDialogShell.Footer>
             <Button type="button" variant="ghost" onClick={props.onDone}>

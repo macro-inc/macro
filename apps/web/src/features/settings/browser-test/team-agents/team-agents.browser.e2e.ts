@@ -355,16 +355,14 @@ test('an admin invites an agent teammate and sees it come up', async ({
   ).toBeVisible();
   await expect(dialog.getByRole('status')).toContainText('Preparing sign-in');
   await screenshot(page, testInfo, 'bring-your-ai-waiting');
-  // Nothing to sign in on until the computer connects.
-  await expect(
-    page.locator('[data-agent-claude]').getByRole('button')
-  ).toHaveCount(0);
+  // Its row shows its Claude, with nothing to sign in on until it connects.
+  const claudeLine = page.locator('[data-agent-claude]');
+  await expect(claudeLine).toContainText('Claude: Macro credits');
+  await expect(claudeLine.getByRole('button')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Skip, use Macro credits' }).click();
   await expect(dialog).toBeHidden();
-  // Its row reads the computer's Claude, but nothing started a sign-in.
-  expect(
-    backend.claudeCalls.filter((call) => !call.endsWith('claude-mode'))
-  ).toEqual([]);
+  // Nothing started a sign-in, and a computer on credits has no login to read.
+  expect(backend.claudeCalls).toEqual([]);
   expect(backend.created).toEqual([
     {
       name: 'Ada',

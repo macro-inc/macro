@@ -10,8 +10,8 @@ import type { AgentClaudeState } from '../core/team-agent-claude';
  */
 export function TeamAgentClaudeStatus(props: {
   state: AgentClaudeState;
-  /** Sign-in needs the computer running: its link comes from there. */
-  canSignIn: boolean;
+  /** Both changes run on the computer, so they need it connected. */
+  connected: boolean;
   pending: boolean;
   onSignIn: () => void;
   onUseCredits: () => void;
@@ -24,19 +24,20 @@ export function TeamAgentClaudeStatus(props: {
       .with('expired', () => t('teamAgents.claudeExpired'))
       .exhaustive();
 
-  const action = () =>
-    match(props.state)
+  const action = () => {
+    if (!props.connected) return undefined;
+    return match(props.state)
       .with('loading', () => undefined)
-      .with('credits', 'expired', () =>
-        props.canSignIn
-          ? { label: t('teamAgents.signInToClaude'), onClick: props.onSignIn }
-          : undefined
-      )
+      .with('credits', 'expired', () => ({
+        label: t('teamAgents.signInToClaude'),
+        onClick: props.onSignIn,
+      }))
       .with('signed_in', () => ({
         label: t('teamAgents.useCredits'),
         onClick: props.onUseCredits,
       }))
       .exhaustive();
+  };
 
   return (
     <Show when={label()}>

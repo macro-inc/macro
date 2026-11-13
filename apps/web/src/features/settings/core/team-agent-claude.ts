@@ -1,4 +1,7 @@
-import type { ClaudeModeResponse } from '@service-agent-harness/generated/schemas';
+import type {
+  ClaudeMode,
+  ClaudeModeResponse,
+} from '@service-agent-harness/generated/schemas';
 import type { TeamAgent } from '@service-auth/team-agents';
 import type { Harness } from '@service-storage/client';
 import { match } from 'ts-pattern';
@@ -16,6 +19,25 @@ export function agentComputerHarness(
 ): Harness | undefined {
   if (!computerId) return undefined;
   return harnesses?.find((harness) => harness.computer_id === computerId);
+}
+
+/**
+ * The agent computer's Claude: whether it uses its own account comes from
+ * the harness list, which polls; the sign-in's expiry, from its login,
+ * which is read only while it does.
+ */
+export function agentClaudeMode(
+  harnessMode: ClaudeMode | undefined,
+  login: ClaudeModeResponse | undefined
+): ClaudeModeResponse | undefined {
+  return match(harnessMode)
+    .returnType<ClaudeModeResponse | undefined>()
+    .with(undefined, () => undefined)
+    .with('macro_credits', () => ({ mode: 'macro_credits' }))
+    .with('own_account', () =>
+      login?.mode === 'own_account' ? login : { mode: 'own_account' }
+    )
+    .exhaustive();
 }
 
 /**

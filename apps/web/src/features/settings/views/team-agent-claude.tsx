@@ -14,6 +14,7 @@ import { createSignal, Show } from 'solid-js';
 import { TeamAgentClaudeStatus } from '../components/team-agent-claude-status';
 import { ClaudeSignInDialog } from '../computers/views/claude-sign-in-dialog';
 import {
+  agentClaudeMode,
   agentClaudeState,
   agentComputerHarness,
 } from '../core/team-agent-claude';
@@ -34,7 +35,10 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     return found?.access === 'owner' ? found : undefined;
   };
   const harnessId = () => harness()?.id;
-  const mode = useClaudeModeQuery(harnessId);
+  // Only a computer on its own account has an expiry to read.
+  const login = useClaudeModeQuery(() =>
+    harness()?.claude_mode === 'own_account' ? harnessId() : undefined
+  );
   const signOut = useClaudeSignOutMutation();
   const [signingIn, setSigningIn] = createSignal(false);
 
@@ -59,10 +63,13 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
         <>
           <TeamAgentClaudeStatus
             state={agentClaudeState(
-              mode.isSuccess ? mode.data : undefined,
+              agentClaudeMode(
+                harness()?.claude_mode,
+                login.isSuccess ? login.data : undefined
+              ),
               Date.now()
             )}
-            canSignIn={!!harness()?.connected}
+            connected={!!harness()?.connected}
             pending={signOut.isPending}
             onSignIn={() => setSigningIn(true)}
             onUseCredits={() =>
