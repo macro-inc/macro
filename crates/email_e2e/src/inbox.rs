@@ -266,9 +266,10 @@ impl Inbox {
         what: &str,
         condition: impl Fn(&Value) -> bool,
     ) -> Result<Value, Report> {
-        eventually(what, DEFAULT_TIMEOUT, async || {
+        wait_seeing(what, async || {
             let link = self.link().await?;
-            Ok(condition(&link).then_some(link))
+            let seen = link.to_string();
+            Ok((condition(&link).then_some(link), seen))
         })
         .await
     }
@@ -313,9 +314,13 @@ impl Inbox {
         condition: impl Fn(&Value) -> bool,
     ) -> Result<Value, Report> {
         let what = format!("{what} in the {view} view of {}", self.email);
-        eventually(&what, DEFAULT_TIMEOUT, async || {
+        wait_seeing(&what, async || {
             let previews = self.previews(view).await?;
-            Ok(previews.into_iter().find(|preview| condition(preview)))
+            let seen = Value::Array(previews.clone()).to_string();
+            Ok((
+                previews.into_iter().find(|preview| condition(preview)),
+                seen,
+            ))
         })
         .await
     }
@@ -338,9 +343,10 @@ impl Inbox {
         what: &str,
         condition: impl Fn(&Value) -> bool,
     ) -> Result<Value, Report> {
-        eventually(what, DEFAULT_TIMEOUT, async || {
+        wait_seeing(what, async || {
             let thread = self.thread(thread_id).await?;
-            Ok(condition(&thread).then_some(thread))
+            let seen = thread.to_string();
+            Ok((condition(&thread).then_some(thread), seen))
         })
         .await
     }
@@ -564,11 +570,13 @@ impl Inbox {
         condition: impl Fn(&ProviderMessage) -> bool,
     ) -> Result<ProviderMessage, Report> {
         let what = format!("{what} in {} at the provider", self.email);
-        eventually(&what, DEFAULT_TIMEOUT, async || {
-            Ok(self
-                .provider_messages()?
-                .into_iter()
-                .find(|message| condition(message)))
+        wait_seeing(&what, async || {
+            let messages = self.provider_messages()?;
+            let seen = format!("{messages:?}");
+            Ok((
+                messages.into_iter().find(|message| condition(message)),
+                seen,
+            ))
         })
         .await
     }
@@ -616,4 +624,21 @@ impl Inbox {
         }
         Ok(())
     }
+}
+
+/// [`eventually`] with the default limit, for a condition that also
+/// describes what it last looked at: a wait that times out says what was
+/// there instead of what it waited for.
+async fn wait_seeing<T>(
+    what: &str,
+    mut look: impl AsyncFnMut() -> Result<(Option<T>, String), Report>,
+) -> Result<T, Report> {
+    let mut last_seen = String::new();
+    let waited = eventually(what, DEFAULT_TIMEOUT, async || {
+        let (found, seen) = look().await?;
+        last_seen = seen;
+        Ok(found)
+    })
+    .await;
+    waited.map_err(|report| report.attach(format!("last seen: {last_seen}")))
 }
