@@ -91,6 +91,79 @@ pub(super) fn delete(tx: &mut Transaction<'_>, key: NodeKey, axis: Axis) -> Resu
     }
     Ok(true)
 }
+/// The touch handle menu's items, in Source TableMoveHandle order.
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) enum MenuItem {
+    InsertColumnLeft,
+    InsertColumnRight,
+    InsertRowBelow,
+    InsertRowAbove,
+    DeleteRow,
+    DeleteColumn,
+    SplitCell,
+    DeleteTable,
+}
+/// Closed `menu-action` payload: no unknown fields, `tracked` optional.
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct MenuAction {
+    /// The handle's tracked anchor cell; absent when the handle tracks none.
+    #[serde(default)]
+    pub(super) tracked: Option<u32>,
+    pub(super) item: MenuItem,
+}
+/// Source runMenuAction in one transaction: the live Range/Table selection's anchor
+/// cell, else `tracked.selectStart()`, then the item's Source operation on that
+/// selection. Row inserts keep the selection, as `$insertTableRowAtNode` does.
+pub(super) fn menu_action(
+    tx: &mut Transaction<'_>,
+    tracked: Option<NodeKey>,
+    item: MenuItem,
+) -> Result<bool, Error> {
+    let live = match tx.selection() {
+        Some(Selection::Range(range)) => find_cell_node(tx.view(), range.anchor.key()),
+        Some(Selection::Table(table)) => find_cell_node(tx.view(), table.anchor.key()),
+        Some(Selection::Node(_)) | None => None,
+    };
+    let cell = match live {
+        Some(cell) => cell,
+        None => {
+            // Read only when the live selection has no cell, as Source does.
+            let Some(cell) = tracked
+                .and_then(|key| tx.view().cast::<TableCellNode>(key))
+                .filter(|cell| tx.is_attached(cell.key()))
+            else {
+                return Ok(false);
+            };
+            tx.select_start(cell)?;
+            cell
+        }
+    };
+    // Source runs the action whenever it found a cell, whatever the action returns.
+    match item {
+        MenuItem::InsertColumnLeft => {
+            insert_table_column_at_selection(tx, false)?;
+        }
+        MenuItem::InsertColumnRight => {
+            insert_table_column_at_selection(tx, true)?;
+        }
+        MenuItem::InsertRowBelow => {
+            insert_table_row_at_selection(tx, true)?;
+        }
+        MenuItem::InsertRowAbove => {
+            insert_table_row_at_selection(tx, false)?;
+        }
+        MenuItem::DeleteRow => delete_table_row_at_selection(tx)?,
+        MenuItem::DeleteColumn => delete_table_column_at_selection(tx)?,
+        MenuItem::SplitCell => unmerge_cell(tx)?,
+        MenuItem::DeleteTable => {
+            let table = get_table_node_from_lexical_node(tx.view(), cell.key())?;
+            tx.remove(table, true)?;
+        }
+    }
+    Ok(true)
+}
 pub(super) fn move_cells(
     tx: &mut Transaction<'_>,
     anchor: NodeKey,

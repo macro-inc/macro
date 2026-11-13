@@ -4,6 +4,8 @@ use super::*;
 mod desktop_test;
 #[cfg(test)]
 mod row_test;
+#[cfg(test)]
+mod menu_test;
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 #[serde(untagged)]
 enum Headers {
@@ -85,6 +87,8 @@ enum TableAction {
         row: u32,
         height: Option<JsNumber>,
     },
+    /// Touch handle menu item (Source TableMoveHandle runMenuAction).
+    MenuAction(super::controls::MenuAction),
 }
 #[derive(Clone, Debug)]
 struct TableCommand {
@@ -98,6 +102,7 @@ pub(in crate::plugins_group_b) fn event_payload(
     Ok(event.payload(&PICKER).map(|_| serde_json::Value::Null))
 }
 static TABLE: CommandKey<TableCommand> = CommandKey::new("group-b.table");
+const MENU_ACTION: &str = "menu-action";
 pub(in crate::plugins_group_b) fn decode(
     name: &str,
     json: &str,
@@ -105,6 +110,18 @@ pub(in crate::plugins_group_b) fn decode(
 ) -> Result<Option<Command>, Error> {
     if name != TABLE.name() {
         return Ok(None);
+    }
+    // Serde also accepts an internally tagged enum as a positional sequence; the
+    // closed menu payload is object-only. This preflight only refuses; every
+    // action, old and new, still decodes from the original JSON text.
+    let preflight: serde_json::Value = serde_json::from_str(json)?;
+    if preflight
+        .as_array()
+        .and_then(|items| items.first())
+        .and_then(serde_json::Value::as_str)
+        == Some(MENU_ACTION)
+    {
+        return Err(Error::invariant("table menu action requires an object"));
     }
     Ok(Some(Command::Extension(ExtensionCommand::new(
         &TABLE,
@@ -244,6 +261,9 @@ impl Plugin for Actions {
                 tx.get_mut::<TableNode>(table)?.col_widths = widths.clone();
                 super::resize::tags(tx, true);
                 true
+            }
+            TableAction::MenuAction(menu) => {
+                super::controls::menu_action(tx, menu.tracked.map(key), menu.item)?
             }
             TableAction::RestoreRow { row, height } => {
                 let row = key(*row);
