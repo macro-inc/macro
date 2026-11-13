@@ -1923,8 +1923,16 @@ or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
 from the viewer's calendars and groups them by day. A tags widget nests tags
 to any depth as coloured pills. A list holds a fixed height and says how many
-items are below it. The dynamic UI gallery (`/app/component/dynamic-ui`) shows
-each widget. Task list titles wrap above their live properties and timestamps;
+items are below it. With `enable-agent-dashboards` on, a wakes widget lists an
+agent account's wakes (status dot, trigger, duration, cost, outcome; a row
+opens its trace) and a trace widget draws one wake's turns and tool calls as a
+waterfall, a full-screen dialog at phone width; only the agent and the owners
+and admins of its teams see them, others see a no-access line, and with the
+flag off both say they aren't available. The dynamic UI gallery
+(`/app/component/dynamic-ui`) shows each widget; the wakes and trace sections
+read their agent and wake from
+`localStorage['dynamic-ui-gallery-wakes'] = '{"agent":"…","wake":"…"}'`,
+because the app drops the URL's query. Task list titles wrap above their live properties and timestamps;
 side-by-side project groups stack below 672px of available container width,
 including a narrow split on a wide screen. Check full long and unbroken titles
 at phone width and in a narrow split, then open a task from its title.
