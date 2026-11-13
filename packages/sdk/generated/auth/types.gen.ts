@@ -336,6 +336,11 @@ export type ComputerStatus = {
      */
     diskGib: number;
     /**
+     * Why the computer failed, as a short sentence safe to show; present
+     * when it failed and the cause is known. The full error is only in the logs.
+     */
+    failureReason?: string | null;
+    /**
      * Harness claimed by this guest.
      */
     harnessId?: string | null;
@@ -2022,6 +2027,10 @@ export type SetupProgress = {
      * Current setup stage.
      */
     step: SetupStep;
+    /**
+     * When `step` began; null when it is not recorded.
+     */
+    stepStartedAt?: string | null;
     /**
      * Number of setup stages.
      */

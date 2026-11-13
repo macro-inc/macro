@@ -11,7 +11,7 @@ use crate::domain::claude_sign_in::{self, ClaudeSignInNotices, ClaudeSignInPass,
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{
-    Backoff, Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind, backoff,
+    Backoff, Effect, EffectWorker, Event, Failure, HostId, MACROD_GRACE, Phase, TimerKind, backoff,
 };
 use crate::domain::models::{Computer, ComputerRecord};
 use crate::domain::ports::{
@@ -264,6 +264,10 @@ where
         .and_then(std::convert::identity);
         match result {
             Ok(follow_up) => {
+                if let Some(Event::EffectFailed { reason, .. }) = &follow_up {
+                    super::telemetry::effect_failed(phase);
+                    tracing::error!(reason = %reason, "computer effect failed permanently; not retrying");
+                }
                 self.repo
                     .finish_effect(pending.id, follow_up, self.clock.now())
                     .await
@@ -291,6 +295,7 @@ where
                     .finish_effect(
                         pending.id,
                         Some(Event::EffectFailed {
+                            failure: effect_failure(&pending.effect),
                             reason: error.to_string(),
                         }),
                         self.clock.now(),
@@ -364,12 +369,17 @@ where
                     } else {
                         Event::InstanceStopped
                     }),
+                    Failure::Create,
                 )
             }
-            Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
+            Effect::Start { .. } => {
+                fleet_completion(self.fleet.start(computer_id).await, None, Failure::Power)
+            }
             // Crash recovery must not reboot a guest whose start succeeded
             // before the previous worker lost its completion write.
-            Effect::Restart { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
+            Effect::Restart { .. } => {
+                fleet_completion(self.fleet.start(computer_id).await, None, Failure::Power)
+            }
             Effect::RestartMacrod { .. } => {
                 let computer = self.computer(computer_id).await?;
                 if computer.state.macrod_connected
@@ -378,11 +388,16 @@ where
                 {
                     return Ok(None);
                 }
-                fleet_completion(self.fleet.restart_macrod(computer_id).await, None)
+                fleet_completion(
+                    self.fleet.restart_macrod(computer_id).await,
+                    None,
+                    Failure::Power,
+                )
             }
             Effect::Stop { .. } => fleet_completion(
                 self.fleet.stop(computer_id).await,
                 Some(Event::InstanceStopped),
+                Failure::Power,
             ),
             Effect::Destroy { .. } => {
                 self.fleet.destroy(computer_id).await.map_err(internal)?;
@@ -721,6 +736,7 @@ where
 fn fleet_completion(
     result: Result<(), impl FleetError>,
     completion: Option<Event>,
+    failure: Failure,
 ) -> Result<Option<Event>, ComputerError> {
     match result {
         Ok(()) => Ok(completion),
@@ -728,7 +744,28 @@ fn fleet_completion(
             tracing::warn!("computer instance lost; reprovisioning");
             Ok(Some(Event::InstanceLost))
         }
+        // Retrying a request the fleet refused only delays the failure.
+        Err(error) if error.is_permanent() => Ok(Some(Event::EffectFailed {
+            failure,
+            reason: error.to_string(),
+        })),
         Err(error) => Err(internal(error)),
+    }
+}
+
+/// What the team is told when `effect` fails for good.
+fn effect_failure(effect: &Effect) -> Failure {
+    match effect {
+        Effect::Create { .. } => Failure::Create,
+        Effect::Start { .. }
+        | Effect::Stop { .. }
+        | Effect::Restart { .. }
+        | Effect::RestartMacrod { .. }
+        | Effect::Destroy { .. }
+        | Effect::RevokeHarness
+        | Effect::PageOperator { .. }
+        | Effect::RemoveBillingItem { .. }
+        | Effect::ScheduleTimer { .. } => Failure::Power,
     }
 }
 

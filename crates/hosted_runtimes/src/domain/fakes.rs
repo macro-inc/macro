@@ -762,6 +762,7 @@ pub fn state(phase: crate::domain::lifecycle::Phase) -> crate::domain::lifecycle
         power_on_requested: false,
         capacity_wait: None,
         retried_by_team: false,
+        failure: None,
     }
 }
 

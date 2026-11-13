@@ -32,11 +32,17 @@ enum FakeFleetError {
     Enrollment(#[from] EnrollmentIssueError),
     #[error("instance missing")]
     Missing,
+    #[error("request rejected")]
+    Rejected,
 }
 
 impl FleetError for FakeFleetError {
     fn is_missing(&self) -> bool {
         matches!(self, Self::Missing)
+    }
+
+    fn is_permanent(&self) -> bool {
+        matches!(self, Self::Rejected)
     }
 }
 
@@ -47,6 +53,8 @@ struct FakeFleet {
     host_failures: Mutex<u32>,
     host_attempts: AtomicU32,
     failures: Mutex<u32>,
+    /// `create` is refused as invalid.
+    rejects: bool,
     missing: bool,
     lose_during_create: std::sync::atomic::AtomicBool,
     calls: Mutex<Vec<String>>,
@@ -76,6 +84,9 @@ impl Fleet for FakeFleet {
         start: bool,
     ) -> Result<GuestImage, FakeFleetError> {
         let image = GuestImage::try_new(BASE_IMAGE).unwrap();
+        if self.rejects {
+            return Err(FakeFleetError::Rejected);
+        }
         {
             let mut failures = self.failures.lock().unwrap();
             if *failures > 0 {
@@ -567,6 +578,46 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
 }
 
 #[tokio::test]
+async fn a_rejected_create_fails_the_computer_without_retrying() {
+    let operator = operator(FakeFleet {
+        rejects: true,
+        ..FakeFleet::default()
+    })
+    .await;
+    let id = paid_computer(&operator).await;
+
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+
+    let failed = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(
+        failed.state.phase,
+        Phase::Crashed {
+            restarts: 0,
+            retry: None,
+        }
+    );
+    let status = failed.status(0, now(), crate::domain::fakes::policy());
+    assert_eq!(
+        status.status,
+        crate::domain::models::ComputerStatusKind::Failed
+    );
+    assert_eq!(
+        status.failure_reason.as_deref(),
+        Some("The computer couldn't be created on the host.")
+    );
+    // The page goes out, then nothing is left to do.
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
+}
+
+#[tokio::test]
 async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
     let orphan =
         ComputerId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead));
@@ -633,6 +684,7 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
         .apply(
             id,
             Event::EffectFailed {
+                failure: crate::domain::lifecycle::Failure::Power,
                 reason: "guest lost".to_owned(),
             },
             now(),
