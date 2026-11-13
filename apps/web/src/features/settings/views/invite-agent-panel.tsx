@@ -5,7 +5,7 @@ import { ThrownResultError } from '@core/util/result';
 import { useUploadAgentAvatarMutation } from '@queries/agents/avatar';
 import { useComputerOffersQuery } from '@queries/computers/computers';
 import { useCreateTeamAgentMutation } from '@queries/team-agents/team-agents';
-import type { CreateTeamAgent, TeamAgent } from '@service-auth/team-agents';
+import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import { InviteAgentForm } from '../components/invite-agent-form';
@@ -35,7 +35,8 @@ export function InviteAgentPanel(props: {
   teamId: string;
   header?: JSX.Element;
   onCancel: () => void;
-  onInvited: (agent: TeamAgent) => void;
+  /** The invite went through; setup goes on without the dialog. */
+  onInvited: () => void;
 }) {
   const offers = useComputerOffersQuery(() => true);
   const upload = useUploadAgentAvatarMutation();
@@ -56,10 +57,10 @@ export function InviteAgentPanel(props: {
         teamId: props.teamId,
         request,
       });
-      toast.success(t('teamAgents.invited', { name: agent.name }), {
-        subtext: t('teamAgents.invitedDescription'),
-      });
-      if (!disposed) props.onInvited(agent);
+      // Setup takes minutes; the inviter hears from a notification once the
+      // agent is ready, and its row in Members shows the step meanwhile.
+      toast.success(t('teamAgents.beingSetUp', { name: agent.name }));
+      if (!disposed) props.onInvited();
     } catch (failure) {
       if (!disposed) setError(inviteFailure(failure));
     }

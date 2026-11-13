@@ -75,6 +75,8 @@ read it before changing behaviour.
   `computers/setup_notice.rs`): `Ready` on the first macrod connection,
   `Failed` on each give-up before it (keyed by `failed_at`, so a retried
   attempt notifies again). It never fails the computer when it cannot be sent.
+  `SetupNotice.agent` names the agent teammate an agent computer runs
+  (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name.
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).
 
 ## Related

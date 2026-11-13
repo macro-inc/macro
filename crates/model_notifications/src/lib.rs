@@ -16,7 +16,7 @@ pub use metadata::{
     CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
     ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata,
+    ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata, ComputerSetupAgent,
     ComputerSetupMetadata, ComputerSetupOutcome, CrmDiscussionMetadata, CrmDiscussionReason,
     DocumentMentionMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     ExternalChatMessageMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
