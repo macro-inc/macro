@@ -519,7 +519,6 @@ async fn filing_in_a_shared_folder_is_refused(pool: PgPool) {
     })
     .await
     .unwrap();
-    let before = grants(&pool, &document).await;
     for scope in [SessionScope::Generation, SessionScope::NoSend] {
         assert_refused(
             write_under(&pool, Some(scope), async |tx| {
@@ -533,20 +532,7 @@ async fn filing_in_a_shared_folder_is_refused(pool: PgPool) {
             })
             .await,
         );
-        assert_refused(
-            write_under(&pool, Some(scope), async |tx| {
-                crate::project_grants::inherit_project_grants(
-                    tx,
-                    &document,
-                    EntityType::Document,
-                    &ROOT_PROJECT_ID,
-                )
-                .await
-            })
-            .await,
-        );
     }
-    assert_eq!(grants(&pool, &document).await, before);
 
     // A document the team already sees is filed there freely.
     write_under(&pool, None, async |tx| {
@@ -562,6 +548,28 @@ async fn filing_in_a_shared_folder_is_refused(pool: PgPool) {
     .await
     .unwrap();
     write_under(&pool, Some(SessionScope::NoSend), async |tx| {
+        crate::project_grants::refuse_filing(tx, &document, EntityType::Document, &ROOT_PROJECT_ID)
+            .await
+    })
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("upsert_test_data"))
+)]
+async fn a_move_within_a_shared_folder_keeps_what_it_inherits(pool: PgPool) {
+    let document = Uuid::now_v7();
+    write_under(&pool, None, async |tx| {
+        crate::team_share::upsert_direct(
+            tx.as_mut(),
+            &ROOT_PROJECT_ID,
+            EntityType::Project,
+            TEAM_ID,
+            AccessLevel::View,
+        )
+        .await?;
         crate::project_grants::inherit_project_grants(
             tx,
             &document,
@@ -572,6 +580,47 @@ async fn filing_in_a_shared_folder_is_refused(pool: PgPool) {
     })
     .await
     .unwrap();
+    let before = grants(&pool, &document).await;
+    assert!(
+        before
+            .iter()
+            .any(|(source_id, _, _)| *source_id == TEAM_ID.to_string()),
+        "the document inherits the root folder's team grant: {before:?}"
+    );
+
+    // Moving it into a subfolder of the shared folder reaches the same team.
+    write_under(&pool, Some(SessionScope::NoSend), async |tx| {
+        crate::project_grants::refuse_filing(
+            tx,
+            &document,
+            EntityType::Document,
+            &CHILD_PROJECT_ID,
+        )
+        .await?;
+        crate::project_grants::drop_project_grants(
+            tx,
+            &document,
+            EntityType::Document,
+            &ROOT_PROJECT_ID,
+        )
+        .await?;
+        crate::project_grants::inherit_project_grants(
+            tx,
+            &document,
+            EntityType::Document,
+            &CHILD_PROJECT_ID,
+        )
+        .await
+    })
+    .await
+    .unwrap();
+    let after = grants(&pool, &document).await;
+    assert!(
+        after
+            .iter()
+            .any(|(source_id, _, _)| *source_id == TEAM_ID.to_string()),
+        "the team keeps its inherited grant after the move: {after:?}"
+    );
 }
 
 #[sqlx::test(

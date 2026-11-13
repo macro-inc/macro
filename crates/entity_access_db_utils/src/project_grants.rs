@@ -219,6 +219,11 @@ async fn unregistered_reach(
 
 /// Give an entity just filed in `project_id` the grants of that folder and
 /// every folder above it.
+///
+/// This writes no scope check of its own: a move drops the grants of the old
+/// folder before it inherits the new one's, so checking here would count the
+/// grants the entity held a moment ago as new. The write that files the
+/// entity calls [`refuse_filing`] first, against the grants it holds then.
 #[tracing::instrument(skip(transaction), err)]
 pub async fn inherit_project_grants(
     transaction: &mut Transaction<'_, Postgres>,
@@ -231,12 +236,6 @@ pub async fn inherit_project_grants(
     if sources.is_empty() {
         return Ok(());
     }
-    refuse_inherited_access(
-        transaction.as_mut(),
-        &[(*entity_id, entity_type.as_ref())],
-        &sources,
-    )
-    .await?;
     let entity_type: &str = entity_type.into();
     let mut query: QueryBuilder<Postgres> = QueryBuilder::new(
         "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",

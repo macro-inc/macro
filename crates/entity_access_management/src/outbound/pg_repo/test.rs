@@ -993,3 +993,58 @@ async fn a_scoped_session_cant_move_a_folder_under_a_shared_one(pool: Pool<Postg
     .unwrap();
     assert_eq!(rows().await, before);
 }
+
+/// A move runs as two steps after the write that files the entity: dropping
+/// what the old folder passed down, then inheriting the new folder's grants.
+/// The filing write checks the scope; under a scope that may not share, the
+/// second step still restores the grants both folders pass down.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
+)]
+async fn a_scoped_move_keeps_the_grants_both_folders_pass_down(pool: Pool<Postgres>) {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let repo = PgRepository::new(pool.clone());
+    let document_id = Uuid::now_v7();
+    let project_a = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let project_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
+    repo.add_entity_to_project(&document_id, EntityType::Document, &project_c)
+        .await
+        .unwrap();
+
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    scope_attribution(no_send, async {
+        repo.remove_entity_from_project(&document_id, EntityType::Document, &project_c)
+            .await?;
+        repo.add_entity_to_project(
+            &document_id,
+            EntityType::Document,
+            &Uuid::parse_str(project_b).unwrap(),
+        )
+        .await
+    })
+    .await
+    .unwrap();
+
+    let granted_from = sqlx::query_scalar!(
+        "SELECT granted_from_project_id FROM entity_access WHERE entity_id = $1",
+        &document_id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    // The owners of A and B, A's channel and B's team.
+    assert_eq!(granted_from.len(), 4);
+    assert!(
+        granted_from.iter().all(
+            |project| matches!(project.as_deref(), Some(id) if id == project_a || id == project_b)
+        ),
+        "{granted_from:?}"
+    );
+}

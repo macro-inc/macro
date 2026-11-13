@@ -65,9 +65,10 @@ top of it.
   transaction writes nothing. A new grant writer or revoker calls it too.
   Deleting an entity's rows, membership cleanup (`source_grants`) and the
   inherited rows a folder move removes are not checked, nor is a new row's
-  owner grant unless the owner is a team. A write that files an entity in a
-  folder and inherits the folder's grants after commit calls
-  `project_grants::refuse_filing` before it commits.
+  owner grant unless the owner is a team. `project_grants::inherit_project_grants`
+  is not checked either: a move drops the old folder's rows before it
+  inherits, so the write that files an entity calls
+  `project_grants::refuse_filing` first, against the rows it holds then.
 - Folder direct-grant changes hold `team_share::acquire_guard` before entity/row
   locks, matching project topology propagation. Legacy non-UUID children inherit
   through their parent dynamically and do not get UUID grant rows.
