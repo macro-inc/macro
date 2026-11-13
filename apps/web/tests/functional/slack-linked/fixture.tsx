@@ -4,7 +4,7 @@ import {
   SlackLinkedProvider,
 } from '@app/features/slack-linked/context/slack-linked-context';
 import { createSlackLinkedCapabilities } from '@app/features/slack-linked/queries/production-capabilities';
-import { SlackPage } from '@app/features/slack-linked/views/slack-page';
+import { SlackLinkedPage } from '@app/features/slack-linked/slack-linked-page';
 import { createOpenSections } from '@app/features/whatsapp-linked/primitives/open-sections';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
@@ -78,7 +78,7 @@ function Page() {
   return (
     <SlackLinkedProvider value={capabilities}>
       <main class="min-h-screen bg-panel p-4 text-ink">
-        <SlackPage
+        <SlackLinkedPage
           handoff={login ? { kind: 'login', loginId: login } : undefined}
         />
       </main>

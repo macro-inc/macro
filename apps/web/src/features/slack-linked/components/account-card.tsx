@@ -93,6 +93,8 @@ export function WorkspaceStrip(props: {
   pending: boolean;
   onDisconnect: () => void;
   onSignInAgain: () => void;
+  /** Show the workspace's domain after its name. */
+  domain: boolean;
 }) {
   return (
     <div
@@ -103,9 +105,11 @@ export function WorkspaceStrip(props: {
       <span class="ph-no-capture truncate font-medium text-ink">
         {props.account.teamName}
       </span>
-      <span class="shrink-0 truncate text-ink-extra-muted touch:hidden">
-        {props.account.teamDomain}
-      </span>
+      <Show when={props.domain}>
+        <span class="shrink-0 truncate text-ink-extra-muted">
+          {props.account.teamDomain}
+        </span>
+      </Show>
       <span
         class="shrink-0"
         classList={{

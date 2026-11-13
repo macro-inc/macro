@@ -122,11 +122,21 @@ export function ExternalView() {
       </section>
     </Show>
   );
+  const touchHeading = (provider: ExternalChatProvider) => (
+    <Show when={isTouchDevice()}>
+      <ViewShell.Header class="pb-2">
+        <h1 class="text-lg font-semibold text-ink">
+          {providerIdentity(provider).label}
+        </h1>
+      </ViewShell.Header>
+    </Show>
+  );
   const providerPage = () => (
     <Show when={selected()}>
       {(provider) => (
         <Dynamic
           component={PROVIDER_PAGES[provider()]}
+          heading={touchHeading(provider())}
           inMacro={touchInMacro()}
         />
       )}
