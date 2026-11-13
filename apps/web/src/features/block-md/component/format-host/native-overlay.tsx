@@ -113,6 +113,12 @@ export function createNativeBodyFormattingOverlay(options: {
     return {
       observer: formatting.observer,
       host: () => formatting.controller()?.host,
+      /** Source slash Link: TRY_INSERT_LINK on the actual published view. */
+      requestLink() {
+        const host = formatting.controller()?.host;
+        if (!host) throw new Error('Native link host is unavailable');
+        host.requestLink();
+      },
       Overlay,
       dispose,
     };

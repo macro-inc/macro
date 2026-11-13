@@ -442,6 +442,7 @@ export default function RustMarkdownEditor(props: {
                         openFileDialog: (kind) =>
                           imageUploads.openFileDialog(kind),
                         requestEquation: () => equationContext.requestCreate(),
+                        requestLink: () => formatting.requestLink(),
                         requestCreation: creation.requestCreation,
                       },
                     },

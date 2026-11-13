@@ -26,9 +26,9 @@ Capture all native formatting query results inside the construction-time latestP
 
 Keep native FormatTools in the selected-body withinPopup path; its full-header title/body focus routing is not qualified by this component checkpoint and must retain Source behavior before any broader host wiring.
 
-Mount the native body floating menu through its construction-time publication observer and an independent optional overlay lifetime; reuse the document interaction accessor including generation, waiting and editor-error locks. Keep its Link button hidden until the native link editor is qualified; do not expose requestLink to Actions from this mount.
+Mount the native body floating menu through its construction-time publication observer and an independent optional overlay lifetime; reuse the document interaction accessor including generation, waiting and editor-error locks. Keep its Link button hidden until the native link editor is qualified. The slash Link row reaches the native link host through the overlay's `requestLink`, which follows Source TRY_INSERT_LINK (create at a caret, Prepare then edit on a range) and throws before the first publication.
 
-Co-dispose HostedFloatingLinkMenu with its actual native link host inside the overlay's FloatingMenuGroup and ErrorBoundary; registerMenu has no independent unbind. Gate interaction and deferred opening on the supplied document interaction accessor. A renderer unit checkpoint does not activate the body Link button or Actions callback.
+Co-dispose HostedFloatingLinkMenu with its actual native link host inside the overlay's FloatingMenuGroup and ErrorBoundary; registerMenu has no independent unbind. Gate interaction and deferred opening on the supplied document interaction accessor. A renderer unit checkpoint does not activate the body Link button.
 
 Use the actual document-body call chain MarkdownPopup → FormatTools withinPopup as the body toolbar oracle. HostedFloatingFormatMenu belongs to MarkdownTextarea/Shell; its component proofs do not establish body UI admission or the six-item body More menu.
 

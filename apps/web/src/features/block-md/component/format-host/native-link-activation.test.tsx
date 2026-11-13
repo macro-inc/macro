@@ -4,6 +4,9 @@ import { Telemetry } from '@macro-inc/observability';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { createNativeActionMenuHost } from '../../../../lib/core/component/LexicalMarkdown/editing/overlay-hosts/native-actions';
+import { ACTIONS } from '../../../../lib/core/component/LexicalMarkdown/plugins/actions/actions';
+import { dispatchApplicationCommandSettled } from '../../../../lib/core/component/LexicalMarkdown/plugins/group-b/command';
 import * as url from '../../../../lib/core/util/url';
 import { MarkdownDocumentProvider } from '../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
@@ -50,27 +53,35 @@ function setup() {
   const runtime = mount([formatting.observer]);
   // jsdom does not make contenteditable elements focusable like a browser.
   runtime.root.tabIndex = 0;
+  // Source MarkdownPopup positions inside the document's local portal scope.
+  const portalScope = document.createElement('div');
+  portalScope.className = 'portal-scope';
+  document.body.append(portalScope);
+  portalScope.append(runtime.root);
   const documentState = createMarkdownDocumentState();
-  const rendered = render(() => (
-    <MarkdownDocumentProvider
-      context={{
-        documentId: () => 'native-link-activation',
-        kind: () => 'document',
-        documentSource: () => ({ type: 'loading' }),
-        permissions: {
-          canEdit: () => true,
-          canComment: () => false,
-          isOwner: () => true,
-        },
-        persistedName: () => undefined,
-        fallbackName: () => undefined,
-        state: documentState,
-        element: () => runtime.root,
-      }}
-    >
-      <formatting.Overlay />
-    </MarkdownDocumentProvider>
-  ));
+  const rendered = render(
+    () => (
+      <MarkdownDocumentProvider
+        context={{
+          documentId: () => 'native-link-activation',
+          kind: () => 'document',
+          documentSource: () => ({ type: 'loading' }),
+          permissions: {
+            canEdit: () => true,
+            canComment: () => false,
+            isOwner: () => true,
+          },
+          persistedName: () => undefined,
+          fallbackName: () => undefined,
+          state: documentState,
+          element: () => runtime.root,
+        }}
+      >
+        <formatting.Overlay />
+      </MarkdownDocumentProvider>
+    ),
+    { container: portalScope }
+  );
   runtime.port.setState(
     JSON.stringify({
       root: {
@@ -116,6 +127,7 @@ function setup() {
     rendered.unmount();
     await runtime.close();
     runtime.root.remove();
+    portalScope.remove();
   };
   return {
     runtime,
@@ -319,6 +331,65 @@ test('disposing the overlay removes the URL editor and its ordered key handlers'
     expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
     expect(fixture.optionalErrors).not.toHaveBeenCalled();
   } finally {
+    await fixture.dispose();
+  }
+});
+
+test('the slash Link row opens the Source create-link editor after actual search removal', async () => {
+  const fixture = setup();
+  const actions = createNativeActionMenuHost(
+    fixture.runtime.view,
+    {
+      requestTable() {},
+      requestLink: () => fixture.formatting.requestLink(),
+    },
+    () => true
+  );
+  try {
+    fixture.runtime.port.setState(state(' body'));
+    const text = [...fixture.runtime.view.mirror.values()].find(
+      (node) => node.kind === 'text' && node.text === ' body'
+    );
+    if (!text) throw new Error('Missing actual native text');
+    fixture.runtime.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: text.key, offset: 0, type: 'text' },
+      focus: { key: text.key, offset: 0, type: 'text' },
+    });
+    const trigger = await dispatchApplicationCommandSettled(
+      fixture.runtime.view,
+      'group-a.search-trigger',
+      { kind: 'actions' }
+    );
+    expect(trigger).toMatchObject({ status: 'success', handled: true });
+    const link = ACTIONS.find((item) => item.id === 'link');
+    if (!link) throw new Error('Missing actual Link catalog item');
+    expect(actions.supports(link)).toBe(true);
+    actions.select(link, 'keyboard');
+    const label =
+      await screen.findByPlaceholderText<HTMLInputElement>('Link text');
+    expect(fixture.runtime.root.querySelector('a')).toBeNull();
+    expect(fixture.runtime.root.textContent).toBe(' body');
+    fireEvent.input(screen.getByPlaceholderText('https://example.com'), {
+      target: { value: 'example.org' },
+    });
+    fireEvent.input(label, { target: { value: 'site' } });
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await vi.waitFor(() =>
+      expect(
+        fixture.runtime.root.querySelector('a')?.getAttribute('href')
+      ).toBe('https://example.org')
+    );
+    expect(fixture.runtime.root.textContent).toBe('site body');
+    expect(fixture.optionalErrors).not.toHaveBeenCalled();
+  } finally {
+    actions.dispose();
     await fixture.dispose();
   }
 });
