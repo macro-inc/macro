@@ -1,15 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type InferType, validateSchema } from '@loro-mirror/core';
 import { LoroManager } from '@macro-inc/collaboration/collab/manager';
-import {
-  MARKDOWN_LORO_SCHEMA,
-  type MarkdownLoroSchemaType,
-} from '@macro-inc/lexical-core/markdown-loro-schema';
+import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { LoroDoc, LoroList, LoroMap, LoroMovableList } from 'loro-crdt';
 import { expect, test } from 'vitest';
-import { toSnapshot } from '../ai-toolkit';
+import { isMarkdownLoroState, toSnapshot } from '../ai-toolkit';
 import { setup } from '../ai-toolkit/_test-helpers';
 import { Doc } from './doc';
 
@@ -34,14 +30,6 @@ const TABLE_KEYS = [
 ] as const;
 
 type KeyShape = 'absent' | 'null' | { value: unknown };
-
-/** The worker hands editorState.toJSON() to the Mirror; check it is the
- *  Mirror's state shape instead of asserting it. */
-function isMarkdownLoroState(
-  value: unknown
-): value is InferType<MarkdownLoroSchemaType> {
-  return validateSchema(MARKDOWN_LORO_SCHEMA, value).valid;
-}
 
 /** Each table node's optional keys, read from the stored Loro maps. */
 function decodeTables(doc: LoroDoc): Record<string, KeyShape>[] {

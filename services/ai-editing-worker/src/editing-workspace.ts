@@ -1,17 +1,15 @@
-import type { InferType } from '@loro-mirror/core';
 import { SyncEngine } from '@macro-inc/collaboration/collab/engine';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import type { WALSyncer } from '@macro-inc/collaboration/collab/wal';
-import type {
-  MARKDOWN_LORO_SCHEMA,
-  MarkdownLoroSchemaType,
-} from '@macro-inc/lexical-core/markdown-loro-schema';
+import type { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { Telemetry } from '@macro-inc/observability';
 import type { SerializedEditorState } from 'lexical';
 import {
   createEditingSession,
+  isMarkdownLoroState,
   type LexicalSession,
   loadSnapshot,
   toSnapshot,
@@ -133,9 +131,16 @@ export class EditingWorkspace {
       });
 
       const snapshot = toSnapshot(this.session);
-      await this.engine.syncStateToLoro(
-        snapshot as unknown as InferType<MarkdownLoroSchemaType>
-      );
+      // The Mirror validates this shape on setState; a snapshot that fails
+      // takes the engine's own sync-failure path (report, reset) instead.
+      if (!isMarkdownLoroState(snapshot)) {
+        Telemetry.error(new Error('AI edit state is not the Mirror state'), {
+          'error.source': 'ai-editing-worker',
+        });
+        await this.engine.reset();
+        return;
+      }
+      await this.engine.syncStateToLoro(snapshot);
     });
   }
 }
