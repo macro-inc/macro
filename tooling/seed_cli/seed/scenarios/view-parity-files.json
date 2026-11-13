@@ -5,15 +5,62 @@
     "pat": {
       "email": "pat@seed.macro.local",
       "first_name": "Pat",
-      "roles": ["professional_subscriber"]
+      "roles": [
+        "professional_subscriber"
+      ]
     }
   },
   "documents": {
-    "image": { "owner": "pat", "name": "Parity image", "file": "parity-image.png" },
-    "video": { "owner": "pat", "name": "Parity video", "file": "parity-video.mp4" },
-    "code": { "owner": "pat", "name": "Parity code", "file": "parity-code.ts" },
-    "archive": { "owner": "pat", "name": "Parity archive", "file": "parity-archive.zip" },
-    "pdf": { "owner": "pat", "name": "Parity PDF", "file": "pdf.pdf" },
-    "canvas": { "owner": "pat", "name": "Parity canvas", "file": "canvas.canvas" }
+    "image": {
+      "owner": "pat",
+      "name": "Parity image",
+      "file": "parity-image.png"
+    },
+    "video": {
+      "owner": "pat",
+      "name": "Parity video",
+      "file": "parity-video.mp4"
+    },
+    "code": {
+      "owner": "pat",
+      "name": "Parity code",
+      "file": "parity-code.ts"
+    },
+    "archive": {
+      "owner": "pat",
+      "name": "Parity archive",
+      "file": "parity-archive.zip"
+    },
+    "pdf": {
+      "owner": "pat",
+      "name": "Parity PDF",
+      "file": "pdf.pdf"
+    },
+    "canvas": {
+      "owner": "pat",
+      "name": "Parity canvas",
+      "file": "canvas.canvas"
+    },
+    "fig": {
+      "owner": "pat",
+      "name": "Parity design",
+      "file": "parity-design.fig"
+    },
+    "psd": {
+      "owner": "pat",
+      "name": "Parity layers",
+      "file": "parity-layers.psd"
+    },
+    "ai": {
+      "owner": "pat",
+      "name": "Parity vector",
+      "file": "parity-vector.ai"
+    }
+  },
+  "chats": {
+    "chat": {
+      "owner": "pat",
+      "name": "Parity chat"
+    }
   }
 }

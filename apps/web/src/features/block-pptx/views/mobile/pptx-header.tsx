@@ -8,7 +8,7 @@ import {
 
 /**
  * The slides block's header on touch: the title with its menu, and who
- * else is viewing.
+ * else is viewing. Ask Macro is in the title menu.
  */
 export function MobilePptxHeader(props: PptxHeaderProps) {
   const { ops, actions } = pptxHeaderTools(props);
@@ -19,7 +19,7 @@ export function MobilePptxHeader(props: PptxHeaderProps) {
       name={props.name()}
       iconType="pptx"
       badges={<FileTypeChip />}
-      menuTools={[actions.share]}
+      menuTools={[actions.askMacro, actions.share]}
       ops={ops}
       trailing={<BlockLiveIndicators />}
     />

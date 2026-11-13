@@ -8,7 +8,7 @@ import {
 
 /**
  * The Word block's header on touch: the title with its menu, and who
- * else is viewing.
+ * else is viewing. Ask Macro is in the title menu.
  */
 export function MobileDocxHeader(props: DocxHeaderProps) {
   const { ops, actions } = docxHeaderTools(props);
@@ -19,7 +19,7 @@ export function MobileDocxHeader(props: DocxHeaderProps) {
       name={props.name()}
       iconType="write"
       trailingBadges={<BetaBadge />}
-      menuTools={[actions.share]}
+      menuTools={[actions.askMacro, actions.share]}
       ops={ops}
       trailing={<BlockLiveIndicators />}
     />
