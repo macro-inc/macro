@@ -12105,6 +12105,10 @@ export interface ListCompaniesResponse {
    */
   companies: CompanyListItem[];
   /**
+   * How many companies matched before the limit.
+   */
+  totalMatching: number;
+  /**
    * Human-readable summary of the results.
    */
   summary: string;

@@ -243,6 +243,7 @@ async fn lists_the_team_companies_with_the_tool_filters(pool: PgPool) {
     assert_eq!(names(&searched), ["Globex"]);
     let (_, first) = get(&app, "member", "/crm/companies?limit=1").await;
     assert_eq!(names(&first), ["Globex"]);
+    assert_eq!(first["totalMatching"], 2);
 
     let (status, unknown) = get(&app, "member", "/crm/companies?stage=nonsense").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);

@@ -65,6 +65,8 @@ pub struct CompanyListItem {
 pub struct ListCompaniesResponse {
     /// The matching CRM companies.
     pub companies: Vec<CompanyListItem>,
+    /// How many companies matched before the limit.
+    pub total_matching: usize,
     /// Human-readable summary of the results.
     pub summary: String,
 }
@@ -193,7 +195,7 @@ where
 
     // Fetch visible companies (and hidden ones when requested), most
     // recently active first, then filter in memory.
-    let mut companies = service_context
+    let mut companies = context
         .service
         .list_companies_for_soup(
             &team_receipt,
@@ -207,7 +209,7 @@ where
         .await
         .map_err(crm_error)?;
     if include_hidden {
-        let hidden = service_context
+        let hidden = context
             .service
             .list_companies_for_soup(
                 &team_receipt,
@@ -230,7 +232,7 @@ where
     }
 
     // Text filter first so the property fetch only covers candidates.
-    if let Some(search) = self
+    if let Some(search) = filters
         .search
         .as_deref()
         .map(str::trim)
@@ -245,7 +247,7 @@ where
 
     // Resolve the stage filter to option ids up front so an unknown
     // stage fails with an actionable error instead of an empty list.
-    let stage_option_ids = match self
+    let stage_option_ids = match filters
         .stage
         .as_deref()
         .map(str::trim)
@@ -280,7 +282,7 @@ where
         SystemPropertyKey::REVENUE_UUID,
     ];
     property_ids.extend_from_slice(stage_catalog.team_stage_definition_ids());
-    let properties_map = service_context
+    let properties_map = context
         .properties
         .get_bulk_entity_properties(&company_access, property_ids)
         .await
@@ -313,7 +315,7 @@ where
                 continue;
             }
         }
-        if let Some(owner_filter) = self
+        if let Some(owner_filter) = filters
             .owner_user_id
             .as_deref()
             .map(str::trim)
@@ -352,6 +354,7 @@ where
 
     Ok(ListCompaniesResponse {
         companies: items,
+        total_matching,
         summary,
     })
 }

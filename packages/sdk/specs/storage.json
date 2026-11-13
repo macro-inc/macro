@@ -8445,6 +8445,112 @@
       }
     },
     "/crm/companies": {
+      "get": {
+        "tags": ["crm::inbound::company_list"],
+        "summary": "List the caller's team's CRM companies, most recent interaction first,\nwith each company's own Stage, Owner and Revenue.",
+        "operationId": "list_companies",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive substring of a company name or domain.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "description": "The company's own Stage property: a stage label (case-insensitive) or\nstage option id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ownerUserId",
+            "in": "query",
+            "description": "Only companies whose Owner property is this Macro user id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeHidden",
+            "in": "query",
+            "description": "Also include hidden companies (team admin or owner only).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum companies to return (1-200, default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCompaniesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown stage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Hidden companies need team admin or owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["crm::inbound::axum_router::create_company"],
         "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. A domain, when given, must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
@@ -35385,6 +35491,58 @@
           }
         }
       },
+      "CompanyListItem": {
+        "type": "object",
+        "description": "A CRM company row returned by [`ListCompanies`].",
+        "required": ["id", "domains", "hidden", "lastInteraction"],
+        "properties": {
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The company's email domains, primary domain first."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden from the team's CRM listings."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The CRM company id. Use with GetCompany, GetEntityProperties /\nSetEntityProperty (entity_type=company)."
+          },
+          "lastInteraction": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent known email interaction with this company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Company display name, when resolved."
+          },
+          "ownerUserId": {
+            "type": ["string", "null"],
+            "description": "Macro user id of the company's owner, if set."
+          },
+          "revenue": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The company's revenue (dollars), if set."
+          },
+          "stage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolCompanyStage",
+                "description": "The company's own Stage property, if set; separate from any\npipeline entry's stage."
+              }
+            ]
+          }
+        }
+      },
       "CompleteUploads": {
         "type": "object",
         "description": "Explicit upload completion; a seal can be submitted separately with an empty list.",
@@ -49441,6 +49599,29 @@
         "description": "Defines who can access an item through its share link.",
         "enum": ["PUBLIC", "TEAM"]
       },
+      "ListCompaniesResponse": {
+        "type": "object",
+        "description": "Response from the [`ListCompanies`] tool.",
+        "required": ["companies", "totalMatching", "summary"],
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyListItem"
+            },
+            "description": "The matching CRM companies."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Human-readable summary of the results."
+          },
+          "totalMatching": {
+            "type": "integer",
+            "description": "How many companies matched before the limit.",
+            "minimum": 0
+          }
+        }
+      },
       "ListDatabaseWebhooksResponse": {
         "type": "object",
         "description": "A database's webhooks.",
@@ -62498,6 +62679,22 @@
           },
           "payload": {
             "description": "The action's stored payload."
+          }
+        }
+      },
+      "ToolCompanyStage": {
+        "type": "object",
+        "description": "A company's own Stage property: the select option id currently set plus its\nhuman-readable label.",
+        "required": ["optionId", "label"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "The stage's display label (e.g. \"Lead\", \"Customer\")."
+          },
+          "optionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The stage property option id (usable with SetEntityProperty)."
           }
         }
       },

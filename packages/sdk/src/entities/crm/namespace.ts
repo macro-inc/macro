@@ -36,7 +36,7 @@ export interface CompanyListOptions {
 }
 
 /** A CRM company with its own Stage, Owner and Revenue, as one listing row. */
-export interface CompanyListing {
+export interface ListedCompany {
   company: Company;
   name: string | undefined;
   /** Email domains, primary first. */
@@ -50,6 +50,14 @@ export interface CompanyListing {
   owner: User | undefined;
   /** The company's own Revenue property, in dollars. */
   revenue: number | undefined;
+}
+
+/** What {@link CrmNamespace.listCompanies} returns. */
+export interface CompanyListing {
+  /** The companies, at most the requested limit. */
+  companies: ListedCompany[];
+  /** How many companies matched before the limit. */
+  totalMatching: number;
 }
 
 /**
@@ -281,16 +289,16 @@ export class CrmNamespace {
    * @example Customers owned by me
    * ```js
    * const me = await macro.users.me();
-   * const rows = await macro.crm.listCompanies({stage: 'Customer', owner: me});
-   * return rows.map(row => ({name: row.name, lastInteraction: row.lastInteraction}));
+   * const {companies, totalMatching} = await macro.crm.listCompanies({stage: 'Customer', owner: me});
+   * return {totalMatching, companies: companies.map(row => ({name: row.name, lastInteraction: row.lastInteraction}))};
    * ```
    *
    * @readonly
    */
   async listCompanies(
     options: CompanyListOptions = {},
-  ): Promise<CompanyListing[]> {
-    const { companies } = unwrap(
+  ): Promise<CompanyListing> {
+    const { companies, totalMatching } = unwrap(
       await this.client.storage.listCompanies({
         query: {
           search: options.search,
@@ -301,7 +309,7 @@ export class CrmNamespace {
         },
       }),
     );
-    return companies.map((row) => ({
+    const listed = companies.map((row): ListedCompany => ({
       company: Company.byId(this.client, row.id),
       name: row.name ?? undefined,
       domains: row.domains,
@@ -311,6 +319,7 @@ export class CrmNamespace {
       owner: row.ownerUserId ? User.byId(this.client, row.ownerUserId) : undefined,
       revenue: row.revenue ?? undefined,
     }));
+    return { companies: listed, totalMatching };
   }
 
   /**
