@@ -451,6 +451,8 @@ test('an earlier commit observer that throws cannot make a referenced upload loo
       throw failure;
   });
   cleanups.push(stop);
+  const reported = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  cleanups.push(() => reported.mockRestore());
   runtime.caret(0, 5);
   const onInserted = vi.fn();
   const result = await Promise.resolve(
@@ -459,6 +461,11 @@ test('an earlier commit observer that throws cannot make a referenced upload loo
   // The document references the file, so the picker must keep the upload.
   expect(result).toBe(true);
   expect(onInserted).toHaveBeenCalledTimes(1);
+  // The observer's own error still surfaces, exactly once.
+  expect(reported).toHaveBeenCalledTimes(1);
+  expect(reported).toHaveBeenCalledWith(failure, {
+    source: 'native-gif-insert-after-publish',
+  });
   expect(children(runtime)[imageIndex(runtime)]).toMatchObject({
     id: FILE_ID,
   });

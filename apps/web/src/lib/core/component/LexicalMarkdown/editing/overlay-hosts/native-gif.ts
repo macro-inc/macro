@@ -208,6 +208,17 @@ export function createNativeGifContext(): {
       const sourceInserted =
         evidence?.status === 'published' && evidence.mainHandled;
       if (referenced || sourceInserted) {
+        // The upload stays owned, but a dispatch failure after publish (a later
+        // commit observer) is still reported, as Source surfaces its listener errors.
+        if (failure) {
+          try {
+            Telemetry.error(failure.error, {
+              source: 'native-gif-insert-after-publish',
+            });
+          } catch {
+            /* the upload stays owned either way */
+          }
+        }
         try {
           onInserted();
         } catch (error) {
