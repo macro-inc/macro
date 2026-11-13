@@ -25,6 +25,7 @@ mod build_dmg_on_tag;
 mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
+mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
@@ -215,6 +216,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "cargo_deny",
         file_name: "cargo_deny.yml",
         render_yaml: || render_gh_workflow(cargo_deny::cargo_deny)(),
+    },
+    WorkflowFile {
+        slug: "cargo_deny_advisories",
+        file_name: "cargo_deny_advisories.yml",
+        render_yaml: || render_gh_workflow(cargo_deny_advisories::cargo_deny_advisories)(),
     },
     WorkflowFile {
         slug: "cargo_workspace_dependency_check",
