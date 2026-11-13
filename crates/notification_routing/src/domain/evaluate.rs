@@ -149,6 +149,7 @@ impl Conversation {
             | NotifEvent::ChannelAccessRequested(_)
             | NotifEvent::RoutineRunFinished(_)
             | NotifEvent::AgentSignInExpiry(_)
+            | NotifEvent::ComputerSetup(_)
             | NotifEvent::RuntimeAccessRemoved(_) => return None,
         };
 
