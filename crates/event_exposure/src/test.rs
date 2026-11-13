@@ -17,6 +17,28 @@ fn public_entity_types_use_entity_wire_names() {
         PublicEntityType::GithubPullRequest.as_str(),
         "github_pull_request"
     );
+    assert_eq!(PublicEntityType::EmailLink.as_str(), "email_link");
+    assert_eq!(PublicEntityType::Notification.as_str(), "notification");
+    assert_eq!(PublicEntityType::Property.as_str(), "property");
+    assert_eq!(
+        PublicEntityType::GithubInstallation.as_str(),
+        "github_installation"
+    );
+}
+
+#[test]
+fn parse_user_id_accepts_macro_ids_and_rejects_others() {
+    assert_eq!(
+        parse_user_id("macro|owner@example.com").unwrap().as_ref(),
+        "macro|owner@example.com"
+    );
+    assert_eq!(
+        parse_user_id("bot|1234"),
+        Err(ExposureError::InvalidEntityId {
+            entity_type: "user",
+            entity_id: "bot|1234".to_owned(),
+        })
+    );
 }
 
 #[test]

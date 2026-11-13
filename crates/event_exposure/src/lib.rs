@@ -157,23 +157,35 @@ impl EntityRef {
 
 /// The type of the entity a public event is about.
 ///
-/// Mostly a Macro [`EntityType`]; bots and webhooks are subjects of public
+/// Mostly a Macro [`EntityType`]; the other variants are subjects of public
 /// events without being access-controlled entities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PublicEntityType {
     /// A Macro entity.
     Entity(EntityType),
-    /// A bot, the subject of its agent-trigger stream.
+    /// A bot, the subject of its agent-trigger stream and lifecycle events.
     Bot,
     /// A webhook configuration.
     Webhook,
     /// A GitHub pull request, by its lowercased `owner/repo/pull/number` key.
     GithubPullRequest,
+    /// A connected inbox (email link).
+    EmailLink,
+    /// A notification.
+    Notification,
+    /// A property definition.
+    Property,
+    /// A GitHub App installation.
+    GithubInstallation,
 }
 
 const BOT_ENTITY_TYPE: &str = "bot";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 const GITHUB_PULL_REQUEST_ENTITY_TYPE: &str = "github_pull_request";
+const EMAIL_LINK_ENTITY_TYPE: &str = "email_link";
+const NOTIFICATION_ENTITY_TYPE: &str = "notification";
+const PROPERTY_ENTITY_TYPE: &str = "property";
+const GITHUB_INSTALLATION_ENTITY_TYPE: &str = "github_installation";
 
 impl PublicEntityType {
     /// The wire name, such as `document` or `bot`.
@@ -183,6 +195,10 @@ impl PublicEntityType {
             Self::Bot => BOT_ENTITY_TYPE,
             Self::Webhook => WEBHOOK_ENTITY_TYPE,
             Self::GithubPullRequest => GITHUB_PULL_REQUEST_ENTITY_TYPE,
+            Self::EmailLink => EMAIL_LINK_ENTITY_TYPE,
+            Self::Notification => NOTIFICATION_ENTITY_TYPE,
+            Self::Property => PROPERTY_ENTITY_TYPE,
+            Self::GithubInstallation => GITHUB_INSTALLATION_ENTITY_TYPE,
         }
     }
 }
@@ -225,15 +241,21 @@ pub enum Audience {
         /// The lowest access level that receives the event.
         min_level: MinAccessLevel,
     },
-    /// One addressed user, such as the recipient of a private call event.
-    /// Webhooks match only that user's personal workspace.
+    /// The one user an event is for: the recipient of a private call event,
+    /// or the owner of personal data (their mailbox, calendar, notifications,
+    /// activity feed). Personal only: webhooks match only that user's personal
+    /// workspace, never their teams'; streams match only that user, and never
+    /// a bot acting for them unless the bot is theirs. Declare personal
+    /// families with this class, not [`Self::Owner`].
     Recipient {
         /// The addressed user.
         user_id: MacroUserIdStr<'static>,
     },
     /// The owning user, such as a deleted session's owner. Webhooks match the
     /// owner as they match any accessor (their personal and team
-    /// workspaces); streams match the owner's personal stream.
+    /// workspaces); streams match the owner's personal stream. Because it
+    /// reaches the owner's team webhooks, never use it for personal data;
+    /// use [`Self::Recipient`].
     Owner {
         /// The owning user.
         user_id: MacroUserIdStr<'static>,
@@ -308,6 +330,17 @@ pub enum MinAccessLevel {
 /// topic using it cannot construct [`Exposure::Public`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Unexposed {}
+
+/// Parse a user id an event carries as a plain string, failing as
+/// [`ExposureError::InvalidEntityId`] when it is not a Macro user id.
+pub fn parse_user_id(raw: &str) -> Result<MacroUserIdStr<'static>, ExposureError> {
+    MacroUserIdStr::try_from(raw.to_owned()).map_err(|_| ExposureError::InvalidEntityId {
+        entity_type: USER_ENTITY_TYPE,
+        entity_id: raw.to_owned(),
+    })
+}
+
+const USER_ENTITY_TYPE: &str = "user";
 
 /// The event violates the contract its exposure relies on. Retrying cannot
 /// fix it, so delivery skips the event.
