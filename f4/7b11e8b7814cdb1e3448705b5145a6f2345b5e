@@ -1,0 +1,59 @@
+crates/code_mode_assets/build.rs
+  s_7f65392b5f68c8::t_783fcf3b28e738 15-20,46-47
+crates/code_mode_assets/generator_inputs.txt
+  s_7f65392b5f68c8::t_1b2318316d5223 1-18
+crates/hosted_runtimes/src/outbound/docker_fleet.rs
+  s_7f65392b5f68c8::t_f8275ef0a73bd7 16-22,59-61,80-83,313,563,581-582,620-628
+crates/hosted_runtimes/src/outbound/docker_fleet/test.rs
+  s_7f65392b5f68c8::t_a6eb33fab01093 13,36,81-111
+crates/hosted_runtimes/src/outbound/docker_fleet/test/enrollment.rs
+  s_7f65392b5f68c8::t_471fdfead1defc 78,184
+docs/development/running-locally.md
+  s_7f65392b5f68c8::t_4d9ff2b33b931e 667,673-674,725-743
+nix/macro-box/AGENTS.md
+  s_7f65392b5f68c8::t_e8a9289387d8af 47-58
+nix/macro-box/macro-box.nix
+  s_7f65392b5f68c8::t_00ca875cc69e27 21-36,39-40,42-43,47-81,94-109,122-140
+services/agent_harness_service/AGENTS.md
+  s_7f65392b5f68c8::t_e917d3ad34077d 268-270
+services/agent_harness_service/src/computers.rs
+  s_7f65392b5f68c8::t_03d8822c42fdad 121-125
+services/agent_harness_service/src/config.rs
+  s_7f65392b5f68c8::t_deeff47b1dda0c 513-515
+services/agent_harness_service/src/config/test.rs
+  s_7f65392b5f68c8::t_0dcbf57a535007 260-267
+tooling/just/xtask.just
+  s_7f65392b5f68c8::t_6f6f467a03c395 8-13
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_7f65392b5f68c8::t_9357ef8ac3e839 401,531,672,693-702,710,717-726,737,752-755,763,771,789-794,884-887,895,932,968-1006,1015,1030,1045-1058,1060-1070,1072-1098,1134-1169,1192,1215-1216,1412-1416,1934
+tooling/xtask/crates/xtask_local/src/local/build.rs
+  s_7f65392b5f68c8::t_aaefb524fb82a4 19,31-33,47-52
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build.rs
+  s_7f65392b5f68c8::t_ae7c1718a1753e 14,16,49-74,78-79,108-130,134-143,165-429,511-519,522-524
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build/test.rs
+  s_7f65392b5f68c8::t_4c75f835af40fb 6,25,80,93-116
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_7f65392b5f68c8::t_4742ab7649c1ba 5-13,27,41-44,167-172,236-239,321-331,333,339-360,363,366-368,372-416,632-638,641-672,674,676-717,719,722-804,806-812,815,817,820,825-826,838-848,851-857,859-860,863-866,868,872,874-896,901-902,905-908,910,912-927
+tooling/xtask/crates/xtask_local/src/local/computers/test.rs
+  s_7f65392b5f68c8::t_41a10008c13e4f 32,38-44,324-335,477-543
+tooling/xtask/crates/xtask_local/src/local/stack.rs
+  s_7f65392b5f68c8::t_ee5e254fe4431e 412
+tooling/xtask/crates/xtask_local/src/local/validate.rs
+  s_7f65392b5f68c8::t_aa624e395d76e7 234-237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f47b11e8b7814cdb1e3448705b5145a6f2345b5e",
+  "prompts": {},
+  "sessions": {
+    "s_7f65392b5f68c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c668b76c-1e3f-4598-b60a-4b8d2d51fda7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
