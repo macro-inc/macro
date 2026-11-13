@@ -55,9 +55,12 @@ draft on a busy machine can be told apart.
 - *Run check*: the drafted routine is saved, fired once with a made-up trigger
   (a seeded person posts, a task changes status or is created, or it is run
   now) and its effect is read from the stack's database, in the owner's
-  workspace only: the message it posted in a channel they're in, the task it
+  workspace only: the message it posted in a channel they're in (a mentioned
+  document or task read with its name, as the person sees it), the task it
   made for them, its own notifications, what its run returned. A run whose
-  condition wasn't met did nothing.
+  condition wasn't met did nothing. A fired event the trigger doesn't match
+  is never admitted, so the check stops after 90 s with none; any other run
+  gets four minutes.
 - *Judge*: a model that sees only the request and the routine, with a glossary
   of the ids in it, grades it 1 to 5 (`RUBRIC` in `judge.ts`); 4 or 5 is a
   draft the person would keep.
@@ -100,8 +103,9 @@ nix develop --command bun $B/drafts.ts run --label main --arm bare  --rounds 3 -
 `--cases a,b` runs some cases, `--model` picks the drafting model (default
 `anthropic/claude-sonnet-5-5`, what paid users draft on), `--no-run-checks`
 and `--no-judge` skip those (a run check holds the stack for up to four
-minutes), `--append` keeps a results file: it first fills the drafts missing
-from the rounds it has, then adds `--rounds` more. And `TEMPO_URL` (default
+minutes, 90 s when no event matched), `--append` keeps a results file: it
+first fills the drafts missing from the rounds it has, then adds `--rounds`
+more. And `TEMPO_URL` (default
 `http://localhost:3200`) is where traces are read. Seed again when the seed
 is more than a few days old: requests read "this week" and "due today".
 
@@ -139,7 +143,8 @@ against the first:
 
 `harness --bin <dir>` points the stack at one build; `reread` checks results
 again after a change to the checks (`--traces` reads the traces again,
-`--judge` grades again).
+`--judge` grades again); it reads the database without the lock, so it can
+run beside a draft.
 
 If every draft prints `no trace`, the stack isn't exporting: when the shared
 collector restarts it drops off the instance's network, and the harness logs
