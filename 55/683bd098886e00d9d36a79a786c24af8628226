@@ -1,0 +1,19 @@
+.agents/rules/sdk.md
+  s_78e4d4c9c30c69::t_8cd9d56e160e45 29-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "55683bd098886e00d9d36a79a786c24af8628226",
+  "prompts": {},
+  "sessions": {
+    "s_78e4d4c9c30c69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fe79474-5242-4476-b7a6-a36107ecbeb5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
