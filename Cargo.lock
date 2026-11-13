@@ -23798,7 +23798,6 @@ dependencies = [
  "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-sqs",
- "base64 0.22.1",
  "bollard",
  "chrono",
  "clap",
