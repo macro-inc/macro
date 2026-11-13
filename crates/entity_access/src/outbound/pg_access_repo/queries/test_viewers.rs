@@ -91,7 +91,7 @@ pub(crate) async fn ensure_user(pool: &PgPool, user_id: &str) -> anyhow::Result<
 }
 
 /// A user with no rows at all: their only source is themself.
-const MATRIX_STRANGER: &str = "macro|matrix-stranger@example.com";
+pub(crate) const MATRIX_STRANGER: &str = "macro|matrix-stranger@example.com";
 
 /// The viewer a matrix entry checks, owned so the matrix can hold it.
 #[derive(Debug, Clone)]

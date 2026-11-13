@@ -5,6 +5,9 @@
 //! (point checks) and `entity_access_viewer_sources(viewer, scope_team)`
 //! (listings), which resolve the viewer's teams and channels by index.
 
+#[cfg(test)]
+mod test;
+
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 

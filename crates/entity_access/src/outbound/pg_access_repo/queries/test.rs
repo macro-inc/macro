@@ -364,3 +364,108 @@ async fn foreign_recipients_follow_exact_source_and_current_team_membership(
     );
     Ok(())
 }
+
+/// Source files of the access statements, without the tests and the
+/// test-only copy of the old statements.
+fn statement_sources(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).expect("read the source directory") {
+        let path = entry.expect("read a directory entry").path();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if path.is_dir() {
+            statement_sources(&path, files);
+        } else if name.ends_with(".rs")
+            && name != "test.rs"
+            && !name.ends_with("_test.rs")
+            && !matches!(name, "test_viewers.rs" | "source_list_oracle.rs")
+        {
+            files.push(path);
+        }
+    }
+}
+
+/// What in `sql` would bind a viewer's source list instead of checking
+/// membership: a source column compared with a bound array, the old
+/// two-argument `external_chat_access_level`, or a membership check under
+/// NOT, which an anonymous viewer would pass.
+fn source_list_uses(sql: &str) -> Vec<String> {
+    const SOURCE_COLUMNS: [&str; 4] = [
+        "source_id",
+        "team_id::text",
+        "channel_id",
+        "channel_id::text",
+    ];
+    let sql = sql
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace("( ", "(");
+    let mut uses = Vec::new();
+    for (at, _) in sql.match_indices(" = ANY($") {
+        let column = sql[..at].rsplit([' ', '(', '.']).next().unwrap_or_default();
+        if SOURCE_COLUMNS.contains(&column) {
+            uses.push(sql[at.saturating_sub(40)..(at + 12).min(sql.len())].to_string());
+        }
+    }
+    for banned in [
+        "external_chat_access_level($1, $2)",
+        "external_chat_sources(",
+        "NOT EXISTS (SELECT FROM entity_access_source_matches",
+    ] {
+        if sql.contains(banned) {
+            uses.push(banned.to_string());
+        }
+    }
+    uses
+}
+
+/// No access statement binds the viewer's source list, so none costs more
+/// for a viewer in more teams and channels.
+#[test]
+fn no_statement_binds_a_source_list() {
+    let mut files = Vec::new();
+    statement_sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    assert!(files.len() > 20, "found only {} source files", files.len());
+    let found: Vec<String> = files
+        .iter()
+        .flat_map(|path| {
+            let text = std::fs::read_to_string(path).expect("read a source file");
+            source_list_uses(&text)
+                .into_iter()
+                .map(move |found| format!("{}: {found}", path.display()))
+        })
+        .collect();
+    assert!(
+        found.is_empty(),
+        "source lists bound:\n{}",
+        found.join("\n")
+    );
+}
+
+#[test]
+fn source_list_uses_finds_each_old_form() {
+    for sql in [
+        "AND source_id = ANY($2)",
+        "WHERE ea.source_id = ANY($1)",
+        "ON owner_tu.team_id::text = ANY($2)",
+        "WHERE c.channel_id = ANY(\n $3)",
+        "SELECT external_chat_access_level($1, $2)",
+        "AND NOT EXISTS (SELECT FROM entity_access_source_matches(x, $1, $2))",
+    ] {
+        assert!(!source_list_uses(sql).is_empty(), "{sql}");
+    }
+    for sql in [
+        "AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))",
+        "AND source_id = ANY(ARRAY(SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)))",
+        "WHERE r.id = ANY($1)",
+        "AND entity_id = ANY($2)",
+        "SELECT external_chat_access_level($1, $2, $3)",
+    ] {
+        assert!(source_list_uses(sql).is_empty(), "{sql}");
+    }
+}

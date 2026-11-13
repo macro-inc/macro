@@ -64,6 +64,13 @@ the entity-access domain service.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
 
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
+- Access statements pass the viewer (`queries::Viewer`) and check a grant's
+  source with `entity_access_source_matches(source, viewer, scope_team)`, or
+  list from `entity_access_viewer_sources(viewer, scope_team)`; never load or
+  bind the viewer's teams and channels as an array, which makes a check cost
+  grow with their memberships. `no_statement_binds_a_source_list` fails on a
+  bound source list, and each family's `*_matches_the_source_list_form` test
+  compares it with the old statement in `source_list_oracle`.
 
 ## Related
 
