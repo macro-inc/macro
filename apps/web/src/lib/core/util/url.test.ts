@@ -13,6 +13,14 @@ import {
   registerExternalUrlInterceptor,
 } from './url';
 
+const platform = vi.hoisted(() => ({
+  mobile: undefined as 'ios' | 'android' | undefined,
+}));
+vi.mock('./platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./platform')>()),
+  getNativeMobilePlatform: () => platform.mobile,
+}));
+
 it('copies routine links using the canonical route', () => {
   expect(
     new URL(buildSimpleEntityUrl({ type: 'routine', id: 'routine-1' })).pathname
@@ -36,6 +44,7 @@ describe('openExternalUrl', () => {
   });
 
   afterEach(() => {
+    platform.mobile = undefined;
     for (const dispose of disposers.splice(0)) dispose();
     openSpy.mockRestore();
   });
@@ -92,5 +101,23 @@ describe('openExternalUrl', () => {
       '_blank',
       'noopener,noreferrer'
     );
+  });
+
+  it('opens a new window on desktop so the app page never navigates', () => {
+    openExternalUrl('https://example.com');
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://example.com',
+      '_blank',
+      'noopener,noreferrer'
+    );
+  });
+
+  it('navigates in place on mobile, where only navigation reaches native', () => {
+    platform.mobile = 'ios';
+
+    openExternalUrl('https://example.com');
+
+    expect(openSpy).toHaveBeenCalledWith('https://example.com', '_self');
   });
 });
