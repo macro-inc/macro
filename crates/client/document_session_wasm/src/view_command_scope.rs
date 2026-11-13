@@ -10,8 +10,8 @@ use std::sync::{
 mod block_navigation;
 mod exports;
 mod failure;
-pub(crate) use failure::model_error;
 pub use failure::ViewCommandFailure;
+pub(crate) use failure::{effect_ordinal, model_error};
 mod host;
 mod registry;
 mod scope;

@@ -38,6 +38,30 @@ pub(super) struct Report {
     pub(super) view_index: usize,
 }
 
+/// Position of `view[index]` among the decoded tag-16 view effects of the same output: a Diff
+/// encodes none, a Cursors one per peer plus one, every other effect one.
+pub(crate) fn effect_ordinal(
+    view: &[document_session::ViewEffect],
+    index: usize,
+) -> Result<u32, &'static str> {
+    use document_session::{InitialView, ViewEffect};
+    let mut ordinal = 0usize;
+    for effect in view.get(..index).ok_or("view effect index out of range")? {
+        let count = match effect {
+            ViewEffect::Diff(_) => 0,
+            ViewEffect::Initialize(InitialView::Editor { .. }) => 1,
+            ViewEffect::Cursors(peers) => peers
+                .len()
+                .checked_add(1)
+                .ok_or("view command cursor count exhausted")?,
+            _ => 1,
+        };
+        ordinal = ordinal
+            .checked_add(count)
+            .ok_or("view command effect count exhausted")?;
+    }
+    u32::try_from(ordinal).map_err(|_| "view command effect ordinal exhausted")
+}
 pub(crate) fn model_error(effect: &document_session::ViewEffect) -> Option<&Error> {
     use document_session::{SessionError, ViewEffect};
     match effect {
@@ -52,7 +76,7 @@ pub(super) fn encode(
     reports: &[Report],
     view: &[document_session::ViewEffect],
 ) -> Result<std::collections::VecDeque<ViewCommandFailure>, &'static str> {
-    use document_session::{InitialView, ViewEffect};
+    use document_session::ViewEffect;
     let mut leases: std::collections::VecDeque<ViewCommandFailure> =
         std::collections::VecDeque::new();
     let mut previous = None;
@@ -73,23 +97,7 @@ pub(super) fn encode(
         if !exact {
             return Err("view command failure effect mismatch");
         }
-        let mut ordinal = 0usize;
-        for effect in &view[..report.view_index] {
-            let count = match effect {
-                ViewEffect::Diff(_) => 0,
-                ViewEffect::Initialize(InitialView::Editor { .. }) => 1,
-                ViewEffect::Cursors(peers) => peers
-                    .len()
-                    .checked_add(1)
-                    .ok_or("view command cursor count exhausted")?,
-                _ => 1,
-            };
-            ordinal = ordinal
-                .checked_add(count)
-                .ok_or("view command effect count exhausted")?;
-        }
-        let ordinal =
-            u32::try_from(ordinal).map_err(|_| "view command effect ordinal exhausted")?;
+        let ordinal = effect_ordinal(view, report.view_index)?;
         let scope = report.cause.scope.raw();
         let invocation = report.cause.invocation.raw();
         if let Some(lease) = leases

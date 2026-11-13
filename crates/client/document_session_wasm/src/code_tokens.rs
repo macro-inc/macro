@@ -303,20 +303,29 @@ fn thrown_cause(error: &lexical_model::Error) -> Option<u32> {
     }
 }
 
-/// Carry every recorded throw this entry's output reports, from every Session path (local,
-/// remote, restore), as the view-command registry binds its failures.
+/// Tag-16 ordinals and cause ids of the recorded throws an output reports, from every Session
+/// path (local, remote, restore), in the decoded numbering JS sees.
+pub(crate) fn thrown_ordinals(view: &[document_session::ViewEffect]) -> Vec<(u32, u32)> {
+    view.iter()
+        .enumerate()
+        .filter_map(|(index, effect)| {
+            let cause = crate::view_command_scope::model_error(effect).and_then(thrown_cause)?;
+            let ordinal = crate::view_command_scope::effect_ordinal(view, index).ok()?;
+            Some((ordinal, cause))
+        })
+        .collect()
+}
+
+/// Carry every recorded throw this entry's output reports, as the view-command registry binds
+/// its failures.
 pub(crate) fn bind_output(
     token: u64,
     entry: u64,
     view: &[document_session::ViewEffect],
 ) -> Option<CodeTokenFailure> {
     let (mut ordinals, mut causes) = (Vec::new(), Vec::new());
-    for (index, effect) in view.iter().enumerate() {
-        let Some(cause) = crate::view_command_scope::model_error(effect).and_then(thrown_cause)
-        else {
-            continue;
-        };
-        if let (Ok(ordinal), true) = (u32::try_from(index), carry(token, cause)) {
+    for (ordinal, cause) in thrown_ordinals(view) {
+        if carry(token, cause) {
             ordinals.push(ordinal);
             causes.push(cause);
         }

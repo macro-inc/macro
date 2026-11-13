@@ -5,6 +5,7 @@ import {
   Access,
   CommandCode,
   EditorInputMsg,
+  type IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import * as nativeModule from '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
@@ -523,6 +524,61 @@ test('a tokenizer throw inside a follow-up update carries no takeable cause', ()
     expect(threw).toBeGreaterThan(0);
     expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
     expect(fixture.session.codeTokenCausesDropped()).toBe(0);
+  } finally {
+    fixture.close();
+  }
+});
+
+// GUARD, not a RED: the decoded ordinal must index the error effect. A Diff before the error
+// in one output needs tx.preceding (core.rs:246/251/273, a multi-item input flushing between
+// items), which no current JS input produces; the host test
+// thrown_ordinals_use_the_decoded_tag16_numbering is the RED for the tag-16 numbering.
+test('guard: the failure ordinal indexes the decoded error effect', () => {
+  const { fixture, code } = surfaceWith(() => {
+    throw new Error(SENTINEL);
+  });
+  const applied: IViewEffectMsg[][] = [];
+  const apply = fixture.view.apply.bind(fixture.view);
+  fixture.view.apply = (words, strings, effects = []) => {
+    applied.push(effects);
+    apply(words, strings, effects);
+  };
+  try {
+    const text = fixture.view.node(code.key)?.children[0];
+    const generation = fixture.view.mirror.keyGeneration;
+    if (text === undefined || generation === null)
+      throw new Error('Missing native code text');
+    try {
+      fixture.port.input(
+        EditorInputMsg.fromEditorApplication({
+          name: 'group-b.code',
+          json: JSON.stringify({
+            action: 'language',
+            key: code.key,
+            language: 'rust',
+          }),
+          generation,
+          selection: selectionMessage({
+            kind: 'range',
+            anchor: { key: text, offset: 1, type: 'text' },
+            focus: { key: text, offset: 1, type: 'text' },
+          }),
+          keyboard: false,
+          key: '',
+          mods: 0,
+          code: 0,
+        })
+      );
+    } catch {
+      // Asserted below.
+    }
+    expect(fixture.errors).toEqual([HOST]);
+    const failure = fixture.session.takeCodeTokenFailure();
+    if (!failure) throw new Error('missing code token failure');
+    const effects = applied.at(-1) ?? [];
+    const [ordinal] = failure.effectOrdinals();
+    expect(effects[ordinal]?.kind).toBe(2);
+    expect(effects[ordinal]?.text).toBe(HOST);
   } finally {
     fixture.close();
   }

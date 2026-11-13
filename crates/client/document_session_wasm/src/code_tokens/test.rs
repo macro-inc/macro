@@ -145,3 +145,46 @@ fn a_throw_outside_every_entry_is_dropped_and_counted() {
     assert_eq!(causes.record("early"), None);
     assert_eq!(causes.dropped(), 1);
 }
+
+#[test]
+fn thrown_ordinals_use_the_decoded_tag16_numbering() {
+    use document_session::{EditorPeerSelection, InitialView, SessionError, ViewEffect};
+    let diff = || lexical_model::Diff {
+        generation: 0,
+        full_reconcile: false,
+        view_text_matches: None,
+        ops: Vec::new(),
+        decorator_renders: Vec::new(),
+    };
+    let peer = || EditorPeerSelection {
+        key: "peer".into(),
+        color: "red".into(),
+        selection: lexical_model::ViewSelection::KeepModel,
+    };
+    let state: lexical_model::SerializedEditorState = serde_json::from_value(serde_json::json!({
+        "root": {"type": "root", "version": 1, "children": []}
+    }))
+    .unwrap();
+    let thrown = || {
+        ViewEffect::Error(SessionError::Model(lexical_model::Error::Extension(
+            Box::new(CodeTokenError::Thrown { cause: 4 }),
+        )))
+    };
+    let view = vec![
+        ViewEffect::Initialize(InitialView::Editor {
+            diff: diff(),
+            state,
+        }),
+        ViewEffect::Cursors(vec![peer(), peer()]),
+        ViewEffect::Diff(diff()),
+        thrown(),
+        ViewEffect::Diff(diff()),
+        ViewEffect::Error(SessionError::Model(lexical_model::Error::Extension(
+            Box::new(CodeTokenError::Host),
+        ))),
+        thrown(),
+    ];
+    // Raw indices 3 and 6. Decoded: Initialize 1 + Cursors 3 + Diff 0 = 4; then that error 1,
+    // Diff 0 and the Host error 1 = 6.
+    assert_eq!(thrown_ordinals(&view), vec![(4, 4), (6, 4)]);
+}
