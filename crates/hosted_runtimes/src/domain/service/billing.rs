@@ -55,6 +55,11 @@ fn readd_key(computer: &crate::domain::models::Computer, purpose: &str, attempt:
     )
 }
 
+/// The key of one generation of a billing effect's item removal.
+fn removal_key(effect_id: i64, generation: u32) -> String {
+    format!("computer-remove:{effect_id}:{generation}")
+}
+
 /// One removal per stray item and snapshot: a later snapshot tries again.
 fn stray_key(item: &SubscriptionItemId, observed_at: DateTime<Utc>) -> String {
     format!("computer-stray:{item}:{}", observed_at.timestamp_micros())
@@ -548,8 +553,14 @@ impl<
             let effect_id = pending.id;
             // One effect's storage failure never stops the batch or the
             // purchase confirmation below; its lease expires and it runs again.
-            if let Err(error) = self.run_billing_effect(pending, now).await {
-                tracing::error!(effect_id, error = ?error, "billing effect could not be recorded");
+            match self.run_billing_effect(pending, now).await {
+                Ok(()) => {}
+                Err(error) if error.is_storage_unavailable() => {
+                    tracing::warn!(effect_id, "computer storage unavailable; billing effect retried later");
+                }
+                Err(error) => {
+                    tracing::error!(effect_id, error = ?error, "billing effect could not be recorded");
+                }
             }
         }
         Ok(count + self.confirm_reservations().await?)
@@ -571,6 +582,9 @@ impl<
                     .complete_effect(pending.id)
                     .await
                     .map_err(internal),
+                // Not the removal's failure: it runs again once its lease
+                // expires, without spending an attempt.
+                Err(error) if error.is_storage_unavailable() => Err(error),
                 Err(error) => {
                     super::super::telemetry::effect_failed("billing");
                     tracing::Span::current().record("otel.status_code", "ERROR");
@@ -632,21 +646,39 @@ impl<
                 return Ok(());
             }
         }
-        // A key per attempt: the subscription guard settles an earlier
-        // attempt left pending, and an item already gone counts as removed,
-        // so a retry never removes twice.
+        let Some(key) = self.removal_key(pending.id).await? else {
+            tracing::info!(subscription_item = %subscription_item,
+                "an earlier attempt removed this item");
+            return Ok(());
+        };
         match self
             .billing
-            .remove_computer(
-                record.team_id(),
-                subscription_item,
-                &format!("computer-remove:{}:{}", pending.id, pending.attempts),
-            )
+            .remove_computer(record.team_id(), subscription_item, &key)
             .await
         {
             // A subscription that is gone took the item with it.
             Ok(()) | Err(BillingError::NoSubscription) => Ok(()),
             Err(error) => Err(error.into()),
         }
+    }
+
+    /// The key a billing effect's removal is sent under: the same one on
+    /// every retry, so a retry replays its own change (which the
+    /// subscription guard lets through) instead of being refused by it. A
+    /// generation whose change definitely did not apply (given up while its
+    /// outcome was unknown) is spent, and the next one is used. `None` when
+    /// a generation already removed the item.
+    async fn removal_key(&self, effect_id: i64) -> Result<Option<String>, ComputerError> {
+        for generation in 0..MAX_BILLING_ATTEMPTS {
+            let key = removal_key(effect_id, generation);
+            match self.billing.charge_status(&key).await? {
+                Some(ChargeStatus::NotApplied) => continue,
+                Some(ChargeStatus::Applied) => return Ok(None),
+                None | Some(ChargeStatus::Pending) => return Ok(Some(key)),
+            }
+        }
+        Err(ComputerError::Internal(rootcause::report!(
+            "every removal of this billing item was given up"
+        )))
     }
 }
