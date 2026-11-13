@@ -3937,6 +3937,16 @@ type GraphqlComputerSetupMetadata {
 	"""
 	computerName: String!
 	"""
+	The Macro user id of the agent teammate the computer runs; absent for
+	a plain computer.
+	"""
+	agentUserId: String
+	"""
+	The name of the agent teammate the computer runs; absent for a plain
+	computer.
+	"""
+	agentName: String
+	"""
 	Whether setup finished or failed.
 	"""
 	outcome: GraphqlComputerSetupOutcome!
