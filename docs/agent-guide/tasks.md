@@ -56,7 +56,9 @@ enabled, the collapsible `Projects` section appears above task `Saved views`.
 It contains `My projects` (assigned to the viewer), `All projects`, `Created by me`,
 and saved project views. The plus beside the section opens the project composer.
 Phones have a separate `Projects` destination in the bottom navigation's More
-menu (or dock after customization), not a Projects pill inside Tasks. The phone
+menu (or dock after customization), not a Projects pill inside Tasks. Each destination
+restores its own last view; switching to Tasks must not reopen Projects. Its floating
+`Project` action opens the initiative composer, not the Drive folder dialog. The phone
 header has one title island with the current view icon, name, and caret; the filter
 island sits on the right. Its views sheet groups built-in and saved project views
 in 48px cards, marks the selected view with accent and a check, and puts New view
@@ -67,6 +69,7 @@ A 14px progress ring follows the project name; hover or focus reveals its count.
 Headers become icons at 840px and below. Updated fades and collapses over 160ms
 at 600px, without animation under reduced motion. Phone rows use the same 44px
 grid and narrow insets as tasks, with Status, Priority, and a lead avatar trailing.
+Unassigned projects use the same dashed-user No assignee placeholder as tasks.
 Opening a project
 pushes its detail and Back returns to the collection. Project scope applies
 before pagination and cannot be removed by clearing editable filters.
@@ -1199,8 +1202,9 @@ project's completion ring, then Details. Share stays in the title drawer and
 appears before Details in the phone Tasks header. Tap Tasks to push the project's
 Tasks view; the header caret and hardware/browser Back return to Overview.
 From Overview, the same caret-only Back island returns to the previous Projects
-list, retaining its selected view and filters. Phones have no Overview/Tasks
-tabs. The title island opens the standard
+list, retaining its selected view and filters. Direct links also show the caret:
+it returns from Tasks to Overview, then to Projects without reopening the direct
+link. Phones have no Overview/Tasks tabs. The title island opens the standard
 actions-only drawer, without a View group. Check both sections at 390px with
 a long project name: all controls stay visible, the title truncates, and the
 ring uses the same completed/total counts as the project list. Also check

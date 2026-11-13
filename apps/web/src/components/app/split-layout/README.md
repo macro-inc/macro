@@ -51,21 +51,27 @@ the owner leaves without remounting the view.
 Android system Back, and edge-swipe completion. Project details return to the
 previous Projects collection entry through route history, preserving its scope,
 filters, and saved view. Tasks also returns to the same project's Overview before
-closing a pane. Other entries and tablets retain pane-stack navigation. Route
-swipes keep the current pane still until completion because there is no second
-pane to reveal. Clear the swipe transform before route Back, even when the route
-changes during a pane drag.
+closing a pane. Direct links without Back history replace the current entry with
+Overview from Tasks, or Projects from Overview. The browser phone header uses the
+same fallback. Detect project detail from route metadata, not the shared `tasks`
+component id, so the list-only rule does not hide its caret island. Other entries
+and tablets retain pane-stack navigation. Route swipes keep the current pane still
+until completion because there is no second pane to reveal. Clear the swipe
+transform before route Back, even when the route changes during a pane drag.
 
 ## Opt-in view restoration
 
 `SplitLayoutProvider` owns a memory-only, account-scoped view-state store.
 A view opts in by calling `useViewRestoration()` in its stable route component.
-The default key comes from the current router location, with Agents conversations
-normalized to `agents`; pass an explicit key to override that grouping.
+The default key comes from `viewRestorationKey`: Agents conversations normalize
+to `agents`, and Tasks-hosted project routes use `projects` instead of `tasks`.
+The mounted workspace re-registers when that key changes. Pass an explicit key
+to override that grouping.
 
 The hook captures its current location, route state, and entry-state slices in
-`useBeforeLeave`. It stages the snapshot with the navigation's `onCommit`
-callback, so a refused, cancelled, failed, or superseded navigation cannot replace
+a pre-navigation guard, including descendant route changes inside a mounted
+workspace. It stages the snapshot with the navigation's `onCommit` callback,
+so a refused, cancelled, failed, or superseded navigation cannot replace
 the saved snapshot. Solid cleanup only unregisters the hook; it never saves state.
 
 Ordinary rail, Go To, and mobile dock navigation sets `resume: true` on the existing
