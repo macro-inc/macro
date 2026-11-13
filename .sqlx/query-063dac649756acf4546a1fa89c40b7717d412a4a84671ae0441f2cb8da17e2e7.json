@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH account AS (\n            INSERT INTO provider_accounts (id, provider, external_account_id, display_email)\n            VALUES ($3, 'claude', 'acct-1', 'team@example.com')\n            RETURNING id\n        )\n        INSERT INTO harness_account_logins\n            (id, harness_id, provider_account_id, provider, signed_in_by, signed_in_at, expires_at)\n        SELECT $1, $2, account.id, 'claude', 'macro|owner@example.com',\n               '2026-11-01T12:00:00Z', '2026-11-20T12:00:00Z'\n        FROM account\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "063dac649756acf4546a1fa89c40b7717d412a4a84671ae0441f2cb8da17e2e7"
+}

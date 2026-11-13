@@ -17,9 +17,10 @@ impl IntoResponse for ChatErr {
             ChatErr::NotFound => (StatusCode::NOT_FOUND, "Not found"),
             ChatErr::BadRequest(_) => (StatusCode::BAD_REQUEST, "Bad request"),
             ChatErr::Conflict(_) => (StatusCode::CONFLICT, "Conflict"),
-            ChatErr::Access(
-                AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
-            ) => (StatusCode::FORBIDDEN, "Forbidden"),
+            ChatErr::Access(AccessError::Unauthorized) => (StatusCode::FORBIDDEN, "Forbidden"),
+            ChatErr::Access(AccessError::UnauthorizedWithMessage(message)) => {
+                (StatusCode::FORBIDDEN, *message)
+            }
             ChatErr::Access(AccessError::NotFound(_)) => (StatusCode::NOT_FOUND, "Not found"),
             ChatErr::Access(AccessError::BadRequest(_)) => (StatusCode::BAD_REQUEST, "Bad request"),
             ChatErr::Unknown(_) | ChatErr::Access(_) => {

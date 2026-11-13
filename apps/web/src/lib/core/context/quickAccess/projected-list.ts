@@ -17,6 +17,7 @@ import {
   untrack,
 } from 'solid-js';
 import type { Bucket } from './types';
+import { keepUnchangedRows } from './unchanged-rows';
 
 // Only these buckets can be materialized from cache hits. Other Quick Access
 // sources (such as sessions) are merged locally. Personal contacts use their
@@ -233,7 +234,10 @@ export function createProjectedList<T extends { id: string }>(options: {
       request.answered = true;
       request.awaitingEngine = false;
       setError(undefined);
-      setItems([...merged.values()]);
+      // A page reader waits for a new list after each load-more, even one
+      // that found no new row; only a refresh may keep the listed array.
+      const rows = [...merged.values()];
+      setItems((shown) => (append ? rows : keepUnchangedRows(shown, rows)));
       setHasMore(cursor !== undefined);
     } catch (error) {
       if (current !== request) return;
