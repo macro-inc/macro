@@ -589,7 +589,33 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['archived', 'active']);
   });
 
-  it('trims archived search results to done threads', () => {
+  it('offers no inbox pages while the search text is too short for the service', async () => {
+    const { source, query } = mount('ss');
+    expect(source.items()).toEqual([]);
+    expect(source.hasMore()).toBe(false);
+    expect(source.isLoading()).toBe(false);
+    await source.loadMore();
+    expect(query.fetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it('pages past search hits the tab drops instead of offering Load More over no rows', async () => {
+    const { source, setState, setSearchEntities, searchNext } =
+      mount('invoice');
+    searchNext.mockImplementationOnce(async () => {
+      setSearchEntities([
+        { ...email('active'), done: false },
+        { ...email('archived'), done: true },
+      ]);
+    });
+    batch(() => {
+      setState('tab', 'archived');
+      setSearchEntities([{ ...email('active'), done: false }]);
+    });
+    await vi.waitFor(() => expect(ids(source)).toEqual(['archived']));
+    expect(searchNext).toHaveBeenCalledOnce();
+  });
+
+  it('trims archived search results to done threads', async () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };
     const active = { ...email('active'), done: false };
@@ -602,7 +628,8 @@ describe('Email list query transitions', () => {
 
     setSearchEntities([{ ...archived, done: false }, active]);
     expect(ids(source)).toEqual([]);
-    expect(source.isLoading()).toBe(false);
+    await vi.waitFor(() => expect(source.isLoading()).toBe(false));
+    expect(source.hasMore()).toBe(false);
   });
 
   it('does not suspend on pending native data while its fetch is paused', () => {

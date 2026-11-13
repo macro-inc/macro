@@ -489,3 +489,168 @@ async fn bundled_claude_models_reach_upstream_and_keep_their_billing_model() {
         assert_eq!(events[0].model, model);
     }
 }
+
+mod brain_route {
+    use super::*;
+    use crate::anthropic_gateway::brain::{
+        BrainAuthenticator, BrainCaller, BrainLookup, BrainRollout,
+    };
+    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+
+    const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";
+    const TEAM: uuid::Uuid = uuid::Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00aa);
+
+    /// Knows exactly one agent key.
+    struct OneAgent;
+
+    impl BrainAuthenticator for OneAgent {
+        fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a> {
+            Box::pin(async move {
+                Ok((key == "mak_agent").then(|| BrainCaller {
+                    user_id: MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned(),
+                    team_id: TEAM,
+                }))
+            })
+        }
+    }
+
+    /// Agent teammates on for [`AGENT`].
+    fn agent_teammates_on() -> BrainRollout {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(
+            MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned(),
+            Ok(FlagSnapshot::new([(
+                agent_credentials::AGENT_TEAMMATES_FLAG.into(),
+                FlagValue::Boolean(true),
+            )])),
+        );
+        BrainRollout::new(flags)
+    }
+
+    async fn brain_gateway(
+        upstream_url: &str,
+        brains: Option<Arc<dyn BrainAuthenticator>>,
+    ) -> (Router, Arc<RecordingUsage>) {
+        brain_gateway_with(upstream_url, brains, agent_teammates_on()).await
+    }
+
+    async fn brain_gateway_with(
+        upstream_url: &str,
+        brains: Option<Arc<dyn BrainAuthenticator>>,
+        rollout: BrainRollout,
+    ) -> (Router, Arc<RecordingUsage>) {
+        let usage = Arc::new(RecordingUsage::default());
+        let mut state = GatewayState::new(
+            Arc::new(InMemoryAgentSessionRepo::new()),
+            FixedComputer(None),
+            Arc::new(DisabledAiAdmissionService),
+            usage.clone(),
+            upstream_url,
+            "upstream-key",
+        )
+        .unwrap();
+        if let Some(brains) = brains {
+            state = state.with_brains(brains, rollout);
+        }
+        (router(state), usage)
+    }
+
+    fn brain_request(key: &str) -> HttpRequest<Body> {
+        HttpRequest::post("/brain/anthropic/v1/messages")
+            .header("authorization", format!("Bearer {key}"))
+            .header("anthropic-version", "2023-06-01")
+            .body(Body::from(
+                r#"{"model":"claude-haiku-4-5-20251001","max_tokens":16,"messages":[]}"#,
+            ))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn an_agents_brain_calls_with_its_key_and_its_usage_counts_against_the_agent() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, usage) = brain_gateway(&upstream_url, Some(Arc::new(OneAgent))).await;
+
+        let response = app.oneshot(brain_request("mak_agent")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let seen = seen.lock().unwrap().clone();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].path, "/v1/messages");
+        assert_eq!(seen[0].headers["x-api-key"], "upstream-key");
+        assert!(seen[0].headers.get("authorization").is_none());
+        let events = usage.0.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].user.as_ref(), AGENT);
+        assert_eq!(events[0].entity, None);
+    }
+
+    #[tokio::test]
+    async fn with_agent_teammates_off_for_the_agent_its_brain_is_refused() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, usage) = brain_gateway_with(
+            &upstream_url,
+            Some(Arc::new(OneAgent)),
+            BrainRollout::new(FakeFeatureFlags::default()),
+        )
+        .await;
+
+        let response = app.oneshot(brain_request("mak_agent")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(seen.lock().unwrap().is_empty());
+        assert!(usage.0.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn without_a_flag_provider_the_brain_is_refused() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, _) = brain_gateway_with(
+            &upstream_url,
+            Some(Arc::new(OneAgent)),
+            BrainRollout::default(),
+        )
+        .await;
+
+        let response = app.oneshot(brain_request("mak_agent")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_key_that_is_not_an_agents_is_refused() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, _) = brain_gateway(&upstream_url, Some(Arc::new(OneAgent))).await;
+
+        let response = app
+            .oneshot(brain_request("mak_someone_else"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn without_brains_configured_the_brain_route_is_unavailable() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, _) = brain_gateway(&upstream_url, None).await;
+
+        let response = app.oneshot(brain_request("mak_agent")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_session_token_does_not_open_the_brain_route() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, _session, _) = gateway(&upstream_url).await;
+
+        let response = app.oneshot(brain_request("session-secret")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(seen.lock().unwrap().is_empty());
+    }
+}

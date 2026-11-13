@@ -57,6 +57,10 @@ pub mod pipeline_workflows;
 #[cfg(feature = "ports")]
 pub mod pipelines;
 
+/// Pipeline outcome and per-amount currency fields.
+#[cfg(feature = "ports")]
+pub mod pipeline_commercial;
+
 /// Explicit contact field edits.
 #[cfg(feature = "ports")]
 pub mod contact_update;

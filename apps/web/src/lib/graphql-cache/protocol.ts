@@ -84,6 +84,9 @@ export function parseStorageGeneration(value: unknown): string {
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
+/** Ranks a record read with the typed search whose rows it loads. */
+export type RecordReadPriority = 'typed-search';
+
 /** Recursive partial-variable object used to limit query inspection work. */
 export type QueryVariableFilter = Record<string, unknown>;
 
@@ -330,6 +333,8 @@ export type ReadRecordsByKeysArgs = {
   fragmentName: string;
   /** Canonical normalized entity keys; bounded by the selection page size. */
   keys: string[];
+  /** Set when the records are the rows of a typed search someone waits on. */
+  priority?: RecordReadPriority;
 };
 
 export type SelectedRecordByKeyWire = {
@@ -922,6 +927,8 @@ export type CacheRequest = { id: number } & (
       document: string;
       fragmentName: string;
       keys: string[];
+      /** May overtake reads, fences and queued network results, never a local change. */
+      priority?: RecordReadPriority;
     }
   | PeopleRequest
   | {
@@ -983,6 +990,22 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
  */
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
+
+/** A text search someone is waiting on; an empty query only browses a list. */
+export function isTypedSearch(request: CacheRequest): boolean {
+  if (request.kind !== 'search') return false;
+
+  const query = request.request.query ?? '';
+  return query.trim() !== '';
+}
+
+/** The rows a typed search named: the search is not answered until they load. */
+export function isTypedSearchRowRead(request: CacheRequest): boolean {
+  return (
+    request.kind === 'read-records-by-keys' &&
+    request.priority === 'typed-search'
+  );
+}
 
 /**
  * A read-only request was refused because the database was moving between

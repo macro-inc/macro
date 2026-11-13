@@ -18,7 +18,9 @@ viewer pattern), which apply to every type defined here.
   route applies, not through the viewer's inbox scope; Soup's email leg only
   serves lists. A thread shared through a team's CRM, a project, or a share
   therefore opens through `emailThread` even though it lives in a teammate's
-  inbox.
+  inbox. Spam-only and trash-only threads render as their folder rows; the
+  mutation reply reader (`mutation_thread.rs`) reads through the same rule
+  with the email service's ownership check.
 - Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
   which rechecks the viewer's team. PRs are stored for the team; without it,
   a session row reads `pullRequestState: null` and overwrites the list's

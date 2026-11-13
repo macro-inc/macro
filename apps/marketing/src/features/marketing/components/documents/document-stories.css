@@ -3,12 +3,12 @@
 .doc-story { position: relative; }
 .doc-story-scroll { scrollbar-width: none; }
 .doc-story-page { max-width: 768px; margin: 0 auto; padding: 44px 0 64px; text-align: left; }
-.doc-story-title { margin-bottom: 14px; outline: none; font: 600 24px/32px 'Inter Variable', Inter, sans-serif; }
+.doc-story-title { margin-bottom: 14px; outline: none; font: 500 24px/32px 'Inter Variable', Inter, sans-serif; }
 .doc-story-tags { margin: 0 0 22px -6px; }
 .doc-story-body { outline: none; color: var(--color-ink); font-size: 15px; line-height: 1.6; overflow-wrap: break-word; }
 .doc-story-body > * { margin: 0; }
 .doc-story-body > p { margin: 12px 0; }
-.doc-story-body > h2 { margin: 22px 0 6px; font-size: 1.125em; font-weight: 600; line-height: 1.5; }
+.doc-story-body > h2 { margin: 22px 0 6px; font-size: 1.125em; font-weight: 500; line-height: 1.5; }
 .doc-story-body > :first-child { margin-top: 0; }
 .doc-story-body > .md-list { margin: 8px 0 8px 1.5em; }
 .doc-story-body > .md-list > li { margin: 0.25em 0; }
@@ -250,7 +250,7 @@
 /* The Docs hero keeps both human edits in its first visible paragraph. */
 .doc-team-edit .doc-caret[data-caret='jacob'] { --doc-caret: var(--color-accent); }
 .doc-team-format[data-selecting=true] { background: color-mix(in oklch, var(--color-accent) 25%, transparent); }
-.doc-team-format[data-bold=true] { font-weight: 600; }
+.doc-team-format[data-bold=true] { font-weight: 500; }
 .doc-agent-tools { transition: min-height 380ms ease; }
 .doc-agent-tools[data-open=false] { min-height: 32px; }
 @media (prefers-reduced-motion: reduce) { .doc-agent-tools { transition: none; } }
