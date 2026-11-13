@@ -7,6 +7,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
+import { providerCredentialRejectedMessage } from '@queries/agents/probe-errors';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import {
@@ -116,7 +117,8 @@ function EffortModelSubmenu(
                   {query.isFetching
                     ? 'Loading effort options…'
                     : query.isError
-                      ? 'Effort options unavailable.'
+                      ? (providerCredentialRejectedMessage(query.error) ??
+                        'Effort options unavailable.')
                       : 'No effort options for this model.'}
                 </div>
               }

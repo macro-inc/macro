@@ -10,8 +10,8 @@ use agent_harness::inbound::app_connections::{self, AppConnectedRequest};
 use agent_harness::inbound::capability_discovery;
 use agent_harness::inbound::mode_choice::{self, AgentModeChoiceRequest, AgentModeChoiceResponse};
 use agent_harness::inbound::model_load::{
-    self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
-    ModelHarnessDto,
+    self, AgentModelDto, AgentModelsStatusDto, CredentialRejectedResponse, LoadAgentModelsRequest,
+    LoadAgentModelsResponse, ModelHarnessDto,
 };
 use agent_harness::inbound::repositories::{
     self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
@@ -193,6 +193,7 @@ impl Modify for SecurityAddon {
         WorkRegistrationResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
+        CredentialRejectedResponse,
         AgentModelDto,
         AgentModelsStatusDto,
         ModelHarnessDto,

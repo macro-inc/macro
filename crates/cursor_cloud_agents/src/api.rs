@@ -311,6 +311,40 @@ fn classify_usage_limit(body: &str) -> Option<crate::domain::error::UsageLimitEx
         })
 }
 
+/// Whether a failed request is Cursor refusing the key itself.
+///
+/// Status first, like [`is_transient`]: any 401 or 403 is the key, whatever
+/// the body says, unless a Connect body explicitly marks it retryable. An
+/// unparseable body (a proxy's HTML) still counts, since the status is
+/// Cursor's or its gateway's verdict on the credential either way.
+fn classify_credential_rejection(
+    method: &'static str,
+    path: &str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> Option<crate::domain::error::CredentialRejected> {
+    if status != reqwest::StatusCode::UNAUTHORIZED && status != reqwest::StatusCode::FORBIDDEN {
+        return None;
+    }
+    let retryable = serde_json::from_str::<crate::api::wire::ConnectErrorEnvelope>(body).is_ok_and(
+        |envelope| {
+            envelope
+                .details
+                .into_iter()
+                .filter_map(|detail| {
+                    serde_json::from_value::<crate::api::wire::ConnectErrorDetail>(detail).ok()
+                })
+                .any(|detail| detail.debug.details.is_retryable)
+        },
+    );
+    (!retryable).then(|| crate::domain::error::CredentialRejected {
+        method,
+        path: path.to_owned(),
+        status: status.as_u16(),
+        detail: body.to_owned(),
+    })
+}
+
 /// The Cursor cloud API client.
 #[derive(Debug, Clone)]
 pub struct CursorClient {
@@ -507,6 +541,9 @@ impl CursorClient {
     {
         let (status, text) = self.get_for_text(path, &[]).await?;
         if !status.is_success() {
+            if let Some(rejected) = classify_credential_rejection("GET", path, status, &text) {
+                return Err(rootcause::report!(rejected).into_dynamic());
+            }
             return Err(rootcause::report!("cursor GET {path} -> {status}: {text}"));
         }
         serde_json::from_str(&text)

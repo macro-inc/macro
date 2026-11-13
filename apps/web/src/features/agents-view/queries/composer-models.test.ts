@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { RosterAgent } from '../core/roster';
@@ -7,6 +8,12 @@ const discovery = vi.hoisted(() => ({
   target: undefined as (() => unknown) | undefined,
   enabled: undefined as (() => boolean) | undefined,
   query: {} as object,
+}));
+
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
+  SERVER_HOSTS: { 'agent-harness': 'https://harness.example.com' },
+  SYNC_SERVICE_HOSTS: { worker: 'https://sync.example.com' },
 }));
 
 vi.mock('@queries/agents/models', () => ({
@@ -103,6 +110,42 @@ describe('composer model discovery', () => {
       setReady(true);
       expect(source.models()).toEqual(models);
       expect(source.currentModel()).toBe('runtime-model');
+      dispose();
+    });
+  });
+
+  it('shows the reconnect message when the provider refused the credential', () => {
+    createRoot((dispose) => {
+      const [error, setError] = createSignal<unknown>(new Error('boom'));
+      discovery.query = {
+        isSuccess: false,
+        isPending: false,
+        isError: true,
+        get error() {
+          return error();
+        },
+      };
+      const source = createComposerModels(() => ({
+        id: 'bot',
+        name: 'Agent',
+        handle: 'agent',
+        kind: 'coder',
+        share: 'private',
+        harness: 'cursor',
+        runtime: { label: 'Cursor', connected: true },
+      }));
+      expect(source.message()).toBe('Could not load models from this machine.');
+      setError(
+        new ThrownResultError([
+          {
+            code: 'PROVIDER_CREDENTIAL_REJECTED',
+            message: 'Reconnect Cursor with a personal API key.',
+          },
+        ])
+      );
+      expect(source.message()).toBe(
+        'Reconnect Cursor with a personal API key.'
+      );
       dispose();
     });
   });

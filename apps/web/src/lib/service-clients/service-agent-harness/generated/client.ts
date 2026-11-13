@@ -45,6 +45,7 @@ import type {
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
   CreateReview,
+  CredentialRejectedResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
   DiscoverConnectorsResponse,
@@ -226,8 +227,13 @@ export type discoverAgentCapabilitiesHandlerResponse403 = {
   status: 403;
 };
 
-export type discoverAgentCapabilitiesHandlerResponse409 = {
-  data: void;
+export type discoverAgentCapabilitiesHandlerResponse409ApplicationJson = {
+  data: CredentialRejectedResponse;
+  status: 409;
+};
+
+export type discoverAgentCapabilitiesHandlerResponse409TextPlain = {
+  data: string;
   status: 409;
 };
 
@@ -249,7 +255,8 @@ export type discoverAgentCapabilitiesHandlerResponseError = (
   | discoverAgentCapabilitiesHandlerResponse400
   | discoverAgentCapabilitiesHandlerResponse401
   | discoverAgentCapabilitiesHandlerResponse403
-  | discoverAgentCapabilitiesHandlerResponse409
+  | discoverAgentCapabilitiesHandlerResponse409ApplicationJson
+  | discoverAgentCapabilitiesHandlerResponse409TextPlain
   | discoverAgentCapabilitiesHandlerResponse502
   | discoverAgentCapabilitiesHandlerResponse504
 ) & {
@@ -701,8 +708,13 @@ export type loadAgentModelsHandlerResponse403 = {
   status: 403;
 };
 
-export type loadAgentModelsHandlerResponse409 = {
-  data: void;
+export type loadAgentModelsHandlerResponse409ApplicationJson = {
+  data: CredentialRejectedResponse;
+  status: 409;
+};
+
+export type loadAgentModelsHandlerResponse409TextPlain = {
+  data: string;
   status: 409;
 };
 
@@ -724,7 +736,8 @@ export type loadAgentModelsHandlerResponseError = (
   | loadAgentModelsHandlerResponse400
   | loadAgentModelsHandlerResponse401
   | loadAgentModelsHandlerResponse403
-  | loadAgentModelsHandlerResponse409
+  | loadAgentModelsHandlerResponse409ApplicationJson
+  | loadAgentModelsHandlerResponse409TextPlain
   | loadAgentModelsHandlerResponse502
   | loadAgentModelsHandlerResponse504
 ) & {

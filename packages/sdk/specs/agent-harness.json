@@ -132,7 +132,19 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod machine or Cursor account is not connected"
+            "description": "Macrod machine or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialRejectedResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "502": {
             "description": "Provider probe failed"
@@ -481,7 +493,19 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod machine or Cursor account is not connected"
+            "description": "Macrod machine or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialRejectedResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "502": {
             "description": "Provider probe failed"
@@ -6217,6 +6241,21 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
+          }
+        }
+      },
+      "CredentialRejectedResponse": {
+        "type": "object",
+        "description": "Error body for a provider that refused the caller's connected credential.\n\nJSON rather than the plain text other failures answer with, so a client\ncan tell this 409 from a disconnected runtime and show `message` as is.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Always [`Self::CODE`]."
+          },
+          "message": {
+            "type": "string",
+            "description": "What to tell the caller, e.g. which kind of key to reconnect with."
           }
         }
       },

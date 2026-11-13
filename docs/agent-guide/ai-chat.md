@@ -656,7 +656,10 @@ the shimmer.
   Unavailable paired agents stay visible with a reason.
   If Macro is unavailable, its catalog stays searchable but
   model choices are disabled in every list. Model discovery uses the
-  selected runtime. Every coding agent shows repository
+  selected runtime. When Cursor refuses the connected key (a team-owned
+  service token, a revoked key), the Cursor submenu says to reconnect with a
+  personal or service-account Cursor API key instead of the generic failure.
+  Every coding agent shows repository
   controls; chat agents hide those controls but keep the mode bar. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.
   The most recently used supported,

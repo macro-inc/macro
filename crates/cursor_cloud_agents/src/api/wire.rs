@@ -378,6 +378,44 @@ pub struct ApiErrorCode {
     pub message: String,
 }
 
+/// The Connect error shape Cursor answers some refusals with:
+/// `{"code", "message", "details": [{"debug": {"error", "details": {"isRetryable"}}}]}`.
+///
+/// Read only for `isRetryable`; every field is defaulted so a body missing
+/// any of them still parses. Entries stay raw so one malformed entry can't
+/// hide a sibling's `isRetryable`; parse each with [`ConnectErrorDetail`].
+#[derive(Debug, Default, Deserialize)]
+pub struct ConnectErrorEnvelope {
+    /// Structured details, one per error.
+    #[serde(default)]
+    pub details: Vec<serde_json::Value>,
+}
+
+/// One entry of [`ConnectErrorEnvelope::details`].
+#[derive(Debug, Default, Deserialize)]
+pub struct ConnectErrorDetail {
+    /// Cursor's debug payload.
+    #[serde(default)]
+    pub debug: ConnectErrorDebug,
+}
+
+/// The debug payload of a [`ConnectErrorDetail`].
+#[derive(Debug, Default, Deserialize)]
+pub struct ConnectErrorDebug {
+    /// The error's own details.
+    #[serde(default)]
+    pub details: ConnectErrorInfo,
+}
+
+/// The innermost details of a Connect error.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectErrorInfo {
+    /// Whether Cursor says the same request may succeed later.
+    #[serde(default)]
+    pub is_retryable: bool,
+}
+
 /// `GET /v1/agents/{id}/artifacts` response.
 ///
 /// The listing is the agent's whole artifact directory, not one run's output:
