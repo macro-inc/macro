@@ -93,6 +93,7 @@ async fn a_scoped_code_mode_credential_is_refused() {
             Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
             registry as Arc<dyn ClientRegistrationStore>,
         ),
+        user_api_keys: None,
     };
     let app = axum::Router::new()
         .route("/mcp", axum::routing::post(|| async { StatusCode::OK }))
