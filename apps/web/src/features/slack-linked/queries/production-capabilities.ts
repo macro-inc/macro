@@ -1,5 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
 import { isMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -63,6 +64,10 @@ function sourceRead<Wire, Value>(
   };
 }
 
+/**
+ * Slack's own sign-in: in Macro desktop's window, handed off to Macro desktop
+ * from a computer's browser, or not at all from a phone or tablet.
+ */
 function desktopSignIn(): DesktopSignIn {
   if (canSignInOnDesktop())
     return {
@@ -70,7 +75,8 @@ function desktopSignIn(): DesktopSignIn {
       signIn: signInOnDesktop,
       captcha: solveCaptchaOnDesktop,
     };
-  if (isNativeMobilePlatform()) return { kind: 'unsupported' };
+  if (isNativeMobilePlatform() || isTouchDevice())
+    return { kind: 'unsupported' };
   return { kind: 'handoff', desktopUrl: desktopSignInUrl };
 }
 
@@ -170,7 +176,9 @@ export function createSlackLinkedCapabilities(host: {
         failure
       ).map(() => undefined),
     loginFinished: refreshSlackAccounts,
-    desktop: desktopSignIn(),
+    get desktop() {
+      return desktopSignIn();
+    },
     disconnect: (account, { signOut }) =>
       ResultAsync.fromPromise(
         disconnect.mutateAsync({

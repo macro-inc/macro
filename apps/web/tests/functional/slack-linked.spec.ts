@@ -360,3 +360,73 @@ test('a workspace whose session ended asks to sign in again; another disconnects
     signOut: true,
   });
 });
+
+test.describe('phone', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test('External’s switcher reaches each provider and counts unread chats', async ({
+    page,
+  }) => {
+    const unexpected = await mount(page, server(), '?view=switcher');
+
+    const apps = page.getByRole('radiogroup', { name: 'External apps' });
+    await expect(apps).toBeVisible();
+    await expect(apps).toContainText(/Slack\s*2/);
+    await expect(page.getByText('Showing whatsapp')).toBeVisible();
+    await apps.getByText('Slack').click();
+    await expect(page.getByText('Showing slack')).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath('external-switcher-phone.png'),
+    });
+    expect(unexpected).toEqual([]);
+  });
+
+  test('signs in by email code; Slack’s own page is left to a computer', async ({
+    page,
+  }) => {
+    const unexpected = await mount(
+      page,
+      server({
+        next: {
+          'slack-linked/login': [
+            {
+              kind: 'email_code',
+              email: 'slack-tester@example.test',
+              retry: false,
+            },
+          ],
+        },
+      })
+    );
+
+    await expect(
+      page.getByText(
+        'Workspaces that sign in with SSO connect from Macro desktop.'
+      )
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Sign in to Slack' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(
+      dialog.getByText(
+        'Workspaces that use SSO sign in from Macro on a computer.'
+      )
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: 'Sign in with browser' })
+    ).toHaveCount(0);
+    await expect(
+      dialog.getByRole('link', { name: 'Sign in from Macro desktop' })
+    ).toHaveCount(0);
+    await page.screenshot({
+      path: test.info().outputPath('slack-sign-in-phone.png'),
+    });
+    await dialog.getByLabel('Email').fill('slack-tester@example.test');
+    await dialog.getByRole('button', { name: 'Continue' }).click();
+    await expect(dialog.getByText('Check your email')).toBeVisible();
+    expect(unexpected).toEqual([]);
+  });
+});

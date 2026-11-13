@@ -18,8 +18,11 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
 - Mobile: **External** in the bottom dock (or **More views → External** when
   the dock is full). It has no back button, like other navigation views; the
   External sidebar is hidden on touch. Like Channels, the account list omits the floating split
-  header; the WhatsApp title uses the shared collection header directly below
-  the safe area on phones and tablets, above the scrollable **In Macro** chats.
+  header; an **External** title uses the shared collection header directly below
+  the safe area on phones and tablets. With more than one provider enabled, an
+  **External apps** switcher (WhatsApp / Slack, each with its unread count)
+  sits under it and picks the page as the sidebar does (same route state).
+  The page's scrollable **In Macro** chats are that provider's only.
   Opening a chat drills in full-screen; its **Back to <provider>** button
   (**Back to WhatsApp**; **Back** until the chat's detail loads) returns.
 
@@ -36,7 +39,7 @@ section per community (its groups by their own name, its announcement group as
 shows its unread total, and folded sections are remembered per person. The
 caret on WhatsApp folds everything; folded, WhatsApp shows the total unread
 count. The open chat's row is highlighted. On phones the page starts with the
-same sections under **In Macro**.
+same sections, for its own provider, under **In Macro**.
 DSS's `external_chat_changed` gateway events (`{scope:"chats"}` for the
 account's chat list, `{scope:"chat", chatId}` for one chat) refresh the lists;
 without one, External re-fetches once ~3 s after opening.
@@ -81,7 +84,7 @@ outside the workspace.
 | State | What shows |
 | --- | --- |
 | Nothing signed in | Outlined Slack row and **Sign in to Slack**; outside Macro desktop it adds that SSO workspaces connect from Macro desktop. |
-| Sign-in dialog | **Sign in to Slack**: an **Email** field and **Continue** first (works on web, desktop and phones). Under it, Macro desktop offers **Sign in with browser** (Slack's own page in a separate Macro window with its own cookies, for SSO); a browser links **Sign in from Macro desktop** (`macro:///external?slackLogin=browser`). **Advanced → Paste token and cookie** takes one `xoxc-` token per line, the `d` cookie and optionally `d-s`. The dialog carries `ph-no-capture`. |
+| Sign-in dialog | **Sign in to Slack**: an **Email** field and **Continue** first (works on web, desktop and phones). Under it, Macro desktop offers **Sign in with browser** (Slack's own page in a separate Macro window with its own cookies, for SSO); a computer's browser links **Sign in from Macro desktop** (`macro:///external?slackLogin=browser`); phones and tablets only say SSO workspaces sign in from Macro on a computer. **Advanced → Paste token and cookie** takes one `xoxc-` token per line, the `d` cookie and optionally `d-s`. The dialog carries `ph-no-capture`. |
 | Sign-in steps | Each answer returns the next step; `working` is polled every second. **Verify with Slack** (captcha: **Verify on slack.com** in desktop, **Continue on Macro desktop** with `macro:///external?slackLogin=<attempt id>` in a browser), **Check your email** (**Confirmation code** `ABC-123`; a wrong one says so), **Choose workspaces** (checkboxes, new workspaces checked, **Enterprise Grid** badge and an admins-can-see note, "SSO: finish in Macro desktop"; **Connect n workspaces**), **Two-factor code** (six digits), **Finish with SSO** (desktop window or handoff), **Slack connected** (lists connected and still-to-finish workspaces; **Done**), and failures with **Start again**. Request failures (rate limits, expiry, conflicts) show inline. Closing cancels an attempt waiting on the person (`DELETE /slack-linked/login/<id>`); a handoff doesn't. |
 | Signed in | **Search conversations and organizations** and **Add workspace** above one section per workspace: a strip (name, domain, Connected/Connecting…, a **<workspace> options** menu with **Sign in again** and **Disconnect**, which asks to confirm and whether to also sign the session out of Slack), then **Slack Connect channels** and **Direct messages** (rows `data-slack-conversation="<id>"` with the other organizations as badges, "Slack Connect · Channel", last activity; **Add to Macro**, or **Added** with **Open**, or "Shared with you by <owner>"), and **Can't be added (n)** (archived, disconnected from the other organization, not a member). A conversation several workspaces see shows once. Adding toasts **Added <name>** with **Open**; Macro imports its last 90 days. |
 | Session ended | A warning row per workspace Slack signed out, with the reason and **Sign in again**; its chats stay in Macro. |

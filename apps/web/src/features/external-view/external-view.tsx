@@ -23,6 +23,7 @@ import { providerIdentity } from '../external-chat/providers/identity';
 import { externalChatApi } from '../external-chat/queries/production-api';
 import { createOpenSections } from '../whatsapp-linked/primitives/open-sections';
 import { InMacroChats, UnreadCount } from './components/in-macro-section';
+import { ProviderSwitcher } from './components/provider-switcher';
 import { selectedProvider } from './core/selection';
 import { useEnabledProviders } from './provider-flags';
 import { handedOffProvider, PROVIDER_PAGES } from './provider-pages';
@@ -108,8 +109,24 @@ export function ExternalView() {
       0
     );
 
-  // Touch has no sidebar: the chats in Macro lead the page.
-  const touchInMacro = () => (
+  // Touch has no sidebar: a switcher picks the provider, as the sidebar's
+  // entries do, and the provider's chats in Macro lead its page.
+  const touchHeading = (provider: ExternalChatProvider) => (
+    <Show when={isTouchDevice()}>
+      <ViewShell.Header class="flex flex-col gap-3 pb-2">
+        <h1 class="text-lg font-semibold text-ink">External</h1>
+        <Show when={providers().length > 1}>
+          <ProviderSwitcher
+            providers={providers()}
+            selected={provider}
+            unread={unread}
+            onSelect={openProvider}
+          />
+        </Show>
+      </ViewShell.Header>
+    </Show>
+  );
+  const touchInMacro = (provider: ExternalChatProvider) => (
     <Show when={isTouchDevice()}>
       <section aria-labelledby="external-chats" class="px-2">
         <h2
@@ -118,17 +135,8 @@ export function ExternalView() {
         >
           In Macro
         </h2>
-        <For each={providers()}>{(provider) => inMacroChats(provider)}</For>
+        {inMacroChats(provider)}
       </section>
-    </Show>
-  );
-  const touchHeading = (provider: ExternalChatProvider) => (
-    <Show when={isTouchDevice()}>
-      <ViewShell.Header class="pb-2">
-        <h1 class="text-lg font-semibold text-ink">
-          {providerIdentity(provider).label}
-        </h1>
-      </ViewShell.Header>
     </Show>
   );
   const providerPage = () => (
@@ -137,7 +145,7 @@ export function ExternalView() {
         <Dynamic
           component={PROVIDER_PAGES[provider()]}
           heading={touchHeading(provider())}
-          inMacro={touchInMacro()}
+          inMacro={touchInMacro(provider())}
         />
       )}
     </Show>

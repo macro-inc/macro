@@ -9,7 +9,7 @@ import { SlackLinked } from '../slack-linked/slack-linked';
 import { WhatsAppLinked } from '../whatsapp-linked/whatsapp-linked';
 
 export type ProviderPageProps = {
-  /** The page's large title, on touch where the top bar floats; else nothing. */
+  /** On touch, where the top bar floats: External's title and provider switcher. */
   heading: JSX.Element;
   /** The chats in Macro, on touch where there is no sidebar; else nothing. */
   inMacro: JSX.Element;
