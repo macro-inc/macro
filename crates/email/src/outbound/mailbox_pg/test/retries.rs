@@ -239,43 +239,55 @@ async fn a_forbidden_message_fails_on_its_own_instead_of_asking_for_reauth(db: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_message_that_keeps_failing_backs_off_and_stops_after_a_day(db: PgPool) {
+async fn a_provider_outage_backs_a_message_off_but_never_abandons_it(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = fixture(&db).await;
-    queue(&db, link, "flaky", 3).await;
-    let transient = || EmailApiError::Transient {
-        message: "Microsoft Graph returned HTTP 500".into(),
-    };
+    queue(&db, link, "waiting", 0).await;
+    let failures = 60;
     let service = sync(
         &repo,
-        Provider::answering(vec![Err(transient()), Err(transient())]),
+        Provider::answering(
+            (0..failures)
+                .map(|_| {
+                    Err(EmailApiError::Transient {
+                        message: "Microsoft Graph returned HTTP 503".into(),
+                    })
+                })
+                .collect(),
+        ),
     );
 
-    assert!(service.reconcile_once().await.is_err());
-    let flaky = row(&db, link, "flaky").await;
-    assert_eq!((flaky.abandoned, flaky.attempts), (false, 4));
+    for _ in 0..failures {
+        assert!(service.reconcile_once().await.is_err());
+        assert!(!row(&db, link, "waiting").await.abandoned);
+        sqlx::query!(
+            "UPDATE email_message_reconciliation SET available_at = now() WHERE link_id = $1",
+            link
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+    }
+
+    let delays: Vec<String> = outcomes(&telemetry)
+        .into_iter()
+        .map(|(outcome, reason, delay)| {
+            assert_eq!((outcome.as_str(), reason.as_str()), ("deferred", "other"));
+            delay.unwrap()
+        })
+        .collect();
+    let expected: Vec<String> = [30, 60, 120, 240, 480, 960]
+        .into_iter()
+        .chain(std::iter::repeat_n(1800, failures - 6))
+        .map(|seconds| seconds.to_string())
+        .collect();
+    assert_eq!(delays, expected);
+    assert_eq!(row(&db, link, "waiting").await.attempts, 6);
+    assert!(telemetry.events("mailbox message abandoned").is_empty());
     assert!(
-        (239..=240).contains(&flaky.delay_seconds),
-        "the fourth failure waits 240 s, got {}",
-        flaky.delay_seconds
-    );
-
-    sqlx::query!(
-        "UPDATE email_message_reconciliation SET attempts = 49, available_at = now() WHERE link_id = $1",
-        link
-    )
-    .execute(&db)
-    .await
-    .unwrap();
-    assert!(service.reconcile_once().await.is_err());
-    assert!(row(&db, link, "flaky").await.abandoned);
-    assert_eq!(
-        outcomes(&telemetry),
-        [
-            ("deferred".into(), "other".into(), Some("240".into())),
-            ("abandoned".into(), "other".into(), None),
-        ]
+        repo.claim_message(Uuid::now_v7()).await.unwrap().is_some(),
+        "the message is still claimed once its backoff ends"
     );
 }
 
