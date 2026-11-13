@@ -14,9 +14,17 @@ async fn stand_in_answers_an_error_once() -> Result<(), Report> {
     let url = format!("{}/documents/import", stack.service_url("document-storage"));
     let refused = http.post(&url).json(&serde_json::json!({})).send().await?;
     assert_eq!(refused.status(), 404);
+
+    let code = serde_json::json!({ "code": "NOT_FOUND" });
+    stack.fail_next_service_request_with("document-storage", "POST", "/documents", 410, &code)?;
+    let refused = http.post(&url).json(&serde_json::json!({})).send().await?;
+    assert_eq!(refused.status(), 410);
+    assert_eq!(refused.json::<serde_json::Value>().await?, code);
+    let staff = stack.user_at("ada@macro.com").await?;
+    assert_eq!(staff.email(), "ada@macro.com");
     let answered = http.post(&url).json(&serde_json::json!({})).send().await?;
     assert_eq!(answered.status(), 200);
-    assert_eq!(stack.service_requests().len(), 2);
+    assert_eq!(stack.service_requests().len(), 3);
 
     stack.finish().await
 }

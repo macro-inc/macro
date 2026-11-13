@@ -61,6 +61,7 @@ struct Failure {
     method: String,
     path_prefix: String,
     status: StatusCode,
+    body: serde_json::Value,
 }
 
 type Failures = Arc<Mutex<Vec<Failure>>>;
@@ -141,13 +142,14 @@ impl MacroServices {
     }
 
     /// Makes the next request to `service` with this method, whose path
-    /// starts with `path_prefix`, answer `status` and an empty JSON object.
+    /// starts with `path_prefix`, answer `status` and `body`.
     pub(crate) fn fail_next(
         &self,
         service: &str,
         method: &str,
         path_prefix: &str,
         status: u16,
+        body: &serde_json::Value,
     ) -> Result<(), Report> {
         let status = StatusCode::from_u16(status).context("not an HTTP status")?;
         self.failures
@@ -158,6 +160,7 @@ impl MacroServices {
                 method: method.to_ascii_uppercase(),
                 path_prefix: path_prefix.to_owned(),
                 status,
+                body: body.clone(),
             });
         Ok(())
     }
@@ -211,10 +214,10 @@ async fn answer(State(routes): State<Routes>, request: Request) -> Response {
                     && failure.method == method.as_str()
                     && path.starts_with(&failure.path_prefix)
             })
-            .map(|index| failures.remove(index).status)
+            .map(|index| failures.remove(index))
     };
-    if let Some(status) = failure {
-        return (status, axum::Json(serde_json::json!({}))).into_response();
+    if let Some(failure) = failure {
+        return (failure.status, axum::Json(failure.body)).into_response();
     }
 
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();

@@ -331,6 +331,12 @@ impl Stack {
         crate::lambda::invoke_scheduled(SCHEDULED_HANDLER, &env, &self.log_dir).await
     }
 
+    /// A Macro user with exactly this address, for scenarios where the
+    /// address matters (a staff domain, a second address at one provider).
+    pub async fn user_at(&self, address: &str) -> Result<User, Report> {
+        User::create(self, address).await
+    }
+
     /// Makes one of the Macro service stand-ins answer an error once: the
     /// next request to `service` (`static-files`, `document-storage` or
     /// `connection-gateway`) with this method whose path within the service
@@ -343,8 +349,29 @@ impl Stack {
         path_prefix: &str,
         status: u16,
     ) -> Result<(), Report> {
+        self.fail_next_service_request_with(
+            service,
+            method,
+            path_prefix,
+            status,
+            &serde_json::json!({}),
+        )
+    }
+
+    /// As [`Stack::fail_next_service_request`], answering `body` with the
+    /// status: for callers that read an error code from the body.
+    pub fn fail_next_service_request_with(
+        &self,
+        service: &str,
+        method: &str,
+        path_prefix: &str,
+        status: u16,
+        body: &serde_json::Value,
+    ) -> Result<(), Report> {
         match &self.macro_services {
-            Some(macro_services) => macro_services.fail_next(service, method, path_prefix, status),
+            Some(macro_services) => {
+                macro_services.fail_next(service, method, path_prefix, status, body)
+            }
             None => bail!("the stack was torn down"),
         }
     }
