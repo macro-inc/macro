@@ -49,30 +49,73 @@ describe('setupStages', () => {
       signedIn: false,
     });
     expect(stages.map((stage) => [stage.id, stage.state])).toEqual([
+      ['billing', 'done'],
       ['creating', 'done'],
       ['booting', 'current'],
       ['connecting', 'upcoming'],
       ['sign_in', 'upcoming'],
     ]);
-    expect(stages[1].detail).toBeUndefined();
+    expect(stages[2].detail).toBeUndefined();
   });
 
-  it('keeps the sign-in in the list for an agent on Macro credits, struck through', () => {
+  it('starts with Updating billing while the purchase is being confirmed, or when the API reports the billing step', () => {
+    const confirming = setupStages(
+      { ...computer, status: 'purchasing', billing: 'purchasing' },
+      { signIn: 'undecided', connected: false, signedIn: false }
+    );
+    expect(confirming[0]).toMatchObject({
+      id: 'billing',
+      label: 'Updating billing…',
+      state: 'current',
+    });
+    expect(confirming[1].state).toBe('upcoming');
+
+    const reported = {
+      ...computer,
+      setup: { step: 'booting' as const, position: 2, total: 4 },
+    };
+    Reflect.set(reported.setup, 'step', 'billing');
+    expect(
+      setupStages(reported, {
+        signIn: 'undecided',
+        connected: false,
+        signedIn: false,
+      })[0].state
+    ).toBe('current');
+  });
+
+  it('keeps the sign-in in the list for an agent on Macro credits, marked skipped', () => {
     const stages = setupStages(computer, {
       signIn: 'skipped',
       connected: false,
       signedIn: false,
     });
     expect(stages.map((stage) => stage.id)).toEqual([
+      'billing',
       'creating',
       'booting',
       'connecting',
       'sign_in',
     ]);
-    expect(stages[3]).toMatchObject({
+    expect(stages[4]).toMatchObject({
       state: 'skipped',
+      label: 'Sign in to Claude · skipped',
       detail: "Not needed: the agent runs on Macro's Claude.",
     });
+  });
+
+  it('words every stage behind the computer as done', () => {
+    const stages = setupStages(
+      { ...computer, status: 'ready', setup: undefined },
+      { signIn: 'needed', connected: true, signedIn: true }
+    );
+    expect(stages.map((stage) => [stage.label, stage.state])).toEqual([
+      ['Billing updated', 'done'],
+      ['Computer created', 'done'],
+      ['Started up', 'done'],
+      ['Connected to Macro', 'done'],
+      ['Signed in to Claude', 'done'],
+    ]);
   });
 
   it('puts the server reason, when there is one, before the generic failed copy', () => {
@@ -83,7 +126,7 @@ describe('setupStages', () => {
         signIn: 'undecided',
         connected: false,
         signedIn: false,
-      })[1].detail
+      })[2].detail
     ).toMatch(/^The host ran out of disk\. The computer could not be set up/);
   });
 
@@ -98,7 +141,7 @@ describe('setupStages', () => {
       connected: false,
       signedIn: false,
     });
-    expect(waiting[3]).toMatchObject({
+    expect(waiting[4]).toMatchObject({
       id: 'sign_in',
       state: 'current',
       detail: expect.stringContaining('unlocks by itself'),
@@ -108,7 +151,7 @@ describe('setupStages', () => {
       connected: true,
       signedIn: false,
     });
-    expect(connected[3].detail).toBeUndefined();
+    expect(connected[4].detail).toBeUndefined();
     const done = setupStages(up, {
       signIn: 'needed',
       connected: true,
@@ -122,7 +165,7 @@ describe('setupStages', () => {
       { ...computer, status: 'failed' },
       { signIn: 'undecided', connected: false, signedIn: false }
     );
-    expect(failed[1]).toMatchObject({
+    expect(failed[2]).toMatchObject({
       state: 'failed',
       detail: expect.stringContaining('Retry'),
     });
@@ -130,7 +173,7 @@ describe('setupStages', () => {
       { ...computer, status: 'waiting_for_capacity', setup: undefined },
       { signIn: 'undecided', connected: false, signedIn: false }
     );
-    expect(waiting[0]).toMatchObject({
+    expect(waiting[1]).toMatchObject({
       state: 'current',
       detail: 'Turn off or release another computer on this host to make room',
     });
@@ -138,14 +181,26 @@ describe('setupStages', () => {
 });
 
 describe('setupStepStartedAt', () => {
-  it('counts the first step from the purchase and later steps from when they were first seen', () => {
+  it('takes the start the API reports over anything seen here', () => {
+    const reported = {
+      ...computer,
+      setup: { step: 'booting' as const, position: 2, total: 4 },
+    };
+    Reflect.set(reported.setup, 'stepStartedAt', '2026-11-01T00:03:00Z');
+    expect(setupStepStartedAt(reported)).toBe(
+      new Date('2026-11-01T00:03:00Z').getTime()
+    );
+  });
+
+  it('counts the billing wait from the purchase and later steps from when they were first seen', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-01T00:05:00Z'));
-    const creating: ComputerStatus = {
+    const confirming: ComputerStatus = {
       ...computer,
+      status: 'purchasing',
       setup: { step: 'creating', position: 1, total: 4 },
     };
-    expect(setupStepStartedAt(creating)).toBe(
+    expect(setupStepStartedAt(confirming)).toBe(
       new Date('2026-11-01T00:00:00Z').getTime()
     );
 

@@ -10,7 +10,10 @@
         "crates/agent_runtime_protocol/**",
         "crates/agent_preview/**",
         "crates/agent_egress/**",
-        "crates/scheduled_action/**"
+        "crates/scheduled_action/**",
+        "crates/agent_git/**",
+        "crates/agent_credentials/**",
+        "packages/starter-agent/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [

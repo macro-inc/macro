@@ -41,6 +41,13 @@ fn main() {
         }
     };
     println!("cargo:rustc-env=MACRO_EMBEDDED_BUNDLE_BUILD={embedded_bundle_build}");
+    // Settings shows this as the app's build date. It stays fixed for the
+    // binary; OTA bundles replace the JavaScript, not this value.
+    let native_build_time_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock is before the Unix epoch")
+        .as_millis();
+    println!("cargo:rustc-env=MACRO_NATIVE_BUILD_TIME_MS={native_build_time_ms}");
     if let Ok(bundle_update_base_url) = std::env::var("MACRO_BUNDLE_UPDATE_BASE_URL") {
         let bundle_update_base_url = bundle_update_base_url.trim();
         if !bundle_update_base_url.is_empty() {

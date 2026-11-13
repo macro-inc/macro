@@ -98,6 +98,7 @@ export function TopBar() {
       buttonComponent: (control) => (
         <ChatWithAgentButton
           grouped={control.grouped}
+          size={control.grouped ? 'md' : undefined}
           entity={{ type: 'project', id, name: name() }}
         />
       ),
@@ -122,10 +123,10 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
+      <SplitHeaderRight size="md">
         <div class="order-[1000] flex items-center gap-2">
           <Show when={!isTouchDevice()}>
-            <HeaderActionGroup label="Folder actions">
+            <HeaderActionGroup label="Folder actions" size="md">
               <For each={toolbarTools()}>
                 {(tool) => (
                   <Show when={!tool.condition || tool.condition()}>
@@ -143,7 +144,11 @@ export function TopBar() {
             </Show>
           </Show>
           <Show when={showShare()}>
-            <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
+            <ShareTrigger
+              size="md"
+              onClick={openShare}
+              copyLink={handleCopyLink}
+            />
           </Show>
         </div>
       </SplitHeaderRight>

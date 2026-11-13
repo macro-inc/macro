@@ -336,6 +336,9 @@ services:
       # sandboxes are siblings of this container rather than children. Harmless
       # under the Daytona provider, which never opens it.
       - /var/run/docker.sock:/var/run/docker.sock
+      # Agent workspace git remotes under /agent-git: bare repositories at
+      # REPO_STORAGE_ROOT, the same path as the deployed EFS volume.
+      - agent_git_repos:/data/agent-git
     depends_on:
       - postgres
       - redis
@@ -780,6 +783,8 @@ services:
 
 volumes:
   sync_state:
+  # agent_harness_service's agent git bare repositories.
+  agent_git_repos:
   # Backing store for the `lgtm` collector (profile-gated, global project).
   lgtm_data:
 

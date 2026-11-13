@@ -13,7 +13,7 @@
 //! disk alone. A marker at least as new as the enrollment, or no enrollment
 //! (the control plane removes it once macrod connects), means enrolled.
 
-use std::os::unix::fs::MetadataExt as _;
+use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
@@ -157,7 +157,7 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         otel.status_code = tracing::field::Empty
     );
     hosted_runtimes::domain::telemetry::attach(&span, enrollment.traceparent.as_deref());
-    enroll(&options, host, &marker, &enrollment)
+    enroll(&options, host, &paths, &marker, &enrollment)
         .instrument(span.clone())
         .await
         .inspect_err(|_| {
@@ -168,6 +168,7 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
 async fn enroll(
     options: &EnrollOptions,
     host: &impl Host,
+    paths: &SystemPaths,
     marker: &Path,
     enrollment: &Enrollment,
 ) -> rootcause::Result<()> {
@@ -182,6 +183,12 @@ async fn enroll(
     write_config(options, agent, &urls)?;
     ensure_credentials(&options.config, enrollment).await?;
     own_like_parent(&options.config, host)?;
+    write_agent_env(
+        &paths.at(AGENT_ENV_PATH),
+        enrollment.agent.as_ref(),
+        &options.config,
+        host,
+    )?;
 
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
@@ -372,6 +379,57 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
     }
 }
 
+/// The agent teammate a computer was bought for: its brain's environment,
+/// read by the guest's `macro-agent.service`. Absent on other computers.
+pub const AGENT_ENV_PATH: &str = "/var/lib/macrod/agent.env";
+
+/// Write the agent's environment as a systemd environment file (mode 0600,
+/// owned like macrod's config, since the brain runs as that user), or remove
+/// a stale one when this enrollment carries no agent.
+fn write_agent_env(
+    path: &Path,
+    agent: Option<&hosted_runtimes::domain::agent::AgentEnrollment>,
+    config: &Path,
+    host: &impl Host,
+) -> rootcause::Result<()> {
+    let Some(agent) = agent else {
+        return match std::fs::remove_file(path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => {
+                result.context(format!("could not remove {}", path.display()))?;
+                Ok(())
+            }
+        };
+    };
+    let contents = agent_env_file(agent);
+    write_file(path, &contents, 0o600)?;
+    let parent = config
+        .parent()
+        .ok_or_else(|| rootcause::report!("{} has no directory", config.display()))?;
+    let metadata =
+        std::fs::metadata(parent).context(format!("could not stat {}", parent.display()))?;
+    host.chown(
+        path,
+        Ownership {
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+        },
+    )
+}
+
+/// `KEY="value"` lines, with `\` and `"` escaped as systemd expects. Names
+/// and single-line values are validated by [`AgentEnv`].
+///
+/// [`AgentEnv`]: hosted_runtimes::domain::agent::AgentEnv
+fn agent_env_file(agent: &hosted_runtimes::domain::agent::AgentEnrollment) -> String {
+    let mut contents = String::new();
+    for (key, value) in agent.env.expose() {
+        let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+        contents.push_str(&format!("{}=\"{escaped}\"\n", key.as_str()));
+    }
+    contents
+}
+
 /// Give a file its directory's owner: enrollment runs as root, macrod as the
 /// user whose home holds its config.
 fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
@@ -387,4 +445,26 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
             gid: metadata.gid(),
         },
     )
+}
+
+fn write_file(path: &Path, contents: &str, mode: u32) -> rootcause::Result<()> {
+    use std::io::Write as _;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .context(format!("could not create {}", parent.display()))?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(mode)
+        .open(path)
+        .context(format!("could not open {}", path.display()))?;
+    // `mode` applies only to new files; a retry tightens an existing one.
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .context(format!("could not set the mode of {}", path.display()))?;
+    file.write_all(contents.as_bytes())
+        .context(format!("could not write {}", path.display()))?;
+    Ok(())
 }

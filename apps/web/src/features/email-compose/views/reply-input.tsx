@@ -539,6 +539,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           props.unframed ? { 'background-color': 'transparent' } : undefined
         }
         hideBorder={props.unframed}
+        // Full-screen mobile compose scrolls the whole surface, not the body.
+        data-composer-scroll={isMobileCompose() ? '' : undefined}
         ref={(el) => {
           composeContainerRef = el;
           if (isMobileCompose()) setScrollContainer(el);
@@ -650,6 +652,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           )}
         >
           <div
+            data-composer-scroll={isMobileCompose() ? undefined : ''}
             ref={(el) => {
               if (!isMobileCompose()) setScrollContainer(el);
             }}

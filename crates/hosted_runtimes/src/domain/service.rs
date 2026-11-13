@@ -80,6 +80,25 @@ pub enum ComputerError {
     Internal(rootcause::Report),
 }
 
+impl ComputerError {
+    /// True when storage could not be reached at all
+    /// ([`crate::domain::ports::StorageUnavailable`]): the work is retried on
+    /// the next pass, not counted as a failed attempt or logged as an error.
+    pub fn is_storage_unavailable(&self) -> bool {
+        let Self::Internal(report) = self else {
+            return false;
+        };
+        report.iter_reports().any(|node| {
+            node.downcast_current_context::<crate::domain::ports::StorageUnavailable>()
+                .is_some()
+                || std::iter::successors(node.current_context_error_source(), |error| {
+                    error.source()
+                })
+                .any(|error| error.is::<crate::domain::ports::StorageUnavailable>())
+        })
+    }
+}
+
 impl From<rootcause::Report> for ComputerError {
     fn from(report: rootcause::Report) -> Self {
         Self::Internal(report)
@@ -182,6 +201,36 @@ impl<
         Ok(())
     }
 
+    /// An agent teammate's computer status for the team roster, with the
+    /// fleet's current availability. Unlike `status`, a detached fleet is not
+    /// refused: the roster still shows the durable state.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn status_for_roster(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(ComputerStatus, crate::domain::models::FleetAttachment), ComputerError> {
+        let availability = self
+            .attachment
+            .attachment(self.clock.now())
+            .await
+            .map_err(internal)?;
+        let record = self.team_record(team_id, computer_id).await?;
+        Ok((self.status_of(&record).await?, availability))
+    }
+
+    /// Release an agent teammate's computer when the agent is removed: the
+    /// lifecycle's normal release, without fleet access or name confirmation.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn request_release(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerStatus, ComputerError> {
+        self.apply_for_team(team_id, computer_id, Event::ReleaseNow)
+            .await
+    }
+
     /// Configure the fail-closed rollout at the composition root.
     pub fn with_rollout(mut self, rollout: crate::domain::rollout::ComputerRollout) -> Self {
         self.rollout = rollout;
@@ -260,7 +309,9 @@ impl<
         }
     }
 
-    /// Every size with its price and availability.
+    /// Every size some host can run awake, with its price and availability.
+    /// A size too large for every host is left out rather than sold out:
+    /// waiting for capacity would never make it available.
     #[tracing::instrument(skip(self, user_id), err)]
     pub async fn offers(
         &self,
@@ -269,23 +320,23 @@ impl<
     ) -> Result<Vec<SizeOffer>, ComputerError> {
         self.require_rollout(&user_id).await?;
         self.require_attached().await?;
-        let sold_out = self
-            .repo
-            .sold_out_sizes(&self.catalog, self.clock.now())
-            .await
-            .map_err(internal)?;
+        let hosts = self.repo.allocation().await.map_err(internal)?;
 
         let billing = self.purchase_billing(team_id).await?;
         let mut offers = Vec::new();
         for entry in &self.catalog {
             let size = entry.size;
+            let units = entry.resources.units();
+            if !hosts.iter().any(|host| host.runs(units)) {
+                continue;
+            }
             offers.push(SizeOffer {
                 size,
                 vcpus: entry.resources.vcpus.get(),
                 memory_gb: entry.resources.memory_gib.get(),
                 disk_gb: entry.resources.disk_gib.get(),
                 quote: self.quote(team_id, size, &billing).await?,
-                sold_out: sold_out.contains(&size),
+                sold_out: !hosts.iter().any(|host| host.sells(units)),
             });
         }
         Ok(offers)

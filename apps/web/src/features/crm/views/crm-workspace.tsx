@@ -773,10 +773,10 @@ export function CrmWorkspaceView(props: {
                 }
               >
                 <Show when={!peopleActive()}>
-                  <HeaderActionGroup label="Company filters">
+                  <HeaderActionGroup label="Company filters" size="md">
                     <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
                   </HeaderActionGroup>
-                  <HeaderActionGroup label="Company view options">
+                  <HeaderActionGroup label="Company view options" size="md">
                     <SoupViewContextSort grouped />
                     <SoupViewContextGroup grouped hideLabel variant="ghost" />
                     <CompanyDisplayMenu grouped />
