@@ -8,18 +8,19 @@ type BackHandle = Pick<
   'content' | 'previousContent' | 'canGoBack' | 'goBack'
 >;
 
-function projectSection(content: SplitContent | null) {
+function projectLocation(content: SplitContent | null) {
   const metadata = content?.entryMetadata;
   if (!isRecord(metadata) || !isRecord(metadata.route)) return;
   const matches = metadata.route.matches;
   if (!Array.isArray(matches)) return;
   const leaf: unknown = matches.at(-1);
-  if (!isRecord(leaf) || leaf.id !== 'tasks-project' || !isRecord(leaf.params))
-    return;
+  if (!isRecord(leaf)) return;
+  if (leaf.id === 'tasks-projects') return { kind: 'list' as const };
+  if (leaf.id !== 'tasks-project' || !isRecord(leaf.params)) return;
   const { projectId, section } = leaf.params;
   if (typeof projectId !== 'string' || !projectId) return;
   if (section !== 'overview' && section !== 'tasks') return;
-  return { projectId, section };
+  return { kind: 'detail' as const, projectId, section };
 }
 
 /** Route Back within a project before falling back to closing its native pane. */
@@ -34,13 +35,16 @@ export function createMobileBackNavigation(options: {
     if (!id) return;
     const handle = options.getSplit(id);
     if (!handle?.canGoBack()) return;
-    const current = projectSection(handle.content());
-    const previous = projectSection(handle.previousContent());
-    // Only the explicit Tasks push owns an in-pane Back step. Other native
-    // destinations, nested tasks, and entries without Overview keep pane-stack Back.
+    const current = projectLocation(handle.content());
+    if (current?.kind !== 'detail') return;
+    const previous = projectLocation(handle.previousContent());
+    // Project details stay in the collection's pane. Use its route history so
+    // Back restores the selected list and filters instead of closing the pane.
+    if (previous?.kind === 'list') return handle;
     if (
-      current?.section === 'tasks' &&
-      previous?.section === 'overview' &&
+      current.section === 'tasks' &&
+      previous?.kind === 'detail' &&
+      previous.section === 'overview' &&
       current.projectId === previous.projectId
     )
       return handle;

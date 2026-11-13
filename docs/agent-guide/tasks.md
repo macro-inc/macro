@@ -1198,7 +1198,9 @@ the header shows Back, the truncating project title, a Tasks island with the
 project's completion ring, then Details. Share stays in the title drawer and
 appears before Details in the phone Tasks header. Tap Tasks to push the project's
 Tasks view; the header caret and hardware/browser Back return to Overview.
-Phones have no Overview/Tasks tabs. The title island opens the standard
+From Overview, the same caret-only Back island returns to the previous Projects
+list, retaining its selected view and filters. Phones have no Overview/Tasks
+tabs. The title island opens the standard
 actions-only drawer, without a View group. Check both sections at 390px with
 a long project name: all controls stay visible, the title truncates, and the
 ring uses the same completed/total counts as the project list. Also check

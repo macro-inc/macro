@@ -76,6 +76,37 @@ describe('native phone project Back', () => {
     }
   );
 
+  it.each(['overview', 'tasks'])(
+    'returns from %s to the Projects list in the same pane',
+    (section) => {
+      const test = setup({
+        stackBack: false,
+        current: projectContent(section),
+        previous: {
+          type: 'component',
+          id: 'tasks',
+          entryMetadata: {
+            route: {
+              matches: [
+                { id: 'view-tasks', params: {} },
+                { id: 'tasks-projects', params: { projectsTab: 'projects' } },
+              ],
+            },
+            search: {
+              tasks: { tab: ['my-projects'] },
+              projects: { savedView: ['saved-projects'] },
+            },
+          },
+        },
+      });
+      expect(test.back.canGoBack()).toBe(true);
+      expect(test.back.canGoBackInPane()).toBe(true);
+      test.back.goBack(FRONT);
+      expect(test.routeBack).toHaveBeenCalledOnce();
+      expect(test.stackBack).not.toHaveBeenCalled();
+    }
+  );
+
   it('uses the same back operation for the caret and hardware Back', () => {
     const test = setup();
     test.back.goBack(FRONT);
