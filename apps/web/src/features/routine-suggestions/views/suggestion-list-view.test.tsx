@@ -262,24 +262,27 @@ function renderRow(onOpenDiscover = vi.fn()) {
 }
 
 describe('the row above the routines list', () => {
-  it('shows three of Discover’s cards, counts each as shown, and says how many more Discover has', async () => {
-    layOutRow('300px 300px 300px 128px');
+  it('shows as many of Discover’s cards as fit, counts each as shown, and says how many more Discover has', async () => {
+    layOutRow('400px 400px 400px 400px 128px');
     const onOpenDiscover = vi.fn();
     const shown = renderRow(onOpenDiscover);
     const more = await screen.findByRole('button', {
-      name: '2 more in Discover',
+      name: '1 more in Discover',
     });
-    expect(shown()).toEqual(['pick-1', 'template-1', 'drafted-1']);
+    expect(shown()).toEqual(['pick-1', 'template-1', 'drafted-1', 'more-0']);
     // Discover's card: the sentence, not a one-line chain.
+    const [pick] = screen.getAllByRole('listitem');
     expect(
-      screen.getByRole('button', { name: 'Reply tag: Respond. Change it' })
+      within(pick!).getByRole('button', {
+        name: 'Reply tag: Respond. Change it',
+      })
     ).toBeTruthy();
     fireEvent.click(more);
     expect(onOpenDiscover).toHaveBeenCalledOnce();
   });
 
   it('shows one card where the page fits one, never counting a card it dropped as shown', async () => {
-    layOutRow('300px 128px');
+    layOutRow('400px 128px');
     const shown = renderRow();
     expect(
       await screen.findByRole('button', { name: '4 more in Discover' })

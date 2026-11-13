@@ -123,7 +123,11 @@ function SkeletonCards(props: { count: number; class: string }) {
   );
 }
 
-/** The sidebar dialog's cards, two to a row, with their states around them. */
+/**
+ * The sidebar dialog's cards, two to a row, with their states around them.
+ * In the 860px dialog each is 25rem wide: the width every suggestion card
+ * has, on Discover and in the row above the routines list too.
+ */
 export function SuggestionDialogGrid(props: {
   view: SuggestionListView;
   actions: SuggestionActions;
@@ -177,9 +181,8 @@ export function SuggestionDialogGrid(props: {
 }
 
 /**
- * Discover's cards, three to a row, two or one where the page is too narrow
- * for cards of at least 18rem (the breakpoints count the page's 1rem
- * padding on each side and the 0.75rem gaps).
+ * Discover's cards, as many to a row as fit, each the dialog's card width
+ * (25rem), narrower only where the page can't fit one.
  */
 export function SuggestionDiscoverGrid(props: {
   view: SuggestionListView;
@@ -196,13 +199,13 @@ export function SuggestionDiscoverGrid(props: {
       skeleton={
         <SkeletonCards
           count={6}
-          class="grid min-w-0 grid-cols-1 gap-3 @min-[38.75rem]/routines:grid-cols-2 @min-[57.5rem]/routines:grid-cols-3"
+          class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(0,25rem))] gap-3"
         />
       }
     >
       {(items) => (
         <ul
-          class="grid min-w-0 grid-cols-1 gap-3 @min-[38.75rem]/routines:grid-cols-2 @min-[57.5rem]/routines:grid-cols-3"
+          class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(0,25rem))] gap-3"
           aria-label={t('routineSuggestions.listLabel')}
         >
           <For each={items()}>
@@ -235,11 +238,10 @@ export function SuggestionDiscoverGrid(props: {
 const ROW_CARD_COLUMNS = 1;
 
 /**
- * The one row above the routines list: up to three of Discover's cards, of
- * at least 18rem like Discover's, with how many more Discover has in a
- * narrow last column. Two cards, then one, where the page is too narrow for
- * three. Nothing while loading, failed or empty, so the list never waits on
- * it.
+ * The one row above the routines list: as many of Discover's cards as fit,
+ * each the dialog's card width (25rem), with how many more Discover has in
+ * a narrow column after them. Nothing while loading, failed or empty, so the
+ * list never waits on it.
  */
 export function SuggestionRow(props: {
   items: SuggestionItem[];
@@ -279,7 +281,7 @@ export function SuggestionRow(props: {
       </div>
       <ul
         ref={(element) => (grid = element)}
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_8rem] gap-3 @min-[47.5rem]/routines:grid-cols-[repeat(2,minmax(0,1fr))_8rem] @min-[66.25rem]/routines:grid-cols-[repeat(3,minmax(0,1fr))_8rem]"
+        class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(0,25rem))_8rem] gap-3"
         aria-label={t('routineSuggestions.listLabel')}
       >
         <For each={visible()}>

@@ -200,7 +200,10 @@ function Failure(props: { status: SuggestionStatus }) {
 
 /**
  * A suggestion's raised card. On a page it sits on the composer surface the
- * routine page uses; in a dialog it is one surface above the dialog's.
+ * routine page uses; in a dialog it is one surface above the dialog's. The
+ * composer surface draws its 1px rim inside the box instead of a border, so
+ * the page card pads 1px more to sit its content where the dialog card's
+ * does: a card is the same size in both.
  */
 function CardSurface(props: ParentProps<{ on: 'page' | 'dialog' }>) {
   return (
@@ -216,7 +219,7 @@ function CardSurface(props: ParentProps<{ on: 'page' | 'dialog' }>) {
         </Card>
       }
     >
-      <RoutineSurface class="flex h-full flex-col gap-1.5 p-4">
+      <RoutineSurface class="flex h-full flex-col gap-1.5 p-[17px]">
         {props.children}
       </RoutineSurface>
     </Show>
