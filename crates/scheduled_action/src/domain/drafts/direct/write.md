@@ -4,7 +4,7 @@ Answer with JSON only, no prose and no code fence, in the shape the request asks
 
 ## A routine as JSON
 
-{"name": "...", "trigger": TRIGGER, "steps": [STEP, ...], "setup": "..."}
+{"name": "...", "trigger": TRIGGER, "steps": [STEP, ...]}
 
 - `name`: what it does, in a few words, like a title ("Overdue tasks digest").
 - TRIGGER is one of:
@@ -13,7 +13,7 @@ Answer with JSON only, no prose and no code fence, in the shape the request asks
   - `{"type": "events", "filters": [{"events": ["channel.message_posted"], "ids": ["<item id>"]}]}`: `ids` are the items whose events start it, such as the channels messages are posted in or the documents that change. Without `ids`, the event starts it for every item the owner can access, which suits the events that select no item (`task.created`, `email.message_received`, `document.created`, `channel.created`, calls). {conditions}
   - `{"type": "multiple", "triggers": [TRIGGER, ...]}` for more than one, never nested.
 - STEP is a code step, `{"type": "code", "title", "summary", "knobs", "sentence", "source"}`, written as below, or an Ask AI step, `{"type": "agent", "model": "<the Ask AI model>", "instructions": "..."}`, whose instructions stand alone: what to do, the items by id, and where to report.
-- `setup`, only when the request asks for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in): a TypeScript module like a code step's, `export async function main({ macro }: StepContext)`, that creates it once, now, named as the request names it, and returns `{ "<key>": { "type": "<its entity type, such as database or channel>", "id": <its id> } }`. Write `{{setup.<key>}}` wherever the routine uses that id; it is replaced with the id once setup has run. Create nothing else in it, and never do the routine's own work there. Leave `setup` out when nothing needs creating.
+{setup}
 
 ## Items the request names
 

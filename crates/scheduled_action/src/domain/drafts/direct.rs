@@ -36,19 +36,25 @@ use crate::domain::ports::{
 };
 
 #[cfg(test)]
-mod test;
+pub(super) mod test;
 
 /// How the find call is told to answer.
 const FIND: &str = include_str!("direct/find.md");
 /// How the writing call is told to write.
 const WRITE: &str = include_str!("direct/write.md");
+/// What the writer is told about `setup`, when the draft may write code.
+const SETUP: &str = include_str!("direct/setup.md");
 /// The most names one lookup takes.
 const MAX_NAMES: usize = 10;
 /// The longest name the lookup takes, in characters.
 const MAX_NAME_CHARS: usize = 200;
-/// What the person reads when setup failed after it had changed something,
-/// and no routine came of the draft.
+/// What the person reads when setup failed after it had changed something
+/// and no routine came of the draft, or the draft was cut off while setup
+/// ran.
 const SETUP_FAILED_PARTWAY: &str = "Drafting stopped after setting up part of the routine. Check for anything it made, then try again.";
+/// What the writer is told when the draft may not write code, so has no
+/// `setup` either.
+const SETUP_UNAVAILABLE: &str = "`setup` can't be used here: nothing can be made while drafting.";
 /// The most SDK areas the writer is given the reference of.
 const MAX_AREAS: usize = 6;
 /// The area every code step may use, whose reference the writer always has.
@@ -255,7 +261,13 @@ impl DirectPrompts {
             } else {
                 "Never give a filter a `condition`."
             };
+            let setup = if code {
+                SETUP.trim()
+            } else {
+                "- Never write `setup`: nothing can be made while drafting here. Leave out anything new for the owner to make and pick."
+            };
             WRITE
+                .replace("{setup}", setup)
                 .replace("{conditions}", conditions)
                 .replace("{guide}", guide.trim())
                 .replace("{steps}", &steps)
@@ -677,6 +689,8 @@ fn put_step(steps: &mut Vec<Value>, index: usize, step: &Value) -> Result<(), Wr
 enum Setup {
     #[default]
     NotRun,
+    /// It never runs: the draft may not write code.
+    Unavailable,
     /// It ran, returning these ids by placeholder key.
     Ran(BTreeMap<String, String>),
     Failed {
@@ -693,7 +707,7 @@ impl Setup {
     fn due(&self, source: &str) -> bool {
         match self {
             Self::NotRun => true,
-            Self::Ran(_) => false,
+            Self::Unavailable | Self::Ran(_) => false,
             Self::Failed {
                 source: failed,
                 wrote,
@@ -702,16 +716,23 @@ impl Setup {
         }
     }
 
-    /// Whether it won't run again, whatever the writer answers.
-    fn settled(&self) -> bool {
-        matches!(self, Self::Ran(_) | Self::Failed { wrote: true, .. })
+    /// Why it won't run again, whatever the writer answers, for the
+    /// writer, or `None` while it still may.
+    fn settled(&self) -> Option<&'static str> {
+        match self {
+            Self::NotRun | Self::Failed { wrote: false, .. } => None,
+            Self::Unavailable => Some(SETUP_UNAVAILABLE),
+            Self::Ran(_) | Self::Failed { wrote: true, .. } => {
+                Some("`setup` has already run and won't run again.")
+            }
+        }
     }
 
     /// `routine` with the ids setup returned in place of their placeholders.
     fn fill(&self, routine: &Routine) -> Routine {
         match self {
             Self::Ran(ids) => routine.with_ids(ids),
-            Self::NotRun | Self::Failed { .. } => routine.clone(),
+            Self::NotRun | Self::Unavailable | Self::Failed { .. } => routine.clone(),
         }
     }
 
@@ -725,6 +746,9 @@ impl Setup {
         Some(WriterProblem::new(match self {
             Self::NotRun => format!(
                 "The routine uses {named}, but has no `setup` to make them. Add `setup`, or leave those items for the owner to pick."
+            ),
+            Self::Unavailable => format!(
+                "The routine uses {named}, but {SETUP_UNAVAILABLE} Leave those items for the owner to pick."
             ),
             Self::Ran(ids) => {
                 let returned: Vec<String> = ids.keys().cloned().collect();
@@ -816,12 +840,13 @@ fn problems_for_writer(
     }
     let settled = setup.settled();
     text.push_str(match (shape, settled) {
-        (Shape::Routine, false) => "\nFix them. Answer with JSON holding only what changes: `{\"steps\": {\"<index>\": <the whole step>}}`, and `trigger`, `name` or `setup` only if they change.",
-        (Shape::Routine, true) => "\nFix them. Answer with JSON holding only what changes: `{\"steps\": {\"<index>\": <the whole step>}}`, and `trigger` or `name` only if they change.",
+        (Shape::Routine, None) => "\nFix them. Answer with JSON holding only what changes: `{\"steps\": {\"<index>\": <the whole step>}}`, and `trigger`, `name` or `setup` only if they change.",
+        (Shape::Routine, Some(_)) => "\nFix them. Answer with JSON holding only what changes: `{\"steps\": {\"<index>\": <the whole step>}}`, and `trigger` or `name` only if they change.",
         (Shape::Step(_), _) => "\nFix them. Answer with the whole step again, as `{\"step\": ...}`.",
     });
-    if settled {
-        text.push_str(" `setup` has already run and won't run again.");
+    if let Some(why) = settled {
+        text.push(' ');
+        text.push_str(why);
     }
     text
 }
@@ -834,23 +859,33 @@ fn needs_fix(check: &RoutineCheck, shape: Shape) -> bool {
     }
 }
 
-/// What the writer is asked: the request and everything it needs.
+/// What the writer is asked: the request and everything it needs. Without
+/// `code`, there's no SDK reference and no `setup`.
 fn write_prompt(
     task: &str,
     shape: Shape,
     context: &DraftContext,
     lookup: &Lookup,
     reference: &str,
+    code: bool,
 ) -> String {
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
-    let answer = match shape {
-        Shape::Routine => "Answer with the routine's JSON.",
-        Shape::Step(_) => {
+    let answer = match (shape, code) {
+        (Shape::Routine, _) => "Answer with the routine's JSON.",
+        (Shape::Step(_), true) => {
             "Answer with JSON holding the step, `{\"step\": STEP}`, and `setup` only when it needs one."
         }
+        (Shape::Step(_), false) => "Answer with JSON holding the step, `{\"step\": STEP}`.",
+    };
+    let reference = if code {
+        format!(
+            "The SDK reference for the areas this routine uses:\n<sdk>\n{reference}\n</sdk>\n\n"
+        )
+    } else {
+        String::new()
     };
     format!(
-        "{task}\n\nNow is {now}; the owner's time zone is {timezone}. Ask AI steps run on the model `{model}`.\n\n{items}\nThe SDK reference for the areas this routine uses:\n<sdk>\n{reference}\n</sdk>\n\n{answer}",
+        "{task}\n\nNow is {now}; the owner's time zone is {timezone}. Ask AI steps run on the model `{model}`.\n\n{items}\n{reference}{answer}",
         timezone = context.timezone,
         model = context.agent_model,
         items = lookup.for_writer(),
@@ -865,13 +900,16 @@ struct DirectSoFar {
     last: Option<RoutineCheck>,
     created: Vec<CreatedItem>,
     setup: Setup,
+    /// Setup is running: a draft cut off now can't know what it made.
+    setting_up: bool,
     checks: u32,
     fixes: u8,
 }
 
 impl DirectSoFar {
     /// The draft, ended for the reason `ended` names: its last check, or
-    /// else the failure, `failure` unless setup failed partway.
+    /// else the failure, `failure` unless setup failed partway. Cut off
+    /// while setup ran, it fails saying so, whatever its last check.
     fn ended(
         self,
         ended: &'static str,
@@ -889,12 +927,11 @@ impl DirectSoFar {
             "routine.draft.created_unused",
             created.iter().filter(|item| !item.used).count(),
         );
+        let partway = self.setting_up || matches!(self.setup, Setup::Failed { wrote: true, .. });
         match self.last {
-            Some(check) => drafted(request, program, check, created),
-            None if matches!(self.setup, Setup::Failed { wrote: true, .. }) => {
-                super::failed_with(SETUP_FAILED_PARTWAY, created)
-            }
-            None => super::failed_with(failure, created),
+            Some(check) if !self.setting_up => drafted(request, program, check, created),
+            _ if partway => super::failed_with(SETUP_FAILED_PARTWAY, created),
+            _ => super::failed_with(failure, created),
         }
     }
 }
@@ -992,22 +1029,27 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
             lookup.left.len() + lookup.failed.len(),
         );
         run.progress.report(DraftMilestone::Found(lookup.names()));
-        let mut areas: Vec<String> = named
+        let areas: Vec<String> = named
             .sdk
             .iter()
             .map(|area| area.trim().to_owned())
             .filter(|area| area != AI_AREA && !area.is_empty())
             .take(MAX_AREAS)
             .collect();
-        if areas.is_empty() && code {
-            areas = FALLBACK_AREAS
-                .iter()
-                .map(|area| (*area).to_owned())
-                .collect();
-        }
         let reference = if code {
-            self.code.area_reference(&areas)
+            // No area named, or none the SDK has: the commonest ones.
+            match self.code.area_reference(&areas) {
+                reference if reference.trim().is_empty() => {
+                    let fallback: Vec<String> = FALLBACK_AREAS
+                        .iter()
+                        .map(|area| (*area).to_owned())
+                        .collect();
+                    self.code.area_reference(&fallback)
+                }
+                reference => reference,
+            }
         } else {
+            so_far.setup = Setup::Unavailable;
             String::new()
         };
         if self.cancelled(&run).await {
@@ -1016,7 +1058,7 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         run.progress.report(DraftMilestone::Writing);
         let system = prompts.write(code, context.conditions);
         let mut turns = vec![DraftTurn::User(write_prompt(
-            &task, shape, context, &lookup, &reference,
+            &task, shape, context, &lookup, &reference, code,
         ))];
         let mut routine = match request {
             DraftRequest::Routine { .. } => Routine {
@@ -1070,7 +1112,10 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                 Err(problem) => Some(problem),
                 Ok(()) => match routine.setup.clone() {
                     Some(source) if so_far.setup.due(&source) => {
-                        match self.set_up(owner, &run, context, &routine, &source).await {
+                        so_far.setting_up = true;
+                        let ran = self.set_up(owner, &run, context, &routine, &source).await;
+                        so_far.setting_up = false;
+                        match ran {
                             Ok((ids, items)) => {
                                 so_far.created.extend(items);
                                 so_far.setup = Setup::Ran(ids);
@@ -1134,7 +1179,10 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                 break "fixes_spent";
             }
             so_far.fixes += 1;
-            run.progress.report(DraftMilestone::Fixing);
+            // Before any check, a fix is still the writing.
+            if so_far.checks > 0 {
+                run.progress.report(DraftMilestone::Fixing);
+            }
             turns.push(DraftTurn::User(problem));
         };
         Ok(Some(std::mem::take(so_far).ended(

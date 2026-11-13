@@ -429,8 +429,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // items by name, one call on the person's Ask AI model writes the
     // routine, and saving's checks run on it, so the model goes again only to
     // fix what they found. The calls are admitted and billed as the person's
-    // automation usage. The session drafter stays for rows a replica on
-    // older code started.
+    // automation usage. Rows a replica on older code drafted in a session
+    // still have that session stopped and deleted with them.
     let drafts = Arc::new(
         RoutineDrafts::new(
             draft_code,

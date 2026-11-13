@@ -56,29 +56,34 @@ each run.
   catalog code routines as examples), built once per mix of code and
   trigger conditions (`DirectPrompts`) so the provider caches it; its user
   turn carries the request, the found items by id and the reference of the
-  areas named (`RoutineCode::area_reference`). A `setup` module creating
+  areas named, or of the commonest ones when the SDK has none of them
+  (`RoutineCode::area_reference`). A `setup` module creating
   what the routine uses runs once, as the person, and its ids replace each
   `{{setup.<key>}}` (`Setup`): a run that failed runs again only once the
   writer changed it and only if it changed nothing, and a placeholder left
-  unfilled goes back to the writer, never to the check. Saving's checks
-  (`DraftChecks`, the service's `check_draft`) run on the result; only
+  unfilled goes back to the writer, never to the check. A draft that may
+  not write code (`DraftContext::code`) has no `setup`: the writer isn't
+  told of it (`direct/setup.md`) and it never runs (`Setup::Unavailable`).
+  Saving's checks (`DraftChecks`, the service's `check_draft`) run on the result; only
   their problems, with the SDK declarations they name, go back to the
   model, at most `DirectTuning::max_fixes` times. A whole routine needs a
   trigger of its own; only a step drafted for a routine without one is
   checked on a passing stand-in. Cut off by `DRAFT_TIMEOUT` or shutdown, a
   draft still hands back its last check and what setup made
-  (`DirectSoFar`). The calls are admitted and billed as the person's
+  (`DirectSoFar`); cut off while setup runs, it fails saying it may have
+  made something. The calls are admitted and billed as the person's
   automation usage (`DraftModel`, `AiFeature::Automation`). Progress
   reports the admission (`DraftMilestone::Admitted`, which answers a
-  background start before anything is looked up) and what was found and
-  left by name (`DraftMilestone::Found`). Spans: `routine.draft` records
+  background start before anything is looked up), what was found and
+  left by name (`DraftMilestone::Found`), and fixing only once a check
+  ran. Spans: `routine.draft` records
   drafter `direct`, names found and left, checks, fixes, items created and
   `ended`, once each; `routine.draft.call` each call's purpose and answer
   size; `routine.draft.lookup`; `routine.draft.setup` what it made and
-  whether a failed run wrote; never the words or the names. With it,
-  discarding a job deletes only its row, so a job a
-  replica on older code drafted in a session keeps its stopped hidden
-  session. Without direct drafting (tests), the draft runs in an ordinary
+  whether a failed run wrote; never the words or the names. With it, a
+  job discarded, expired or swept still has its session stopped and
+  deleted, failures logged only at debug: a job a replica on older code
+  drafted has one. Without direct drafting (tests), the draft runs in an ordinary
   hidden agent session (`RoutineSessions`) of the in-process Macro agent:
   the person's own
   (source `user`, origin `requested`) but hidden, a background session

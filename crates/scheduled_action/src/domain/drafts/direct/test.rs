@@ -212,6 +212,20 @@ impl Milestones {
     }
 }
 
+/// Direct drafting whose model is admitted, then never answers: a draft
+/// still under way, for the background jobs' tests.
+pub(in crate::domain::drafts) fn never_answering() -> DirectDrafting {
+    DirectDrafting {
+        model: Arc::new(Model {
+            interrupts: Some(CancellationToken::new()),
+            ..Model::default()
+        }),
+        names: Arc::new(Names::default()),
+        checks: Arc::new(Checks(Arc::new(Checker::default()))),
+        tuning: DirectTuning::default(),
+    }
+}
+
 fn direct_drafts(
     model: &Arc<Model>,
     names: &Arc<Names>,
@@ -246,7 +260,19 @@ async fn draft_until<Code: RoutineCode>(
     milestones: &Milestones,
     interrupt: CancellationToken,
 ) -> anyhow::Result<Option<Draft>> {
-    let (program, context) = drafts.read_request(&request, context())?;
+    draft_in(drafts, request, context(), id, milestones, interrupt).await
+}
+
+/// [`draft_until`] in `context`.
+async fn draft_in<Code: RoutineCode>(
+    drafts: &RoutineDrafts<Code, Sessions>,
+    request: DraftRequest,
+    context: DraftContext,
+    id: Uuid,
+    milestones: &Milestones,
+    interrupt: CancellationToken,
+) -> anyhow::Result<Option<Draft>> {
+    let (program, context) = drafts.read_request(&request, context)?;
     let direct = Arc::clone(drafts.direct.as_ref().expect("drafts directly"));
     drafts
         .direct_draft(
@@ -463,10 +489,11 @@ async fn an_answer_that_isnt_a_routine_is_sent_back_unchecked() {
     assert_eq!(calls.len(), 4);
     assert!(calls[2].asked().contains("no JSON object"));
     assert!(calls[3].asked().contains("`trigger` isn't a trigger"));
-    // Only the routine that could be checked was.
+    // Only the routine that could be checked was, and nothing was fixed
+    // before it.
     assert_eq!(
         milestones.stages(),
-        ["admitted", "found", "writing", "fixing", "fixing", "passed"]
+        ["admitted", "found", "writing", "passed"]
     );
 }
 
@@ -759,7 +786,12 @@ struct SetsUp {
     checker: Checker,
     returns: Value,
     fails: Mutex<VecDeque<bool>>,
+    /// Cancels this token and never ends, as setup still running when the
+    /// harness shuts down.
+    hangs: Option<CancellationToken>,
     ran: Mutex<Vec<(String, Uuid)>>,
+    /// The areas each reference was asked for.
+    areas: Mutex<Vec<Vec<String>>>,
 }
 
 impl SetsUp {
@@ -768,12 +800,18 @@ impl SetsUp {
             checker: Checker::default(),
             returns,
             fails: Mutex::new(VecDeque::new()),
+            hangs: None,
             ran: Mutex::new(Vec::new()),
+            areas: Mutex::new(Vec::new()),
         }
     }
 
     fn ran(&self) -> Vec<(String, Uuid)> {
         self.ran.lock().unwrap().clone()
+    }
+
+    fn sources(&self) -> Vec<String> {
+        self.ran().into_iter().map(|(source, _)| source).collect()
     }
 }
 
@@ -799,6 +837,10 @@ impl RoutineCode for SetsUp {
             .lock()
             .unwrap()
             .push((run.step.source.clone(), run.routine_id));
+        if let Some(hangs) = &self.hangs {
+            hangs.cancel();
+            std::future::pending::<()>().await;
+        }
         let fails = self.fails.lock().unwrap().pop_front();
         match fails {
             None => CodeOutcome {
@@ -839,6 +881,20 @@ impl RoutineCode for SetsUp {
         self.checker.declarations(problems)
     }
 
+    fn area_reference(&self, areas: &[String]) -> String {
+        self.areas.lock().unwrap().push(areas.to_vec());
+        let known: Vec<&str> = areas
+            .iter()
+            .map(String::as_str)
+            .filter(|area| SDK_AREAS.contains(area))
+            .collect();
+        if known.is_empty() {
+            String::new()
+        } else {
+            format!("the reference of {}", known.join(", "))
+        }
+    }
+
     async fn rewrite(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -849,6 +905,9 @@ impl RoutineCode for SetsUp {
         Err("no rewrites here".into())
     }
 }
+
+/// The SDK areas [`SetsUp`] has a reference of.
+const SDK_AREAS: &[&str] = &["ai", "channels", "tasks", "email", "databases"];
 
 fn setting_up(code: &Arc<SetsUp>, model: &Arc<Model>) -> RoutineDrafts<SetsUp, Sessions> {
     let rows = Arc::new(Rows::default());
@@ -1170,7 +1229,7 @@ async fn a_routine_needs_a_trigger_even_when_a_fix_leaves_it_out() {
     assert!(calls[3].asked().contains("the routine has no `trigger`"));
     assert_eq!(
         milestones.stages(),
-        ["admitted", "found", "writing", "fixing", "fixing", "passed"]
+        ["admitted", "found", "writing", "passed"]
     );
 }
 
@@ -1262,5 +1321,133 @@ fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
             kind: Some(ItemKind::Person),
             matches: 0,
         }]
+    );
+}
+
+#[tokio::test]
+async fn a_draft_cut_off_while_setup_runs_says_it_may_have_made_something() {
+    let interrupt = CancellationToken::new();
+    let code = Arc::new(SetsUp {
+        hangs: Some(interrupt.clone()),
+        ..SetsUp::returning(json!({}))
+    });
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            written(posted_in(&[]), json!([code_step("Make a task", "bad")])),
+            json!({ "setup": "first", "steps": { "0": add_row("good", ORDERS) } }).to_string(),
+        ],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        interrupt,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    // Its first check failed, but what setup made is unknown: it says so.
+    let Draft::Failed { message, created } = draft else {
+        panic!("expected a failure, got {draft:?}");
+    };
+    assert_eq!(message, SETUP_FAILED_PARTWAY);
+    assert!(created.is_empty());
+    assert_eq!(code.sources(), ["first"]);
+}
+
+#[tokio::test]
+async fn without_code_setup_never_runs_and_its_items_are_left_for_the_owner() {
+    let code = Arc::new(SetsUp::returning(json!({})));
+    let ask = |instructions: &str| json!({ "type": "agent", "model": context().agent_model, "instructions": instructions });
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            with_setup(
+                posted_in(&[]),
+                ask("Add a row to {{setup.orders}}"),
+                "first",
+            ),
+            json!({ "steps": { "0": ask("Add a row to the owner's orders database") } })
+                .to_string(),
+        ],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_in(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        DraftContext {
+            code: false,
+            ..context()
+        },
+        Uuid::now_v7(),
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let drafted = drafted_routine(draft);
+    assert_eq!(
+        drafted.steps[0]["instructions"],
+        "Add a row to the owner's orders database"
+    );
+    assert!(code.ran().is_empty());
+    let calls = model.calls();
+    assert!(calls[1].system.contains("Never write `setup`"));
+    assert!(!calls[1].system.contains("{{setup.<key>}}"));
+    assert!(!calls[1].asked().contains("<sdk>"));
+    assert!(
+        calls[2].asked().contains(SETUP_UNAVAILABLE),
+        "{}",
+        calls[2].asked()
+    );
+}
+
+#[tokio::test]
+async fn areas_the_sdk_doesnt_have_give_the_writer_the_commonest_ones() {
+    let code = Arc::new(SetsUp::returning(json!({})));
+    let model = Arc::new(Model::new(
+        json!({ "names": [], "sdk": ["slack"] }),
+        vec![written(
+            posted_in(&[]),
+            json!([code_step("Make a task", "good")]),
+        )],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(BUG_REPORTS),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    drafted_routine(draft);
+    let areas = code.areas.lock().unwrap().clone();
+    assert!(
+        areas.ends_with(&[
+            vec!["slack".to_owned()],
+            FALLBACK_AREAS
+                .iter()
+                .map(|area| (*area).to_owned())
+                .collect(),
+        ]),
+        "{areas:?}"
+    );
+    assert!(
+        model.calls()[1]
+            .asked()
+            .contains("the reference of channels, tasks, email")
     );
 }

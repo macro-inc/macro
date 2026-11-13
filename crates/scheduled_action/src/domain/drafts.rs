@@ -489,27 +489,37 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
     }
 
     /// Delete a draft's session, unless it was `stopped`, and its row. A
-    /// direct draft has no session: only its row goes.
+    /// direct draft has no session, but a row a replica on older code drafted
+    /// has one, so a direct drafter tries it too, expecting none.
     async fn forget_draft(&self, action: &RoutineSessionAction, stopped: bool) {
-        if self.direct.is_some() {
-            if let Err(error) = self.hand_backs.finish(action.session_id.as_uuid()).await {
-                tracing::warn!(error = ?error, "could not forget a routine draft");
-            }
+        if self.direct.is_none() {
+            clean_up(
+                self.sessions.as_ref(),
+                self.hand_backs.as_ref(),
+                action,
+                stopped,
+            )
+            .await;
             return;
         }
-        clean_up(
-            self.sessions.as_ref(),
-            self.hand_backs.as_ref(),
-            action,
-            stopped,
-        )
-        .await;
+        if !stopped {
+            self.stop_draft(action).await;
+        }
+        if let Err(error) = self.sessions.delete(action.clone()).await {
+            tracing::debug!(error = ?error, "no routine draft session to delete");
+        }
+        if let Err(error) = self.hand_backs.finish(action.session_id.as_uuid()).await {
+            tracing::warn!(error = ?error, "could not forget a routine draft");
+        }
     }
 
-    /// Stop a draft's session, which a direct draft doesn't have.
+    /// Stop a draft's session; a direct drafter tries it as
+    /// [`Self::forget_draft`] does.
     async fn stop_draft(&self, action: &RoutineSessionAction) {
         if self.direct.is_none() {
             stop(self.sessions.as_ref(), action).await;
+        } else if let Err(error) = self.sessions.cancel(action.clone()).await {
+            tracing::debug!(error = ?error, "no routine draft session to stop");
         }
     }
 
