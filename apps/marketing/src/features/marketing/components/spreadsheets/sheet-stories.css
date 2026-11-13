@@ -17,7 +17,7 @@
 .sheet-story > .sheet-frame { overflow: hidden; border: 1px solid #ffffff1a; border-radius: 12px; background: #000; }
 .sheet-title { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--sheet-line); }
 .sheet-title > svg { width: 16px; height: 16px; }
-.sheet-title strong { font-size: 13.5px; font-weight: 600; }
+.sheet-title strong { font-size: 13.5px; font-weight: 500; }
 .sheet-title-people { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .sheet-agent-badge { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--sheet-agent); color: #fff; }
 .sheet-agent-badge svg { width: 11px; height: 11px; }
@@ -33,7 +33,7 @@
 .sheet-grid-letters > span, .sheet-grid-number { justify-content: center; background: var(--sheet-header); color: #a8a8a8; font-size: 11px; }
 .sheet-grid-cell { padding: 0 8px; }
 .sheet-grid-cell[data-numeric=true] { justify-content: flex-end; font-variant-numeric: tabular-nums; }
-.sheet-grid-cell b, .sheet-written[data-bold=true] { font-weight: 600; }
+.sheet-grid-cell b, .sheet-written[data-bold=true] { font-weight: 500; }
 .sheet-written { animation: sheet-written 260ms ease-out; }
 @keyframes sheet-written { from { opacity: 0; transform: translateY(3px); } }
 
@@ -45,7 +45,7 @@
 .sheet-grid-cursor[data-tone=agent] { --tone: var(--sheet-agent); }
 .sheet-grid-cursor[data-tone=person] { --tone: var(--sheet-person); }
 .sheet-grid-cursor[data-tone=self] { --tone: #fff; background: #ffffff0a; }
-.sheet-grid-cursor b { position: absolute; bottom: 100%; left: -2px; display: flex; align-items: center; gap: 3px; padding: 0 5px; border-radius: 4px 4px 4px 0; background: var(--tone); color: #111; font-size: 10px; font-weight: 600; line-height: 16px; white-space: nowrap; }
+.sheet-grid-cursor b { position: absolute; bottom: 100%; left: -2px; display: flex; align-items: center; gap: 3px; padding: 0 5px; border-radius: 4px 4px 4px 0; background: var(--tone); color: #111; font-size: 10px; font-weight: 500; line-height: 16px; white-space: nowrap; }
 .sheet-grid-cursor b svg { width: 10px; height: 10px; }
 .sheet-grid-cursor[data-tone=agent] b { color: #fff; }
 .sheet-grid-cursor[data-tone=self] b { display: none; }
@@ -70,7 +70,7 @@
   transition: top 240ms cubic-bezier(.2, .8, .2, 1);
 }
 .sheet-record-head { display: flex; align-items: center; gap: 8px; }
-.sheet-record-head strong { font-size: 14px; font-weight: 600; }
+.sheet-record-head strong { font-size: 14px; font-weight: 500; }
 .sheet-record-stage { margin-left: auto; padding: 1px 8px; border-radius: 999px; background: #58ae8326; color: #7fd1a6; font-size: 11px; }
 .sheet-record-stage[data-stage=Negotiation] { background: #8ab4f826; color: #8ab4f8; }
 .sheet-record dl { display: grid; gap: 6px; margin: 12px 0; }
@@ -91,7 +91,7 @@
 .sheet-chart-bars span { max-width: 100%; overflow: hidden; color: #8f8f8f; font-size: 10px; text-overflow: ellipsis; }
 .sheet-comment { position: absolute; top: 206px; left: 270px; z-index: 3; width: 214px; box-sizing: border-box; padding: 10px 12px; }
 .sheet-comment > div { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.sheet-comment > div strong { font-weight: 600; }
+.sheet-comment > div strong { font-weight: 500; }
 .sheet-comment > div span { color: #8f8f8f; }
 .sheet-comment p { margin: 6px 0 8px; }
 .sheet-comment-replies { display: flex; align-items: center; gap: 6px; color: #85b9e8; font-size: 12px; }
