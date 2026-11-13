@@ -66,17 +66,15 @@ export function createLabelCollapse(
     width = rect.width;
     measure();
   });
+  const schedule = () => {
+    if (frame === undefined) frame = requestAnimationFrame(measure);
+  };
   // New controls render before the next frame; measure them then.
-  createEffect(
-    on(
-      order,
-      () => {
-        if (frame === undefined) frame = requestAnimationFrame(measure);
-      },
-      { defer: true }
-    )
-  );
+  createEffect(on(order, schedule, { defer: true }));
+  // A web font that swaps in widens the labels without resizing the row.
+  document.fonts?.addEventListener('loadingdone', schedule);
   onCleanup(() => {
+    document.fonts?.removeEventListener('loadingdone', schedule);
     if (frame !== undefined) cancelAnimationFrame(frame);
   });
 
