@@ -1,4 +1,4 @@
-//! A document check is traced, without the viewer's user id.
+//! A document check and its query are traced, without the viewer's user id.
 
 use super::*;
 use std::fmt::Debug;
@@ -78,9 +78,13 @@ async fn document_check_is_traced_without_the_user_id(pool: PgPool) -> anyhow::R
         .await?;
 
     let values = values.0.lock().unwrap().clone();
-    assert!(
-        values.iter().any(|value| value == "get_document_access"),
-        "the check opens its span: {values:?}"
+    assert_eq!(
+        values
+            .iter()
+            .filter(|value| *value == "get_document_access")
+            .count(),
+        2,
+        "the check and the query that takes the viewer each open a span: {values:?}"
     );
     let leaked: Vec<_> = values
         .iter()

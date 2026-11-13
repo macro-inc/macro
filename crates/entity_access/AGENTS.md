@@ -64,8 +64,7 @@ the entity-access domain service.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
 
 - Spans here never record a user id (a `MacroUserId` is an email, and a
-  `Viewer` carries one): skip it. Checks record no source-id count; their cost
-  no longer depends on the viewer's memberships.
+  `Viewer` carries one): skip it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 - Access statements pass the viewer (`queries::Viewer`) and check a grant's
   source with `entity_access_source_matches(source, viewer, scope_team)`, or
