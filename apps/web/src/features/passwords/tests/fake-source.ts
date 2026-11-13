@@ -207,7 +207,9 @@ export function createFakePasswordSource(
       script.requests?.push(structuredClone(batch));
       if (script.failRequests && script.failRequests > 0) {
         script.failRequests--;
-        return err(script.failWith ?? 'retryable');
+        return err(
+          script.failWith ?? { retryable: true, reason: 'unreachable' }
+        );
       }
       let targetFolderId: string | null = null;
       if (batch.target.kind === 'new') {
@@ -309,7 +311,7 @@ export function createFakePasswordSource(
       });
       if (script.loseResponses && script.loseResponses > 0) {
         script.loseResponses--;
-        return err('retryable');
+        return err({ retryable: true, reason: 'unreachable' });
       }
       return ok({
         targetFolderId,

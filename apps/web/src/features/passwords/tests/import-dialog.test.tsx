@@ -225,6 +225,7 @@ it('continues an unfinished import of the same file with the same import id', as
   fireEvent.click(screen.getByRole('button', { name: 'Import 2 items' }));
   // Two real backoff waits before the busy item is given up on.
   await screen.findByText('1 failed', undefined, { timeout: 5000 });
+  expect(screen.getByText('The vault was busy (1)')).toBeTruthy();
   cleanup();
 
   mount(source, PARSED, resume);
@@ -682,4 +683,15 @@ it('leaves the folder cap to the vault when continuing an import', async () => {
   await screen.findByText(/^Continuing an earlier import of this file/);
   const start = screen.getByRole('button', { name: 'Import 3 items' });
   expect((start as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('says the server could not be reached when no batch got through', async () => {
+  const source = createFakePasswordSource([], { failRequests: 9 });
+  mount(source, PARSED, createMemoryImportResume());
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText('Bitwarden JSON');
+  fireEvent.click(screen.getByRole('button', { name: 'Import 2 items' }));
+  await screen.findByText('2 failed', undefined, { timeout: 5000 });
+  expect(screen.getByText("Couldn't reach the server (2)")).toBeTruthy();
 });

@@ -385,6 +385,7 @@ describe('sendImport', () => {
     expect(outcome).toMatchObject({
       created: 5,
       failed: 25,
+      failures: { unreachable: 25 },
       interrupted: true,
     });
   });
@@ -394,7 +395,7 @@ describe('sendImport', () => {
     const source = createFakePasswordSource([], {
       requests,
       failRequests: 1,
-      failWith: 'rejected',
+      failWith: { retryable: false, reason: 'invalid' },
     });
     const items = Array.from({ length: 30 }, (_, index) =>
       item(`row:${index + 1}`)
@@ -412,7 +413,11 @@ describe('sendImport', () => {
       { span: NOOP_SPAN, onProgress: () => {}, wait: noWait }
     );
     expect(requests).toHaveLength(2);
-    expect(outcome).toMatchObject({ created: 5, failed: 25 });
+    expect(outcome).toMatchObject({
+      created: 5,
+      failed: 25,
+      failures: { invalid: 25 },
+    });
   });
 
   it('counts items a rerun of the same import already landed as already present', async () => {

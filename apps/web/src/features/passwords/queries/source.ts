@@ -69,19 +69,27 @@ function failure(codes: readonly string[]): PasswordFailure {
 /** The viewer changed: the request was dropped and must not be retried. */
 const SCOPE_CHANGED = 'SCOPE_CHANGED';
 
+/** A gateway answering for a service it could not reach: 502, 503, 504. */
+const SERVER_UNREACHABLE = 'SERVER_UNREACHABLE';
+
 /**
- * Worth sending again: no answer, a busy vault (after the request's own busy
- * retries), or a server error. A rejected request would fail the same way.
+ * Why a batch request failed, and whether to send it again: no answer, a busy
+ * vault (after the request's own busy retries) or a server error are worth
+ * resending; a rejected request would fail the same way.
  */
 function importFailure(codes: readonly string[]): ImportRequestFailure {
-  const retryable = codes.some(
-    (code) =>
-      code === 'NETWORK_ERROR' ||
-      code === 'SERVER_ERROR' ||
-      code === PasswordErrorCode.vault_busy ||
-      code === PasswordErrorCode.vault_unavailable
-  );
-  return retryable ? 'retryable' : 'rejected';
+  const has = (code: string) => codes.includes(code);
+  if (has('NETWORK_ERROR') || has(SERVER_UNREACHABLE))
+    return { retryable: true, reason: 'unreachable' };
+  if (has(PasswordErrorCode.vault_busy))
+    return { retryable: true, reason: 'busy' };
+  if (has('SERVER_ERROR') || has(PasswordErrorCode.vault_unavailable))
+    return { retryable: true, reason: 'server_error' };
+  if (has(SCOPE_CHANGED))
+    return { retryable: false, reason: 'account_changed' };
+  if (has(PasswordErrorCode.invalid_request))
+    return { retryable: false, reason: 'invalid' };
+  return { retryable: false, reason: 'refused' };
 }
 
 /**
@@ -107,7 +115,7 @@ export function createPasswordSource(
   ): PasswordResult<T> {
     return (await requestCodes<T>(path, method, body)).mapErr(failure);
   }
-  /** `request`, keeping the error codes: network, `SERVER_ERROR` (any 5xx), or the vault's. */
+  /** `request`, keeping the error codes: network, `SERVER_UNREACHABLE` (502-504), `SERVER_ERROR` (other 5xx), or the vault's. */
   async function requestCodes<T extends object>(
     path: string,
     method: string,
@@ -132,6 +140,8 @@ export function createPasswordSource(
             retry: { maxTries: 1 },
             trace: { parentSpan: span },
             errorResponseHandler: async (response) => {
+              if ([502, 503, 504].includes(response.status))
+                return { code: SERVER_UNREACHABLE, message: 'Unreachable' };
               if (response.status >= 500)
                 return { code: 'SERVER_ERROR', message: 'Server error' };
               const fallback = statusError(response.status);

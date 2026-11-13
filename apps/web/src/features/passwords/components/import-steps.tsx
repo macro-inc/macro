@@ -21,6 +21,8 @@ import type {
   ImportPreview,
 } from '../context/passwords-context';
 import {
+  type ImportFailureReason,
+  type ImportTally,
   MAX_FOLDER_DEPTH,
   MAX_TEAM_FOLDERS,
   VAULT_LIST_CAP,
@@ -428,12 +430,19 @@ export function ImportProgressStep(props: { done: number; total: number }) {
   );
 }
 
-export function ImportResultStep(props: {
-  created: number;
-  alreadyPresent: number;
-  skipped: number;
-  failed: number;
-}) {
+/** Result lines for failed items, by reason, in the order shown. */
+const FAILURE_LINES = [
+  ['unreachable', 'passwords.importFailureUnreachable'],
+  ['server_error', 'passwords.importFailureServerError'],
+  ['busy', 'passwords.importFailureBusy'],
+  ['folder_missing', 'passwords.importFailureFolderMissing'],
+  ['invalid', 'passwords.importFailureInvalid'],
+  ['refused', 'passwords.importFailureRefused'],
+  ['no_answer', 'passwords.importFailureNoAnswer'],
+  ['account_changed', 'passwords.importFailureAccountChanged'],
+] as const satisfies readonly (readonly [ImportFailureReason, string])[];
+
+export function ImportResultStep(props: ImportTally) {
   return (
     <div class="flex flex-col gap-2" data-passwords-import-result>
       <p class="text-sm font-medium">{t('passwords.importDone')}</p>
@@ -451,7 +460,20 @@ export function ImportResultStep(props: {
         </Show>
         <Show when={props.failed > 0}>
           <li class="text-failure-ink">
-            {t('passwords.importFailedCount', { count: props.failed })}
+            <span>
+              {t('passwords.importFailedCount', { count: props.failed })}
+            </span>
+            <ul class="flex flex-col pl-4" data-passwords-import-failures>
+              <For
+                each={FAILURE_LINES.filter(
+                  ([reason]) => (props.failures[reason] ?? 0) > 0
+                )}
+              >
+                {([reason, key]) => (
+                  <li>{t(key, { count: props.failures[reason] ?? 0 })}</li>
+                )}
+              </For>
+            </ul>
           </li>
         </Show>
       </ul>

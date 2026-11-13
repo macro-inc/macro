@@ -250,6 +250,17 @@ export function planBatches<Item extends ImportCandidate>(
   return batches;
 }
 
+/** Why items failed to import, as the result screen groups them. */
+export type ImportFailureReason =
+  | 'unreachable'
+  | 'server_error'
+  | 'busy'
+  | 'folder_missing'
+  | 'invalid'
+  | 'refused'
+  | 'no_answer'
+  | 'account_changed';
+
 /** What one import did, by item count. */
 export type ImportTally = {
   created: number;
@@ -257,4 +268,6 @@ export type ImportTally = {
   /** Duplicates left out by choice, and items the parser skipped. */
   skipped: number;
   failed: number;
+  /** `failed`, by reason. */
+  failures: Partial<Record<ImportFailureReason, number>>;
 };

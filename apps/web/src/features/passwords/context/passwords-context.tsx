@@ -14,7 +14,7 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
-import type { ImportTarget } from '../core/import';
+import type { ImportFailureReason, ImportTarget } from '../core/import';
 import type {
   PasswordActivity,
   PasswordDraft,
@@ -92,8 +92,11 @@ export type ImportBatchBody = {
 };
 export type ImportItemOutcome = PasswordImportOutcome;
 export type ImportErrorCode = PasswordImportErrorCode;
-/** A batch request that failed as a whole: worth resending, or not. */
-export type ImportRequestFailure = 'retryable' | 'rejected';
+/** A batch request that failed as a whole: why, and whether to resend it. */
+export type ImportRequestFailure = {
+  retryable: boolean;
+  reason: ImportFailureReason;
+};
 /** Per-item outcomes, never values; mapped from `PasswordImportBatchResult`. */
 export type ImportBatchResult = {
   targetFolderId: string | null;

@@ -28,6 +28,7 @@ import {
   chunkNames,
   duplicateKeys,
   foldersFor,
+  type ImportFailureReason,
   type ImportTally,
   type ImportTarget,
   MATCH_BYTES,
@@ -101,9 +102,23 @@ type RunOutcome = {
   created: number;
   alreadyPresent: number;
   failed: number;
+  failures: Partial<Record<ImportFailureReason, number>>;
   targetFolderId: string | null;
   interrupted: boolean;
 };
+
+/** Why the vault failed one item, as the result screen groups it. */
+function itemFailureReason(
+  code: ImportErrorCode | undefined
+): ImportFailureReason {
+  return match(code)
+    .with('busy', () => 'busy' as const)
+    .with('vault_unavailable', undefined, () => 'server_error' as const)
+    .with('folder_missing', () => 'folder_missing' as const)
+    .with('invalid_request', () => 'invalid' as const)
+    .with('not_found', 'forbidden', 'version_conflict', () => 'refused' as const)
+    .exhaustive(() => 'server_error' as const);
+}
 
 /**
  * Item failures worth sending again: the vault was busy or briefly
@@ -149,8 +164,13 @@ export async function sendImport(
     created: 0,
     alreadyPresent: 0,
     failed: 0,
+    failures: {},
     targetFolderId: null,
     interrupted: false,
+  };
+  const fail = (reason: ImportFailureReason, count = 1) => {
+    outcome.failed += count;
+    outcome.failures[reason] = (outcome.failures[reason] ?? 0) + count;
   };
   let target = run.target;
   let pending = run.items;
@@ -173,7 +193,7 @@ export async function sendImport(
       for (
         let attempt = 1;
         result.isErr() &&
-        result.error === 'retryable' &&
+        result.error.retryable &&
         attempt < BATCH_ATTEMPTS;
         attempt++
       ) {
@@ -185,7 +205,7 @@ export async function sendImport(
       batches++;
       if (result.isErr()) {
         // Folder-phase and request failures fail the whole batch.
-        outcome.failed += items.length;
+        fail(result.error.reason, items.length);
         outcome.interrupted = true;
         options.onProgress(
           outcome.created + outcome.alreadyPresent + outcome.failed
@@ -212,14 +232,14 @@ export async function sendImport(
           .with('failed', () => {
             if (isRetryable(answer.errorCode) && round + 1 < ITEM_RETRY_ROUNDS)
               retry.push(item);
-            else outcome.failed++;
+            else fail(itemFailureReason(answer.errorCode));
           })
           .exhaustive(() => {
-            outcome.failed++;
+            fail('no_answer');
           });
       }
       // An item the server did not answer for is unknown: count it failed.
-      outcome.failed += bySource.size;
+      if (bySource.size > 0) fail('no_answer', bySource.size);
       options.onProgress(
         outcome.created + outcome.alreadyPresent + outcome.failed
       );
@@ -542,6 +562,7 @@ export function createPasswordImport(props: {
         alreadyPresent: outcome.alreadyPresent,
         skipped: left + parserSkipped,
         failed: outcome.failed,
+        failures: outcome.failures,
       },
       targetFolderId: outcome.targetFolderId,
       interrupted: outcome.interrupted,
