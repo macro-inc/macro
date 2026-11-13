@@ -725,7 +725,7 @@ async fn save_after_discard_is_refused(provider: Provider) -> Result<(), Report>
         Value::Null,
         "the discarded draft is back in its thread"
     );
-    wait_for_no_draft_preview(&inbox, "Lunch").await?;
+    wait_for_no_draft_preview(&inbox, "Re: Lunch").await?;
     wait_for_no_provider_draft(&inbox).await?;
     // The mailbox settles asynchronously: a later change proves nothing came
     // back after it did.
@@ -1016,7 +1016,7 @@ async fn discarded_reply_draft_leaves_the_thread(provider: Provider) -> Result<(
         Ok(())
     };
     assert_gone("right after the discard").await?;
-    wait_for_no_draft_preview(&inbox, "Lunch").await?;
+    wait_for_no_draft_preview(&inbox, "Re: Lunch").await?;
     wait_for_no_provider_draft(&inbox).await?;
     assert_gone("after the mailbox dropped the draft").await?;
     let preview = inbox.wait_for_preview("inbox", "Lunch").await?;

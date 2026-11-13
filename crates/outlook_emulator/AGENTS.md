@@ -196,8 +196,9 @@ local stack, without Microsoft accounts.
 - An attachment's `size` is larger than its file, as in Graph, where it
   counts the attachment's other properties too. Never compare it for equality
   with the uploaded length.
-- A subject keeps its first 255 characters, Exchange's limit; the rest is
-  dropped without an error. Whether Graph refuses instead is not checked
+- A subject written by creating or patching a message keeps its first 255
+  characters, Exchange's limit; the rest is dropped without an error.
+  `createReply`, `createForward` and delivered mail are not cut. Whether Graph refuses instead is not checked
   against it.
 - Links (`@odata.nextLink`, `@odata.deltaLink`, upload URLs) are on the
   emulator's own origin, because the client refuses to send its bearer token

@@ -235,7 +235,7 @@ async fn outlook_wire(stack: &Stack, inbox: &Inbox, id: &str) -> Result<Wire, Re
     let message = provider_get(
         stack,
         inbox,
-        &format!("/me/messages/{id}?$select=subject,body,internetMessageHeaders"),
+        &format!("/me/messages/{id}?$select=subject,body,internetMessageHeaders,ccRecipients,bccRecipients"),
     )
     .await?;
     let mut wire = Wire {
@@ -268,6 +268,18 @@ async fn outlook_wire(stack: &Stack, inbox: &Inbox, id: &str) -> Result<Wire, Re
                 .collect()
         })
         .unwrap_or_default();
+    // Graph gives the copied recipients as properties, not as headers.
+    for (name, property) in [("cc", "ccRecipients"), ("bcc", "bccRecipients")] {
+        let addresses: Vec<&str> = message[property]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|recipient| recipient["emailAddress"]["address"].as_str())
+            .collect();
+        if !addresses.is_empty() {
+            wire.headers.push((name.to_owned(), addresses.join(", ")));
+        }
+    }
 
     let attachments = provider_get(stack, inbox, &format!("/me/messages/{id}/attachments")).await?;
     for attachment in attachments["value"].as_array().into_iter().flatten() {

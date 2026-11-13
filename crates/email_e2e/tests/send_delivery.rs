@@ -105,7 +105,8 @@ async fn send_and_lose_the_queue_message(
 
 /// A reply sent from Macro joins the conversation on both sides: the
 /// recipient sees it under the message it answers, not as a new thread, and
-/// so does the sender.
+/// so does the sender. If this fails, a reply starts a conversation of
+/// its own for one of them.
 async fn reply_joins_the_thread_on_both_sides(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
@@ -212,15 +213,13 @@ async fn cc_and_bcc_recipients_get_the_message(provider: Provider) -> Result<(),
         );
         assert!(!copy.html.contains(joan.email()), "{}", copy.html);
     }
-    if provider == Provider::Gmail {
-        assert!(
-            to_copy
-                .header("cc")
-                .is_some_and(|value| value.contains(linus.email())),
-            "the Cc recipient is not named on the To recipient's copy: {:?}",
-            to_copy.headers
-        );
-    }
+    assert!(
+        to_copy
+            .header("cc")
+            .is_some_and(|value| value.contains(linus.email())),
+        "the Cc recipient is not named on the To recipient's copy: {:?}",
+        to_copy.headers
+    );
     for inbox in [&to, &cc, &bcc] {
         assert_eq!(provider_copies(inbox, "Launch plan")?.len(), 1);
     }
@@ -408,6 +407,12 @@ async fn gmail_sweep_does_not_resend_what_gmail_accepted() -> Result<(), Report>
 
     wait_until_sent(&from, &sent).await?;
     from.wait_for_preview("sent", "Invoice 42").await?;
+    // Every sweep message, and the one the stopped worker held, is worked off
+    // before the copies are counted.
+    eventually("the queue to be worked off", DEFAULT_TIMEOUT, async || {
+        Ok((stack.queue_depth(SCHEDULED_QUEUE).await? == 0).then_some(()))
+    })
+    .await?;
     let delivered = provider_copies(&to, "Invoice 42")?;
     assert_eq!(
         delivered.len(),
@@ -501,7 +506,8 @@ async fn refused_send_is_reported_as_failed(provider: Provider) -> Result<(), Re
 /// A reply whose body already carries the conversation, quoted by another
 /// mail client, goes out with that quote once: the server adds no second
 /// copy of the thread, and the provider's own reply draft does not bring one
-/// either.
+/// either. If this fails, the recipient reads the conversation twice
+/// under the reply.
 async fn quoted_thread_is_sent_once(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
@@ -562,7 +568,7 @@ async fn sent_html_keeps_paragraphs_and_links(provider: Provider) -> Result<(), 
     let body = concat!(
         "<html><body>",
         "<p>First point.</p><p>Second point.</p><p>Third point.</p>",
-        r#"<p><a href="https://macro.com/book/ada-lovelace">Book a time</a></p>"#,
+        r#"<p><a href="https://example.com/book/ada">Book a time</a></p>"#,
         "</body></html>",
     );
     from.send(&json!({
@@ -589,7 +595,7 @@ async fn sent_html_keeps_paragraphs_and_links(provider: Provider) -> Result<(), 
         received.html
     );
     assert_eq!(
-        received.html_count(r#"href="https://macro.com/book/ada-lovelace""#),
+        received.html_count(r#"href="https://example.com/book/ada""#),
         1,
         "the link lost its address: {}",
         received.html

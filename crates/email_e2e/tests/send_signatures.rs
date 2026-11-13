@@ -16,7 +16,7 @@ const SPACER: &str = "<div><br></div>";
 /// A three-line signature as the signature editor saves it: every paragraph
 /// carries its own zero margin, because a sent email has no stylesheet.
 const SIGNATURE: &str = concat!(
-    r#"<p style="margin:0">Ada Lovelace</p>"#,
+    r#"<p style="margin:0">Ada Example</p>"#,
     r#"<p style="margin:0">Analytical Engines Ltd</p>"#,
     r#"<p style="margin:0">+44 20 7946 0000</p>"#,
 );
@@ -56,7 +56,7 @@ async fn new_message_carries_the_signature(provider: Provider) -> Result<(), Rep
         received.html
     );
     let spacer = received.html.find(SPACER);
-    let name = received.html.find("Ada Lovelace");
+    let name = received.html.find("Ada Example");
     assert!(
         spacer.is_some() && signature < spacer && spacer < name,
         "no blank line between the text and the signature: {}",
@@ -73,7 +73,7 @@ async fn new_message_carries_the_signature(provider: Provider) -> Result<(), Rep
             received
                 .text
                 .replace("\r\n", "\n")
-                .contains("The engine is ready.\n\nAda Lovelace"),
+                .contains("The engine is ready.\n\nAda Example"),
             "the plain-text part has no signature after a blank line: {:?}",
             received.text
         );
@@ -95,7 +95,7 @@ async fn reply_to_a_signed_message_is_signed(provider: Provider) -> Result<(), R
     set_signature(&from, SIGNATURE, true).await?;
 
     let quoted_signature =
-        format!(r#"<div class="{SIGNATURE_MARKER}"><p>Grace Hopper, Rear Admiral</p></div>"#);
+        format!(r#"<div class="{SIGNATURE_MARKER}"><p>Grace Example, Director</p></div>"#);
     from.deliver(&Mail {
         html: Some(format!("<div>Is it ready?</div>{quoted_signature}")),
         ..Mail::new(
@@ -122,7 +122,7 @@ async fn reply_to_a_signed_message_is_signed(provider: Provider) -> Result<(), R
     .await?;
 
     let (_, received) = wait_for_wire(&stack, &to, "Re: Status").await?;
-    let own = received.html.find("Ada Lovelace");
+    let own = received.html.find("Ada Example");
     let quote = received.html.find(QUOTE_MARKER);
     assert!(
         own.is_some(),
@@ -135,13 +135,13 @@ async fn reply_to_a_signed_message_is_signed(provider: Provider) -> Result<(), R
         received.html
     );
     assert_eq!(
-        received.html_count("Ada Lovelace"),
+        received.html_count("Ada Example"),
         1,
         "the sender's signature is there more than once: {}",
         received.html
     );
     assert_eq!(
-        received.html_count("Grace Hopper, Rear Admiral"),
+        received.html_count("Grace Example, Director"),
         1,
         "the quoted signature was lost or repeated: {}",
         received.html
@@ -152,7 +152,8 @@ async fn reply_to_a_signed_message_is_signed(provider: Provider) -> Result<(), R
 
 /// The inbox's reply setting and the composer's per-message switch decide
 /// whether a signature goes out: off for replies when the inbox says so,
-/// and off for any message the sender removed it from.
+/// and off for any message the sender removed it from. If this fails, mail
+/// goes out signed against the sender's choice, or unsigned when it was on.
 async fn signature_follows_the_settings(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
@@ -195,18 +196,18 @@ async fn signature_follows_the_settings(provider: Provider) -> Result<(), Report
 
     let (_, reply) = wait_for_wire(&stack, &to, "Re: Lunch").await?;
     assert!(
-        !reply.html.contains("Ada Lovelace"),
+        !reply.html.contains("Ada Example"),
         "a reply was signed although the inbox signs new mail only: {}",
         reply.html
     );
     let (_, unsigned) = wait_for_wire(&stack, &to, "Unsigned on purpose").await?;
     assert!(
-        !unsigned.html.contains("Ada Lovelace"),
+        !unsigned.html.contains("Ada Example"),
         "a message was signed although its sender removed the signature: {}",
         unsigned.html
     );
     let (_, signed) = wait_for_wire(&stack, &to, "Signed by default").await?;
-    assert_eq!(signed.html_count("Ada Lovelace"), 1, "{}", signed.html);
+    assert_eq!(signed.html_count("Ada Example"), 1, "{}", signed.html);
 
     stack.finish().await
 }

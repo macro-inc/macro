@@ -791,7 +791,7 @@ async fn gmail_imported_signature_keeps_an_image_pasted_from_a_message() -> Resu
     );
     stack.gmail().set_signature(
         inbox.email(),
-        &format!("<div>Ada Lovelace</div><img src=\"{pasted}\" width=\"96\">"),
+        &format!("<div>Ada Example</div><img src=\"{pasted}\" width=\"96\">"),
     )?;
 
     let imported = inbox
@@ -803,7 +803,7 @@ async fn gmail_imported_signature_keeps_an_image_pasted_from_a_message() -> Resu
         .as_str()
         .unwrap_or_default()
         .to_owned();
-    assert!(signature.contains("Ada Lovelace"), "{signature}");
+    assert!(signature.contains("Ada Example"), "{signature}");
     assert!(
         !signature.contains("mail.google.com"),
         "the saved signature still points at Gmail's own page: {signature}"
