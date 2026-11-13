@@ -1,4 +1,5 @@
 import { NarrowRowGrid } from '@app/features/entity/composed/list-entity/narrow-row-grid';
+import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import { Entity } from '@entity';
 import { Property as PropertyControl } from '@property';
@@ -59,7 +60,9 @@ export function MobileProjectRow(props: ProjectRowProps) {
                   <>
                     <PropertyControl.Pill
                       aria-label={
-                        hasValue(shown()) ? 'Change assignees' : 'No assignee'
+                        hasValue(shown())
+                          ? t('entityActions.setAssignee')
+                          : t('viewMenus.unassigned')
                       }
                       data-blocks-navigation
                       stopPropagation={canEdit()}
