@@ -1,0 +1,24 @@
+apps/web/src/lib/core/component/UserIcon.test.tsx
+  s_a093176ce8ce6e::t_0f3567dbbcd054 1-48,52-66,71-97
+  s_a093176ce8ce6e::t_321f8257e59ce3 49-51,67-70
+apps/web/src/lib/core/component/UserIcon.tsx
+  s_a093176ce8ce6e::t_67793e7956cbcc 165-167,170-174,191-194
+docs/agent-guide/agent-dashboards.md
+  s_a093176ce8ce6e::t_4dd9c0cbfa4899 49-51,53-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "aea3110b7c251b97b5154c4c802832977b97c315",
+  "prompts": {},
+  "sessions": {
+    "s_a093176ce8ce6e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d51409e-141f-4d29-921b-15fd47c496b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
