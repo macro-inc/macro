@@ -1,0 +1,26 @@
+apps/web/src/features/dynamic-ui/widgets/wakes/TraceWaterfall.tsx
+  s_82939d9d17c700::t_44b18a13fe2acd 6
+apps/web/src/features/dynamic-ui/widgets/wakes/format.test.ts
+  s_82939d9d17c700::t_44b18a13fe2acd 39-41
+apps/web/src/features/dynamic-ui/widgets/wakes/Gate.tsx
+  s_82939d9d17c700::t_44b18a13fe2acd 2
+apps/web/src/lib/queries/agent-wakes/wakes.ts
+  s_82939d9d17c700::t_44b18a13fe2acd 2-4
+  s_82939d9d17c700::t_c5b9c368837c6e 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6642c5a4948c1090afa84678387d190e72636276",
+  "prompts": {},
+  "sessions": {
+    "s_82939d9d17c700": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bebbfa1f-b141-4a2c-ae6c-41735d9a70be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
