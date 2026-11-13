@@ -5,7 +5,7 @@ import { ThrownResultError } from '@core/util/result';
 import { useUploadAgentAvatarMutation } from '@queries/agents/avatar';
 import { useComputerOffersQuery } from '@queries/computers/computers';
 import { useCreateTeamAgentMutation } from '@queries/team-agents/team-agents';
-import type { CreateTeamAgent } from '@service-auth/team-agents';
+import type { CreateTeamAgent, TeamAgent } from '@service-auth/team-agents';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import { InviteAgentForm } from '../components/invite-agent-form';
@@ -35,7 +35,7 @@ export function InviteAgentPanel(props: {
   teamId: string;
   header?: JSX.Element;
   onCancel: () => void;
-  onInvited: () => void;
+  onInvited: (agent: TeamAgent) => void;
 }) {
   const offers = useComputerOffersQuery(() => true);
   const upload = useUploadAgentAvatarMutation();
@@ -59,7 +59,7 @@ export function InviteAgentPanel(props: {
       toast.success(t('teamAgents.invited', { name: agent.name }), {
         subtext: t('teamAgents.invitedDescription'),
       });
-      if (!disposed) props.onInvited();
+      if (!disposed) props.onInvited(agent);
     } catch (failure) {
       if (!disposed) setError(inviteFailure(failure));
     }

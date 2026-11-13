@@ -1207,13 +1207,15 @@ template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. With `enable-routine-suggestions` and
 `enable-routine-code-steps` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
-of Discover's cards, at Discover's size (as many as fit, three at most desktop
-widths), and in the last column **N more · In Discover**, which opens a third tab, **Discover**. Discover
+of Discover's cards, as many as fit, and after them a narrow **N more · In
+Discover** column, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
-the templates no suggestion already offers, four cards to a row (the knob
-sentence in two lines, the chain and the action; **On** once turned on), with
+the templates no suggestion already offers, as many cards to a row as fit, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint
-**picked for you, then Macro's templates**. The list's search narrows Discover
+**picked for you, then Macro's templates**. Every suggestion card, in the row,
+on Discover and in the sidebar dialog, is the dialog's card: 25rem wide
+(narrower only in a pane too small for one) and as tall as the tallest card in
+its row. The list's search narrows Discover
 too. Discover's tab carries a violet dot while it has AI picks this browser
 hasn't shown there; opening or leaving it marks them seen. The cards behave as
 in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
@@ -1773,7 +1775,12 @@ restart rules still apply.
   see `email.md`); `g h` still goes Home.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
-- Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
+- Splits: `` ` `` split, `Shift+Esc` maximize. `Shift+H`/`J`/`K`/`L` and
+  `Shift+Arrow` move focus to the split on that side, by where the splits tile:
+  to the one level with the focused split's centre (the upper or left one on a
+  tie), or back to the split you came from when it borders that side; past the
+  edge they wrap. In a list `Shift+Up`/`Down` extend the selection instead;
+  sliders, the database grid, and the slide stage and rail keep `Shift+Arrow`.
 - Desktop app only: `Ctrl/Cmd` with `+`, `-`, and `0` zoom the page and reset it,
   through the same stops a browser uses. The level persists across relaunches,
   and the commands appear in the command menu as Zoom in / Zoom out / Actual

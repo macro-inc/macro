@@ -28,6 +28,7 @@ import { CursorSystemNotificationNode } from './nodes/CursorSystemNotificationNo
 import { CustomCodeNode } from './nodes/CustomCodeNode';
 import { DatabaseQueryNode } from './nodes/DatabaseQueryNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
+import { DetailsNode, DetailsSummaryNode } from './nodes/DetailsNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
 import { DiffNode } from './nodes/DiffNode';
@@ -130,6 +131,17 @@ export const SupportedNodeTypes = [
   AgentActivityNode,
   AgentContextNode,
   CursorSystemNotificationNode,
+] as const;
+
+/**
+ * Nodes for read-only rendering (messages, PR comments): every supported node
+ * plus the ones only a renderer needs, such as GitHub's collapsible
+ * `<details>` sections. Keep editor-only behavior out of these.
+ */
+export const StaticRenderNodeTypes = [
+  ...SupportedNodeTypes,
+  DetailsNode,
+  DetailsSummaryNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

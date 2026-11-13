@@ -5,11 +5,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   createAgent: vi.fn(),
+  startSignIn: vi.fn(),
+  completeSignIn: vi.fn(),
   flag: () => ({ enabled: false, loading: false }),
+  computersFlag: () => ({ enabled: false, loading: false }),
+  harnesses: (): unknown[] => [],
+  agents: (): unknown[] => [],
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => mocks.flag(),
+  useFeatureFlag: (flag: { key: string }) => () =>
+    flag.key === 'enable-macro-computers'
+      ? mocks.computersFlag()
+      : mocks.flag(),
+}));
+vi.mock('@queries/harnesses/harnesses', () => ({
+  useHarnessesQuery: () => ({
+    isSuccess: true,
+    get data() {
+      return mocks.harnesses();
+    },
+  }),
+}));
+vi.mock('@queries/computers/claude', () => ({
+  useClaudeSignInMutation: () => ({ mutateAsync: mocks.startSignIn }),
+  useClaudeCompleteMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.completeSignIn,
+  }),
 }));
 vi.mock('@queries/computers/computers', () => ({
   useComputerOffersQuery: () => ({
@@ -58,6 +81,12 @@ vi.mock('@queries/team-agents/team-agents', () => ({
     isPending: false,
     mutateAsync: mocks.createAgent,
   }),
+  useTeamAgentsQuery: () => ({
+    isSuccess: true,
+    get data() {
+      return { agents: mocks.agents() };
+    },
+  }),
 }));
 
 vi.mock('@queries/team-agents/voices', () => ({
@@ -101,6 +130,12 @@ vi.mock('./TeamInviteLinkSection', () => ({
 import { InviteToTeamDialog } from './Team';
 
 const [flag, setFlag] = createSignal({ enabled: false, loading: false });
+const [computersFlag, setComputersFlag] = createSignal({
+  enabled: false,
+  loading: false,
+});
+const [harnesses, setHarnesses] = createSignal<unknown[]>([]);
+const [agents, setAgents] = createSignal<unknown[]>([]);
 
 class ResizeObserverStub {
   observe() {}
@@ -112,13 +147,21 @@ beforeEach(() => {
   // The agent form's scrolling body measures itself.
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   setFlag({ enabled: false, loading: false });
+  setComputersFlag({ enabled: false, loading: false });
+  setHarnesses([]);
+  setAgents([]);
   mocks.flag = flag;
+  mocks.computersFlag = computersFlag;
+  mocks.harnesses = harnesses;
+  mocks.agents = agents;
 });
 
 afterEach(() => {
   cleanup();
   mocks.mutate.mockReset();
   mocks.createAgent.mockReset();
+  mocks.startSignIn.mockReset();
+  mocks.completeSignIn.mockReset();
 });
 
 function sendInvite(onClose: () => void = () => {}) {
@@ -274,5 +317,120 @@ describe('InviteToTeamDialog agent teammates', () => {
     setFlag({ enabled: false, loading: false });
     expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
+  });
+
+  describe('Bring your AI after the purchase', () => {
+    const ada = {
+      userId: 'macro|ada@agents.macro.invalid',
+      teamId: 'team-1',
+      name: 'Ada',
+      jobDescription: 'Triage support email.',
+      personality: 'Warm and concise.',
+      createdBy: 'macro|maya@example.com',
+      computerId: null,
+      status: 'provisioning',
+      createdAt: '2026-11-11T09:00:00Z',
+    };
+    const adaHarness = {
+      id: 'harness-ada',
+      computer_id: 'computer-ada',
+      access: 'owner',
+      connected: true,
+    };
+
+    async function inviteAda(
+      onClose: () => void,
+      computers = { enabled: true, loading: false }
+    ) {
+      setFlag({ enabled: true, loading: false });
+      setComputersFlag(computers);
+      mocks.createAgent.mockResolvedValue(ada);
+      openAsAdmin(onClose);
+      fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
+      fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
+        target: { value: 'Ada' },
+      });
+      fireEvent.input(
+        screen.getByRole('textbox', { name: 'Job description' }),
+        { target: { value: 'Triage support email.' } }
+      );
+      fireEvent.input(screen.getByRole('textbox', { name: 'Personality' }), {
+        target: { value: 'Warm and concise.' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^Invite agent/ }));
+      await vi.waitFor(() =>
+        expect(screen.getByText('Bring your AI to Ada')).toBeTruthy()
+      );
+    }
+
+    it("waits for the agent's computer, then signs it in to Claude", async () => {
+      const onClose = vi.fn();
+      mocks.startSignIn.mockResolvedValue({
+        url: 'https://claude.com/cai/oauth/authorize?state=abc',
+      });
+      mocks.completeSignIn.mockResolvedValue({ signedIn: true });
+      await inviteAda(onClose);
+
+      // Bought but not enrolled yet: nothing to sign in on.
+      expect(screen.getByRole('status').textContent).toContain(
+        'Preparing sign-in'
+      );
+      expect(mocks.startSignIn).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+
+      setAgents([{ ...ada, computerId: 'computer-ada' }]);
+      setHarnesses([{ ...adaHarness, connected: false }]);
+      expect(mocks.startSignIn).not.toHaveBeenCalled();
+
+      setHarnesses([adaHarness]);
+      await vi.waitFor(() =>
+        expect(
+          screen.getByRole('link', { name: /Open claude.ai/ })
+        ).toBeTruthy()
+      );
+      expect(mocks.startSignIn.mock.calls[0]?.[0]).toMatchObject({
+        harnessId: 'harness-ada',
+        entry: 'team_agent_invite',
+      });
+
+      fireEvent.click(screen.getByRole('link', { name: /Open claude.ai/ }));
+      fireEvent.input(
+        screen.getByRole('textbox', {
+          name: 'Paste the code Claude showed you',
+        }),
+        { target: { value: ' code-123 ' } }
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
+      await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(mocks.completeSignIn.mock.calls[0]?.[0]).toMatchObject({
+        harnessId: 'harness-ada',
+        entry: 'team_agent_invite',
+        code: 'code-123',
+      });
+    });
+
+    it('leaves once the computers rollout settles off', async () => {
+      const onClose = vi.fn();
+      await inviteAda(onClose, { enabled: false, loading: true });
+      setAgents([{ ...ada, computerId: 'computer-ada' }]);
+      setHarnesses([adaHarness]);
+      // Not known to be on: nothing starts a sign-in.
+      expect(mocks.startSignIn).not.toHaveBeenCalled();
+
+      setComputersFlag({ enabled: false, loading: false });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(mocks.startSignIn).not.toHaveBeenCalled();
+    });
+
+    it('lets the inviter skip and keep Macro credits while the computer starts', async () => {
+      const onClose = vi.fn();
+      await inviteAda(onClose);
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Skip, use Macro credits' })
+      );
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(mocks.startSignIn).not.toHaveBeenCalled();
+    });
   });
 });

@@ -75,6 +75,7 @@ import {
   canRemoveTeamMember,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
+import { TeamAgentClaude } from './views/team-agent-claude';
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -589,6 +590,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       agent={agent}
                       canRemove={isAdminOrOwner()}
                       onRemove={() => setAgentToRemove(agent)}
+                      claude={
+                        isAdminOrOwner() ? (
+                          <TeamAgentClaude agent={agent} />
+                        ) : undefined
+                      }
                       onChangeVoice={
                         canChangeVoice()
                           ? () => setVoiceAgent(agent)

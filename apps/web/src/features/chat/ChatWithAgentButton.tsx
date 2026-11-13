@@ -188,6 +188,7 @@ export function ChatWithAgentButton(props: {
   label?: string;
   disabled?: boolean;
   grouped?: boolean;
+  size?: ButtonSize;
 }) {
   const [opening, setOpening] = createSignal(false);
   async function open() {
@@ -202,6 +203,7 @@ export function ChatWithAgentButton(props: {
   return (
     <HeaderActionButton
       grouped={props.grouped}
+      size={props.size}
       tooltip={props.label ?? 'Chat with Agent'}
       label={props.label ?? 'Chat'}
       icon={
