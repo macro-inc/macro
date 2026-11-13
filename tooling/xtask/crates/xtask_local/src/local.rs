@@ -1254,17 +1254,22 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
         );
     }
     // `services = true` in the local telemetry settings: lgtm copies what it
-    // receives to the Grafana forwarder. Only this backend can.
+    // receives to the Grafana forwarder. Only this backend can. A forwarder
+    // that fails to start leaves lgtm's copy as it was.
     let forwarder = (backend == cli::TracesBackend::Lgtm)
         .then(|| grafana_forwarder::Forwarder::from_settings(stage))
-        .flatten();
-    if let Some(forwarder) = &forwarder
-        && let Err(e) = forwarder.reconcile(stage)
-    {
-        stage.note(&format!(
-            "  WARNING: could not start the Grafana forwarder ({e:#}); telemetry stays local"
-        ));
-    }
+        .flatten()
+        .filter(|forwarder| {
+            forwarder
+                .reconcile(stage)
+                .inspect_err(|e| {
+                    stage.note(&format!(
+                        "  WARNING: could not start the Grafana forwarder ({e:#}); \
+                         telemetry stays local"
+                    ));
+                })
+                .is_ok()
+        });
     let copy_to = forwarder
         .as_ref()
         .map(grafana_forwarder::Forwarder::lgtm_endpoint);
