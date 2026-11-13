@@ -6,7 +6,7 @@ import { TraceFlow } from '@app/observability/flow';
 import { forYouRoute } from '@app/routes/routes';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
-import { createMemo } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { layoutDay } from './core/day';
 import { type Suggestion, topPriorities } from './core/suggestion';
 import { useSuggestionsSource } from './queries/suggestions-source';
@@ -15,18 +15,26 @@ import { HomePrioritiesView } from './views/home-priorities-view';
 
 const PRIORITIES_SHOWN = 5;
 
+const MINUTE_MS = 60_000;
+
 /** Today's timed events, when the person has the calendar. */
 function useToday() {
   const calendar = useCalendarUiFlag();
-  // The day Home was opened on; Home remounts often enough to stay current.
-  const now = new Date();
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  const range = createCalendarOccurrenceQueryRange(start, end);
+  // Home can stay open for hours: the strip's "now" moves each minute, and
+  // the day it shows changes at midnight.
+  const [now, setNow] = createSignal(new Date());
+  const clock = setInterval(() => setNow(new Date()), MINUTE_MS);
+  onCleanup(() => clearInterval(clock));
+  const dayStart = createMemo(() => new Date(now()).setHours(0, 0, 0, 0));
+  const range = createMemo(() => {
+    const start = new Date(dayStart());
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return createCalendarOccurrenceQueryRange(start, end);
+  });
   const data = useCalendarOccurrenceData({
-    range: () => range,
+    range,
     queryOptions: () => ({ enabled: calendar() }),
   });
 
@@ -37,7 +45,7 @@ function useToday() {
       .visibleEvents()
       .filter((event) => !event.allDay && !event.isCancelled);
 
-    return { date: now, strip: layoutDay(events, now), events };
+    return { date: now(), strip: layoutDay(events, now()), events };
   });
 
   return today;
