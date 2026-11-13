@@ -363,37 +363,46 @@ describe('Source applyAiOps controls', () => {
 
   it('records undo steps for two AI edits more than 300 ms apart', async () => {
     // Grouping is registerLoroHistory's time rule (getMergeAction plus Loro's
-    // mergeInterval, both 300 ms), not a structural group per AI edit.
+    // mergeInterval, both 300 ms), not a structural group per AI edit. Both
+    // read the global Date.now() (getMergeAction directly; loro-crdt's wasm
+    // glue imports only Date.now), so only Date is faked: edits land at
+    // exactly 0 and `gap` ms, and timers (settle) stay real.
     const rows = [];
-    for (const gap of [0, 400]) {
-      const r = await rig(SEED);
-      selectAlpha(r.editor);
-      const [a, b] = blockIds(r.editor);
-      if (!a || !b) throw new Error('expected two blocks');
-      applyAiOps(r.editor, r.mappings, [
-        { kind: 'appendText', node: a, text: ' [one]' },
-      ]);
-      await r.settle();
-      await new Promise((done) => setTimeout(done, gap));
-      applyAiOps(r.editor, r.mappings, [
-        { kind: 'appendText', node: b, text: ' [two]' },
-      ]);
-      await r.settle();
-      const text = () => r.editor.read(() => $getRoot().getTextContent());
-      const after = text();
-      r.editor.dispatchCommand(UNDO_COMMAND, undefined);
-      await r.settle();
-      const undo1 = text();
-      r.editor.dispatchCommand(UNDO_COMMAND, undefined);
-      await r.settle();
-      rows.push({ gap, after, undo1, undo2: text() });
+    const start = new Date('2026-01-01T00:00:00.000Z').getTime();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (const gap of [0, 400]) {
+        vi.setSystemTime(start);
+        const r = await rig(SEED);
+        selectAlpha(r.editor);
+        const [a, b] = blockIds(r.editor);
+        if (!a || !b) throw new Error('expected two blocks');
+        applyAiOps(r.editor, r.mappings, [
+          { kind: 'appendText', node: a, text: ' [one]' },
+        ]);
+        await r.settle();
+        vi.setSystemTime(start + gap);
+        applyAiOps(r.editor, r.mappings, [
+          { kind: 'appendText', node: b, text: ' [two]' },
+        ]);
+        await r.settle();
+        const text = () => r.editor.read(() => $getRoot().getTextContent());
+        const after = text();
+        r.editor.dispatchCommand(UNDO_COMMAND, undefined);
+        await r.settle();
+        const undo1 = text();
+        r.editor.dispatchCommand(UNDO_COMMAND, undefined);
+        await r.settle();
+        rows.push({ gap, after, undo1, undo2: text() });
+      }
+    } finally {
+      vi.useRealTimers();
     }
     const out = process.env.AI_EDIT_SOURCE_UNDO_GAP_OUT;
     if (out) {
       const { writeFileSync } = await import('node:fs');
       writeFileSync(out, `${JSON.stringify(rows, null, 2)}\n`);
     }
-    console.log(JSON.stringify(rows, null, 2));
     for (const row of rows)
       expect(row.after).toBe('Alpha beta gamma [one]\n\nSecond line [two]');
     const seed = 'Alpha beta gamma\n\nSecond line';
