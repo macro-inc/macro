@@ -49,16 +49,13 @@ fn each_cleanup_event_has_its_sources_and_one_target() {
     assert_eq!(Event::Deleted.sources(), [Cleanup::Stopping]);
 }
 
-/// Tools only while open; the generation scope until deleted.
+/// Tools only while open; the generation scope until deleted, so an
+/// abandoned session, which may still exist, keeps it.
 #[test]
 fn tools_stop_at_the_end_and_the_scope_at_deletion() {
     for state in Cleanup::iter() {
         assert_eq!(state.takes_tools(), state == Cleanup::Open, "{state:?}");
-        assert_eq!(
-            state.undeleted(),
-            matches!(state, Cleanup::Open | Cleanup::Stopping),
-            "{state:?}"
-        );
+        assert_eq!(state.undeleted(), state != Cleanup::Deleted, "{state:?}");
     }
 }
 

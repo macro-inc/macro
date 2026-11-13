@@ -174,10 +174,11 @@ impl Cleanup {
         self == Self::Open
     }
 
-    /// Whether the session still exists as far as its row knows: its code
-    /// keeps a generation session's scope.
+    /// Whether the session may still exist: every state but deleted, an
+    /// abandoned one included. Its code keeps a generation session's scope,
+    /// and the feed refuses it.
     pub fn undeleted(self) -> bool {
-        matches!(self, Self::Open | Self::Stopping)
+        self != Self::Deleted
     }
 }
 

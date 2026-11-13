@@ -24,12 +24,12 @@ scheduler's spec.
   field `suggestions.caller`): only the person's own session with no program's
   marks (no code-mode invocation, no code-execution header) is `user`; any
   other credential is `agent`. An agent whose signed invocation names a
-  generation session not yet deleted (open, or ended and being cleaned up), of
-  either kind, gets 403 (`Generating`), since hidden sessions only manage the
-  feed through their own tools. The harness refuses
-  to start without validating requests' attribution. An agent accepting a
-  background prompt suggestion only takes it on (the person runs it from the app);
-  any other suggestion becomes done either way.
+  generation session not deleted (open, ended and being cleaned up, or
+  abandoned), of either kind, gets 403 (`Generating`), since hidden sessions
+  only manage the feed through their own tools. The harness refuses to start
+  without validating requests' attribution. An agent accepting a background
+  prompt suggestion only takes it on (the person runs it from the app); any
+  other suggestion becomes done either way.
 - New since the last visit: the app sends `POST /suggestions/viewed` once the
   feed is on screen, which stores the time in `suggestion_feed_view` (one row
   per person; a time never goes back). The feed marks an open suggestion

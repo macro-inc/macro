@@ -110,7 +110,7 @@ impl GenerationSessions for RowSessions {
         Ok(sqlx::query_scalar!(
             r#"SELECT EXISTS (
                    SELECT 1 FROM suggestion_generation_session
-                   WHERE session_id = $1 AND cleanup IN ('open', 'stopping')) AS "undeleted!""#,
+                   WHERE session_id = $1 AND cleanup <> 'deleted') AS "undeleted!""#,
             session,
         )
         .fetch_one(&self.0)

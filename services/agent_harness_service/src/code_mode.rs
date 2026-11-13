@@ -30,8 +30,8 @@ pub trait SessionScopes: Send + Sync + 'static {
 
 /// Suggestion generation sessions read, and write only through their own
 /// tools and email drafts, until they are deleted: one whose turn ended but
-/// is still being stopped keeps the scope. A background run whose
-/// suggestion sends nothing reaches nobody.
+/// is still being stopped, or whose delete was given up, keeps the scope. A
+/// background run whose suggestion sends nothing reaches nobody.
 pub struct HarnessScopes {
     pub generations: Arc<dyn suggestions::domain::ports::GenerationSessions>,
     pub runs: Arc<dyn suggestions::domain::ports::RunScopes>,
