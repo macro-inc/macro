@@ -1,0 +1,48 @@
+crates/channels/src/domain/service/test/deletion.rs
+  s_9adf6dfdfe2ddd::t_57836db50b02d3 32-62,69-78
+  s_9adf6dfdfe2ddd::t_60d35e59126e53 79-81
+crates/webhook/src/domain/ingestion/test.rs
+  s_9adf6dfdfe2ddd::t_d8a56830972660 720
+crates/webhook/src/inbound/kafka_consumer/test.rs
+  s_9adf6dfdfe2ddd::t_d8a56830972660 118
+services/search_processing_service/src/inbound/kafka_consumer/test.rs
+  s_9adf6dfdfe2ddd::t_d8a56830972660 703,1693,2074
+crates/channels/src/domain/broker_events.rs
+  s_9adf6dfdfe2ddd::t_91ce0ea45ec5ea 86-92
+crates/channels/src/domain/events.rs
+  s_9adf6dfdfe2ddd::t_91ce0ea45ec5ea 62-63
+crates/channels/src/domain/broker_events/test.rs
+  s_9adf6dfdfe2ddd::t_d8a56830972660 172
+  s_9adf6dfdfe2ddd::t_57836db50b02d3 108-159,161-165
+  s_9adf6dfdfe2ddd::t_bed2c10a264b7b 160
+crates/channels/src/domain/service.rs
+  s_9adf6dfdfe2ddd::t_91ce0ea45ec5ea 533
+crates/channels/src/domain/side_effects.rs
+  s_9adf6dfdfe2ddd::t_91ce0ea45ec5ea 1152-1156,1160
+services/document_storage_service/src/server.rs
+  s_9adf6dfdfe2ddd::t_8cf00418177edf 606-607,610-612,2330
+services/document_storage_service/src/api/internal.rs
+  s_9adf6dfdfe2ddd::t_8cf00418177edf 21,208
+crates/chat/src/domain/service/entity_mutation.rs
+  s_9adf6dfdfe2ddd::t_ae8892da28e448 11,65,68,92,95,138,162,165,187,190,216,238,241
+services/document_storage_service/src/api/context.rs
+  s_9adf6dfdfe2ddd::t_8cf00418177edf 613-615,625
+crates/chat/src/domain/service/chat/test.rs
+  s_9adf6dfdfe2ddd::t_d424ea801c8e49 1194-1231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7d3ddc26c34f388d08cfe0eac01cb5bdf891f2cd",
+  "prompts": {},
+  "sessions": {
+    "s_9adf6dfdfe2ddd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c35b1b8-462f-45fe-960d-31815e6c0d47",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
