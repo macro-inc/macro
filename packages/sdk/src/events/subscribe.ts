@@ -129,6 +129,8 @@ function isControl(
  * Frames read from one connection, waiting for the consumer. The reader
  * pauses once `READ_AHEAD` frames wait, so a slow consumer pushes back on the
  * server instead of growing the queue.
+ *
+ * @mcp-exclude Internal to an event stream.
  */
 class FrameQueue {
   /** How the connection ended, once it has. */
