@@ -148,8 +148,6 @@ client_version() {
 
 RELEASE_URL="https://github.com/$RELEASE_REPO/releases/download/v$PINNED_VERSION"
 
-# Download a release asset into WORK_DIR and check it against the release's
-# SHA256SUMS.
 # SHA256 of the pinned release's assets, so a replaced asset fails even if its
 # SHA256SUMS were replaced too. Other versions fall back to SHA256SUMS alone.
 pinned_sha256() {
@@ -164,6 +162,8 @@ pinned_sha256() {
   esac
 }
 
+# Download a release asset into WORK_DIR and check it against the release's
+# SHA256SUMS.
 fetch_release_asset() {
   local asset="$1" expected actual pinned
 

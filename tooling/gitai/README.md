@@ -62,7 +62,7 @@ To replace a machine's credential, run `gitai-enroll --rotate` on it. When someo
 
 ## Test enrolment without touching your machine
 
-Never run it against your real `HOME`. Use a scratch home, a short `TMPDIR` (the daemon's socket path must fit in 108 bytes) and a local stand-in for the server that answers `POST /v1/credentials` with `201 {"id", "credential": "gitai_...", "email", "hostname", "created_at"}`:
+Never run it against your real `HOME`. Use a scratch home, a short `TMPDIR` (the daemon's socket path must fit in 108 bytes) and a local stand-in for the server that answers `POST /v1/credentials` with `201 {"id", "credential": "gitai_...", "email", "hostname", "created_at"}`, `GET /v1/credentials` (for `--rotate`) and `GET /v1/whoami` with `200 {"id", "email", "hostname"}`, or the local gitai-service itself (`GITAI_BASE_URL=http://localhost:30937/gitai`, shared key `local-gitai-shared-key`). To test managed mode, make `~/.git-ai/config.json` in the scratch home a symlink to a read-only file:
 
 ```sh
 scratch=$(mktemp -d)
