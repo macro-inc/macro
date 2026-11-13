@@ -5,7 +5,10 @@ use shared_entity_registry::{InsertOutcome, NewEntityRecord, RegisteredEntityTyp
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{clear_deleted, delete_entity, insert_entity, mark_deleted, touch_updated};
+use super::{
+    clear_deleted, clear_deleted_many, delete_entities, delete_entity, insert_entity, mark_deleted,
+    mark_deleted_many, touch_updated,
+};
 
 fn user_owner() -> Owner {
     Owner::parse(OwnerType::User, "macro|hutch@macro.com").unwrap()
@@ -381,4 +384,124 @@ async fn helpers_never_commit(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(count, 0);
+}
+
+async fn deleted_at_by_id(
+    tx: &mut Transaction<'_, Postgres>,
+    ids: &[Uuid],
+) -> Vec<(Uuid, Option<DateTime<Utc>>)> {
+    sqlx::query!(
+        r#"
+        SELECT id, deleted_at
+        FROM entity
+        WHERE id = ANY($1)
+        ORDER BY id
+        "#,
+        ids,
+    )
+    .fetch_all(tx.as_mut())
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.id, row.deleted_at))
+    .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mark_deleted_many_marks_only_the_listed_rows(pool: PgPool) {
+    let at = ts("2024-01-01T00:00:00Z");
+    let mut tx = pool.begin().await.unwrap();
+    for id in 1..=3 {
+        insert(
+            &mut tx,
+            NewEntityRecord::new(
+                Uuid::from_u128(id),
+                RegisteredEntityType::Document,
+                user_owner(),
+            ),
+        )
+        .await;
+    }
+
+    let changed = mark_deleted_many(
+        &mut tx,
+        &[Uuid::from_u128(1), Uuid::from_u128(2), Uuid::from_u128(99)],
+        at,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(changed, 2);
+    assert_eq!(
+        deleted_at_by_id(
+            &mut tx,
+            &[Uuid::from_u128(1), Uuid::from_u128(2), Uuid::from_u128(3)]
+        )
+        .await,
+        vec![
+            (Uuid::from_u128(1), Some(at)),
+            (Uuid::from_u128(2), Some(at)),
+            (Uuid::from_u128(3), None),
+        ]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn clear_deleted_many_restores_only_the_listed_rows(pool: PgPool) {
+    let at = ts("2024-01-01T00:00:00Z");
+    let mut tx = pool.begin().await.unwrap();
+    for id in 1..=2 {
+        insert(
+            &mut tx,
+            NewEntityRecord::new(
+                Uuid::from_u128(id),
+                RegisteredEntityType::Project,
+                user_owner(),
+            ),
+        )
+        .await;
+    }
+    mark_deleted_many(&mut tx, &[Uuid::from_u128(1), Uuid::from_u128(2)], at)
+        .await
+        .unwrap();
+
+    let changed = clear_deleted_many(&mut tx, &[Uuid::from_u128(1)])
+        .await
+        .unwrap();
+
+    assert_eq!(changed, 1);
+    assert_eq!(
+        deleted_at_by_id(&mut tx, &[Uuid::from_u128(1), Uuid::from_u128(2)]).await,
+        vec![(Uuid::from_u128(1), None), (Uuid::from_u128(2), Some(at))]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_entities_removes_only_the_listed_rows(pool: PgPool) {
+    let mut tx = pool.begin().await.unwrap();
+    for id in 1..=3 {
+        insert(
+            &mut tx,
+            NewEntityRecord::new(
+                Uuid::from_u128(id),
+                RegisteredEntityType::Chat,
+                user_owner(),
+            ),
+        )
+        .await;
+    }
+
+    let removed = delete_entities(&mut tx, &[Uuid::from_u128(1), Uuid::from_u128(3)])
+        .await
+        .unwrap();
+
+    assert_eq!(removed, 2);
+    assert_eq!(
+        deleted_at_by_id(
+            &mut tx,
+            &[Uuid::from_u128(1), Uuid::from_u128(2), Uuid::from_u128(3)]
+        )
+        .await,
+        vec![(Uuid::from_u128(2), None)]
+    );
 }
