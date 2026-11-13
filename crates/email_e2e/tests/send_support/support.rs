@@ -116,6 +116,10 @@ pub fn provider_drafts(inbox: &Inbox) -> Result<Vec<ProviderMessage>, Report> {
         .collect())
 }
 
+/// How long a read of a provider's own API may take. Each test has its own
+/// runtime, so the client is not shared between calls.
+const PROVIDER_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 async fn provider_get(stack: &Stack, inbox: &Inbox, path: &str) -> Result<Value, Report> {
     let (base, token) = match inbox.provider() {
         Provider::Gmail => (
@@ -130,6 +134,7 @@ async fn provider_get(stack: &Stack, inbox: &Inbox, path: &str) -> Result<Value,
     let response = reqwest::Client::new()
         .get(format!("{base}{path}"))
         .bearer_auth(token)
+        .timeout(PROVIDER_READ_TIMEOUT)
         .send()
         .await
         .context(format!("the provider did not answer GET {path}"))?;

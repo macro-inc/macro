@@ -198,8 +198,9 @@ local stack, without Microsoft accounts.
   with the uploaded length.
 - A subject written by creating or patching a message keeps its first 255
   characters, Exchange's limit; the rest is dropped without an error.
-  `createReply`, `createForward` and delivered mail are not cut. Whether Graph refuses instead is not checked
-  against it.
+  That includes a subject given in the `message` of `createReply` or
+  `createForward`; the subject those derive from the parent, and delivered
+  mail, are not cut. Whether Graph refuses instead is not checked against it.
 - Links (`@odata.nextLink`, `@odata.deltaLink`, upload URLs) are on the
   emulator's own origin, because the client refuses to send its bearer token
   to a host other than its Graph root. Delta links use the OData key form

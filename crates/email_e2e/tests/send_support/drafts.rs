@@ -18,7 +18,9 @@ pub fn id_of(message: &Value) -> String {
 
 /// The generation a client must name on its next write to a draft.
 pub fn generation_of(message: &Value) -> i64 {
-    message["draft_generation"].as_i64().unwrap_or_default()
+    message["draft_generation"]
+        .as_i64()
+        .unwrap_or_else(|| panic!("the API named no draft generation: {message}"))
 }
 
 /// `POST /email/drafts`, answered or refused.
