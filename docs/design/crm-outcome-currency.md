@@ -56,14 +56,23 @@ Older tool results remain readable when that metadata is absent.
 CRM owns the stable Outcome and amount/currency column identities; the shared
 database engine owns their columns, options and cells. Pipeline authorization
 and operation validation remain the common boundary for app and agent writes.
-Three migrations ship it, each in its own transaction. The first adds
+Three migrations ship it. The first adds
 `crm_pipeline_entities.commercial_fields` with a constant default. The second
-gives every existing tracked pipeline its columns and options; it locks each
-pipeline row as the write guard does, so it does nothing else. The third seeds
-the rows' Outcome and currency cells without those locks, so writers proceed
-while it runs. All are additive and preserve amounts, stages and row
-identities. Services provision the fields of a new pipeline and add Open/USD to
-each inserted row in their ordinary operation batches.
+gives every existing tracked pipeline its columns and options in one
+transaction; it locks each pipeline row and then its table row, in the order
+the write guard and row writers take them, so it does nothing else. The third
+seeds the rows' Outcome and currency cells one pipeline per transaction, holding
+a table's row lock only while that pipeline's own rows are written. All are
+additive and preserve amounts, stages and row identities.
+
+Both backfill files follow the storage contract for a change made outside the
+service: each bumps the table's version and writes a journal entry for it,
+indexed by the columns or rows it touched, with no ops and an incomplete
+inverse, so it cannot be undone. Without the bump an open editor, which reloads
+only when the version moves, would keep the old schema, and an edit made
+against it would pass its `baseVersions` check instead of answering a conflict.
+Services provision the fields of a new pipeline and add Open/USD to each
+inserted row in their ordinary operation batches.
 
 No database trigger fills these in. Migrations run before services roll, so a
 service instance still on the previous version can, for the length of the

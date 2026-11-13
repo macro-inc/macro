@@ -1,24 +1,24 @@
 use super::*;
 
-/// The backfill files as the migration runner applies them, each in its own
-/// transaction, against a pipeline put back into its pre-migration shape.
+/// The backfill files as the migration runner applies them, against a pipeline
+/// put back into its pre-migration shape: the schema file in a transaction, the
+/// row seeding as one statement outside one, since it commits per pipeline.
 /// Their functions are dropped at the end, so they rerun.
 async fn run_backfill(pool: &PgPool) {
-    for file in [
-        include_str!(
-            "../../../macro_db_client/migrations/20261113162435_crm_pipeline_commercial_fields_backfill.sql"
-        ),
-        include_str!(
-            "../../../macro_db_client/migrations/20261113174353_crm_pipeline_commercial_fields_seed_rows.sql"
-        ),
-    ] {
-        let mut transaction = pool.begin().await.unwrap();
-        sqlx::raw_sql(file)
-            .execute(&mut *transaction)
-            .await
-            .unwrap();
-        transaction.commit().await.unwrap();
-    }
+    let mut transaction = pool.begin().await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../macro_db_client/migrations/20261113162435_crm_pipeline_commercial_fields_backfill.sql"
+    ))
+    .execute(&mut *transaction)
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../macro_db_client/migrations/20261113174353_crm_pipeline_commercial_fields_seed_rows.sql"
+    ))
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 async fn forget_commercial_fields(pool: &PgPool, pipeline: Uuid) {
@@ -151,6 +151,12 @@ async fn commercial_backfill_preserves_amounts_stages_and_row_identity(pool: PgP
     .await
     .unwrap();
     forget_commercial_fields(&pool, p.id).await;
+    let stale = s
+        .table(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
+        .await
+        .unwrap()
+        .table
+        .version;
     let generic = s
         .create(
             team_receipt(team, OWNER),
@@ -164,6 +170,28 @@ async fn commercial_backfill_preserves_amounts_stages_and_row_identity(pool: PgP
         .unwrap()
         .pipeline;
     run_backfill(&pool).await;
+    // The schema and the seeded rows are each a new, journaled table version,
+    // so an editor holding the old schema reloads and its edits conflict.
+    let journaled = sqlx::query_scalar!(
+        "SELECT version FROM database_changes WHERE table_id = $1 AND version > $2 ORDER BY version",
+        p.table_id.into_uuid(),
+        stale.0,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(journaled, [stale.0 + 1, stale.0 + 2]);
+    let mut outdated: databases::domain::models::OpBatch = vec![insert(&p, company)].into();
+    outdated.base_versions.insert(p.table_id, stale);
+    assert!(matches!(
+        s.apply_ops(
+            access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
+            None,
+            outdated,
+        )
+        .await,
+        Err(PipelineError::Database(DatabaseError::VersionConflict))
+    ));
     let generic_table = s
         .table(access(&a, generic.id, EntityType::CrmPipeline, OWNER).await)
         .await
