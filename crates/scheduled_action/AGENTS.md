@@ -80,12 +80,13 @@ each run.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
   themselves belong to generations (`crates/suggestion_generation`: an
-  onboarding run once the inbox connects, then nightly), which brief each
+  onboarding run once the inbox connects, then nightly, and on request), which brief each
   routines session through `RoutineSuggestionApi::brief` (`suggestions/prompt.rs`:
   the routines guide, the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags, angle
-  brackets in the data swapped so it can't close them; a nightly brief adds
-  review and retire) and count what it kept (`kept`). A session hands back
+  brackets in the data swapped so it can't close them; a nightly or manual
+  brief adds review and retire, and only onboarding's asks for speed) and
+  count what it suggested (`suggested`). A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
   `macro.routines.review()` (`GET .../suggestions/review`) and retires open

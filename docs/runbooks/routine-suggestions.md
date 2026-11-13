@@ -4,12 +4,13 @@ Runbook for the routine suggestions monitor in
 [`monitors/routine-suggestions.ts`](../../infra/stacks/monitoring/monitors/routine-suggestions.ts).
 Its alert links the **Routine suggestions** dashboard.
 
-When a person's inbox connects (onboarding), and each night in their time
-zone, agent-harness-service runs a generation (`crates/suggestion_generation`):
+When a person's inbox connects (onboarding), each night in their time zone,
+and when they ask for fresh suggestions (manual), agent-harness-service runs
+a generation (`crates/suggestion_generation`):
 a suggestions session and routines sessions of the in-process Macro agent (three
-at onboarding, each suggesting for some of the nine surfaces, and one at
-night for all of them, once a week, for people on a paid plan) through
-`macro.routines.suggest`. A nightly routines session also reviews and retires
+at onboarding, each suggesting for some of the nine surfaces, and otherwise
+one for all of them, once a week; nightly runs are for people on a paid plan) through
+`macro.routines.suggest`. A nightly or manual routines session also reviews and retires
 earlier suggestions and adds at most two. At onboarding a routines session that suggests
 nothing is retried once. Surfaces AI leaves empty show Macro's templates.
 Routine suggestions are behind the `enable-routine-suggestions` flag.
@@ -39,8 +40,10 @@ only. It notifies; it does not page.
 
 - Open a failed generation's trace and read its session spans.
   `suggestion.session.ended` says how each stopped: `timed_out` (the
-  240-second limit), `failed` (the session errored) or `finished` without a
-  kept suggestion.
+  240-second limit), `failed` (the turn failed, or stopped to wait for an
+  approval or answer nobody gives; `suggestion.session.reason` names which),
+  `delivery_unknown`, `cancelled` (a deploy), `interrupted` (its process
+  died), or `finished` without a kept suggestion.
 - Many `timed_out` or `failed` sessions at once point at the agent: its model
   provider, agent-harness-service's agent runtime, or the hidden sessions not
   starting. Check the agent-harness-service errors around the same time.
