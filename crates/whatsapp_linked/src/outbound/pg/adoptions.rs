@@ -110,6 +110,8 @@ impl AdoptionRepository for PgWhatsAppRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
+        // Checks are spent only on what an added chat shows.
+        super::pictures::release_detached_pictures_in(&mut tx, chat.id).await?;
         let observers = sqlx::query_scalar!(
             "UPDATE whatsapp_chat_membership SET consent_ended_at = COALESCE(consent_ended_at, now()) WHERE chat_id = $1 RETURNING account_id",
             chat.id

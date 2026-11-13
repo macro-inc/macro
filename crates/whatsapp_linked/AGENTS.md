@@ -83,7 +83,9 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   owner's account sees). Adoption tracks the added group or direct chat by
   `remote_id`, and ingest each new non-Macro group sender by one of their
   aliases (LID when known), for the chat owner's account; the unadded chat
-  list never is. The read path joins a chat's picture on `remote_id` and a
+  list never is. `*_whatsapp_profile_picture_backfill.sql` tracked what was
+  added before. Detaching a chat drops the rows no other added chat of the
+  owner shows (`release_detached_pictures_in`), releasing their files. The read path joins a chat's picture on `remote_id` and a
   person's on their `whatsapp_identity_alias` rows. The session claims due checks
   within `PICTURE_QUERIES_PER_HOUR` / `PICTURE_QUERIES_PER_DAY`
   (`models.rs`), counted in `whatsapp_picture_query` so the budget survives
@@ -113,7 +115,8 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   calls, and `whatsapp_roster`/`whatsapp_chat_membership`; released files
   queue in `external_chat_file_deletion`) and its entity type validation, then
   `*_whatsapp_lookup.sql` (phone-number lookups), then
-  `*_whatsapp_profile_picture.sql` (pictures and their query budget).
+  `*_whatsapp_profile_picture.sql` (pictures and their query budget) and
+  its `_backfill`.
   Deleting a user cascades to their account,
   chats (with their grants, entity record and sharing settings) and sends;
   aliases outlive the account that saw them.

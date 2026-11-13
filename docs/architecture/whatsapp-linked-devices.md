@@ -124,7 +124,10 @@ picture to some accounts and not others; a chat shows the pictures its
 owner's account sees, as it shows that account's contact names. Only added
 chats are tracked: the group or direct chat when it is added and each new
 sender who is not a Macro user, never the unadded chat list (bulk picture
-queries for strangers get accounts banned). The session holding the account
+queries for strangers get accounts banned). Chats and people added before
+pictures were tracked are backfilled the same way, all due at once for the
+budget to pace. Detaching a chat stops tracking (and deletes the files of)
+the pictures no other added chat of the owner shows. The session holding the account
 checks due pictures one at a time, 3 s apart, within 60 per hour and 100 per
 day per account (counted in Postgres, so the budget survives a replica move),
 and pauses 15 minutes, doubling up to 6 hours, when WhatsApp answers 429. It

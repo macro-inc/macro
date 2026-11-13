@@ -207,10 +207,40 @@ async fn pictures_of_an_added_group_and_its_people_follow_whatsapp(pool: PgPool)
         "the change notification makes the group's picture due",
     )
     .await;
+    // Every claim first forgets queries older than a day: once this
+    // day-old marker is gone, a check cycle claimed while the picture was
+    // due, and the spent budget gave it nothing to ask.
+    sqlx::query!(
+        "INSERT INTO whatsapp_picture_query (account_id, queried_at) VALUES ($1, now() - interval '2 days')",
+        account
+    )
+    .execute(&world.pool)
+    .await
+    .unwrap();
+    let claimed = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let markers = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM whatsapp_picture_query
+            WHERE account_id = $1 AND queried_at <= now() - interval '1 day'"#,
+            account
+        )
+        .fetch_one(&world.pool)
+        .await
+        .unwrap();
+        (markers == 0).then_some(())
+    })
+    .await;
+    world
+        .expect(claimed, "a check cycle claims while the budget is spent")
+        .await;
     assert_eq!(
         world.whatsapp.picture_queries(),
         queries,
-        "the woken loop asks nothing while the budget is spent"
+        "the claiming cycle asks nothing while the budget is spent"
+    );
+    assert_eq!(
+        picture(&world.pool, &group).await.unwrap().state,
+        "due",
+        "the picture stays due for when the budget frees"
     );
     let freed_at = sqlx::query_scalar!(
         r#"WITH freed AS (DELETE FROM whatsapp_picture_query WHERE account_id = $1)
