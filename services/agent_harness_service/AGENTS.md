@@ -32,6 +32,9 @@ Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+  `src/pull_request_descriptions.rs` is the GitHub adapter `set_pull_request`
+  uses to write the session and source links into a PR description, with the
+  session owner's linked GitHub token (`LinkedGithubTokens`).
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from

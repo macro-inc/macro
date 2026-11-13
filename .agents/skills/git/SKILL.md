@@ -62,8 +62,12 @@ test fixtures. Describe the code change and nothing else.
   products. Name a third-party product only when the code integrates with it
   (`Slack integration`), never as the source of a request or report.
 - Never cite support channels, tickets, chat channels or threads, calls,
-  meetings, emails, or links into support tools or Macro workspace items
-  (task and agent-session links are fine). Don't say who asked or where it was reported.
+  meetings, emails, or links into support tools or Macro workspace items, and
+  don't say who asked or where it was reported. Task and agent-session links
+  are fine anywhere. The channel message or routine that started an agent
+  session is linked only inside the `<!-- macro-agent-links -->` block that
+  `set_pull_request` writes (or that you paste from its `description_links`);
+  never describe what those links point at.
 - Never mention places tied to a person or customer (cities, offices, regions).
 - When the reason matters, say it in general terms: "Users with long read
   histories saw channels load slowly", not "<customer> reported in
@@ -75,7 +79,7 @@ test fixtures. Describe the code change and nothing else.
 
 CI's `PR Privacy Check` fails a PR whose title, body, or commits contain
 emails, phone numbers, @mentions, chat-channel names, or support-tool and Macro
-workspace links (Dependabot PRs are exempt). It cannot see names, so passing it
+workspace links other than those above (Dependabot PRs are exempt). It cannot see names, so passing it
 is not enough: reread every title, body, and message against the list above.
 Run it locally before pushing or opening a PR:
 

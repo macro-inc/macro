@@ -24,6 +24,20 @@ report() {
 }
 
 # scan SOURCE: read text on stdin and report every banned pattern.
+# agent_links_block MODE: print the lines of stdin inside closed
+# `<!-- macro-agent-links -->` blocks (MODE inside) or every other line
+# (MODE outside). A block that never closes counts as outside.
+agent_links_block() {
+  awk -v mode="$1" '
+    { line = $0; sub(/\r$/, "", line) }
+    line == "<!-- macro-agent-links -->" && !open { open = 1; held = ""; next }
+    line == "<!-- /macro-agent-links -->" && open { open = 0; if (mode == "inside") printf "%s", held; next }
+    open { held = held $0 "\n"; next }
+    mode == "outside" { print }
+    END { if (open && mode == "outside") printf "%s", held }
+  '
+}
+
 scan() {
   local source="$1" text prose
   # Trailers (Co-authored-by, Signed-off-by) are git identity metadata.
@@ -39,9 +53,20 @@ scan() {
   report "$source" "support or chat link" "$(grep -oiE 'https?://([a-z0-9-]+\.slack\.com/(archives|client|team)|app\.slack\.com/client|app\.intercom\.(com|io)|[a-z0-9-]+\.zendesk\.com/agent|app\.frontapp\.com|discord\.com/channels|mail\.google\.com|app\.hubspot\.com|app\.usepylon\.com|app\.plain\.com|app\.crisp\.chat|secure\.helpscout\.net)[^[:space:])>]*' <<<"$text" || true)"
   # Links to workspace items (channels, documents, chats, emails). Tasks are
   # the issue tracker and may be linked like GitHub issues; agent sessions are
-  # the provenance coding agents link from the pull requests they open.
-  report "$source" "Macro workspace link" "$(grep -oiE 'https?://([a-z0-9-]+\.)?macro\.com/app/[a-z-]+/[A-Za-z0-9-]+[^[:space:])>`]*' <<<"$text" \
-    | grep -viE '^https?://([a-z0-9-]+\.)?macro\.com/app/(tasks?|agent)/' || true)"
+  # the provenance coding agents link from the pull requests they open. Inside
+  # the `<!-- macro-agent-links -->` block Macro writes into those pull
+  # requests, the channel message or routine that started the session is
+  # allowed too: opaque ids that only people with access in Macro can open.
+  local links
+  links='https?://([a-z0-9-]+\.)?macro\.com/app/[a-z-]+/[A-Za-z0-9-]+[^[:space:])>`]*'
+  report "$source" "Macro workspace link" "$(agent_links_block outside <<<"$text" \
+    | grep -oiE "$links" | grep -viE '^https?://([a-z0-9-]+\.)?macro\.com/app/(tasks?|agent)/' || true)"
+  # Inside it, a channel or routine link must have exactly the shape Macro
+  # writes: ids only, no other path or query.
+  local uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+  report "$source" "Macro workspace link" "$(agent_links_block inside <<<"$text" \
+    | grep -oiE "$links" | grep -viE '^https?://([a-z0-9-]+\.)?macro\.com/app/(tasks?|agent)/' \
+    | grep -vxiE "https?://([a-z0-9-]+\\.)?macro\\.com/app/(channel/$uuid(\\?channel_message_id=$uuid(&channel_thread_id=$uuid)?)?|routines/$uuid)" || true)"
   # `@scope/package` names end in a slash and are not mentions.
   report "$source" "@mention" "$(grep -oE '(^|[[:space:](])@[A-Za-z0-9][A-Za-z0-9-]*/?' <<<"$prose" \
     | sed -E 's/^[[:space:](]*//' | grep -v '/$' \

@@ -106,7 +106,10 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - PR titles and bodies, commits, review replies, comments, and docs describe
   only the code. Never name people, customers, their companies or products,
   places, or support channels and tickets; state any reason in general terms.
-  See the `git` skill's Privacy section; CI's `PR Privacy Check` enforces it.
+  Task and agent-session links are fine anywhere; a channel message or routine
+  link only inside the `<!-- macro-agent-links -->` block `set_pull_request`
+  writes. See the `git` skill's Privacy
+  section; CI's `PR Privacy Check` enforces it.
 - Never `git stash`; it's shared across sessions.
 - Memory is context, not authority; verify against code.
 - Treat hosted dev data as real. `.cursor/*.sh` is Cursor Cloud only.
