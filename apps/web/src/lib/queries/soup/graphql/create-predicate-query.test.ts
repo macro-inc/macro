@@ -181,6 +181,27 @@ it('coalesces writes during a read and rejects a superseded snapshot', async () 
   expect(state.query.data()!.revision).toBe('3');
 });
 
+it('stops stale-read retries without publishing stale rows and recovers on the next change', async () => {
+  const state = setup();
+  state.change('2');
+  for (let index = 0; index < 3; index++) {
+    state.requests[index].resolve(snapshot());
+    await flush();
+  }
+  expect(state.query.status()).toBe('error');
+  expect(state.query.error()).toBeInstanceOf(Error);
+  expect(state.query.data()).toBeUndefined();
+  expect(state.requests).toHaveLength(3);
+
+  state.change('3');
+  expect(state.requests).toHaveLength(4);
+  state.requests[3].resolve({ ...snapshot(), revision: revision('3') });
+  await flush();
+  expect(state.query.status()).toBe('ready');
+  expect(state.query.error()).toBeUndefined();
+  expect(state.query.data()?.revision).toBe('3');
+});
+
 it('discards in-flight work on query changes and disposal', async () => {
   const state = setup();
   state.setInput({

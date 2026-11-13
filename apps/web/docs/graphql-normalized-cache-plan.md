@@ -933,6 +933,12 @@ so equal IDs in different entity types remain independent. Channel lookups use
 refreshes. Soup exposes generic revalidation descriptors rather than registering
 channel notification readers. Consumers receive rows and unresolved IDs without
 coordinating query lifetimes.
+
+A predicate that still trails the observed cache revision after three consecutive
+reads reports a cache error instead of holding initial hydration indefinitely.
+The existing network path then resolves missing entities; stale rows stay
+unpublished, and a later cache change can recover the local predicate.
+
 Deletion markers use the same `typename:id` identity through pending mutations,
 retention, display filtering, and restore confirmation. Deleting or restoring a
 document must not hide or restore an unrelated channel with the same ID. The

@@ -500,6 +500,72 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('falls back to network hydration when cache revisions repeatedly trail writes', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const changes = new Set<(revision: string) => void>();
+    const reads: ReturnType<typeof deferred<LiveQueryUpdate>>[] = [];
+    const stale: LiveQueryUpdate = {
+      kind: 'live-query',
+      revision: parseCacheRevision(REVISION_1),
+      reset: true,
+      keys: [],
+      upserts: [],
+      patches: [],
+      removed: [],
+      retainedKeys: [],
+      optimistic: false,
+    };
+    entityFilterMock.mockImplementation((args) => {
+      if (!args.liveQuery || args.liveQuery.release)
+        return Promise.resolve({ kind: 'unsupported' });
+      const read = deferred<LiveQueryUpdate>();
+      reads.push(read);
+      return read.promise;
+    });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => REVISION_1,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        changes.add(callback);
+        return () => changes.delete(callback);
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createSoupLiveQuery(
+        () => ({ sortMethod: 'CREATED_AT', limit: 1 }),
+        () => ({
+          projection: 'channel-list',
+          cacheFirstEntities: [{ entityType: 'CHANNEL', entityId: 'missing' }],
+        })
+      ),
+      dispose,
+    }));
+    try {
+      expect(reads).toHaveLength(1);
+      for (const changed of changes) changed(REVISION_2);
+      for (let index = 0; index < 3; index++) {
+        reads[index].resolve(stale);
+        await Promise.resolve();
+      }
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+      expect(query.cacheStatus()).toBe('error');
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ __typename: 'GraphqlSoupChannel', id: 'missing' }],
+          next_cursor: null,
+        })
+      );
+      expect(query.data()?.map((row) => row.id)).toEqual(['missing']);
+      expect(query.isFetching()).toBe(false);
+    } finally {
+      dispose();
+      for (const read of reads) read.resolve(stale);
+    }
+  });
+
   it('restarts missing-ID hydration after a cache generation changes', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
