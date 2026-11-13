@@ -456,6 +456,12 @@ export interface NormalizedCacheExchangeOptions {
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
   onCacheError?: (error: unknown, op: Operation) => void;
   /**
+   * Called once a query's cache read showed nothing (a miss, a failed read,
+   * or one a newer generation fenced) and its network read was forwarded.
+   * `network-only` reads skip the cache and are not reported.
+   */
+  onCacheMiss?: (op: Operation) => void;
+  /**
    * Extracts the session identity (e.g. viewer id, `data.user.id`) from a
    * response. The extracted value is passed to the cache as an opaque tag;
    * a write tagged with a different identity than the one bound to the
@@ -1126,7 +1132,9 @@ export function normalizedCacheExchange(
         }
         // `cache-only` must never touch the network, including after churn.
         if (policy === 'cache-only') return cacheResult(op, undefined, false);
-        if (!networkForwarded && !registrationOnly) enqueueQueryForward(op);
+        if (registrationOnly) return undefined;
+        if (!networkForwarded) enqueueQueryForward(op);
+        options.onCacheMiss?.(op);
         return undefined;
       }
 
