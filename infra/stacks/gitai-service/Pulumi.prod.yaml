@@ -1,3 +1,5 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
+  doppler:dopplerToken:
+    secure: AAABABzg1Em/mDSIZtrHt65EWHY/0JX/ICZu/YiVkzi27503aLh5a8n2CxNleYjg4LPmeRxzNAO28SyH0c3Ef0cA17Nqgr4Jt2zHnAog4p7uoJbfFA==

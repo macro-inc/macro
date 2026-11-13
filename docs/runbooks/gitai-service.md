@@ -23,9 +23,9 @@ Do these in order.
      behind the VPC's NAT address, and `GET /v1/blame` answers 501. Treat it as
      required for real use.
    - `GITAI_EVENTS_BUCKET`, `GITAI_SESSIONS_BUCKET` and `GITAI_TABLE` are written
-     by the stack itself on its first deploy (Pulumi `doppler.Secret`); don't
-     create them by hand.
-   - Add `GITAI_SHARED_KEY` and `GITHUB_TOKEN` to `local/lcl_personal` too.
+     by the stack itself (Pulumi `doppler.Secret`); see step 5 for seeding them.
+   - Add `GITAI_SHARED_KEY` (and `GITHUB_TOKEN` if wanted locally) to the project's
+     `lcl` config.
 3. **Pulumi Doppler token.** The stack writes those three names into Doppler, so it
    needs a Doppler token that can write the `gitai-service` project:
    `cd infra/stacks/gitai-service && pulumi config set --secret doppler:dopplerToken <token> -s dev`,
@@ -36,11 +36,12 @@ Do these in order.
    (or dispatch `deploy-service-generic.yml` with `gitai-service` and `dev`).
    Prod follows the next release. Buckets, KMS keys and the table are `protect`ed
    in prod.
-5. **The Doppler config check until prod deploys.** `GITAI_EVENTS_BUCKET`,
-   `GITAI_SESSIONS_BUCKET` and `GITAI_TABLE` reach `prd` only with the first prod
-   deploy. Until then, a PR that changes `services/gitai_service/src/config.rs`
-   or `doppler_config.rs` fails the `doppler-config` check against `prd`; hold such
-   changes until prod has deployed.
+5. **The Doppler config check before prod deploys.** `GITAI_EVENTS_BUCKET`,
+   `GITAI_SESSIONS_BUCKET` and `GITAI_TABLE` reach `prd` from the stack only with
+   the first prod deploy, and the `doppler-config` check needs them earlier. Seed
+   them by hand with the names the stack creates (`gitai-events-<stack>`,
+   `gitai-sessions-<stack>`, `gitai-service-index-<stack>`, where `<stack>` is
+   `dev` or `prod`); the stack's `doppler.Secret` then keeps them.
 6. **Check dev.** `curl https://dev-gateway.macro.com/gitai/health` returns 200.
    Mint a test credential with the dev shared key (`POST /gitai/v1/credentials`),
    point a scratch client with its own `HOME` at dev, make a commit in a clone of
