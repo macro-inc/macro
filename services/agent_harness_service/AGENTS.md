@@ -188,9 +188,12 @@ Pulumi stacks; they do not host extra agent processes.
   every minute and starts nightly generations every five minutes, once the
   process is ready.
   Accepted background prompt suggestions run in hidden, billable sessions of the
-  in-process Macro agent (`SuggestionRunSessions` in `scheduling.rs`), settled
-  every 30 s. The suggestions routes are served here too, and `scheduling.rs` runs suggestions'
-  resolution consumer (group `suggestions-resolution`, `crates/suggestions`) beside the
+  in-process Macro agent (`SuggestionRunSessions` in `scheduling.rs`, which reads
+  every page of a session's activity for what it created, each item once). Runs
+  move from their sessions' lifecycle events and a reconcile sweep every five
+  minutes. The suggestions routes are served here too, and `scheduling.rs` runs
+  suggestions' resolution consumer (group `suggestions-resolution`) and runs
+  consumer (group `suggestions-runs`, both `crates/suggestions`) beside the
   event intake, under the same readiness gate and shutdown.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar

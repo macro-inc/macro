@@ -18,6 +18,14 @@ scheduler's spec.
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
+- The feed (`GET /suggestions`) is `{ suggestions, done }`: open suggestions
+  best first, then those done in the last day, most recently first; `?limit`
+  caps each list. Each carries its server-computed `status` (`open`,
+  `running`, `failed`, `done`; `closed` only in `review`,
+  `SuggestionStatus::of`) and its latest `run` as stored. Reading it never
+  calls a session. A suggestion one of whose items can't be checked is left out
+  and logged, never failing the feed. Each process keeps a person's flag for
+  60 s and counts them in at most once an hour per time zone (`Recent`).
 - The feed, `accept` and `dismiss` (`UserOnly`) serve the person and anyone
   acting for them: a code-mode credential is a Macro API token for the
   person, so it passes. The router labels the caller (`SuggestionCaller`, span
@@ -103,32 +111,53 @@ scheduler's spec.
 
 - Background runs: the person accepting a `prompt` suggestion with `runMode`
   `background` in the app (their own session, not a program: `Accept`'s
-  `by_person`) starts an `suggestion_run` (`RunSessions`, wired in the harness): a
+  `by_person`) starts a `suggestion_run` (`RunSessions`, wired in the harness): a
   hidden session of the person's, billed as their agent usage. Anyone acting
   for them (an agent) only takes the suggestion on (`accepted`, no run) for them to
   run. Accept carries the `updatedAt` the card showed; a run starts only if
   the suggestion is unchanged since (409 otherwise). Clicking Run is the approval:
   the run is told never to stop to ask or wait (`run_prompt`), and posts or
   sends only what the suggestion's `sends` says (shown on the card, approved by
-  running it), or nothing. A run whose suggestion has no `sends` gets a `no_send`
-  scope where the harness mints its credential (`RunScopes`): every service
-  refuses its sends and posts. Its progress (`running`,
-  `finished`, `failed`) is read from the session on every feed read, never
-  stored; the suggestion's `run.sessionId` is where the UI shows the result. `settle_runs` (every 30 s
-  in the harness) makes a finished run's suggestion done with the session and what
-  it created as `produced`; a failed run leaves the suggestion accepted, and
-  accepting it again retries. Retiring or dismissing a suggestion never stops its
-  run. Accepting any other suggestion makes it done (`done` in the feed);
-  accepting a done suggestion again changes nothing.
-- A run is never started twice: a prompt whose answer was lost
-  (`RunStartError::Uncertain`) leaves the run for its session to settle; only
-  a definite refusal (the prompted session deleted) settles it failed at once.
-  `settle_runs` checks runs in turn (`checked_at`) and gives a run up only on
-  what is known: past a 10 minute start window, a session confirmed missing
-  (`SessionReadError::Missing`, from the stored sessions), or one still waiting
-  for its prompt, cut off by a restart (`Disconnected`), or waiting for an
-  approval or an answer nobody will give, once it is deleted. A session that
-  can't be read is never given up.
+  running it), or nothing. The run row keeps the `sends` it started with; a run
+  started with none gets a `no_send` scope where the harness mints its
+  credential (`RunScopes`, read from that snapshot): every service refuses its
+  sends and posts. While a run is unsettled, a rewrite of the suggestion's
+  `prompt` or `sends` is refused (`{ ok: false }`, `Written::RunGoing`).
+- Runs move only through the run state machine (`domain/run.rs`, one table of
+  `(state, event) → (state, effect)`): `starting` → `running` ⇄ `waiting` →
+  `finished` or `failed`, plus `stopping` (over its time: stop it, delete it
+  after a 5 minute grace, end `failed`) and `cancelling` (its suggestion closed:
+  end `cancelled`). A run gets 10 minutes to start, 10 minutes waiting
+  (counted from when it began waiting) and 60 minutes in all. The state and
+  when it was entered are stored, so the feed never asks a session. Every move
+  compares and sets the state it read, under a 2 minute hold
+  (`claimed_until`), so two processes never act on one run; its effect (read
+  what it made, stop, delete) runs before it lands. A finished run makes an
+  accepted suggestion done with the session and what it created as `produced`
+  (each item once, at most 200; the harness reads every page of the session's
+  activity); a failed run leaves it accepted, and accepting it again runs it
+  again.
+- Runs move from their sessions' lifecycle events (`inbound/run_consumer.rs`,
+  group `suggestions-runs`, `macro.agent_session_lifecycle`: settled, waiting
+  for input, command rejected, stopped, deleted) and from a reconcile sweep
+  every 5 minutes in the harness (`SuggestionRuns::reconcile_runs`, at most 200
+  runs, least recently checked first) that reads each unsettled run's session,
+  for missed events and runs over their time. One run's error never stops the
+  sweep. A run is never started twice: a prompt whose answer was lost
+  (`RunStartError::Uncertain`) stays `starting` for its session to settle; only
+  a definite refusal fails it at once. A session that can't be read is given
+  up only past the run's time.
+- Dismissing, retiring or resolving a suggestion moves its unsettled run to
+  `cancelling` in the same write (`lifecycle::cancels_run`); dismiss and retire
+  also stop its session at once, resolve leaves that to the sweep. A cancelled
+  run that finishes never makes its suggestion done. Accepting any other
+  suggestion makes it done (`done` in the feed); accepting a done suggestion
+  again changes nothing.
+- Every state write follows the suggestion lifecycle table
+  (`domain/lifecycle.rs`): the service asks it where an event moves a
+  suggestion, and each SQL guard allows exactly its sources
+  (`pg_suggestion_repo/test/lifecycle.rs` tries every write from every state
+  against it).
 
 ## Gotchas
 

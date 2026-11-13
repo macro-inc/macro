@@ -74,6 +74,7 @@ use suggestions::domain::resolution::SuggestionResolution;
 use suggestions::domain::service::SuggestionService;
 use suggestions::inbound::kafka_consumer::run_suggestion_resolution_consumer;
 use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::inbound::run_consumer::run_suggestion_runs_consumer;
 use suggestions::outbound::email_drafts::EmailSuggestionDrafts;
 use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
@@ -97,8 +98,9 @@ const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 /// How often generation sessions a stopped process left behind are cleaned up.
 const GENERATION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often finished background runs of suggestions are settled.
-const SUGGESTION_RUN_SETTLE_INTERVAL: Duration = Duration::from_secs(30);
+/// How often unsettled background runs of suggestions are checked, for the
+/// session events a run missed and the runs over their time.
+const SUGGESTION_RUN_RECONCILE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// How often people in their night are checked for a nightly generation.
 const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
@@ -106,33 +108,50 @@ const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// code-mode invocations.
 struct ActivityCreations(activity::outbound::pg_activity_repo::PgActivityRepo);
 
-/// Activity rows read per draft; a draft creates a handful of items.
-const DRAFT_ACTIVITY_PAGE: u32 = 100;
+/// Activity rows read per page; a session creates a handful of items.
+const SESSION_ACTIVITY_PAGE: u32 = 100;
+/// Pages of a session's activity read at most.
+const SESSION_ACTIVITY_PAGES: usize = 10;
 
 #[async_trait::async_trait]
 impl SessionCreations for ActivityCreations {
+    /// Each item the session created, once, newest first.
     async fn created_by(&self, session: uuid::Uuid) -> Result<Vec<CreatedItem>> {
         use activity::domain::models::{Action, RecordedAction};
         use activity::domain::ports::AgentActivityReads as _;
-        let page = self
-            .0
-            .agent_activity(
-                session,
-                None,
-                None,
-                std::num::NonZeroU32::new(DRAFT_ACTIVITY_PAGE).context("page size")?,
-            )
-            .await
-            .map_err(|error| anyhow::anyhow!("could not read a session's activity: {error}"))?;
-        Ok(page
-            .records
-            .into_iter()
-            .filter(|record| matches!(record.action, RecordedAction::Known(Action::Created)))
-            .map(|record| CreatedItem {
-                entity_type: record.entity_type,
-                entity_id: record.entity_id,
-            })
-            .collect())
+        let limit = std::num::NonZeroU32::new(SESSION_ACTIVITY_PAGE).context("page size")?;
+        let mut created = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut cursor = None;
+        for _ in 0..SESSION_ACTIVITY_PAGES {
+            let page = self
+                .0
+                .agent_activity(session, None, cursor, limit)
+                .await
+                .map_err(|error| anyhow::anyhow!("could not read a session's activity: {error}"))?;
+            for record in page.records {
+                if !matches!(record.action, RecordedAction::Known(Action::Created)) {
+                    continue;
+                }
+                let item = CreatedItem {
+                    entity_type: record.entity_type,
+                    entity_id: record.entity_id,
+                };
+                if seen.insert(item.clone()) {
+                    created.push(item);
+                }
+            }
+            match page.next {
+                Some(next) => cursor = Some(next),
+                None => return Ok(created),
+            }
+        }
+        tracing::warn!(
+            agent.session.id = %session,
+            pages = SESSION_ACTIVITY_PAGES,
+            "session activity read only in part"
+        );
+        Ok(created)
     }
 }
 
@@ -312,7 +331,18 @@ where
         })
     }
 
-    async fn discard(
+    async fn stop(
+        &self,
+        run: &suggestions::domain::model::StoredRun,
+    ) -> Result<(), rootcause::Report> {
+        use agent_session::domain::routines::RoutineSessions as _;
+        self.sessions
+            .cancel(Self::action(run))
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
+    }
+
+    async fn delete(
         &self,
         run: &suggestions::domain::model::StoredRun,
     ) -> Result<(), rootcause::Report> {
@@ -795,7 +825,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             let mut nightly = tokio::time::interval(NIGHTLY_INTERVAL);
             nightly.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            let mut runs = tokio::time::interval(SUGGESTION_RUN_SETTLE_INTERVAL);
+            let mut runs = tokio::time::interval(SUGGESTION_RUN_RECONCILE_INTERVAL);
             runs.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 // Each is logged by its own span.
@@ -805,7 +835,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     _ = sweep.tick() => { let _ = generation.sweep().await; }
                     _ = nightly.tick() => { let _ = generation.nightly().await; }
                     _ = runs.tick() => {
-                        let _ = suggestions::domain::ports::SuggestionApi::settle_runs(settling.as_ref()).await;
+                        let _ = suggestions::domain::ports::SuggestionRuns::reconcile_runs(settling.as_ref()).await;
                     }
                 }
             }
@@ -819,6 +849,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // `macro.suggestions.*`, read and acted on by the person. Served here, under
     // the scheduler's prefix, next to the routine suggestions they share
     // generations with.
+    let runs = Arc::clone(&feed);
     let feed_state = SuggestionRouterState {
         service: feed,
         authorization_state: authorization_state.clone(),
@@ -831,11 +862,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // deleted item, lost access. Its own consumer group, started with the
     // other consumers once the listener is ready.
     let resolution = SuggestionResolution::new(feed_repo, suggestion_access);
+    let (resolution_ready, resolution_brokers) =
+        (suggestions_ready.clone(), suggestions_brokers.clone());
     let suggestions_shutdown = lifecycle.stop_consumers.clone();
     lifecycle.consumers.spawn(supervise_consumer(
         move || {
-            let mut ready = suggestions_ready.clone();
-            let brokers = suggestions_brokers.clone();
+            let mut ready = resolution_ready.clone();
+            let brokers = resolution_brokers.clone();
             let resolution = resolution.clone();
             let shutdown = suggestions_shutdown.clone();
             async move {
@@ -845,6 +878,28 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     result = ready.wait_for(|ready| *ready) => if result.is_err() { return Ok(()); },
                 }
                 run_suggestion_resolution_consumer(&brokers, resolution, shutdown.cancelled()).await
+            }
+        },
+        lifecycle.stop_consumers.clone(),
+        CONSUMER_RESTART_DELAY,
+    ));
+    // Background runs move as their sessions go: a settled turn, a question, a
+    // deleted session. Its own consumer group; the reconcile sweep covers what
+    // it misses.
+    let runs_shutdown = lifecycle.stop_consumers.clone();
+    lifecycle.consumers.spawn(supervise_consumer(
+        move || {
+            let mut ready = suggestions_ready.clone();
+            let brokers = suggestions_brokers.clone();
+            let runs = Arc::clone(&runs);
+            let shutdown = runs_shutdown.clone();
+            async move {
+                tokio::select! {
+                    biased;
+                    _ = shutdown.cancelled() => return Ok(()),
+                    result = ready.wait_for(|ready| *ready) => if result.is_err() { return Ok(()); },
+                }
+                run_suggestion_runs_consumer(&brokers, runs, shutdown.cancelled()).await
             }
         },
         lifecycle.stop_consumers.clone(),

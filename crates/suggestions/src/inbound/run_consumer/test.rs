@@ -1,17 +1,17 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_uuid::Uuid;
 use rdkafka::message::{OwnedMessage, Timestamp};
 use serde_json::{Value, json};
-use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
 use super::*;
 use crate::domain::model::{SuggestionError, SuggestionState};
+use crate::domain::ports::SuggestionRepo as _;
 use crate::domain::run::{Advanced, RunStateName};
 use crate::domain::service::test::runs::run_harness;
-use crate::domain::ports::SuggestionRepo as _;
 use crate::domain::service::test::{Harness, OWNER, user};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
@@ -230,7 +230,9 @@ impl SuggestionRuns for Fake {
             .ok_or_else(|| SuggestionError::Internal(rootcause::report!("the database is down")))
     }
 
-    async fn reconcile_runs(&self) -> Result<crate::domain::ports::RunsReconciled, SuggestionError> {
+    async fn reconcile_runs(
+        &self,
+    ) -> Result<crate::domain::ports::RunsReconciled, SuggestionError> {
         unreachable!("the consumer never sweeps")
     }
 }
@@ -311,6 +313,10 @@ async fn a_lifecycle_event_settles_a_run(pool: PgPool) {
     let repo = PgSuggestionRepo::new(pool);
     let stored = repo.run(run.session).await.unwrap().unwrap();
     assert_eq!(stored.state.name(), RunStateName::Finished);
-    let done = repo.suggestion(&user(OWNER), suggestion.id).await.unwrap().unwrap();
+    let done = repo
+        .suggestion(&user(OWNER), suggestion.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(done.state, SuggestionState::Done);
 }

@@ -192,6 +192,7 @@ impl SuggestionApi for FakeSuggestions {
         _: &MacroUserIdStr<'static>,
         _: SuggestionCaller,
         _: Option<Tz>,
+        _: Option<usize>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         unreachable!()
     }
@@ -212,10 +213,6 @@ impl SuggestionApi for FakeSuggestions {
         _: SuggestionCaller,
         _: Uuid,
     ) -> Result<(), SuggestionError> {
-        unreachable!()
-    }
-
-    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
         unreachable!()
     }
 
