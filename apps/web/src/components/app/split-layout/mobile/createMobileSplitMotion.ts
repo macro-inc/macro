@@ -12,7 +12,10 @@ const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
 const SWIPE_ANIMATION_MS = 88;
 const BG_PEEK_OFFSET = 110; // px the pane behind is offset left at rest; closes to 0 as the front slides away
 
-export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
+export function createMobileSplitMotion(options: {
+  stack: MobilePaneStack;
+  inPaneBack?: { canGoBack(): boolean; goBack(): void };
+}) {
   const { stack } = options;
 
   const forwardAnimation = createMobileForwardAnimation({
@@ -26,6 +29,7 @@ export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
     velocityThreshold: SWIPE_VELOCITY_THRESHOLD,
     distanceThreshold: SWIPE_DISTANCE_THRESHOLD,
     stack,
+    inPaneBack: options.inPaneBack,
     canStart: () => forwardAnimation.phase() === 'idle',
   });
 

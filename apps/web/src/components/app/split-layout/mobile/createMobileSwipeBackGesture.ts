@@ -15,13 +15,15 @@ type MobileSwipeBackGestureOptions = {
   distanceThreshold: number;
   stack: MobilePaneStack;
   canStart: () => boolean;
+  inPaneBack?: { canGoBack(): boolean; goBack(): void };
 };
 
 export function createMobileSwipeBackGesture(
   options: MobileSwipeBackGestureOptions
 ) {
   const [dragOffset, setDragOffset] = createSignal(0);
-  const [isDragging, setIsDragging] = createSignal(false);
+  const [dragging, setDragging] = createSignal<false | 'pane' | 'route'>(false);
+  const isDragging = () => dragging() !== false;
   const [isAnimatingOut, setIsAnimatingOut] = createSignal(false);
 
   let startX = 0;
@@ -37,7 +39,7 @@ export function createMobileSwipeBackGesture(
   function reset() {
     clearScheduledAnimation();
     batch(() => {
-      setIsDragging(false);
+      setDragging(false);
       setIsAnimatingOut(false);
       setDragOffset(0);
     });
@@ -68,13 +70,18 @@ export function createMobileSwipeBackGesture(
 
   function trigger() {
     if (!options.canStart() || isAnimatingOut()) return;
+    if (options.inPaneBack?.canGoBack()) {
+      options.inPaneBack.goBack();
+      return;
+    }
     if (!options.stack.canGoBack()) return;
     animateComplete(() => options.stack.completeGoBack());
   }
 
   function handleTouchStart(e: TouchEvent) {
     if (!options.canStart() || isAnimatingOut()) return;
-    if (!options.stack.canGoBack()) return;
+    const inPane = options.inPaneBack?.canGoBack() ?? false;
+    if (!inPane && !options.stack.canGoBack()) return;
     const touch = e.touches[0];
     if (!touch) return;
     const left =
@@ -91,7 +98,7 @@ export function createMobileSwipeBackGesture(
     }
     startX = touch.clientX;
     startTime = Date.now();
-    setIsDragging(true);
+    setDragging(inPane ? 'route' : 'pane');
   }
 
   function handleTouchMove(e: TouchEvent) {
@@ -105,11 +112,21 @@ export function createMobileSwipeBackGesture(
 
   function handleTouchEnd() {
     if (!isDragging()) return;
-    setIsDragging(false);
+    const inPane = dragging() === 'route';
+    setDragging(false);
     const dx = dragOffset();
     const elapsed = Date.now() - startTime;
     const velocity = elapsed > 0 ? dx / elapsed : 0;
     const threshold = window.innerWidth * options.distanceThreshold;
+    if (inPane) {
+      reset();
+      if (
+        (dx > threshold || velocity > options.velocityThreshold) &&
+        options.inPaneBack?.canGoBack()
+      )
+        options.inPaneBack.goBack();
+      return;
+    }
     if (dx > threshold || velocity > options.velocityThreshold) {
       trigger();
     } else {
@@ -119,7 +136,11 @@ export function createMobileSwipeBackGesture(
 
   function handleTouchCancel() {
     if (!isDragging()) return;
-    setIsDragging(false);
+    if (dragging() === 'route') {
+      reset();
+      return;
+    }
+    setDragging(false);
     animateSnapBack();
   }
 
@@ -148,6 +169,14 @@ export function createMobileSwipeBackGesture(
   }
 
   function styleForSlot(isForeground: boolean) {
+    // An in-pane route has no second pane to reveal; keep the current view
+    // stationary until the gesture commits instead of previewing another pane.
+    if (dragging() === 'route')
+      return {
+        transform: 'none',
+        transition: 'none',
+        'will-change': 'auto',
+      };
     return isForeground ? foregroundStyle() : backgroundStyle();
   }
 
