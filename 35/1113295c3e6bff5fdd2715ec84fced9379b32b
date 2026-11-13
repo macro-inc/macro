@@ -1,0 +1,33 @@
+apps/web/src/features/block-canvas/views/transitions/slide-transition-inspector.tsx
+  s_39eee246ac6b4a::t_91a4d29962f5a6 44-48
+  s_39eee246ac6b4a::t_7fe5b030159cce 11
+  s_39eee246ac6b4a::t_34c7b0dab9000e 8,21-24,72-73
+apps/web/src/features/block-canvas/components/transition-inspector.tsx
+  s_39eee246ac6b4a::t_7fe5b030159cce 21-24,121-122,124,133
+apps/web/src/features/block-canvas/canvas-next.tsx
+  s_39eee246ac6b4a::t_7fe5b030159cce 18,117-119
+apps/web/src/features/block-canvas/core/transitions/transition-edits.ts
+  s_39eee246ac6b4a::t_6f5cb802326bb7 2-43
+  s_39eee246ac6b4a::t_51c6ca335e6d6e 1
+apps/web/src/features/block-canvas/core/transitions/transitions.test.ts
+  s_39eee246ac6b4a::t_6440d03dfdb1e2 1-6
+  s_39eee246ac6b4a::t_6f5cb802326bb7 21-25,243-256,262-273
+  s_39eee246ac6b4a::t_51c6ca335e6d6e 257-261
+  s_39eee246ac6b4a::t_8d98775ca26405 274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "351113295c3e6bff5fdd2715ec84fced9379b32b",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
