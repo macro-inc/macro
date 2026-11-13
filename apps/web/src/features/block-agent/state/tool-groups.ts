@@ -15,6 +15,10 @@
  * row however it ended. A run of thoughts alone has no call to fold and
  * stays visible.
  *
+ * Whitespace-only prose is not a passage (as in the fold's own segments): a
+ * newline the agent emits between two calls renders nothing, so it must not
+ * split their run in two or strand the thoughts around it outside the fold.
+ *
  * Segments are half-open index ranges into the parts array, so a grouped call
  * keeps its position for the tool render context.
  */
@@ -62,10 +66,16 @@ export function rendersOwnView(part: MessagePart | undefined): boolean {
   return SELF_RENDERING_TOOLS.has(name);
 }
 
+/** Prose with nothing to read: it renders nothing and separates nothing. */
+export function isBlankText(part: MessagePart | undefined): boolean {
+  return part?.kind === 'text' && part.text.trim() === '';
+}
+
 /** Whether a part may be folded into a collapsed run with its neighbours. */
 function isGroupable(part: MessagePart | undefined): boolean {
   return (
     part?.kind === 'thought' ||
+    isBlankText(part) ||
     (part?.kind === 'tool_use' &&
       part.detail.kind !== 'subagent' &&
       part.detail.kind !== 'user_tool' &&
