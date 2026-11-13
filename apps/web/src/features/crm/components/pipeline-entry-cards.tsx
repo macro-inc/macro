@@ -177,8 +177,8 @@ function PipelineEntryCard(props: {
           )}
         </Show>
       </header>
-      {/* Each value is a property-layout cell from renderCell: 32px rows, with
-          its own hit area padded to line up with the label column. */}
+      {/* Each value is a property-layout cell from renderCell: 32px rows,
+          whose padding is pulled out below so every value starts on one edge. */}
       <div ref={list} class="@container/card flex flex-col px-2 pb-2 pt-1.5">
         <Key each={fields().shown} by={(cell) => cell.column.id}>
           {(cell) => {

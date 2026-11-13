@@ -628,7 +628,7 @@ function BooleanCell(props: {
  * What a cell shows, without its editors, focus handling or popups: rows
  * mounted mid-scroll render this until scrolling settles, because a full
  * `GridCell` costs more than a fast scroll leaves time for. Matches the
- * display each `GridCell` kind renders.
+ * display each `GridCell` kind renders in the `grid` layout.
  */
 export function GridCellPreview(props: {
   column: DatabaseViewColumn;
