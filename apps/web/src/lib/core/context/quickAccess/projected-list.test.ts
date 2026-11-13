@@ -524,6 +524,62 @@ describe('Quick Access local projection', () => {
     expect(search).toHaveBeenCalledTimes(2);
   });
 
+  it('stops reporting a search once the cache answers, while its rows still load', async () => {
+    const rows = deferred<{ id: string }[]>();
+    const project = vi.fn(materialize).mockReturnValueOnce(rows.promise);
+    const list = root(() =>
+      createProjectedList({
+        host: { search: async () => page(['first']) },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'fir',
+        materialize: project,
+      })
+    );
+    expect(list.isSearching()).toBe(true);
+    await vi.waitFor(() => expect(project).toHaveBeenCalledOnce());
+    expect(list.isSearching()).toBe(false);
+    expect(list.isLoading()).toBe(true);
+    expect(list.items()).toEqual([]);
+
+    rows.resolve([{ id: 'GraphqlSoupDocument:first' }]);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.isSearching()).toBe(false);
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:first' }]);
+  });
+
+  it('reports a search again when its rows are refused while the cache changes owner', async () => {
+    const refused = Object.assign(new Error('cache reads unavailable'), {
+      errorCode: 'owner-handoff-blocked',
+    });
+    let engineReplaced = () => {};
+    const project = vi.fn(materialize).mockRejectedValueOnce(refused);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search: async () => page(['first']),
+          onCacheGenerationChanged: (listener) => {
+            engineReplaced = () => listener({ storage: 'preserved' });
+            return () => {};
+          },
+        },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'fir',
+        materialize: project,
+      })
+    );
+    await vi.waitFor(() => expect(list.error()).toBe(refused));
+    expect(list.isSearching()).toBe(true);
+
+    engineReplaced();
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:first' }])
+    );
+    expect(list.isSearching()).toBe(false);
+  });
+
   it.each(['search', 'materialize'] as const)(
     'publishes a slow %s during continuous revisions and coalesces a follow-up',
     async (stage) => {

@@ -102,8 +102,9 @@ export function createProjectedList<T extends { id: string }>(options: {
     )
   );
   const [error, setError] = createSignal<unknown>();
-  // True from a new query or bucket set until its first answer, unlike
-  // `loading`, which also covers replays of a window already on screen.
+  // True from a new query or bucket set until the cache first answers it.
+  // Loading the rows that answer names does not count, and neither do replays
+  // of a window already on screen; `loading` covers both.
   const [searching, setSearching] = createSignal(
     untrack(loading) === 'initial'
   );
@@ -156,6 +157,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       setSearching(true);
       stopWaitingAtLimit(request);
     }
+    let cacheAnswered = false;
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
     const visibleIds = new Set([
@@ -204,6 +206,10 @@ export function createProjectedList<T extends { id: string }>(options: {
           }
         );
         if (current !== request) return;
+        if (!request.answered) {
+          cacheAnswered = true;
+          setSearching(false);
+        }
         const materialized = await span.span(
           'quick_access.materialize',
           async (span) => {
@@ -243,6 +249,9 @@ export function createProjectedList<T extends { id: string }>(options: {
       if (current !== request) return;
       span.error('Quick Access cache search failed');
       request.awaitingEngine = isRefusedFirstAnswer(request, error);
+      // The rows were refused after the cache answered, so the replay that
+      // loads them is awaited like a first answer.
+      if (request.awaitingEngine && cacheAnswered) setSearching(true);
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
