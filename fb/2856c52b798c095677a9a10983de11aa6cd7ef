@@ -1,0 +1,22 @@
+apps/web/src/vite-env.d.ts
+  s_699e95788b47ad::t_239f5af7c91597 36
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_699e95788b47ad::t_bcefb6d69f7391 1162-1164,1166-1174
+  s_699e95788b47ad::t_90dbc298fae3d3 1165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fb2856c52b798c095677a9a10983de11aa6cd7ef",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
