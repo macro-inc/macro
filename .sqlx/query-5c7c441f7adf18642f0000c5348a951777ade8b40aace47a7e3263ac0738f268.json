@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_generation SET status = 'failed', finished_at = $3\n               WHERE user_id = $1 AND trigger <> $2 AND status = 'generating' AND started_at < $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c7c441f7adf18642f0000c5348a951777ade8b40aace47a7e3263ac0738f268"
+}

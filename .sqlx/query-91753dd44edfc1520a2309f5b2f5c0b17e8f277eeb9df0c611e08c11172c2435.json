@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.agent_session_id AS session_id, s.bot_id AS agent_id FROM agent_correlations c JOIN agent_session s ON s.id = c.agent_session_id WHERE c.id = $1",
+  "query": "SELECT c.agent_session_id AS session_id, s.bot_id AS agent_id, c.scope FROM agent_correlations c JOIN agent_session s ON s.id = c.agent_session_id WHERE c.id = $1",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "agent_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "scope",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -21,8 +26,9 @@
     },
     "nullable": [
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "c89d8c0c8c3117242967bd116594cd50151fe74e0065df5b6cb9fa21e9451e70"
+  "hash": "91753dd44edfc1520a2309f5b2f5c0b17e8f277eeb9df0c611e08c11172c2435"
 }

@@ -6,9 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GenerateRoutineSuggestionsParams = {
-  /**
-   * IANA time zone, e.g. `America/New_York`.
-   */
-  timezone: string;
-};
+/**
+ * Retiring an open suggestion that no longer fits.
+ */
+export interface RetireSuggestion {
+  /** Why, for the change log. */
+  reason: string;
+}

@@ -18,14 +18,16 @@ use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    Change, ChangeAction, GenerationSession, KindName, NewSuggestion, RetireSuggestionRequest,
-    RewriteSuggestion, RunMode, SessionKind, Suggestion, SuggestionContent, SuggestionError,
-    SuggestionFeed, SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
-    Target,
+    Change, ChangeAction, GenerationSession, GenerationTrigger, KindName, NewSuggestion,
+    RetireSuggestionRequest, RewriteSuggestion, RunMode, SessionKind, Suggestion,
+    SuggestionContent, SuggestionError, SuggestionFeed, SuggestionKind, SuggestionState,
+    SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 use super::ports::{
-    Limits, RequestSessions, SuggestionAccess, SuggestionApi, SuggestionRepo, Written,
+    GenerationSessions, Limits, RequestSessions, SuggestionAccess, SuggestionApi,
+    SuggestionAudience, SuggestionRepo, Written,
 };
+use super::prompt;
 
 #[cfg(test)]
 mod test;
@@ -58,7 +60,13 @@ pub struct SuggestionService<Repo, Access, Flags> {
     repo: Arc<Repo>,
     access: Arc<Access>,
     request_sessions: Arc<dyn RequestSessions>,
+    generation_sessions: Arc<dyn GenerationSessions>,
+    audience: Arc<dyn SuggestionAudience>,
     flags: Option<Flags>,
+    /// The SDK reference a suggestions session's brief carries.
+    sdk_reference: String,
+    /// The model a suggestions session has check each new suggestion against its items.
+    checker_model: String,
 }
 
 impl<Repo, Access, Flags> SuggestionService<Repo, Access, Flags>
@@ -72,14 +80,35 @@ where
         repo: Arc<Repo>,
         access: Arc<Access>,
         request_sessions: Arc<dyn RequestSessions>,
+        generation_sessions: Arc<dyn GenerationSessions>,
+        audience: Arc<dyn SuggestionAudience>,
         flags: Option<Flags>,
     ) -> Self {
         Self {
             repo,
             access,
             request_sessions,
+            generation_sessions,
+            audience,
             flags,
+            sdk_reference: String::new(),
+            checker_model: String::new(),
         }
+    }
+
+    /// Hand suggestions sessions `reference`, the SDK methods and fields they use
+    /// ([`prompt::SYMBOLS`], [`prompt::FIELDS_OF`]), so they skip reading the
+    /// documentation.
+    pub fn with_sdk_reference(mut self, reference: String) -> Self {
+        self.sdk_reference = reference;
+        self
+    }
+
+    /// Have suggestions sessions check each new suggestion against its items with
+    /// `model`, in a completion that sees nothing else.
+    pub fn with_checker_model(mut self, model: String) -> Self {
+        self.checker_model = model;
+        self
     }
 
     #[tracing::instrument(name = "suggestions.flag", err, skip_all)]
@@ -119,10 +148,10 @@ where
         };
         let session = match session {
             Some(session) => self
-                .repo
-                .generation_session(session)
+                .generation_sessions
+                .open_session(session)
                 .await
-                .map_err(SuggestionError::internal)?,
+                .map_err(SuggestionError::Internal)?,
             None => None,
         };
         let session = session
@@ -132,6 +161,9 @@ where
         let span = tracing::Span::current();
         span.record("agent.session.id", session.session.to_string());
         span.record("suggestion.generation.id", session.generation.to_string());
+        if let Some(trace) = &session.trace_id {
+            span.record("suggestion.generation.trace_id", trace.as_str());
+        }
         Ok(session)
     }
 
@@ -247,8 +279,20 @@ where
     async fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
+        timezone: Option<chrono_tz::Tz>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         self.require_flag(user).await?;
+        if let Some(timezone) = timezone {
+            // Reading the feed counts the person in for nightly generations;
+            // a failure here never fails the read.
+            let _ = self
+                .audience
+                .seen(user, timezone.name(), Utc::now())
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(?error, "could not record a suggestions reader")
+                });
+        }
         let done_since = Utc::now() - DONE_WITHIN;
         let shown: Vec<Suggestion> = self
             .repo
@@ -284,6 +328,23 @@ where
         span.record("suggestions.done", done.len());
         span.record("suggestions.hidden", hidden);
         Ok(SuggestionFeed { suggestions, done })
+    }
+
+    fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String {
+        prompt::brief(
+            trigger,
+            timezone.name(),
+            Utc::now(),
+            &self.sdk_reference,
+            &self.checker_model,
+        )
+    }
+
+    async fn kept(&self, generation: Uuid, session: Uuid) -> Result<u32, SuggestionError> {
+        self.repo
+            .kept_by(generation, session)
+            .await
+            .map_err(SuggestionError::internal)
     }
 
     #[tracing::instrument(name = "suggestions.accept", skip_all, fields(suggestion.id = %id), err)]
@@ -363,6 +424,7 @@ where
     #[tracing::instrument(name = "suggestions.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         suggestions.count = tracing::field::Empty,
     ), err)]
     async fn review(
@@ -404,6 +466,7 @@ where
     #[tracing::instrument(name = "suggestions.suggest", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         suggestion.kind = request.kind.as_ref(),
         suggestion.id = tracing::field::Empty,
         suggestion.outcome = tracing::field::Empty,
@@ -583,6 +646,7 @@ where
     #[tracing::instrument(name = "suggestions.rewrite", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         suggestion.id = %id,
         suggestion.outcome = tracing::field::Empty,
         suggestion.problems = tracing::field::Empty,
@@ -696,6 +760,7 @@ where
     #[tracing::instrument(name = "suggestions.retire", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         suggestion.id = %id,
         suggestion.outcome = tracing::field::Empty,
         suggestion.problems = tracing::field::Empty,

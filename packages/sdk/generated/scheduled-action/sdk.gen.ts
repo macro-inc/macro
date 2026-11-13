@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DetachScheduledActionData, DetachScheduledActionErrors, DetachScheduledActionResponses, DiscardRoutineDraftJobData, DiscardRoutineDraftJobErrors, DiscardRoutineDraftJobResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GenerateRoutineSuggestionsData, GenerateRoutineSuggestionsErrors, GenerateRoutineSuggestionsResponses, GetRoutineDraftJobData, GetRoutineDraftJobErrors, GetRoutineDraftJobResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListRoutineDraftJobsData, ListRoutineDraftJobsErrors, ListRoutineDraftJobsResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, StartRoutineDraftJobData, StartRoutineDraftJobErrors, StartRoutineDraftJobResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DetachScheduledActionData, DetachScheduledActionErrors, DetachScheduledActionResponses, DiscardRoutineDraftJobData, DiscardRoutineDraftJobErrors, DiscardRoutineDraftJobResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetRoutineDraftJobData, GetRoutineDraftJobErrors, GetRoutineDraftJobResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListRoutineDraftJobsData, ListRoutineDraftJobsErrors, ListRoutineDraftJobsResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, RecordSuggestionsSeenData, RecordSuggestionsSeenErrors, RecordSuggestionsSeenResponses, RetireRoutineSuggestionData, RetireRoutineSuggestionErrors, RetireRoutineSuggestionResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewRoutineSuggestionsData, ReviewRoutineSuggestionsErrors, ReviewRoutineSuggestionsResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, StartRoutineDraftJobData, StartRoutineDraftJobErrors, StartRoutineDraftJobResponses, StartSuggestionGenerationData, StartSuggestionGenerationErrors, StartSuggestionGenerationResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -155,12 +155,30 @@ export class Sdk extends HeyApiClient {
         });
     }
 
-    public generateRoutineSuggestions<ThrowOnError extends boolean = false>(options: Options<GenerateRoutineSuggestionsData, ThrowOnError>): RequestResult<GenerateRoutineSuggestionsResponses, GenerateRoutineSuggestionsErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<GenerateRoutineSuggestionsResponses, GenerateRoutineSuggestionsErrors, ThrowOnError>({ url: '/scheduled-actions/suggestions/generate', ...options });
+    /**
+     * What a routines generation session reads before managing suggestions.
+     */
+    public reviewRoutineSuggestions<ThrowOnError extends boolean = false>(options?: Options<ReviewRoutineSuggestionsData, ThrowOnError>): RequestResult<ReviewRoutineSuggestionsResponses, ReviewRoutineSuggestionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ReviewRoutineSuggestionsResponses, ReviewRoutineSuggestionsErrors, ThrowOnError>({ url: '/scheduled-actions/suggestions/review', ...options });
     }
 
     public dismissRoutineSuggestion<ThrowOnError extends boolean = false>(options: Options<DismissRoutineSuggestionData, ThrowOnError>): RequestResult<DismissRoutineSuggestionResponses, DismissRoutineSuggestionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DismissRoutineSuggestionResponses, DismissRoutineSuggestionErrors, ThrowOnError>({ url: '/scheduled-actions/suggestions/{id}/dismiss', ...options });
+    }
+
+    /**
+     * Retire an open suggestion that no longer fits, from a routines
+     * generation session.
+     */
+    public retireRoutineSuggestion<ThrowOnError extends boolean = false>(options: Options<RetireRoutineSuggestionData, ThrowOnError>): RequestResult<RetireRoutineSuggestionResponses, RetireRoutineSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RetireRoutineSuggestionResponses, RetireRoutineSuggestionErrors, ThrowOnError>({
+            url: '/scheduled-actions/suggestions/{id}/retire',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     public deleteScheduledAction<ThrowOnError extends boolean = false>(options: Options<DeleteScheduledActionData, ThrowOnError>): RequestResult<DeleteScheduledActionResponses, DeleteScheduledActionErrors, ThrowOnError> {
@@ -277,10 +295,24 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Start the caller's onboarding generation, once their inbox is connected.
+     */
+    public startSuggestionGeneration<ThrowOnError extends boolean = false>(options: Options<StartSuggestionGenerationData, ThrowOnError>): RequestResult<StartSuggestionGenerationResponses, StartSuggestionGenerationErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<StartSuggestionGenerationResponses, StartSuggestionGenerationErrors, ThrowOnError>({ url: '/suggestions/generate', ...options });
+    }
+
+    /**
      * What a suggestions generation session reads before managing suggestions.
      */
     public reviewSuggestions<ThrowOnError extends boolean = false>(options?: Options<ReviewSuggestionsData, ThrowOnError>): RequestResult<ReviewSuggestionsResponses, ReviewSuggestionsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ReviewSuggestionsResponses, ReviewSuggestionsErrors, ThrowOnError>({ url: '/suggestions/review', ...options });
+    }
+
+    /**
+     * The caller loaded the app in their time zone.
+     */
+    public recordSuggestionsSeen<ThrowOnError extends boolean = false>(options: Options<RecordSuggestionsSeenData, ThrowOnError>): RequestResult<RecordSuggestionsSeenResponses, RecordSuggestionsSeenErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RecordSuggestionsSeenResponses, RecordSuggestionsSeenErrors, ThrowOnError>({ url: '/suggestions/seen', ...options });
     }
 
     /**
