@@ -7590,6 +7590,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_e2e"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "axum",
+ "base64 0.22.1",
+ "gmail_emulator",
+ "hex",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_event_topics",
+ "outlook_emulator",
+ "rdkafka",
+ "redis",
+ "reqwest 0.13.4",
+ "rootcause",
+ "rustls",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
