@@ -87,10 +87,19 @@ link from the packet drawer.
   signature faces in `core/signature-style.ts`. The page and the PDF both
   read them; change printing there, not in one renderer.
 - Merging keeps the source's log whole under `merged`, never spliced into
-  the target's chain: each event's hash depends on the one before it.
+  the target's chain: each event's hash depends on the one before it. The
+  entry carries the source's recipient names, because its events refer to
+  recipients the merged packet may no longer have.
+- A merge into a packet out for signature clears signatures like a replaced
+  document does, so `core/certificate.ts` lists state digests only from the
+  last `audit.documents_replaced` or `audit.packets_merged` on.
+- A `DocumentSource` hands over files one at a time and waits for each
+  (`onFile` returns a promise); the dialog keeps Continue disabled until
+  every hand-over has settled.
 - The store's clock records expiry and due reminders (`onSchedule`). A
   transition that returns its packet unchanged writes nothing, so the clock
-  is free when nothing is due.
+  is free when nothing is due. It runs only while a tab for that account is
+  open.
 - The audit chain shows consistency of the entries present, nothing more:
   the browser holds the log and could rewrite it. Do not word UI or docs as
   if it proved authenticity or completeness.

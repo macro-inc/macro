@@ -566,7 +566,9 @@ export function mergePackets(
   }
   const inFlight = packetStatus(target, context.now) !== 'draft';
 
-  const { documents, documentIds } = mergeDocuments(target, source);
+  const mergedDocuments = mergeDocuments(target, source);
+  if (!mergedDocuments) return err({ kind: 'cannot_merge' });
+  const { documents, documentIds } = mergedDocuments;
   const { recipients, recipientIds } = mergeRecipients(
     target,
     source,
@@ -603,6 +605,7 @@ export function mergePackets(
         id: source.id,
         title: source.title,
         mergedAt: context.now,
+        recipients: source.recipients.map(({ id, name }) => ({ id, name })),
         events: source.events,
       },
     ],
@@ -615,14 +618,21 @@ export function mergePackets(
   return ok(invite(merged, context));
 }
 
-/** The target's documents plus the source's; the same bytes are kept once. */
+/**
+ * The target's documents plus the source's; the same bytes are kept once.
+ * Two different documents under one id cannot both be kept, since fields and
+ * stored bytes are found by that id, so such a pair is not merged at all.
+ */
 function mergeDocuments(target: Packet, source: Packet) {
   const documents = [...target.documents];
   const documentIds = new Map<string, string>();
   for (const document of source.documents) {
-    const same = documents.find(
-      (each) => each.id === document.id || each.sha256 === document.sha256
+    const clash = documents.find(
+      (each) => each.id === document.id && each.sha256 !== document.sha256
     );
+    if (clash) return undefined;
+
+    const same = documents.find((each) => each.sha256 === document.sha256);
     documentIds.set(document.id, same?.id ?? document.id);
     if (!same) documents.push(document);
   }
@@ -656,9 +666,27 @@ function mergeRecipients(
     const taken = recipients.some((each) => each.id === recipient.id);
     const id = taken ? context.newId() : recipient.id;
     recipientIds.set(recipient.id, id);
-    recipients.push({ ...resetRecipient(recipient), id });
+    recipients.splice(insertionIndex(recipients, recipient.role), 0, {
+      ...resetRecipient(recipient),
+      id,
+    });
   }
   return { recipients, recipientIds };
+}
+
+/**
+ * Where a recipient joining a packet goes in its order. A signer signs after
+ * the signers already there, but before a sender who countersigns last; a
+ * copy recipient goes to the end.
+ */
+function insertionIndex(
+  recipients: readonly Recipient[],
+  role: Recipient['role']
+): number {
+  if (role === 'copy') return recipients.length;
+  const lastSigner = recipients.findLastIndex((each) => each.role === 'signer');
+  if (lastSigner === -1) return 0;
+  return recipients[lastSigner].isSender ? lastSigner : lastSigner + 1;
 }
 
 /** The same field placed in both packets is one field. */

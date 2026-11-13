@@ -116,6 +116,7 @@ const packet = z.object({
         id: z.string(),
         title: z.string(),
         mergedAt: z.string(),
+        recipients: z.array(z.object({ id: z.string(), name: z.string() })),
         events: z.array(event),
       })
     )

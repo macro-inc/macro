@@ -587,20 +587,34 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     targetId: string,
     sourceId: string
   ): ResultAsync<Packet, ContractsError> {
-    return mutate<Packet>(async (current) => {
-      const target = current.packets.find((each) => each.id === targetId);
-      const source = current.packets.find((each) => each.id === sourceId);
-      if (!target || !source) return err({ kind: 'not_found' });
+    return mutate<{ merged: Packet; sourceDocumentIds: string[] }>(
+      async (current) => {
+        const target = current.packets.find((each) => each.id === targetId);
+        const source = current.packets.find((each) => each.id === sourceId);
+        if (!target || !source) return err({ kind: 'not_found' });
 
-      const merged = mergePackets(target, source, lifecycle());
-      if (merged.isErr()) return err(merged.error);
-      const sealed = await sealEvents(merged.value, deps.digestText);
-      // The source is gone; every database it was in now lists the target.
-      const packets = current.packets
-        .filter((each) => each.id !== sourceId)
-        .map((each) => (each.id === targetId ? sealed : each));
-      return ok({ next: { ...current, packets }, value: sealed });
-    });
+        const merged = mergePackets(target, source, lifecycle());
+        if (merged.isErr()) return err(merged.error);
+        const sealed = await sealEvents(merged.value, deps.digestText);
+        // The source is gone; every database it was in now lists the target.
+        const packets = current.packets
+          .filter((each) => each.id !== sourceId)
+          .map((each) => (each.id === targetId ? sealed : each));
+        return ok({
+          next: { ...current, packets },
+          value: {
+            merged: sealed,
+            sourceDocumentIds: source.documents.map((document) => document.id),
+          },
+        });
+      }
+      // A document both packets held is kept once; the other copy's bytes
+      // are no longer referred to by any packet.
+    ).andThen(({ merged, sourceDocumentIds }) =>
+      ResultAsync.fromSafePromise(dropUnreferenced(sourceDocumentIds)).map(
+        () => merged
+      )
+    );
   }
 
   function deleteStoredDraft(

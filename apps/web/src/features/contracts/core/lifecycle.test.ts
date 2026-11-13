@@ -629,12 +629,13 @@ describe('mergePackets', () => {
       'msa',
       'nda',
     ]);
-    // Sarah is in both packets under one email: she is one recipient.
+    // Sarah is in both packets under one email: she is one recipient. The
+    // new signer signs before the sender, who still countersigns last.
     expect(merged.recipients.map((recipient) => recipient.id)).toEqual([
       SARAH,
+      'lee',
       AVERY,
       'dana',
-      'lee',
     ]);
     expect(
       merged.fields.find((field) => field.id === 'nda-sarah')?.recipientId
@@ -661,6 +662,10 @@ describe('mergePackets', () => {
         id: source.id,
         title: 'Acme NDA',
         mergedAt: context.now,
+        recipients: [
+          { id: 'sarah-again', name: 'Sarah Chen' },
+          { id: 'lee', name: 'Lee Okafor' },
+        ],
         events: source.events,
       },
     ]);
@@ -708,6 +713,55 @@ describe('mergePackets', () => {
     expect(sarah?.access?.issuedAt).toBe(later.now);
     expect(sarah?.access?.token).not.toBe(token(packet, SARAH));
     expect(packetStatus(merged, later.now)).toBe('sent');
+  });
+
+  it('ends signing on a merged-in packet that was out for signature', () => {
+    // One context for both packets, so each gets its own id.
+    const { context, packet } = sent();
+    const draft = ndaDraft(context);
+    const partlySigned = signAs(
+      packet,
+      token(packet, SARAH),
+      { ...TYPED_SIGNATURE, values: { 'sarah-title': 'VP, Operations' } },
+      context.at(SARAH_SIGNS_AT)
+    )._unsafeUnwrap();
+
+    const merged = mergePackets(
+      draft,
+      partlySigned,
+      context.at('2026-11-11T09:00:00.000Z')
+    )._unsafeUnwrap();
+
+    // The draft stays a draft: nobody has a link, and nothing is signed.
+    expect(packetStatus(merged, '2026-11-11T09:00:00.000Z')).toBe('draft');
+    expect(merged.recipients.every((each) => !each.access)).toBe(true);
+    expect(merged.recipients.every((each) => !each.signedAt)).toBe(true);
+    expect(merged.fields.every((field) => field.value === undefined)).toBe(
+      true
+    );
+    // What the merged-in packet had been through is still on record.
+    expect(merged.merged?.[0].events.map((event) => event.type)).toContain(
+      'contract.signed_by_recipient'
+    );
+  });
+
+  it('refuses two different documents that share an id', () => {
+    const context = testContext();
+    const target = acmeDraft(context);
+    const other = createDraft(
+      {
+        ...ACME_DRAFT,
+        title: 'Another packet',
+        documents: [
+          { ...ACME_DRAFT.documents[0], pageCount: 9, sha256: 'e'.repeat(64) },
+        ],
+      },
+      context
+    )._unsafeUnwrap();
+
+    expect(mergePackets(target, other, context)._unsafeUnwrapErr()).toEqual({
+      kind: 'cannot_merge',
+    });
   });
 
   it('refuses a packet that is closed, and a packet with itself', () => {

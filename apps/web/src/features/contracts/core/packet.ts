@@ -141,6 +141,8 @@ type MergedPacket = {
   id: string;
   title: string;
   mergedAt: string;
+  /** Who its events refer to, so its log still reads after it is gone. */
+  recipients: { id: string; name: string }[];
   events: PacketEvent[];
 };
 

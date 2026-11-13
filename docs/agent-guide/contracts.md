@@ -48,14 +48,18 @@ to images.
 into this one, for a packet created by mistake instead of updating an existing
 one. A dialog lists the packets that can be merged in. The chosen packet's
 documents, recipients, fields and databases move into this packet; a document
-with the same bytes and a recipient with the same email are kept once. The
-merged packet is removed and the activity log records the merge. If this
-packet was already out for signature, signatures are cleared and signers get
-new links.
+with the same bytes and a recipient with the same email are kept once, and a
+signer who joins signs before a sender who countersigns last. The merged
+packet is removed: its signatures are discarded and its signing links stop
+working, which the dialog warns about when that packet is out for signature.
+Its history stays readable in this packet's drawer under **History of
+“<title>”, merged in**, and the activity log records the merge. If this packet was already
+out for signature, its signatures are cleared too and signers get new links.
 
 Reminders follow the packet's cadence on their own: once the cadence has
 passed since a pending signer was last contacted, the activity log records a
-reminder. No email is sent.
+reminder. That happens only while the sender has Contracts open in a tab; no
+email is sent.
 
 A signer whose turn it is shows **Copy signing link**; when that signer is the
 viewer it shows **Sign now**.

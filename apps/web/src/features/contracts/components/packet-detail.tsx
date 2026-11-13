@@ -4,7 +4,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import { Avatar, Button } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { PdfDocument } from '../context/contracts-context';
-import type { CertificateEvent } from '../core/certificate';
+import type { CertificateEvent, MergedHistory } from '../core/certificate';
 import type { ContractDatabase } from '../core/database';
 import type { Packet, PacketDocument, Recipient } from '../core/packet';
 import { signingPosition } from '../core/routing';
@@ -277,6 +277,22 @@ export function PacketProperties(props: {
 }
 
 /** The packet's log, newest first. */
+/** The log a merged-in packet had, kept under the packet it became part of. */
+export function MergedHistoryList(props: { histories: MergedHistory[] }) {
+  return (
+    <For each={props.histories}>
+      {(history) => (
+        <section class="flex flex-col gap-2">
+          <SectionHeading>
+            {t('contracts.mergedHistory', { title: history.title })}
+          </SectionHeading>
+          <ActivityList events={history.events} />
+        </section>
+      )}
+    </For>
+  );
+}
+
 export function ActivityList(props: { events: CertificateEvent[] }) {
   return (
     <ol class="flex flex-col gap-2">

@@ -322,6 +322,32 @@ describe('mergePackets', () => {
       (await contracts.mergePackets(target.id, 'missing'))._unsafeUnwrapErr()
     ).toEqual({ kind: 'not_found' });
   });
+
+  it('drops the stored copy of a document both packets held', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    // The same PDF uploaded twice: two stored copies, one set of bytes.
+    const first = (
+      await contracts.importDocument(pdf('%PDF-1.7 body', 'MSA.pdf'))
+    )._unsafeUnwrap();
+    const again = (
+      await contracts.importDocument(pdf('%PDF-1.7 body', 'MSA.pdf'))
+    )._unsafeUnwrap();
+    const target = (
+      await contracts.createDraft({ ...ACME_DRAFT, documents: [first] })
+    )._unsafeUnwrap();
+    const source = (
+      await contracts.createDraft({ ...ACME_DRAFT, documents: [again] })
+    )._unsafeUnwrap();
+
+    const merged = (
+      await contracts.mergePackets(target.id, source.id)
+    )._unsafeUnwrap();
+
+    expect(merged.documents.map((document) => document.id)).toEqual([first.id]);
+    expect(browser.documents.has(first.id)).toBe(true);
+    expect(browser.documents.has(again.id)).toBe(false);
+  });
 });
 
 describe('scheduled reminders', () => {

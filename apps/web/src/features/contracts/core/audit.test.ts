@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACME_DRAFT,
   acmeDraft,
   SARAH,
   sha256,
@@ -9,7 +10,12 @@ import {
 } from '../tests/packets';
 import { firstBrokenEvent, sealEvents } from './audit';
 import { buildCertificate } from './certificate';
-import { replaceDocument, sendPacket } from './lifecycle';
+import {
+  createDraft,
+  mergePackets,
+  replaceDocument,
+  sendPacket,
+} from './lifecycle';
 import { findRecipient } from './packet';
 
 async function signedBySarah() {
@@ -26,7 +32,7 @@ async function signedBySarah() {
     { ...TYPED_SIGNATURE, values: { 'sarah-title': 'VP, Operations' } },
     context.at('2026-11-10T19:26:47.000Z')
   )._unsafeUnwrap();
-  return { sent, signed: await sealEvents(signed, sha256) };
+  return { context, sent, signed: await sealEvents(signed, sha256) };
 }
 
 describe('sealEvents', () => {
@@ -85,6 +91,40 @@ describe('buildCertificate', () => {
       tokenId: 'tok_1',
     });
     expect(certificate.copyRecipients).toEqual(['Dana Whitfield']);
+  });
+
+  it('drops the digests of signatures a merge voided', async () => {
+    const signedPacket = await signedBySarah();
+    const { signed } = signedPacket;
+    const context = signedPacket.context.at('2026-11-11T09:00:00.000Z');
+    const extra = createDraft(
+      {
+        ...ACME_DRAFT,
+        title: 'Side letter',
+        recipients: [],
+        documents: [
+          {
+            id: 'side-letter',
+            name: 'Side Letter',
+            pageCount: 1,
+            source: 'upload',
+            sha256: 'd'.repeat(64),
+          },
+        ],
+      },
+      context
+    )._unsafeUnwrap();
+    const merged = await sealEvents(
+      mergePackets(signed, extra, context)._unsafeUnwrap(),
+      sha256
+    );
+
+    // Sarah signed before the side letter was part of the packet. Only the
+    // packet as sent again, with it, is listed.
+    const { hashes, signers } = buildCertificate(merged);
+    expect(hashes.map((hash) => hash.step)).toEqual(['before_signing']);
+    expect(hashes[0].hash).toBe(merged.events.at(-1)?.stateHash);
+    expect(signers[0].signedAt).toBeUndefined();
   });
 
   it('drops the digests of signatures a replaced document voided', async () => {

@@ -54,10 +54,13 @@ export type Certificate = {
  * signer has signed.
  */
 function certificateHashes(packet: Packet): CertificateHash[] {
-  // Replacing a document voids every earlier signature, so only the events
-  // after the latest replacement describe what was finally signed.
+  // Replacing a document, or merging another packet in, voids every earlier
+  // signature, so only the events after the latest of those describe what
+  // was finally signed.
   const replaced = packet.events.findLastIndex(
-    (event) => event.type === 'audit.documents_replaced'
+    (event) =>
+      event.type === 'audit.documents_replaced' ||
+      event.type === 'audit.packets_merged'
   );
   const current = packet.events.slice(replaced + 1);
   const hashes: CertificateHash[] = [];
@@ -143,4 +146,36 @@ export function buildCertificate(packet: Packet): Certificate {
     hashes: certificateHashes(packet),
     events: packet.events.map((event) => certificateEvent(packet, event)),
   };
+}
+
+/** The log of a packet that was merged into this one, readable on its own. */
+export type MergedHistory = {
+  id: string;
+  title: string;
+  mergedAt: string;
+  events: CertificateEvent[];
+};
+
+/** Every packet merged into this one, oldest first, with its log named. */
+export function mergedHistories(packet: Packet): MergedHistory[] {
+  return (packet.merged ?? []).map((merged) => {
+    const names = new Map(
+      merged.recipients.map((recipient) => [recipient.id, recipient.name])
+    );
+    return {
+      id: merged.id,
+      title: merged.title,
+      mergedAt: merged.mergedAt,
+      events: merged.events.map((event) => ({
+        id: event.id,
+        at: event.at,
+        type: event.type,
+        actor: event.actor,
+        recipientName: event.recipientId
+          ? names.get(event.recipientId)
+          : undefined,
+        note: event.note,
+      })),
+    };
+  });
 }

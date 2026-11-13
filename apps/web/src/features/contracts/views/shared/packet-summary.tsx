@@ -3,12 +3,13 @@ import { createMemo, For, Show } from 'solid-js';
 import {
   ActivityList,
   DocumentThumbnail,
+  MergedHistoryList,
   PacketProperties,
   RecipientList,
   SectionHeading,
 } from '../../components/packet-detail';
 import { useContractsContext } from '../../context/contracts-context';
-import { buildCertificate } from '../../core/certificate';
+import { buildCertificate, mergedHistories } from '../../core/certificate';
 import { nextReminderAt } from '../../core/lifecycle';
 import type { Packet, Recipient } from '../../core/packet';
 import type { PacketRow } from '../../core/packet-row';
@@ -95,6 +96,7 @@ export function PacketSummary(props: {
         <SectionHeading>{t('contracts.activity')}</SectionHeading>
         <ActivityList events={certificate().events} />
       </section>
+      <MergedHistoryList histories={mergedHistories(packet())} />
     </div>
   );
 }

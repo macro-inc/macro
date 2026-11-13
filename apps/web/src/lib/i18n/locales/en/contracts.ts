@@ -107,6 +107,9 @@ export default {
   mergeNothing: 'There is no other open packet to merge.',
   mergeRestartsSigning:
     'This packet is out for signature. Merging adds documents its signers have not seen, so signatures are cleared and new signing links are issued.',
+  mergeEndsSourceSigning:
+    'That packet is out for signature. Its signing links stop working, and any signatures already on it are discarded.',
+  mergedHistory: 'History of “{{title}}”, merged in',
   mergeConfirm: 'Merge',
   merged: 'Packets merged',
   mergeNeedsSignature:

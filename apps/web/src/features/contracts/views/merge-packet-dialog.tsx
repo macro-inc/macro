@@ -1,8 +1,9 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Key } from '@solid-primitives/keyed';
 import { ActionDialogShell, Button, Dialog, RadioGroup } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { PacketStatusPill } from '../components/packet-status-pill';
 import { useContractsContext } from '../context/contracts-context';
 import { canMerge } from '../core/lifecycle';
@@ -21,7 +22,7 @@ export function MergePacketDialog(props: {
   onMerged: (packet: Packet) => void;
 }) {
   const context = useContractsContext();
-  const [sourceId, setSourceId] = createSignal('');
+  const [chosenId, setChosenId] = createSignal('');
   const [merging, setMerging] = createSignal(false);
 
   const candidates = () =>
@@ -31,8 +32,16 @@ export function MergePacketDialog(props: {
         (each) => each.id !== props.packet.id && canMerge(each, context.now())
       );
   const statusOf = (packet: Packet) => packetStatus(packet, context.now());
+  /** The chosen packet, while it can still be merged in. */
+  const source = () => candidates().find((each) => each.id === chosenId());
+  const sourceId = () => source()?.id ?? '';
   /** A packet already out for signature starts signing over once it grows. */
   const restartsSigning = () => statusOf(props.packet) !== 'draft';
+  /** A packet out for signature stops being signable once it is folded in. */
+  const endsSourceSigning = () => {
+    const chosen = source();
+    return chosen !== undefined && statusOf(chosen) !== 'draft';
+  };
 
   async function merge(event: SubmitEvent) {
     event.preventDefault();
@@ -86,34 +95,41 @@ export function MergePacketDialog(props: {
             >
               <RadioGroup
                 value={sourceId()}
-                onChange={setSourceId}
+                onChange={setChosenId}
                 aria-label={t('contracts.mergeChoose')}
                 class="flex max-h-72 flex-col gap-1 overflow-auto"
               >
-                <For each={candidates()}>
+                {/* Keyed on the id: a store write replaces every packet
+                    object, and the rows keep their focus through it. */}
+                <Key each={candidates()} by="id">
                   {(candidate) => (
                     <RadioGroup.Item
-                      value={candidate.id}
+                      value={candidate().id}
                       class="flex min-h-11 items-center gap-3 rounded-xl border border-edge-muted px-3 data-[checked]:border-ink"
                     >
                       <RadioGroup.ItemControl />
                       <RadioGroup.ItemLabel class="flex min-h-11 min-w-0 flex-1 items-center gap-2">
                         <span class="min-w-0 flex-1 truncate text-sm font-medium">
-                          {candidate.title}
+                          {candidate().title}
                         </span>
                         <span class="shrink-0 text-xs text-ink-extra-muted">
                           {t('contracts.documentCount', {
-                            count: candidate.documents.length,
+                            count: candidate().documents.length,
                           })}
                         </span>
-                        <PacketStatusPill status={statusOf(candidate)} />
+                        <PacketStatusPill status={statusOf(candidate())} />
                       </RadioGroup.ItemLabel>
                     </RadioGroup.Item>
                   )}
-                </For>
+                </Key>
               </RadioGroup>
             </Show>
 
+            <Show when={endsSourceSigning()}>
+              <p role="alert" class="text-sm text-failure-ink">
+                {t('contracts.mergeEndsSourceSigning')}
+              </p>
+            </Show>
             <Show when={restartsSigning()}>
               <p class="text-sm text-ink-muted">
                 {t('contracts.mergeRestartsSigning')}
