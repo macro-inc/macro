@@ -2,6 +2,11 @@
 //! attachment when it is opened: as the recipient's provider is handed them
 //! and as the other Macro services are asked to store them.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a scenario reads and changes its own database, which the query cache does not describe"
+)]
+
 #[path = "send_support/support.rs"]
 mod support;
 

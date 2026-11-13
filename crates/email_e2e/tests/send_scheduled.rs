@@ -1,6 +1,11 @@
 //! Send later and undo: a schedule holds the message until its time, sends
 //! what was committed, and an undo gives the draft back.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a scenario reads and changes its own database, which the query cache does not describe"
+)]
+
 #[path = "send_support/support.rs"]
 mod support;
 
@@ -27,10 +32,11 @@ const LONG_UNDO_WINDOW: &str = "600";
 
 /// A stack whose undo window stays open for the whole scenario.
 async fn stack_with_open_undo_window() -> Result<Stack, Report> {
-    Stack::start_with(StackOptions {
-        env: vec![(UNDO_WINDOW.to_owned(), LONG_UNDO_WINDOW.to_owned())],
-    })
-    .await
+    let mut options = StackOptions::default();
+    options
+        .env
+        .push((UNDO_WINDOW.to_owned(), LONG_UNDO_WINDOW.to_owned()));
+    Stack::start_with(options).await
 }
 
 /// A field of a JSON object that must be a string.

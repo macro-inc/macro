@@ -1,6 +1,11 @@
 //! Delivery of a message sent from Macro: it leaves through the provider
 //! once, arrives as it was written, and its sender can see what became of it.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a scenario reads and changes its own database, which the query cache does not describe"
+)]
+
 #[path = "send_support/support.rs"]
 mod support;
 

@@ -5,6 +5,11 @@
 //! the mailbox by the draft worker, so the Outlook scenarios check the
 //! provider's Drafts folder as well.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a scenario reads and changes its own database, which the query cache does not describe"
+)]
+
 #[path = "send_support/drafts.rs"]
 mod drafts;
 #[path = "send_support/support.rs"]
