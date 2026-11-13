@@ -3,7 +3,10 @@ import {
   ModelCatalogPicker,
   type ModelRowProps,
 } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Component, JSX } from 'solid-js';
 
@@ -33,7 +36,7 @@ export function ModelSelector(props: {
       value={props.model ?? null}
       options={props.options.map((option) => ({
         id: option.id,
-        label: modelLabel(option.id, option.name),
+        label: modelLabel(option.id, option.name, option.description),
         description: option.description,
         group: option.group,
       }))}
@@ -65,10 +68,7 @@ export function SessionModelSelector(props: AgentModelSelectorProps) {
       onCloseAutoFocus={props.onCloseAutoFocus}
       model={shown()}
       label={[
-        modelLabel(
-          shown(),
-          props.options.find((option) => option.id === shown())?.name
-        ),
+        catalogModelLabel(shown(), props.options),
         isTouchDevice() ? props.effortLabel : undefined,
       ]
         .filter(Boolean)
