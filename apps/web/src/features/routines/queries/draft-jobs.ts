@@ -162,6 +162,12 @@ export async function startDraftJob(
     let attempts = 1;
     if (response.isErr() && unanswered(response.error)) {
       await sleep(RETRY_DELAY_MS);
+      // Sent now, it would start the draft as the login that replaced this one.
+      if (queryAccountSession() !== login) {
+        span.setAttr('routine.draft.attempts', attempts);
+        span.setAttr('routine.draft.outcome', 'login_replaced');
+        return SIGNED_IN_AGAIN;
+      }
       response = await send();
       attempts = 2;
     }

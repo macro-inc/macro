@@ -242,6 +242,25 @@ describe('startDraftJob', () => {
       await confirmLogin('someone-else');
     }
   });
+
+  it('sends no retry once a login replaced the session', async () => {
+    await confirmLogin('me');
+    vi.useFakeTimers();
+    client.startRoutineDraftJob
+      .mockResolvedValueOnce(err([DROPPED]))
+      .mockResolvedValueOnce(ok(drafting('theirs')));
+    const started = startDraftJob(REQUEST, context);
+    await resetQueryAccountSession();
+    try {
+      await vi.runAllTimersAsync();
+      await expect(started).resolves.toBe(SIGNED_IN_AGAIN);
+      // Sent, it would have gone out as the new login and drafted for it.
+      expect(client.startRoutineDraftJob).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      await confirmLogin('someone-else');
+    }
+  });
 });
 
 const SIGNED_IN_AGAIN = 'You signed in again while this draft was starting.';
