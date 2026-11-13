@@ -120,12 +120,20 @@ export function MachineRow(props: {
   name: string;
   meta: JSX.Element;
   actions?: JSX.Element;
+  /**
+   * The actions are one icon button (a lone ⋯): keep it on the name's line
+   * on narrow rows instead of giving it a line of its own.
+   */
+  inlineActions?: boolean;
   /** The settings search and notification landing target. */
   target?: string;
 }) {
   return (
     <div
-      class="flex items-start justify-between gap-4 px-6 py-4 transition-colors @max-[480px]:flex-col @max-[480px]:gap-2 [&.ring-2]:bg-accent-bg/50 [&.ring-2]:ring-inset [&.ring-offset-2]:ring-offset-0"
+      class={cn(
+        'flex items-start justify-between gap-4 px-6 py-4 transition-colors [&.ring-2]:bg-accent-bg/50 [&.ring-2]:ring-inset [&.ring-offset-2]:ring-offset-0',
+        !props.inlineActions && '@max-[480px]:flex-col @max-[480px]:gap-2'
+      )}
       data-settings-target={props.target}
       data-runtime-row={props.name}
     >
@@ -138,7 +146,13 @@ export function MachineRow(props: {
         </p>
       </div>
       <Show when={props.actions}>
-        <div class="flex shrink-0 flex-wrap items-center justify-end gap-1 @max-[480px]:justify-start @max-[480px]:pl-2">
+        <div
+          class={cn(
+            'flex shrink-0 flex-wrap items-center justify-end gap-1',
+            !props.inlineActions &&
+              '@max-[480px]:justify-start @max-[480px]:pl-2'
+          )}
+        >
           {props.actions}
         </div>
       </Show>

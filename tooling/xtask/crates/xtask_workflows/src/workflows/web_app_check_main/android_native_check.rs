@@ -46,6 +46,7 @@ const SKIP_LABEL: &str = "steps.labels.outputs.skip == 'true'";
 pub(super) fn job() -> Job {
     Job::default()
         .name("Android Native Check")
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .permissions(
             Permissions::default()

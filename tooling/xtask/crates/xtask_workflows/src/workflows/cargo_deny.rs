@@ -44,6 +44,7 @@ pub fn cargo_deny() -> Workflow {
 /// cache volume needed. Small suffices.
 fn cargo_deny_job() -> Job {
     Job::default()
+        .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_step(checkout())
         .add_step(fetch_advisory_db())

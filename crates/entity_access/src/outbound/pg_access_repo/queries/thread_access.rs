@@ -59,7 +59,7 @@ pub async fn get_owned_email_thread_ids(
 }
 
 /// Get the highest access level a user has for an email thread.
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, source_ids, user_id))]
 pub async fn get_thread_access(
     pool: &PgPool,
     thread_id: &Uuid,
@@ -273,7 +273,7 @@ pub async fn get_thread_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, source_ids, user_id))]
 pub async fn explain_thread_access(
     pool: &PgPool,
     thread_id: &Uuid,

@@ -45,9 +45,13 @@ through them and the per-runtime APIs.
 - Record the IDs you will search by (entity, user, team, session, document) and
   sizes/counts as fields. Skip bulky or sensitive arguments; never record
   prompts, message content, tokens, secrets, or personal data (email, username,
-  IP); use opaque ids.
+  IP); use opaque ids. `#[tracing::instrument]` records every argument it
+  doesn't skip, by `Debug`, and a `MacroUserId` is an email: skip user ids (and
+  structs holding one) or use `skip_all` with explicit `fields`.
 - Async work that outlives the request (spawned tasks, queued jobs) links to or
-  parents on the span that started it, so the flow stays one trace.
+  parents on the span that started it, so the flow stays one trace. DataLoader
+  batches spawn with `|batch| tokio::spawn(batch.in_current_span())` (ast-grep
+  `rust-dataloader-batch-in-request-span`, error).
 
 ## Timing
 

@@ -75,7 +75,7 @@ function Avatar(props: { initials: string; size?: number; color?: string }) {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * 0.38)}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         'place-items': 'center',
         width: `${s}px`,
@@ -504,7 +504,7 @@ function MentionPill(props: {
         <span
           style={{
             color: 'var(--c4)',
-            'font-weight': '700',
+            'font-weight': '500',
             'margin-right': '2px',
           }}
         >
@@ -677,7 +677,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                 style={{
                   color: 'var(--c1)',
                   'font-family': appFont,
-                  'font-weight': '700',
+                  'font-weight': '500',
                   'letter-spacing': '-0.01em',
                 }}
               >
@@ -707,7 +707,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                 display: 'flex',
                 'font-family': appFont,
                 'font-size': '12.5px',
-                'font-weight': '600',
+                'font-weight': '500',
                 gap: '6px',
               }}
             >
@@ -749,7 +749,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                     color: 'var(--c4)',
                     'font-family': appFont,
                     'font-size': '14px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   Aa
@@ -806,7 +806,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '14px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Emails
@@ -830,7 +830,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                     color: 'var(--c1)',
                     'font-family': appFont,
                     'font-size': '11.5px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     padding: '4px 11px',
                   }}
                 >
@@ -890,7 +890,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                         flex: 'none',
                         'font-family': appFont,
                         'font-size': '13px',
-                        'font-weight': mail.unread ? '600' : '500',
+                        'font-weight': '500',
                         overflow: 'hidden',
                         'text-overflow': 'ellipsis',
                         'white-space': 'nowrap',
@@ -904,7 +904,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                         flex: '1',
                         'font-family': appFont,
                         'font-size': '13px',
-                        'font-weight': mail.unread ? '600' : '400',
+                        'font-weight': mail.unread ? '500' : '400',
                         'min-width': 0,
                         overflow: 'hidden',
                         'text-overflow': 'ellipsis',
@@ -968,7 +968,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                     display: 'flex',
                     'font-family': appFont,
                     'font-size': '12px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     gap: '6px',
                   }}
                 >
@@ -1017,7 +1017,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                     display: 'flex',
                     'font-family': appFont,
                     'font-size': '12px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     gap: '6px',
                   }}
                 >
@@ -1096,7 +1096,7 @@ export function HeroCompanyWindow(props: { flush?: boolean }) {
                   display: 'flex',
                   'font-family': appFont,
                   'font-size': '12px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                   gap: '6px',
                   padding: '13px 14px',
                 }}
@@ -1203,7 +1203,7 @@ export function BuildsThemselvesGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '13.5px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               Sarah Chen
@@ -1300,7 +1300,7 @@ export function BuildsThemselvesGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '15.5px',
-                'font-weight': '700',
+                'font-weight': '500',
               }}
             >
               Hartwell
@@ -1785,7 +1785,7 @@ export function DiscussionGraphic() {
     color: 'var(--c1)',
     'font-family': appFont,
     'font-size': '13px',
-    'font-weight': '600',
+    'font-weight': '500',
   };
   const timeStyle: JSX.CSSProperties = {
     color: 'var(--c4)',
@@ -1833,7 +1833,7 @@ export function DiscussionGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Hartwell
@@ -2297,7 +2297,7 @@ export function MentionsGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '15px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Q3 pipeline review
@@ -2461,7 +2461,7 @@ export function EnrichedDetailsGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Hartwell
@@ -2616,7 +2616,7 @@ export function TeamSharingGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '12px',
-                'font-weight': '600',
+                'font-weight': '500',
                 padding: '4px 12px',
               }}
             >
@@ -2665,7 +2665,7 @@ export function TeamSharingGraphic() {
                     color: 'var(--c1)',
                     'font-family': appFont,
                     'font-size': '13px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     overflow: 'hidden',
                     'text-overflow': 'ellipsis',
                     'white-space': 'nowrap',
@@ -2776,7 +2776,7 @@ export function RiskFlagGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Macro Agent
@@ -2825,7 +2825,7 @@ export function RiskFlagGraphic() {
                 display: 'inline-flex',
                 'font-family': appFont,
                 'font-size': '12.5px',
-                'font-weight': '600',
+                'font-weight': '500',
                 gap: '6px',
                 padding: '6px 12px',
               }}
@@ -3249,7 +3249,7 @@ export function CrmAgentPanel(
                 'border-radius': '5px',
                 color: 'var(--c2)',
                 display: 'inline-flex',
-                'font-weight': '600',
+                'font-weight': '500',
                 gap: '4px',
                 padding: '1px 6px',
                 'white-space': 'nowrap',
@@ -3408,7 +3408,7 @@ export function CrmAgentPanel(
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Hartwell
@@ -3624,7 +3624,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -3651,7 +3651,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.04em',
     'line-height': 1.1,

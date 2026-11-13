@@ -4,12 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PipelineFieldSummaryCurrencyField } from './pipelineFieldSummaryCurrencyField';
 import type { PipelineFieldType } from './pipelineFieldType';
 
 /**
  * One field of a pipeline, named as people see it.
  */
 export interface PipelineFieldSummary {
+  /** For a monetary amount, the field holding each entry's currency code. */
+  currencyField?: PipelineFieldSummaryCurrencyField;
   /** Whether it holds several values. */
   multiple: boolean;
   /** The name entries and filters use. */

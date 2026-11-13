@@ -106,6 +106,9 @@ const BEATS: Beat[] = [
       ...together(2, 'Read channel thread', 1200),
     ],
   },
+  // Models often emit a bare blank line between calls; it renders nothing
+  // and must not split the run or strand the thought after it.
+  { kind: 'text', text: '\n\n' },
   {
     kind: 'thought',
     text: 'The overdue invoice is in a billing thread from the hosting vendor, with the PDF attached, and Sam is on the finance team. Next I need our CI usage, so the second email has real numbers.',
@@ -154,6 +157,7 @@ const BEATS: Beat[] = [
     detail: 'CI plan',
     ms: 800,
   },
+  { kind: 'text', text: '\n' },
   {
     kind: 'call',
     tool: 'ReadContent',

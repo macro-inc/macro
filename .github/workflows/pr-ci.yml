@@ -502,7 +502,6 @@ jobs:
             - '.github/kafka-cluster-topics.json'
           node_modules_nix:
             - 'bun.lock'
-            - 'packages/sdk/bun.lock'
             - 'package.json'
             - 'apps/**/package.json'
             - 'packages/**/package.json'
@@ -525,6 +524,7 @@ jobs:
             - '.github/workflows/check_tauri_lockfiles.yml'
           sdk:
             - 'packages/sdk/**'
+            - 'bun.lock'
             - '.github/workflows/sdk-check.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'

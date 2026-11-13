@@ -571,6 +571,7 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
             entity_id,
             updated_at: ts(1000),
         })),
+        document_term_matching: None,
     };
 
     let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
@@ -617,6 +618,7 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
         search_on: SearchOn::NameContent,
         include_crm: false,
         calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
         collapse: None,
     };
     req.filters.chat_filters.chat_ids = vec![chat_id.to_string()];
@@ -691,6 +693,7 @@ fn the_unified_search_span_defaults_the_page_size() {
         search_on: SearchOn::Content,
         include_crm: false,
         calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
         collapse: None,
     };
     let query_params = SearchPaginationParams {
