@@ -15,9 +15,19 @@ afterEach(() => {
   setActiveScope('global');
 });
 
-function press(key: string) {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-  document.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+function press(key: string, init: KeyboardEventInit = {}) {
+  const keydown = new KeyboardEvent('keydown', {
+    key,
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+  document.dispatchEvent(keydown);
+  document.dispatchEvent(
+    new KeyboardEvent('keyup', { key, bubbles: true, ...init })
+  );
+  document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }));
+  return keydown;
 }
 
 function ListHeader(props: {
@@ -118,4 +128,23 @@ it('leaves the key to the search view on a tab without search', () => {
   press('/');
 
   expect(email.handled).toEqual(['search view']);
+});
+
+it('focuses the list search with Cmd+F while the list is on screen', () => {
+  const email = renderEmail({ sidebarAvailable: true });
+
+  const keydown = press('f', { ctrlKey: true });
+
+  expect(email.handled).toEqual(['list search']);
+  expect(keydown.defaultPrevented).toBe(true);
+});
+
+it('leaves Cmd+F to the browser once a thread replaces the list', () => {
+  const email = renderEmail({ sidebarAvailable: true });
+  email.setListOnScreen(false);
+
+  const keydown = press('f', { ctrlKey: true });
+
+  expect(email.handled).toEqual([]);
+  expect(keydown.defaultPrevented).toBe(false);
 });

@@ -3,9 +3,12 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { Accessor } from 'solid-js';
 
 /**
- * `/` and Cmd+F reach Email's search field for as long as Email is mounted.
- * The list header's field takes them while it is on screen; a thread or a new
- * email replaces that header, and the sidebar's field takes them instead.
+ * Email's search keys, registered for as long as Email is mounted.
+ *
+ * `/` always reaches a search field: the list header's while it is on screen,
+ * and the sidebar's once a thread or a new email has replaced that header.
+ * Cmd+F belongs to the list header's field only; without it the key is left
+ * alone, so the browser can still find text in the open thread or draft.
  */
 export function useEmailSearchHotkeys(options: {
   scopeId: string;
@@ -16,8 +19,8 @@ export function useEmailSearchHotkeys(options: {
 }) {
   let focusListSearch: (() => void) | undefined;
 
-  const runSearch = () => {
-    if (!focusListSearch) return options.openSidebarSearch();
+  const runListSearch = () => {
+    if (!focusListSearch) return false;
 
     focusListSearch();
     return true;
@@ -29,7 +32,7 @@ export function useEmailSearchHotkeys(options: {
     scopeId: options.scopeId,
     description: 'Search email',
     condition: () => options.enabled() && options.canSearch(),
-    keyDownHandler: runSearch,
+    keyDownHandler: () => runListSearch() || options.openSidebarSearch(),
   });
 
   useViewControlHotkeys({
@@ -38,7 +41,7 @@ export function useEmailSearchHotkeys(options: {
     search: {
       description: 'Search email',
       condition: options.canSearch,
-      run: runSearch,
+      run: runListSearch,
     },
   });
 

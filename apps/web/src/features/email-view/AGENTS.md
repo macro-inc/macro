@@ -52,8 +52,10 @@ the Soup-backed thread list, and saved email views (flag
 - Unread dots are presence in a small first unread page per view, never a count.
 - `/` and Cmd+F are registered for the whole desktop view in
   `use-email-search-hotkeys.ts`, not in the list header: a thread or a new
-  email unmounts that header, and a key with no Email command falls through
-  to the app sidebar's Search view.
+  email unmounts that header, and a `/` with no Email command falls through
+  to the app sidebar's Search view. With the header unmounted, `/` opens the
+  sidebar's search field; Cmd+F stays unhandled so the browser can find text
+  in the thread or draft.
 - `ViewShell.Main` holds the list at the width `use-reading-pane-list-width.ts`
   reads beside the reading pane, so every drag must be saved through
   `onWidthChangeEnd`; an unsaved one snaps back on the next resize.
