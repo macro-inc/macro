@@ -19,7 +19,7 @@ use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
+    models::{Entity, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
 /// Path parameters for pin routes.
@@ -123,20 +123,15 @@ where
                     .await
                     .map_err(ExtractorError::from)?
                     .ok_or(ExtractorError::Unauthorized)?;
-                let permission = EntityPermission::AccessLevel { access_level };
-                if !permission.satisfies::<T>() {
-                    return Err(ExtractorError::Unauthorized);
-                }
 
-                EntityAccessReceipt {
-                    entity: Entity {
+                EntityAccessReceipt::try_new_authenticated_user(
+                    macro_user_id,
+                    Entity {
                         entity_id: pinned_item_id,
                         entity_type,
                     },
-                    auth: EntityAccessAuth::Authenticated(macro_user_id),
-                    entity_permission: permission,
-                    _marker: PhantomData,
-                }
+                    EntityPermission::AccessLevel { access_level },
+                )?
             }
             MacroAuthorization::Harness(_) | MacroAuthorization::Internal(None) => {
                 return Err(ExtractorError::Unauthorized);

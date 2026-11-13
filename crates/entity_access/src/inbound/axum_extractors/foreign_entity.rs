@@ -131,20 +131,15 @@ impl<T: RequiredPermission, Svc, Auth> ForeignEntityAccessLevelExtractor<T, Svc,
         auth: EntityAccessAuth,
         entity_permission: EntityPermission,
     ) -> Result<Self, ExtractorError> {
-        if !entity_permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        }
-
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new(
+                auth,
+                Entity {
                     entity_id: foreign_entity_id,
                     entity_type: EntityType::ForeignEntity,
                 },
-                auth,
                 entity_permission,
-                _marker: PhantomData,
-            },
+            )?,
             _marker: PhantomData,
         })
     }
