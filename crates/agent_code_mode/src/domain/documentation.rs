@@ -51,27 +51,30 @@ static GENERATED: LazyLock<Generated> = LazyLock::new(|| {
         .expect("generated SDK documentation is valid")
 });
 
-/// The system skill that comes with an entity's guidance in code mode, so a
-/// session that reads how an area works also reads how to do its main job
-/// there, without having to find the skill: how to write a routine.
-fn attached_skill(entity: &str) -> Option<&'static system_skills::SystemSkill> {
-    (entity == ROUTINES_ENTITY).then_some(&system_skills::compose_routines::SKILL)
+/// The system skill that comes with an entity's guidance, so a session that
+/// reads how an area works also reads how to do its main job there, without
+/// having to find the skill: how to write a routine. Code mode carries the
+/// skill; direct hosts carry its routine-tools form.
+fn attached_skill(entity: &str, host: GuideHost) -> Option<String> {
+    use system_skills::compose_routines;
+    (entity == ROUTINES_ENTITY).then(|| match host {
+        GuideHost::Code => compose_routines::SKILL.render_content(),
+        GuideHost::Direct => compose_routines::DIRECT.to_string(),
+    })
 }
 
 /// The entity whose guidance carries the Compose Routines skill.
 const ROUTINES_ENTITY: &str = "routines";
 
-/// The entities as code mode carries them: each guide followed by the system
-/// skill attached to it, wherever the guide goes (inline, routed, or a
-/// `DescribeCodeTools` result).
-static CODE_ENTITIES: LazyLock<Vec<SdkDocumentation>> = LazyLock::new(|| {
+/// The entities as `host` carries them: each guide followed by the system
+/// skill attached to it.
+fn with_attached_skills(host: GuideHost) -> Vec<SdkDocumentation> {
     GENERATED
         .entities
         .iter()
         .cloned()
         .map(|mut doc| {
-            if let Some(skill) = attached_skill(&doc.name) {
-                let skill = skill.render_content();
+            if let Some(skill) = attached_skill(&doc.name, host) {
                 doc.guide = Some(match doc.guide.take() {
                     Some(guide) => format!("{guide}\n\n{skill}"),
                     None => skill,
@@ -80,7 +83,16 @@ static CODE_ENTITIES: LazyLock<Vec<SdkDocumentation>> = LazyLock::new(|| {
             doc
         })
         .collect()
-});
+}
+
+/// The entities as code mode carries them, wherever a guide goes (inline,
+/// routed, or a `DescribeCodeTools` result).
+static CODE_ENTITIES: LazyLock<Vec<SdkDocumentation>> =
+    LazyLock::new(|| with_attached_skills(GuideHost::Code));
+
+/// The entities as direct hosts carry them inline.
+static DIRECT_ENTITIES: LazyLock<Vec<SdkDocumentation>> =
+    LazyLock::new(|| with_attached_skills(GuideHost::Direct));
 
 /// Every SDK entity with its index, supplied at build time, with the guidance
 /// code mode carries.
@@ -145,14 +157,13 @@ const SDK_ONLY_GUIDES: [&str; 2] = ["agentSessions", "tasks"];
 
 /// Every area's guidance as one prompt section, for prompts that do not route
 /// entities per turn. The search guide stays a `DescribeCodeTools` topic, as
-/// it is SDK how-to rather than how an area works. Code mode carries each
-/// guide with its attached skill; direct hosts, which cannot run the SDK,
-/// carry the guide alone.
+/// it is SDK how-to rather than how an area works. Each guide comes with its
+/// attached skill, in the form that host can follow.
 pub fn inline_guides(host: GuideHost) -> &'static str {
     fn render(host: GuideHost) -> String {
         let entities: &[SdkDocumentation] = match host {
             GuideHost::Code => sdk_documentation(),
-            GuideHost::Direct => &GENERATED.entities,
+            GuideHost::Direct => &DIRECT_ENTITIES,
         };
         entities
             .iter()

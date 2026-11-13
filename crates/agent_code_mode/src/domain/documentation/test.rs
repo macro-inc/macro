@@ -399,13 +399,14 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
     assert!(result.contains(catalog[32].index.as_deref().unwrap()));
 }
 
-/// A code-mode session that reads the routines guide reads the Compose
-/// Routines skill right after it, without having to find it. A direct host,
-/// which can't run the skill's programs, reads the guide alone, which points
-/// to the skill.
+/// A session that reads the routines guide reads the Compose Routines skill
+/// right after it, without having to find it: code mode the skill, and a
+/// direct host, which can't run the skill's programs, its routine-tools form.
 #[test]
-fn code_mode_carries_the_compose_routines_skill_with_the_routines_guide() {
-    let skill = system_skills::compose_routines::SKILL.render_content();
+fn the_routines_guide_carries_the_compose_routines_skill_each_host_can_follow() {
+    use system_skills::compose_routines;
+    let skill = compose_routines::SKILL.render_content();
+    let direct_skill = compose_routines::DIRECT.to_string();
     let guide = entity_guide("routines").expect("routines has a guide");
     assert!(
         guide.contains("follow the Compose Routines skill"),
@@ -419,8 +420,9 @@ fn code_mode_carries_the_compose_routines_skill_with_the_routines_guide() {
     assert_eq!(carried, format!("{guide}\n\n{skill}"));
     assert!(inline_guides(GuideHost::Code).contains(carried));
     let direct = inline_guides(GuideHost::Direct);
-    assert!(direct.contains(guide));
+    assert!(direct.contains(&format!("{guide}\n\n{direct_skill}")));
     assert!(!direct.contains(&skill));
+    assert!(!inline_guides(GuideHost::Code).contains(&direct_skill));
 }
 
 #[tokio::test]

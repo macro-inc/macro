@@ -63,8 +63,10 @@ enforced by the ordinary backend APIs.
   `{ includeChildren }` adds active sub-routines and `{ parent }` returns one
   routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,
   `children()` and `keepAsOwn()` read and change the link, and
-  `RoutineExecution.created` holds the routines a run created. The rules an
-  agent needs are in the `@agent` block on `RoutineNamespace`.
+  `RoutineExecution.created` holds the routines a run created. The `@agent` block on
+  `RoutineNamespace` says when a request is a routine; how to write one is
+  the Compose Routines skill (`crates/system_skills`), which comes with that
+  guide.
   `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.
