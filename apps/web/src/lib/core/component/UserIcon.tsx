@@ -161,14 +161,17 @@ export function UserIcon(props: UserIconProps) {
   const openDirectMessage = useOpenDirectMessage();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const agentProfile = useAgentProfile();
-  // A click on an agent teammate opens its profile, not a DM: the card
-  // trigger does that on click, so the DM on press stands aside.
-  const opensProfile = () =>
-    !props.suppressClick && !!agentProfile.profileOf(props.id);
 
+  // A press on an agent teammate's picture opens its profile where a
+  // person's opens the DM: same moment, and like the DM it leaves the press to
+  // whatever row the picture sits in.
   const openDm = (event: MouseEvent) => {
     if (!props.id || isConnectedSecondaryInbox(props.id)) return;
-    if (opensProfile()) return;
+    const profileId = agentProfile.profileOf(props.id);
+    if (profileId) {
+      agentProfile.open(profileId, 'avatar', event);
+      return;
+    }
     fireAndForget(
       openDirectMessage(props.id, {
         activate: true,
@@ -185,16 +188,10 @@ export function UserIcon(props: UserIconProps) {
   // its actions rather than jumping straight into a conversation.
   const avatarMouseDown = () =>
     props.suppressClick || isTouchDevice() ? undefined : openDm;
-  const profileSurface = () => (props.suppressClick ? undefined : 'avatar');
-
-  // Without a card, the avatar itself opens an agent's profile on click.
-  const openProfileWithoutCard = (event: MouseEvent) => {
-    const id = props.id;
-    if (!id || !opensProfile()) return;
-    event.preventDefault();
-    event.stopPropagation();
-    agentProfile.open(id, 'avatar', event);
-  };
+  // On touch the tap goes to the card trigger, which opens an agent's profile
+  // instead of the card; a pointer opens it on press, above.
+  const profileSurface = () =>
+    props.suppressClick || !isTouchDevice() ? undefined : 'avatar';
 
   const triggerClass = () =>
     size() === 'fill' ? 'size-full' : 'inline-flex shrink-0';
@@ -241,7 +238,6 @@ export function UserIcon(props: UserIconProps) {
           size={size()}
           class={props.class}
           onMouseDown={props.suppressClick ? undefined : openDm}
-          onClick={props.suppressClick ? undefined : openProfileWithoutCard}
         >
           <UserIconContent
             name={props.name}

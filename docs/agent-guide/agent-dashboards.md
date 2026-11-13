@@ -46,10 +46,12 @@ and one column: the renderer stacks rows below its container breakpoint.
 An agent teammate's profile opens wherever you click the agent, with the flag
 on. Each opens it in a new pane (in front, on phones):
 
-- its picture anywhere it shows (channel messages, Settings → Team), which for
-  a person still opens the DM;
+- its picture anywhere it shows (channel messages, Settings → Team): on press,
+  where a person's opens the DM, so a row the picture sits in still acts; on
+  touch, the tap that opens a person's card;
 - its name beside its channel messages, which for a person stays plain text;
-- an `@mention` of it, which for a person only shows the user card on hover;
+- an `@mention` of it in a message, which for a person only shows the user card
+  on hover (a composer keeps the click for editing);
 - its row in a channel's member list, which for a person opens the DM;
 - **Open profile**, the first action of its hover card (and of the touch sheet
   where one still opens);
