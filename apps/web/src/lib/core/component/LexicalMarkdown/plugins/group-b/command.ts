@@ -171,3 +171,34 @@ export function dispatchApplicationCommandSettledIfSessionEdit(
     ...(admission.mainCommit ? { mainCommit: admission.mainCommit } : {}),
   });
 }
+
+/** Settle one Edit-admitted application command before returning, in the
+ *  caller's task. Like dispatchApplicationCommandSettledIfSessionEdit, the view
+ *  and generation are captured at the call and rechecked after the payload is
+ *  materialized at actual entry; the view is never retargeted. */
+export function dispatchApplicationCommandNowIfSessionEdit(
+  view: EditorView,
+  name: string,
+  payload: () => JsonValue
+): InputSettlement {
+  if (!(view.port instanceof SessionPort))
+    throw new Error(
+      'Synchronous application commands require the native session port'
+    );
+  const generation = view.mirror.keyGeneration;
+  if (!view.isMounted || generation === null)
+    throw new Error('Native view generation is unavailable');
+  return view.port.inputNowIfSessionEdit(() => {
+    if (!view.isMounted || view.mirror.keyGeneration !== generation)
+      throw new Error('Native view generation changed before admission');
+    const input = applicationInput(view, name, payload());
+    if (
+      !view.isMounted ||
+      view.mirror.keyGeneration !== generation ||
+      !input?.isEditorApplication() ||
+      input.value.generation !== generation
+    )
+      throw new Error('Native view generation changed during admission');
+    return input.value;
+  });
+}
