@@ -84,7 +84,7 @@ passkeys, previous passwords, unusual verification codes), and how many items
 look like ones the vault has (same kind, name ignoring case, website host).
 Skip items I already have is on by default; when it would leave nothing to
 import, the preview says so (turn it off to import copies) and offers Done. When the vault list is at its
-500-item cap, the export's distinct names are matched in the vault with
+500-item cap, or still loading or failed, the export's distinct names are matched in the vault with
 `POST …/items/match` (names trimmed and lower-cased once on the client, in
 the body, never a URL; at most 500 names and 192 KiB per request, metadata
 only); if a request fails or an answer is capped, the preview says
@@ -100,9 +100,9 @@ Import sends batches of at most 25 items and 3.5 MiB, one at a time, to
 answers busy are resent after a backoff. The result counts imported, already
 present, skipped and failed items and offers Open folder. The import id is
 kept in sessionStorage under a hash of the viewer and the file's contents
-(hashed in the worker), with the destination, privacy and, for items it
-created but could not finish, their source keys and item ids (written only
-when that set changes). Importing the same file again in the tab continues the
+(hashed in the worker), with the destination, privacy and the source keys of
+items that may be unfinished: failed with an item id, or verification-code
+items sent without an answer yet (written only when that set changes). Importing the same file again in the tab continues the
 import with the same destination and privacy (locked in the preview) and
 resends those unfinished items rather than skipping them as duplicates, which
 finishes a verification code an earlier run could not set up. If the folder
