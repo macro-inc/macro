@@ -698,10 +698,12 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert_eq!(problems, Vec::new(), "the CreateRoutine example");
         // The Compose Routines skill's example step, as code mode carries it
         // after the routines guide.
-        let guide = agent_code_mode::domain::sdk_documentation()
+        let routines = agent_code_mode::domain::sdk_documentation()
             .iter()
             .find(|doc| doc.name == "routines")
-            .and_then(|doc| doc.guide.as_deref())
+            .unwrap();
+        let guide = agent_code_mode::domain::with_attached_skill(routines)
+            .guide
             .unwrap();
         let (_, rest) = guide.split_once("        source: `").unwrap();
         let (source, _) = rest.split_once("`,\n").unwrap();

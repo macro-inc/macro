@@ -2495,8 +2495,9 @@ also exercise direct ACP model-change requests, downgrade, and resume.
 The built-in **Compose Routines** skill is how an agent writes or changes a
 routine from a conversation. A code-mode session reads it with the routines
 guide, without looking for it, and usually does the whole job in one program:
-one `macro.search.names` lookup for every item the request names (asking with
-`AskUser` when a name is missing or ambiguous), then `macro.routines.check`
+one `macro.search.names` lookup for every item the request names (asking, with
+`AskUser` where it can or else in its reply, when a name has no exact match or
+several), then `macro.routines.check`
 and `create` or `update`, then a one- or two-sentence reply with the routine's
 link. The routine is saved switched on. A step takes each item the request
 names from a knob holding its name, which it looks up when it runs. Hosts

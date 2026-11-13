@@ -18,8 +18,8 @@ Be quick. Usually one program finds what the request names, checks the routine a
 
 ## Find what it names
 
-- Look up every item the request names (a channel, person, project or folder, document, database, label or tag) with one `macro.search.names([...])` call, each name as written, as `{ name, kinds }` when the request says its kind (a #name is a channel). The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
-- When a name has no exact match, or several and the request doesn't say which kind it means, ask which one (with `AskUser` where you have it) before saving.
+- Look up every item the request names with one `macro.search.names([...])` call, each name as written, as `{ name, kinds }` when the request says its kind: `channel` (a #name), `person`, `initiative` (what the app calls a project), `project` (a folder), `document`, `task`, `database`, `agent`, `label` (an email label) or `tag`. The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
+- When a name has no exact match, or several, ask which one before saving anything: with `AskUser` where you have it, otherwise in your reply.
 - When they mean a routine they have (attached, or "my invoice routine"), change it rather than adding another. Find it by name in `await macro.routines.list({ includeEvents: true })`, or with `macro.routines.byId(id)` when it is attached. Return `routine.toJSON().detail` (after `await routine.name()` for one from `byId`) to read its `trigger` and `task` as stored.
 
 ## Write it
@@ -116,6 +116,11 @@ static WRITING: StaticPrompt<'static> = StaticPrompt::borrowed(
 );
 
 static SESSION_WITHOUT_CODE: ComposedPrompt = SESSION.compose(&WITHOUT_CODE);
+
+/// The skill as code mode carries it after the routines guide: how a
+/// code-mode session finds, checks, saves and reports a routine, then how to
+/// write one, without the routine-tools part it has no tools for.
+pub static CODE: ComposedPrompt = SESSION.compose(&WRITING);
 
 /// The skill's instructions as a composable prompt section: how a code-mode
 /// session finds, checks, saves and reports a routine, what a session without
