@@ -853,6 +853,11 @@ async fn a_scoped_session_patches_a_chat_but_not_its_sharing() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(
+        body,
+        agent_correlation::context::SharingRefused::MESSAGE.as_bytes()
+    );
     let res = scope_attribution(
         no_send,
         router.clone().oneshot(patch(r#"{"name": "Renamed"}"#)),
