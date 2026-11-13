@@ -274,7 +274,10 @@ Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: while loading, the card draws its
 header with the question (the card's name, so it wraps as it will) above a body
 reserved from `previewData.poll.optionCount`, keeps that height through load,
-and never scrolls or clips inside:
+and never scrolls or clips inside. With the real form block held suspended,
+the card shows the form's loading skeleton (`FormBlockLoading`, which needs no
+effect to appear), then after ten seconds "Couldn’t load this form." with Retry,
+and reports `form.card.stalled`:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
 
 Pinch zoom on opened image files (Drive details and image splits) has a

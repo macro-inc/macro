@@ -7,6 +7,7 @@ import { FormCardView } from '@app/features/block-form/views/form-card-view';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { UserContextProvider } from '@core/context/user';
+import { createBlockInstance } from '@core/orchestrator';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { previewKeys } from '@queries/preview/keys';
@@ -198,12 +199,47 @@ function PollExample(props: {
   );
 }
 
+/**
+ * The real form block in the card, as a channel message mounts it. The test
+ * holds the block's code, so it stays suspended in its loading state.
+ */
+function SuspendedPollExample() {
+  const id = '01a19a29-0000-7000-8000-000000000099';
+  queryClient.setQueryData(previewKeys.item(id).queryKey, {
+    id,
+    type: 'form',
+    name: 'Pick your size',
+    rawName: 'Pick your size',
+    owner: 'macro|owner@example.com',
+    loading: false,
+    access: 'access',
+  } satisfies PreviewItem);
+  const block = createBlockInstance('form', id, {
+    nested: { parentContext: {} },
+  });
+  return (
+    <section aria-label="Suspended" class="max-w-xl">
+      <DocumentCard
+        key={id}
+        documentId={id}
+        documentName="Pick your size"
+        blockName="form"
+        blockParams={{}}
+        previewData={{ poll: { optionCount: 7 } }}
+        previewComponent={() => block.element()}
+        theme={channelTheme}
+      />
+    </section>
+  );
+}
+
 function Fixture() {
   return (
     <main class="h-screen space-y-6 overflow-y-auto bg-page p-4 text-ink">
       <For each={polls}>
         {(poll, index) => <PollExample index={index() + 1} {...poll} />}
       </For>
+      <SuspendedPollExample />
     </main>
   );
 }

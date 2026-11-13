@@ -58,3 +58,48 @@ for (const viewport of [
     });
   }
 }
+
+for (const viewport of [
+  { name: 'desktop', width: 1280, height: 800 },
+  { name: 'phone', width: 390, height: 844 },
+]) {
+  test(`a poll card shows its form block loading instead of an empty body on ${viewport.name}`, async ({
+    page,
+  }) => {
+    await page.route('https://**', (route) => route.abort());
+    // Hold the form block's code: the block stays suspended in its loading
+    // state, as a card does while the form's code or detail is in flight.
+    await page.route('**/src/features/block-form/form-block.tsx*', () => {});
+    await page.clock.install();
+    await page.setViewportSize(viewport);
+    await page.goto(fixture);
+    const section = page.getByRole('region', { name: 'Suspended' });
+    await expect(section.getByText('owner@example.com')).toBeVisible({
+      timeout: 30_000,
+    });
+    const loading = section.getByRole('status', { name: 'Loading form' });
+    await expect(loading).toBeVisible();
+    await loading.scrollIntoViewIfNeeded();
+    // Painted, not clipped away: the loading state is what a person sees at
+    // its center, and it has height.
+    const box = (await loading.boundingBox())!;
+    expect(box.height).toBeGreaterThan(40);
+    const hit = await loading.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const top = document.elementFromPoint(
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2
+      );
+      return !!top && element.contains(top);
+    });
+    expect(hit).toBe(true);
+
+    // A form that never arrives says so and offers to load again, instead
+    // of a skeleton that never ends.
+    await page.clock.fastForward(10_000);
+    await expect(section.getByText('Couldn’t load this form.')).toBeVisible();
+    await section.getByRole('button', { name: 'Retry' }).click();
+    await expect(loading).toBeVisible();
+    await expect(section.getByRole('alert')).toHaveCount(0);
+  });
+}
