@@ -6,6 +6,12 @@ Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+`Featured Results` are the name matches, listed before the search service
+answers. They obey the Type filter and tags like the rows below them, and
+featured documents and tasks show the same properties. They are not listed
+while the search is scoped to a channel, a sender, or a task facet (status,
+priority, assignee, created by), which name matches cannot be checked against.
+
 Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
 **All** name results, and in the desktop Search page's `Featured Results`. They
 come from the routines list (Quick Access `routine` bucket), not the search
