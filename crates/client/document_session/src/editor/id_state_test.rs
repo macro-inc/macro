@@ -112,7 +112,16 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
     writer
         .init(&doc, now, Access::Edit, &mut Vec::new())
         .unwrap();
+    // OFF persists the bare version (receipt SHA-256
+    // 17135650998faced89334561c0fed993b0f4c5113a3da1740b47bb6dfe511eec).
+    assert_eq!(
+        lexical_loro::reconstruct_state(&doc, config.policy)
+            .unwrap()
+            .root["$"]["documentMetadata"],
+        serde_json::json!({"version":10})
+    );
     let mut state = writer.state().to_json().unwrap();
+    // Installs the custom-code subtree this test reopens.
     state.root.insert(
         "children".into(),
         serde_json::json!([
@@ -140,12 +149,7 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
         expected.root["children"][0]["children"][0]["$"]["id"],
         "application-leaf"
     );
-    // OFF first edit persists the bare version (receipt SHA-256
-    // 17135650998faced89334561c0fed993b0f4c5113a3da1740b47bb6dfe511eec).
-    let bare = serde_json::json!({"version":10});
-    assert_eq!(expected.root["$"]["documentMetadata"], bare);
     let persisted = lexical_loro::reconstruct_state(&doc, config.policy).unwrap();
-    assert_eq!(persisted.root["$"]["documentMetadata"], bare);
     let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
     drop(writer);
     drop(doc);
@@ -175,7 +179,7 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
 
 #[cfg(feature = "application")]
 #[test]
-fn editable_draft_cleanup_preserves_bare_metadata_storage() {
+fn editable_draft_cleanup_preserves_metadata_and_writes_its_parsed_null_slot() {
     let now = Now {
         mono: doc_sync_core::Millis(0),
         wall: doc_sync_core::UnixMillis(0),
@@ -208,9 +212,10 @@ fn editable_draft_cleanup_preserves_bare_metadata_storage() {
     let after = lexical_loro::reconstruct_initial_state(&doc, policy).unwrap();
     assert!(!after.has_transparent_wrappers);
     assert_ne!(doc.oplog_vv(), before_vv);
+    // An Edit open writes the parsed null slot (first open 605dfc47, reopen 5486fba0).
     assert_eq!(
         after.state.root["$"]["documentMetadata"],
-        serde_json::json!({"version":10})
+        serde_json::json!({"version":10,"environmentTags":null})
     );
     let text = &after.state.root["children"][0]["children"][0];
     assert_eq!(text["text"], "preserved");
@@ -283,11 +288,16 @@ fn live_history_keeps_metadata_while_loro_undo_removes_and_redo_restores_its_slo
     let mut surface = EditorSurface::new(config, 7, now).unwrap();
     let mut effects = Vec::new();
     surface.init(&doc, now, Access::Edit, &mut effects).unwrap();
-    assert!(
-        surface.state().to_json().unwrap().root["$"]
-            .get("documentMetadata")
-            .is_none()
+    // The open writes the load metadata as its own undo group (write-path-3 5f5e1b4e).
+    assert_eq!(
+        surface.state().to_json().unwrap().root["$"]["documentMetadata"],
+        serde_json::json!({"version":10})
     );
+    // Input arrives after Loro's 400 ms merge interval, as in the tape (Enter at +1060 ms).
+    let now = Now {
+        mono: doc_sync_core::Millis(1060),
+        wall: doc_sync_core::UnixMillis(1060),
+    };
     surface.focused = true;
     surface.focus_known = true;
     let paragraph = surface.state().first_child_or_err(NodeKey::ROOT).unwrap();
@@ -327,6 +337,15 @@ fn live_history_keeps_metadata_while_loro_undo_removes_and_redo_restores_its_slo
         lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]["documentMetadata"],
         bare
     );
+    // The first undo reverts only the edit; Loro keeps the load metadata (414abf76).
+    surface
+        .apply(&doc, Input::Undo, now, Access::Edit, &mut effects)
+        .unwrap();
+    assert!(surface.state().root_text_content().is_empty());
+    assert_eq!(
+        lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]["documentMetadata"],
+        bare
+    );
     let metadata_fixups = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let observed_fixups = metadata_fixups.clone();
     let _subscription = doc.subscribe_root(Arc::new(move |event| {
@@ -358,6 +377,14 @@ fn live_history_keeps_metadata_while_loro_undo_removes_and_redo_restores_its_slo
         .check(&doc, surface.state())
         .unwrap();
 
+    // Redo restores the load group, then the edit.
+    surface
+        .apply(&doc, Input::Redo, now, Access::Edit, &mut effects)
+        .unwrap();
+    assert_eq!(
+        lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]["documentMetadata"],
+        bare
+    );
     surface
         .apply(&doc, Input::Redo, now, Access::Edit, &mut effects)
         .unwrap();

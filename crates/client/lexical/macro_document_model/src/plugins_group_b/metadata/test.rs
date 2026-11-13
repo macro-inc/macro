@@ -28,8 +28,8 @@ impl Plugin for InitialCorrection {
 }
 
 #[test]
-fn initial_followups_still_run_without_upgrading_metadata() -> Result<(), Box<dyn std::error::Error>>
-{
+fn initial_followups_run_and_the_upgrade_is_a_following_host_update()
+-> Result<(), Box<dyn std::error::Error>> {
     let mut editor = register(Editor::builder(EditorMode::ViewAttached))
         .plugin(InitialCorrection)
         .initial_state(serde_json::from_value(json!({
@@ -52,7 +52,7 @@ fn initial_followups_still_run_without_upgrading_metadata() -> Result<(), Box<dy
             .and_then(|state| state.get("documentMetadata"))
             .is_none()
     );
-    editor.update(|tx| {
+    let (_, edit) = editor.update(|tx| {
         assert!(
             !tx.is_initializing(),
             "ordinary updates must leave initialization"
@@ -61,6 +61,23 @@ fn initial_followups_still_run_without_upgrading_metadata() -> Result<(), Box<dy
         let text = tx.create_text("x")?;
         tx.append(paragraph, &[text.key()])
     })?;
+    assert!(
+        edit.chain()
+            .flat_map(|commit| &commit.events)
+            .any(|event| event
+                .payload(&DOCUMENT_METADATA_UPGRADE_REQUESTED)
+                .is_some()),
+        "a mutating edit over stale metadata requests the upgrade"
+    );
+    assert!(
+        editor.state().to_json()?.root["$"]
+            .get("documentMetadata")
+            .is_none(),
+        "the edit's own chain must not write metadata"
+    );
+    // The host answers in its own following update, like Source's queued microtask.
+    let (_, upgrade) = editor.dispatch(&document_metadata_upgrade())?;
+    assert!(upgrade.tags.contains(&UpdateTag::HistoryMerge));
     let edited = editor.state().to_json()?;
     assert_eq!(edited.root["$"]["documentMetadata"]["version"], json!(10));
     assert!(

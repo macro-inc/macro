@@ -16,6 +16,8 @@ pub(crate) mod reported_errors;
 pub use reported_errors::ReportedModelErrorObserver;
 mod history;
 #[cfg(feature = "application")]
+mod metadata;
+#[cfg(feature = "application")]
 pub(crate) use builder::with_session_plugins_excluding_root;
 pub use builder::{
     default_editor_builder, register_editor_commands, with_session_plugins,
@@ -314,6 +316,10 @@ impl EditorSurface {
         } else {
             LoroProjection::initialize(doc, base, self.config.policy, now.wall.0 / 1000)?
         };
+        #[cfg(feature = "application")]
+        let upgrade = initial
+            .as_ref()
+            .is_some_and(|output| Self::requests_metadata_upgrade(&output.effects));
         if let Some(output) = initial {
             if access == Access::Edit && !cleanup {
                 projection.local_commit(doc, &output.commits, LOCAL_ORIGIN, now.wall.0 / 1000)?;
@@ -339,6 +345,18 @@ impl EditorSurface {
         self.availability = HistoryAvailability::default();
         // Initialization's ClearHistory boundary makes the manager ready for user edits.
         self.history_ready = true;
+        // Source's first node-mutating update after load queues the history-merge
+        // metadata upgrade. Its sync writes derived root search text, then the version:
+        // two local commits in one undo group, after the initial content.
+        #[cfg(feature = "application")]
+        if access == Access::Edit {
+            // Initialize carries the upgraded state; only failures reach the view.
+            let mut upgrade_view = Vec::new();
+            self.load_follow_up(doc, now, upgrade, &mut upgrade_view)?;
+            view.extend(upgrade_view.into_iter().filter(|effect| {
+                matches!(effect, ViewEffect::Editor(Effect::FollowUpFailed { .. }))
+            }));
+        }
         drop(load_guard);
         let _view = tracing::info_span!("view.initialize").entered();
         // A full patch is generated from an empty editor in the same registry.
@@ -351,6 +369,7 @@ impl EditorSurface {
             diff,
             state: self.core.state().to_json()?,
         }));
+        self.history_changed(view);
         Ok(())
     }
     pub(crate) fn resync(

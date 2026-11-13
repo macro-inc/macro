@@ -261,6 +261,12 @@ pub enum Error {
         /// Conflicting name.
         key: &'static str,
     },
+    /// A stored-slot supersede outside an ordinary local transaction.
+    #[error("stored state supersede refused for {key}")]
+    StoredStateSupersedeRefused {
+        /// Retained root state name.
+        key: &'static str,
+    },
     /// Json error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
@@ -445,6 +451,7 @@ impl Error {
             Self::SetEmptyEditorState => "SetEmptyEditorState",
             Self::WriteAfterSetEditorState => "WriteAfterSetEditorState",
             Self::StateKeyCollision { .. } => "StateKeyCollision",
+            Self::StoredStateSupersedeRefused { .. } => "StoredStateSupersedeRefused",
             Self::Json(..) => "Json",
             Self::Extension(..) => "Extension",
         }

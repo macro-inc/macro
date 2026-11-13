@@ -141,10 +141,12 @@ node transforms before publication. A NodeSelection currently reports insertion
 without attaching the new GIF, leaving an orphaned upload; both engines retain
 that behavior until it is corrected together.
 
-When opening an older document without `documentMetadata`, verify that hydration
-preserves the model and sends no local document update or WAL append. The first
-real text edit adds version 10 in that edit’s normal update; read-only export
-must retain it without another write.
+When opening an older document without `documentMetadata` for editing, verify
+that the open writes paragraph `searchText` and then `documentMetadata`
+`{version: 10}` as two local commits in one undo step, before any input. Undo
+on the freshly opened document removes both (a shared Source quirk: the stored
+metadata is gone until the next edit, which re-emits it). Read-only and
+comment-only opens write nothing.
 
 Click the gap between two adjacent code blocks or tables: one paragraph appears
 between them, takes the caret, and accepts typing; Undo and Redo restore the exact

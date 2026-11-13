@@ -38,6 +38,13 @@ pub(crate) fn lis(sequence: &[usize]) -> OrderedSet<usize> {
     }
     result
 }
+/// The explicit before/after states and candidate keys of one projection pass.
+struct Pass<'a> {
+    all: &'a [&'a Commit],
+    prev_state: &'a EditorState,
+    next_state: &'a EditorState,
+    candidates: OrderedMap<NodeKey, Mutation>,
+}
 impl LoroProjection {
     /// Project a complete output's commit/follow-up chain as one explicit Loro commit.
     pub fn local_commit(
@@ -103,14 +110,67 @@ impl LoroProjection {
         let (Some(first), Some(last)) = (all.first(), all.last()) else {
             return Ok(LocalProjected::default());
         };
-        let prev = first.prev.view();
-        let next = last.next.view();
         let mut candidates = OrderedMap::default();
         for commit in &all {
             for (key, mutation) in &commit.changes.mutations {
                 candidates.insert(*key, *mutation);
             }
         }
+        let pass = Pass {
+            all: &all,
+            prev_state: &first.prev,
+            next_state: &last.next,
+            candidates,
+        };
+        self.project_states(doc, pass, origin, now, suppress_events, exports)
+    }
+    /// Write the opt-in root search text derived from `state` as one local Loro commit,
+    /// with no model update, as Source's full-state sync does after the initial content.
+    pub fn refresh_root_search_text(
+        &mut self,
+        doc: &LoroDoc,
+        state: &EditorState,
+        now: loro::Timestamp,
+    ) -> Result<LocalProjected> {
+        if self.search_text.is_none() {
+            return Ok(LocalProjected::default());
+        }
+        let candidates = state
+            .view()
+            .children(NodeKey::ROOT)
+            .map(|key| (key, Mutation::Updated))
+            .collect::<OrderedMap<_, _>>();
+        let mut exports = std::mem::take(&mut self.own_exports);
+        let pass = Pass {
+            all: &[],
+            prev_state: state,
+            next_state: state,
+            candidates,
+        };
+        let result = self.project_states(doc, pass, LOCAL_ORIGIN, now, false, &mut exports);
+        self.own_exports = exports;
+        if result.is_err() {
+            self.child_index = crate::child_index::ChildIndex::default();
+        }
+        result
+    }
+    fn project_states(
+        &mut self,
+        doc: &LoroDoc,
+        pass: Pass<'_>,
+        origin: &'static str,
+        now: loro::Timestamp,
+        suppress_events: bool,
+        exports: &mut (JsonExportBuffer, JsonExportBuffer),
+    ) -> Result<LocalProjected> {
+        let Pass {
+            all,
+            prev_state,
+            next_state,
+            candidates,
+        } = pass;
+        let prev = prev_state.view();
+        let next = next_state.view();
         let mut dirty = OrderedMap::default();
         let mut structure = OrderedSet::default();
         for (&key, &mutation) in &candidates {
@@ -158,7 +218,7 @@ impl LoroProjection {
             }
         }
         // A disappearing transparent wrapper can still change its surviving synced parent's list.
-        for commit in &all {
+        for commit in all {
             for (key, mutation) in &commit.changes.mutations {
                 if *mutation == Mutation::Destroyed {
                     let mut parent = commit.prev.view().parent(*key);
@@ -174,6 +234,10 @@ impl LoroProjection {
                     }
                 }
             }
+        }
+        // A superseded retained root slot changes ROOT's stored export without dirtying it.
+        if all.iter().any(|commit| commit.stored_state_superseded) {
+            dirty.entry(NodeKey::ROOT).or_insert(Mutation::Updated);
         }
         // Element exports can derive fields from descendants (textStyle and
         // textFormat). Visit their own JSON without materializing child lists.
@@ -232,7 +296,7 @@ impl LoroProjection {
         // which produced them. External commits (including own-field visibility
         // changes) and uncommitted native writes invalidate them before use.
         let anchors_valid = origin == LOCAL_ORIGIN
-            && self.indexed_state.same_snapshot(&first.prev)
+            && self.indexed_state.same_snapshot(prev_state)
             && self.indexed_vv == before_vv
             && self.indexed_frontiers == doc.state_frontiers()
             && !doc.is_detached()
@@ -497,7 +561,7 @@ impl LoroProjection {
                 search.retire_unbound(&self.index);
             }
         }
-        self.indexed_state = last.next.clone();
+        self.indexed_state = next_state.clone();
         let after_vv = doc.oplog_vv();
         let changed = before_vv != after_vv;
         self.indexed_vv = after_vv;

@@ -479,6 +479,28 @@ impl NodeState {
         // its value in place; a later JSON import prunes learned configs.
         Ok(())
     }
+    /// Whether an imported stored slot for `name` differs from the live typed value's
+    /// export (absent versus present, or a different serialized value).
+    pub(crate) fn stored_differs_from_live(&self, name: &str) -> bool {
+        let Some(stored) = self.imported_raw.as_ref().and_then(|raw| raw.get(name)) else {
+            return false;
+        };
+        let live = self
+            .known_entries()
+            .find(|(key, _)| key.name() == name)
+            .and_then(|(key, value)| {
+                if key.equal_any(value.as_ref(), key.default_any().as_ref()) {
+                    None
+                } else {
+                    key.json_any(value.as_ref())
+                }
+            });
+        match (stored, live) {
+            (Some(stored), Some(live)) => !serialized_equal(&live, stored),
+            (None, None) => false,
+            _ => true,
+        }
+    }
     pub(crate) fn forget_stored_value(&mut self, name: &str) {
         self.storage_only.retain(|stored| stored != name);
         if let Some(values) = &mut self.imported_raw {

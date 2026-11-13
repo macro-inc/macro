@@ -801,7 +801,8 @@ fn resync_restored_undo_manager_observes_the_same_host_clock() {
             &mut view,
         )
         .expect("first history entry");
-    assert_eq!(surface.undo.as_ref().expect("undo manager").undo_count(), 1);
+    // The load group is an undo item before the edit (write-path-3 5f5e1b4e, 414abf76).
+    assert_eq!(surface.undo.as_ref().expect("undo manager").undo_count(), 2);
     surface
         .resync(&doc, now(1100), Access::Edit, &mut view)
         .expect("real resync preserves existing manager");
@@ -826,7 +827,8 @@ fn resync_restored_undo_manager_observes_the_same_host_clock() {
             .as_ref()
             .expect("restored manager")
             .undo_count(),
-        2
+        // The load group, the first edit and the pushed state (write-path-3 5f5e1b4e).
+        3
     );
     surface
         .apply(&doc, Input::Undo, now(1500), Access::Edit, &mut view)

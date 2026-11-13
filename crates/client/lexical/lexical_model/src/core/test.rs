@@ -3,6 +3,7 @@ mod delta;
 mod events;
 mod main_commit;
 mod remote;
+mod retained_root;
 struct Typing;
 impl Plugin for Typing {
     fn name(&self) -> &'static str {

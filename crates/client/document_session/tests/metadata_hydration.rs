@@ -9,9 +9,12 @@ use macro_document_model::EditorType;
 use serde_json::json;
 use std::sync::{Arc, atomic::AtomicI64};
 
+/// A metadata-free document opened for editing is upgraded before input (5cf r003 OFF),
+/// so the first edit and later read-only exports write no metadata of their own.
 #[test]
-fn opening_a_metadata_free_document_keeps_the_persisted_state()
+fn opening_a_metadata_free_document_upgrades_it_before_input()
 -> Result<(), Box<dyn std::error::Error>> {
+    use loro_internal::ToJson;
     let source = macro_document_model::preset_builder_with_mode(
         EditorType::MarkdownSync,
         EditorMode::ViewAttached,
@@ -24,22 +27,11 @@ fn opening_a_metadata_free_document_keeps_the_persisted_state()
         ] }
     }))?)
     .build()?;
-    let expected = source.state().to_json()?;
-    assert!(
-        expected
-            .root
-            .get("$")
-            .and_then(|state| state.get("documentMetadata"))
-            .is_none()
-    );
-    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(
-        &serde_json::to_value(&expected)?,
-        None,
-    )?;
+    let stored = source.state().to_json()?;
+    let snapshot =
+        lexical_loro::snapshot::raw_state_to_loro_snapshot(&serde_json::to_value(&stored)?, None)?;
     let doc = lexical_loro::new_doc(50)?;
     doc.import(&snapshot)?;
-    let before_version = doc.oplog_vv();
-    let before_raw = doc.get_deep_value();
     let now = Now {
         mono: Millis(0),
         wall: UnixMillis(0),
@@ -53,27 +45,15 @@ fn opening_a_metadata_free_document_keeps_the_persisted_state()
         <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
     let mut effects = Vec::new();
     Surface::init(&mut surface, &doc, now, Access::Edit, &mut effects)?;
-    let actual = surface.state().to_json()?;
-    eprintln!(
-        "{}",
-        json!({
-            "oplogChanged": doc.oplog_vv() != before_version,
-            "rawDocumentChanged": doc.get_deep_value() != before_raw,
-            "metadata": actual.root.get("$").and_then(|state| state.get("documentMetadata")),
-            "modelEqual": actual == expected,
-        })
+    assert_eq!(
+        surface.state().to_json()?.root["$"]["documentMetadata"]["version"],
+        json!(10)
     );
     assert_eq!(
-        doc.oplog_vv(),
-        before_version,
-        "hydration wrote Loro operations"
+        doc.get_deep_value().to_json_value()["root"]["$"]["documentMetadata"]["version"],
+        json!(10)
     );
-    assert_eq!(
-        doc.get_deep_value(),
-        before_raw,
-        "hydration changed persisted fields"
-    );
-    assert_eq!(actual, expected, "hydration changed the public model");
+    let opened = doc.oplog_vv();
     let paragraph = surface
         .state()
         .view()
@@ -105,10 +85,19 @@ fn opening_a_metadata_free_document_keeps_the_persisted_state()
         None,
     )?;
     assert!(changed);
-    let edited = surface.state().to_json()?;
-    assert_eq!(edited.root["$"]["documentMetadata"]["version"], json!(10));
     assert_eq!(surface.state().root_text_content().as_ref(), "beforex");
-    assert_ne!(doc.oplog_vv(), before_version);
+    let edit = op_shapes(&serde_json::to_value(
+        doc.export_json_updates(&opened, &doc.oplog_vv())?,
+    )?);
+    assert!(
+        !edit.contains(&(
+            "Map".to_owned(),
+            "insert".to_owned(),
+            "documentMetadata".to_owned()
+        )),
+        "the first edit rewrote metadata: {edit:?}"
+    );
+    let edited = surface.state().to_json()?;
     let edited_version = doc.oplog_vv();
     assert_eq!(
         surface.state().to_json()?,
@@ -123,84 +112,126 @@ fn opening_a_metadata_free_document_keeps_the_persisted_state()
     Ok(())
 }
 
-fn assert_no_document_writes(
-    output: &document_session::SessionOutput,
+/// One op as (container kind, op kind, map key or "-").
+type OpShape = (String, String, String);
+
+/// Every op of a Loro JSON update export as (container kind, op kind, map key or "-");
+/// peer and container ids are excluded and nothing is filtered.
+fn op_shapes(updates: &serde_json::Value) -> Vec<OpShape> {
+    updates["changes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|change| change["ops"].as_array().cloned().unwrap_or_default())
+        .map(|op| {
+            let kind = op["container"]
+                .as_str()
+                .and_then(|id| id.rsplit(':').next())
+                .unwrap_or("?")
+                .to_owned();
+            let action = op["content"]["type"].as_str().unwrap_or("?").to_owned();
+            let key = op["content"]["key"].as_str().unwrap_or("-").to_owned();
+            (kind, action, key)
+        })
+        .collect()
+}
+
+/// Handle one input as a host would: acknowledge every storage write, then fire the
+/// timers it schedules within five seconds. Collects each WAL row and each sub-update of
+/// every sent PeerUpdate frame.
+fn drive(
+    session: &mut document_session::DocumentSession<EditorSurface>,
+    now: Now,
+    input: document_session::SessionInput,
+    rows: &mut Vec<Vec<u8>>,
+    sent: &mut Vec<Vec<u8>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use bebop::Record;
-    use doc_sync_core::{IoEffect, StorageOp};
-    for effect in &output.io {
-        match effect {
-            IoEffect::Storage {
-                op: StorageOp::WalAppend { .. },
-                ..
-            } => {
-                panic!("opening emitted a WAL append");
+    use doc_sync_core::{IoEffect, StorageEvent, StorageOp, SyncInput};
+    use document_session::SessionInput;
+    let mut queue = std::collections::VecDeque::from([(now, input)]);
+    let mut last = now.mono;
+    while let Some((at, input)) = queue.pop_front() {
+        let output = session.handle(at, input);
+        for effect in &output.io {
+            match effect {
+                IoEffect::Storage { id, op } => {
+                    if let StorageOp::WalAppend { record, .. } = op {
+                        rows.push(record.bytes.clone());
+                    }
+                    if !matches!(op, StorageOp::Load { .. }) {
+                        queue.push_back((
+                            at,
+                            SessionInput::Sync(SyncInput::Storage(StorageEvent::Done {
+                                id: *id,
+                                result: Ok(()),
+                            })),
+                        ));
+                    }
+                }
+                IoEffect::SocketSend { frame, .. } => {
+                    if frame.first() != Some(&1) {
+                        return Err("fragmented frame in a small load control".into());
+                    }
+                    if let sync_protocol::FromPeer::PeerUpdate { updates, .. } =
+                        sync_protocol::FromPeer::deserialize(&frame[1..])?
+                    {
+                        sent.extend(updates.iter().map(|update| update.to_vec()));
+                    }
+                }
+                _ => {}
             }
-            IoEffect::SocketSend { frame, .. } => {
-                assert_eq!(
-                    frame.first(),
-                    Some(&1),
-                    "small open control unexpectedly fragmented"
-                );
-                let message = sync_protocol::FromPeer::deserialize(&frame[1..])?;
-                assert!(
-                    !matches!(
-                        message,
-                        sync_protocol::FromPeer::PeerUpdate { .. }
-                            | sync_protocol::FromPeer::PeerCommentUpdate { .. }
-                    ),
-                    "opening emitted a document update"
-                );
-            }
-            _ => {}
+        }
+        if queue.is_empty()
+            && let Some(wake) = output
+                .wake_at
+                .filter(|wake| wake.0 > last.0 && wake.0 <= now.mono.0 + 5000)
+        {
+            last = wake;
+            queue.push_back((
+                Now {
+                    mono: wake,
+                    wall: UnixMillis(i64::try_from(wake.0)?),
+                },
+                SessionInput::Sync(SyncInput::Tick),
+            ));
         }
     }
-    assert!(
-        !output
-            .view
-            .iter()
-            .any(|effect| matches!(effect, document_session::ViewEffect::Error(_))),
-        "opening returned a view error"
-    );
     Ok(())
 }
 
-#[test]
-fn cold_remote_open_has_no_wal_or_document_frame_before_the_first_edit()
--> Result<(), Box<dyn std::error::Error>> {
+/// Source writes paragraph searchText, then root documentMetadata, in their own local
+/// updates after the initial sync; undoing the first edit keeps both.
+fn load_normalisation_survives_first_edit_undo(
+    socket_delay: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
     use bebop::Record;
     use doc_sync_core::*;
     use document_session::{DocumentSession, SessionConfig, SessionInput};
     use lexical_model::*;
-    let source = macro_document_model::preset_builder_with_mode(
-        EditorType::MarkdownSync,
-        EditorMode::ViewAttached,
-    )
-    .initial_state(serde_json::from_value(json!({ "root": {
-        "type":"root", "version":1, "$":{"id":"cold-root"}, "children":[
-            {"type":"paragraph","version":1,"$":{"id":"cold-block"},"children":[
-                {"type":"text","version":1,"text":"before","$":{"id":"cold-leaf"}}
-            ]}
+    use loro_internal::ToJson;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
         ]
-    }}))?)
-    .build()?;
-    let expected = source.state().to_json()?;
-    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(
-        &serde_json::to_value(&expected)?,
-        None,
-    )?;
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
     let baseline = lexical_loro::new_doc(80)?;
     baseline.import(&snapshot)?;
-    let config = application_editor_config(
+    let opened = baseline.oplog_vv();
+    let mut config = application_editor_config(
         EditorConfig::default(),
         Arc::new(AtomicI64::new(0)),
         EditorType::MarkdownSync,
     );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
     let mut session = DocumentSession::<EditorSurface>::new(
         SessionConfig {
             sync: SyncConfig {
-                doc: "metadata-open-control".parse()?,
-                session: SessionId(uuid_value::Uuid::from_u128(1)),
+                doc: "load-normalisation".parse()?,
+                session: SessionId(uuid_value::Uuid::from_u128(2)),
                 user: UserKey("fixture-user".into()),
                 transport: TransportKind::Direct,
                 persistence: Persistence::Durable,
@@ -234,12 +265,13 @@ fn cold_remote_open_has_no_wal_or_document_frame_before_the_first_edit()
             wall: UnixMillis(0),
         },
     )?;
-    let now = Now {
-        mono: Millis(1),
-        wall: UnixMillis(1),
+    let at = |ms: u32| Now {
+        mono: Millis(u64::from(ms)),
+        wall: UnixMillis(i64::from(ms)),
     };
-    let output = session.handle(now, SessionInput::Sync(SyncInput::Start));
-    assert_no_document_writes(output)?;
+    let mut rows = Vec::new();
+    let mut sent = Vec::new();
+    let output = session.handle(at(1), SessionInput::Sync(SyncInput::Start));
     let load = output
         .io
         .iter()
@@ -259,8 +291,9 @@ fn cold_remote_open_has_no_wal_or_document_frame_before_the_first_edit()
             _ => None,
         })
         .expect("real socket connect");
-    let output = session.handle(
-        now,
+    drive(
+        &mut session,
+        at(1),
         SessionInput::Sync(SyncInput::Storage(StorageEvent::Loaded {
             id: load,
             result: Ok(LocalState {
@@ -269,15 +302,20 @@ fn cold_remote_open_has_no_wal_or_document_frame_before_the_first_edit()
                 assist: vec![],
             }),
         })),
-    );
-    assert_no_document_writes(output)?;
-    assert_no_document_writes(session.handle(
-        now,
+        &mut rows,
+        &mut sent,
+    )?;
+    drive(
+        &mut session,
+        at(1 + socket_delay),
         SessionInput::Sync(SyncInput::Socket {
             conn,
             event: SocketEvent::Opened,
         }),
-    ))?;
+        &mut rows,
+        &mut sent,
+    )?;
+    let synced = 2 + socket_delay;
     let mut bytes = Vec::new();
     sync_protocol::FromRemote::RemoteInitialSync {
         snapshot: bebop::SliceWrapper::from_cooked(&snapshot),
@@ -285,117 +323,982 @@ fn cold_remote_open_has_no_wal_or_document_frame_before_the_first_edit()
     }
     .serialize(&mut bytes)?;
     for frame in sync_protocol::framing::into_frames(&bytes, 900000) {
-        assert_no_document_writes(session.handle(
-            now,
+        drive(
+            &mut session,
+            at(synced),
             SessionInput::Sync(SyncInput::Socket {
                 conn,
                 event: SocketEvent::Frame(frame),
             }),
-        ))?;
+            &mut rows,
+            &mut sent,
+        )?;
     }
     let mut bytes = Vec::new();
-    let version = baseline.oplog_vv().encode();
+    let version = opened.encode();
     sync_protocol::FromRemote::RemoteUpdateSince {
         vv: bebop::SliceWrapper::from_cooked(&version),
         update: bebop::SliceWrapper::from_cooked(&[]),
     }
     .serialize(&mut bytes)?;
     for frame in sync_protocol::framing::into_frames(&bytes, 900000) {
-        assert_no_document_writes(session.handle(
-            now,
+        drive(
+            &mut session,
+            at(synced + 67),
             SessionInput::Sync(SyncInput::Socket {
                 conn,
                 event: SocketEvent::Frame(frame),
             }),
-        ))?;
+            &mut rows,
+            &mut sent,
+        )?;
+    }
+
+    // Before any input: the sent updates carry exactly the load-time normalisation, in
+    // Source order (5cf r003 OFF frame 288 B: 105 B searchText, then 126 B
+    // documentMetadata). The per-commit boundary is pinned at the surface by
+    // load_normalisation_is_two_local_commits_in_source_order. Sub-update and WAL row
+    // counts are recorded, not asserted: native coalesces local commits within 25 ms into
+    // one WAL row and one sub-update, a named transport-granularity difference (t1yg ruling).
+    eprintln!(
+        "load sub-updates: native {}, Source 2; WAL rows: native {}, Source 2",
+        sent.len(),
+        rows.len()
+    );
+    let loaded = lexical_loro::new_doc(81)?;
+    loaded.import(&snapshot)?;
+    for update in &sent {
+        loaded.import(update)?;
     }
     assert_eq!(
-        session.version(),
-        baseline.oplog_vv(),
-        "cold OPEN wrote local operations"
+        op_shapes(&serde_json::to_value(
+            loaded.export_json_updates(&opened, &loaded.oplog_vv())?
+        )?),
+        [
+            (
+                "Map".to_owned(),
+                "insert".to_owned(),
+                "searchText".to_owned()
+            ),
+            (
+                "Map".to_owned(),
+                "insert".to_owned(),
+                "documentMetadata".to_owned()
+            ),
+            ("Map".to_owned(), "insert".to_owned(), "version".to_owned()),
+        ],
+        "load-time normalisation sent before input"
     );
-    assert_eq!(session.surface().state().to_json()?, expected);
+    let raw = loaded.get_deep_value().to_json_value();
+    assert_eq!(raw["root"]["children"][0]["$"]["searchText"], json!(""));
+    assert_eq!(raw["root"]["$"]["documentMetadata"]["version"], json!(10));
+    // write-path-3 (decode 5f5e1b4e): the load group is a Source undo item.
+    assert!(
+        session.surface().history().can_undo,
+        "load group is undoable"
+    );
+    assert!(!session.surface().history().can_redo);
+
+    // Enter, then undo it, as the fuzzer tape does.
     let paragraph = session
         .surface()
         .state()
         .view()
         .first_child(NodeKey::ROOT)
         .expect("paragraph");
-    let text = session
-        .surface()
-        .state()
-        .view()
-        .first_child(paragraph)
-        .expect("text");
-    let point = Point::text(text, Utf16Offset(6));
-    let output = session.handle(
-        Now {
-            mono: Millis(2),
-            wall: UnixMillis(2),
-        },
+    let point = Point::element(paragraph, ChildIndex(0));
+    let entered = synced + 1060;
+    drive(
+        &mut session,
+        at(entered),
         SessionInput::Editor(Input::Command {
-            command: Command::InsertText("x".into()),
+            command: Command::InsertParagraph,
             selection: ViewSelection::Range {
                 anchor: point,
                 focus: point,
                 resolution_dirty: false,
             },
         }),
-    );
-    let wake = output.wake_at;
-    let row = output.io.iter().find_map(|effect| match effect {
-        IoEffect::Storage {
-            op: StorageOp::WalAppend { record, .. },
-            ..
-        } => Some(record.bytes.clone()),
-        _ => None,
-    });
-    let edited = session.surface().state().to_json()?;
-    assert_eq!(edited.root["$"]["documentMetadata"]["version"], json!(10));
-    assert_eq!(
-        session.surface().state().root_text_content().as_ref(),
-        "beforex"
-    );
-    let version = session.version();
-    assert_eq!(session.surface().state().to_json()?, edited);
-    assert_eq!(
-        session.version(),
-        version,
-        "read-only export changed version"
-    );
-    let row = match row {
-        Some(row) => row,
-        None => {
-            let wake = wake.expect("actual first-edit append deadline");
-            let output = session.handle(
-                Now {
-                    mono: wake,
-                    wall: UnixMillis(i64::try_from(wake.0)?),
-                },
-                SessionInput::Sync(SyncInput::Tick),
-            );
-            output
-                .io
-                .iter()
-                .find_map(|effect| match effect {
-                    IoEffect::Storage {
-                        op: StorageOp::WalAppend { record, .. },
-                        ..
-                    } => Some(record.bytes.clone()),
-                    _ => None,
-                })
-                .expect("actual first-edit coalesced WAL")
-        }
-    };
-    baseline.import(&row)?;
-    let persisted = lexical_loro::reconstruct_initial_state(
-        &baseline,
-        &macro_document_model::sync::MACRO_SYNC_POLICY,
+        &mut rows,
+        &mut sent,
     )?;
     assert_eq!(
-        persisted.state.root["$"]["documentMetadata"]["version"],
+        session
+            .surface()
+            .state()
+            .view()
+            .children(NodeKey::ROOT)
+            .count(),
+        2
+    );
+    drive(
+        &mut session,
+        at(entered + 160),
+        SessionInput::Editor(Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        }),
+        &mut rows,
+        &mut sent,
+    )?;
+
+    // Reopen from the server base plus every WAL row.
+    let reopened = lexical_loro::new_doc(82)?;
+    reopened.import(&snapshot)?;
+    for row in &rows {
+        reopened.import(row)?;
+    }
+    let raw = reopened.get_deep_value().to_json_value();
+    assert_eq!(raw["root"]["children"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        raw["root"]["children"][0]["$"]["searchText"],
+        json!(""),
+        "undoing the first edit removed searchText"
+    );
+    assert_eq!(
+        raw["root"]["$"]["documentMetadata"]["version"],
         json!(10),
-        "same first edit WAL lacks metadata"
+        "undoing the first edit removed documentMetadata"
+    );
+    Ok(())
+}
+
+#[test]
+fn load_normalisation_is_its_own_update_on_a_fast_socket() -> Result<(), Box<dyn std::error::Error>>
+{
+    load_normalisation_survives_first_edit_undo(26)
+}
+
+#[test]
+fn load_normalisation_is_its_own_update_on_a_delayed_socket()
+-> Result<(), Box<dyn std::error::Error>> {
+    load_normalisation_survives_first_edit_undo(5000)
+}
+
+/// A writable surface over the 5cf tape's stale document (root id plus one empty
+/// paragraph, no metadata or searchText), opened with the search-text policy.
+fn open_stale_document() -> Result<(EditorSurface, loro::LoroDoc), Box<dyn std::error::Error>> {
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let doc = lexical_loro::new_doc(50)?;
+    doc.import(&snapshot)?;
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut Vec::new())?;
+    Ok((surface, doc))
+}
+
+/// Apply one local input at `ms` and return the op shapes it exported.
+fn local_input(
+    surface: &mut EditorSurface,
+    doc: &loro::LoroDoc,
+    input: lexical_model::Input,
+    ms: u32,
+) -> Result<Vec<OpShape>, Box<dyn std::error::Error>> {
+    let before = doc.oplog_vv();
+    Surface::local(
+        surface,
+        doc,
+        document_session::SessionInput::Editor(input),
+        document_session::LocalInputContext::new(
+            Now {
+                mono: Millis(u64::from(ms)),
+                wall: UnixMillis(i64::from(ms)),
+            },
+            Access::Edit,
+            true,
+        ),
+        &mut Vec::new(),
+        None,
+    )?;
+    Ok(op_shapes(&serde_json::to_value(
+        doc.export_json_updates(&before, &doc.oplog_vv())?,
+    )?))
+}
+
+fn map_op(action: &str, key: &str) -> OpShape {
+    ("Map".to_owned(), action.to_owned(), key.to_owned())
+}
+
+fn stored_root(doc: &loro::LoroDoc) -> serde_json::Value {
+    use loro_internal::ToJson;
+    doc.get_deep_value().to_json_value()["root"].clone()
+}
+
+/// write-path-3 [Enter, Undo, Undo] (forensics 414abf76): Enter is its own group; the
+/// first Undo reverts only Enter, the second reverts both load commits in one step, and
+/// the live model keeps version 10.
+#[test]
+fn enter_undo_undo_reverts_enter_then_the_load_group() -> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let (mut surface, doc) = open_stale_document()?;
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let point = Point::element(paragraph, ChildIndex(0));
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::InsertParagraph,
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        1060,
+    )?;
+    assert!(surface.history().can_undo);
+    let undo = || Input::Command {
+        command: Command::Undo,
+        selection: ViewSelection::KeepModel,
+    };
+    local_input(&mut surface, &doc, undo(), 1220)?;
+    let root = stored_root(&doc);
+    assert_eq!(root["children"].as_array().map(Vec::len), Some(1));
+    assert_eq!(root["$"]["documentMetadata"]["version"], json!(10));
+    assert_eq!(root["children"][0]["$"]["searchText"], json!(""));
+    assert!(surface.history().can_undo);
+    assert!(surface.history().can_redo);
+    let second = local_input(&mut surface, &doc, undo(), 2470)?;
+    assert_eq!(
+        second,
+        [
+            map_op("delete", "documentMetadata"),
+            map_op("delete", "searchText")
+        ],
+        "the second Undo reverts both load commits in one step"
+    );
+    assert!(!surface.history().can_undo);
+    assert!(surface.history().can_redo);
+    assert_eq!(
+        surface.state().to_json()?.root["$"]["documentMetadata"]["version"],
+        json!(10),
+        "the live model retains the metadata"
+    );
+    Ok(())
+}
+
+/// write-path-3 Undo-first (forensics fe4c58ed), then Redo (Ctrl+Shift+Z a816121a and
+/// Ctrl+Y e0562d33 both): Undo deletes both in one step; Redo re-adds both in one step.
+#[test]
+fn undo_first_then_redo_reverts_and_restores_the_load_group()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let (mut surface, doc) = open_stale_document()?;
+    let undone = local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        1000,
+    )?;
+    assert_eq!(
+        undone,
+        [
+            map_op("delete", "documentMetadata"),
+            map_op("delete", "searchText")
+        ]
+    );
+    assert!(!surface.history().can_undo);
+    assert!(surface.history().can_redo);
+    let redone = local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Redo,
+            selection: ViewSelection::KeepModel,
+        },
+        2000,
+    )?;
+    assert_eq!(
+        redone,
+        [
+            map_op("insert", "documentMetadata"),
+            map_op("insert", "version"),
+            map_op("insert", "searchText"),
+        ]
+    );
+    assert!(surface.history().can_undo);
+    assert!(!surface.history().can_redo);
+    let root = stored_root(&doc);
+    assert_eq!(root["$"]["documentMetadata"], json!({"version": 10}));
+    assert_eq!(root["children"][0]["$"]["searchText"], json!(""));
+    Ok(())
+}
+
+/// write-path-3 [Undo-first, type 'a'] (forensics 981022b7; 4ddec tail7 7827c38f): the
+/// edit's own single update carries its text ops, the paragraph searchText with its new
+/// derived value, and the retained documentMetadata in a new map.
+#[test]
+fn an_edit_after_undo_first_re_emits_metadata_and_search_text_inside_its_own_update()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let (mut surface, doc) = open_stale_document()?;
+    assert_eq!(
+        stored_root(&doc)["$"]["documentMetadata"],
+        json!({"version": 10}),
+        "the open wrote the load metadata"
+    );
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        1000,
+    )?;
+    assert!(stored_root(&doc)["$"].get("documentMetadata").is_none());
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let point = Point::element(paragraph, ChildIndex(0));
+    let before = doc.oplog_vv();
+    let edit = local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::InsertText("a".into()),
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        2000,
+    )?;
+    let changes = serde_json::to_value(doc.export_json_updates(&before, &doc.oplog_vv())?)?;
+    assert_eq!(
+        changes["changes"].as_array().map(Vec::len),
+        Some(1),
+        "one update"
+    );
+    for expected in [
+        map_op("insert", "searchText"),
+        map_op("insert", "documentMetadata"),
+    ] {
+        assert!(edit.contains(&expected), "missing {expected:?} in {edit:?}");
+    }
+    let root = stored_root(&doc);
+    assert_eq!(root["$"]["documentMetadata"], json!({"version": 10}));
+    assert_eq!(root["children"][0]["$"]["searchText"], json!("a"));
+    Ok(())
+}
+
+/// write-path-4 [Ctrl+Z, type 'a', Ctrl+Z] (decode e9061543): the next Undo is one
+/// step reverting the edit together with its re-emitted metadata and searchText.
+#[test]
+fn undo_after_the_re_emitting_edit_reverts_it_with_its_re_emit()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let (mut surface, doc) = open_stale_document()?;
+    assert_eq!(
+        stored_root(&doc)["$"]["documentMetadata"],
+        json!({"version": 10}),
+        "the open wrote the load metadata"
+    );
+    let undo = || Input::Command {
+        command: Command::Undo,
+        selection: ViewSelection::KeepModel,
+    };
+    local_input(&mut surface, &doc, undo(), 1000)?;
+    assert!(
+        stored_root(&doc)["$"].get("documentMetadata").is_none(),
+        "Undo-first removed the load metadata"
+    );
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let point = Point::element(paragraph, ChildIndex(0));
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::InsertText("a".into()),
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        2000,
+    )?;
+    let undone = local_input(&mut surface, &doc, undo(), 4000)?;
+    for expected in [
+        (
+            "MovableList".to_owned(),
+            "delete".to_owned(),
+            "-".to_owned(),
+        ),
+        map_op("delete", "documentMetadata"),
+        map_op("delete", "searchText"),
+    ] {
+        assert!(
+            undone.contains(&expected),
+            "missing {expected:?} in {undone:?}"
+        );
+    }
+    let root = stored_root(&doc);
+    assert!(root["$"].get("documentMetadata").is_none());
+    assert_eq!(root["children"][0]["children"], json!([]));
+    Ok(())
+}
+
+/// write-path-4 [Ctrl+Z, type 'a', Ctrl+Shift+Z] (decode e9061543): the edit clears the
+/// redo stack, so Redo sends nothing and changes nothing.
+#[test]
+fn redo_after_a_fresh_edit_is_a_no_op() -> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let (mut surface, doc) = open_stale_document()?;
+    assert_eq!(
+        stored_root(&doc)["$"]["documentMetadata"],
+        json!({"version": 10}),
+        "the open wrote the load metadata"
+    );
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        1000,
+    )?;
+    assert!(
+        stored_root(&doc)["$"].get("documentMetadata").is_none(),
+        "Undo-first removed the load metadata"
+    );
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let point = Point::element(paragraph, ChildIndex(0));
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::InsertText("a".into()),
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        2000,
+    )?;
+    let model = surface.state().to_json()?;
+    let stored = stored_root(&doc);
+    let redone = local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Redo,
+            selection: ViewSelection::KeepModel,
+        },
+        4000,
+    )?;
+    assert_eq!(
+        redone,
+        Vec::new(),
+        "redo after a fresh edit wrote {redone:?}"
+    );
+    assert_eq!(surface.state().to_json()?, model);
+    assert_eq!(stored_root(&doc), stored);
+    Ok(())
+}
+
+/// Reopen (forensics 5486fba0) and first open by another peer (final-receipt 605dfc47):
+/// metadata stored bare by a load write gains environmentTags:null from the next open's
+/// load follow-up, as ONE op into the existing map.
+#[test]
+fn reopening_bare_stored_metadata_writes_the_parsed_null_slot()
+-> Result<(), Box<dyn std::error::Error>> {
+    use loro::ContainerTrait;
+    use std::sync::Mutex;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5","searchText":""},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    // A Source peer's load write: documentMetadata as a Map container holding version 10.
+    let writer = lexical_loro::new_doc(60)?;
+    writer.import(&snapshot)?;
+    let root_state = match writer.get_map("root").get("$") {
+        Some(loro::ValueOrContainer::Container(loro::Container::Map(map))) => map,
+        _ => return Err("root state map".into()),
+    };
+    let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
+    metadata.insert("version", 10)?;
+    writer.commit();
+    assert_eq!(
+        stored_root(&writer)["$"]["documentMetadata"],
+        json!({"version": 10})
+    );
+    assert!(metadata.id().is_normal());
+    let doc = lexical_loro::new_doc(51)?;
+    doc.import(&writer.export(loro::ExportMode::Snapshot)?)?;
+    let opened = doc.oplog_vv();
+    let commits = Arc::new(Mutex::new(0_usize));
+    let counted = commits.clone();
+    let _subscription = doc.subscribe_local_update(Box::new(move |_| {
+        if let Ok(mut commits) = counted.lock() {
+            *commits += 1;
+        }
+        true
+    }));
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 51, now)?;
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut Vec::new())?;
+    assert_eq!(*commits.lock().map_err(|_| "commit count lock")?, 1);
+    assert_eq!(
+        op_shapes(&serde_json::to_value(
+            doc.export_json_updates(&opened, &doc.oplog_vv())?
+        )?),
+        [map_op("insert", "environmentTags")]
+    );
+    assert_eq!(
+        stored_root(&doc)["$"]["documentMetadata"],
+        json!({"version": 10, "environmentTags": null})
+    );
+    Ok(())
+}
+
+/// Type `text` at the caret, collecting the view effects the session publishes.
+fn type_text(
+    surface: &mut EditorSurface,
+    doc: &loro::LoroDoc,
+    text: &str,
+    ms: u32,
+) -> Result<Vec<document_session::ViewEffect>, Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let selection = match surface.state().view().last_descendant(NodeKey::ROOT) {
+        Some(key) if surface.state().view().is_text(key) => {
+            let end = Point::text(
+                key,
+                Utf16Offset(u32::try_from(
+                    surface
+                        .state()
+                        .view()
+                        .text_content(key)
+                        .encode_utf16()
+                        .count(),
+                )?),
+            );
+            ViewSelection::Range {
+                anchor: end,
+                focus: end,
+                resolution_dirty: false,
+            }
+        }
+        _ => {
+            let paragraph = surface
+                .state()
+                .view()
+                .first_child(NodeKey::ROOT)
+                .expect("paragraph");
+            let point = Point::element(paragraph, ChildIndex(0));
+            ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            }
+        }
+    };
+    let mut effects = Vec::new();
+    Surface::local(
+        surface,
+        doc,
+        document_session::SessionInput::Editor(Input::Command {
+            command: Command::InsertText(text.into()),
+            selection,
+        }),
+        document_session::LocalInputContext::new(
+            Now {
+                mono: Millis(u64::from(ms)),
+                wall: UnixMillis(i64::from(ms)),
+            },
+            Access::Edit,
+            true,
+        ),
+        &mut effects,
+        None,
+    )?;
+    Ok(effects)
+}
+
+fn effect_kinds(effects: &[document_session::ViewEffect]) -> Vec<String> {
+    use document_session::ViewEffect;
+    effects
+        .iter()
+        .map(|effect| match effect {
+            ViewEffect::ChecklistPlans(_) => "ChecklistPlans".to_owned(),
+            ViewEffect::Initialize(_) => "Initialize".to_owned(),
+            ViewEffect::Diff(_) => "Diff".to_owned(),
+            ViewEffect::Editor(editor) => {
+                let debug = format!("{editor:?}");
+                let end = debug.find(['(', '{', ' ']).unwrap_or(debug.len());
+                format!("Editor:{}", &debug[..end])
+            }
+            ViewEffect::HistoryAwarenessSelection { .. } => "HistoryAwarenessSelection".to_owned(),
+            ViewEffect::DocChanged(_) => "DocChanged".to_owned(),
+            ViewEffect::Presence(_) => "Presence".to_owned(),
+            ViewEffect::CommitTags(tags) => format!("CommitTags:{tags:?}"),
+            ViewEffect::Cursors(_) => "Cursors".to_owned(),
+            ViewEffect::Status(_) => "Status".to_owned(),
+            ViewEffect::Reply { .. } => "Reply".to_owned(),
+            ViewEffect::EndComposition => "EndComposition".to_owned(),
+            ViewEffect::Error(_) => "Error".to_owned(),
+        })
+        .collect()
+}
+
+/// The stored-slot supersede rides the edit's own publication: the view receives the
+/// same commit tags and one diff, exactly as for an edit without it.
+#[test]
+fn the_re_emitting_edit_publishes_like_an_ordinary_edit() -> Result<(), Box<dyn std::error::Error>>
+{
+    use lexical_model::*;
+    // Baseline with the same undo transitions but no supersede: stored metadata is already
+    // the parsed live form, so the load group writes only searchText.
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let writer = lexical_loro::new_doc(60)?;
+    writer.import(&snapshot)?;
+    let root_state = match writer.get_map("root").get("$") {
+        Some(loro::ValueOrContainer::Container(loro::Container::Map(map))) => map,
+        _ => return Err("root state map".into()),
+    };
+    let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
+    metadata.insert("version", 10)?;
+    metadata.insert("environmentTags", loro::LoroValue::Null)?;
+    writer.commit();
+    let ordinary_doc = lexical_loro::new_doc(50)?;
+    ordinary_doc.import(&writer.export(loro::ExportMode::Snapshot)?)?;
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let opened = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut ordinary =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, opened)?;
+    Surface::init(
+        &mut ordinary,
+        &ordinary_doc,
+        opened,
+        Access::Edit,
+        &mut Vec::new(),
+    )?;
+    local_input(
+        &mut ordinary,
+        &ordinary_doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        1000,
+    )?;
+    assert!(
+        stored_root(&ordinary_doc)["children"][0]["$"]
+            .get("searchText")
+            .is_none()
+    );
+    let plain = type_text(&mut ordinary, &ordinary_doc, "a", 2000)?;
+    let (mut re_emitting, doc) = open_stale_document()?;
+    local_input(
+        &mut re_emitting,
+        &doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        1000,
+    )?;
+    assert!(stored_root(&doc)["$"].get("documentMetadata").is_none());
+    let flagged = type_text(&mut re_emitting, &doc, "a", 2000)?;
+    assert_eq!(
+        stored_root(&doc)["$"]["documentMetadata"],
+        json!({"version": 10})
+    );
+    assert_eq!(effect_kinds(&flagged), effect_kinds(&plain));
+    Ok(())
+}
+
+/// The supersede adds no undo entry and leaves the 400 ms merge rule unchanged: after the
+/// re-emitting edit, an edit 399 ms later merges and one 401 ms later starts a new entry.
+#[test]
+fn the_supersede_leaves_history_merging_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let (mut surface, doc) = open_stale_document()?;
+    let undo = || Input::Command {
+        command: Command::Undo,
+        selection: ViewSelection::KeepModel,
+    };
+    local_input(&mut surface, &doc, undo(), 1000)?;
+    type_text(&mut surface, &doc, "a", 2000)?;
+    type_text(&mut surface, &doc, "b", 2399)?;
+    type_text(&mut surface, &doc, "c", 2800)?;
+    assert_eq!(surface.state().root_text_content().as_ref(), "abc");
+    local_input(&mut surface, &doc, undo(), 4000)?;
+    assert_eq!(
+        surface.state().root_text_content().as_ref(),
+        "ab",
+        "401 ms split"
+    );
+    local_input(&mut surface, &doc, undo(), 5000)?;
+    assert_eq!(
+        surface.state().root_text_content().as_ref(),
+        "",
+        "399 ms merge"
+    );
+    assert!(stored_root(&doc)["$"].get("documentMetadata").is_none());
+    Ok(())
+}
+
+/// Live OFF profile (2a10869b): a stale document whose last block is a table gains its
+/// trailing empty paragraph in the load follow-up, with the metadata, after the search text.
+/// Fixture: that document's load state without the trailing paragraph and metadata.
+#[test]
+fn the_load_follow_up_runs_root_transforms_after_a_final_table()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::Mutex;
+    let stored: serde_json::Value =
+        serde_json::from_str(include_str!("testdata/table-last-stale.json"))?;
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let doc = lexical_loro::new_doc(50)?;
+    doc.import(&snapshot)?;
+    let commits = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let captured = commits.clone();
+    let _subscription = doc.subscribe_local_update(Box::new(move |bytes| {
+        if let Ok(mut commits) = captured.lock() {
+            commits.push(bytes.clone());
+        }
+        true
+    }));
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut Vec::new())?;
+    let root = stored_root(&doc);
+    let types: Vec<_> = root["children"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|child| child["type"].clone())
+        .collect();
+    assert_eq!(
+        types,
+        [json!("paragraph"), json!("table"), json!("paragraph")]
+    );
+    assert_eq!(root["$"]["documentMetadata"], json!({"version": 10}));
+    let replay = lexical_loro::new_doc(81)?;
+    replay.import(&snapshot)?;
+    let mut per_commit = Vec::new();
+    for commit in commits.lock().map_err(|_| "commit capture lock")?.iter() {
+        let before = replay.oplog_vv();
+        replay.import(commit)?;
+        per_commit.push(op_shapes(&serde_json::to_value(
+            replay.export_json_updates(&before, &replay.oplog_vv())?,
+        )?));
+    }
+    assert_eq!(per_commit.len(), 2, "{per_commit:?}");
+    let trailing = (
+        "MovableList".to_owned(),
+        "insert".to_owned(),
+        "-".to_owned(),
+    );
+    assert!(per_commit[0].contains(&map_op("insert", "searchText")));
+    assert!(
+        !per_commit[0].contains(&trailing)
+            && !per_commit[0].contains(&map_op("insert", "documentMetadata")),
+        "the search-text commit carries neither the paragraph nor the metadata: {:?}",
+        per_commit[0]
+    );
+    for expected in [
+        map_op("insert", "documentMetadata"),
+        (
+            "MovableList".to_owned(),
+            "insert".to_owned(),
+            "-".to_owned(),
+        ),
+    ] {
+        assert!(
+            per_commit[1].contains(&expected),
+            "the metadata follow-up appends the trailing paragraph: missing {expected:?} in {:?}",
+            per_commit[1]
+        );
+    }
+    Ok(())
+}
+
+/// Source's writeStateToLoro skips read-only editors; load normalisation never reaches Loro.
+#[test]
+fn read_and_comment_only_opens_write_no_load_normalisation()
+-> Result<(), Box<dyn std::error::Error>> {
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    for access in [Access::Read, Access::CommentOnly] {
+        let doc = lexical_loro::new_doc(50)?;
+        doc.import(&snapshot)?;
+        let before = doc.oplog_vv();
+        let mut config = application_editor_config(
+            EditorConfig::default(),
+            Arc::new(AtomicI64::new(0)),
+            EditorType::MarkdownSync,
+        );
+        config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+        let now = Now {
+            mono: Millis(0),
+            wall: UnixMillis(0),
+        };
+        let mut surface =
+            <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
+        let mut effects = Vec::new();
+        Surface::init(&mut surface, &doc, now, access, &mut effects)?;
+        assert_eq!(
+            doc.oplog_vv(),
+            before,
+            "{access:?} open wrote Loro operations"
+        );
+    }
+    Ok(())
+}
+
+/// Source commits load-time normalisation as two local updates after the initial content:
+/// paragraph searchText first (105 B), then root documentMetadata (126 B). Each local
+/// commit is captured separately; peer and container ids are excluded.
+#[test]
+fn load_normalisation_is_two_local_commits_in_source_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::Mutex;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let doc = lexical_loro::new_doc(50)?;
+    doc.import(&snapshot)?;
+    let commits = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let captured = commits.clone();
+    let _subscription = doc.subscribe_local_update(Box::new(move |bytes| {
+        if let Ok(mut commits) = captured.lock() {
+            commits.push(bytes.clone());
+        }
+        true
+    }));
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
+    let mut effects = Vec::new();
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut effects)?;
+    // write-path-3 (decode 5f5e1b4e): the load group is a Source undo item.
+    assert!(surface.history().can_undo, "load group is undoable");
+    assert!(!surface.history().can_redo);
+    let replay = lexical_loro::new_doc(81)?;
+    replay.import(&snapshot)?;
+    let mut per_commit = Vec::new();
+    for commit in commits.lock().map_err(|_| "commit capture lock")?.iter() {
+        let before = replay.oplog_vv();
+        replay.import(commit)?;
+        per_commit.push(op_shapes(&serde_json::to_value(
+            replay.export_json_updates(&before, &replay.oplog_vv())?,
+        )?));
+    }
+    assert_eq!(
+        per_commit,
+        [
+            vec![(
+                "Map".to_owned(),
+                "insert".to_owned(),
+                "searchText".to_owned()
+            )],
+            vec![
+                (
+                    "Map".to_owned(),
+                    "insert".to_owned(),
+                    "documentMetadata".to_owned()
+                ),
+                ("Map".to_owned(), "insert".to_owned(), "version".to_owned()),
+            ],
+        ],
+        "load-time normalisation local commits"
     );
     Ok(())
 }

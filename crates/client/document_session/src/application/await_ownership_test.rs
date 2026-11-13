@@ -72,7 +72,7 @@ fn authored_await_gets_current_peer_and_local_status() {
 }
 
 #[test]
-fn on_open_await_derives_ownership_without_writing_raw_local_or_versions() {
+fn on_open_await_derives_ownership_without_writing_raw_local_state() {
     let source = stored_await();
     let snapshot = source.export(loro::ExportMode::Snapshot).unwrap();
     let now = Now {
@@ -101,11 +101,17 @@ fn on_open_await_derives_ownership_without_writing_raw_local_or_versions() {
             peer::get_peer_id(surface.state().view(), NodeKey::ROOT).unwrap(),
             None
         );
+        // An Edit open writes only the parsed null metadata slot (first open 605dfc47,
+        // reopen 5486fba0); ownership derivation writes nothing.
+        let mut expected = raw.clone();
+        if access == Access::Edit {
+            expected.root["$"]["documentMetadata"]["environmentTags"] = serde_json::Value::Null;
+        }
         assert_eq!(
             lexical_loro::reconstruct_state(&doc, &lexical_loro::PlainPolicy).unwrap(),
-            raw
+            expected
         );
-        assert_eq!(doc.oplog_vv(), vv);
+        assert_eq!(doc.oplog_vv() == vv, access != Access::Edit);
         surface
             .projection
             .as_ref()

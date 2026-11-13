@@ -61,6 +61,8 @@ pub struct Transaction<'editor> {
     pub(crate) nested: std::collections::VecDeque<(NestedUpdateFn, UpdateOptions)>,
     pub(crate) transform_iterations: u16,
     pub(crate) dirty_since_flush: bool,
+    /// Set only by supersede_retained_root_state; publishes without dirty nodes.
+    pub(crate) stored_state_superseded: bool,
     pub(crate) pipeline_continuation:
         Option<Box<crate::pipeline::continuation::PipelineContinuation>>,
     pub(crate) prepared: Option<Box<crate::prepared::PreparedTransition>>,
@@ -130,6 +132,7 @@ impl<'editor> Transaction<'editor> {
             nested: crate::pipeline::nested_queue(),
             transform_iterations: 0,
             dirty_since_flush: true,
+            stored_state_superseded: false,
             pipeline_continuation: None,
             prepared: None,
             #[cfg(feature = "bench-counters")]
@@ -275,6 +278,40 @@ impl<'editor> Transaction<'editor> {
             }
         }
         Ok(Arc::make_mut(slot))
+    }
+    /// Re-record ROOT's stored slot for a retained live state key from its live typed
+    /// value, so stored export matches what a sync writer emits. Marks nothing dirty,
+    /// runs no transforms and adds no history; the publication carries
+    /// `Commit::stored_state_superseded`. Ordinary local transactions only: refused while
+    /// initializing and in collaboration or history updates. Returns whether it changed.
+    pub fn supersede_retained_root_state<ValueType: StateValue>(
+        &mut self,
+        key: &'static StateKey<ValueType>,
+    ) -> Result<bool, Error> {
+        self.guard_write()?;
+        if self.is_initializing()
+            || self.options.tags.contains(&UpdateTag::Collaboration)
+            || self.options.tags.contains(&UpdateTag::Historic)
+        {
+            return Err(Error::StoredStateSupersedeRefused { key: key.name() });
+        }
+        let slot = self
+            .pending
+            .nodes
+            .get_mut(&NodeKey::ROOT)
+            .ok_or(Error::NodeNotFound(NodeKey::ROOT))?;
+        if !slot
+            .state
+            .as_ref()
+            .is_some_and(|state| state.stored_differs_from_live(key.name()))
+        {
+            return Ok(false);
+        }
+        if let Some(state) = &mut Arc::make_mut(slot).state {
+            Arc::make_mut(state).forget_stored_value(key.name());
+        }
+        self.stored_state_superseded = true;
+        Ok(true)
     }
     /// Whether node processing is required, before normalization or collection.
     pub fn has_dirty_nodes(&self) -> bool {

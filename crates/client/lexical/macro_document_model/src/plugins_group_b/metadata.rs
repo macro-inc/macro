@@ -25,6 +25,23 @@ pub static DOCUMENT_METADATA: StateKey<Arc<Value>> = StateKey::new("documentMeta
     Arc::new(json!({"version": version, "environmentTags": tags}))
 });
 
+/// Requested after any node-mutating commit whose previous document version was below
+/// [`DOCUMENT_VERSION`], like Source documentMetadataPlugin's update listener. The host
+/// answers with [`document_metadata_upgrade`] in its own following update.
+pub static DOCUMENT_METADATA_UPGRADE_REQUESTED: EventKey<()> =
+    EventKey::new("group-b.document-metadata-upgrade-requested");
+static UPGRADE: CommandKey<()> = CommandKey::new("group-b.document-metadata-upgrade");
+static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
+    command: CommandKind::Extension(&UPGRADE),
+    priority: CommandPriority::Editor,
+    placement: Placement::After,
+}];
+
+/// Source's queued `editor.update(..., { tag: 'history-merge' })` that sets the version.
+pub fn document_metadata_upgrade() -> Command {
+    Command::Extension(ExtensionCommand::new(&UPGRADE, ()))
+}
+
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder
         .state_export_order::<Root>(&["id", "documentMetadata", "pinnedPropertyIds"])
@@ -36,14 +53,49 @@ impl Plugin for Metadata {
         "group-b.document-metadata"
     }
     fn commands(&self) -> &[CommandRegistration] {
-        &[]
+        &COMMANDS
     }
-    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
-        Ok(Handled::No)
+    fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
+        let Command::Extension(command) = command else {
+            return Ok(Handled::No);
+        };
+        if command.payload(&UPGRADE).is_none() {
+            return Ok(Handled::No);
+        }
+        let current = tx.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
+        if current
+            .get("version")
+            .and_then(Value::as_f64)
+            .unwrap_or(-1.0)
+            >= DOCUMENT_VERSION
+        {
+            // Not stale: Source's sync still writes the parsed live value (a null slot).
+            tx.supersede_retained_root_state(&DOCUMENT_METADATA)?;
+            return Ok(Handled::Yes);
+        }
+        let mut metadata = current
+            .as_object()
+            .cloned()
+            .ok_or(Error::Invariant("document metadata object"))?;
+        metadata.insert("version".into(), lexical_model::js_number(DOCUMENT_VERSION));
+        tx.add_tag(UpdateTag::HistoryMerge);
+        tx.set_state(
+            NodeKey::ROOT,
+            &DOCUMENT_METADATA,
+            Arc::new(Value::Object(metadata)),
+        )?;
+        Ok(Handled::Yes)
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
-        let current = tx.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
-        if tx.is_initializing() || commit.changes.mutations.is_empty() {
+        // Source's RootNode transform reads the metadata on every root update, which
+        // binds its parsed value (environmentTags: null) into later exports.
+        tx.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
+        if commit.changes.mutations.is_empty() {
+            return Ok(());
+        }
+        // Initialization asks the host for its load follow-up update.
+        if tx.is_initializing() {
+            tx.emit(&DOCUMENT_METADATA_UPGRADE_REQUESTED, ());
             return Ok(());
         }
         let previous = commit
@@ -56,21 +108,14 @@ impl Plugin for Metadata {
             .unwrap_or(-1.0)
             < DOCUMENT_VERSION
         {
-            // The source schedules a follow-up even when another update upgraded metadata.
-            // Avoid a redundant identity-only state write once the value is current.
-            if current.get("version").and_then(Value::as_f64) != Some(DOCUMENT_VERSION) {
-                let mut metadata = current
-                    .as_object()
-                    .cloned()
-                    .ok_or(Error::Invariant("document metadata object"))?;
-                metadata.insert("version".into(), lexical_model::js_number(DOCUMENT_VERSION));
-                tx.add_tag(UpdateTag::HistoryMerge);
-                tx.set_state(
-                    NodeKey::ROOT,
-                    &DOCUMENT_METADATA,
-                    Arc::new(Value::Object(metadata)),
-                )?;
-            }
+            tx.emit(&DOCUMENT_METADATA_UPGRADE_REQUESTED, ());
+        }
+        // Source's sync writes the live parsed metadata inside every local update, so a
+        // stored copy lost to undo is re-emitted in this edit's own update.
+        if !commit.tags.contains(&UpdateTag::Collaboration)
+            && !commit.tags.contains(&UpdateTag::Historic)
+        {
+            tx.supersede_retained_root_state(&DOCUMENT_METADATA)?;
         }
         Ok(())
     }

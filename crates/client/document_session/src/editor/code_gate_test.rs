@@ -60,7 +60,9 @@ fn receive_unset_remote_code(tokens: CodeTokens) -> (Option<Value>, Option<Value
         serde_json::json!([
             {"type":"custom-code","previewEnabled":false,"$":{"id":"remote-code"},"children":[
                 {"type":"text","text":"plain block","$":{"id":"remote-leaf"}}
-            ]}
+            ]},
+            // The editing peer writes the trailing paragraph in its own update (two-OFF a5fe77b8).
+            {"type":"paragraph","$":{"id":"remote-trailing"},"children":[]}
         ]),
     );
     remote
@@ -263,4 +265,99 @@ fn init_reachability_of_the_tokenizer_over_a_stored_code_block() {
         .unwrap();
     let calls = provider.calls.load(Ordering::Relaxed);
     assert_eq!(calls, 0);
+}
+
+/// Two-OFF probe (a5fe77b8): the EDITING peer that turns ``` + Enter into a code block writes the
+/// trailing paragraph inside its own single update; the receiver has nothing to fix up.
+#[test]
+fn the_editing_peer_writes_the_trailing_paragraph_in_its_own_update() {
+    let doc = lexical_loro::new_doc(7).unwrap();
+    lexical_loro::mirror::set_state(
+        &doc,
+        &serde_json::json!({
+            "type":"root","version":1,"format":"","indent":0,"direction":null,
+            "$":{"id":"root"},
+            "children":[{"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+                "$":{"id":"editing-paragraph"},"textFormat":0,"textStyle":"","children":[]}]
+        }),
+    )
+    .unwrap();
+    let mut editing = EditorSurface::new(config(CodeTokens::none()), 7, now()).unwrap();
+    editing
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let paragraph = editing.state().first_child_or_err(NodeKey::ROOT).unwrap();
+    let point = Point::element(paragraph, ChildIndex(0));
+    for (index, character) in "```".chars().enumerate() {
+        let selection = if index == 0 {
+            ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            }
+        } else {
+            ViewSelection::KeepModel
+        };
+        editing
+            .apply(
+                &doc,
+                Input::Command {
+                    command: Command::InsertText(character.to_string()),
+                    selection,
+                },
+                now(),
+                Access::Edit,
+                &mut Vec::new(),
+            )
+            .unwrap();
+    }
+    let before = doc.oplog_vv();
+    editing
+        .apply(
+            &doc,
+            Input::KeyDown {
+                event: KeyEvent {
+                    key: "Enter".into(),
+                    ..KeyEvent::default()
+                },
+                routed: Some(Command::Key {
+                    command: KeyCommand::Enter,
+                    event: Some(KeyEvent {
+                        key: "Enter".into(),
+                        ..KeyEvent::default()
+                    }),
+                }),
+                routed_prevent_default: true,
+                selection: ViewSelection::KeepModel,
+            },
+            now(),
+            Access::Edit,
+            &mut Vec::new(),
+        )
+        .unwrap();
+    let types: Vec<Value> = editing.state().to_json().unwrap().root["children"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|child| child["type"].clone())
+        .collect();
+    let updates =
+        serde_json::to_value(doc.export_json_updates(&before, &doc.oplog_vv()).unwrap()).unwrap();
+    assert_eq!(
+        updates["changes"].as_array().map(Vec::len),
+        Some(1),
+        "one update"
+    );
+    assert_eq!(
+        types.first().and_then(Value::as_str),
+        Some("custom-code"),
+        "``` + Enter made a code block: {types:?}"
+    );
+    assert_eq!(
+        types.last().and_then(Value::as_str),
+        Some("paragraph"),
+        "{types:?}"
+    );
+    assert_eq!(types.len(), 2, "{types:?}");
 }

@@ -44,6 +44,7 @@ pub struct PendingUpdate {
     nested: std::collections::VecDeque<(NestedUpdateFn, UpdateOptions)>,
     transform_iterations: u16,
     dirty_since_flush: bool,
+    stored_state_superseded: bool,
     pipeline_continuation: Option<Box<crate::pipeline::continuation::PipelineContinuation>>,
     pub(crate) prepared: Option<Box<crate::prepared::PreparedTransition>>,
     #[cfg(feature = "bench-counters")]
@@ -142,6 +143,7 @@ impl Transaction<'_> {
             nested: self.nested,
             transform_iterations: self.transform_iterations,
             dirty_since_flush: self.dirty_since_flush,
+            stored_state_superseded: self.stored_state_superseded,
             pipeline_continuation: self.pipeline_continuation,
             prepared: self.prepared,
             #[cfg(feature = "bench-counters")]
@@ -210,6 +212,7 @@ impl Editor {
             nested: update.nested,
             transform_iterations: update.transform_iterations,
             dirty_since_flush: update.dirty_since_flush,
+            stored_state_superseded: update.stored_state_superseded,
             pipeline_continuation: update.pipeline_continuation,
             prepared: update.prepared,
             #[cfg(feature = "bench-counters")]
@@ -343,6 +346,7 @@ impl Transaction<'_> {
         self.nested = update.nested;
         self.transform_iterations = update.transform_iterations;
         self.dirty_since_flush = update.dirty_since_flush;
+        self.stored_state_superseded = update.stored_state_superseded;
         self.pipeline_continuation = update.pipeline_continuation;
         self.prepared = update.prepared;
         #[cfg(feature = "bench-counters")]

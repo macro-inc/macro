@@ -392,7 +392,7 @@ impl Editor {
             if let Some(preceding) = commit.preceding.as_deref() {
                 append_prior(preceding, prior);
             }
-            if !commit.is_noop() {
+            if !commit.is_noop() && !commit.only_supersedes_stored_state() {
                 prior.push(commit);
             }
             for following in &commit.following {

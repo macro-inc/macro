@@ -199,6 +199,9 @@ impl EditorSurface {
             self.history_ready = true;
         }
         let failed = result.is_err();
+        #[cfg(feature = "application")]
+        let upgrade =
+            matches!(&result, Ok(output) if Self::requests_metadata_upgrade(&output.effects));
         match result {
             Ok(output) => {
                 self.handled = output.handled;
@@ -225,6 +228,12 @@ impl EditorSurface {
                 view.push(ViewEffect::Error(SessionError::Model(error.error)));
             }
         }
+        #[cfg(feature = "application")]
+        let changed = if upgrade {
+            self.upgrade_document_metadata(doc, now, access, view)? || changed
+        } else {
+            changed
+        };
         self.refresh_cursor(doc);
         if changed && let Some(undo) = &self.undo {
             self.history_selection

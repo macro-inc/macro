@@ -97,11 +97,13 @@ fn collapsing_a_root_card_wraps_it_in_a_paragraph() -> Result<(), Error> {
         json!({"key": card.index(), "expanded": false}),
         card,
     )?;
+    // Source 5cf code trace (card-collapse-trace.md, SHA-256 c3e102b5...): the collapse
+    // update wraps the card in a paragraph; trailingParagraphPlugin.ts:103-107 appends only
+    // after a block decorator, code block or table, so no trailing paragraph follows.
     assert_eq!(
         children_types(&editor)?,
         json!([
-            {"type":"paragraph","children":["agent-session-mention"]},
-            {"type":"paragraph","children":[]}
+            {"type":"paragraph","children":["agent-session-mention"]}
         ])
     );
     Ok(())

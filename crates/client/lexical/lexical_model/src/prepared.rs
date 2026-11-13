@@ -226,6 +226,7 @@ pub(crate) struct PreparedTransition {
     pub(crate) composition_key: Option<NodeKey>,
     pub(crate) composition_changed: bool,
     pub(crate) full_reconcile: bool,
+    pub(crate) stored_state_superseded: bool,
     pub(crate) preceding: Option<Box<Commit>>,
     #[cfg(feature = "bench-counters")]
     pub(crate) work: WorkCounters,
@@ -250,6 +251,7 @@ impl PreparedTransition {
                 composition_key: self.composition_key,
                 composition_changed: self.composition_changed,
                 full_reconcile: self.full_reconcile,
+                stored_state_superseded: self.stored_state_superseded,
                 preceding: self.preceding,
                 #[cfg(feature = "bench-counters")]
                 work: self.work,

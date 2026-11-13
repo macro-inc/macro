@@ -42,7 +42,10 @@ mod tag_mention_actions;
 pub use media_properties::{MediaMountAction, media_mount_action};
 mod metadata;
 mod movement;
-pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
+pub use metadata::{
+    DOCUMENT_METADATA, DOCUMENT_METADATA_UPGRADE_REQUESTED, DOCUMENT_VERSION,
+    document_metadata_upgrade,
+};
 mod structure;
 pub mod table;
 mod text_paste;

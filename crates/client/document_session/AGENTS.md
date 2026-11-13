@@ -48,7 +48,8 @@ The host supplies identities and both clocks and executes the returned effects.
   operation exists; consuming-view exposure, not model publication, owns signature
   observation revisions.
 - Clean persisted transparent wrappers only during writable initialization; use stored editor JSON to retain imported state and protected local fields, and apply initial hooks once.
-- Verify metadata-free opens against unchanged Loro versions and no WAL/document-update frames; include metadata in the first edit’s normal coalesced WAL without an extra metadata input.
+- Run the load follow-up on every writable application open, after the UndoManager exists and inside one history-merge group: the root search-text refresh, then the requested metadata update (version upgrade when stale, otherwise the stored-slot supersede). It is one undoable step, as in Source; read and comment-only opens write nothing.
+- Answer a local chain's metadata upgrade request with its own following update in the same drain (Edit only); a failure is reported as a follow-up failure and keeps the triggering edit.
 - Never weaken either side of the collab differential or change oracle expectations.
 
 ## Checks

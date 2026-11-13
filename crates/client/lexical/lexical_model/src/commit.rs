@@ -98,6 +98,9 @@ pub struct Commit {
     pub composition_changed: bool,
     /// Whether all records were compared.
     pub full_reconcile: bool,
+    /// A retained live root state's stored slot was re-recorded from its live value,
+    /// without dirtying nodes (Transaction::supersede_retained_root_state).
+    pub stored_state_superseded: bool,
     /// Earlier transition published by set_editor_state inside the update.
     pub preceding: Option<Box<Commit>>,
     /// Instrumented model work.
@@ -107,7 +110,18 @@ pub struct Commit {
 impl Commit {
     /// Nothing dirty, no selection change and no emitted events.
     pub fn is_noop(&self) -> bool {
-        self.changes.is_empty() && !self.selection_changed && self.events.is_empty()
+        self.changes.is_empty()
+            && !self.selection_changed
+            && self.events.is_empty()
+            && !self.stored_state_superseded
+    }
+    /// A publication whose only effect is a superseded retained root stored slot: it is
+    /// projected with its chain but never delivered to after-commit hooks.
+    pub fn only_supersedes_stored_state(&self) -> bool {
+        self.stored_state_superseded
+            && self.changes.is_empty()
+            && !self.selection_changed
+            && self.events.is_empty()
     }
     /// Lazy, memoized root-text comparison.
     pub fn text_content_changed(&self) -> bool {
@@ -245,7 +259,7 @@ impl Transaction<'_> {
         let artifact = prepare(&commit)?;
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
-        if dirty || selection_changed {
+        if dirty || selection_changed || commit.stored_state_superseded {
             self.editor.state = self.pending.clone();
         }
         self.editor.carried_tags = if !dirty && selection_changed {
@@ -352,7 +366,7 @@ impl Transaction<'_> {
         {
             self.pending.foreign_selection_identity = self.foreign_selections.current.clone();
         }
-        let next = if dirty || selection_changed {
+        let next = if dirty || selection_changed || self.stored_state_superseded {
             self.pending.clone()
         } else {
             prev.clone()
@@ -373,6 +387,7 @@ impl Transaction<'_> {
             composition_key: self.composition_key,
             composition_changed,
             full_reconcile: self.full_reconcile,
+            stored_state_superseded: self.stored_state_superseded,
             preceding: self.preceding.take(),
             #[cfg(feature = "bench-counters")]
             work: std::mem::take(&mut self.work),
@@ -496,6 +511,7 @@ impl Editor {
             composition_key: self.composition_key,
             composition_changed: false,
             full_reconcile: false,
+            stored_state_superseded: false,
             default_prevented: false,
             preceding: None,
             following: vec![],

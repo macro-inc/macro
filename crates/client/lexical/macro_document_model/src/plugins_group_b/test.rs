@@ -292,6 +292,7 @@ fn document_version_upgrade_preserves_other_root_state_and_environment_tags() ->
         tx.append(NodeKey::ROOT, &[p.key()])?;
         Ok(())
     })?;
+    editor.dispatch(&document_metadata_upgrade())?;
     let state = editor.state().view();
     let metadata = state.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
     assert_eq!(
