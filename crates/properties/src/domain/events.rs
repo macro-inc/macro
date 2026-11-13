@@ -3,8 +3,11 @@
 //! Property definition and option events are keyed by property definition id.
 //! Entity property events are keyed by entity id to preserve per-entity ordering.
 
+pub mod public;
 #[cfg(test)]
 mod test;
+
+pub use public::PropertyPublicEvent;
 
 use activity::Actor;
 use chrono::{DateTime, Utc};
@@ -220,7 +223,7 @@ impl TopicEvent for PropertyTopicEvent {
 
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = PropertyPublicEvent;
 
     fn exposure(
         &self,
@@ -228,26 +231,96 @@ impl TopicEvent for PropertyTopicEvent {
         macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
         macro_event_broker::exposure::ExposureError,
     > {
-        use macro_event_broker::exposure::{Exposure, PendingPhase};
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, Exposure, PendingPhase, PublicEvent, Stage,
+        };
+        use public::{
+            PublicEntityPropertiesCleared, PublicEntityPropertyDeleted,
+            PublicEntityPropertyUpdated, acting, public_entity_type,
+        };
+        use std::borrow::Cow;
 
-        Ok(match self {
-            Self::EntityPropertyUpdated(_)
-            | Self::EntityPropertyDeleted(_)
-            | Self::EntityPropertiesCleared(_) => Exposure::pending(
-                PendingPhase::EntityFamilies,
-                "entity property family: Entity(entity_type, entity_id) of the entity carrying the property; value and previous value",
-            ),
-            Self::Created(_) | Self::Deleted(_) => Exposure::pending(
-                PendingPhase::TeamFamilies,
-                "property definitions: Team or Owner from PropertyOwner; its Database variant needs Entity(Database) and its System variant has no audience",
-            ),
-            Self::OptionCreated(_) | Self::OptionUpdated(_) | Self::OptionDeleted(_) => {
-                Exposure::pending(
-                    PendingPhase::TeamFamilies,
-                    "property options carry only property_definition_id, not the PropertyOwner; the producer must add the owner before a Team or Owner rule can be declared",
+        const NO_ENTITY_AUDIENCE: &str = "a property on a calendar event or user has no entity accessor list; it stays internal until those families have an audience";
+
+        // A property value is visible to whoever can see the entity carrying
+        // it, so the audience is that entity's.
+        let (name, entity_type, entity_id, payload) = match self {
+            Self::EntityPropertyUpdated(metadata) => {
+                let Some(entity_type) = public_entity_type(metadata.entity_type) else {
+                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
+                };
+                (
+                    "entity_property.updated",
+                    entity_type,
+                    &metadata.entity_id,
+                    PropertyPublicEvent::EntityPropertyUpdated(PublicEntityPropertyUpdated {
+                        entity_property_id: metadata.entity_property_id,
+                        entity_type,
+                        entity_id: metadata.entity_id.clone(),
+                        property_definition_id: metadata.property_definition_id,
+                        actor: acting(metadata.actor.as_ref(), metadata.actor_user_id.as_ref()),
+                        on_behalf_of: metadata.on_behalf_of.clone(),
+                        updated_at: metadata.updated_at,
+                    }),
                 )
             }
-        })
+            Self::EntityPropertyDeleted(metadata) => {
+                let Some(entity_type) = public_entity_type(metadata.entity_type) else {
+                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
+                };
+                (
+                    "entity_property.deleted",
+                    entity_type,
+                    &metadata.entity_id,
+                    PropertyPublicEvent::EntityPropertyDeleted(PublicEntityPropertyDeleted {
+                        entity_property_id: metadata.entity_property_id,
+                        entity_type,
+                        entity_id: metadata.entity_id.clone(),
+                        property_definition_id: metadata.property_definition_id,
+                        actor: acting(metadata.actor.as_ref(), metadata.actor_user_id.as_ref()),
+                        on_behalf_of: metadata.on_behalf_of.clone(),
+                    }),
+                )
+            }
+            Self::EntityPropertiesCleared(metadata) => {
+                let Some(entity_type) = public_entity_type(metadata.entity_type) else {
+                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
+                };
+                (
+                    "entity_properties.cleared",
+                    entity_type,
+                    &metadata.entity_id,
+                    PropertyPublicEvent::EntityPropertiesCleared(PublicEntityPropertiesCleared {
+                        entity_type,
+                        entity_id: metadata.entity_id.clone(),
+                        actor: acting(metadata.actor.as_ref(), metadata.actor_user_id.as_ref()),
+                        on_behalf_of: metadata.on_behalf_of.clone(),
+                    }),
+                )
+            }
+            Self::Created(_) | Self::Deleted(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::TeamFamilies,
+                    "property definitions: Team or Owner from PropertyOwner; its Database variant needs Entity(Database) and its System variant has no audience",
+                ));
+            }
+            Self::OptionCreated(_) | Self::OptionUpdated(_) | Self::OptionDeleted(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::TeamFamilies,
+                    "property options carry only property_definition_id, not the PropertyOwner; the producer must add the owner before a Team or Owner rule can be declared",
+                ));
+            }
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(entity_type, entity_id.clone()),
+            audience: Audience::Entity {
+                entity_type,
+                entity_id: entity_id.clone(),
+            },
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
     }
 }
 

@@ -387,3 +387,119 @@ fn shared_owner_and_value_types_keep_exact_wire_representations() {
         json!({"type": "String", "value": "free text"})
     );
 }
+
+mod exposure {
+    use super::*;
+    use macro_event_broker::exposure::{
+        Audience, EntityType as MacroEntityType, Exposure, PublicEvent, Stage,
+    };
+
+    fn public(event: &PropertyTopicEvent) -> PublicEvent<'_, PropertyPublicEvent> {
+        match event.exposure().unwrap() {
+            Exposure::Public(public) => public,
+            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        }
+    }
+
+    fn updated(entity_type: EntityType) -> PropertyTopicEvent {
+        PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+            entity_property_id: uuid(ENTITY_PROPERTY_ID),
+            entity_id: ENTITY_ID.to_owned(),
+            entity_type,
+            property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+            actor_user_id: Some(user_id("macro|editor@example.com")),
+            actor: None,
+            on_behalf_of: None,
+            source: None,
+            inherited_from_project: None,
+            value: Some(PropertyValue::Bool(true)),
+            previous_value: Some(PropertyValue::Bool(false)),
+            updated_at: timestamp(UPDATED_AT),
+        })
+    }
+
+    #[test]
+    fn entity_property_events_reach_the_carrying_entity_in_preview() {
+        let events = [
+            updated(EntityType::Task),
+            PropertyTopicEvent::EntityPropertyDeleted(EntityPropertyDeletedMetadata {
+                entity_property_id: uuid(ENTITY_PROPERTY_ID),
+                entity_id: ENTITY_ID.to_owned(),
+                entity_type: EntityType::Task,
+                property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+                actor_user_id: None,
+                actor: None,
+                on_behalf_of: None,
+            }),
+            PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+                entity_id: ENTITY_ID.to_owned(),
+                entity_type: EntityType::Task,
+                actor_user_id: None,
+                actor: None,
+                on_behalf_of: None,
+            }),
+        ];
+        for event in &events {
+            let public = public(event);
+            assert_eq!(
+                public.audience,
+                Audience::Entity {
+                    entity_type: MacroEntityType::Document,
+                    entity_id: ENTITY_ID.to_owned(),
+                },
+                "{}",
+                public.name
+            );
+            assert_eq!(public.stage, Stage::Preview);
+            assert_eq!(
+                serde_json::to_value(public.payload.as_ref()).unwrap()["event_type"],
+                public.name
+            );
+        }
+    }
+
+    #[test]
+    fn updated_payload_names_the_property_without_values() {
+        let event = updated(EntityType::Thread);
+        let public = public(&event);
+        assert_eq!(
+            public.audience,
+            Audience::Entity {
+                entity_type: MacroEntityType::EmailThread,
+                entity_id: ENTITY_ID.to_owned(),
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(public.payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "entity_property.updated",
+                "metadata": {
+                    "entity_property_id": ENTITY_PROPERTY_ID,
+                    "entity_type": "email_thread",
+                    "entity_id": ENTITY_ID,
+                    "property_definition_id": PROPERTY_DEFINITION_ID,
+                    "actor": "macro|editor@example.com",
+                    "on_behalf_of": null,
+                    "updated_at": UPDATED_AT,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn properties_without_an_entity_audience_stay_internal() {
+        for entity_type in [EntityType::CalendarEvent, EntityType::User] {
+            assert!(matches!(
+                updated(entity_type).exposure().unwrap(),
+                Exposure::Internal(_)
+            ));
+        }
+    }
+
+    #[cfg(feature = "inbound")]
+    #[test]
+    fn public_payload_has_a_schema() {
+        use utoipa::ToSchema as _;
+        assert_eq!(PropertyPublicEvent::name(), "PropertyPublicEvent");
+    }
+}
