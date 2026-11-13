@@ -15,6 +15,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::ports::ConnectionStore;
 
 use crate::external_session_requests::BrokerExternalSessionRequests;
+use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 
 /// Reuse live harness/session instances and the existing external-request adapter.
 pub fn router<Bots, Harness, Sessions, Broker, Repo, Connections, Auth>(
@@ -23,6 +24,7 @@ pub fn router<Bots, Harness, Sessions, Broker, Repo, Connections, Auth>(
     sessions: Sessions,
     broker: Broker,
     repo: Repo,
+    harnesses: PgHarnessRepo,
     connections: Connections,
     authorization: MacroAuthorizationState<Auth>,
 ) -> Router
@@ -38,7 +40,7 @@ where
     let service = RoutineSessionsService::new(
         bots,
         harness.clone(),
-        BrokerExternalSessionRequests::new(broker, repo),
+        BrokerExternalSessionRequests::new(broker, repo, harnesses),
         sessions,
         harness,
         PipedreamConnectedApps(connections),

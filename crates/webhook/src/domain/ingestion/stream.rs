@@ -127,9 +127,13 @@ pub(crate) fn agent_trigger_stream_candidate(
         TriggerAudience::People(people) => StreamAudience::Any(
             people
                 .into_iter()
-                .map(|person| StreamAudience::Person {
-                    user_id: person.to_string(),
-                })
+                .map(|person| person.to_string())
+                // A requested session also reaches its runtime's own stream,
+                // which authenticates as the harness owner rather than as
+                // whichever teammate asked. Only the live stream: persisted
+                // webhooks keep the requester alone.
+                .chain(requested_runtime_user(&event.event))
+                .map(|user_id| StreamAudience::Person { user_id })
                 .collect(),
         ),
     };
@@ -137,6 +141,17 @@ pub(crate) fn agent_trigger_stream_candidate(
         audience,
         event: normalized,
     })
+}
+
+/// The user a requested session's runtime streams as, when the producer
+/// named one.
+fn requested_runtime_user(event: &AgentTriggerTopicEvent) -> Option<String> {
+    match event {
+        AgentTriggerTopicEvent::New(new) => new
+            .requested()
+            .and_then(|requested| requested.runtime_user.clone()),
+        _ => None,
+    }
 }
 
 pub(crate) fn agent_session_lifecycle_stream_candidate(

@@ -1810,6 +1810,7 @@ async fn run() -> anyhow::Result<()> {
             external_session_requests::BrokerExternalSessionRequests::new(
                 broker.clone(),
                 session_repo.clone(),
+                PgHarnessRepo::new(pool.clone()),
             ),
         ),
         harness.clone(),
@@ -1822,6 +1823,7 @@ async fn run() -> anyhow::Result<()> {
         draining_sessions.clone(),
         broker.clone(),
         session_repo.clone(),
+        PgHarnessRepo::new(pool.clone()),
         PgConnectionRepo::new(pool.clone()),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
@@ -1841,6 +1843,7 @@ async fn run() -> anyhow::Result<()> {
             external_session_requests::BrokerExternalSessionRequests::new(
                 broker.clone(),
                 session_repo.clone(),
+                PgHarnessRepo::new(pool.clone()),
             ),
             draining_sessions.clone(),
             (*harness).clone(),

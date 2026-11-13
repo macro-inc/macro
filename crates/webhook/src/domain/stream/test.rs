@@ -744,6 +744,15 @@ const TEAMMATE_ID: &str = "macro|teammate@example.com";
 
 /// A composer request to a bot's own runtime, asked by `requester`.
 fn requested_session_candidate(requester: &str) -> StreamCandidateEvent {
+    requested_session_candidate_for(requester, None)
+}
+
+/// A composer request asked by `requester` to a runtime that authenticates
+/// as `runtime_user`.
+fn requested_session_candidate_for(
+    requester: &str,
+    runtime_user: Option<&str>,
+) -> StreamCandidateEvent {
     use agent_trigger::domain::broker_events::{
         AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
     };
@@ -757,6 +766,7 @@ fn requested_session_candidate(requester: &str) -> StreamCandidateEvent {
             ),
             owner: requester.to_owned(),
             context: None,
+            runtime_user: runtime_user.map(str::to_owned),
         }),
     ));
     crate::domain::ingestion::stream::agent_trigger_stream_candidate(&event)
@@ -770,8 +780,15 @@ async fn first_after_requested(
     scope: WebhookScope,
     requester: &str,
 ) -> NormalizedWebhookEvent {
+    first_after(subscriber_id, scope, requested_session_candidate(requester)).await
+}
+
+async fn first_after(
+    subscriber_id: &str,
+    scope: WebhookScope,
+    requested: StreamCandidateEvent,
+) -> NormalizedWebhookEvent {
     let (service, sender) = service(FakeAccessService::allowing(&[]));
-    let requested = requested_session_candidate(requester);
     let mut stream = service
         .open_stream(
             MacroUserIdStr::try_from(subscriber_id.to_owned()).expect("valid user id"),
@@ -811,4 +828,25 @@ async fn a_requested_session_does_not_reach_a_teammates_team_stream() {
 async fn a_requested_session_reaches_the_requesters_user_stream() {
     let first = first_after_requested(SUBSCRIBER_ID, WebhookScope::User, SUBSCRIBER_ID).await;
     assert_ne!(first.event_name, "webhook.created");
+}
+
+const BUYER_ID: &str = "macro|buyer@example.com";
+
+/// A team computer's runtime streams as its buyer; a teammate's request to it
+/// still reaches that stream.
+#[tokio::test]
+async fn a_teammates_request_reaches_the_runtime_owners_team_stream() {
+    let requested = requested_session_candidate_for(TEAMMATE_ID, Some(BUYER_ID));
+    let first = first_after(BUYER_ID, WebhookScope::Team, requested).await;
+    assert_ne!(
+        first.event_name, "webhook.created",
+        "the request was dropped"
+    );
+}
+
+#[tokio::test]
+async fn a_teammates_request_does_not_reach_a_third_members_team_stream() {
+    let requested = requested_session_candidate_for(TEAMMATE_ID, Some(BUYER_ID));
+    let first = first_after(SUBSCRIBER_ID, WebhookScope::Team, requested).await;
+    assert_eq!(first.event_name, "webhook.created");
 }
