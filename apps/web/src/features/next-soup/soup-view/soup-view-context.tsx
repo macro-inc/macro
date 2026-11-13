@@ -24,11 +24,17 @@ import {
   type Query,
   type QueryStore,
 } from '@app/features/next-soup/filters/filter-store/query-store';
+import { useFeaturedDocuments } from '@app/features/next-soup/queries/featured-documents';
 import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
+import {
+  featuredDocumentIds,
+  featureSearchResults,
+  withFeaturedDocumentData,
+} from '@app/features/next-soup/soup-view/featured-search-results';
 import {
   createTagFilter,
   type TagFilter,
@@ -62,6 +68,7 @@ import {
   NATIVE_OFFLINE_ERROR_MESSAGE,
   nativeNetworkStatus,
 } from '@core/mobile/native-network-status';
+import { arrayEquals } from '@core/util/compareUtils';
 import {
   type EntityData,
   getPropertyOptionLabel,
@@ -85,6 +92,7 @@ import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
@@ -964,6 +972,12 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const itemsSource = () => soupItemsSource;
 
+  const featuredDocuments = useFeaturedDocuments(() =>
+    ENABLE_FEATURED_SEARCH_RESULTS
+      ? featuredDocumentIds(search.localFuzzyResults())
+      : []
+  );
+
   const localDrafts = createLocalDraftSource(
     () => itemsQuery.transport === 'graphql'
   );
@@ -1019,7 +1033,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         ];
       }
 
-      const local = search.localFuzzyResults();
+      const local = withFeaturedDocumentData(
+        search.localFuzzyResults(),
+        featuredDocuments()
+      );
       const service = search.serviceSearchResults();
 
       const needle = search.searchText().toLowerCase();
@@ -1123,26 +1140,19 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     return soup.positions.apply(transformed);
   };
 
-  const entities = () => {
-    const base = baseEntities();
-    if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return base;
-
-    const featuredIds = search.featuredIds();
-    if (featuredIds.length === 0) return base;
-
-    const entityMap = new Map(base.map((e) => [e.id, e]));
-    const featuredIdSet = new Set(featuredIds);
-    const featured: SoupEntity[] = [];
-
-    for (const id of featuredIds) {
-      const e = entityMap.get(id);
-      if (e) featured.push(e);
+  const featuredSearch = createLazyMemo(() =>
+    ENABLE_FEATURED_SEARCH_RESULTS && search.isSearching()
+      ? featureSearchResults(baseEntities(), search.featuredIds())
+      : undefined
+  );
+  const entities = () => featuredSearch()?.entities ?? baseEntities();
+  const featuredIds = createMemo(
+    () => featuredSearch()?.featuredIds ?? [],
+    [],
+    {
+      equals: arrayEquals,
     }
-
-    const rest = base.filter((e) => !featuredIdSet.has(e.id));
-
-    return [...featured, ...rest];
-  };
+  );
 
   const groupQueries = createGroupedSoupQueries({
     groupedPaging: () => itemsQuery.groupedPaging,
@@ -1579,7 +1589,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     setSearchText: search.setSearchText,
     searchPaused: sourceSearchPaused,
     setSearchPaused,
-    featuredIds: search.featuredIds,
+    featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
     queryFilters,

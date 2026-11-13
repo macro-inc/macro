@@ -1,11 +1,11 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 
-const pool = vi.hoisted(() => vi.fn(() => []));
+const pool = vi.hoisted(() => vi.fn((): unknown[] => []));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@app/features/soup/search', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/features/soup/search')>()),
-  useSearchContext: () => ({ entityPool: pool }),
+  useSearchContext: () => ({ entityPool: pool, routinePool: () => [] }),
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
@@ -27,9 +27,77 @@ vi.mock('@core/mobile/inputModality', () => ({ isModality: () => false }));
 vi.mock('@core/component/EntityIcon', () => ({ getIconConfig: vi.fn() }));
 
 import { createSoupState } from '../create-soup-state';
-import { createSearchState } from './create-search-state';
+import { NIL_UUID, type QueryState } from '../filters/filter-store';
+import {
+  createSearchState,
+  hidesLocalSearchResults,
+} from './create-search-state';
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  pool.mockReset();
+  pool.mockReturnValue([]);
+});
+
+function featuredIdsFor(include: QueryState['include']) {
+  vi.useFakeTimers();
+  pool.mockReturnValue([
+    {
+      data: {
+        id: 'task-1',
+        type: 'document',
+        name: 'budget review',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      },
+    },
+  ]);
+  const [text, setText] = createSignal('');
+  const { search, dispose } = createRoot((dispose) => ({
+    dispose,
+    search: createSearchState({
+      surface: () => 'search',
+      soup: createSoupState(),
+      filters: () => ({ include, exclude: {} }),
+      assignees: () => [],
+      searchText: text,
+      setSearchText: setText,
+    }),
+  }));
+  setText('budget');
+  vi.advanceTimersByTime(20);
+  const ids = search.featuredIds();
+  dispose();
+  return ids;
+}
+
+it('keeps local results when a type filter NIL-excludes the other types', () => {
+  expect(
+    featuredIdsFor({
+      subType: ['task'],
+      channelId: [NIL_UUID],
+      threadId: [NIL_UUID],
+      chatId: [NIL_UUID],
+    })
+  ).toEqual(['task-1']);
+});
+
+it('hides local results from a search scoped to a channel or a sender', () => {
+  expect(featuredIdsFor({ channelId: ['channel-1'] })).toEqual([]);
+  expect(featuredIdsFor({ channelSenderId: ['user-1'] })).toEqual([]);
+});
+
+it('hides local results the task facets cannot be tested against', () => {
+  expect(
+    hidesLocalSearchResults({
+      properties: [{ propertyId: 'status', type: 'select', value: 'done' }],
+    })
+  ).toBe(true);
+  expect(hidesLocalSearchResults({ documentOwnerId: ['user-1'] })).toBe(true);
+  expect(hidesLocalSearchResults({ documentOwnerId: [NIL_UUID] })).toBe(false);
+  expect(hidesLocalSearchResults({})).toBe(false);
+});
+
 it('does not demand the entity pool until local search has text', () => {
   vi.useFakeTimers();
   const [text, setText] = createSignal('');
