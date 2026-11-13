@@ -1875,7 +1875,12 @@ fn build_query<'a>(
 
     if include_initiatives {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(initiative_top_clause(sort_method, false, property_sort));
+        builder.push(initiative_top_clause(
+            sort_method,
+            false,
+            property_sort,
+            filter_ast.initiative_filter.as_deref(),
+        ));
         builder.push(build_initiative_filter(
             filter_ast.initiative_filter.as_deref(),
         ));
@@ -2683,7 +2688,12 @@ fn build_grouped_query<'a>(
 
     if include_initiatives {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(initiative_top_clause(sort_method, true, false));
+        builder.push(initiative_top_clause(
+            sort_method,
+            true,
+            false,
+            filter_ast.initiative_filter.as_deref(),
+        ));
         builder.push(build_initiative_filter(
             filter_ast.initiative_filter.as_deref(),
         ));

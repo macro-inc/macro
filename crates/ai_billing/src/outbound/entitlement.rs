@@ -141,15 +141,25 @@ where
         {
             return Ok(None);
         }
-        let seats: Vec<_> = self
+        let mut seats = Vec::new();
+        for member in self
             .teams
             .get_team_members(&team_id)
             .await
             .map_err(entitlement_err)?
-            .into_iter()
-            .filter(|member| member.plan == teams::domain::model::SeatPlan::Premium)
-            .map(|member| member.user_id.into_owned())
-            .collect();
+        {
+            // An agent teammate's included seat is not on the subscription.
+            if member.plan != teams::domain::model::SeatPlan::Premium
+                || self
+                    .teams
+                    .is_seat_included(&team_id, &member.user_id)
+                    .await
+                    .map_err(entitlement_err)?
+            {
+                continue;
+            }
+            seats.push(member.user_id.into_owned());
+        }
         if seats.is_empty() || seats.len() as u64 > observation.quantity {
             return Ok(None);
         }

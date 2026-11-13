@@ -4,9 +4,14 @@
 //! double-quoted phrases so callers can build AND-of-terms queries where each
 //! quoted span counts as a single phrase term. Used by both the unified
 //! dispatch and the channel-only endpoint. [`drop_wordless_terms`] then removes
-//! the terms no indexed text can match.
+//! the terms no indexed text can match, and [`resolve_document_term_matching`]
+//! decides how the remaining terms combine on document content.
 
-use models_search::MatchType;
+use macro_user_id::user_id::MacroUserIdStr;
+use models_search::{MatchType, TermMatching};
+use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_DYNAMIC_MATCHING};
+
+use crate::TermMatchingRollout;
 
 /// Splits search terms by whitespace, preserving double-quoted phrases.
 /// e.g. `["hello world"]` → `["hello", "world"]`
@@ -66,6 +71,31 @@ pub(in crate::api::search) fn record_term_counts(
 ) {
     span.record("search.terms", kept);
     span.record("search.dropped_terms", dropped);
+}
+
+/// Decide how a search's terms match document content.
+///
+/// Dynamic matching changes which documents match, so it needs both the
+/// request to ask for it and the rollout to allow the caller. A request that
+/// does not ask (the SDK, AI tools) never reads the rollout, and neither does
+/// a query too short for dynamic matching to change.
+pub(in crate::api::search) async fn resolve_document_term_matching(
+    rollout: &dyn TermMatchingRollout,
+    caller: &str,
+    requested: TermMatching,
+    term_count: usize,
+) -> DocumentTermMatching {
+    if requested != TermMatching::Dynamic || term_count < MIN_TERMS_FOR_DYNAMIC_MATCHING {
+        return DocumentTermMatching::All;
+    }
+    let Ok(caller) = MacroUserIdStr::parse_from_str(caller) else {
+        return DocumentTermMatching::All;
+    };
+    if rollout.dynamic_enabled_for(caller).await {
+        DocumentTermMatching::Dynamic
+    } else {
+        DocumentTermMatching::All
+    }
 }
 
 #[cfg(test)]

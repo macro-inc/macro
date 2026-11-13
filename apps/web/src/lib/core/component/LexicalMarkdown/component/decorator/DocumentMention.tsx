@@ -632,8 +632,17 @@ function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
     if (i.access === 'does_not_exist' && isRecentMention()) return undefined;
     return i.access;
   };
+  // A pasted routine link carries no label; name it from the routine's read.
+  const resolvedName = () => {
+    const i = item();
+    if (i.loading || i.access !== 'access') return undefined;
+    return i.name;
+  };
   return (
-    <Show when={unavailable()} fallback={<RoutineLink {...props} />}>
+    <Show
+      when={unavailable()}
+      fallback={<RoutineLink {...props} resolvedName={resolvedName()} />}
+    >
       {(access) => (
         <UnavailableMention
           access={access()}
@@ -650,10 +659,17 @@ function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
   );
 }
 
-/** Routine references use their saved label; routines have no hover preview. */
-function RoutineLink(props: DocumentMentionDecoratorProps) {
+/**
+ * Routine references use their saved label, else the routine's own name;
+ * routines have no hover preview.
+ */
+function RoutineLink(
+  props: DocumentMentionDecoratorProps & { resolvedName?: string }
+) {
   const name = () =>
-    props.documentName?.replaceAll('\n', ' ').trim() || 'Routine';
+    props.documentName?.replaceAll('\n', ' ').trim() ||
+    props.resolvedName?.replaceAll('\n', ' ').trim() ||
+    'Routine';
   const open = (event: MouseEvent | KeyboardEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -677,7 +693,7 @@ function RoutineLink(props: DocumentMentionDecoratorProps) {
           if (event.key === 'Enter') open(event);
         }}
       >
-        <DocumentMentionStatic {...props} />
+        <DocumentMentionStatic {...props} documentName={name()} />
       </span>
     </Tooltip>
   );

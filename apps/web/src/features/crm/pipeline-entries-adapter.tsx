@@ -72,14 +72,18 @@ export function createCrmPipelineEntries(
         <PipelineEntryCards
           entries={query.entries()}
           onOpenPipeline={props.onOpenPipeline}
-          renderCell={(entry, cell, wrap) => (
+          renderCell={(entry, cell, display) => (
             <GridCell
               column={cell().column}
               value={shownValue(entry(), cell())}
-              wrap={wrap()}
+              wrap={display.fit !== 'line'}
+              emptyLabel={display.emptyLabel}
               canEdit={entry().pipeline.canEdit}
+              layout="property"
               renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
-              renderTextValue={(value) => <DatabaseTextValue value={value} />}
+              renderTextValue={(value) => (
+                <DatabaseTextValue value={value} fit={display.fit} />
+              )}
               renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
               renderMentionPicker={(picker) => (
                 <DatabaseMentionPicker {...picker} />

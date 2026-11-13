@@ -44,9 +44,11 @@ threads, pins, recents, notifications, folders, activity.
   `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
   `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
-  across item types. Folder duplication runs on its own task and copies
-  documents and chats through `entity_mutation/project_contents.rs`, the
-  projects domain's `ProjectContentCopier` port.
+  across item types. Folder duplication, trash, restore and permanent delete
+  run on their own task (`run_on_own_task`), so a dropped request cannot stop
+  them partway; duplication copies documents and chats through
+  `entity_mutation/project_contents.rs`, the projects domain's
+  `ProjectContentCopier` port.
 - `src/outbound/docx_export.rs`: primary-database parts and immutable DOCX export
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.
@@ -119,6 +121,11 @@ threads, pins, recents, notifications, folders, activity.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
+- Thread edits (`api/threads/edit_thread.rs`) and saved view definition
+  creates and updates refuse sharing changes from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check. Every agent session scope is refused `/soup/graphql` and
+  its WebSocket (`agent_correlation::scope`).
 
 ## Related
 
