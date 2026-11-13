@@ -77,6 +77,7 @@ export function createBucketV2(
     transferAcceleration,
     lifecycleRules,
     enableVersioning,
+    cors = true,
     tags,
   }: {
     id: string;
@@ -85,6 +86,8 @@ export function createBucketV2(
     tags?: { [key: string]: string };
     lifecycleRules?: aws.types.input.s3.BucketLifecycleConfigurationV2Rule[];
     enableVersioning?: boolean;
+    /** Allow browser uploads and downloads from Macro's origins. */
+    cors?: boolean;
   },
   opts?: pulumi.CustomResourceOptions
 ): aws.s3.BucketV2 {
@@ -99,23 +102,24 @@ export function createBucketV2(
     opts
   );
 
-  // Add CORS configuration using BucketCorsConfigurationV2
-  new aws.s3.BucketCorsConfigurationV2(
-    `${id}-cors`,
-    {
-      bucket: bucket.id,
-      corsRules: [
-        {
-          allowedHeaders: ['*'],
-          allowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
-          allowedOrigins: ALLOWED_ORIGINS,
-          exposeHeaders: ['ETag'],
-          maxAgeSeconds: 3000,
-        },
-      ],
-    },
-    { ...opts, dependsOn: [bucket] }
-  );
+  if (cors) {
+    new aws.s3.BucketCorsConfigurationV2(
+      `${id}-cors`,
+      {
+        bucket: bucket.id,
+        corsRules: [
+          {
+            allowedHeaders: ['*'],
+            allowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
+            allowedOrigins: ALLOWED_ORIGINS,
+            exposeHeaders: ['ETag'],
+            maxAgeSeconds: 3000,
+          },
+        ],
+      },
+      { ...opts, dependsOn: [bucket] }
+    );
+  }
 
   if (lifecycleRules) {
     new aws.s3.BucketLifecycleConfigurationV2(

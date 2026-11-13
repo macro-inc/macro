@@ -155,6 +155,10 @@
       "name": "gateway-stack",
       "version": "0.0.0",
     },
+    "stacks/gitai-service": {
+      "name": "gitai-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/github-runners": {
       "name": "github-runners-stack",
       "version": "0.0.0",
@@ -647,6 +651,8 @@
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 
     "get-stream": ["get-stream@6.0.1", "", {}, "sha512-ts6Wi+2j3jQjqi70w5AlN8DFnkSwC+MqmxEzdEALB2qXZYV3X/b1CTfgPLGJNMeAWxdPfU8FO1ms3NUfaHCPYg=="],
+
+    "gitai-service-stack": ["gitai-service-stack@workspace:stacks/gitai-service"],
 
     "github-runners-stack": ["github-runners-stack@workspace:stacks/github-runners"],
 

@@ -23,6 +23,7 @@ export enum GatewayService {
   MCP_SERVER = 'MCP_SERVER',
   DOCUMENT_COGNITION_SERVICE = 'DOCUMENT_COGNITION_SERVICE',
   LEXICAL_SERVICE = 'LEXICAL_SERVICE',
+  GITAI_SERVICE = 'GITAI_SERVICE',
 }
 
 /**
@@ -55,6 +56,8 @@ export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
   [GatewayService.DOCUMENT_COGNITION_SERVICE]: 120,
   [GatewayService.CALENDAR_SERVICE]: 140,
   [GatewayService.LEXICAL_SERVICE]: 160,
+  // No lower-numbered rule matches /gitai.
+  [GatewayService.GITAI_SERVICE]: 170,
   [GatewayService.CONVERT_SERVICE]: 3000,
 };
 
