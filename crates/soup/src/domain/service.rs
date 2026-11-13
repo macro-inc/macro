@@ -1061,13 +1061,14 @@ where
         let mut crm_contact_ids = Vec::new();
         for entity in entities {
             match entity.entity_type {
-                // Calendar events, agent sessions and runtimes ride the main
-                // by-ids query in both soup types.
+                // Calendar events, agent sessions, runtimes and teams ride the
+                // main by-ids query in both soup types.
                 EntityType::Document
                 | EntityType::Chat
                 | EntityType::CalendarEvent
                 | EntityType::AgentSession
                 | EntityType::Harness
+                | EntityType::Team
                 | EntityType::Initiative => main_entities.push(entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.

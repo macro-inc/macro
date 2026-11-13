@@ -26,6 +26,8 @@ pub mod email_thread;
 pub mod foreign_entity;
 /// Paired runtime models for attention feeds.
 pub mod harness;
+/// Team models for attention feeds.
+pub mod team;
 /// Initiative models for Soup responses.
 pub mod initiative;
 /// Unified Soup feed item model.

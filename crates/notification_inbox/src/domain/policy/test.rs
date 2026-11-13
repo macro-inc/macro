@@ -18,3 +18,8 @@ fn channel_threads_are_never_groups() {
     assert!(!CANDIDATE_TYPES.contains(&EntityType::ChannelMessage));
     assert!(CANDIDATE_TYPES.contains(&EntityType::Channel));
 }
+
+#[test]
+fn team_scoped_requests_are_candidates() {
+    assert!(CANDIDATE_TYPES.contains(&EntityType::Team));
+}
