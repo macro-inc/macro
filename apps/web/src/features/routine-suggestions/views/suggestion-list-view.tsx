@@ -10,9 +10,8 @@ import {
   type SuggestionListView,
 } from '../components/routine-suggestion-list';
 import {
+  SuggestionCard,
   type SuggestionCardModel,
-  SuggestionDialogCard,
-  SuggestionDiscoverCard,
   SuggestionMoreCell,
 } from '../components/suggestion-card';
 import {
@@ -154,7 +153,8 @@ export function SuggestionDialogGrid(props: {
                 props.onOpenRoutine
               );
               return (
-                <SuggestionDialogCard
+                <SuggestionCard
+                  on="dialog"
                   model={cardModel(item, props.actions, props.surface)}
                   {...handlers}
                   onDismiss={
@@ -176,7 +176,11 @@ export function SuggestionDialogGrid(props: {
   );
 }
 
-/** Discover's cards, four to a row. */
+/**
+ * Discover's cards, three to a row, two or one where the page is too narrow
+ * for cards of at least 18rem (the breakpoints count the page's 1rem
+ * padding on each side and the 0.75rem gaps).
+ */
 export function SuggestionDiscoverGrid(props: {
   view: SuggestionListView;
   actions: SuggestionActions;
@@ -191,13 +195,16 @@ export function SuggestionDiscoverGrid(props: {
       onRetry={props.onRetry}
       skeleton={
         <SkeletonCards
-          count={8}
-          class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-2.5"
+          count={6}
+          class="grid min-w-0 grid-cols-1 gap-3 @min-[38.75rem]/routines:grid-cols-2 @min-[57.5rem]/routines:grid-cols-3"
         />
       }
     >
       {(items) => (
-        <CardGrid>
+        <ul
+          class="grid min-w-0 grid-cols-1 gap-3 @min-[38.75rem]/routines:grid-cols-2 @min-[57.5rem]/routines:grid-cols-3"
+          aria-label={t('routineSuggestions.listLabel')}
+        >
           <For each={items()}>
             {(item, index) => {
               const handlers = cardHandlers(
@@ -207,43 +214,29 @@ export function SuggestionDiscoverGrid(props: {
                 props.onOpenRoutine
               );
               return (
-                <SuggestionDiscoverCard
+                <SuggestionCard
+                  on="page"
                   model={cardModel(item, props.actions)}
                   {...handlers}
                 />
               );
             }}
           </For>
-        </CardGrid>
+        </ul>
       )}
     </RoutineSuggestionList>
   );
 }
 
-/** Cards as Discover lays them out: as many columns of at least 15rem as fit. */
-function CardGrid(props: {
-  ref?: (element: HTMLUListElement) => void;
-  children: JSX.Element;
-}) {
-  return (
-    <ul
-      ref={props.ref}
-      class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-2.5"
-      aria-label={t('routineSuggestions.listLabel')}
-    >
-      {props.children}
-    </ul>
-  );
-}
-
-/** Columns a row starts with, until it is measured. */
-const ROW_COLUMNS = 4;
+/** Card columns a row starts with, until it is measured. */
+const ROW_CARD_COLUMNS = 3;
 
 /**
- * The one row above the routines list: Discover's cards, at Discover's
- * size, as many as fit in one row with how many more Discover has in the
- * last column. Nothing while loading, failed or empty, so the list never
- * waits on it.
+ * The one row above the routines list: up to three of Discover's cards, at
+ * Discover's size, with how many more Discover has in a narrow last column.
+ * Two cards, then one, where the page is too narrow for three of at least
+ * 18rem. Nothing while loading, failed or empty, so the list never waits on
+ * it.
  */
 export function SuggestionRow(props: {
   items: SuggestionItem[];
@@ -251,9 +244,10 @@ export function SuggestionRow(props: {
   onOpenDiscover(): void;
   onOpenRoutine(routineId: string): void;
 }): JSX.Element {
-  const [columns, setColumns] = createSignal(ROW_COLUMNS);
+  const [cardColumns, setCardColumns] = createSignal(ROW_CARD_COLUMNS);
   let grid: HTMLUListElement | undefined;
-  // The grid decides how many columns fit; the row fills one row of them.
+  // The grid's breakpoints decide how many card columns fit; its last
+  // column is always the more cell's.
   createResizeObserver(
     () => grid,
     () => {
@@ -261,12 +255,10 @@ export function SuggestionRow(props: {
       const count = getComputedStyle(grid)
         .gridTemplateColumns.split(' ')
         .filter(Boolean).length;
-      if (count > 0) setColumns(count);
+      if (count > 1) setCardColumns(count - 1);
     }
   );
-  const fits = () => props.items.length <= columns();
-  const visible = () =>
-    fits() ? props.items : props.items.slice(0, columns() - 1);
+  const visible = () => props.items.slice(0, cardColumns());
   const more = () => props.items.length - visible().length;
   return (
     <section
@@ -282,7 +274,11 @@ export function SuggestionRow(props: {
           {t('routineSuggestions.suggestedForYou')}
         </h2>
       </div>
-      <CardGrid ref={(element) => (grid = element)}>
+      <ul
+        ref={(element) => (grid = element)}
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_8rem] gap-3 @min-[47.5rem]/routines:grid-cols-[repeat(2,minmax(0,1fr))_8rem] @min-[66.25rem]/routines:grid-cols-[repeat(3,minmax(0,1fr))_8rem]"
+        aria-label={t('routineSuggestions.listLabel')}
+      >
         <For each={visible()}>
           {(item, index) => {
             const handlers = cardHandlers(
@@ -292,7 +288,8 @@ export function SuggestionRow(props: {
               props.onOpenRoutine
             );
             return (
-              <SuggestionDiscoverCard
+              <SuggestionCard
+                on="page"
                 model={cardModel(item, props.actions)}
                 {...handlers}
               />
@@ -302,7 +299,7 @@ export function SuggestionRow(props: {
         <Show when={more() > 0}>
           <SuggestionMoreCell count={more()} onOpen={props.onOpenDiscover} />
         </Show>
-      </CardGrid>
+      </ul>
     </section>
   );
 }

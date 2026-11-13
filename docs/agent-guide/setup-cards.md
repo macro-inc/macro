@@ -88,7 +88,8 @@ area icon, **For you** (violet), **Draft** or **Template** badges, the name,
 what it does as the routine page's knob sentence (underlined values change in
 place before turning it on; without code steps it reads as a summary), its
 trigger → first step, and below a divider AI's reason or **From Macro** beside
-**Turn on** (AI's catalog picks) or a quiet **Review →** / **Use →** label.
+**Turn on** (AI's catalog picks) or a quiet **Review →** / **Use →** label,
+or **Enabled** once on. Long names and reasons wrap.
 The whole card is one button (hover tint, focus ring around the card, Enter
 and Space). While AI's suggestions are still arriving (they come one by one),
 the footer says **Finding more for you…** and the grid refreshes every 2

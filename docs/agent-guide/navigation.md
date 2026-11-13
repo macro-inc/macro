@@ -1207,11 +1207,12 @@ template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. With `enable-routine-suggestions` and
 `enable-routine-code-steps` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
-of Discover's cards, at Discover's size (as many as fit, three at most desktop
-widths), and in the last column **N more · In Discover**, which opens a third tab, **Discover**. Discover
+of Discover's cards, at Discover's size: three, or two then one where the page
+is too narrow for cards of at least 18rem, and in a narrow last column **N more
+· In Discover**, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
-the templates no suggestion already offers, four cards to a row (the knob
-sentence in two lines, the chain and the action; **On** once turned on), with
+the templates no suggestion already offers, three cards to a row (two or one
+when narrower), each laid out like the sidebar dialog's cards, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint
 **picked for you, then Macro's templates**. The list's search narrows Discover
 too. Discover's tab carries a violet dot while it has AI picks this browser

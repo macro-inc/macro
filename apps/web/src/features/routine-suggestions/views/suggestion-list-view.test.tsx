@@ -191,7 +191,7 @@ describe('the row above the routines list', () => {
   it('shows one row of Discover’s cards, counts each as shown, and says how many more Discover has', () => {
     vi.mocked(analytics.track).mockClear();
     const onOpenDiscover = vi.fn();
-    // Five cards for four columns: three, then the cell for two more.
+    // Five cards: three, then the cell for two more.
     const many = [
       ...items,
       ...items.slice(0, 2).map((item, n) => ({ ...item, id: `more-${n}` })),
