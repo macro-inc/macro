@@ -559,7 +559,7 @@ fn the_clear_selection_command_drops_the_selection_only() {
     assert_eq!(native.state().selection(), None);
     assert!(commit.selection_changed);
     assert_eq!(export(&native), before);
-    assert!(commit.tags.is_empty());
+    assert!(commit.tags.iter().next().is_none());
     // Already clear: still handled, still no document change.
     let (handled, _) = native.dispatch(&command).expect("dispatch");
     assert_eq!(handled, Handled::Yes);
