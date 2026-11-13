@@ -143,9 +143,9 @@ Outlook (Microsoft Graph) outbound adapters.
   account. `zones.rs` is CLDR's `windowsZones.xml` (territory `001`, in file
   order) with its `LICENSE` beside it; regenerate both from a new CLDR
   release when Windows adds zones. Keep out a zone whose IANA rules the
-  bundled chrono-tz lacks: Outlook writes send local times computed with
-  them, so stale rules move an event. British Columbia, Alberta and Manitoba
-  Standard Time are held out that way until current tz data ships.
+  vendored tz data (`vendor/chrono-tz`) lacks: Outlook writes send local
+  times computed with them, so stale rules move an event; update the tz
+  data first.
 - The Graph root is `macro_service_urls::MicrosoftGraphUrl`, so
   `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
   `crates/outlook_emulator`; tests in other crates use

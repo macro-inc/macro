@@ -79,7 +79,7 @@ export function ChannelTopBar(props: {
     <ViewShell.TopBar class="call-bar call-channel-bar gap-3 py-0">
       <div class="flex min-w-0 shrink items-center gap-2">
         <Hash class="size-4 shrink-0" />
-        <span class="truncate text-sm font-semibold">launch</span>
+        <span class="truncate text-sm font-medium">launch</span>
       </div>
       <TabsInset
         class="call-channel-tabs shrink-0"
@@ -383,7 +383,7 @@ export function JoinCallEmptyState(props: {
           </For>
         </div>
         <div class="flex flex-col items-center gap-1">
-          <h2 class="text-lg font-semibold">Call in progress</h2>
+          <h2 class="text-lg font-medium">Call in progress</h2>
           <p class="max-w-sm text-sm text-ink-muted">
             {firstNames(props.people)}
           </p>

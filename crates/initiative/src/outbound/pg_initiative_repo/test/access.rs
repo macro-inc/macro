@@ -59,3 +59,42 @@ async fn assignee_sharing_adds_manageable_collaborators_without_owner_downgrade(
     assert_eq!(initiative_access(&pool, created.id, MEMBER).await?, None);
     Ok(())
 }
+
+/// A session that may not share assigns only people who already have the
+/// access an assignee gets.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_scoped_session_assigns_only_who_already_has_access(pool: PgPool) -> anyhow::Result<()> {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    insert_user(&pool, OWNER).await?;
+    insert_user(&pool, MEMBER).await?;
+    insert_user(&pool, TEAMMATE).await?;
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(OWNER, "Launch", &[TEAMMATE]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+
+    let refused = scope_attribution(
+        no_send,
+        repo.grant_assignees(created.id, vec![user(MEMBER)]),
+    )
+    .await;
+    assert!(refused.is_err());
+    assert_eq!(initiative_access(&pool, created.id, MEMBER).await?, None);
+
+    scope_attribution(
+        no_send,
+        repo.grant_assignees(created.id, vec![user(OWNER), user(TEAMMATE)]),
+    )
+    .await?;
+    Ok(())
+}

@@ -9,7 +9,7 @@ use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
 use crate::{
-    MatchType, SearchOn, call_record::SimpleCallRecordSearchResponseBaseItem,
+    MatchType, SearchOn, TermMatching, call_record::SimpleCallRecordSearchResponseBaseItem,
     channel::SimpleChannelSearchReponseBaseItem, chat::SimpleChatSearchResponseBaseItem,
     document::SimpleDocumentSearchResponseBaseItem, email::SimpleEmailSearchResponseBaseItem,
     project::SimpleProjectSearchResponseBaseItem,
@@ -114,6 +114,13 @@ pub struct UnifiedSearchRequest {
     /// their calendars.
     #[serde(default)]
     pub calendar_event_scope: CalendarEventSearchScope,
+
+    /// How a query of several terms matches document content. Defaults to
+    /// `all`, the strict AND that AI tools and the SDK rely on; the web
+    /// app's Search view asks for `dynamic`.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub term_matching: TermMatching,
 
     #[schemars(skip)]
     pub collapse: Option<bool>,

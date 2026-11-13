@@ -8,6 +8,9 @@ pub mod models;
 /// What a chat's people are called.
 #[cfg(feature = "ports")]
 pub mod people;
+/// DSS use case: staged profile pictures become static files.
+#[cfg(feature = "ports")]
+pub mod pictures;
 /// Port traits.
 #[cfg(feature = "ports")]
 pub mod ports;

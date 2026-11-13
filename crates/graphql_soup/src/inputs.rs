@@ -290,7 +290,10 @@ impl SoupInitialInput {
         let method = self
             .sort_method
             .unwrap_or(GraphqlSimpleSortMethod::ViewedAt);
-        let cursor = if method == GraphqlSimpleSortMethod::Property {
+        let cursor = if matches!(
+            method,
+            GraphqlSimpleSortMethod::Property | GraphqlSimpleSortMethod::Name
+        ) {
             SoupQuery::Property(models_pagination::Query::Sort(
                 selected_sort(
                     method,
@@ -460,6 +463,10 @@ pub enum GraphqlSimpleSortMethod {
     /// Missing definitions and unsupported types use update-time ordering.
     /// Email, channels, calls, companies, and agent sessions never appear.
     Property,
+    /// Sort by the item's own name, case-insensitively in ICU root collation
+    /// order, unnamed last, then newest update and ID. Database rows have no
+    /// name here and sort last. Omits the same sources `PROPERTY` does.
+    Name,
 }
 
 impl GraphqlSimpleSortMethod {
@@ -474,6 +481,9 @@ impl GraphqlSimpleSortMethod {
                 return Err(async_graphql::Error::new(
                     "property sort requires sortPropertyDefinitionId",
                 ));
+            }
+            Self::Name => {
+                return Err(async_graphql::Error::new("NAME is not a timestamp sort"));
             }
             Self::NotifiedAt => {
                 return Err(async_graphql::Error::new(
@@ -501,6 +511,18 @@ fn selected_sort(
     property: Option<ID>,
     direction: Option<GraphqlSortDirection>,
 ) -> async_graphql::Result<DynamicSort> {
+    if method == GraphqlSimpleSortMethod::Name {
+        if property.is_some() {
+            return Err(async_graphql::Error::new(
+                "sortPropertyDefinitionId requires PROPERTY",
+            ));
+        }
+        return Ok(DynamicSort::name(
+            direction
+                .map(GraphqlSortDirection::into_model)
+                .unwrap_or_default(),
+        ));
+    }
     if method == GraphqlSimpleSortMethod::Property {
         return Ok(DynamicSort::Property {
             property_definition_id: parse_id(

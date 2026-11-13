@@ -26,6 +26,37 @@ async fn the_first_connection_tells_the_buyer_once() {
             harness_id: Some(HARNESS),
             computer_name: "Ada".to_owned(),
             buyer: buyer(),
+            agent: None,
+            outcome: SetupOutcome::Ready,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn an_agent_computers_notice_names_its_agent() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    let agent = MacroUserIdStr::try_from("macro|ada@agents.macro.invalid".to_owned()).unwrap();
+    operator
+        .repo
+        .agents
+        .lock()
+        .unwrap()
+        .insert(id, agent.clone());
+    operator.run_fleet_effects().await.unwrap();
+
+    operator.macrod_connected(HARNESS).await.unwrap();
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+
+    assert_eq!(
+        *operator.notices.sent.lock().unwrap(),
+        vec![SetupNotice {
+            computer_id: id,
+            team_id: TEAM,
+            harness_id: Some(HARNESS),
+            computer_name: "Ada".to_owned(),
+            buyer: buyer(),
+            agent: Some(agent),
             outcome: SetupOutcome::Ready,
         }]
     );
@@ -52,6 +83,7 @@ async fn a_failed_setup_tells_the_buyer_why() {
             harness_id: None,
             computer_name: "Ada".to_owned(),
             buyer: buyer(),
+            agent: None,
             outcome: SetupOutcome::Failed {
                 failure: Failure::Create,
                 failed_at: now(),

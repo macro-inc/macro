@@ -215,6 +215,7 @@ impl IntoResponse for InitiativeError {
         let status_code = match &self {
             InitiativeError::NotFound => StatusCode::NOT_FOUND,
             InitiativeError::Unauthorized => StatusCode::UNAUTHORIZED,
+            InitiativeError::Forbidden(_) => StatusCode::FORBIDDEN,
             InitiativeError::BadRequest(_) => StatusCode::BAD_REQUEST,
             InitiativeError::Conflict(_) => StatusCode::CONFLICT,
             InitiativeError::NameTooLong { .. } => StatusCode::UNPROCESSABLE_ENTITY,

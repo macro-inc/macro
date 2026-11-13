@@ -82,7 +82,9 @@ a local stack, without Google accounts.
 - Point a local `email_service` and `pubsub_workers` at it:
   `OVERRIDE_GMAIL_API_URL=<base>/gmail/v1`,
   `OVERRIDE_GOOGLE_PEOPLE_API_URL=<base>/people/v1`,
-  `OVERRIDE_GOOGLE_OAUTH_CERTS_URL=<base>/oauth2/v3/certs`, and
+  `OVERRIDE_GOOGLE_OAUTH_CERTS_URL=<base>/oauth2/v3/certs`,
+  `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL=<base>/oauth2/v3/tokeninfo` (on
+  `email_service` only), and
   `OVERRIDE_AUTH_SERVICE_URL=<base>/_emulator/authentication-service` to get
   access tokens without the authentication service. Start the emulator with
   `--push-endpoint http://<email_service>/gmail/webhook`.

@@ -65,6 +65,7 @@ export default {
   stopping: 'Turning off',
   stopped: 'Powered off',
   failed: 'Failed',
+  failedBecause: 'Setup failed: {{reason}}',
   failedHint: 'Macro is looking into it. Contact support if it stays failed.',
   retry: 'Retry',
   retryFailed: "Couldn't retry. Try again.",
@@ -123,6 +124,8 @@ export default {
   stepCreateAgentShort: 'Create',
   loadingSizes: 'Loading computer sizes',
   noSizes: 'No computer sizes are available right now.',
+  noSizesReason:
+    "Macro's hosts have no room for a new computer. Try again later.",
   setupProgressLabel: 'Setup progress',
   stageBilling: 'Updating billing…',
   stageSignIn: 'Sign in to Claude',
@@ -133,6 +136,7 @@ export default {
   stageSignInDone: 'Signed in to Claude',
   stageSkipped: '{{stage}} · skipped',
   skippedStep: 'skipped',
+  creditsStep: 'Macro credits',
   signInWaitsForRetry:
     'Setup stopped before the computer came up, so there is no sign-in yet. Retry setup above; this step continues once the computer connects.',
   signInUnlocksLater:
@@ -142,11 +146,20 @@ export default {
   computerStarting: 'Computer starting',
   setupFailedReason:
     'The computer could not be set up. Retry sets it up again at no extra charge; contact support if it fails again.',
+  setupFailedDetails:
+    'Retry sets it up again at no extra charge. Contact support if it fails again.',
+  failedBilling: "Couldn't update billing",
+  failedCreating: "Couldn't create the computer",
+  failedBooting: "Couldn't start the computer",
+  failedConnecting: "Couldn't connect the computer to Macro",
+  failedSetup: "Couldn't set up the computer",
+  failedWithReason: '{{headline}}: {{reason}}',
+  progressLine: '{{stage}} · {{elapsed}}',
+  showSetupProgress: 'Show setup progress',
+  setupFailureDetails: 'Details',
   retrySetup: 'Retry setup',
   setupFailedTitle: 'Setup failed',
-  signInSkipped: "Not needed: the agent runs on Macro's Claude.",
-  nameAgentToContinue: 'Name the agent to continue.',
-  chooseClaudeToContinue: 'Choose which Claude it should use to continue.',
+  signInSkipped: 'Not needed: the agent runs on Macro credits.',
   tryItAfterSetup: 'Try it and creating agents unlock once setup finishes.',
   pasteCodeToContinue: 'Paste the code from claude.ai to complete sign-in.',
   buyAfterSizesLoad: 'Buy unlocks once the sizes have loaded.',
@@ -162,13 +175,12 @@ export default {
   almostReady: 'Almost ready',
   almostReadyBody: 'Finishing setup on {{computer}}.',
   setupAgentTitle: "Let's set up an agent on it",
-  setupAgentBody: 'Agents on this computer run Claude Code.',
   agentName: 'Agent name',
   claudeChoice: 'Which Claude should it use?',
   claudeOwnChoice: 'Your Claude account',
   claudeOwnChoiceHint:
     'Sign in with Claude Pro or Max. Everyone on the team uses this account on this computer.',
-  claudeCreditsChoice: "Macro's Claude",
+  claudeCreditsChoice: 'Macro credits',
   claudeCreditsChoiceHint: "Runs on Macro's API key and your team's credits.",
   setupDoneTitle: '{{agent}} is ready',
   setupDoneBody:
@@ -185,6 +197,10 @@ export default {
   done: 'Done',
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',
+  getComputerValue: "A hosted computer where your team's agents run.",
+  getComputerValueShort: 'Hosted, always on',
+  factAlwaysOn: 'Always on, never sleeps',
+  factClaudePlans: 'Runs on your Claude plan or Macro credits',
   getComputerLine:
     'A full computer, with your Claude sub, and a Macro agent, ready to go',
   trialBlocked:

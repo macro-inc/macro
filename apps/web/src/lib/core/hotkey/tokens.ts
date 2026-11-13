@@ -169,7 +169,6 @@ export const TOKENS = {
     sendAndMarkDone: 'email.sendAndMarkDone',
     archive: 'email.archive',
     reply: 'email.reply',
-    replyAll: 'email.replyAll',
     forward: 'email.forward',
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
@@ -223,6 +222,8 @@ export const TOKENS = {
     },
     focusSplitRight: 'window.focusSplitRight',
     focusSplitLeft: 'window.focusSplitLeft',
+    focusSplitDown: 'window.focusSplitDown',
+    focusSplitUp: 'window.focusSplitUp',
   },
 
   // canvas

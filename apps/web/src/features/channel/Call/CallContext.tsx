@@ -14,6 +14,7 @@ import {
   fetchActiveCall,
   invalidateActiveCallQueries,
   requestCallToken,
+  requestStartCallToken,
   useLeaveCallMutation,
 } from '@queries/call/call';
 import { makePersisted } from '@solid-primitives/storage';
@@ -1752,6 +1753,7 @@ function createCallState() {
     shouldRequestToken: callSession.shouldRequestToken,
     prepareToken: prepareNativeCallJoin,
     requestToken: requestCallToken,
+    startCall: requestStartCallToken,
     connect: (token, source) =>
       callSession.connectWithToken(token, {
         channelTitle: token.channelId

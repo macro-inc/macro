@@ -324,7 +324,7 @@ fn property_sort_keeps_null_position_without_a_query_context() {
         limit: 10,
         val: models_pagination::CursorVal {
             sort_type: sort,
-            last_val: sort.position(None, chrono::DateTime::default()),
+            last_val: sort.position(None, None, chrono::DateTime::default()),
         },
         filter: EntityFilterAst::default(),
     })

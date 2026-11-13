@@ -23,6 +23,7 @@ import type {
 } from '../protocol';
 import {
   isTypedSearch,
+  isTypedSearchRowRead,
   parseCacheRevision,
   parseStorageGeneration,
 } from '../protocol';
@@ -138,6 +139,16 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 /** A new engine or cleared storage: not even a typed search runs ahead. */
 function stopsTypedSearch(request: CacheRequest): boolean {
   return request.kind === 'init' || request.kind === 'clear';
+}
+
+/** A change made on this device rather than a result from the network. */
+function isLocalChange(request: CacheRequest): boolean {
+  return (
+    request.kind === 'enqueue-optimistic-mutation' ||
+    request.kind === 'defer-optimistic-write' ||
+    request.kind === 'commit-optimistic-write' ||
+    request.kind === 'rollback-optimistic-write'
+  );
 }
 
 function isAuthoritativeWrite(request: CacheRequest): boolean {
@@ -408,9 +419,25 @@ export class CacheWorkerCore {
     }
   }
 
+  /**
+   * The rows a typed search named rank with it, as the search is not answered
+   * for the person waiting until they list. They may run before a network
+   * result queued ahead of them: that is the result arriving a moment later,
+   * and its cache change refreshes the list. A change this page made itself
+   * must show in rows read after it, so behind one of those a row read orders
+   * like any other record read.
+   */
+  private arrivalPriority(request: CacheRequest): number {
+    if (!isTypedSearchRowRead(request)) return requestPriority(request);
+
+    return this.queue.some((queued) => isLocalChange(queued.request))
+      ? NORMAL_READ_PRIORITY
+      : TYPED_SEARCH_PRIORITY;
+  }
+
   private enqueue(request: CacheRequest): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const priority = requestPriority(request);
+      const priority = this.arrivalPriority(request);
       const signature = readSignature(request);
 
       // Coalesce only within the current lifecycle segment. In particular, a
@@ -481,27 +508,7 @@ export class CacheWorkerCore {
       }
     }
 
-    // A typed search registers nothing and writes nothing, so the generation
-    // checks and operation teardowns that fence other reads do not order it.
-    // After an engine restart those fences sit between it and the head of the
-    // replayed backlog. It can then run before a write queued ahead of it:
-    // its rows are only older, and that write's cache change refreshes them.
-    let searchEnd = this.queue.findIndex((queued) =>
-      stopsTypedSearch(queued.request)
-    );
-    if (searchEnd === -1) searchEnd = this.queue.length;
-    for (let i = segmentEnd; i < searchEnd; i += 1) {
-      const candidate = this.queue[i];
-      const selected = this.queue[index];
-      if (
-        candidate &&
-        selected &&
-        isTypedSearch(candidate.request) &&
-        candidate.priority > selected.priority
-      ) {
-        index = i;
-      }
-    }
+    index = this.pickPastFences(index, segmentEnd);
 
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
@@ -524,6 +531,36 @@ export class CacheWorkerCore {
         this.collectArrivalsThenDrain();
         this.resolveDrainWaitersIfIdle();
       });
+  }
+
+  /**
+   * A typed search registers nothing and writes nothing, so the generation
+   * checks and operation teardowns that fence other reads do not order it.
+   * After an engine restart those fences sit between it and the head of the
+   * replayed backlog. It can then run before a write queued ahead of it:
+   * its rows are only older, and that write's cache change refreshes them.
+   * A row read that ranks with the search crosses the same fences; it carries
+   * no operation, and no local change was queued ahead of it when it arrived.
+   */
+  private pickPastFences(selectedIndex: number, segmentEnd: number): number {
+    let index = selectedIndex;
+    let searchEnd = this.queue.findIndex((queued) =>
+      stopsTypedSearch(queued.request)
+    );
+    if (searchEnd === -1) searchEnd = this.queue.length;
+    for (let i = segmentEnd; i < searchEnd; i += 1) {
+      const candidate = this.queue[i];
+      const selected = this.queue[index];
+      if (
+        candidate &&
+        selected &&
+        candidate.priority === TYPED_SEARCH_PRIORITY &&
+        candidate.priority > selected.priority
+      ) {
+        index = i;
+      }
+    }
+    return index;
   }
 
   /**

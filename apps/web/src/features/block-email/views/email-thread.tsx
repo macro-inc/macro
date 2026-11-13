@@ -53,7 +53,7 @@ function EmailThreadHeader(props: EmailThreadToolsOptions) {
         />
       </SplitHeaderLeft>
 
-      <SplitHeaderRight>
+      <SplitHeaderRight size="md">
         <EmailThreadHeaderActions
           controls={
             <EmailThreadControlGroups

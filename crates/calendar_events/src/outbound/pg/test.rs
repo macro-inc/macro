@@ -3664,16 +3664,30 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
 
     // A couple of isolated failures stay below the badge threshold.
     for _ in 0..2 {
-        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-            .await
-            .unwrap();
+        repo.record_google_calendar_sync_error(
+            key,
+            lease_token,
+            account_id,
+            calendar_id,
+            CalendarSyncFailure::Transient,
+            message,
+        )
+        .await
+        .unwrap();
     }
     assert_eq!(sync_error().await, None);
 
     // A third failure crosses the threshold and surfaces to the user.
-    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-        .await
-        .unwrap();
+    repo.record_google_calendar_sync_error(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        CalendarSyncFailure::Transient,
+        message,
+    )
+    .await
+    .unwrap();
     assert_eq!(sync_error().await.as_deref(), Some(message));
 
     // A successful sync clears the badge and resets the failure counter.
@@ -3698,17 +3712,31 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
 
     // A fresh failure after recovery starts the count over, so one blip does
     // not immediately re-badge.
-    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-        .await
-        .unwrap();
+    repo.record_google_calendar_sync_error(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        CalendarSyncFailure::Transient,
+        message,
+    )
+    .await
+    .unwrap();
     assert_eq!(sync_error().await, None);
 
     // A badged calendar that drops off the provider list and later returns
     // starts clean rather than resurrecting its old badge.
     for _ in 0..2 {
-        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-            .await
-            .unwrap();
+        repo.record_google_calendar_sync_error(
+            key,
+            lease_token,
+            account_id,
+            calendar_id,
+            CalendarSyncFailure::Transient,
+            message,
+        )
+        .await
+        .unwrap();
     }
     assert_eq!(sync_error().await.as_deref(), Some(message));
     repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
@@ -3727,9 +3755,16 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
         .id;
     assert_eq!(resurrected_id, calendar_id);
     assert_eq!(sync_error().await, None);
-    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-        .await
-        .unwrap();
+    repo.record_google_calendar_sync_error(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        CalendarSyncFailure::Transient,
+        message,
+    )
+    .await
+    .unwrap();
     assert_eq!(sync_error().await, None);
 }
 
@@ -7410,6 +7445,7 @@ mod meeting_uid;
 mod mention_join_link;
 mod organizer_calendar;
 mod source_access;
+mod sync_health;
 
 mod replacement;
 

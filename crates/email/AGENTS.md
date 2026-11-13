@@ -91,8 +91,9 @@ tools — hexagonal, heavily feature-gated.
 
 - Depends on: `entity_access`, `entity_access_management`, `email_utils`,
   `crm`, `frecency`, `item_filters`, `lexical_client`, `macro_event_broker`,
-  `calendar_events` (optional, feature `calendar_invitations`), `sqs_client`
-  (optional, feature `sqs`; it must not depend back on this crate).
+  `entity_access_db_utils` (optional, feature `outbound`), `calendar_events`
+  (optional, feature `calendar_invitations`), `sqs_client` (optional, feature
+  `sqs`; it must not depend back on this crate).
 - Used by: many crates and services, including `ai_tools`, `graphql_email`,
   `teams`, `databases_sql`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
@@ -124,6 +125,10 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Moving a thread into a folder (`update_thread_project`) calls
+  `entity_access_db_utils::project_grants::refuse_filing_in` in the
+  transaction that writes `project_id`, so a scoped agent session can't file
+  it where the folder's grants would reach someone new.
 - Keep the legacy read policies in `MessageReadService`: public reads union
   owned and delegated inboxes, internal summaries use only the newest owned
   inbox, and public/internal pagination have different invalid-bound behavior.

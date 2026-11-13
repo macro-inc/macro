@@ -1,3 +1,4 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import type { ResultError } from '@core/util/result';
 import { throwOnErr } from '@core/util/result';
 import type { BaseFetchErrorCode } from '@core/util/safeFetch';
@@ -14,6 +15,11 @@ import { match, P } from 'ts-pattern';
 import { phoneFromJid } from '../../whatsapp-linked/core/account';
 import type { ChatSend, SendFailure, SendProgress } from '../core/chat';
 import { type Person, type RichContent, webLink } from '../core/rich';
+
+/** A provider picture is a static file; none when hidden or unset. */
+function pictureUrl(fileId: string | null | undefined): string | undefined {
+  return fileId ? staticFileIdEndpoint(fileId) : undefined;
+}
 
 function person(ref: ExternalChatPersonRef): Person {
   return { name: ref.name, userId: ref.userId ?? undefined };
@@ -215,6 +221,7 @@ export const externalChatApi: ExternalChatApi = {
       backfill: group.backfill
         ? { state: group.backfill.state, imported: group.backfill.imported }
         : undefined,
+      pictureUrl: pictureUrl(group.pictureFileId),
       community: group.community
         ? {
             id: group.community.id,
@@ -238,11 +245,13 @@ export const externalChatApi: ExternalChatApi = {
         ? phoneFromJid(view.sendingIdentity)
         : undefined,
       unreadCount: view.unreadCount,
+      pictureUrl: pictureUrl(view.pictureFileId),
       members: (view.members?.participants ?? []).map((person) => ({
         id: person.jid,
         // The server names everyone (provider name, else phone number).
         name: person.name,
         admin: person.admin,
+        pictureUrl: pictureUrl(person.pictureFileId),
       })),
       backfill: view.backfill
         ? { state: view.backfill.state, imported: view.backfill.imported }
@@ -273,6 +282,7 @@ export const externalChatApi: ExternalChatApi = {
         sender: {
           name: message.sender.name,
           userId: message.sender.userId ?? undefined,
+          pictureUrl: pictureUrl(message.sender.pictureFileId),
         },
         body: message.body,
         mentions: message.mentions.map((mention) => ({

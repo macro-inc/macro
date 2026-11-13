@@ -15,6 +15,7 @@ import common from './en/common';
 import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
+import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
@@ -34,6 +35,7 @@ import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
 import tabs from './en/tabs';
+import teamAgents from './en/team-agents';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -59,6 +61,7 @@ export default {
   computers,
   create,
   crm,
+  emailThread,
   emailViews,
   entityActions,
   entityIcons,
@@ -78,6 +81,7 @@ export default {
   splitMenu,
   subRoutines,
   tabs,
+  teamAgents,
   tutorials,
   viewMenus,
 };

@@ -167,6 +167,7 @@ export function ForwardMessageComposer(props: {
           />
           <CustomScrollbar scrollContainer={props.composer.scrollRef} />
           <div
+            data-composer-scroll
             class="grow shrink min-h-20 max-h-56 overflow-y-auto scrollbar-hidden px-4 mobile:px-3 py-1.5 w-full text-sm"
             ref={props.composer.setScrollRef}
           >

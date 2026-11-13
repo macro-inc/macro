@@ -1,11 +1,14 @@
 import type { ReplyType } from '@app/features/email-compose/core/reply-type';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { t } from '@app/lib/i18n';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileDockIsland } from '@components/app/mobile/MobileDockIsland';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ArrowBendDoubleUpLeft from '@icon/system/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
 import ArrowDown from '@icon/system/regular/arrow-down.svg';
@@ -13,11 +16,14 @@ import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
-import { type Component, Show } from 'solid-js';
+import { type Component, createSignal, Show } from 'solid-js';
 import type { EmailThreadListNavigation } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
-import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
+import {
+  offersReplyAll,
+  openEmailReplyComposerForMessage,
+} from '../primitives/reply-actions';
 
 /**
  * A floating pill on the dock's own surface. The island stays opaque when the
@@ -79,6 +85,26 @@ export function BottomReplyButtons(props: {
     return email ? inboxIconProps(email) : { email: '' };
   };
 
+  const showReplyAll = () =>
+    offersReplyAll(
+      props.lastMessage,
+      currentUserEmail(),
+      viewContext.compose.accounts.inboxes(),
+      viewContext.compose.accounts.primaryId()
+    );
+
+  const showForward = () => ctx.permissions().isOwner;
+
+  // A narrow phone row drops these labels one at a time, in this order.
+  const [actionRow, setActionRow] = createSignal<HTMLElement>();
+  const labelCollapsed = createLabelCollapse(actionRow, () => [
+    'reply',
+    ...(showForward() ? ['forward'] : []),
+    ...(showReplyAll() ? ['reply-all'] : []),
+  ]);
+  const shownLabel = (id: string, label: string) =>
+    labelCollapsed(id) ? undefined : label;
+
   const isDone = () => ctx.isThreadDone();
 
   // Matches TopBar: a send-only thread is permanently done, so the toggle
@@ -114,24 +140,37 @@ export function BottomReplyButtons(props: {
               showTooltip={false}
               suppressClick
             />
-            <span class="truncate">Reply...</span>
+            <span class="truncate">{t('emailThread.replyPlaceholder')}</span>
           </button>
         </div>
       }
     >
       <FloatRegionOrInline region="accessory">
         <div class="w-full p-2 pb-2 pt-4 touch:px-(--mobile-chrome-gutter) touch:py-0">
-          <div class="flex flex-row flex-wrap items-center gap-2 justify-between touch:pointer-events-auto">
+          <div
+            ref={setActionRow}
+            class="flex flex-row flex-wrap items-center gap-2 justify-between touch:pointer-events-auto"
+          >
             <div class="flex flex-row items-center gap-2">
               <ReplyActionButton
                 icon={ArrowBendUpLeft}
-                label="Reply"
-                onClick={open('reply-all')}
+                label={shownLabel('reply', t('emailThread.reply'))}
+                ariaLabel={t('emailThread.reply')}
+                onClick={open('reply')}
               />
-              <Show when={ctx.permissions().isOwner}>
+              <Show when={showReplyAll()}>
+                <ReplyActionButton
+                  icon={ArrowBendDoubleUpLeft}
+                  label={shownLabel('reply-all', t('emailThread.replyAll'))}
+                  ariaLabel={t('emailThread.replyAll')}
+                  onClick={open('reply-all')}
+                />
+              </Show>
+              <Show when={showForward()}>
                 <ReplyActionButton
                   icon={ArrowBendUpRight}
-                  label="Forward"
+                  label={shownLabel('forward', t('emailThread.forward'))}
+                  ariaLabel={t('emailThread.forward')}
                   onClick={open('forward')}
                 />
               </Show>
@@ -143,13 +182,13 @@ export function BottomReplyButtons(props: {
                   <>
                     <ReplyActionButton
                       icon={ArrowUp}
-                      ariaLabel="Previous email"
+                      ariaLabel={t('emailThread.previousEmail')}
                       disabled={!navigation().canPrevious()}
                       onClick={() => navigation().previous()}
                     />
                     <ReplyActionButton
                       icon={ArrowDown}
-                      ariaLabel="Next email"
+                      ariaLabel={t('emailThread.nextEmail')}
                       disabled={!navigation().canNext()}
                       onClick={() => navigation().next()}
                     />
@@ -168,7 +207,11 @@ export function BottomReplyButtons(props: {
                       />
                     </Show>
                   )}
-                  ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
+                  ariaLabel={
+                    isDone()
+                      ? t('emailThread.markNotDone')
+                      : t('emailThread.markDone')
+                  }
                   onClick={toggleMarkDone}
                 />
               </Show>

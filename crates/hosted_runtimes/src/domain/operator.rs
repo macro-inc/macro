@@ -60,6 +60,7 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier> {
     notices: SetupNotifier,
     clock: Time,
     deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
+    agents: std::sync::Arc<dyn crate::domain::agent::AgentEnrollmentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
 }
 
@@ -73,7 +74,7 @@ struct HostReadiness {
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
-    Repo: ComputerRepo,
+    Repo: ComputerRepo + crate::domain::agent::ComputerAgents,
     Machines: Fleet,
     Registry: Harnesses,
     Time: Clock,
@@ -96,12 +97,23 @@ where
             notices,
             clock,
             deployment,
+            agents: std::sync::Arc::new(crate::domain::agent::NoAgentEnrollment),
             host: tokio::sync::Mutex::new(HostReadiness::default()),
         };
         // Fleet connectivity is independent of the harness's other routes.
         // Keep the operator so its periodic passes can recover registration.
         let _ = operator.host_id().await;
         Ok(operator)
+    }
+
+    /// Issue each agent computer's enrollment from `agents`. Without it,
+    /// every computer enrolls without an agent.
+    pub fn with_agent_enrollment(
+        mut self,
+        agents: std::sync::Arc<dyn crate::domain::agent::AgentEnrollmentSource>,
+    ) -> Self {
+        self.agents = agents;
+        self
     }
 
     async fn host_id(&self) -> Result<HostId, ComputerError> {
@@ -350,6 +362,7 @@ where
                 let enrollment = CreateEnrollment {
                     harnesses: &self.harnesses,
                     deployment: self.deployment.as_ref(),
+                    agents: self.agents.as_ref(),
                     computer: &computer,
                     generation: *generation,
                 };
@@ -420,6 +433,8 @@ where
             }
             Effect::NotifySetup { outcome } => {
                 let computer = self.computer(computer_id).await?;
+                // An agent teammate's computer is told about as its agent.
+                let agent = self.repo.agent_of(computer_id).await.map_err(internal)?;
                 self.notices
                     .send(SetupNotice {
                         computer_id,
@@ -427,6 +442,7 @@ where
                         harness_id: computer.harness_id,
                         computer_name: computer.name.as_str().to_owned(),
                         buyer: computer.created_by,
+                        agent,
                         outcome: outcome.clone(),
                     })
                     .await
@@ -689,7 +705,10 @@ where
                 (now - computer.created_at).num_milliseconds() as f64 / 1000.0,
             );
             // A convenience: the span records a failure, and setup carries on.
-            self.create_default_agent(&computer, harness_id).await.ok();
+            // An agent teammate's computer is the agent's; it gets no coding agent.
+            self.create_default_agent_unless_teammate(&computer, harness_id)
+                .await
+                .ok();
         }
         // The pairing is claimed, so the code is useless; remove it anyway.
         self.fleet
@@ -709,6 +728,26 @@ where
         fields(computer_id = %computer.id, team_id = %computer.team_id, harness_id = %harness_id, outcome = tracing::field::Empty),
         err
     )]
+    /// The default coding agent, on computers bought without an agent teammate.
+    async fn create_default_agent_unless_teammate(
+        &self,
+        computer: &Computer,
+        harness_id: HarnessId,
+    ) -> Result<(), ComputerError> {
+        if self
+            .repo
+            .agent_of(computer.id)
+            .await
+            .map_err(internal)?
+            .is_some()
+        {
+            tracing::info!(computer_id = %computer.id, "an agent teammate's computer gets no default coding agent");
+            return Ok(());
+        }
+        self.create_default_agent(computer, harness_id).await?;
+        Ok(())
+    }
+
     async fn create_default_agent(
         &self,
         computer: &Computer,
@@ -816,6 +855,7 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
 struct CreateEnrollment<'a, Registry> {
     harnesses: &'a Registry,
     deployment: &'a dyn crate::domain::enrollment::DeploymentSource,
+    agents: &'a dyn crate::domain::agent::AgentEnrollmentSource,
     computer: &'a Computer,
     generation: EnrollmentGeneration,
 }
@@ -835,6 +875,16 @@ impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
             .deployment
             .deployment()
             .map_err(|_| EnrollmentIssueError)?;
+        // An agent computer never enrolls without its agent: a failed
+        // issuance fails this enrollment, and the Create effect retries.
+        let agent = self
+            .agents
+            .issue(self.computer.id, self.generation)
+            .await
+            .map_err(|error| {
+                tracing::warn!(%error, "agent enrollment issuance failed");
+                EnrollmentIssueError
+            })?;
         // Creating a pairing retires the earlier claim secret, so a guest from a
         // lost earlier issuance can no longer claim.
         let pairing = self
@@ -850,6 +900,7 @@ impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
             name: self.computer.name.clone(),
             deployment,
             traceparent: super::telemetry::traceparent(),
+            agent,
         })
     }
 }

@@ -9,6 +9,12 @@ tools/HTTP/GraphQL surfaces over them.
 ## Start here
 
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
+- `src/domain/pipeline_commercial.rs`: protected Outcome and amount/currency
+  identities, insert defaults and write validation, for pipelines that track a
+  record; `apply_ops` runs it before stage-requirement validation. A generic
+  pipeline, or one from a writer older than the migration, has no such fields.
+  See the [outcome/currency design](../../docs/design/crm-outcome-currency.md)
+  for migration assumptions.
 - `src/domain/pipelines/requirements.rs`: stage-entry rules keyed by column and
   option IDs. `apply_ops` validates every pipeline write under the pipeline write
   guard; agent/CSV workflows use the same service. Deletions cascade rules.
@@ -184,6 +190,9 @@ tools/HTTP/GraphQL surfaces over them.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
+- The pipeline `edit` route refuses `sharing` from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

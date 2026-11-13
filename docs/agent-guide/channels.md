@@ -465,6 +465,10 @@ Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
 for `text-xs`, with accessibility text scaling preserved.
 
+In the iOS app, a swipe down from the conversation into the keyboard
+dismisses it. A drag that starts inside a long draft scrolls the draft instead,
+and dismisses only once the draft is at its top and the drag keeps going down.
+
 Desktop message text uses a 16px horizontal inset and a compact gap above the
 toolbar, consistent at narrow and wide composer widths.
 
