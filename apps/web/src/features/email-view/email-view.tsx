@@ -36,12 +36,13 @@ import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
-import { EMAIL_TABS } from './constants';
+import { canSearchEmailTab, EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import type { EmailListPane } from './reader-pane';
 import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
+import { useEmailSearchHotkeys } from './use-email-search-hotkeys';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
 import {
@@ -97,13 +98,33 @@ function EmailPanes(props: {
   focusList: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
   onListWidthChange: (width: number) => void;
+  openSidebarSearch: () => void;
 }) {
+  const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
+  const { state } = useEmailView();
+
+  const search = useEmailSearchHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    canSearch: () => canSearchEmailTab(state.tab),
+    openSidebarSearch: () => {
+      if (shell.aside.isCollapsed()) {
+        if (!shell.aside.canCollapse()) return false;
+        shell.aside.expand();
+      }
+
+      props.openSidebarSearch();
+      return true;
+    },
+  });
+
   const listColumn = (beside?: 'reader') => (
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
         onSearchEscape={props.focusList}
+        registerSearch={search.registerListSearch}
       />
       <ViewTour tour={emailTour} />
       <ViewShell.Content>{props.list}</ViewShell.Content>
@@ -143,6 +164,24 @@ function EmailDesktopLayout(props: {
   // A new email takes the list's place, so the reading pane folds away.
   const readerBeside = () => readingPane() && !composing();
   const [listWidth, setListWidth] = useReadingPaneListWidth();
+  const [sidebarSearchOpen, setSidebarSearchOpen] = createSignal(false);
+  let sidebarSearchInput: HTMLInputElement | undefined;
+  let sidebarSearchFocusPending = false;
+
+  const focusSidebarSearch = () => {
+    if (!sidebarSearchFocusPending || !sidebarSearchInput?.isConnected) return;
+
+    sidebarSearchFocusPending = false;
+    sidebarSearchInput.focus();
+    sidebarSearchInput.select();
+  };
+
+  // Opening the sidebar can mount a new search field; that one takes the focus.
+  const openSidebarSearch = () => {
+    sidebarSearchFocusPending = true;
+    setSidebarSearchOpen(true);
+    queueMicrotask(focusSidebarSearch);
+  };
 
   return (
     <ViewShell.Root
@@ -169,13 +208,21 @@ function EmailDesktopLayout(props: {
       detailOpen={readerBeside()}
     >
       <ViewShell.Aside>
-        <EmailSidebar />
+        <EmailSidebar
+          searchOpen={sidebarSearchOpen()}
+          onSearchOpenChange={setSidebarSearchOpen}
+          searchRef={(input) => {
+            sidebarSearchInput = input;
+            queueMicrotask(focusSidebarSearch);
+          }}
+        />
       </ViewShell.Aside>
       <EmailPanes
         list={props.list}
         focusList={props.focusList}
         setListPane={props.setListPane}
         onListWidthChange={setListWidth}
+        openSidebarSearch={openSidebarSearch}
       />
     </ViewShell.Root>
   );
