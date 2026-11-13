@@ -27,7 +27,8 @@ and the web's TypeScript through specta.
 ## Recipes
 
 - Add a widget: add a `Widget` variant with its doc comment, run
-  `just gen-dynamic-ui-types` in `apps/web`, and add its arm to `Render` in
+  `just gen-dynamic-ui-types` and `just gen-agent-fold-types` in `apps/web`
+  (agent_fold's wire types embed the view), and add its arm to `Render` in
   `apps/web/src/features/dynamic-ui/render.tsx`; the exhaustive `match` fails
   to compile until you do.
 - Bound a value (a count, a range, a non-empty string): make it a `nutype`
@@ -39,8 +40,9 @@ and the web's TypeScript through specta.
 
 - `cargo test -p dynamic_ui`; `the_present_view_schema_is_pinned` snapshots
   the model-facing schema with insta.
-- `just gen-dynamic-ui-types` in `apps/web`, then commit
-  `src/features/dynamic-ui/generated` and `packages/lexical-core/generated`;
+- `just gen-dynamic-ui-types` and `just gen-agent-fold-types` in `apps/web`,
+  then commit `src/features/dynamic-ui/generated`,
+  `packages/lexical-core/generated` and the agent-fold types;
   CI's Check Specta Types step fails when they are stale.
 
 ## Gotchas

@@ -1283,6 +1283,25 @@ expression: schema
       ],
       "type": "object"
     },
+    "WakeStatusFilter": {
+      "description": "The wakes a wakes widget shows, by where they stand.",
+      "oneOf": [
+        {
+          "enum": [
+            "ok",
+            "failed",
+            "timeout",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "description": "Still running.",
+          "type": "string"
+        }
+      ]
+    },
     "Widget": {
       "description": "One block of a view. Layout is order-driven; nesting is achieved with the\n`container` widget.",
       "oneOf": [
@@ -1490,6 +1509,80 @@ expression: schema
           "required": [
             "type",
             "items"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "An agent account's wakes, newest first: what woke it, whether it is\nstill running, how long it took, what it cost when known, and what\ncame of it. Only the agent and the owners and admins of its teams can\nread them; others see that they have no access.",
+          "properties": {
+            "agentId": {
+              "description": "The agent account's user id, e.g. what macro.me() returns for it.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Cap the number of rows shown. Defaults to 25.",
+              "format": "uint32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WakeStatusFilter"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only wakes in this status."
+            },
+            "title": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "wakes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "agentId"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "One wake's model session as a waterfall: its prompt, turns and tool\ncalls with their timing, tokens and results. Use the wake id a wakes\nwidget or the SDK's wake list shows.",
+          "properties": {
+            "agentId": {
+              "description": "The agent account's user id.",
+              "type": "string"
+            },
+            "title": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "trace",
+              "type": "string"
+            },
+            "wakeId": {
+              "description": "The wake's id.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "agentId",
+            "wakeId"
           ],
           "type": "object"
         },
