@@ -465,6 +465,15 @@ fn local_times_use_the_zones_2026_rules() {
         let instant: DateTime<Utc> = utc.parse().unwrap();
         let read = json!({"dateTime": "2026-11-02T02:16:00.0000000", "timeZone": zone});
         assert_eq!(normalize::instant(&read).unwrap(), instant, "{zone}");
+    }
+}
+
+/// Graph applies its own current rules to the local time Macro sends, so a
+/// write computed with stale rules lands an hour off for every attendee.
+#[test]
+fn writes_send_local_times_in_the_zones_2026_rules() {
+    for (zone, utc) in CANADA_2026 {
+        let instant: DateTime<Utc> = utc.parse().unwrap();
         let time = EventTime::Timed {
             starts_at: instant,
             ends_at: instant + chrono::Duration::hours(1),
