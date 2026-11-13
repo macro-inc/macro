@@ -814,7 +814,9 @@ async fn a_dormant_listed_session_costs_the_dial_nothing() {
 async fn answer_loads(agent: &FakeAgent, total: usize) {
     let mut answered = Vec::new();
     while answered.len() < total {
-        agent.wait_for_requests(1 + answered.len() + 1).await;
+        agent
+            .wait_for_method_requests("session/load", answered.len() + 1)
+            .await;
         for frame in agent.received_frames() {
             if let RawJsonRpcMessage::Request(request) = frame
                 && request.method.as_ref() == "session/load"
