@@ -19,6 +19,10 @@ const RECONCILE_LAMBDA: xtask_paths::RepoFile<'static> = xtask_paths::RepoFile::
     "infra/stacks/fusionauth-instance/templates/reconcile_secondary_idp_link.js",
 );
 
+const MICROSOFT_RECONCILE_LAMBDA: xtask_paths::RepoFile<'static> = xtask_paths::RepoFile::new(
+    "infra/stacks/fusionauth-instance/templates/reconcile_microsoft_signin.js",
+);
+
 fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
     let path = xtask_paths::repo_root().join(file.as_str());
     std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
@@ -30,25 +34,32 @@ fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
 /// demand. `google` (a real client from the resolved run env, or the stack's
 /// Gmail emulator) configures the `google`/`google_gmail` OIDC IdPs so
 /// Google sign-in and the email connect flows work locally,
-/// and `github` the `github` IdP that `POST /link/github` resolves; the
+/// `github` the `github` IdP that `POST /link/github` resolves, and
+/// `microsoft` (the stack's Outlook emulator) the `microsoft` IdP that Sign
+/// in with Microsoft and `POST /link/outlook` resolve; the
 /// generated file is gitignored, and the init-snapshot key hashes it, so
-/// adding/removing either client re-inits the stack automatically.
+/// adding/removing any of them re-inits the stack automatically.
 pub fn write_kickstart(
     instance: &Instance,
     google: Option<&kickstart::GoogleIdp>,
     github: Option<&kickstart::GithubIdp>,
+    microsoft: Option<&kickstart::MicrosoftIdp>,
 ) -> Result<()> {
     let dir = gen_compose::kickstart_dir(instance);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
 
-    let doc = kickstart::build(
+    let mut doc = kickstart::build(
         redirect_urls(instance)?,
         &read_lambda(POPULATE_JWT_LAMBDA)?,
         &read_lambda(RECONCILE_LAMBDA)?,
         google,
         github,
     );
+    if let Some(microsoft) = microsoft {
+        let lambda = read_lambda(MICROSOFT_RECONCILE_LAMBDA)?;
+        kickstart::add_microsoft_idp(&mut doc, microsoft, &lambda);
+    }
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)
         .with_context(|| format!("writing {}", dir.join("kickstart.json").display()))?;
