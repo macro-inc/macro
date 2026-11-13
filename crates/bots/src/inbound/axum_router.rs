@@ -851,6 +851,7 @@ impl IntoResponse for BotsHandlerErr {
         let status = match &self {
             Self::BadRequest(_) | Self::Bot(BotError::BadRequest(_)) => StatusCode::BAD_REQUEST,
             Self::Bot(BotError::NotFound(_)) => StatusCode::NOT_FOUND,
+            Self::Bot(BotError::AgentTeammateComputer) => StatusCode::CONFLICT,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
             Self::Bot(BotError::Unavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Bot(BotError::Repo(_)) => StatusCode::INTERNAL_SERVER_ERROR,

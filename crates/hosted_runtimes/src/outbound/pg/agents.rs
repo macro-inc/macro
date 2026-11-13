@@ -2,12 +2,72 @@
 //! or on its reservation while the purchase is confirming.
 
 use macro_user_id::user_id::MacroUserIdStr;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{PgComputerError, PgComputerRepo};
 use crate::domain::{agent::ComputerAgents, ids::ComputerId};
 
+/// [`ComputerAgents`] on its own, for services that only ask which agent a
+/// computer runs and need none of [`PgComputerRepo`]'s lifecycle storage.
+#[derive(Debug, Clone)]
+pub struct PgComputerAgents {
+    pool: PgPool,
+}
+
+impl PgComputerAgents {
+    /// Read computers' agents from `pool`.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
 impl ComputerAgents for PgComputerRepo {
+    type Error = PgComputerError;
+
+    async fn agent_of(
+        &self,
+        computer: ComputerId,
+    ) -> Result<Option<MacroUserIdStr<'static>>, PgComputerError> {
+        PgComputerAgents::new(self.pool.clone())
+            .agent_of(computer)
+            .await
+    }
+
+    async fn computer_for_agent(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<ComputerId>, PgComputerError> {
+        PgComputerAgents::new(self.pool.clone())
+            .computer_for_agent(team_id, agent)
+            .await
+    }
+
+    async fn has_live_computer(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<bool, PgComputerError> {
+        PgComputerAgents::new(self.pool.clone())
+            .has_live_computer(team_id, agent)
+            .await
+    }
+}
+
+/// The harness listings mark an agent teammate's computer by its agent.
+impl harnesses::domain::ports::ComputerTeamAgents for PgComputerAgents {
+    type Err = PgComputerError;
+
+    async fn team_agent_of(
+        &self,
+        computer: ComputerId,
+    ) -> Result<Option<MacroUserIdStr<'static>>, PgComputerError> {
+        self.agent_of(computer).await
+    }
+}
+
+impl ComputerAgents for PgComputerAgents {
     type Error = PgComputerError;
 
     #[tracing::instrument(skip(self), err)]

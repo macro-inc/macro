@@ -26,7 +26,7 @@ use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
-use hosted_runtimes::outbound::pg::PgComputerRepo;
+use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo};
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -56,6 +56,19 @@ const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// How often every awake computer's harnessd status is read, catching a
 /// sign-in or sign-out made on the computer itself.
 const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
+
+/// The harness service over the harness table, marking agent teammates'
+/// computers from the computer table.
+pub type PgHarnessService =
+    HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo, PgComputerAgents>;
+
+/// [`PgHarnessService`] over `pool`.
+pub fn harness_service(pool: &PgPool) -> PgHarnessService {
+    HarnessServiceImpl::new(
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+        PgComputerAgents::new(pool.clone()),
+    )
+}
 
 /// The notification ingress the operator's setup notices go through.
 pub type SetupNotifications =
@@ -253,8 +266,7 @@ pub struct ClaudeSignInWatch<Ingress> {
 }
 
 /// [`harnessd::Harnessd`] over the harness table.
-pub type HostedHarnessd =
-    harnessd::Harnessd<HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
+pub type HostedHarnessd = harnessd::Harnessd<PgHarnessService>;
 
 /// Run the operator's passes until `shutdown`.
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
@@ -534,11 +546,7 @@ pub struct ComputerPresence<Inner> {
 }
 
 /// [`sign_in_ahead::SignInAhead`] over the harness table.
-pub type SignInAheadHandle = Arc<
-    sign_in_ahead::SignInAhead<
-        HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>,
-    >,
->;
+pub type SignInAheadHandle = Arc<sign_in_ahead::SignInAhead<PgHarnessService>>;
 
 impl<Inner> ComputerPresence<Inner> {
     pub fn new(

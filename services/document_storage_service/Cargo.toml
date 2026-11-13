@@ -176,6 +176,7 @@ graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound"] }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }

@@ -380,9 +380,17 @@ async fn run_server() -> anyhow::Result<()> {
     let bots_repo = PgBotsRepo::new(db.clone());
     // The agent API checks a newly selected MCP app against Pipedream's
     // directory, the same check the ConfigureAgent tool makes.
-    let bots_service = BotServiceImpl::new(bots_repo, macro_event_broker.clone()).with_mcp_apps(
-        ai_tools::PipedreamMcpAppCatalog::new(ai_tools::pipedream_client_from_env()?),
-    );
+    let bots_service = BotServiceImpl::new(
+        bots_repo,
+        macro_event_broker.clone(),
+        harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(db.clone()),
+            hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
+        ),
+    )
+    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::new(
+        ai_tools::pipedream_client_from_env()?,
+    ));
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
@@ -397,8 +405,10 @@ async fn run_server() -> anyhow::Result<()> {
         db.clone(),
     )));
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
-    let harnesses_service =
-        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(db.clone()));
+    let harnesses_service = harnesses::domain::service::HarnessServiceImpl::new(
+        PgHarnessRepo::new(db.clone()),
+        hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
+    );
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(

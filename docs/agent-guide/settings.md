@@ -265,7 +265,12 @@ the computer is connected), **Claude: your plan · Use Macro credits** (a
 confirmation, then sign-out), or **Claude sign-in expired · Sign in to
 Claude**. The sign-in spans carry `claude.sign_in.entry`
 (`team_agent_invite`, `team_agent_row`). Owners and admins remove an agent with its trash button and a
-confirmation; that releases its computer and deletes its account. On phones the
+confirmation; that releases its computer and deletes its account. An agent
+teammate is reached only by DM or in channels, like any member: its computer's
+runtime (`team_agent_user_id` on `/harnesses`) never appears in **Where it
+runs**, the Agents page or composer roster, the machine strips, or teammates'
+machines, its setup offers no **Try it** or **Create agent here**, and the API
+refuses saving an agent or opening a session on it (409). On phones the
 dialog and confirmation are sheets and rows stay touch rows. Backend-free check:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
 from `apps/web` (desktop 1440 and phone 390).
