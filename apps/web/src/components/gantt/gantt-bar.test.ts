@@ -1,8 +1,20 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createComponent, createSignal } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt';
 import { toGanttDay } from './gantt-date';
+
+// Bars watch their label's size, which jsdom cannot measure.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 
 afterEach(() => {
   cleanup();

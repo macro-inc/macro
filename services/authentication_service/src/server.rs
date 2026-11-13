@@ -48,7 +48,7 @@ use macro_authorization::{
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    StaticFilePublicUrl, StaticFileServiceUrl,
+    GoogleOauthAuthorizationUrl, StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
@@ -100,7 +100,9 @@ use crate::{
     microsoft_token_cipher::{
         EnvelopeMicrosoftTokenCipher, KmsDataKeyProvider, MicrosoftTokenCipher,
     },
-    outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
+    outbound::team_owned_entity_cleanup::{
+        TeamOwnedEntityCleanupAdapter, TeamOwnedEntityCleanupConfig,
+    },
 };
 use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -286,6 +288,8 @@ async fn run_server() -> anyhow::Result<()> {
         std::time::Duration::from_secs(10),
     ));
     let static_file_public_url = StaticFilePublicUrl::new()?.to_string();
+    let google_authorization_url = url::Url::parse(GoogleOauthAuthorizationUrl::new()?.as_str())
+        .context("Google OAuth authorization URL is not a URL")?;
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.to_string().clone(),
         DocumentStorageServiceUrl::new()?.to_string(),
@@ -685,9 +689,11 @@ async fn run_server() -> anyhow::Result<()> {
         PgBotsRepo::new(db.clone()),
         EntityRegistryServiceImpl::new(PgEntityRegistryRepository::new(db.clone())),
         document_storage_service_client.clone(),
-        internal_key.clone(),
-        harness_url.clone(),
-        scheduled_action_url.clone(),
+        TeamOwnedEntityCleanupConfig {
+            internal_key: internal_key.clone(),
+            harness_url: harness_url.clone(),
+            scheduled_action_url: scheduled_action_url.clone(),
+        },
         // Needs only the repository: the billing-backed computer service is
         // built after the team service it bills through.
         Arc::new(hosted_runtimes::domain::service::TeamComputerRelease::new(
@@ -848,6 +854,7 @@ async fn run_server() -> anyhow::Result<()> {
             rate_limit_service: rate_limit,
             event_broker: macro_event_broker.clone(),
             calendar_scope_enabled: config.calendar_scope_enabled,
+            google_authorization_url,
             account_link_state_key,
             jwt_args,
             authorization_state,

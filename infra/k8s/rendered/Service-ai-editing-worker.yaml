@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ai-editing-worker
+    app.kubernetes.io/name: ai-editing-worker
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: ai-editing-worker
+  namespace: macro-kube-reference
+spec:
+  ports:
+    - name: p8933
+      port: 8933
+      protocol: TCP
+      targetPort: 8933
+  publishNotReadyAddresses: false
+  selector:
+    app: ai-editing-worker
