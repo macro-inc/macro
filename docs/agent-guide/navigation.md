@@ -1233,6 +1233,22 @@ with the list. Click a row to open it in the same
 pane. Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
 and Last run shows only the dot and time.
 
+Right-clicking a row (a long press on a tablet) opens its menu, and the row
+stays highlighted while it is open: **Open in new split** (disabled without
+room for another split) and **Open in new tab** (with desktop tabs); **Run
+now** (disabled while it runs or a run is starting; a toast says **Run
+started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
+(the routine page's copy: same steps, triggers, description, run visibility and
+on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
+toast whose **Open** opens the copy) and, on a sub-routine, **Keep as my
+routine**; **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
+**Share**; then **Delete**, which confirms first and names the sub-routines
+deleted with it. A routine someone else owns offers the open entries, **Copy
+Link** and **Copy ID**. On a phone a long press opens the same actions in a
+drawer under the routine's name, without the split and tab entries, in Agents
+and in **Settings → Routines** alike. Renaming and changing the icon stay on the
+routine's page.
+
 Open the routine and use its **Runs** tab to see past runs. **Show runs in
 Home and Agents** (a switch under **Runs & notifications** on the routine's
 page; **Runs hidden** / **Runs shown** chip in New routine) decides where its
