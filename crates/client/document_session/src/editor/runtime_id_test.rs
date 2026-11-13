@@ -23,17 +23,17 @@ const FIXTURE: &str = r#"{"root":{"type":"root","children":[
 fn editor_from(
     config: &EditorConfig,
     peer: u64,
-    random: Option<NodeRandom>,
+    entropy: Option<NodeRandom>,
 ) -> Result<Editor, Box<dyn std::error::Error>> {
-    let builder = match random {
+    let builder = match entropy {
         None => (config.builder)(EditorMode::ViewAttached, peer),
-        Some(random) => builder::with_session_plugins_excluding_root(
+        Some(entropy) => builder::with_session_plugins_excluding_root(
             macro_document_model::surface::preset_builder_with_mode(
                 macro_document_model::EditorType::MarkdownSync,
                 EditorMode::ViewAttached,
             )
             .extension_state(NodeClock(Arc::new(|| 1000)))
-            .extension_state(random)
+            .extension_state(entropy)
             .extension_state(NodeHost::default()),
             peer,
             &ID_STATE,
