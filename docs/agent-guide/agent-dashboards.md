@@ -32,6 +32,8 @@ With the flag off they redirect to Home.
 
 The dashboard renders full width with the dynamic-ui renderer, read-only. Each
 widget fetches as the viewer, so a pane shows only what the viewer can read.
+The panes sit in an `AgentScope` (`dynamic-ui/widgets/panes/agent-scope.tsx`)
+holding the dashboard's owner, the agent an agent pane shows when it names none.
 States: a loading skeleton; **No dashboard yet** when the account has none
 (the home route also answers 404 when the viewer can't see it, so that reads
 the same); **No access** for a dashboard opened by id that the viewer can't
@@ -51,7 +53,7 @@ on. Each opens it in a new pane (in front, on phones):
   touch, the tap that opens a person's card;
 - its name beside its channel messages, which for a person stays plain text;
 - an `@mention` of it in a message, which for a person only shows the user card
-  on hover (a composer keeps the click for editing);
+  on hover (an editable editor keeps the click for placing the caret);
 - its row in a channel's member list, which for a person opens the DM;
 - **Open profile**, the first action of its hover card (and of the touch sheet
   where one still opens);
