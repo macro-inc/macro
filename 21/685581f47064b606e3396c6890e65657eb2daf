@@ -1,0 +1,49 @@
+agent-teammates/muppet/packages/lib/utilities/traces/test/fixtures/claude.jsonl
+  s_4ad987aad95396::t_64405af5501c5d 1-10
+agent-teammates/muppet/packages/lib/utilities/traces/redact.ts
+  s_4ad987aad95396::t_375187e339df36 1-10,12-18,28,57,92-102
+  s_4ad987aad95396::t_a615553545d92d 11,19-27,29-51,58,60-91
+  s_c6fe7b7c1d36f7::t_ea8714b8eee53f 52-56,59
+agent-teammates/muppet/packages/lib/utilities/traces/fit.ts
+  s_4ad987aad95396::t_e9bfd5c670a50b 1-95
+agent-teammates/muppet/packages/lib/utilities/traces/test/redact.test.ts
+  s_4ad987aad95396::t_4d4fefe39242ab 11-12,14-21,37
+  s_4ad987aad95396::t_a615553545d92d 1,3-10,13,22-36,38-89,121
+  s_4ad987aad95396::t_cf160ef9f344c4 2,90-99,103-104,107,109-120
+  s_4ad987aad95396::t_adf0eaf7e05623 100-102
+  s_4ad987aad95396::t_5a289816393049 105-106,108
+agent-teammates/muppet/packages/lib/utilities/traces/index.ts
+  s_4ad987aad95396::t_d8a3142e2705fc 1-31
+agent-teammates/muppet/packages/lib/utilities/traces/trace.ts
+  s_4ad987aad95396::t_fa171024c33bcb 1-587
+agent-teammates/muppet/packages/lib/utilities/traces/test/trace.test.ts
+  s_4ad987aad95396::t_d2bac534930bd7 1-103,109-158,164-197,207-217,222-232,236,238-239
+  s_4ad987aad95396::t_adf0eaf7e05623 104-108,159-163,198-206,218-221
+  s_4ad987aad95396::t_cf160ef9f344c4 233-235,237
+agent-teammates/muppet/packages/lib/utilities/traces/test/fixtures/codex.jsonl
+  s_4ad987aad95396::t_64405af5501c5d 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "21685581f47064b606e3396c6890e65657eb2daf",
+  "prompts": {},
+  "sessions": {
+    "s_4ad987aad95396": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c198cfe7-a5f2-49d6-aa73-895a27ba7c33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
