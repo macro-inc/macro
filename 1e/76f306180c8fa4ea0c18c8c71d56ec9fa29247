@@ -1,0 +1,27 @@
+crates/ai_tools/AGENTS.md
+  s_3c8bdfdb266f32::t_99321a62f21d89 91
+crates/agent_code_mode/AGENTS.md
+  s_3c8bdfdb266f32::t_99321a62f21d89 44-46
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_3c8bdfdb266f32::t_1d3c0deca1747d 454-455,457-458,494-495,501-505
+services/agent_harness_service/AGENTS.md
+  s_3c8bdfdb266f32::t_77e31ea75240ec 35-36,298-299
+crates/ai_tools/src/lib.rs
+  s_3c8bdfdb266f32::t_1d3c0deca1747d 73-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1e76f306180c8fa4ea0c18c8c71d56ec9fa29247",
+  "prompts": {},
+  "sessions": {
+    "s_3c8bdfdb266f32": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "047d61f4-a7d4-4fc1-a6a7-ed748e55fd32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
