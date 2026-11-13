@@ -129,6 +129,22 @@ async fn one_deadline_bounds_stalled_background_work() {
     assert!(task.await.unwrap_err().is_cancelled());
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_stalled_sweep_holds_up_no_other() {
+    let lifecycle = ServiceLifecycle::default();
+    let interval = Duration::from_secs(60);
+    spawn_sweep(&lifecycle, interval, std::future::pending::<()>);
+    let runs = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&runs);
+    spawn_sweep(&lifecycle, interval, move || {
+        counted.fetch_add(1, Ordering::SeqCst);
+        std::future::ready(())
+    });
+    tokio::time::sleep(interval * 2 + Duration::from_secs(1)).await;
+    // At once, then each minute.
+    assert_eq!(runs.load(Ordering::SeqCst), 3);
+}
+
 fn docs_router() -> Router {
     mount_router(Router::new().route(
         "/health",
