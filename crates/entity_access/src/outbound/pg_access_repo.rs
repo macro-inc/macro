@@ -467,14 +467,11 @@ impl AccessRepository for PgAccessRepository {
         let Ok(scheduled_action_uuid) = scheduled_action_id.parse::<Uuid>() else {
             return Ok(None);
         };
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
         Ok(
             queries::scheduled_action_access::get_scheduled_action_access(
                 &self.pool,
                 &scheduled_action_uuid,
-                &source_ids,
+                Viewer::from_user(user_id),
             )
             .await?,
         )
@@ -485,15 +482,9 @@ impl AccessRepository for PgAccessRepository {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<Uuid>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
         Ok(
-            queries::scheduled_action_access::accessible_scheduled_action_ids(
-                &self.pool,
-                &source_ids,
-            )
-            .await?,
+            queries::scheduled_action_access::accessible_scheduled_action_ids(&self.pool, user_id)
+                .await?,
         )
     }
 
