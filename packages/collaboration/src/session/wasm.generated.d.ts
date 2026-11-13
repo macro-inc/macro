@@ -480,11 +480,6 @@ export class ViewCommandFailure {
 }
 
 /**
- * Registered tokenizers on this thread; dev-probes builds only, never shipped.
- */
-export function debugCodeTokenProviders(): number;
-
-/**
  * Install the ordinary synchronous Enter dispatcher and original-cause lookup.
  * The dispatcher owns its event stack and stores thrown values by issued scope.
  */
@@ -590,7 +585,6 @@ export interface InitOutput {
     readonly codetokenfailure_causes: (a: number) => [number, number];
     readonly codetokenfailure_effectOrdinals: (a: number) => [number, number];
     readonly codetokenfailure_entry: (a: number) => bigint;
-    readonly debugCodeTokenProviders: () => number;
     readonly docsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
