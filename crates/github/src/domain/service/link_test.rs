@@ -342,6 +342,8 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
         state: "open".to_string(),
         repository_id: None,
         merged_at: None,
+        merged_by: None,
+        closed_at: None,
         additions: 12,
         deletions: 3,
         author_login: None,

@@ -4,6 +4,9 @@ import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
+  GithubPullRequestReview,
+  GithubPullRequestReviewDecision,
+  GithubPullRequestUser,
   SoupCountedReaction,
   SoupLabel,
   SoupMessageAttachment,
@@ -91,6 +94,17 @@ export type GithubPullRequestEntity = ForeignEntityBase & {
     headBranch?: string;
     /** Whether the pull request is a draft, when known. */
     draft?: boolean;
+    /** Outstanding review requests use stable GitHub user IDs. */
+    requestedReviewerGithubUserIds?: string[];
+    /** Each reviewer's latest submitted review. */
+    reviews?: GithubPullRequestReview[];
+    reviewDecision?: GithubPullRequestReviewDecision | null;
+    /** Live conflict result; omitted until GitHub can determine mergeability. */
+    hasConflicts?: boolean;
+    mergedBy?: GithubPullRequestUser | null;
+    closedBy?: GithubPullRequestUser | null;
+    mergedAt?: string | null;
+    closedAt?: string | null;
   };
 };
 

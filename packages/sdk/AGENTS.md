@@ -156,6 +156,7 @@ enforced by the ordinary backend APIs.
   `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of
   `src/macro.ts` and its dependency graph; LiveKit runtimes stay optional peers.
 - `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
+- `githubPullRequests.byId()` exposes draft, checks, review requests, latest reviews, review decision, and known merge/close actors and times through lazy accessors; unknown closing details stay absent.
 
 ## Boundaries
 

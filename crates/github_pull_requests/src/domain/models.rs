@@ -423,6 +423,18 @@ pub struct StoredGithubPullRequest {
     /// The branch and commit carrying the pull request's changes, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<GitRefDto>,
+    /// The GitHub user who merged the pull request, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merged_by: Option<GithubPullRequestUser>,
+    /// The sender of the closing webhook, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_by: Option<GithubPullRequestUser>,
+    /// When GitHub closed the pull request, including merges.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_at: Option<DateTime<Utc>>,
+    /// When GitHub merged the pull request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merged_at: Option<DateTime<Utc>>,
 }
 
 impl StoredGithubPullRequest {
@@ -468,6 +480,10 @@ impl StoredGithubPullRequest {
             github_updated_at: row.github_updated_at,
             base: row.base.map(Into::into),
             head: row.head.map(Into::into),
+            merged_by: pull_request.merged_by,
+            closed_by: pull_request.closed_by,
+            closed_at: pull_request.closed_at,
+            merged_at: pull_request.merged_at,
         })
     }
 }

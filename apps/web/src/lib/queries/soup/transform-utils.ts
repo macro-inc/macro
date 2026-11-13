@@ -33,9 +33,10 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
-import { type GithubPullRequestLabel, toSubType } from '@entity/types/entity';
+import { toSubType } from '@entity/types/entity';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
+import type { EnrichedGithubPullRequest } from '@service-auth/generated/schemas';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,
@@ -47,11 +48,11 @@ import type {
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {
-  GithubPullRequest,
   SoupAttachment,
   SoupCalendarEventTime,
   SoupPage,
   SoupProperty,
+  StoredGithubPullRequest,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -937,15 +938,11 @@ export const mapApiSoupItemToEntity = (
       return out;
     })
     .with({ tag: 'foreignEntity' }, (item) => {
-      // `authorLogin`/`authorId`/`labels` are enrichment-only fields the
-      // backend now returns but that aren't on the base generated schema yet.
-      const metadata = item.data.metadata as unknown as GithubPullRequest & {
-        authorLogin?: string | null;
-        authorId?: number | null;
-        labels?: GithubPullRequestLabel[] | null;
-        description?: string | null;
-        head?: { name?: string | null } | null;
-      };
+      // ForeignEntity metadata is opaque JSON; PR writers use the generated
+      // enrichment contract, with the listing's shared typed review decision.
+      const metadata = item.data
+        .metadata as unknown as EnrichedGithubPullRequest &
+        Pick<StoredGithubPullRequest, 'reviewDecision' | 'head'>;
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
 
@@ -982,6 +979,15 @@ export const mapApiSoupItemToEntity = (
           authorId: metadata.authorId ?? undefined,
           description: metadata.description ?? undefined,
           headBranch: metadata.head?.name ?? undefined,
+          draft: metadata.draft ?? undefined,
+          requestedReviewerGithubUserIds:
+            metadata.requestedReviewerGithubUserIds ?? [],
+          reviews: metadata.reviews ?? [],
+          reviewDecision: metadata.reviewDecision ?? undefined,
+          mergedBy: metadata.mergedBy,
+          closedBy: metadata.closedBy,
+          mergedAt: metadata.mergedAt,
+          closedAt: metadata.closedAt,
         },
       };
 

@@ -326,9 +326,29 @@ impl<
                 .map(|review| vec![review]),
             base: pull_request.and_then(|pr| Self::git_ref_from_payload(pr.get("base")?)),
             head: pull_request.and_then(|pr| Self::git_ref_from_payload(pr.get("head")?)),
+            merged_by: pull_request
+                .and_then(|pr| pr.get("merged_by"))
+                .and_then(Self::user_from_payload),
+            closed_by: if event.action() == Some("closed") {
+                event
+                    .payload
+                    .get("sender")
+                    .and_then(Self::user_from_payload)
+            } else {
+                None
+            },
+            merged_at: pull_request
+                .and_then(|pr| pr.get("merged_at"))
+                .and_then(Self::timestamp_from_payload),
+            closed_at: pull_request
+                .and_then(|pr| pr.get("closed_at"))
+                .and_then(Self::timestamp_from_payload),
         })
     }
 
+    fn timestamp_from_payload(value: &serde_json::Value) -> Option<chrono::DateTime<chrono::Utc>> {
+        value.as_str()?.parse().ok()
+    }
     /// A pull request payload's `base` or `head`: the branch and the commit it points at.
     fn git_ref_from_payload(branch: &serde_json::Value) -> Option<GitRef> {
         let name = branch
@@ -497,6 +517,10 @@ impl<
             },
             base: details.base.or(fallback.base),
             head: details.head.or(fallback.head),
+            merged_by: details.merged_by.or(fallback.merged_by),
+            closed_by: fallback.closed_by,
+            closed_at: details.closed_at.or(fallback.closed_at),
+            merged_at: details.merged_at.or(fallback.merged_at),
         }
     }
 
@@ -562,7 +586,11 @@ impl<
 
     /// Create or refresh foreign entity rows for a pull request, scoped to the
     /// Macro source (team or user) associated with the GitHub App installation.
-    #[tracing::instrument(skip(self, event))]
+    #[tracing::instrument(
+        name = "github.pull_request.sync",
+        skip_all,
+        fields(event_type = %event.event_type, pull_request_number = event.pull_number().and_then(|number| i64::try_from(number).ok()), outcome = tracing::field::Empty)
+    )]
     async fn upsert_pull_request_foreign_entities(
         &self,
         event: &ValidatedGithubWebhookEvent,
@@ -570,45 +598,56 @@ impl<
         EnrichedGithubPullRequest,
         Vec<PullRequestForeignEntityUpsert>,
     )> {
-        let Some(installation_id) = event.installation_id() else {
-            tracing::warn!("missing installation id, cannot upsert PR foreign entity");
-            return None;
-        };
-        let installation_id = installation_id.to_string();
+        let result = async {
+            let Some(installation_id) = event.installation_id() else {
+                tracing::warn!("missing installation id, cannot upsert PR foreign entity");
+                return None;
+            };
+            let installation_id = installation_id.to_string();
 
-        let stored_for_sources = match self.repo.get_installation_sources(&installation_id).await {
-            Ok(sources) => sources,
-            Err(error) => {
-                tracing::error!(
-                    error=?error,
+            let stored_for_sources =
+                match self.repo.get_installation_sources(&installation_id).await {
+                    Ok(sources) => sources,
+                    Err(error) => {
+                        tracing::error!(
+                            error=?error,
+                            installation_id,
+                            "failed to fetch GitHub App installation sources for PR foreign entity"
+                        );
+                        return None;
+                    }
+                };
+
+            if stored_for_sources.is_empty() {
+                tracing::trace!(
                     installation_id,
-                    "failed to fetch GitHub App installation sources for PR foreign entity"
+                    "no GitHub App installation sources found for PR foreign entity upsert"
                 );
                 return None;
             }
-        };
 
-        if stored_for_sources.is_empty() {
-            tracing::trace!(
-                installation_id,
-                "no GitHub App installation sources found for PR foreign entity upsert"
-            );
-            return None;
+            let Some(pull_request) = self.enriched_pull_request_metadata(event).await else {
+                tracing::warn!("missing PR metadata, cannot upsert foreign entity");
+                return None;
+            };
+
+            let upserts = self
+                .upsert_enriched_pull_request_foreign_entities(
+                    pull_request.clone(),
+                    &stored_for_sources,
+                )
+                .await;
+
+            Some((pull_request, upserts))
         }
-
-        let Some(pull_request) = self.enriched_pull_request_metadata(event).await else {
-            tracing::warn!("missing PR metadata, cannot upsert foreign entity");
-            return None;
+        .await;
+        let outcome = match &result {
+            Some((_, upserts)) if !upserts.is_empty() => "updated",
+            Some(_) => "no_updates",
+            None => "skipped",
         };
-
-        let upserts = self
-            .upsert_enriched_pull_request_foreign_entities(
-                pull_request.clone(),
-                &stored_for_sources,
-            )
-            .await;
-
-        Some((pull_request, upserts))
+        tracing::Span::current().record("outcome", outcome);
+        result
     }
 
     /// Create or refresh one foreign entity record per installation source from already-enriched
@@ -941,7 +980,12 @@ impl<
         }
     }
 
-    #[tracing::instrument(skip(self, webhook_event), err)]
+    #[tracing::instrument(
+        name = "github.webhook.sync",
+        skip_all,
+        fields(event_type = %webhook_event.event_type, action = webhook_event.action(), outcome = tracing::field::Empty),
+        err
+    )]
     async fn process_webhook_event(
         &self,
         webhook_event: &ValidatedGithubWebhookEvent,
@@ -1043,7 +1087,10 @@ impl<
             },
         };
         let published = self.publish_webhook_event(webhook_event).await;
-        synced.and(published)
+        let result = synced.and(published);
+        tracing::Span::current()
+            .record("outcome", if result.is_ok() { "success" } else { "error" });
+        result
     }
 
     #[tracing::instrument(skip(self), fields(macro_user_id = %macro_user_id), err)]

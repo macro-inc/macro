@@ -67,6 +67,16 @@ export const githubPullRequestChangesKeys = createQueryKeys(
   }
 );
 
+export const prForeignEntityKeys = createQueryKeys('github-pr', {
+  'foreign-entity': (id: string) => ({ queryKey: [id] }),
+});
+
+/** Shared by the Reviews board and visible list rows. */
+export const reviewsMergeabilityKeys = createQueryKeys('reviews', {
+  mergeability: (pullRequests: readonly string[]) => ({
+    queryKey: [pullRequests],
+  }),
+});
 export const pullRequestMentionKeys = createQueryKeys('pullRequestMention', {
   foreignEntity: (id: string) => ({
     queryKey: [id],

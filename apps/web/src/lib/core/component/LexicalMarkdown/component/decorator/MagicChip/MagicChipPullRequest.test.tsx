@@ -1,5 +1,7 @@
 /** @vitest-environment jsdom */
+import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
+import { initSoupNormalizer } from '@queries/soup/normalized-cache/normalizer';
 import { handlePullRequestUpdated } from '@queries/storage/pr-mention-sync';
 import { storageServiceClient } from '@service-storage/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
@@ -7,7 +9,7 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err } from 'neverthrow';
 import { Suspense } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MagicChipPullRequest } from './MagicChipPullRequest';
 
 vi.mock('@queries/agent-session/list-sync', () => ({
@@ -31,8 +33,17 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));
 
+let stopNormalizer: () => void;
+beforeEach(() => {
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'viewer',
+    authenticated: true,
+  });
+  stopNormalizer = initSoupNormalizer(queryClient);
+});
 afterEach(() => {
   cleanup();
+  stopNormalizer();
   queryClient.clear();
   vi.useRealTimers();
   vi.clearAllMocks();

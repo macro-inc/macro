@@ -280,6 +280,10 @@ fn stored_pull_request(github_key: &str, head_sha: Option<&str>) -> StoredGithub
             name: Some("feature".to_string()),
             sha: Some(sha.to_string()),
         }),
+        merged_by: None,
+        closed_by: None,
+        closed_at: None,
+        merged_at: None,
     }
 }
 

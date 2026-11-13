@@ -37,6 +37,8 @@ lists visible PRs.
 
 - Add a typed PR column: `src/domain/models.rs` → `src/outbound/pg_github_pull_request_repo.rs`
   → the merge rule in `src/domain/models.rs` that decides how it's refreshed.
+- Hydrate review metadata from shared typed columns only after listing pagination, in batches of at most 100 keys; preserve the listing's existing access and cursor behavior.
+- Keep merge/close actors and times in foreign-entity metadata; sparse refreshes retain them and open status clears them, without a backfill or extra columns.
 - Add a changeset/diff capability: `src/domain/service.rs` (`changes` module)
   → `src/outbound/s3_patch_store.rs` → `git_patch` if the diff shape changes.
 

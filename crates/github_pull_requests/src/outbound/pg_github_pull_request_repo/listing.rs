@@ -1,5 +1,6 @@
 //! Listing the pull request records a caller can see, for Soup's foreign entity leg.
 
+mod review_metadata;
 #[cfg(test)]
 mod test;
 
@@ -529,24 +530,27 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
             .as_ref()
             .map(github_pull_request_expr_jsonpath);
 
-        self.fetch_listing(ListingQuery {
-            source_ids: &source_ids,
-            source_auth_entities: &source_auth_entities,
-            sort_method: *query.sort_method(),
-            filter_jsonpath: if entity_ids.is_some() {
-                None
-            } else {
-                filter_jsonpath.as_deref()
-            },
-            notification_user_id,
-            notification_sets: notification_sets.as_deref(),
-            cursor_id: cursor_id.copied(),
-            cursor_value: cursor_value.copied(),
-            limit: limit as i64,
-            github_pull_request_jsonpath: github_pull_request_jsonpath.as_deref(),
-            ascending: sort_direction == GithubPullRequestSortDirection::Asc,
-            entity_ids: entity_ids.as_deref(),
-        })
-        .await
+        let mut entities = self
+            .fetch_listing(ListingQuery {
+                source_ids: &source_ids,
+                source_auth_entities: &source_auth_entities,
+                sort_method: *query.sort_method(),
+                filter_jsonpath: if entity_ids.is_some() {
+                    None
+                } else {
+                    filter_jsonpath.as_deref()
+                },
+                notification_user_id,
+                notification_sets: notification_sets.as_deref(),
+                cursor_id: cursor_id.copied(),
+                cursor_value: cursor_value.copied(),
+                limit: limit as i64,
+                github_pull_request_jsonpath: github_pull_request_jsonpath.as_deref(),
+                ascending: sort_direction == GithubPullRequestSortDirection::Asc,
+                entity_ids: entity_ids.as_deref(),
+            })
+            .await?;
+        self.hydrate_review_metadata(&mut entities).await?;
+        Ok(entities)
     }
 }

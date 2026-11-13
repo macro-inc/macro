@@ -1,6 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
+import { prForeignEntityKeys } from '@queries/storage/keys';
 import { storageServiceClient } from '@service-storage/client';
 import type { StoredGithubPullRequest } from '@service-storage/generated/schemas/storedGithubPullRequest';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -19,8 +20,8 @@ export type PrForeignEntityData = {
   headBranch?: string;
 };
 
-export function prForeignEntityQueryKey(id: string): string[] {
-  return ['github-pr', 'foreign-entity', id];
+export function prForeignEntityQueryKey(id: string) {
+  return prForeignEntityKeys['foreign-entity'](id).queryKey;
 }
 
 /** Refetch one PR detail after it was merged. */
@@ -59,6 +60,14 @@ function prForeignEntityDataFromStored(
       repo: pullRequest.repo,
       status: pullRequest.status,
       url: pullRequest.url,
+      reviews: pullRequest.reviews,
+      requestedReviewerGithubUserIds:
+        pullRequest.requestedReviewerGithubUserIds,
+      reviewDecision: pullRequest.reviewDecision,
+      mergedBy: pullRequest.mergedBy,
+      closedBy: pullRequest.closedBy,
+      mergedAt: pullRequest.mergedAt,
+      closedAt: pullRequest.closedAt,
     },
   };
 }

@@ -61647,6 +61647,22 @@
             },
             "description": "The latest check runs on the pull request's head commit."
           },
+          "closedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When GitHub closed the pull request, including merges."
+          },
+          "closedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestUser",
+                "description": "The sender of the closing webhook, when known."
+              }
+            ]
+          },
           "comments": {
             "type": "array",
             "items": {
@@ -61699,6 +61715,22 @@
               "$ref": "#/components/schemas/GithubPullRequestLabel"
             },
             "description": "The pull request's labels."
+          },
+          "mergedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When GitHub merged the pull request."
+          },
+          "mergedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestUser",
+                "description": "The GitHub user who merged the pull request, when known."
+              }
+            ]
           },
           "number": {
             "type": "integer",

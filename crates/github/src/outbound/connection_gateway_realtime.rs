@@ -22,7 +22,12 @@ impl ConnectionGatewayGithubRealtime {
 }
 
 impl GithubSyncRealtime for ConnectionGatewayGithubRealtime {
-    #[tracing::instrument(skip(self, recipients, entity), err)]
+    #[tracing::instrument(
+        name = "github.pull_request.push",
+        skip_all,
+        fields(foreign_entity_id = %entity.id, recipient_count = recipients.len() as i64),
+        err
+    )]
     async fn publish_pull_request(
         &self,
         recipients: &[MacroUserIdStr<'static>],

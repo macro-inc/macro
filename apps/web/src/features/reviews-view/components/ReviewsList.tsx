@@ -40,6 +40,7 @@ import {
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { buildReviewsRows } from '../core/reviews-rows';
 import type { ReviewsListController } from '../primitives/create-reviews-list-controller';
+import { useReviewsMergeabilityQuery } from '../queries/use-reviews-mergeability-query';
 import type { useReviewsQuery } from '../queries/use-reviews-query';
 import { isAuthoredBy } from '../reviews-filter';
 import {
@@ -81,6 +82,7 @@ function ReviewListElement(props: JSX.HTMLAttributes<HTMLUListElement>) {
 
 function ReviewRow(props: {
   review: GithubPullRequestEntity;
+  hasConflicts?: boolean;
   authorDisplayName?: string;
   checked: boolean;
   onChecked: (checked: boolean, shiftKey: boolean) => void;
@@ -107,7 +109,13 @@ function ReviewRow(props: {
         }}
       >
         <ListEntity
-          entity={props.review}
+          entity={{
+            ...props.review,
+            metadata: {
+              ...props.review.metadata,
+              hasConflicts: props.hasConflicts,
+            },
+          }}
           authorDisplayName={props.authorDisplayName}
           checked={props.checked}
           onChecked={props.onChecked}
@@ -173,6 +181,27 @@ export function ReviewsList(props: ReviewsListProps) {
     });
     return indexes;
   });
+  const [scrollOffset, setScrollOffset] = createSignal(0);
+  // Read only the visible window. Waiting for scroll end avoids a different
+  // GitHub batch for every row crossed during a fling.
+  const visiblePullRequests = createMemo(() => {
+    const handle = virtualizer();
+    const height = listSize.height;
+    if (!handle || !height) return [];
+    const start = handle.findItemIndex(scrollOffset());
+    const end = handle.findItemIndex(scrollOffset() + height);
+    return rows()
+      .slice(start, end + 1)
+      .flatMap((row) =>
+        row.kind === 'review' && row.review.metadata.status === 'open'
+          ? [row.review.metadata]
+          : []
+      );
+  });
+  const mergeability = useReviewsMergeabilityQuery(
+    visiblePullRequests,
+    () => true
+  );
   const rowIndex = (reviewIndex: number) =>
     rowIndexes()[reviewIndex] ?? reviewIndex;
   const scrollHandle = () => {
@@ -391,6 +420,9 @@ export function ReviewsList(props: ReviewsListProps) {
                     bufferSize={320}
                     itemSize={48}
                     onScroll={checkNearEnd}
+                    onScrollEnd={() =>
+                      setScrollOffset(virtualizer()?.scrollOffset ?? 0)
+                    }
                   >
                     {(row) => (
                       <Switch>
@@ -408,6 +440,9 @@ export function ReviewsList(props: ReviewsListProps) {
                             return (
                               <ReviewRow
                                 review={review()}
+                                hasConflicts={mergeability.hasConflicts(
+                                  review().metadata
+                                )}
                                 checked={list.selection.isSelected(review().id)}
                                 authorDisplayName={
                                   isAuthoredBy(

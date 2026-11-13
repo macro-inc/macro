@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { reviewsMergeabilityKeys } from '@queries/storage/keys';
 import { authServiceClient } from '@service-auth/client';
 import type { GithubPullRequestNumber } from '@service-auth/generated/schemas';
 import { useQueries } from '@tanstack/solid-query';
@@ -16,11 +17,9 @@ const mergeabilityKey = (pullRequest: GithubPullRequestNumber) =>
 const reviewsMergeabilityQueryOptions = (
   pullRequests: readonly GithubPullRequestNumber[]
 ) => ({
-  queryKey: [
-    'reviews',
-    'mergeability',
-    pullRequests.map(mergeabilityKey),
-  ] as const,
+  queryKey: reviewsMergeabilityKeys.mergeability(
+    pullRequests.map(mergeabilityKey)
+  ).queryKey,
   queryFn: async () => {
     const response = await throwOnErr(() =>
       authServiceClient.getGithubPullRequestMergeability({
@@ -76,6 +75,10 @@ export function useReviewsMergeabilityQuery(
   return {
     mergeability: (pullRequest: GithubPullRequestNumber) =>
       byKey().get(mergeabilityKey(pullRequest)),
+    hasConflicts: (pullRequest: GithubPullRequestNumber) => {
+      const value = byKey().get(mergeabilityKey(pullRequest));
+      return value && value !== 'unknown' ? value === 'conflicting' : undefined;
+    },
     isError: () => queries.some((query) => query.isError),
   };
 }
