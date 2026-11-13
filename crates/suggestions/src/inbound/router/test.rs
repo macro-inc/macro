@@ -203,7 +203,7 @@ impl SuggestionApi for FakeSuggestions {
         unreachable!()
     }
 
-    async fn kept(&self, _: Uuid, _: Uuid) -> Result<u32, SuggestionError> {
+    async fn feed_changes(&self, _: Uuid, _: Uuid) -> Result<u32, SuggestionError> {
         unreachable!()
     }
 

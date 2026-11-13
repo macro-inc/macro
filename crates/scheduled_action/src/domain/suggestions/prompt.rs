@@ -48,6 +48,21 @@ pub struct BriefData<'a> {
     pub guide: &'a str,
 }
 
+/// What a weekly routines session does before suggesting: review and retire.
+const WEEKLY_REVIEW: &str = "First, in one \
+    program, read what you suggested before with \
+    `await macro.routines.review()` and the user's own routines with \
+    `await macro.routines.list()`, and retire with `suggestion.retire(reason)` open \
+    suggestions that no longer fit their work or duplicate one of their routines. Then \
+    suggest at most 2 new routines in all (not 3 per surface), and none unless the \
+    evidence is strong. Draft at most one routine the catalog lacks, and only one built \
+    around something specific in their workspace that you name (a deal, vendor, \
+    project, channel, label or report they keep), that discovers, evaluates or advances \
+    it; a general habit is a catalog routine or nothing. Never a weekly recap, digest or \
+    audit, and never what their own routines already do. When you draft nothing, don't \
+    read the routine-writing docs. Suggestions are never rewritten; retire one and \
+    suggest a better one instead.";
+
 /// The session's one prompt.
 pub fn brief(data: &BriefData<'_>) -> String {
     let surfaces = data
@@ -58,26 +73,18 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     let occasion = match data.trigger {
-        GenerationTrigger::Onboarding => "The user just signed up.",
-        GenerationTrigger::Nightly => {
-            "This is the week's run (routine suggestions come once a week). First, in one \
-             program, read what you suggested before with \
-             `await macro.routines.review()` and the user's own routines with \
-             `await macro.routines.list()`, and retire with `suggestion.retire(reason)` open \
-             suggestions that no longer fit their work or duplicate one of their routines. Then \
-             suggest at most 2 new routines in all (not 3 per surface), and none unless the \
-             evidence is strong. Draft at most one routine the catalog lacks, and only one built \
-             around something specific in their workspace that you name (a deal, vendor, \
-             project, channel, label or report they keep), that discovers, evaluates or advances \
-             it; a general habit is a catalog routine or nothing. Never a weekly recap, digest or \
-             audit, and never what their own routines already do. When you draft nothing, don't \
-             read the routine-writing docs. Suggestions are never rewritten; retire one and \
-             suggest a better one instead."
-        }
+        GenerationTrigger::Onboarding => "The user just signed up. Be quick: they are waiting.".to_owned(),
+        GenerationTrigger::Nightly => format!(
+            "This is the week's run (routine suggestions come once a week). {WEEKLY_REVIEW}"
+        ),
+        GenerationTrigger::Manual => format!(
+            "The user asked for fresh suggestions; this is the week's run (routine \
+             suggestions come once a week). {WEEKLY_REVIEW}"
+        ),
     };
     let task = TASK
         .replace("{surfaces}", &surfaces)
-        .replace("{occasion}", occasion);
+        .replace("{occasion}", &occasion);
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let model = data.agent_model;
     let timezone = data.timezone;

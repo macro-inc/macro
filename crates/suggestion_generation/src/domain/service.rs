@@ -1,8 +1,9 @@
 //! Generations: runs of hidden agent sessions that write a person's suggestions
 //! and routine suggestions.
 //!
-//! A generation starts at onboarding ([`GenerationService::start`]) or in
-//! the person's night ([`GenerationService::nightly`]). It runs one suggestions
+//! A generation starts at onboarding ([`GenerationService::start`]), in the
+//! person's night ([`GenerationService::nightly`]) or when they ask for fresh
+//! suggestions ([`GenerationService::regenerate`]). It runs one suggestions
 //! session and the routines sessions of the [`SessionLayout`] at once, each
 //! for the person, hidden and non-billable (`SessionBilling::NonBillable`),
 //! each told what its kind's crate briefs it with. A session may only call
@@ -10,8 +11,15 @@
 //! open; the tools decide and log everything else. Code here only schedules
 //! sessions, waits for their turn and cleans up: no reconciling, ranking or
 //! retiring.
+//!
+//! The lifecycles are tables of their own, tested exhaustively: a
+//! generation's in [`super::generation`], a session's in [`super::session`],
+//! the nightly decision in [`super::nightly`] and the weekly routines
+//! cadence in [`super::cadence`]. Code here applies them.
 
+use std::convert::Infallible;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use agent_runtime_protocol::domain::action::AgentActionId;
@@ -19,10 +27,10 @@ use agent_session::domain::model::{
     AgentSessionId, SessionBilling, SessionSource, SessionVisibility,
 };
 use agent_session::domain::routines::{
-    PrepareRoutineSession, PromptRoutineSession, RoutineActionStatus, RoutineSessionAction,
-    RoutineSessionError, RoutineSessions, ValidateRoutineSession,
+    PrepareRoutineSession, PromptRoutineSession, RoutineSessionAction, RoutineSessionError,
+    RoutineSessions, ValidateRoutineSession,
 };
-use chrono::Utc;
+use chrono::{DateTime, TimeDelta, Utc};
 use chrono_tz::Tz;
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -34,45 +42,48 @@ use scheduled_action::domain::suggestions::ports::RoutineSuggestionApi;
 use suggestions::domain::model::{GenerationTrigger, SessionKind};
 use suggestions::domain::ports::SuggestionApi;
 use suggestions::domain::service::SUGGESTIONS_FLAG;
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
+use super::cadence::{routines_due, routines_ok};
+use super::generation::{
+    Admission, GenerationEvent, GenerationOverview, SessionResult, admit, conclude,
+};
 use super::model::{
-    AudienceMember, GenerationAgent, GenerationError, GenerationOutcome, SessionLayout,
-    StaleSession,
+    GenerationAgent, GenerationError, NewGeneration, SessionLayout, StaleSession, StartOutcome,
 };
 use super::night;
-use super::ports::{GenerationRepo, Plans};
+use super::nightly::{NightlyDecision, NightlyOutcome, Plan, decide, needs_plan};
+use super::ports::{GenerationRepo, Plans, StoredSessions};
+use super::session::{Cleanup, CleanupEvent, Poll, SessionEnding, Work, poll};
 
 #[cfg(test)]
 mod test;
 
 /// The longest an onboarding routines session runs: the person is waiting.
 pub const ONBOARDING_ROUTINES_TIMEOUT: Duration = Duration::from_secs(240);
-/// The longest a nightly routines session runs: it reviews what it suggested
-/// before, too.
+/// The longest a nightly or manual routines session runs: it reviews what
+/// it suggested before, too.
 pub const NIGHTLY_ROUTINES_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 /// The longest an onboarding suggestions session runs: the person is waiting.
 pub const ONBOARDING_SUGGESTIONS_TIMEOUT: Duration = Duration::from_secs(240);
-/// The longest a nightly suggestions session runs: it researches the whole
-/// workspace.
+/// The longest a nightly or manual suggestions session runs: it researches
+/// the whole workspace.
 pub const NIGHTLY_SUGGESTIONS_TIMEOUT: Duration = Duration::from_secs(15 * 60);
-/// How long a session row may stay open before the sweep deletes it and
-/// its session: longer than any session.
-pub const STALE_SESSION: Duration = Duration::from_secs(20 * 60);
-/// How long a generation may stay running before it counts as interrupted
-/// and may start again: longer than its sessions and a retry.
-pub const STALE_GENERATION: Duration = Duration::from_secs(25 * 60);
-/// Who counts as active for a nightly run: seen in the last week.
-pub const ACTIVE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::days(7);
+/// How long a session may stay open before the sweep ends it as
+/// interrupted, even while its generation runs: longer than any session.
+pub const STALE_SESSION: TimeDelta = TimeDelta::minutes(20);
+/// How often a running generation tells storage it is alive.
+pub const HEARTBEAT: Duration = Duration::from_secs(30);
+/// How long a generation's heartbeat may be silent before the sweep marks
+/// it interrupted and its person may start the next attempt.
+pub const HEARTBEAT_LOST: TimeDelta = TimeDelta::minutes(3);
+/// How long an ended session waits between deletes: after its own process
+/// tried, or a sweep before.
+pub const CLEANUP_RETRY: TimeDelta = TimeDelta::minutes(5);
 pub use super::night::NIGHT;
-/// Nightly runs at most once in this long, whatever the zone does.
-pub const NIGHTLY_EVERY: chrono::TimeDelta = chrono::TimeDelta::hours(20);
-/// How often a person's nightly run includes a routines session: once a
-/// week. Other nights run only the suggestions session.
-pub const ROUTINES_EVERY: chrono::TimeDelta = chrono::TimeDelta::days(7);
 /// Nightly generations one process runs at once. A nightly run is one
 /// suggestions session of up to 15 minutes (a routines one too, weekly), so with
 /// the harness's two processes and a tick every 5 minutes this starts about
@@ -83,7 +94,7 @@ pub const MAX_NIGHTLY_RUNS: usize = 6;
 const DUE_BATCHES: usize = 4;
 const SWEEP_BATCH: u16 = 64;
 /// How long the change log keeps an entry.
-pub const CHANGES_KEPT: chrono::TimeDelta = chrono::TimeDelta::days(90);
+pub const CHANGES_KEPT: TimeDelta = TimeDelta::days(90);
 /// Change-log entries one sweep deletes at most.
 const PRUNE_BATCH: u16 = 1000;
 const FIRST_POLL: Duration = Duration::from_millis(500);
@@ -107,6 +118,9 @@ struct Runner<Repo, Sessions, Routines, SuggestionFeed> {
     sessions: Arc<Sessions>,
     routines: Arc<Routines>,
     suggestions: Arc<SuggestionFeed>,
+    /// Which sessions are stored; without it, a failed delete is never
+    /// taken for a session already gone.
+    stored: Option<Arc<dyn StoredSessions>>,
     agent: GenerationAgent,
     layout: SessionLayout,
 }
@@ -114,7 +128,7 @@ struct Runner<Repo, Sessions, Routines, SuggestionFeed> {
 /// One generation, as it runs.
 struct Run {
     generation: Uuid,
-    started_at: chrono::DateTime<Utc>,
+    started_at: DateTime<Utc>,
     user: MacroUserIdStr<'static>,
     trigger: GenerationTrigger,
     timezone: Tz,
@@ -122,23 +136,74 @@ struct Run {
     routines: bool,
 }
 
-/// How one session ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
-#[strum(serialize_all = "snake_case")]
-enum Ending {
-    Finished,
-    TimedOut,
-    /// The prompt may or may not have reached the session; it is stopped.
-    DeliveryUnknown,
-    Failed,
-    Cancelled,
+/// What stops a generation's sessions early.
+#[derive(Clone, Copy)]
+struct Stop<'a> {
+    /// The process is stopping.
+    shutdown: &'a CancellationToken,
+    /// Storage no longer counts the generation running: the sweep marked it
+    /// interrupted while its heartbeat couldn't be written.
+    lost: &'a CancellationToken,
 }
 
-/// One session's end and what it kept.
-#[derive(Debug, Clone, Copy)]
+impl Stop<'_> {
+    fn any(self) -> bool {
+        self.shutdown.is_cancelled() || self.lost.is_cancelled()
+    }
+}
+
+/// One session's end and what it did.
 struct Ended {
-    ending: Ending,
-    kept: u32,
+    ending: SessionEnding,
+    work: Work,
+    /// The session, when its cleanup waits for its generation's end to be
+    /// stored: its process is stopping.
+    deferred: Option<RoutineSessionAction>,
+}
+
+/// One routines session group's end, and whether it took a second try.
+struct GroupEnded {
+    ended: Ended,
+    retried: bool,
+}
+
+/// How many people a nightly tick left each way.
+#[derive(Default)]
+struct NightlyCounts {
+    started: usize,
+    skipped: usize,
+    dropped: usize,
+    missed: usize,
+    retrying: usize,
+    waiting: usize,
+}
+
+impl NightlyCounts {
+    fn add(&mut self, outcome: NightlyOutcome) {
+        match outcome {
+            NightlyOutcome::Started => self.started += 1,
+            NightlyOutcome::Skipped => self.skipped += 1,
+            NightlyOutcome::Dropped => self.dropped += 1,
+            NightlyOutcome::Missed => self.missed += 1,
+            NightlyOutcome::Retrying => self.retrying += 1,
+            // A tick never cuts a run short.
+            NightlyOutcome::CutShort => {}
+        }
+    }
+}
+
+/// How long a `kind` session of a `trigger` generation may run.
+fn timeout(trigger: GenerationTrigger, kind: SessionKind) -> Duration {
+    match (trigger, kind) {
+        (GenerationTrigger::Onboarding, SessionKind::Suggestions) => ONBOARDING_SUGGESTIONS_TIMEOUT,
+        (GenerationTrigger::Onboarding, SessionKind::Routines) => ONBOARDING_ROUTINES_TIMEOUT,
+        (GenerationTrigger::Nightly | GenerationTrigger::Manual, SessionKind::Suggestions) => {
+            NIGHTLY_SUGGESTIONS_TIMEOUT
+        }
+        (GenerationTrigger::Nightly | GenerationTrigger::Manual, SessionKind::Routines) => {
+            NIGHTLY_ROUTINES_TIMEOUT
+        }
+    }
 }
 
 impl<Repo, Sessions, Routines, SuggestionFeed, Flags>
@@ -169,6 +234,7 @@ where
                 sessions,
                 routines,
                 suggestions,
+                stored: None,
                 agent,
                 layout: SessionLayout::default(),
             }),
@@ -186,24 +252,35 @@ where
         self
     }
 
-    /// Whether the person is on a paid plan; no when it can't be told.
-    async fn paid(&self, user: &MacroUserIdStr<'static>) -> bool {
-        let Some(plans) = &self.plans else {
-            return false;
-        };
-        plans
-            .paid(user)
-            .await
-            .inspect_err(|error| tracing::warn!(?error, "could not read a plan; no nightly run"))
-            .unwrap_or(false)
-    }
-
     /// Split routine suggestions across `layout`'s sessions.
     pub fn with_layout(mut self, layout: SessionLayout) -> Self {
         if let Some(runner) = Arc::get_mut(&mut self.runner) {
             runner.layout = layout;
         }
         self
+    }
+
+    /// Ask `stored` whether a session that couldn't be deleted is gone.
+    pub fn with_stored_sessions(mut self, stored: Arc<dyn StoredSessions>) -> Self {
+        if let Some(runner) = Arc::get_mut(&mut self.runner) {
+            runner.stored = Some(stored);
+        }
+        self
+    }
+
+    /// The person's plan; without plans, nobody pays.
+    async fn plan(&self, user: &MacroUserIdStr<'static>) -> Plan {
+        let Some(plans) = &self.plans else {
+            return Plan::Unpaid;
+        };
+        match plans.paid(user).await {
+            Ok(true) => Plan::Paid,
+            Ok(false) => Plan::Unpaid,
+            Err(error) => {
+                tracing::warn!(?error, "could not read a plan");
+                Plan::Unknown
+            }
+        }
     }
 
     /// Which kinds are on for the person: suggestions, routine suggestions.
@@ -224,43 +301,122 @@ where
     }
 
     /// Start the person's generation for `trigger` in the background, if
-    /// one may start: their onboarding one runs once, a nightly one once a
-    /// night. Off when neither suggestions nor routine suggestions are on.
-    #[tracing::instrument(name = "suggestion.generation.start", skip_all, fields(
-        suggestion.generation.trigger = trigger.as_ref(),
-        suggestion.generation.id = tracing::field::Empty,
-        suggestion.generation.suggestions = tracing::field::Empty,
-        suggestion.generation.routines = tracing::field::Empty,
-    ), err)]
+    /// [`admit`] lets it: onboarding once, nightly once a night, manual once
+    /// an hour, and one cut short again as its next attempt. Not found when
+    /// what `trigger` runs is off: suggestions for a manual run, both kinds
+    /// for the others.
     pub async fn start(
         &self,
         user: &MacroUserIdStr<'static>,
         trigger: GenerationTrigger,
         timezone: Tz,
-    ) -> Result<bool, GenerationError> {
-        let (suggestions, mut routines) = self.kinds(user).await;
-        if !suggestions && !routines {
+    ) -> Result<StartOutcome, GenerationError> {
+        self.launch(user, trigger, timezone, None).await
+    }
+
+    /// Start the fresh suggestions the person asked for: a manual
+    /// generation, nightly-style. Refused while one of theirs runs, and
+    /// within [`super::generation::REGENERATE_EVERY`] of their last.
+    pub async fn regenerate(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        timezone: Tz,
+    ) -> Result<(), GenerationError> {
+        match self
+            .launch(user, GenerationTrigger::Manual, timezone, None)
+            .await?
+        {
+            StartOutcome::Started => Ok(()),
+            StartOutcome::Refused(Admission::Running) => Err(GenerationError::Running),
+            StartOutcome::Refused(Admission::Cooldown { available_at }) => {
+                Err(GenerationError::Cooldown { available_at })
+            }
+            // A manual run has a window, and runs the suggestions session
+            // whenever suggestions are on.
+            StartOutcome::Refused(admission @ (Admission::Done | Admission::Start { .. })) => {
+                Err(GenerationError::Internal(rootcause::report!(
+                    "a manual generation was refused as {admission:?}"
+                )))
+            }
+            StartOutcome::Nothing => Err(GenerationError::NotFound),
+        }
+    }
+
+    /// The person's generations now: whether one runs, how the last ended,
+    /// and when they may ask for fresh suggestions.
+    pub async fn overview(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<GenerationOverview, GenerationError> {
+        let (suggestions, _) = self.kinds(user).await;
+        if !suggestions {
+            return Err(GenerationError::NotFound);
+        }
+        let facts = self
+            .runner
+            .repo
+            .overview(user)
+            .await
+            .map_err(GenerationError::internal)?;
+        Ok(GenerationOverview::new(facts, Utc::now()))
+    }
+
+    /// Start a generation, holding `permit` while it runs.
+    #[tracing::instrument(name = "suggestion.generation.start", skip_all, fields(
+        suggestion.generation.trigger = trigger.as_ref(),
+        suggestion.generation.admission = tracing::field::Empty,
+        suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.attempt = tracing::field::Empty,
+        suggestion.generation.suggestions = tracing::field::Empty,
+        suggestion.generation.routines = tracing::field::Empty,
+    ), err)]
+    async fn launch(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        trigger: GenerationTrigger,
+        timezone: Tz,
+        permit: Option<OwnedSemaphorePermit>,
+    ) -> Result<StartOutcome, GenerationError> {
+        let (suggestions, routines_on) = self.kinds(user).await;
+        let off = match trigger {
+            GenerationTrigger::Manual => !suggestions,
+            GenerationTrigger::Onboarding | GenerationTrigger::Nightly => {
+                !suggestions && !routines_on
+            }
+        };
+        if off {
             return Err(GenerationError::NotFound);
         }
         let now = Utc::now();
         let repo = &self.runner.repo;
-        // Routine suggestions come once a week; other nights only suggestions.
-        if trigger == GenerationTrigger::Nightly
-            && routines
-            && repo
-                .routines_since(user, now - ROUTINES_EVERY)
-                .await
-                .map_err(GenerationError::internal)?
-        {
-            routines = false;
-        }
         let span = tracing::Span::current();
+        let facts = repo
+            .admission(user, trigger)
+            .await
+            .map_err(GenerationError::internal)?;
+        let admission = admit(trigger, facts.running, facts.latest, now);
+        span.record("suggestion.generation.admission", admission.as_ref());
+        let Admission::Start { attempt } = admission else {
+            return Ok(StartOutcome::Refused(admission));
+        };
+        // Routine suggestions come at onboarding, then once a week.
+        let routines = routines_on
+            && match trigger {
+                GenerationTrigger::Onboarding => true,
+                GenerationTrigger::Nightly | GenerationTrigger::Manual => {
+                    let last_ok = repo
+                        .last_routines_ok(user)
+                        .await
+                        .map_err(GenerationError::internal)?;
+                    routines_due(trigger, last_ok, now)
+                }
+            };
         span.record("suggestion.generation.suggestions", suggestions);
         span.record("suggestion.generation.routines", routines);
         if !suggestions && !routines {
-            return Ok(false);
+            return Ok(StartOutcome::Nothing);
         }
-        if trigger == GenerationTrigger::Onboarding && self.paid(user).await {
+        if trigger == GenerationTrigger::Onboarding && self.plan(user).await == Plan::Paid {
             repo.see(
                 user,
                 timezone.name(),
@@ -270,61 +426,51 @@ where
             .await
             .map_err(GenerationError::internal)?;
         }
-        let stale =
-            chrono::Duration::from_std(STALE_GENERATION).map_err(GenerationError::internal)?;
-        let Some(generation) = repo
-            .begin(user, trigger, now, now - stale, now - NIGHTLY_EVERY)
-            .await
-            .map_err(GenerationError::internal)?
-        else {
-            return Ok(false);
-        };
-        span.record("suggestion.generation.id", generation.to_string());
-        let run = Run {
-            generation,
-            started_at: now,
+        let new = NewGeneration {
+            id: Uuid::now_v7(),
             user: user.clone(),
             trigger,
-            timezone,
-            suggestions,
-            routines,
+            attempt,
+            started_at: now,
+            after: facts.latest.map(|latest| latest.started_at),
         };
-        // Onboarding: a child of the request that started it, one trace. A
-        // nightly tick starts many people's: each is its own trace, linked to
-        // the tick, so a trace never holds two people's runs.
-        let run_span = match trigger {
-            GenerationTrigger::Onboarding => tracing::info_span!(
-                "suggestion.generation",
-                suggestion.generation.id = %generation,
-                suggestion.generation.trigger = trigger.as_ref(),
-                suggestion.generation.suggestions = suggestions,
-                suggestion.generation.routines = routines,
-                suggestion.generation.suggestions_kept = tracing::field::Empty,
-                suggestion.generation.routines_kept = tracing::field::Empty,
-                suggestion.generation.retries = tracing::field::Empty,
-                suggestion.generation.outcome = tracing::field::Empty,
-                user.id = tracing::field::Empty,
-                otel.status_code = tracing::field::Empty,
-            ),
-            GenerationTrigger::Nightly => {
-                let span = tracing::info_span!(
-                    parent: None,
-                    "suggestion.generation",
-                    suggestion.generation.id = %generation,
-                    suggestion.generation.trigger = trigger.as_ref(),
-                    suggestion.generation.suggestions = suggestions,
-                    suggestion.generation.routines = routines,
-                    suggestion.generation.suggestions_kept = tracing::field::Empty,
-                    suggestion.generation.routines_kept = tracing::field::Empty,
-                    suggestion.generation.retries = tracing::field::Empty,
-                    suggestion.generation.outcome = tracing::field::Empty,
-                    user.id = tracing::field::Empty,
-                    otel.status_code = tracing::field::Empty,
-                );
-                span.follows_from(tracing::Span::current());
-                span
-            }
+        // Another start since admission read: that one runs.
+        if !repo
+            .insert(&new)
+            .await
+            .map_err(GenerationError::internal)?
+        {
+            return Ok(StartOutcome::Refused(Admission::Running));
+        }
+        let generation = new.id;
+        span.record("suggestion.generation.id", generation.to_string());
+        span.record("suggestion.generation.attempt", attempt);
+        // Asked for by the person (onboarding, manual): a child of the
+        // request, one trace. A nightly tick starts many people's: each is
+        // its own trace, linked to the tick, so a trace never holds two
+        // people's runs.
+        let parent = match trigger {
+            GenerationTrigger::Onboarding | GenerationTrigger::Manual => span.id(),
+            GenerationTrigger::Nightly => None,
         };
+        let run_span = tracing::info_span!(
+            parent: parent,
+            "suggestion.generation",
+            suggestion.generation.id = %generation,
+            suggestion.generation.trigger = trigger.as_ref(),
+            suggestion.generation.attempt = attempt,
+            suggestion.generation.suggestions = suggestions,
+            suggestion.generation.routines = routines,
+            suggestion.generation.feed_changes = tracing::field::Empty,
+            suggestion.generation.routines_suggested = tracing::field::Empty,
+            suggestion.generation.retries = tracing::field::Empty,
+            suggestion.generation.outcome = tracing::field::Empty,
+            user.id = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        if trigger == GenerationTrigger::Nightly {
+            run_span.follows_from(&span);
+        }
         // Its sessions' tool calls arrive without this trace's context: they
         // record its id, kept with the generation, to be joined to it.
         if let Some(trace) = run_span.in_scope(macro_tower_layers::current_trace_id)
@@ -340,12 +486,17 @@ where
             Ok(None) => {}
             Err(error) => tracing::warn!(?error, "could not read a person's account id"),
         }
+        let run = Run {
+            generation,
+            started_at: now,
+            user: user.clone(),
+            trigger,
+            timezone,
+            suggestions,
+            routines,
+        };
         let runner = Arc::clone(&self.runner);
         let shutdown = self.shutdown.clone();
-        let permit = match trigger {
-            GenerationTrigger::Onboarding => None,
-            GenerationTrigger::Nightly => Arc::clone(&self.nightly).try_acquire_owned().ok(),
-        };
         self.tasks.spawn(
             async move {
                 runner.run(run, shutdown).await;
@@ -353,128 +504,187 @@ where
             }
             .instrument(run_span),
         );
-        Ok(true)
+        Ok(StartOutcome::Started)
     }
 
     /// Start nightly generations for the people due one, as many as this
-    /// process has room for. How many started.
+    /// process has room for, and record what became of each
+    /// ([`decide`]). How many started.
     #[tracing::instrument(name = "suggestion.nightly", skip_all, fields(
         suggestion.nightly.started = tracing::field::Empty,
+        suggestion.nightly.skipped = tracing::field::Empty,
         suggestion.nightly.dropped = tracing::field::Empty,
         suggestion.nightly.missed = tracing::field::Empty,
+        suggestion.nightly.retrying = tracing::field::Empty,
         suggestion.nightly.waiting = tracing::field::Empty,
     ), err)]
     pub async fn nightly(&self) -> Result<usize, GenerationError> {
         let now = Utc::now();
-        let stale =
-            chrono::Duration::from_std(STALE_GENERATION).map_err(GenerationError::internal)?;
-        let (mut started, mut dropped, mut missed, mut waiting) = (0, 0, 0, 0);
+        let repo = &self.runner.repo;
+        let mut counts = NightlyCounts::default();
         // People dropped or passed over don't use up the tick: keep reading
-        // who is due while there is room, a bounded number of times.
+        // who is due while there is room, a bounded number of times. Each
+        // person recorded leaves the due set until their next run.
         'batches: for _ in 0..DUE_BATCHES {
             let room = self.nightly.available_permits();
             if room == 0 {
                 break;
             }
-            let due: Vec<AudienceMember> = self
-                .runner
-                .repo
-                .due(
-                    now,
-                    now - stale,
-                    u16::try_from(room * 2).unwrap_or(u16::MAX),
-                )
+            let due = repo
+                .due(now, u16::try_from(room * 2).unwrap_or(u16::MAX))
                 .await
                 .map_err(GenerationError::internal)?;
             if due.is_empty() {
                 break;
             }
             for (index, member) in due.iter().enumerate() {
-                if self.nightly.available_permits() == 0 {
-                    waiting += due.len() - index;
-                    break 'batches;
-                }
-                let repo = &self.runner.repo;
-                // Nightly runs are for people active this week on a paid
-                // plan; the rest wait to be seen again on one.
-                if member.seen_at <= now - ACTIVE_WITHIN || !self.paid(&member.user).await {
-                    if let Err(error) = repo.forget(&member.user).await {
-                        tracing::warn!(?error, "could not drop someone from the audience");
-                    }
-                    dropped += 1;
-                    continue;
-                }
-                let next = night::following(&member.user, member.timezone, now);
-                // Their night ended before there was room: the next one.
-                if !night::in_night(member.timezone, now) {
-                    missed += 1;
+                let room = self.nightly.available_permits();
+                let plan = if needs_plan(member, now, room) {
+                    Some(self.plan(&member.user).await)
                 } else {
-                    match self
-                        .start(&member.user, GenerationTrigger::Nightly, member.timezone)
-                        .await
-                    {
-                        Ok(true) => started += 1,
-                        Ok(false) | Err(GenerationError::NotFound) => {}
-                        Err(error) => {
-                            tracing::warn!(?error, "could not start a nightly generation");
-                            continue;
-                        }
+                    None
+                };
+                let outcome = match decide(member, now, room, plan) {
+                    NightlyDecision::Wait => {
+                        counts.waiting += due.len() - index;
+                        break 'batches;
                     }
-                }
-                if let Err(error) = repo.reschedule(&member.user, next).await {
-                    tracing::warn!(?error, "could not schedule someone's next nightly run");
+                    NightlyDecision::Drop => NightlyOutcome::Dropped,
+                    NightlyDecision::Miss => NightlyOutcome::Missed,
+                    NightlyDecision::Retry => NightlyOutcome::Retrying,
+                    NightlyDecision::Start => self.start_nightly(&member.user, member.timezone).await,
+                };
+                counts.add(outcome);
+                let next_run = outcome.next_run(&member.user, member.timezone, now);
+                if let Err(error) = repo
+                    .record_nightly(&member.user, outcome, next_run, now)
+                    .await
+                {
+                    tracing::warn!(
+                        ?error,
+                        outcome = outcome.as_ref(),
+                        "could not record a nightly outcome"
+                    );
                 }
             }
         }
         let span = tracing::Span::current();
-        span.record("suggestion.nightly.started", started);
-        span.record("suggestion.nightly.dropped", dropped);
-        span.record("suggestion.nightly.missed", missed);
-        span.record("suggestion.nightly.waiting", waiting);
-        if missed > 0 || waiting > 0 {
+        span.record("suggestion.nightly.started", counts.started);
+        span.record("suggestion.nightly.skipped", counts.skipped);
+        span.record("suggestion.nightly.dropped", counts.dropped);
+        span.record("suggestion.nightly.missed", counts.missed);
+        span.record("suggestion.nightly.retrying", counts.retrying);
+        span.record("suggestion.nightly.waiting", counts.waiting);
+        if counts.missed > 0 || counts.waiting > 0 {
             // Due but not started: nightly capacity is short.
             tracing::warn!(
                 event = "suggestion.nightly_short",
-                missed,
-                waiting,
+                missed = counts.missed,
+                waiting = counts.waiting,
                 "people due a nightly generation weren't started"
             );
         }
-        Ok(started)
+        Ok(counts.started)
     }
 
-    /// Delete the sessions and close the rows a process that stopped
-    /// mid-generation left behind. How many it cleaned up.
+    /// Start one person's nightly run with one of this process's nightly
+    /// places; what became of them.
+    async fn start_nightly(&self, user: &MacroUserIdStr<'static>, timezone: Tz) -> NightlyOutcome {
+        let Ok(permit) = Arc::clone(&self.nightly).try_acquire_owned() else {
+            // The tick is the only one taking places, and runs only free
+            // them; never expected.
+            return NightlyOutcome::Retrying;
+        };
+        match self
+            .launch(user, GenerationTrigger::Nightly, timezone, Some(permit))
+            .await
+        {
+            Ok(StartOutcome::Started) => NightlyOutcome::Started,
+            // Ran within the window, one of theirs runs, or nothing is on
+            // or due: the next night.
+            Ok(StartOutcome::Refused(_) | StartOutcome::Nothing)
+            | Err(
+                GenerationError::NotFound
+                | GenerationError::Running
+                | GenerationError::Cooldown { .. },
+            ) => NightlyOutcome::Skipped,
+            Err(GenerationError::Internal(error)) => {
+                tracing::warn!(?error, "could not start a nightly generation");
+                NightlyOutcome::Retrying
+            }
+        }
+    }
+
+    /// Mark interrupted the generations whose process stopped beating, end
+    /// the sessions they left open, and delete the sessions whose delete
+    /// failed or never ran. How many generations and sessions it handled.
     #[tracing::instrument(name = "suggestion.sweep", skip_all, fields(
-        suggestion.swept = tracing::field::Empty,
+        suggestion.sweep.interrupted = tracing::field::Empty,
+        suggestion.sweep.orphaned = tracing::field::Empty,
+        suggestion.sweep.stuck = tracing::field::Empty,
+        suggestion.sweep.deleted = tracing::field::Empty,
+        suggestion.sweep.abandoned = tracing::field::Empty,
         suggestion.changes_pruned = tracing::field::Empty,
     ), err)]
     pub async fn sweep(&self) -> Result<usize, GenerationError> {
-        let stale = chrono::Duration::from_std(STALE_SESSION).map_err(GenerationError::internal)?;
-        let stale = self
-            .runner
-            .repo
-            .stale_sessions(Utc::now() - stale, SWEEP_BATCH)
+        let now = Utc::now();
+        let repo = &self.runner.repo;
+        let span = tracing::Span::current();
+        let lost = repo
+            .interrupt_lost(now - HEARTBEAT_LOST, now, SWEEP_BATCH)
             .await
             .map_err(GenerationError::internal)?;
-        for session in &stale {
-            self.runner.clean_up(&action_for(session), false).await;
+        for generation in &lost {
+            tracing::warn!(
+                event = "suggestion.generation_interrupted",
+                suggestion.generation.id = %generation.generation,
+                suggestion.generation.trigger = generation.trigger.as_ref(),
+                "a generation's process stopped without ending it"
+            );
+            // A nightly run cut short is due again at once, for its next
+            // attempt.
+            if generation.trigger == GenerationTrigger::Nightly
+                && let Err(error) = repo
+                    .record_nightly(&generation.user, NightlyOutcome::CutShort, Some(now), now)
+                    .await
+            {
+                tracing::warn!(?error, "could not make an interrupted nightly run due again");
+            }
+        }
+        let orphaned = repo
+            .end_orphaned_sessions(now - STALE_SESSION, now, SWEEP_BATCH)
+            .await
+            .map_err(GenerationError::internal)?;
+        let stuck = repo
+            .claim_stuck_sessions(now - CLEANUP_RETRY, now, SWEEP_BATCH)
+            .await
+            .map_err(GenerationError::internal)?;
+        let (mut deleted, mut abandoned) = (0, 0);
+        for session in orphaned.iter().chain(&stuck) {
+            match self
+                .runner
+                .clean_up(&action_for(session), session.ending, session.attempts)
+                .await
+            {
+                Cleanup::Deleted => deleted += 1,
+                Cleanup::Abandoned => abandoned += 1,
+                Cleanup::Open | Cleanup::Stopping => {}
+            }
         }
         // The change log is for us, never shown: kept for a while, then
         // deleted a batch at a time.
-        match self
-            .runner
-            .repo
-            .prune_changes(Utc::now() - CHANGES_KEPT, PRUNE_BATCH)
-            .await
-        {
+        match repo.prune_changes(now - CHANGES_KEPT, PRUNE_BATCH).await {
             Ok(pruned) => {
-                tracing::Span::current().record("suggestion.changes_pruned", pruned);
+                span.record("suggestion.changes_pruned", pruned);
             }
             Err(error) => tracing::warn!(?error, "could not prune the suggestion change log"),
         }
-        tracing::Span::current().record("suggestion.swept", stale.len());
-        Ok(stale.len())
+        span.record("suggestion.sweep.interrupted", lost.len());
+        span.record("suggestion.sweep.orphaned", orphaned.len());
+        span.record("suggestion.sweep.stuck", stuck.len());
+        span.record("suggestion.sweep.deleted", deleted);
+        span.record("suggestion.sweep.abandoned", abandoned);
+        Ok(lost.len() + orphaned.len() + stuck.len())
     }
 
     /// The person loaded the app in zone `timezone`: with suggestions on and a
@@ -485,7 +695,7 @@ where
         timezone: Tz,
     ) -> Result<(), GenerationError> {
         let (suggestions, _) = self.kinds(user).await;
-        if !suggestions || !self.paid(user).await {
+        if !suggestions || self.plan(user).await != Plan::Paid {
             return Ok(());
         }
         let now = Utc::now();
@@ -528,60 +738,98 @@ where
     Routines: RoutineSuggestionApi,
     SuggestionFeed: SuggestionApi,
 {
-    /// The generation: its suggestions session and its routines sessions at once.
+    /// The generation: its suggestions session and its routines sessions at
+    /// once, beating its heartbeat, then its end.
     async fn run(self: Arc<Self>, run: Run, shutdown: CancellationToken) {
         let span = tracing::Span::current();
-        let suggestions = async {
-            if run.suggestions {
-                Some(self.suggestions_session(&run, &shutdown).await)
-            } else {
-                None
-            }
+        let lost = CancellationToken::new();
+        let stop = Stop {
+            shutdown: &shutdown,
+            lost: &lost,
         };
-        let routines = async {
-            if run.routines {
-                self.routine_sessions(&run, &shutdown).await
-            } else {
-                Vec::new()
-            }
+        let sessions = async {
+            let suggestions = async {
+                if run.suggestions {
+                    Some(self.suggestions_session(&run, stop).await)
+                } else {
+                    None
+                }
+            };
+            let routines = async {
+                if run.routines {
+                    self.routine_sessions(&run, stop).await
+                } else {
+                    Vec::new()
+                }
+            };
+            tokio::join!(suggestions, routines)
         };
-        let (suggestions, routines) = tokio::join!(suggestions, routines);
-        let retries = routines.iter().filter(|(_, retried)| *retried).count();
-        let ended: Vec<Ended> = suggestions
-            .into_iter()
-            .chain(routines.iter().map(|(ended, _)| *ended))
-            .collect();
-        let finished = ended
+        let (suggestions, routines) = tokio::select! {
+            ended = sessions => ended,
+            never = self.heartbeat(run.generation, &lost) => match never {},
+        };
+        let ended: Vec<&Ended> = suggestions
             .iter()
-            .filter(|ended| ended.ending == Ending::Finished)
-            .count();
-        let outcome = if shutdown.is_cancelled() && finished == 0 {
-            GenerationOutcome::Cancelled
-        } else if finished == ended.len() {
-            GenerationOutcome::Ready
-        } else if finished > 0 {
-            GenerationOutcome::Partial
-        } else {
-            GenerationOutcome::Failed
-        };
-        let suggestions_kept = suggestions.map_or(0, |ended| ended.kept);
-        let routines_kept: u32 = routines.iter().map(|(ended, _)| ended.kept).sum();
+            .chain(routines.iter().map(|group| &group.ended))
+            .collect();
+        let results: Vec<SessionResult> = ended
+            .iter()
+            .map(|ended| SessionResult {
+                finished: ended.ending == SessionEnding::Finished,
+                changed: ended.work.any(),
+            })
+            .collect();
+        let event = conclude(&results, shutdown.is_cancelled());
+        let outcome = event.entered();
+        // The status first: a stopping process may get no further.
+        match self.repo.end(run.generation, event, Utc::now()).await {
+            Ok(true) => {}
+            Ok(false) => tracing::warn!(
+                outcome = outcome.as_ref(),
+                "a generation had already ended when its sessions did"
+            ),
+            Err(error) => tracing::error!(?error, "could not record how a generation ended"),
+        }
+        // What a stopping process deferred, now that the end is stored.
+        let deferred = ended.iter().filter_map(|ended| {
+            ended
+                .deferred
+                .as_ref()
+                .map(|action| self.clean_up(action, ended.ending, 0))
+        });
+        futures::future::join_all(deferred).await;
+        let now = Utc::now();
+        if routines
+            .iter()
+            .any(|group| routines_ok(group.ended.ending, group.ended.work))
+            && let Err(error) = self
+                .repo
+                .routines_ok(&run.user, run.timezone.name(), now)
+                .await
+        {
+            tracing::warn!(?error, "could not record a week's routine suggestions");
+        }
         if run.routines {
             self.report_routines(&run, &routines, &shutdown).await;
         }
-        if outcome != GenerationOutcome::Cancelled
+        // A nightly run cut short is due again at once, for its next attempt.
+        if run.trigger == GenerationTrigger::Nightly
+            && event == GenerationEvent::ProcessStopped
             && let Err(error) = self
                 .repo
-                .finish(run.generation, finished > 0, Utc::now())
+                .record_nightly(&run.user, NightlyOutcome::CutShort, Some(now), now)
                 .await
         {
-            tracing::error!(error = ?error, "could not record how a generation ended");
+            tracing::warn!(?error, "could not make a cancelled nightly run due again");
         }
-        span.record("suggestion.generation.suggestions_kept", suggestions_kept);
-        span.record("suggestion.generation.routines_kept", routines_kept);
+        let feed_changes = suggestions.as_ref().map_or(0, |ended| ended.work.count());
+        let routines_suggested: u32 = routines.iter().map(|group| group.ended.work.count()).sum();
+        let retries = routines.iter().filter(|group| group.retried).count();
+        span.record("suggestion.generation.feed_changes", feed_changes);
+        span.record("suggestion.generation.routines_suggested", routines_suggested);
         span.record("suggestion.generation.retries", retries);
         span.record("suggestion.generation.outcome", outcome.as_ref());
-        if outcome == GenerationOutcome::Failed {
+        if event == GenerationEvent::NoneFinished {
             span.record("otel.status_code", "ERROR");
         }
         tracing::info!(
@@ -589,10 +837,30 @@ where
             trigger = run.trigger.as_ref(),
             outcome = outcome.as_ref(),
             sessions = ended.len(),
-            suggestions_kept,
-            routines_kept,
+            feed_changes,
+            routines_suggested,
             retries,
         );
+    }
+
+    /// Tell storage the generation is alive while it runs. If storage no
+    /// longer counts it running, its sessions stop.
+    async fn heartbeat(&self, generation: Uuid, lost: &CancellationToken) -> Infallible {
+        let mut beats =
+            tokio::time::interval_at(tokio::time::Instant::now() + HEARTBEAT, HEARTBEAT);
+        beats.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            beats.tick().await;
+            match self.repo.beat(generation, Utc::now()).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    tracing::warn!("a generation no longer counts as running; its sessions stop");
+                    lost.cancel();
+                    return std::future::pending().await;
+                }
+                Err(error) => tracing::warn!(?error, "could not beat a generation's heartbeat"),
+            }
+        }
     }
 
     /// Have routine suggestions log what the routines sessions did, as
@@ -600,15 +868,15 @@ where
     async fn report_routines(
         &self,
         run: &Run,
-        routines: &[(Ended, bool)],
+        routines: &[GroupEnded],
         shutdown: &CancellationToken,
     ) {
-        let kept: u32 = routines.iter().map(|(ended, _)| ended.kept).sum();
-        let outcome = if shutdown.is_cancelled() && kept == 0 {
+        let suggested: u32 = routines.iter().map(|group| group.ended.work.count()).sum();
+        let outcome = if shutdown.is_cancelled() && suggested == 0 {
             "cancelled"
-        } else if routines.iter().all(|(ended, _)| ended.kept > 0) {
+        } else if routines.iter().all(|group| group.ended.work.any()) {
             "ready"
-        } else if kept > 0 {
+        } else if suggested > 0 {
             "partial"
         } else {
             "failed"
@@ -621,8 +889,8 @@ where
                     trigger: run.trigger.into(),
                     outcome,
                     sessions: routines.len(),
-                    kept,
-                    retries: routines.iter().filter(|(_, retried)| *retried).count(),
+                    kept: suggested,
+                    retries: routines.iter().filter(|group| group.retried).count(),
                     started_at: run.started_at,
                     duration_ms: u64::try_from(duration.num_milliseconds()).unwrap_or(0),
                 },
@@ -631,62 +899,39 @@ where
     }
 
     /// The generation's one suggestions session.
-    async fn suggestions_session(&self, run: &Run, shutdown: &CancellationToken) -> Ended {
+    async fn suggestions_session(&self, run: &Run, stop: Stop<'_>) -> Ended {
         let brief = self.suggestions.brief(run.trigger, run.timezone);
-        let timeout = match run.trigger {
-            GenerationTrigger::Onboarding => ONBOARDING_SUGGESTIONS_TIMEOUT,
-            GenerationTrigger::Nightly => NIGHTLY_SUGGESTIONS_TIMEOUT,
-        };
-        let session = AgentSessionId::new();
-        let ending = self
-            .session(
-                run,
-                session,
-                SessionKind::Suggestions,
-                &[],
-                brief,
-                timeout,
-                1,
-                shutdown,
-            )
-            .await;
-        let kept = self
-            .suggestions
-            .kept(run.generation, session.as_uuid())
+        self.session(run, SessionKind::Suggestions, &[], brief, 1, stop)
             .await
-            .inspect_err(|error| {
-                tracing::warn!(?error, "could not count a suggestions session's changes")
-            })
-            .unwrap_or(0);
-        Ended { ending, kept }
     }
 
     /// At onboarding, one routines session per layout group, and one that
-    /// kept nothing is retried once; at night, one session for every
-    /// surface. Each session's end, and whether it was
-    /// retried.
-    async fn routine_sessions(
-        &self,
-        run: &Run,
-        shutdown: &CancellationToken,
-    ) -> Vec<(Ended, bool)> {
+    /// suggested nothing is retried once; otherwise one session for every
+    /// surface. Each group's end, and whether it was retried.
+    async fn routine_sessions(&self, run: &Run, stop: Stop<'_>) -> Vec<GroupEnded> {
         // Onboarding splits the surfaces so the first suggestions arrive
-        // fast; at night nobody waits, so one session covers them all at a
-        // third of the cost.
-        let nightly = SessionLayout::single();
+        // fast; otherwise nobody waits on routines, so one session covers
+        // them all at a third of the cost.
+        let single = SessionLayout::single();
         let layout = match run.trigger {
             GenerationTrigger::Onboarding => &self.layout,
-            GenerationTrigger::Nightly => &nightly,
+            GenerationTrigger::Nightly | GenerationTrigger::Manual => &single,
         };
         let groups = layout.sessions().iter().map(|surfaces| async move {
-            let first = self.routine_session(run, surfaces, 1, shutdown).await;
+            let first = self.routine_session(run, surfaces, 1, stop).await;
             let retry = run.trigger == GenerationTrigger::Onboarding
-                && first.kept == 0
-                && !shutdown.is_cancelled();
+                && !first.work.any()
+                && !stop.any();
             if retry {
-                (self.routine_session(run, surfaces, 2, shutdown).await, true)
+                GroupEnded {
+                    ended: self.routine_session(run, surfaces, 2, stop).await,
+                    retried: true,
+                }
             } else {
-                (first, false)
+                GroupEnded {
+                    ended: first,
+                    retried: false,
+                }
             }
         });
         futures::future::join_all(groups).await
@@ -697,7 +942,7 @@ where
         run: &Run,
         surfaces: &[Surface],
         attempt: u8,
-        shutdown: &CancellationToken,
+        stop: Stop<'_>,
     ) -> Ended {
         let brief = match self
             .routines
@@ -708,8 +953,9 @@ where
             Err(error) => {
                 tracing::warn!(error = ?error, "could not brief a routines session");
                 return Ended {
-                    ending: Ending::Failed,
-                    kept: 0,
+                    ending: SessionEnding::Failed,
+                    work: Work::RoutinesSuggested(0),
+                    deferred: None,
                 };
             }
         };
@@ -718,45 +964,23 @@ where
             .filter_map(|surface| serde_json::to_value(surface).ok())
             .filter_map(|value| value.as_str().map(str::to_owned))
             .collect();
-        let session = AgentSessionId::new();
-        let ending = self
-            .session(
-                run,
-                session,
-                SessionKind::Routines,
-                &names,
-                brief,
-                match run.trigger {
-                    GenerationTrigger::Onboarding => ONBOARDING_ROUTINES_TIMEOUT,
-                    GenerationTrigger::Nightly => NIGHTLY_ROUTINES_TIMEOUT,
-                },
-                attempt,
-                shutdown,
-            )
-            .await;
-        let kept = self
-            .routines
-            .kept(&run.user, session.as_uuid())
+        self.session(run, SessionKind::Routines, &names, brief, attempt, stop)
             .await
-            .inspect_err(|error| tracing::warn!(error = ?error, "could not count a routines session's suggestions"))
-            .unwrap_or(0);
-        Ended { ending, kept }
     }
 
-    /// Run one hidden session with `brief` until its turn ends or
-    /// `timeout`, then stop and delete it.
-    #[expect(clippy::too_many_arguments, reason = "one session, all of its parts")]
+    /// Run one hidden session with `brief` until its turn ends, its kind's
+    /// timeout, or a stop; store its ending, count what it did, then stop
+    /// and delete it.
     async fn session(
         &self,
         run: &Run,
-        session: AgentSessionId,
         kind: SessionKind,
         surfaces: &[String],
         brief: String,
-        timeout: Duration,
         attempt: u8,
-        shutdown: &CancellationToken,
-    ) -> Ending {
+        stop: Stop<'_>,
+    ) -> Ended {
+        let session = AgentSessionId::new();
         let span = tracing::info_span!(
             "suggestion.session",
             agent.session.id = %session,
@@ -767,9 +991,12 @@ where
             suggestion.session.tool_calls = tracing::field::Empty,
             suggestion.session.turns = tracing::field::Empty,
             suggestion.session.ended = tracing::field::Empty,
+            suggestion.session.reason = tracing::field::Empty,
+            suggestion.session.work = tracing::field::Empty,
+            suggestion.session.cleanup = tracing::field::Empty,
         );
-        let reads = std::sync::atomic::AtomicU32::new(0);
         async {
+            let span = tracing::Span::current();
             let action = RoutineSessionAction {
                 owner: run.user.clone(),
                 bot_id: self.agent.bot,
@@ -790,45 +1017,104 @@ where
                 .await
             {
                 tracing::error!(error = ?error, "could not open a generation session");
-                return Ending::Failed;
+                span.record("suggestion.session.ended", SessionEnding::Failed.as_ref());
+                span.record("suggestion.session.reason", "not_opened");
+                return Ended {
+                    ending: SessionEnding::Failed,
+                    work: nothing(kind),
+                    deferred: None,
+                };
             }
-            let ending = tokio::select! {
-                ending = tokio::time::timeout(timeout, self.turn(&action, brief, &reads)) => match ending {
-                    Ok(Ok(ending)) => ending,
-                    Ok(Err(RoutineSessionError::PromptDeliveryUnknown)) => Ending::DeliveryUnknown,
+            let reads = AtomicU32::new(0);
+            let (ending, reason) = tokio::select! {
+                biased;
+                () = stop.shutdown.cancelled() => (SessionEnding::Cancelled, None),
+                () = stop.lost.cancelled() => (SessionEnding::Interrupted, Some("heartbeat_lost")),
+                turn = tokio::time::timeout(timeout(run.trigger, kind), self.turn(&action, brief, &reads)) => match turn {
+                    Ok(Ok(ended)) => ended,
+                    Ok(Err(RoutineSessionError::PromptDeliveryUnknown)) => (SessionEnding::DeliveryUnknown, None),
                     Ok(Err(error)) => {
                         tracing::warn!(error = ?error, "a generation session failed");
-                        Ending::Failed
+                        (SessionEnding::Failed, Some("session_error"))
                     }
-                    Err(_) => Ending::TimedOut,
+                    Err(_) => (SessionEnding::TimedOut, None),
                 },
-                () = shutdown.cancelled() => Ending::Cancelled,
             };
             // Each field once: a span keeps a bounded number of attributes.
-            let span = tracing::Span::current();
             span.record("suggestion.session.ended", ending.as_ref());
-            span.record(
-                "suggestion.session.status_reads",
-                reads.load(std::sync::atomic::Ordering::Relaxed),
-            );
+            if let Some(reason) = reason {
+                span.record("suggestion.session.reason", reason);
+            }
+            span.record("suggestion.session.status_reads", reads.load(Ordering::Relaxed));
             if let Ok(activity) = self.sessions.activity(action.clone()).await {
                 span.record("suggestion.session.tool_calls", activity.tool_calls);
                 span.record("suggestion.session.turns", activity.turns);
             }
-            self.clean_up(&action, ending == Ending::Finished).await;
-            ending
+            // The ending first: from here its tools refuse it, so what it
+            // changed is final when counted.
+            match self.repo.end_session(session.as_uuid(), ending, Utc::now()).await {
+                Ok(true) => {}
+                Ok(false) => tracing::warn!("a generation session had already ended"),
+                Err(error) => {
+                    tracing::warn!(?error, "could not record how a generation session ended");
+                }
+            }
+            let work = self.work(run, kind, session.as_uuid()).await;
+            span.record("suggestion.session.work", work.count());
+            // A stopping process stores its generation's end before
+            // cleaning up; the sweep finishes what it doesn't get to.
+            if stop.shutdown.is_cancelled() {
+                return Ended {
+                    ending,
+                    work,
+                    deferred: Some(action),
+                };
+            }
+            let cleanup = self.clean_up(&action, ending, 0).await;
+            span.record("suggestion.session.cleanup", cleanup.as_ref());
+            Ended {
+                ending,
+                work,
+                deferred: None,
+            }
         }
         .instrument(span)
         .await
     }
 
-    /// Open the hidden session, prompt it once and wait for its turn to end.
+    /// What session `session` of kind `kind` did, by its kind's measure;
+    /// nothing when it can't be counted.
+    async fn work(&self, run: &Run, kind: SessionKind, session: Uuid) -> Work {
+        match kind {
+            SessionKind::Suggestions => Work::FeedChanges(
+                self.suggestions
+                    .feed_changes(run.generation, session)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(?error, "could not count a suggestions session's changes");
+                    })
+                    .unwrap_or(0),
+            ),
+            SessionKind::Routines => Work::RoutinesSuggested(
+                self.routines
+                    .suggested(&run.user, session)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(?error, "could not count a routines session's suggestions");
+                    })
+                    .unwrap_or(0),
+            ),
+        }
+    }
+
+    /// Open the hidden session, prompt it once and wait for its turn to end:
+    /// how, with the failure's name.
     async fn turn(
         &self,
         action: &RoutineSessionAction,
         brief: String,
-        reads: &std::sync::atomic::AtomicU32,
-    ) -> Result<Ending, RoutineSessionError> {
+        reads: &AtomicU32,
+    ) -> Result<(SessionEnding, Option<&'static str>), RoutineSessionError> {
         self.sessions
             .prepare(PrepareRoutineSession {
                 selection: ValidateRoutineSession {
@@ -863,12 +1149,15 @@ where
         loop {
             tokio::time::sleep(delay).await;
             delay = (delay * 2).min(MAX_POLL);
-            reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            reads.fetch_add(1, Ordering::Relaxed);
             match self.sessions.status(action.clone()).await {
-                Ok(RoutineActionStatus::Succeeded | RoutineActionStatus::Failed(_)) => {
-                    return Ok(Ending::Finished);
+                Ok(status) => {
+                    failures = 0;
+                    match poll(&status) {
+                        Poll::Ended(ending, reason) => return Ok((ending, reason)),
+                        Poll::Waiting => {}
+                    }
                 }
-                Ok(RoutineActionStatus::Pending(_)) => failures = 0,
                 Err(error) => {
                     failures += 1;
                     if failures >= MAX_STATUS_FAILURES {
@@ -879,29 +1168,70 @@ where
         }
     }
 
-    async fn stop(&self, action: &RoutineSessionAction) -> bool {
-        self.sessions
-            .cancel(action.clone())
+    /// Stop the session if its turn may still run, delete it, and store how
+    /// far that got: deleted (or confirmed missing), or a failed delete for
+    /// the sweep to retry, given up after
+    /// [`super::session::MAX_CLEANUP_ATTEMPTS`]. `attempts` deletes failed
+    /// before.
+    async fn clean_up(
+        &self,
+        action: &RoutineSessionAction,
+        ending: SessionEnding,
+        attempts: u8,
+    ) -> Cleanup {
+        // A failed stop doesn't hold up the delete, which stops it too.
+        if ending.turn_may_run()
+            && let Err(error) = self.sessions.cancel(action.clone()).await
+        {
+            tracing::warn!(error = ?error, "could not stop a generation session");
+        }
+        let event = match self.sessions.delete(action.clone()).await {
+            Ok(()) => CleanupEvent::Deleted,
+            Err(error) => match self.stored(action.session_id).await {
+                Some(false) => CleanupEvent::Deleted,
+                Some(true) | None => {
+                    tracing::warn!(error = ?error, attempts, "could not delete a generation session");
+                    CleanupEvent::delete_failed(attempts)
+                }
+            },
+        };
+        if event == CleanupEvent::GaveUp {
+            tracing::warn!(
+                event = "suggestion.session_abandoned",
+                agent.session.id = %action.session_id,
+                "gave up deleting a generation session"
+            );
+        }
+        match self
+            .repo
+            .advance_cleanup(action.session_id.as_uuid(), event, Utc::now())
             .await
-            .inspect_err(|error| {
-                tracing::warn!(error = ?error, "could not stop a generation session");
-            })
-            .is_ok()
+        {
+            Ok(true) => {}
+            Ok(false) => tracing::warn!("a generation session's cleanup had moved on"),
+            Err(error) => {
+                tracing::warn!(?error, "could not record a generation session's cleanup");
+            }
+        }
+        event.entered()
     }
 
-    /// Stop the session unless it was `stopped`, delete it and close its
-    /// row. Each part is tried whatever became of the one before; the sweep
-    /// catches what fails.
-    async fn clean_up(&self, action: &RoutineSessionAction, stopped: bool) {
-        if !stopped {
-            self.stop(action).await;
-        }
-        if let Err(error) = self.sessions.delete(action.clone()).await {
-            tracing::warn!(error = ?error, "could not delete a generation session");
-        }
-        if let Err(error) = self.repo.close_session(action.session_id.as_uuid()).await {
-            tracing::warn!(error = ?error, "could not close a generation session");
-        }
+    /// Whether `session` is stored; none when that can't be told.
+    async fn stored(&self, session: AgentSessionId) -> Option<bool> {
+        let stored = self.stored.as_ref()?;
+        stored
+            .exists(session)
+            .await
+            .inspect_err(|error| tracing::warn!(?error, "could not look a session up"))
+            .ok()
+    }
+}
+
+/// What a session of `kind` that never ran did.
+fn nothing(kind: SessionKind) -> Work {
+    match kind {
+        SessionKind::Suggestions => Work::FeedChanges(0),
+        SessionKind::Routines => Work::RoutinesSuggested(0),
     }
 }
 

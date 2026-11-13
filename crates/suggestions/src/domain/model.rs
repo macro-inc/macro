@@ -581,17 +581,32 @@ pub enum NewKind {
     },
 }
 
-/// What starts a generation: a person finishing onboarding, or their night.
-/// Shared by everything a generation's sessions write.
+/// What starts a generation: a person finishing onboarding, their night, or
+/// the person asking for fresh suggestions. Shared by everything a
+/// generation's sessions write.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr, strum::IntoStaticStr,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::EnumString,
+    strum::AsRefStr,
+    strum::IntoStaticStr,
+    strum::EnumIter,
+    serde::Serialize,
+    utoipa::ToSchema,
 )]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum GenerationTrigger {
     /// The person just signed up; their workspace is nearly empty.
     Onboarding,
     /// The nightly run in the person's night: full research, then manage.
     Nightly,
+    /// The person asked for fresh suggestions: the nightly run's research,
+    /// while they wait.
+    Manual,
 }
 
 /// What a generation session may call: suggestions or routine suggestions.

@@ -393,12 +393,12 @@ where
         let Some(session) = session else {
             return Ok(());
         };
-        let generation = self
+        let generating = self
             .generation_sessions
-            .open_session(session)
+            .undeleted(session)
             .await
             .map_err(SuggestionError::Internal)?;
-        if generation.is_some() {
+        if generating {
             return Err(SuggestionError::Generating);
         }
         Ok(())
@@ -591,7 +591,7 @@ where
         )
     }
 
-    async fn kept(&self, generation: Uuid, session: Uuid) -> Result<u32, SuggestionError> {
+    async fn feed_changes(&self, generation: Uuid, session: Uuid) -> Result<u32, SuggestionError> {
         self.repo
             .kept_by(generation, session)
             .await
@@ -1271,6 +1271,7 @@ where
     #[tracing::instrument(name = "suggestions.attach_draft", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         suggestion.id = %id,
         email.draft.id = %request.email_draft_id,
         suggestion.outcome = tracing::field::Empty,

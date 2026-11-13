@@ -259,15 +259,21 @@ pub trait RequestSessions: Send + Sync + 'static {
     async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>, rootcause::Report>;
 }
 
-/// The open hidden sessions of generations. Object-safe, so one adapter
-/// serves every crate whose tools a generation session calls.
+/// The hidden sessions of generations. Object-safe, so one adapter serves
+/// every crate whose tools a generation session calls.
 #[async_trait::async_trait]
 pub trait GenerationSessions: Send + Sync + 'static {
-    /// Session `session`, if it is a generation's and still open.
+    /// Session `session`, if it is a generation's and still open: only then
+    /// may it call its kind's tools.
     async fn open_session(
         &self,
         session: Uuid,
     ) -> Result<Option<GenerationSession>, rootcause::Report>;
+
+    /// Whether `session` is a generation's and not yet deleted: open, or
+    /// ended and being cleaned up. Code it still runs keeps a generation
+    /// session's scope, and the feed refuses it.
+    async fn undeleted(&self, session: Uuid) -> Result<bool, rootcause::Report>;
 }
 
 /// Who gets a nightly generation. Object-safe, for the same reason.
@@ -354,9 +360,10 @@ pub trait SuggestionApi: Send + Sync + 'static {
     /// for a person in `timezone`.
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String;
 
-    /// How many changes suggestions session `session` of generation `generation`
-    /// made.
-    fn kept(
+    /// How many feed changes suggestions session `session` of generation
+    /// `generation` made: suggestions it added, brought back, rewrote, retired
+    /// or gave a draft. What the session did, not what is open now.
+    fn feed_changes(
         &self,
         generation: Uuid,
         session: Uuid,

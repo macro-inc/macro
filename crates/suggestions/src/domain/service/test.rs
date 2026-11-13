@@ -90,7 +90,7 @@ impl GenerationSessions for RowSessions {
     ) -> Result<Option<GenerationSession>, rootcause::Report> {
         let row = sqlx::query!(
             r#"SELECT session_id, generation_id, user_id, kind FROM suggestion_generation_session
-               WHERE session_id = $1 AND closed_at IS NULL"#,
+               WHERE session_id = $1 AND cleanup = 'open'"#,
             session,
         )
         .fetch_optional(&self.0)
@@ -104,6 +104,18 @@ impl GenerationSessions for RowSessions {
             surfaces: Vec::new(),
             trace_id: None,
         }))
+    }
+
+    async fn undeleted(&self, session: Uuid) -> Result<bool, rootcause::Report> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1 FROM suggestion_generation_session
+                   WHERE session_id = $1 AND cleanup IN ('open', 'stopping')) AS "undeleted!""#,
+            session,
+        )
+        .fetch_one(&self.0)
+        .await
+        .unwrap())
     }
 }
 
@@ -321,7 +333,9 @@ impl Harness {
 
     async fn close(&self, session: Uuid) {
         sqlx::query!(
-            "UPDATE suggestion_generation_session SET closed_at = now() WHERE session_id = $1",
+            r#"UPDATE suggestion_generation_session
+               SET cleanup = 'deleted', ending = 'finished', ended_at = now(), cleanup_at = now()
+               WHERE session_id = $1"#,
             session,
         )
         .execute(&self.pool)
