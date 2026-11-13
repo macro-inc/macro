@@ -175,9 +175,11 @@ export function RoutineRowMenu(props: ParentProps<RoutineRowMenuProps>) {
               as="div"
               class="group/routine-menu"
               disabled={isMobile()}
-              ref={(element: HTMLElement) =>
-                touchHandler(element, () => ({ onLongPress: openDrawer }))
-              }
+              ref={(element: HTMLElement) => {
+                // A tablet gets the context menu's own long press.
+                if (isMobile())
+                  touchHandler(element, () => ({ onLongPress: openDrawer }));
+              }}
               onContextMenu={(event: MouseEvent) => {
                 // Android reports a long press as a context menu too.
                 if (!isMobile()) return;
