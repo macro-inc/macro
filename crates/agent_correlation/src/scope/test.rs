@@ -100,6 +100,8 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("POST", "/agent-harness/agent-sessions/warm"),
         ("POST", "/agent-sessions/01a1/app-connections"),
         ("POST", "/cognition/chats/01a1/tool/call"),
+        ("POST", "/cognition/chats/01a1/tool/update"),
+        ("POST", "/cognition/chats/01a1/tool/response/update"),
         // Agents and bots act later, with the person's access.
         ("POST", "/agents"),
         ("PUT", "/agents/01a1"),
@@ -109,6 +111,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("PATCH", "/bots/01a1"),
         ("DELETE", "/bots/01a1"),
         ("DELETE", "/bots/01a1/tokens/02b2"),
+        // Credentials, also refused to any credential that signs a scope.
+        ("POST", "/bots/01a1/tokens"),
+        ("POST", "/harness-pairings/ABCD-1234/approve"),
         // The computers agents run on.
         ("PATCH", "/harnesses/01a1"),
         ("DELETE", "/harnesses/me"),

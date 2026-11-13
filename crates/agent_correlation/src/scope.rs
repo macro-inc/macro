@@ -23,10 +23,10 @@ pub enum SessionScope {
 /// act later), connected apps and their tools, and webhooks. Also the
 /// requests that start work with the person's full access: a new or warmed
 /// agent session, a session's control, queued prompts and app connections
-/// (which resume it), its tool approvals and review decisions, running a
-/// chat's tool call (a chat message's tools are refused by its route),
-/// agents, bots and the computers they run on, which act later. A run that
-/// sends nothing makes none of them.
+/// (which resume it), its tool approvals and review decisions, running or
+/// rewriting a chat's tool call (a chat message's tools are refused by its
+/// route), agents, bots and the computers they run on, which act later, and
+/// their credentials. A run that sends nothing makes none of them.
 const SENDS: &[(&str, &str)] = &[
     ("POST", "/email/messages"),
     ("POST", "/email/send-confirmed"),
@@ -79,6 +79,8 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/agent-sessions/{id}/reviews/{id}"),
     ("PATCH", "/agent-sessions/{id}/permissions"),
     ("POST", "/chats/{id}/tool/call"),
+    ("POST", "/chats/{id}/tool/update"),
+    ("POST", "/chats/{id}/tool/response/update"),
     ("POST", "/agents"),
     ("PUT", "/agents/{id}"),
     ("PATCH", "/agents/{id}"),
@@ -87,7 +89,9 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/bots"),
     ("PATCH", "/bots/{id}"),
     ("DELETE", "/bots/{id}"),
+    ("POST", "/bots/{id}/tokens"),
     ("DELETE", "/bots/{id}/tokens/{id}"),
+    ("POST", "/harness-pairings/{id}/approve"),
     ("PATCH", "/harnesses/{id}"),
     ("DELETE", "/harnesses/{id}"),
     ("PUT", "/harnesses/{id}/team-access"),

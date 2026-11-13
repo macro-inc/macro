@@ -212,7 +212,6 @@ fn the_generation_scope_matches_the_sdk_catalog() {
 fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
     // Send-looking writes that reach nobody else.
     let reviewed = [
-        "agent-harness.addConnectedMcpServer",
         "auth.generateEmailLink",
         "auth.deleteTeamInviteLink",
         "auth.deleteTeamInviteHandler",
@@ -318,13 +317,13 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.discoverAgentCapabilitiesHandler",
         "agent-harness.discoverConnectedApps",
         "agent-harness.loadAgentModelsHandler",
-        // Presenting a review asks the person; deciding one is refused.
+        // Changes to a session the run can edit, like edits to a shared
+        // document: presenting a review or view, opening it in the person's
+        // app, and its name, links and settings. None of them runs a
+        // session, and deciding a review is refused.
         "agent-harness.createSessionReview",
-        // Shown only to the person.
         "agent-harness.openInApp",
         "agent-harness.presentSessionView",
-        // The person's own sessions' names, links and settings; none of
-        // them runs a session.
         "agent-harness.deleteAgentSession",
         "agent-harness.linkAgentSessionPullRequest",
         "agent-harness.linkAgentSessionTask",
@@ -341,16 +340,11 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.putAgentAutoArchivePreferences",
         "agent-harness.putAgentCodingPreferences",
         "agent-harness.putAgentSandboxSize",
-        // Edits to the person's own chat; running a tool call is refused.
+        // Rejecting a pending tool call runs nothing; running or rewriting
+        // one is refused.
         "cognition.rejectToolCall",
-        "cognition.updateToolCall",
-        "cognition.updateToolResponse",
         // Withdrawing the person's own request, like a channel's.
         "storage.accessRequestsCancel",
-        // They issue credentials, which `AccountHolderOrInternal` refuses a
-        // scoped one.
-        "storage.approveHarnessPairing",
-        "storage.createBotToken",
         // Unauthenticated: a credential adds nothing.
         "storage.claimHarnessPairing",
         "storage.createHarnessPairing",
@@ -403,8 +397,21 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         .any(|word| text.contains(word))
     };
     let scope = SessionScope::NoSend;
+    let operations = code_execution::domain::operations();
+    // A reviewed entry names an operation the scope still allows, so a
+    // renamed or newly refused one doesn't linger.
+    let stale: Vec<&str> = reviewed
+        .iter()
+        .copied()
+        .filter(|key| {
+            operations.get(*key).is_none_or(|operation| {
+                !scope.allows(&operation.method, &concrete(&operation.path))
+            })
+        })
+        .collect();
+    assert!(stale.is_empty(), "stale reviewed entries: {stale:#?}");
     let mut unclassified = Vec::new();
-    for (key, operation) in code_execution::domain::operations() {
+    for (key, operation) in operations {
         if !operation.write || !looks_like_a_send(key, &operation.path) {
             continue;
         }
