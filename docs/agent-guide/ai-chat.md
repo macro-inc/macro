@@ -1873,7 +1873,8 @@ no caret. Tool arguments and results never fall back to raw JSON.
 
 Consecutive tool calls, programs and thoughts between two pieces of the agent's
 text form one group, with the thoughts before, between and after its calls; a
-run of thoughts with no call stays as separate rows. Subagents, tools requiring user input, presented views and tools that
+run of thoughts with no call stays as separate rows. A blank line the agent
+emits between calls is not text and does not split the group. Subagents, tools requiring user input, presented views and tools that
 render their own answer stay outside groups so they stay visible during other
 tool bursts. A group never opens on its own and has no scrolling window: opened,
 it lists every call in full, and that stays open as the group settles.
