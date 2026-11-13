@@ -175,8 +175,8 @@ a local stack, without Google accounts.
 - Not emulated, because our code does not depend on it: invitation mail for
   `sendUpdates`, ACLs and calendars shared between users (each user's list
   holds its own calendars), free/busy, `updatedMin` and `q` on `events.list`,
-  `singleEvents` with a sync token, the `_R` ids of a split series, and the
-  seconds Google takes to carry a change to a guest's copy (it is immediate).
+  `singleEvents` with a sync token, and the `_R` ids of a split series.
+  A change reaches a guest's copy at once unless copies are held back.
 - Three answers are the emulator's reading, not checked against Google:
   patching a deleted event answers 400, `events.instances` of an event that
   does not repeat answers the event itself, and a guest's forbidden change

@@ -476,6 +476,35 @@ impl Stack {
             .unwrap_or_default()
     }
 
+    /// How many calendar push notifications Google has finished delivering
+    /// for the mailbox `address`.
+    pub fn google_calendar_pushes(&self, address: &str) -> usize {
+        self.gmail
+            .channel_deliveries()
+            .iter()
+            .filter(|delivery| delivery.mailbox.eq_ignore_ascii_case(address))
+            .count()
+    }
+
+    /// Waits until Google has delivered a calendar push for the mailbox
+    /// `address` beyond the first `seen`. A change made through
+    /// `calendar_service` comes back as a push that starts a sync round:
+    /// wait for it, then for the round
+    /// ([`Calendar::wait_until_synced`](crate::Calendar::wait_until_synced)),
+    /// before changing the calendar at Google.
+    pub async fn wait_for_google_calendar_push(
+        &self,
+        address: &str,
+        seen: usize,
+    ) -> Result<(), Report> {
+        eventually(
+            &format!("Google to push a calendar change of {address}"),
+            crate::wait::DEFAULT_TIMEOUT,
+            async || Ok((self.google_calendar_pushes(address) > seen).then_some(())),
+        )
+        .await
+    }
+
     /// What the calendar read routes told the notification service and the
     /// connection gateway, oldest first. What `calendar_service` itself told
     /// the gateway is in [`Stack::service_requests`].
@@ -709,8 +738,6 @@ async fn start_calendar(
     })
 }
 
-/// Waits until a service answers its health check, failing at once when the
-/// process exits.
 /// What [`Stack::boot`] started.
 struct Booted {
     aws: Aws,

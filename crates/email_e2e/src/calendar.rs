@@ -217,18 +217,38 @@ impl Calendar {
     /// Makes every Outlook calendar of the inbox `address` due for its next
     /// poll now. Outlook has no calendar push: the service polls each
     /// calendar every two minutes, and a scenario stands in for that clock.
+    ///
+    /// A poll that is under way when this is called may have read the
+    /// calendar before the scenario changed it, and sets its own next run
+    /// two minutes ahead when it ends. So this waits until no calendar of
+    /// the inbox is being polled or due (a poll takes and gives back its
+    /// lease once per step, staying due until its last), and makes them all
+    /// due then.
     pub async fn poll_outlook_now(&self, address: &str) -> Result<(), Report> {
-        sqlx::query(
-            "UPDATE calendar_outlook_work work SET next_run_at = now() \
-             FROM calendar_accounts account \
-             WHERE account.id = work.account_id \
-               AND lower(account.provider_account_id) = lower($1)",
+        eventually(
+            &format!("the Outlook calendars of {address} to be free for a poll"),
+            DEFAULT_TIMEOUT,
+            async || {
+                let made_due = sqlx::query(
+                    "UPDATE calendar_outlook_work work SET next_run_at = now() \
+                     FROM calendar_accounts account \
+                     WHERE account.id = work.account_id \
+                       AND lower(account.provider_account_id) = lower($1) \
+                       AND NOT EXISTS ( \
+                           SELECT 1 FROM calendar_outlook_work busy \
+                           LEFT JOIN calendars calendar ON calendar.id = busy.calendar_id \
+                           WHERE busy.account_id = account.id \
+                             AND (busy.calendar_id IS NULL OR NOT calendar.is_deleted) \
+                             AND (busy.next_run_at <= now() OR busy.lease_until >= now()))",
+                )
+                .bind(address)
+                .execute(&self.db)
+                .await
+                .context("could not make the Outlook calendars due")?;
+                Ok((made_due.rows_affected() > 0).then_some(()))
+            },
         )
-        .bind(address)
-        .execute(&self.db)
         .await
-        .context("could not make the Outlook calendars due")?;
-        Ok(())
     }
 }
 

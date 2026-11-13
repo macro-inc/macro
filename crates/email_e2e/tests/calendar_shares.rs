@@ -603,11 +603,15 @@ async fn a_copy_that_becomes_an_invitation_can_be_answered() -> Result<(), Repor
     let ada = stack.user("ada").await?;
     let ben = stack.user("ben").await?;
     let (_, bens, event_id) = shared_offsite(&stack, &ada, &ben).await?;
+    let pushed = stack.google_calendar_pushes(ben.email());
     bens.post(&format!("/events/{event_id}/copy"), &json!({}))
         .await?
         .ok()?;
     let copy = bens.wait_for_event("Offsite").await?;
     assert_eq!(copy["event"]["isSnapshot"], true, "{copy}");
+    stack
+        .wait_for_google_calendar_push(ben.email(), pushed)
+        .await?;
     bens.wait_until_synced(ben.email()).await?;
 
     // At Google the invitation folds into the copy: the same event now

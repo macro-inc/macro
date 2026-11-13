@@ -458,6 +458,7 @@ async fn the_calendar_service_answers_behind_the_gateway_prefix() -> Result<(), 
     assert_eq!(calendars[0]["isPrimary"], true, "{listed}");
 
     let start = events::hour_in_days(1);
+    let pushed = stack.google_calendar_pushes(ada.email());
     let created = calendar
         .post(
             "/events",
@@ -473,6 +474,9 @@ async fn the_calendar_service_answers_behind_the_gateway_prefix() -> Result<(), 
         )
         .await?;
     assert!((200..300).contains(&created.status), "{}", created.text);
+    stack
+        .wait_for_google_calendar_push(ada.email(), pushed)
+        .await?;
     calendar.wait_until_synced(ada.email()).await?;
     let at_google = stack.gmail().events(ada.email(), PRIMARY)?;
     let planning = at_google

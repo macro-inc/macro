@@ -229,6 +229,9 @@ async fn clients_reload_team_out_of_office_only_when_it_changed() -> Result<(), 
     let calendar = grace.calendar()?;
     calendar.wait_for_event("Standup").await?;
     calendar.wait_until_synced(grace.email()).await?;
+    // The import tells open clients after it is marked finished: let that
+    // pass before counting what the changes below send.
+    refreshes_after(&stack, 0, 1).await?;
 
     let flags = |new: &[Refresh]| -> Vec<Value> {
         new.iter()

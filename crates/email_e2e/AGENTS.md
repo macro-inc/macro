@@ -16,7 +16,7 @@ scenarios.
   database cloned from a migrated template, a leased Redis database, the
   production queues with their dead-letter queues, an in-memory S3 and CDN
   (`src/aws.rs`), stand-ins for the other Macro services that record what
-  they were asked (`src/macro_services.rs`), and the two service processes.
+  they were asked (`src/macro_services.rs`), and the service processes.
   Scenarios run in parallel and share nothing but the four servers (Postgres, Redis, SQS, Kafka).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
   started with an environment the harness builds (`src/stack/environment.rs`)
@@ -126,7 +126,7 @@ calendar.patch(&format!("/events/{}", item["event"]["id"].as_str().unwrap()), &c
 
 ## Scope
 
-- Owns: the harness and the email scenarios.
+- Owns: the harness and the email and calendar scenarios.
 - Not here: the fakes of Google and Microsoft → `crates/gmail_emulator`,
   `crates/outlook_emulator`. Tests of one crate's logic → that crate.
 - Not started yet: search, the real notification,
