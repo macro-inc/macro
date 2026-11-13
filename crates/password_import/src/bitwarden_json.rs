@@ -6,9 +6,10 @@
 //! `passwordHistory` and `attachments`. Folder names nest with `/`.
 //! `encrypted: true` fails with `EncryptedBitwarden`.
 use std::collections::HashMap;
+use std::fmt;
 
 use serde::Deserialize;
-use serde::de::IgnoredAny;
+use serde::de::{Deserializer, Error, IgnoredAny, SeqAccess, Visitor};
 use serde_json::value::RawValue;
 
 use crate::bounded::{Bounded, Count};
@@ -102,7 +103,7 @@ impl From<u8> for FieldType {
 struct Item {
     id: Option<String>,
     organization_id: Option<String>,
-    collection_ids: Option<Vec<IgnoredAny>>,
+    collection_ids: Option<CollectionIds>,
     folder_id: Option<String>,
     #[serde(rename = "type")]
     item_type: Option<u8>,
@@ -122,6 +123,42 @@ struct Item {
     attachments: Option<Vec<IgnoredAny>>,
     deleted_date: Option<IgnoredAny>,
     archived_date: Option<IgnoredAny>,
+}
+
+/// Whether `collectionIds` names any collection. Bitwarden's import docs
+/// show it as an array and as one id; entries are read without being kept.
+struct CollectionIds {
+    any: bool,
+}
+
+impl<'de> Deserialize<'de> for CollectionIds {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(CollectionIdsVisitor)
+    }
+}
+
+struct CollectionIdsVisitor;
+
+impl<'de> Visitor<'de> for CollectionIdsVisitor {
+    type Value = CollectionIds;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a list of collection ids or one id")
+    }
+
+    fn visit_str<E: Error>(self, id: &str) -> Result<Self::Value, E> {
+        Ok(CollectionIds {
+            any: !id.is_empty(),
+        })
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let mut any = false;
+        while seq.next_element::<IgnoredAny>()?.is_some() {
+            any = true;
+        }
+        Ok(CollectionIds { any })
+    }
 }
 
 #[derive(Deserialize)]
@@ -296,7 +333,7 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
     let in_collection = item
         .collection_ids
         .as_ref()
-        .is_some_and(|collections| !collections.is_empty());
+        .is_some_and(|collections| collections.any);
     if item.organization_id.is_some() || in_collection {
         return parts.skip(Some(key), name, SkipReason::SharedCollection);
     }

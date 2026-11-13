@@ -223,3 +223,23 @@ fn a_bitwarden_csv_row_with_an_archived_date_is_skipped_as_archived() {
         .collect();
     assert_eq!(skipped, vec![password_import::SkipReason::Archived]);
 }
+
+#[test]
+fn a_bitwarden_item_with_one_collection_id_string_is_shared() {
+    let json = r#"{"encrypted":false,"items":[
+        {"id":"item1","type":2,"name":"Shared","collectionIds":"collection1"}]}"#;
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    let skipped: Vec<_> = export
+        .skipped
+        .iter()
+        .map(|skipped| skipped.reason)
+        .collect();
+    assert_eq!(skipped, vec![password_import::SkipReason::SharedCollection]);
+}
