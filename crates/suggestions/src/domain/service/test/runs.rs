@@ -1062,6 +1062,39 @@ async fn a_restored_suggestion_keeps_its_cancelled_run(pool: PgPool) {
     assert_eq!(runs.started().len(), 2);
 }
 
+/// A run its dismissal cancelled may still finish; restored, its suggestion
+/// stays open, shows no result and runs again.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_restored_suggestion_whose_old_run_finishes_stays_open(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    let run = runs.last();
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    h.service
+        .restore(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    h.news(
+        run.session,
+        SessionNews::TurnEnded {
+            action: run.action,
+            finished: true,
+        },
+    )
+    .await;
+    assert_eq!(h.run_state(run.session).await, RunStateName::Finished);
+    let restored = h.in_feed(suggestion.id).await.unwrap();
+    assert_eq!(restored.state, SuggestionState::Proposed);
+    assert_eq!(restored.status, SuggestionStatus::Open);
+    assert_eq!(restored.result, None);
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    assert_eq!(runs.started().len(), 2);
+}
+
 /// A settled run's card opens what it made, or its session when it failed.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_settled_run_gives_its_suggestion_a_result(pool: PgPool) {

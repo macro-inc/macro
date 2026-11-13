@@ -58,8 +58,10 @@ pub struct Suggestion {
 }
 
 /// What to open to see how acting on a suggestion in `state`, whose latest run
-/// is `run` and which produced `produced`, went: never before a run settles,
-/// and nothing for a cancelled run.
+/// is `run` and which produced `produced`, went: only for a done suggestion
+/// (what its finished run made, else the session; what was made without a
+/// run) or an accepted one whose run failed (the session). An open suggestion
+/// shows none, even one restored while its old run settled.
 pub fn result_of(
     state: SuggestionState,
     run: Option<&SuggestionRun>,
@@ -76,19 +78,15 @@ pub fn result_of(
         entity_id: run.session_id.to_string(),
         part_id: None,
     };
-    match run {
-        Some(run) => match run.state {
-            RunStateName::Finished => made().or_else(|| Some(session(run))),
-            RunStateName::Failed => Some(session(run)),
-            RunStateName::Starting
-            | RunStateName::Running
-            | RunStateName::Waiting
-            | RunStateName::Stopping
-            | RunStateName::Cancelling
-            | RunStateName::Cancelled => None,
-        },
-        None if state == SuggestionState::Done => made(),
-        None => None,
+    match (state, run) {
+        (SuggestionState::Done, Some(run)) if run.state == RunStateName::Finished => {
+            made().or_else(|| Some(session(run)))
+        }
+        (SuggestionState::Done, None) => made(),
+        (SuggestionState::Accepted, Some(run)) if run.state == RunStateName::Failed => {
+            Some(session(run))
+        }
+        _ => None,
     }
 }
 

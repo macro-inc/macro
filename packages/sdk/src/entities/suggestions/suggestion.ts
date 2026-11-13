@@ -203,10 +203,11 @@ export class Suggestion {
   }
 
   /**
-   * What came of it, as a handle, once its run settled: what a finished run
-   * made (else its agent session), or a failed run's session. Without a run,
-   * what acting on it made, such as a saved routine. Undefined while it runs,
-   * for a cancelled run, and for a kind of item the SDK has no handle for.
+   * What came of it, as a handle, while its `status` is `done` or `failed`:
+   * what its finished run made (else its agent session), its failed run's
+   * session, or without a run what acting on it made, such as a saved
+   * routine. Undefined otherwise, and for a kind of item the SDK has no
+   * handle for.
    */
   get result(): EntityReference | undefined {
     const result = this.record.result;

@@ -79,9 +79,12 @@ fn a_suggestions_result_is_what_its_settled_run_made() {
     for state in SuggestionState::iter() {
         for name in RunStateName::iter() {
             let latest = run(name);
-            let expected = match name {
-                RunStateName::Finished => Some(document.clone()),
-                RunStateName::Failed => Some(session_of(&latest)),
+            // Only a done suggestion's finished run, or an accepted one's
+            // failed run, has a result: a suggestion restored while its
+            // cancelled run settled shows none.
+            let expected = match (state, name) {
+                (SuggestionState::Done, RunStateName::Finished) => Some(document.clone()),
+                (SuggestionState::Accepted, RunStateName::Failed) => Some(session_of(&latest)),
                 _ => None,
             };
             assert_eq!(

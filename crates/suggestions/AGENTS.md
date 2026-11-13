@@ -25,9 +25,10 @@ scheduler's spec.
   `running`, `failed`, `done`) counts every suggestion shown either way. Each
   carries its server-computed `status` (`open`, `running` while its latest run
   is unsettled and not being cancelled, `failed`, `done`; `closed` only in
-  `review`, `SuggestionStatus::of`), its latest `run` as stored, and, once
-  that run settled, its `result` (`result_of`: what the run made over its
-  session, a failed run's session, or without a run what acting on it made).
+  `review`, `SuggestionStatus::of`), its latest `run` as stored, and, while
+  it is `done` or `failed`, its `result` (`result_of`: what its finished run
+  made over its session, its failed run's session, or without a run what
+  acting on it made; none while open, even after an old run settled).
   Reading it never calls a session or reads an item. A suggestion one of whose
   items can't be checked is left out and logged, never failing the feed. Each
   process keeps a person's flag for 60 s and counts them in at most once an
