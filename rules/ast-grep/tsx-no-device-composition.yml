@@ -22,6 +22,7 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-code/component/Block.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-image/component/Block.tsx
@@ -50,7 +51,6 @@ ignores:
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
   - apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
   - apps/web/src/features/block-call/views/CallDetailView.tsx
-  - apps/web/src/features/block-canvas/component/TopBar.tsx
   - apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
   - apps/web/src/features/block-channel/component/Top.tsx
   - apps/web/src/features/block-chat/component/TopBar.tsx
