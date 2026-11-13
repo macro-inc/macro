@@ -7,6 +7,7 @@ import { QueryClientProvider, QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { createComponent, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RETRY_DELAY_MS } from './compose-routine';
 import {
   discardDraftJob,
   reportDraftJob,
@@ -250,6 +251,8 @@ describe('startDraftJob', () => {
       .mockResolvedValueOnce(err([DROPPED]))
       .mockResolvedValueOnce(ok(drafting('theirs')));
     const started = startDraftJob(REQUEST, context);
+    // The new login comes during the pause before the retry.
+    await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS / 2);
     await resetQueryAccountSession();
     try {
       await vi.runAllTimersAsync();
