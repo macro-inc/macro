@@ -1,0 +1,380 @@
+crates/scheduled_action/src/domain/suggestions.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 449
+crates/suggestions/src/domain/prompt.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 85-89
+crates/scheduled_action/src/domain/suggestions/prompt.md
+  s_3c6362fd17dcc4::t_617567d93d7504 18
+crates/scheduled_action/src/inbound/suggestion_router/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 66
+crates/suggestions/src/outbound/reply_waits.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-127
+crates/suggestions/src/domain/run/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-568
+crates/suggestions/src/outbound.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1,5
+docs/agent-guide/email.md
+  s_3c6362fd17dcc4::t_617567d93d7504 781-782
+crates/suggestion_generation/src/domain/service/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 3,6-7,9,22-37,40,43-44,46-49,51-80,84-94,96,98-100,103-118,126,150-158,167,169-181,184-188,203-208,213-219,227,240-241,245,253,263,267,276,280-288,296,298-306,316,325,328-334,341-342,350,359,369,379,389-411,415-435,437-442,445-447,449-458,461-483,485-571,574-580,585,587,589,591-604,606-613,615-616,618-628,631,634-688,691,697-699,702,704-719,723-805,807-824,828,830-832,834-843,869-871,874-892,894,896-901,904-906,908-915,919-931,935-948,952-953,955,958-961,963-975,979-981,984-985,987,989-990,994-1002,1009-1015,1020-1021,1023,1027-1030,1032,1045-1054,1056-1061,1065-1085,1088-1112,1114-1115,1130-1138,1140,1149-1151,1155,1171-1176,1178-1179,1181,1184-1223,1225-1226,1229,1231-1241,1244-1253,1256-1257,1259-1264,1268-1272,1277-1336,1338,1340-1343,1345-1347,1350-1415,1417-1485,1488-1520,1523-1544,1546-1547,1549-1550,1553,1556-1571,1574-1587,1589-1640,1643-1697,1699-1732,1734-1848,1852-1918,1935-1937,1939,1945,1951
+crates/suggestions/src/outbound/email_drafts/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 82-88,96-160
+  s_3c6362fd17dcc4::t_0e67f840c70d9c 161
+crates/suggestion_generation/src/domain/ports.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1,5,12-15,18-20,25-27,31-46,48,50-52,56-65,82-90,92-115,118,122-124,127,129-132,135-147,184,190-195,205-212
+  s_3c6362fd17dcc4::t_02fabcd6c769ed 213
+services/agent_harness_service/AGENTS.md
+  s_3c6362fd17dcc4::t_617567d93d7504 202-210
+crates/suggestions/src/domain/service/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 11-14,17-18,22,26-28,32,35-39,41,44-46,71,75,82-110,136,151-162,208,230,243-244,247,300-308,319,380-382,455,459,466,531,535-538,565,608,691,846,869,881,888-1030,1049,1053-1055,1087,1090,1108,1112-1115,1134,1159,1182,1198-1202,1204-1205,1207-1213,1216,1268,1313-1319,1322-1330,1333-1336,1340-1345,1347,1349-1358,1362-1374,1376,1378-1383,1385,1387-1389,1391,1395-1396,1398-1403,1406,1455-1460,1465,1518-1523,1682,1694,1702-1703,1705-1706,1708-1748,1753,1755-1760,1766-1795,1797-1799,1801-1813,1816-1817,1819-1820,1823,1827-1861,1863,1866-1901,1903-1905,1910-1925,1927-1969,1972-1980,1982-1996
+packages/sdk/src/coverage/skipped.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 303-305
+crates/suggestions/src/domain.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 5,10
+crates/macro_db_client/migrations/20261113060906_suggestion_feed_view.up.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-8
+crates/suggestion_generation/src/inbound.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1
+crates/suggestion_generation/AGENTS.md
+  s_3c6362fd17dcc4::t_617567d93d7504 6-9,13-21,24-25,28-29,35-62,65-71,81-105,109,125-126,130-138,140-141
+crates/suggestion_generation/src/outbound/pg_generation_repo.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 4-9,15,18,22-26,28,41,58-109,115,119-132,136,138-144,146-148,150-152,155-156,158-164,166,169,172,175,177-196,199,202-228,230-238,253-254,262,269-308,310-313,316-346,348-358,361,364,368-376,378,385-387,391-393,399-457,465-466,474,522,527,529,532-533,535,546,552-597,606,609-611,613,634-659,664-669,671,678
+crates/suggestions/src/domain/lifecycle.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-107
+crates/suggestions/src/inbound/run_consumer/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-322
+crates/suggestions/src/outbound/pg_suggestion_repo/test/lifecycle.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-480
+crates/email_utils/AGENTS.md
+  s_3c6362fd17dcc4::t_617567d93d7504 17-18
+crates/macro_db_client/migrations/20261113060906_suggestion_feed_view.down.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-3
+crates/suggestions/src/domain/run.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-485
+crates/suggestions/src/outbound/pg_suggestion_repo/test/runs.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-372
+crates/macro_db_client/migrations/20261113062043_suggestion_reply_facts.down.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-6
+crates/suggestions/src/outbound/reply_waits/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-211
+crates/suggestions/src/domain/service/test/runs.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-1349
+crates/suggestion_generation/src/domain/cadence/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-40
+crates/suggestions/src/inbound/router.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 74-77,98-101,129-131,157-158,172-173,194,203-207,217,239-244,249-280,293,356-390
+crates/suggestion_generation/src/domain/service.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 4-6,14-18,20,22,30-31,33,45,50-53,55,58-60,67-68,72-73,75-85,97,121-123,131,139-152,155,157-206,237,263-285,304-364,367,369,373,378-387,393-413,417,419,429-430,433-435,437-450,452-469,485-493,503,507-508,511,514,519-520,522-523,529-530,537-539,541-546,548-565,570-576,580-581,585,588-618,620-624,628-632,635-673,677,679,683-688,699,742-743,746-749,751-770,772-774,776,778-812,816-818,821,824,826-833,836,844-845,850-869,875,878-879,881,883,896-897,906,908,913-915,917-919,922,925-927,929-932,934-937,948,959-961,970,974-976,984-986,997-999,1002,1023-1029,1031-1038,1041,1043,1048-1051,1056-1082,1088-1114,1119-1120,1155,1157-1162,1174-1189,1191-1206,1208-1217,1219-1237
+crates/scheduled_action/AGENTS.md
+  s_3c6362fd17dcc4::t_617567d93d7504 127,131-133
+crates/suggestions/src/domain/service/recent/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-46
+crates/suggestion_generation/src/domain.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 4-5,8,11
+crates/suggestion_generation/src/domain/nightly/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-184
+docs/runbooks/routine-suggestions.md
+  s_3c6362fd17dcc4::t_617567d93d7504 7-9,11-13,43-46
+crates/suggestions/Cargo.toml
+  s_3c6362fd17dcc4::t_617567d93d7504 9,17
+crates/macro_db_client/migrations/20261113043329_harden_suggestion_generation.up.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-69
+crates/suggestions/src/domain/ports.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 13-16,19,43-44,59-72,105-110,115,118-119,121-122,124-126,128,132-135,138-140,142-143,146-157,159,176-177,191-193,204-206,212,216-226,248,284-285,294-296,300-323,334-335,338-339,344-348,392-397,405-410,416,419-426,447-456,461-464,523-578
+crates/suggestion_generation/src/inbound/router/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 45-56,58-68,76,83-106,112,161,185-214,216-217,220-340
+crates/suggestions/src/inbound.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-2,6
+crates/suggestions/src/outbound/email_drafts.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 3,8-9,14-17,28,32,46,51-62,65-81
+  s_3c6362fd17dcc4::t_80df29aa9efee5 82
+crates/suggestions/src/swagger.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 11,14,26-28,34-35
+crates/suggestions/src/inbound/router/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 144-145,147-148,178,181,184-185,189-196,217-227,230,234,328,332,366,388-389,445-480
+packages/sdk/generated/scheduled-action/index.ts
+  s_3c6362fd17dcc4::t_06dda65a75500c 4
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 308-322,337-344,398-404
+  s_3c6362fd17dcc4::t_06dda65a75500c 5
+  s_3c6362fd17dcc4::t_1c68530afeacf5 405
+packages/sdk/src/entities/suggestions/suggestion.test.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 6,20,26,121-238
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 13-14,799-845,856-860,866-872,1029-1053,1492-1496,1797-1801,1806,1820-1823,1839-1840,1853-1862,1865-1866,1870-1876,1878,1880,1890-1894,1920-1924,1926-1930,1956,1963-1970,1978-1982,2958-2962,2984,3055-3121,3181-3211,3273,3363-3401
+  s_3c6362fd17dcc4::t_41a6d0967a8cf0 3402
+crates/suggestion_generation/src/domain/cadence.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-37
+crates/suggestions/src/domain/service.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 12,14,21,23-27,30-32,35,37-38,52-54,58-68,90,96-99,136,140-141,167-177,180-191,193-196,240-242,247-265,329,331,334,399-442,461-507,522,546,550-551,558,563,566-573,576-579,585-586,588-624,637,678,691,707,758,768,773-808,919,928,936-946,1002,1006-1020,1022,1148,1152-1162,1174,1250,1264,1271,1311,1318-1319,1321,1324-1325,1327,1347,1355,1362
+crates/suggestion_generation/src/domain/nightly.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-141
+services/agent_harness_service/src/scheduling.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 86,89,109-110,112-114,122-125,129,133-165,217-237,366-377,839-845,861-870,872-874,877-903,905-915,917-918,938,951-952,956-957,972-993,1142-1169
+  s_3c6362fd17dcc4::t_844f5b76b967e1 1170-1171
+packages/sdk/specs/scheduled-action.json
+  s_3c6362fd17dcc4::t_617567d93d7504 1960-1970,1975,2164-2292,2395-2446,2608,2783-2855,2957,4451-4529,4541-4545,4551-4555,4808-4835,5550-5563,6080-6082,6119-6122,6130-6140,6165-6168,6189,6202-6219,6222-6223,6225-6228,6230,6234,6241,6250-6261,6302,6307-6310,6314-6318,6363,6368,6374-6382,6398-6402
+crates/suggestions/src/domain/service/runs.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-485
+crates/macro_db_client/migrations/20261113044136_suggestion_run_state.down.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-18
+crates/email_utils/src/body_parsed/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 116-125
+crates/scheduled_action/src/domain/suggestions/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 156-159
+crates/scheduled_action/src/domain/suggestions/prompt/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 62-85
+crates/suggestion_generation/src/domain/session/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-144
+crates/suggestion_generation/src/inbound/router.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-3,10,21-25,39-51,90,100-101,129-144,146,198-216,265-329
+  s_3c6362fd17dcc4::t_c05855837c5b06 330
+crates/suggestions/src/domain/check.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 191,196-197
+crates/suggestions/src/domain/lifecycle/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-108
+crates/suggestions/src/domain/prompt/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 40-69
+crates/suggestions/src/outbound/pg_suggestion_repo.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 13,15-17,20,66-68,102-103,128-129,156-157,177-178,202-212,232-243,247-248,261-262,277-282,308,311,315-318,340-342,357-359,363-421,435-437,443-447,544-572,623,627-628,630-632,634-635,640-641,650,652-655,662-665,673-686,688-689,693-699,703-726,729-735,737-744,746,748,751,753-754,756,763,765-767,769,772-782,785-812,814-817,819,821-824,826-827,829-831,895,897-898,901-902,933-952,985-994,1038-1040,1050,1059,1078-1084,1118-1142,1206,1213,1218,1220-1232,1240
+services/agent_harness_service/src/code_mode.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 32-34,43
+crates/suggestions/AGENTS.md
+  s_3c6362fd17dcc4::t_617567d93d7504 21-50,55-68,117-118,122-124,146,150-151,154-203
+packages/sdk/src/entities/suggestions/suggestion.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 5,8,14,18,138-147,181-184,187-192,199-200,205-218,224-237,245-251,283-293,297
+  s_3c6362fd17dcc4::t_75491c538c9ca0 294-296,298
+crates/suggestions/src/inbound/run_consumer.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-193
+packages/sdk/src/utils/verbs.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 108
+crates/suggestion_generation/src/domain/generation.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-315
+infra/stacks/monitoring/monitors/routine-suggestions.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 2,12
+.github/workspace-dep-closures.json
+  s_3c6362fd17dcc4::t_617567d93d7504 15612,15622,15675
+crates/suggestions/src/domain/model/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-233
+crates/suggestion_generation/src/domain/model.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 9,12-14,103,112-153,175-207,213,216-224
+crates/suggestions/src/outbound/pg_suggestion_repo/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 6-8,56,333-347,350-360,362-363,368-387,389-391,394-399,401-408,410,413-426,428-429,432-445,448
+crates/macro_db_client/migrations/20261113043329_harden_suggestion_generation.down.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-37
+crates/suggestion_generation/src/outbound/pg_generation_repo/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1,10,32-35,37-123,126-131,134-170,172,174,176-192,194-195,197-272,274-275,277-298,300-305,307-314,316-329,331-334,336-372,374-375,377-388,392-396,398-431,433-446,448-458,460-461,464-466,468,470,472-597,600-631,633,637,639,641-642,651-700,703-726,728-729,731,734,738-740,742,744-798,800-804,806,808-811,813-815,818-844,847-873,875,878-884,887-908,911-912,914,917-920,923-924,927-929,934,936-937,940-941,943,945-947,950,953-954,956,958-965,968-969,971-975,978-986,989-990,992-1004,1006-1057,1059-1090,1092-1094,1119,1122,1126,1131,1141-1142,1158-1159,1161-1166,1176
+crates/suggestions/src/domain/model.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 10-14,47-51,54-58,64-102,105-106,109-116,118,120-141,144-150,154-169,208,223-228,256-261,272-321,369,494-495,499,501-539,701-704,725-737,757-759,761-771,774,780-782,913-914,917-920
+crates/macro_db_client/migrations/20261110011716_delete_suggestions_with_their_kind_rows.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 5-6
+packages/sdk/src/entities/suggestions/namespace.ts
+  s_3c6362fd17dcc4::t_617567d93d7504 8,28-39,86,105-108,111-112,114-124
+crates/suggestions/src/domain/service/recent.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-51
+crates/scheduled_action/src/domain/suggestions/ports.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 142-144
+crates/suggestions/src/domain/resolution/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 96
+crates/suggestion_generation/src/swagger.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-2,6,9-24
+crates/scheduled_action/src/domain/suggestions/model.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 285
+crates/suggestion_generation/src/domain/session.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-240
+crates/suggestion_generation/src/domain/generation/test.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 1-295
+crates/email_utils/src/body_parsed.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 60-75
+crates/macro_db_client/migrations/20261113044136_suggestion_run_state.up.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-42
+apps/web/src/features/email-thread/views/bottom-reply-buttons.tsx
+  s_3c6362fd17dcc4::t_617567d93d7504 4,15,22-26,35-52
+crates/macro_db_client/migrations/20261113062043_suggestion_reply_facts.up.sql
+  s_3c6362fd17dcc4::t_617567d93d7504 1-12
+crates/scheduled_action/src/domain/suggestions/prompt.rs
+  s_3c6362fd17dcc4::t_617567d93d7504 51-65,76-77,79-85,89
+.sqlx/query-0016805a8bd69613c35ebd46cedc5d28fdd0572a4392a96be58eab3bc9c7d3a1.json
+  s_3c6362fd17dcc4::t_f2c44743201901 3,9-10,16
+.sqlx/query-03e6fb7773248fd837613854e577e4767d844fe88fbf3a49c408cf4b1ed1afc5.json
+  s_3c6362fd17dcc4::t_dd12d5efee19cd 1-22
+.sqlx/query-06237e8bee0d6244666113ba5eb5079aa1190ab6e94e8232f34a9b1bb327f3a1.json
+  s_3c6362fd17dcc4::t_0ec3f4d621ef9e 3,8-9,18,21
+.sqlx/query-0fe9af214c7740d9d174a41e836cc8c4a655a9f5de32a5896a7f48382f2bc076.json
+  s_3c6362fd17dcc4::t_1ddf3940910764 3,15,17-20,27
+.sqlx/query-1fa51e15f2e1cb9958a41bd37981bc9204fbe0d6742566133cbccfd8e2d37b34.json
+  s_3c6362fd17dcc4::t_c152841323a8d2 1-22
+.sqlx/query-203667c846c59f9ce32a9b8eded585726a57060b2b5461f2d3822294a8f68ca9.json
+  s_3c6362fd17dcc4::t_8e640a6cdf193f 3,8,14
+.sqlx/query-2411dbfc7af93bc5c06a09e1e95fbed3c79cb2836dab92080a10dfeca8069514.json
+  s_3c6362fd17dcc4::t_7e891686fc1561 3,88-102,130-132,136
+.sqlx/query-2807ce0078cf85c871add60d9464dd28a4f73e742d626acf43ef931ff1d1d911.json
+  s_3c6362fd17dcc4::t_7ee3ae875888b9 3,16
+.sqlx/query-370a921ec1f6ca87aeb5fecbeab00c7befe15de02e314d1c6c7c5483417cdd9b.json
+  s_3c6362fd17dcc4::t_2f72c020470d7e 3,8,13,18-19,23,25-29,34,41,45
+.sqlx/query-3ad4dd2fb8641576219456acb70d8a3ee00b2fc25b9a5e72f80947b30a9c3cae.json
+  s_3c6362fd17dcc4::t_4734bca6076578 1-18
+.sqlx/query-3cad1115b73520ff628f716fad77857fcb20d38f466a93d993b9945abf6b17c1.json
+  s_3c6362fd17dcc4::t_924ec2e91651bb 1-71
+.sqlx/query-3f993c5f78cc8f6619ba1f58bc5b5b2b330cfbbd422122680f28fa151a41b7e9.json
+  s_3c6362fd17dcc4::t_c9e51c3f8fbfc9 3,34
+.sqlx/query-3fdbcbab595290e20f665e36def1e3fb80b1e74eceae1422942e8d0064f9b465.json
+  s_3c6362fd17dcc4::t_e5bc408fdec68f 1-72
+.sqlx/query-48ace5ed35ed498a7a29157bda61da2ee04db7aff4b61fdef206f156f7c4c7fc.json
+  s_3c6362fd17dcc4::t_b42732beb9dff4 3,8-9,14,16,23
+.sqlx/query-52f76afa4ae449aecead8932b12ff52e810f2662ba46b05fbe8f3624f2651db8.json
+  s_3c6362fd17dcc4::t_bb8fe9868abb97 3,10-12,17
+.sqlx/query-5400796fbaa6802de2d80bd191f69716cbd8c419976fcf8e22a39955de00548b.json
+  s_3c6362fd17dcc4::t_f75e18feee13fe 3,14-15,20
+.sqlx/query-5abe01d67743d42faea898e38dff55064db31cf10884a22b02a7f4f72eb2fa68.json
+  s_3c6362fd17dcc4::t_9fd3f4d089da77 3,9,11-12,18
+.sqlx/query-5e834a5ae2dcbdac215ea2c76685cb205f9f62a6e4def7cbfb5f706f95d762b0.json
+  s_3c6362fd17dcc4::t_6c032337e220dc 3,38-48,54,64-65,69
+.sqlx/query-5ec492d161c6c813f7f325ed3e986a21d141f2d508a77b93bb834919bf838e65.json
+  s_3c6362fd17dcc4::t_c8abcceda22479 3,8,12,14-16,22
+.sqlx/query-6150193885406dff458b70d16b9f79d74d6f025877621cbe002e17c9e2be0407.json
+  s_3c6362fd17dcc4::t_a501862ca3f469 1-16
+.sqlx/query-641ba16eb6d55992a0df18b1e4ff27e392d76f328dee88fefd32805bc192b0c3.json
+  s_3c6362fd17dcc4::t_615cdd26132098 3,13
+.sqlx/query-682a1fdf962eca2c7739cededf1142ebc011120676e6fb4ef673f5b2ed314049.json
+  s_3c6362fd17dcc4::t_92d0fc94128fd8 1-41
+.sqlx/query-6a50d30ba5dae90a8d12b7c0e7f7b06ef766901dfa17a62a1c9a0fc0a42a04c7.json
+  s_3c6362fd17dcc4::t_df596a0a7da890 1-17
+.sqlx/query-6dfc58e5b02cca8c23c398dc84f8d5911f0acf113e69d69c646cd9ce2a38a91b.json
+  s_3c6362fd17dcc4::t_9c019ee80e71aa 1-42
+.sqlx/query-7656db9a41b221871e4616a74b57bafd7d03e49c78aff4039268eafb11d84fbd.json
+  s_3c6362fd17dcc4::t_957863a03aafa1 1-18
+.sqlx/query-77620450f2d94e8f76a5b3e9a0a551b31475f92aeb3bebdd973d059b2ec9f67a.json
+  s_3c6362fd17dcc4::t_649ba3ab25ebf7 3,21
+.sqlx/query-842c19e2b022e5adbf8cbf280473ce7d26edf9773be9757c22f2bcdcae4a07a0.json
+  s_3c6362fd17dcc4::t_144f837bd82417 3,14
+.sqlx/query-8dac0b68e84412dea67ddfb23d45abef4f2b41d64948b6a92f2daa7abacc4c8b.json
+  s_3c6362fd17dcc4::t_0b278fce0919e6 1-41
+.sqlx/query-97ab4903b2f156d4da91f281b9d340fd0701252074b156ad216fc4ad9c6ac01f.json
+  s_3c6362fd17dcc4::t_9cf7858e7103df 3,88-102,130-132,136
+.sqlx/query-985b62951247f2b9f53b99bc6b790a8710a90103e58eee35a99dfc4d2b1df0c1.json
+  s_3c6362fd17dcc4::t_b4eb38752456de 3,8-10,15
+.sqlx/query-9f1372584372a47b031bdb2a87d9da1ed56b517af0a241d5baa53c6dc79cba92.json
+  s_3c6362fd17dcc4::t_31abb84213ca17 3,8,18,24,35
+.sqlx/query-a25430b1def7970ec4ff859aa2036b14d0f3e3c241472ace2ef368cf5d7978c8.json
+  s_3c6362fd17dcc4::t_52b9bcb3a4bbac 1-48
+.sqlx/query-ac8a0b1e11419d170a7eda0efdcabff88928ea681970678735071d4001fb2e17.json
+  s_3c6362fd17dcc4::t_04b19e5b3860aa 1-16
+.sqlx/query-c71af7108acc8a5ef46b97906f43c3d8c9b6477c276271ebfc29226a1d5fd253.json
+  s_3c6362fd17dcc4::t_e140d53570f7d1 3,39-40,52
+.sqlx/query-c8d1bbd88252a134f3a6a5c0b614e6aa1610b88f8561c1f18d94c8285f885e92.json
+  s_3c6362fd17dcc4::t_3927fdd31e24e5 3,88-102,130-132,136
+.sqlx/query-c9c21f384314cf0b4020ca34ec243b7c4f6197f1afb4baff688b813563edf951.json
+  s_3c6362fd17dcc4::t_187845ee7f0738 1-20
+.sqlx/query-d18502c2001b20d23716cf18efb48d82ea0c4d20559c20e4fd10e3a88e32bc7e.json
+  s_3c6362fd17dcc4::t_0d6dbeab3347ef 3,8,14-15,22
+.sqlx/query-d540b9abf057c600eee8f464a7ab447daba1e8c2be418b680d1d9ef640c077fa.json
+  s_3c6362fd17dcc4::t_c501594159b2d2 3,10,16
+.sqlx/query-d73665d943da6f108ed3bd8f704e75994033cf07cac8ea44fa8d045710f57eae.json
+  s_3c6362fd17dcc4::t_6dde2547e2b6ff 3,14
+.sqlx/query-e508e5035090853c776d9f7817f38d26f4741c8e9ffb1a08d36a699169614f3c.json
+  s_3c6362fd17dcc4::t_a2e190963dde37 3,38-48,54,64-65,69
+.sqlx/query-e7ca4b2aa05108f16b41b1a5445dcb0abbf1a47ae4aac7d001deb765f9bcea2b.json
+  s_3c6362fd17dcc4::t_90aa4b260ef81a 3,8,14
+.sqlx/query-f2cba12a2dd88b0957d9a3a7ae7815208bb5b4667427b55e2cecd78d35fc7f8c.json
+  s_3c6362fd17dcc4::t_b3e00c2a1a5da7 1-59
+.sqlx/query-f4eb148aaae33b62666d1d9e5381b8b32a1ad402bed548f4e6793bddf2e60f61.json
+  s_3c6362fd17dcc4::t_1622b2ff97785a 3,88-102,130-132,136
+.sqlx/query-f4fd5f8226139f69ea345f89c16cf6bfbfa52aed5ae2c18b7736c52e7ebbe1f3.json
+  s_3c6362fd17dcc4::t_f74ae057b652a1 3,10-11,16
+.sqlx/query-f52d9024376b88709ab67f0f58834dcdd618f735508dfd2400bfb76d2ba95264.json
+  s_3c6362fd17dcc4::t_72334bd1aad7d4 1-19
+.sqlx/query-fdbbc7b3c6134816f41af5d16924f438945613a214f5d150414a78c3f9a042d0.json
+  s_3c6362fd17dcc4::t_613a9650fcb9d8 3,18,21
+Cargo.lock
+  s_3c6362fd17dcc4::t_906531aabf8a00 20163,20172
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_3c6362fd17dcc4::t_f6f623c6d941a6 25,33-35,2265-2418,2557-2626,2935-3008
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/acceptSuggestionRequest.ts
+  s_3c6362fd17dcc4::t_19b1065a082fe2 14-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/feedCounts.ts
+  s_3c6362fd17dcc4::t_732f391b6bbea3 1-33
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverview.ts
+  s_3c6362fd17dcc4::t_e712f1cde17f79 1-30
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewLastFinishedAt.ts
+  s_3c6362fd17dcc4::t_5222a034e4a44f 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewLastOutcome.ts
+  s_3c6362fd17dcc4::t_b2a3072e6ff563 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewRegenerateAvailableAt.ts
+  s_3c6362fd17dcc4::t_a6dfb5071586ee 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewStartedAt.ts
+  s_3c6362fd17dcc4::t_f42cbf091e8a70 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewTrigger.ts
+  s_3c6362fd17dcc4::t_ae3a5488b18da2 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationState.ts
+  s_3c6362fd17dcc4::t_86a79eb2a0bda6 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationTrigger.ts
+  s_3c6362fd17dcc4::t_b9816fb1bb12c9 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_3c6362fd17dcc4::t_4ec9860d1bd0ce 139-145,147,149,176-179,251,295,299-301,303,305,310,312,314-315,320
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/listSuggestionsParams.ts
+  s_3c6362fd17dcc4::t_04f14ec0d35f38 15-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerateSuggestionsParams.ts
+  s_3c6362fd17dcc4::t_be94e54445b7d8 1-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerationCooldown.ts
+  s_3c6362fd17dcc4::t_6222c5ea7e8183 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerationRefusal.ts
+  s_3c6362fd17dcc4::t_8fc0dfe9eecbd1 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerationRunning.ts
+  s_3c6362fd17dcc4::t_f9f08e977c52d5 1-16
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/runStateName.ts
+  s_3c6362fd17dcc4::t_d720a5bd7cfedf 1-24
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOf.ts
+  s_3c6362fd17dcc4::t_863d354b7a7a16 10,14,34-36,39,47-48
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOfResult.ts
+  s_3c6362fd17dcc4::t_b9bad0ef47d1dc 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionChanged.ts
+  s_3c6362fd17dcc4::t_6e72dfa67e37af 11-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionDraft.ts
+  s_3c6362fd17dcc4::t_73837c889c402f 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionDraftAllOf.ts
+  s_3c6362fd17dcc4::t_0fdae257808aae 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionDraftAllOfPreview.ts
+  s_3c6362fd17dcc4::t_78988862fe9dfe 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionFeed.ts
+  s_3c6362fd17dcc4::t_a28c917e369076 8,10,14-15,18-24
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionFeedDone.ts
+  s_3c6362fd17dcc4::t_694b3e3e438e2c 1-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionGenerationStatus.ts
+  s_3c6362fd17dcc4::t_5401312b8ccf0d 1-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKind.ts
+  s_3c6362fd17dcc4::t_78b58ba6c5b704 10,18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFour.ts
+  s_3c6362fd17dcc4::t_04cd59e68f1b8b 10,12,21-22,24-26
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourDraft.ts
+  s_3c6362fd17dcc4::t_147c42e8e2a4b9 8,10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourFrom.ts
+  s_3c6362fd17dcc4::t_fa491521884a03 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourWaitingSince.ts
+  s_3c6362fd17dcc4::t_12a71dc2c6f738 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfNine.ts
+  s_3c6362fd17dcc4::t_57e2cdbb690cc4 8,13-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfNineKind.ts
+  s_3c6362fd17dcc4::t_a9abe630e5d6f0 9-10,13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionRun.ts
+  s_3c6362fd17dcc4::t_83b75b0513317d 8,15,19-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionStatus.ts
+  s_3c6362fd17dcc4::t_61ae8003fc3c85 10,12-13,16-17,20-21
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_3c6362fd17dcc4::t_9192ebe9107497 1960-1970,1975,2164-2292,2395-2446,2608,2783-2855,2957,4451-4529,4541-4545,4551-4555,4808-4835,5550-5563,6080-6082,6119-6122,6130-6140,6165-6168,6189,6202-6219,6222-6223,6225-6228,6230,6234,6241,6250-6261,6302,6307-6310,6314-6318,6363,6368,6374-6382,6398-6402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e5fc81e1d4a568de5b559de3cd545dd600b198e9",
+  "prompts": {},
+  "sessions": {
+    "s_3c6362fd17dcc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02467add-a007-41c9-9280-bad5f33c09fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
