@@ -144,7 +144,8 @@ impl GenerationRepo for PgGenerationRepo {
     async fn insert(&self, generation: &NewGeneration) -> Result<bool, Self::Err> {
         // The unique indexes refuse a second running generation and a
         // second onboarding one of the same attempt; the guard refuses one
-        // started since admission read.
+        // started since admission read (with none read, any). The bound stays
+        // a range on (user_id, trigger, started_at), not a filter.
         let inserted = sqlx::query!(
             r#"INSERT INTO suggestion_generation
                  (id, user_id, trigger, status, attempt, started_at, heartbeat_at)
@@ -152,7 +153,7 @@ impl GenerationRepo for PgGenerationRepo {
                WHERE NOT EXISTS (
                    SELECT 1 FROM suggestion_generation
                    WHERE user_id = $2 AND trigger = $3
-                     AND ($7::timestamptz IS NULL OR started_at > $7))
+                     AND started_at > coalesce($7::timestamptz, '-infinity'::timestamptz))
                ON CONFLICT DO NOTHING"#,
             generation.id,
             generation.user.as_ref(),
