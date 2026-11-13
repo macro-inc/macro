@@ -70,7 +70,7 @@ focus) hides it on that device for good (`localStorage`
 keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
+use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface: both focus the list header's search field. When a thread or a new email has replaced the list, `/` opens the sidebar's search field instead (showing a hidden sidebar first), and `Ctrl+F` is left to the browser's find.
 
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star, `z` undo the last action, and `g` then a letter
@@ -307,7 +307,15 @@ mail arrive (locally: insert a thread and publish `email.message_received` on
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
 under the new heading. Active searches also hide retained results and show loading
-while selected tag sets are pending. Background refreshes retain the current list. To check this,
+while selected tag sets are pending. Background refreshes retain the current list.
+
+While the search field has text the list shows only search states: no Watch
+tutorial row, a spinner while the search runs, `Keep typing to search` under 3
+characters (the search service's minimum; Focus filters its own list at any
+length), and `No results` when nothing matches. `Load More` appears only under
+result rows: a page whose hits the tab or a client-side filter drops (Archived
+keeps only archived hits) pages on by itself until a row shows or results run
+out. To check the tab switch,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
@@ -777,8 +785,17 @@ the same subtle 3D rim in dark mode, and a faint hover tint. The selected
 card uses a 2% ink wash, brighter than that hover and lighter than a hovered
 settings row. Desktop selection does not add an accent-colored ring; keyboard
 focus has a neutral outline.
-On touch, the floating Reply, Forward, previous/next email, and done controls
-use the mobile dock's chrome fill and icon color in both themes.
+On touch, the floating Reply, Reply all, Forward, previous/next email, and done
+controls sit on the mobile dock's own surface (`MobileDockIsland`) in both
+themes. An unavailable previous/next control dims its arrow while its island
+stays opaque. When the row is too narrow for every label, Reply, then Forward,
+then Reply all drop to icon-only pills until it fits on one line; check at 320,
+375, 390 and 430px.
+Reply all, in the message header and on touch, shows only when it reaches
+someone Reply doesn't: a To or Cc recipient other than the sender and the
+inbox the reply sends from (with its aliases). A reply to a message that inbox
+sent already goes to everyone, so it has no Reply all; a message from another
+of the viewer's inboxes counts as someone else's, as it does in the composer.
 Replies appear inline on desktop and in a full-screen composer on touch devices,
 including tablets. Reply, Reply all, and Forward use the same grouped header
 actions as new email: attach, schedule, and send. The schedule clock matches
@@ -806,8 +823,10 @@ delete, attach, insert image, format, schedule, and send. Touch compose uses its
 header toolbar, which has no insert image button. **Insert image** opens an
 image-only picker and inlines the chosen images at the cursor, uploading and
 sized like pasted ones; a video chosen there is ignored.
-`R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
-or the latest message when none is selected. `F` opens a forward and focuses To.
+`R` replies to the sender of the selected message, or of the latest message
+when none is selected. `Enter` (after expanding a collapsed selected message)
+and the desktop **Reply...** box open reply-all;
+there is no separate reply-all shortcut. `F` opens a forward and focuses To.
 A new email also focuses To once it mounts, unless the user already moved to
 another field: with the CPU throttled, click Subject right after opening compose
 and type; every character must stay in Subject.
@@ -1229,7 +1248,12 @@ its attachments. Logout should warn about queued sends even after their original
 local working copies have been retired; it must not claim to cancel server sends.
 Approved local sends survive sign-out, are hidden from other accounts, and resume
 only when the same account signs back in. The status panel also lists failed,
-unconfirmed, and scheduled server attempts from other devices, with pagination. Cancelling one must
+unconfirmed, and scheduled server attempts from other devices, with pagination. A
+visible tab reads them every 10 seconds while a send is in motion (queued in this
+browser, accepted and due, or sending) and once a minute otherwise; a hidden tab
+does not read and catches up when shown. So a send from another device can take
+up to a minute to appear in an idle tab; a send from another tab of the same
+browser reads at once. Cancelling one must
 preserve this device's unsynced edits. A malformed or newer-version journal record
 shows a recovery warning, retains its recognizable draft locks, and does not stop
 unrelated valid sends. Reconnecting an expired email account requires **Check

@@ -1,6 +1,6 @@
 import { formatDate, formatEmailDate } from '@core/util/date';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 
 /** What participants can see and do about a request to join. */
@@ -12,7 +12,15 @@ export type AccessRequestOutcome =
   | { kind: 'denied'; by: string }
   | { kind: 'withdrawn' };
 
-/** A request to join, announced in the channel with inline answers. */
+/**
+ * A request to join, announced in the channel with inline answers.
+ *
+ * The channel list measures a row once when it mounts, so the row's height
+ * never depends on what loads later. The request wraps like message text from
+ * what is known at mount (the name stored with the event, or the email), and
+ * the answer line keeps the buttons' height in every state (taller on touch,
+ * like them), including while the request loads.
+ */
 export function AccessRequestActivityRow(props: {
   eventId: string;
   occurredAt: string;
@@ -23,6 +31,10 @@ export function AccessRequestActivityRow(props: {
   onApprove: () => void;
   onDeny: () => void;
 }) {
+  const email = () =>
+    props.requesterEmail && props.requesterEmail !== props.requesterName
+      ? props.requesterEmail
+      : undefined;
   return (
     <div
       class="flex gap-2 py-1.5 pl-(--message-padding-x) pr-2 text-sm text-ink-muted"
@@ -35,32 +47,25 @@ export function AccessRequestActivityRow(props: {
         <UserPlusIcon class="size-4.5 text-accent" />
       </span>
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
-        <div class="min-h-6 flex items-baseline gap-2">
-          <span class="min-w-0 break-words">
+        <div class="flex items-start gap-2 leading-6">
+          <p class="min-w-0 flex-1 wrap-break-word">
             <span class="font-medium text-ink">{props.requesterName}</span>{' '}
-            <Show
-              when={
-                props.requesterEmail &&
-                props.requesterEmail !== props.requesterName
-              }
-            >
-              <span>({props.requesterEmail})</span>{' '}
-            </Show>
+            <Show when={email()}>{(email) => <span>({email()}) </span>}</Show>
             asked to join the channel
-          </span>
+          </p>
           <time
-            class="shrink-0 text-xs text-ink-extra-muted"
+            class="shrink-0 text-xs/6 text-ink-extra-muted"
             dateTime={props.occurredAt}
             title={formatEmailDate(props.occurredAt)}
           >
             {formatDate(props.occurredAt, { showTime: true })}
           </time>
         </div>
-        <Switch>
-          <Match
-            when={props.outcome.kind === 'pending' && props.outcome.canAnswer}
-          >
-            <div class="flex flex-wrap items-center gap-2">
+        <div class="h-7 touch:h-9 flex items-center gap-2 text-xs">
+          <Switch>
+            <Match
+              when={props.outcome.kind === 'pending' && props.outcome.canAnswer}
+            >
               <Button
                 size="sm"
                 variant="primary"
@@ -77,35 +82,51 @@ export function AccessRequestActivityRow(props: {
               >
                 Deny
               </Button>
-            </div>
-          </Match>
-          <Match when={props.outcome.kind === 'pending'}>
-            <span class="text-xs">Waiting for a channel member to answer</span>
-          </Match>
-          <Match
-            when={props.outcome.kind === 'approved' ? props.outcome : undefined}
-          >
-            {(outcome) => (
-              <span class="text-xs">
-                Approved by{' '}
-                <span class="font-medium text-ink">{outcome().by}</span>
+            </Match>
+            <Match when={props.outcome.kind === 'pending'}>
+              <span class="truncate">
+                Waiting for a channel member to answer
               </span>
-            )}
-          </Match>
-          <Match
-            when={props.outcome.kind === 'denied' ? props.outcome : undefined}
-          >
-            {(outcome) => (
-              <span class="text-xs">
-                Denied by{' '}
-                <span class="font-medium text-ink">{outcome().by}</span>
-              </span>
-            )}
-          </Match>
-          <Match when={props.outcome.kind === 'withdrawn'}>
-            <span class="text-xs">Request withdrawn</span>
-          </Match>
-        </Switch>
+            </Match>
+            <Match
+              when={
+                props.outcome.kind === 'approved' ? props.outcome : undefined
+              }
+            >
+              {(outcome) => (
+                <Tooltip
+                  label={`Approved by ${outcome().by}`}
+                  class="min-w-0 max-w-max truncate"
+                  as="span"
+                >
+                  <span class="truncate">
+                    Approved by{' '}
+                    <span class="font-medium text-ink">{outcome().by}</span>
+                  </span>
+                </Tooltip>
+              )}
+            </Match>
+            <Match
+              when={props.outcome.kind === 'denied' ? props.outcome : undefined}
+            >
+              {(outcome) => (
+                <Tooltip
+                  label={`Denied by ${outcome().by}`}
+                  class="min-w-0 max-w-max truncate"
+                  as="span"
+                >
+                  <span class="truncate">
+                    Denied by{' '}
+                    <span class="font-medium text-ink">{outcome().by}</span>
+                  </span>
+                </Tooltip>
+              )}
+            </Match>
+            <Match when={props.outcome.kind === 'withdrawn'}>
+              <span class="truncate">Request withdrawn</span>
+            </Match>
+          </Switch>
+        </div>
       </div>
     </div>
   );

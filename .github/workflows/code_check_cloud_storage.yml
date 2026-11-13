@@ -19,7 +19,7 @@ jobs:
       graphql_schema: ${{ steps.filter.outputs.graphql_schema }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -321,7 +321,7 @@ jobs:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
       SQLX_OFFLINE: 'true'
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -523,7 +523,7 @@ jobs:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
       SQLX_OFFLINE: 'true'
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -758,7 +758,7 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: '0'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
-    timeout-minutes: 90
+    timeout-minutes: 20
     services:
       postgres:
         image: pgvector/pgvector:pg14
@@ -1056,7 +1056,7 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: '0'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SQLX_OFFLINE: 'true'
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

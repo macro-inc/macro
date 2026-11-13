@@ -30,5 +30,6 @@ sqlx = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_correlation = { path = "../agent_correlation" }
 macro_db_migrator = { path = "../macro_db_migrator" }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }

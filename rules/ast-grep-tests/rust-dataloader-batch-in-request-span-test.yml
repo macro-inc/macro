@@ -1,0 +1,35 @@
+id: rust-dataloader-batch-in-request-span
+valid:
+  - |
+    fn f() { let l = DataLoader::new(loader, |batch| tokio::spawn(batch.in_current_span())); }
+  - |
+    fn f() { let l = DataLoader::new(loader, |batch| { tokio::spawn(batch.in_current_span()); }); }
+  - |
+    fn f() { let l = DataLoader::with_cache(loader, |batch| tokio::spawn(batch.in_current_span()), HashMapCache::default()); }
+  - |
+    fn f() { let l = DataLoader::new(loader, spawn_in_current_span); }
+invalid:
+  - |
+    fn f() { let l = DataLoader::new(loader, tokio::spawn); }
+  - |
+    fn f() { let l = DataLoader::new(loader, tokio::task::spawn); }
+  - |
+    fn f() { let l = DataLoader::new(loader, ::tokio::spawn); }
+  - |
+    fn f() { let l = async_graphql::dataloader::DataLoader::new(loader, tokio::spawn); }
+  - |
+    fn f() { let l = DataLoader::new(loader, |batch| tokio::spawn(batch)); }
+  - |
+    fn f() { let l = DataLoader::new(loader, move |f| tokio::task::spawn(f)); }
+  - |
+    fn f() { let l = DataLoader::new(loader, |batch| { tokio::spawn(batch) }); }
+  - |
+    fn f() { let l = DataLoader::new(loader, |batch| { tokio::spawn(batch); }); }
+  - |
+    fn f() {
+        let l = DataLoader::new(loader, |batch| {
+            tokio::spawn(batch);
+        });
+    }
+  - |
+    fn f() { let l = DataLoader::with_cache(loader, tokio::spawn, HashMapCache::default()); }

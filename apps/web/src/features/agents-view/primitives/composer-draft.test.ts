@@ -106,6 +106,46 @@ describe('createPersistedComposerDraft', () => {
     });
   });
 
+  it('keeps composers mounted on one draft in step', () => {
+    createRoot((dispose) => {
+      const page = createPersistedComposerDraft(undefined, () => 'user');
+      const list = createPersistedComposerDraft(undefined, () => 'user');
+      page.setDraft('typed on the page');
+      expect(list.draft()).toBe('typed on the page');
+
+      list.setDraft('typed on the page, then in the list');
+      expect(page.draft()).toBe('typed on the page, then in the list');
+
+      page.setDraft('');
+      expect(list.draft()).toBe('');
+      dispose();
+    });
+  });
+
+  it('keeps the draft shared while another composer still holds it', () => {
+    const list = createRoot((dispose) => ({
+      draft: createPersistedComposerDraft(undefined, () => 'user'),
+      dispose,
+    }));
+    createRoot((dispose) => {
+      const page = createPersistedComposerDraft(undefined, () => 'user');
+      page.setDraft('typed on the page');
+      dispose();
+    });
+    expect(list.draft.draft()).toBe('typed on the page');
+    list.dispose();
+
+    localStorage.setItem(
+      `${NEW_CONVERSATION_DRAFT_KEY}:user`,
+      JSON.stringify('written elsewhere')
+    );
+    createRoot((dispose) => {
+      const draft = createPersistedComposerDraft(undefined, () => 'user');
+      expect(draft.draft()).toBe('written elsewhere');
+      dispose();
+    });
+  });
+
   it('removes the persisted value when the draft becomes empty', () => {
     createRoot((dispose) => {
       const draft = createPersistedComposerDraft(undefined, () => 'user');

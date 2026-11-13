@@ -28,7 +28,7 @@ use system_properties::{
 };
 
 /// Initial values do not assign anyone here, so nothing is ever notified.
-struct NoNotifications;
+pub(super) struct NoNotifications;
 
 impl properties::NotificationService for NoNotifications {
     type Err = anyhow::Error;
@@ -38,14 +38,14 @@ impl properties::NotificationService for NoNotifications {
     }
 }
 
-type Access = EntityAccessServiceImpl<PgAccessRepository>;
-type Properties =
+pub(super) type Access = EntityAccessServiceImpl<PgAccessRepository>;
+pub(super) type Properties =
     PropertiesServiceImpl<PropertiesPgRepo, PermissionServiceImpl<Access>, NoNotifications>;
 
-struct Harness {
-    access: Arc<Access>,
-    properties: Arc<Properties>,
-    resources: Arc<
+pub(super) struct Harness {
+    pub(super) access: Arc<Access>,
+    pub(super) properties: Arc<Properties>,
+    pub(super) resources: Arc<
         ProjectResources<
             Properties,
             SystemPropertiesServiceImpl<PgSystemPropertiesRepository>,
@@ -54,7 +54,7 @@ struct Harness {
     >,
 }
 
-fn harness(pool: &PgPool) -> Harness {
+pub(super) fn harness(pool: &PgPool) -> Harness {
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));

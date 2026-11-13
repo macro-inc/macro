@@ -12,7 +12,7 @@ function FigLabel(props: { children: JSX.Element }) {
         color: 'color-mix(in srgb, var(--c4) 60%, transparent)',
         'font-family': 'Inter, body',
         'font-size': mobile() ? '11px' : '12px',
-        'font-weight': '700',
+        'font-weight': '500',
         'letter-spacing': '0.14em',
         'text-transform': 'uppercase',
       }}
@@ -69,7 +69,7 @@ function AiAutomations() {
             color: 'var(--c2)',
             'font-family': 'body',
             'font-size': mobile() ? '13px' : '14px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.07em',
             'text-transform': 'uppercase',
           }}

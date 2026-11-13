@@ -9,25 +9,55 @@ against its session; a routine id is a signed Macro API token claim
 JWT's acting user. A correlation may carry a `SessionScope`, set where the
 harness mints the credential: then every service that accepts it refuses
 requests outside the scope (`403`), so a hidden session's limits hold in
-code, not in its prompt.
+code, not in its prompt. The harness also signs the scope into the credential
+(`agent_scope`), so a service with no database enforces it too
+(`enforce_signed_scope`).
 
 ## Start here
 
 - `src/domain.rs`: repository contract and agent-binding validation.
-- `src/scope.rs`: session scopes and the requests each allows: reads by
-  method, its own writes, and `POST_READS`; the harness test
+- `src/scope.rs`: session scopes and the requests each allows. `generation`:
+  reads by method, its own writes, and `POST_READS`; `no_send` (a background
+  run that sends nothing): anything but `SENDS`, the requests that reach
+  someone else or start work with the person's full access (agent sessions,
+  session control, tool approvals, review decisions, running or rewriting
+  chat tool calls, and agents, bots, the computers they run on and their
+  credentials). The harness tests
+  `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk` (every
+  send-like SDK write is refused or reviewed, and every reviewed one is still
+  allowed) and
+  `a_run_that_sends_nothing_starts_no_work_with_the_persons_access` hold
+  `no_send` to that; the harness test
   `the_generation_scope_matches_the_sdk_catalog` keeps the lists in step with
   the SDK's operation catalog. A new POST read or session tool route updates
-  them.
+  them. Credentials are not a scope's to decide: a token that signs
+  `agent_scope` authenticates as `ScopedMacroApiJwt`, which
+  `AccountHolderOrInternal` refuses on every route that issues a credential.
+  `SignedScope` reads the `agent_scope` claim; a name this build doesn't know
+  allows only reads. `ANY_WRITE` lists paths that run any write whatever the
+  method (DSS GraphQL, by POST or its WebSocket); every scope, and an unknown
+  one, is refused them. No scope may share (`allows_sharing`).
 - `src/context.rs`: async context (`Attribution`: correlation, routine, the
-  display verb sent with a correlated SDK call, and the validated session and
-  its scope: `current_session`, `current_scope`); capture before spawning,
+  display verb sent with a correlated SDK call, the validated session
+  (`current_session`), and the scope stored with it, else the one the
+  credential signs (`current_scope`)); capture before spawning,
   scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
-  on routine writes.
+  on routine writes. `may_share` says whether the request may change who can
+  see an item. `entity_access_db_utils::scoped_grants` checks it wherever
+  access grants are written, so creation, filing in a folder, assignment and
+  imports need no route check. `refuse_sharing` is the body check for sharing
+  that isn't a grant (link sharing) or that the grant writer can't see:
+  documents, call records, initiatives, projects, chats, DSS threads and saved
+  views, CRM pipeline edits. A new such field or edit route joins that check.
+  Both record the refusal for `propagate`.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
-  (`propagate` scopes the validated correlation, its verb and the signed routine).
+  (`propagate` checks the signed scope, then scopes the validated
+  correlation, its verb and the signed routine, and answers a request that
+  recorded a sharing refusal with 403 `SharingRefused`, whatever error the
+  handler mapped it to). `enforce_signed_scope` is the
+  check alone, for a service with no database to look a correlation up in.
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries

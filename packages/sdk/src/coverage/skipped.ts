@@ -40,6 +40,8 @@ export const agentHarnessExcluded = [
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'getClaudeMode', // Computer account credentials are managed in the app.
   'startClaudeSignIn', // Computer account credentials are managed in the app.
+  'getAgentVoices', // The agent voice picker is an admin app flow.
+  'getAgentVoiceSample', // The agent voice picker is an admin app flow.
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
@@ -153,6 +155,11 @@ export const authExcluded = [
 ];
 
 export const authBacklog = [
+  'createTeamAgent', // Inviting an agent teammate buys a computer; an admin app flow for now.
+  'deleteTeamAgent', // Removing an agent teammate releases its computer; an admin app flow for now.
+  'listTeamAgents', // Agent teammates fit a team entity; wrap with the team namespace later.
+  'getTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
+  'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
@@ -300,15 +307,15 @@ export const scheduledActionExcluded = [
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
   'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
   'recordSuggestionsSeen', // The app records each load; agents have no use for it.
+  'getSuggestionGeneration', // The app polls it while fresh suggestions generate.
+  'regenerateSuggestions', // The app's refresh button, at most hourly; generation sessions may not call it.
+  'recordSuggestionsViewed', // The app records the person opening the feed; an agent's read is not a visit.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
-export const scheduledActionBacklog = [
-  'listSuggestions', // The suggestions feed; the user's own agent reads it in a follow-up.
-  'acceptSuggestion', // Likewise.
-  'dismissSuggestion', // Likewise.
-] as const satisfies readonly (keyof ScheduledActionSdk)[];
+export const scheduledActionBacklog =
+  [] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
 export const searchExcluded = [
   'simpleUnifiedSearch',

@@ -70,7 +70,7 @@ export function EmailThread(props: {
       </Show>
       <div class="mail-thread-body">
         <Show when={!props.hideSubject}>
-          <h3 class="block w-full max-w-full min-w-0 text-pretty font-semibold tracking-tight text-ink leading-snug text-2xl mb-6">
+          <h3 class="block w-full max-w-full min-w-0 text-pretty font-medium tracking-tight text-ink leading-snug text-2xl mb-6">
             {props.email.subject}
           </h3>
         </Show>

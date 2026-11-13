@@ -7,7 +7,7 @@ use uuid::Uuid;
 /// Check if a user is a member of the specified channels.
 ///
 /// Returns the subset of channel_ids that the user is a participant of.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn check_user_channel_membership(
     pool: &PgPool,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
