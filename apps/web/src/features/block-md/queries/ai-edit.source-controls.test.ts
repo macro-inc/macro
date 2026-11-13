@@ -59,6 +59,8 @@ describe('Source AI edit client settlement order', () => {
   });
 
   it('turns a throwing onOps into the failed toast', async () => {
+    // Not the op-refusal path: in the app editor applyAiOps does not throw for a
+    // refused op (onError is Telemetry.error), so this is any other onOps throw.
     respond({ ops: [{ kind: 'setText', node: 'n', text: 't' }] });
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const order = await run(() => {
