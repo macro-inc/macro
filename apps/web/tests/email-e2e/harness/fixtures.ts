@@ -142,6 +142,23 @@ export const test = base.extend<Options & { mailbox: Mailbox }>({
         await page.addInitScript(() => {
           localStorage.setItem('macro:login', 'true');
         });
+        // A change of the machine's network (another container starting)
+        // makes Chrome drop the requests in flight and leaves the page
+        // without part of the app. The test process fetches the app's own
+        // files instead; no such change reaches it.
+        await page.route(
+          (url) => url.pathname.startsWith('/app/'),
+          async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            try {
+              const response = await route.fetch();
+              await route.fulfill({ response });
+            } catch {
+              // The test ended meanwhile, or the fetch could not be made.
+              await route.fallback().catch(() => undefined);
+            }
+          }
+        );
         const stopRelay = await relayGateway(page, stack, user);
 
         const api = (path: string, init?: RequestInit) =>

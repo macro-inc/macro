@@ -83,3 +83,32 @@ CI: the `Email end-to-end (browser)` workflow (`xtask_workflows`'
 `email_e2e_browser.rs`) runs on pushes to `main` that change the web app or
 backend code and, within `PR CI`, on pull requests that touch email or
 calendar code on either side.
+
+## What is here
+
+One spec file per area; helpers a file shares with others are in `harness/`.
+
+| Files | Area | Helpers |
+| --- | --- | --- |
+| `reply`, `send-*` | what a reply, forward or new message sends, undo, send outcome | `harness/send.ts` |
+| `draft-*`, `attachment` | draft saving, discarding and recovery, attachments, the editor | `harness/drafts.ts` |
+| `list`, `state`, `inbox`, `folders` | the list, Done and read state, inbox selection, Sent, folders | `harness/list.ts` |
+| `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
+| `link*`, `notify` | connecting inboxes and calendars, the Mail badge | `harness/linking.ts` |
+| `calendar-invitation` | the invitation card in a thread | |
+
+- `harness/linking.ts` stands in for the authentication service's link
+  endpoints and the provider callback; the consent pages are the emulators'.
+- `list.spec.ts`'s new-mail test runs only with `EMAIL_E2E_LIVE_UPDATES=1`
+  and alone: every stack's services read live updates in one Kafka consumer
+  group, so another running stack can take the event.
+
+## Fixture tests
+
+Bugs that one component decides are covered in the features' `browser-test/`
+suites instead (the email composer, the calendar, event details, signatures,
+unavailable mentions) and in `packages/email-renderer`. `just
+apps/web/test-email-fixtures-browser` runs the ones that cover an email or
+calendar bug class; the recipe lists them. The CI job runs it beside this
+suite. `src/features/calendar/browser-test` mounts the calendar over scripted
+`/calendar` routes until `calendar_service` is part of the stack.
