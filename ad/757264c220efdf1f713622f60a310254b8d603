@@ -1,0 +1,36 @@
+packages/graphics/src/core/shapes/artifact.ts
+  s_467ffae7bfc0ed::t_69f937987b095f 1-4
+  s_467ffae7bfc0ed::t_692b6389e7d8d7 12-14,23,45-48
+packages/graphics/src/core/artifact-commands.ts
+  s_dfeff50ab3a311::t_6d84a502a4620e 5,7-8,14-26,39,87-110
+packages/graphics/src/core/index.ts
+  s_dfeff50ab3a311::t_d1c53af8aa06d8 128
+packages/graphics/src/core/shapes/embedded.ts
+  s_dfeff50ab3a311::t_a9413ac5aa5aa2 55-57
+packages/graphics/src/core/slide-transition.ts
+  s_dfeff50ab3a311::t_1b5e9a85b1bed4 76-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ad757264c220efdf1f713622f60a310254b8d603",
+  "prompts": {},
+  "sessions": {
+    "s_467ffae7bfc0ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08f1dd5d-1128-4aba-b991-7dd6dce0c816",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
