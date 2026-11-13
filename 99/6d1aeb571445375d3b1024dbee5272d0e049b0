@@ -1,0 +1,36 @@
+apps/web/src/features/block-canvas/views/artifact-controls.tsx
+  s_db469ad4d09071::t_582768e3b30e20 18,111
+  s_db469ad4d09071::t_726285a0baf0ac 16-17,19-20
+apps/web/src/features/block-canvas/views/canvas-view.tsx
+  s_db469ad4d09071::t_582768e3b30e20 69
+  s_db469ad4d09071::t_14a92a8eb684c4 53
+apps/web/src/features/block-canvas/primitives/create-eraser-state.ts
+  s_db469ad4d09071::t_8501aa19012565 10
+  s_db469ad4d09071::t_582768e3b30e20 108
+apps/web/src/features/block-canvas/views/canvas-read-only-view.tsx
+  s_db469ad4d09071::t_582768e3b30e20 12
+  s_db469ad4d09071::t_8501aa19012565 11
+apps/web/src/features/block-canvas/browser-test/artifact.e2e.ts
+  s_db469ad4d09071::t_8501aa19012565 73
+apps/web/src/features/block-canvas/constants.ts
+  s_db469ad4d09071::t_582768e3b30e20 6-9
+apps/web/src/features/block-canvas/primitives/text-input.ts
+  s_db469ad4d09071::t_582768e3b30e20 58,141
+  s_db469ad4d09071::t_8501aa19012565 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "996d1aeb571445375d3b1024dbee5272d0e049b0",
+  "prompts": {},
+  "sessions": {
+    "s_db469ad4d09071": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67403a05-27ff-4b1b-84cf-a4954e24f336",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
