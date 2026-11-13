@@ -1284,7 +1284,8 @@
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
               # CI needs sccache to cache every crate. It loads this shell through
               # setup-nix-dev-shell, so these attributes reach its build steps.
-              # The shellHook switches local shells to incremental builds.
+              # The shellHook switches local shells to incremental builds, and
+              # to kache when it is on PATH.
               CARGO_INCREMENTAL = "0";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
@@ -1300,11 +1301,34 @@
                 export SCCACHE_CACHE_SIZE="''${SCCACHE_CACHE_SIZE:-30G}"
                 # Local rebuilds after an edit are mostly workspace crates, which
                 # incremental compilation reuses and sccache misses across
-                # worktrees anyway. Third-party crates still go through sccache.
+                # worktrees anyway. Third-party crates still go through the
+                # compiler cache.
                 # Line tables keep backtrace locations while shrinking test
                 # binaries; set CARGO_PROFILE_DEV_DEBUG=full to use a debugger.
                 if [ -z "''${CI:-}" ]; then
                   unset CARGO_INCREMENTAL
+                  # Local shells use kache when it is on the caller's PATH; it
+                  # is not a devshell package. kache's adaptive incremental mode
+                  # needs CARGO_INCREMENTAL unset, as above. MACRO_RUST_CACHE
+                  # picks one explicitly: kache, sccache or none.
+                  case "''${MACRO_RUST_CACHE:-auto}" in
+                    auto)
+                      if kache_bin="$(command -v kache)"; then
+                        export RUSTC_WRAPPER="$kache_bin"
+                      fi
+                      ;;
+                    kache)
+                      if kache_bin="$(command -v kache)"; then
+                        export RUSTC_WRAPPER="$kache_bin"
+                      else
+                        echo "error: MACRO_RUST_CACHE=kache but kache is not on PATH; using sccache" >&2
+                      fi
+                      ;;
+                    sccache) ;;
+                    none) unset RUSTC_WRAPPER ;;
+                    *) echo "error: MACRO_RUST_CACHE must be kache, sccache or none, not ''${MACRO_RUST_CACHE@Q}; using sccache" >&2 ;;
+                  esac
+                  unset kache_bin
                   export CARGO_PROFILE_DEV_DEBUG="''${CARGO_PROFILE_DEV_DEBUG:-line-tables-only}"
                   ${pkgs.lib.optionalString isLinux ''
                     # Link host binaries with mold. Scoped to the host target, so
