@@ -2,7 +2,14 @@ import { expect, test } from '@playwright/test';
 import { LANGUAGES } from '../languages';
 
 test.beforeEach(async ({ page }) => {
-  await page.routeWebSocket('**', (socket) => socket.close());
+  // The app's sockets to Macro's services are closed, never Vite's own: on a
+  // cold server a dependency found while the page loads makes Vite re-bundle
+  // and ask the page to reload over that socket, and a page that can't is
+  // left on 504 "Outdated Optimize Dep" chunks and never reports ready.
+  await page.routeWebSocket(
+    (url) => url.hostname !== 'localhost',
+    (socket) => socket.close()
+  );
   await page.route('https://**', (route) => route.abort());
   // A page that never reports ready is only diagnosable from what it logged.
   page.on('pageerror', (error) => console.log(`[page error] ${error.message}`));
