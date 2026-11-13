@@ -140,7 +140,8 @@ export class Meeting extends MacroEntity<MeetingRecord> {
   }
 
   /**
-   * Invite an email address.
+   * Invite an email address. An agent's program (a code-mode run, or a token signed for an agent) is refused (403): give the user the
+   * meeting link to share instead.
    *
    * @destructive
    * @openworld

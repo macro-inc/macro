@@ -207,7 +207,9 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     return ExternalChatUpload.from(this, record);
   }
 
-  /** Personal sessions and owner API credentials can send. Bots never send.
+  /** Personal sessions and owner API credentials can send. Bots never send, and
+   * an agent's program (a code-mode run, or a token signed for an agent) is
+   * refused (403): write the message out and ask the user to send it in Macro.
    * Preserve the idempotency key; uncertain outcomes are never automatically resent.
    * The server enforces one request per second per user.
    *

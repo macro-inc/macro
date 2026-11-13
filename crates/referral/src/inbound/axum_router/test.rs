@@ -43,6 +43,17 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        // "agent" is the user's credential signed for an agent's program.
+        if jwt == "agent" {
+            let mut credential = self
+                .authorize("valid")
+                .await
+                .map(macro_authorization::ValidatedCredential::session)?;
+            credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+            credential.identity.agent_id =
+                Some(serde_json::from_value(serde_json::json!(uuid::Uuid::from_u128(1))).unwrap());
+            return Ok(credential);
+        }
         self.authorize(jwt)
             .await
             .map(macro_authorization::ValidatedCredential::session)
@@ -276,4 +287,36 @@ async fn test_get_code_not_affected_by_rate_limit() {
     let response = app.oneshot(get_code_request()).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_send_invite_refuses_an_agents_program() {
+    let invite = |bearer: &str, code_mode: bool| {
+        let request = axum::http::Request::post("/send")
+            .header(header::AUTHORIZATION, format!("Bearer {bearer}"))
+            .header(header::CONTENT_TYPE, "application/json");
+        let request = if code_mode {
+            request.header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        } else {
+            request
+        };
+        request
+            .body(axum::body::Body::from(
+                serde_json::json!({"recipient": "friend@example.com"}).to_string(),
+            ))
+            .unwrap()
+    };
+
+    for request in [invite("agent", false), invite("valid", true)] {
+        let app = build_router(ok_service(), allowing_rate_limiter());
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["message"],
+            crate::inbound::axum_router::send_invite::PROGRAM_REFERRAL_REFUSAL
+        );
+    }
 }

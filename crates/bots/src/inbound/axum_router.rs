@@ -14,7 +14,7 @@ use crate::domain::{
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
 };
@@ -28,8 +28,8 @@ use entity_access::{
 };
 use macro_authorization::{
     AccountHolderOrInternal, AnyPrincipal, BotOnly, MacroAuthorization,
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
+    MacroAuthorizationState, UserOrInternal, refuse_agent_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -570,7 +570,11 @@ pub async fn delete_bot_handler<
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Handler for `POST /bots/{bot_id}/tokens`.
+/// Why an agent's program may not mint a bot token: its secret would be in
+/// the program's hands.
+pub const PROGRAM_BOT_TOKEN_REFUSAL: &str = "An agent's program cannot mint bot tokens. The user mints them in Macro, from the bot's settings or a bot credential card.";
+
+/// Handler for `POST /bots/{bot_id}/tokens`. An agent's program is refused (403).
 #[utoipa::path(
     post,
     tag = "bots",
@@ -584,6 +588,7 @@ pub async fn delete_bot_handler<
         (status = 201, body = CreateBotTokenResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -595,9 +600,15 @@ pub async fn create_token_handler<
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(path): Path<BotPath>,
     Json(req): Json<CreateBotTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
+    refuse_agent_run(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+        PROGRAM_BOT_TOKEN_REFUSAL,
+    )?;
     let token = state
         .service
         .create_token(
@@ -844,6 +855,9 @@ pub enum BotsHandlerErr {
     /// Domain error.
     #[error(transparent)]
     Bot(#[from] BotError),
+    /// The caller may not use this route, e.g. an agent's program.
+    #[error(transparent)]
+    Refused(#[from] MacroAuthorizationRejection),
 }
 
 impl IntoResponse for BotsHandlerErr {
@@ -854,6 +868,7 @@ impl IntoResponse for BotsHandlerErr {
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
             Self::Bot(BotError::Unavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Bot(BotError::Repo(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Refused(rejection) => rejection.status,
         };
         if matches!(
             status,

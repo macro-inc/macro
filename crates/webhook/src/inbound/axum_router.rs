@@ -13,13 +13,14 @@ use crate::domain::{
 use axum::{
     Json, RequestPartsExt, Router,
     extract::{FromRef, FromRequestParts, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationRejection,
+    MacroAuthorizationService, MacroAuthorizationState, refuse_agent_run,
 };
 use model_error_response::ErrorResponse;
 use rate_limit::domain::models::RateLimitOk;
@@ -214,7 +215,11 @@ where
         .with_state(state)
 }
 
-/// Create a webhook.
+/// Why an agent's program may not create or change a webhook: it would send
+/// the workspace's events to an address the program chose.
+pub const PROGRAM_WEBHOOK_REFUSAL: &str = "An agent's program cannot create or change webhooks. Ask the user to set the webhook up in Macro's settings.";
+
+/// Create a webhook. An agent's program is refused (403).
 #[utoipa::path(
     post,
     path = "/webhook/webhooks",
@@ -231,8 +236,14 @@ where
 pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
+    headers: HeaderMap,
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
+    refuse_agent_run(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+        PROGRAM_WEBHOOK_REFUSAL,
+    )?;
     let webhook = service
         .create_webhook(authorization.authorization.user.macro_user_id, request)
         .await?;
@@ -289,7 +300,8 @@ pub async fn list_webhooks<S: WebhookService, Auth: MacroAuthorizationService>(
     ))
 }
 
-/// Patch a webhook.
+/// Patch a webhook. An agent's program is refused (403): any field can widen
+/// what is sent, or where.
 #[utoipa::path(
     patch,
     path = "/webhook/webhooks/{webhook_id}",
@@ -307,9 +319,15 @@ pub async fn list_webhooks<S: WebhookService, Auth: MacroAuthorizationService>(
 pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
+    headers: HeaderMap,
     Path(path): Path<WebhookPath>,
     Json(request): Json<PatchWebhookRequest>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
+    refuse_agent_run(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+        PROGRAM_WEBHOOK_REFUSAL,
+    )?;
     Ok(Json(
         service
             .patch_webhook(
@@ -378,17 +396,32 @@ pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService
 }
 
 /// Webhook handler error.
-pub struct WebhookHandlerError(WebhookError);
+pub enum WebhookHandlerError {
+    /// The webhook service refused or failed.
+    Webhook(WebhookError),
+    /// The caller may not use this route, e.g. an agent's program.
+    Refused(MacroAuthorizationRejection),
+}
 
 impl From<WebhookError> for WebhookHandlerError {
     fn from(error: WebhookError) -> Self {
-        Self(error)
+        Self::Webhook(error)
+    }
+}
+
+impl From<MacroAuthorizationRejection> for WebhookHandlerError {
+    fn from(rejection: MacroAuthorizationRejection) -> Self {
+        Self::Refused(rejection)
     }
 }
 
 impl IntoResponse for WebhookHandlerError {
     fn into_response(self) -> Response {
-        let status = match self.0 {
+        let error = match self {
+            Self::Webhook(error) => error,
+            Self::Refused(rejection) => return rejection.into_response(),
+        };
+        let status = match error {
             WebhookError::BadRequest(_) => StatusCode::BAD_REQUEST,
             WebhookError::Conflict(_) => StatusCode::CONFLICT,
             WebhookError::Unauthorized => StatusCode::FORBIDDEN,
@@ -396,10 +429,10 @@ impl IntoResponse for WebhookHandlerError {
             WebhookError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error=?self.0, "webhook handler error");
+            tracing::error!(error=?error, "webhook handler error");
             "internal server error".to_string()
         } else {
-            self.0.to_string()
+            error.to_string()
         };
         (
             status,

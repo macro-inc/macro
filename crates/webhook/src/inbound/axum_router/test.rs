@@ -106,6 +106,16 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        // "agent" is the user's credential signed for an agent's program.
+        if jwt == "agent" {
+            let mut credential = self
+                .authorize("valid")
+                .await
+                .map(macro_authorization::ValidatedCredential::session)?;
+            credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+            credential.identity.agent_id = Some(bot_id::MACRO_AI_BOT_ID);
+            return Ok(credential);
+        }
         self.authorize(jwt)
             .await
             .map(macro_authorization::ValidatedCredential::session)
@@ -714,4 +724,38 @@ fn webhook() -> Webhook {
 
 fn user_id() -> &'static str {
     "macro|webhook-test@example.com"
+}
+
+#[tokio::test]
+async fn an_agents_program_cannot_create_or_change_webhooks() {
+    for (method, uri, body) in [
+        ("POST", "/webhooks", create_body()),
+        (
+            "PATCH",
+            "/webhooks/wh_123",
+            json!({ "endpoint_url": "https://attacker.example/collect" }),
+        ),
+    ] {
+        let service = FakeService::default();
+        let response = send_request(
+            service.clone(),
+            FakeRateLimiter::default(),
+            FakeAuthorizationService::default(),
+            Some("Bearer agent"),
+            method,
+            uri,
+            body,
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{method} {uri}");
+        assert_eq!(
+            response_json(response).await["message"],
+            super::PROGRAM_WEBHOOK_REFUSAL
+        );
+        assert!(
+            service.calls().is_empty(),
+            "{method} {uri} reached the service"
+        );
+    }
 }

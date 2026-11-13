@@ -1,9 +1,16 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderMap, StatusCode},
+};
 use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
     inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
-use macro_authorization::MacroAuthorizationService;
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationRejection,
+    MacroAuthorizationService, refuse_agent_run,
+};
 use macro_user_id::{email::Email, lowercased::Lowercase};
 use model_error_response::ErrorResponse;
 
@@ -49,7 +56,14 @@ pub enum InviteToTeamError {
     /// The request named a team other than the caller's current team
     #[error("the requested team is not the caller's current team")]
     NotCurrentTeam,
+    /// An agent's program asked to send invites.
+    #[error(transparent)]
+    Refused(#[from] MacroAuthorizationRejection),
 }
+
+/// Why an agent's program may not invite people to a team: the invite emails
+/// reach addresses outside the workspace.
+pub const PROGRAM_TEAM_INVITE_REFUSAL: &str = "An agent's program cannot invite people to a team. Ask the user to invite them from the team settings in Macro.";
 
 impl axum::response::IntoResponse for InviteToTeamError {
     fn into_response(self) -> axum::response::Response {
@@ -67,6 +81,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
                 }),
             ),
             InviteToTeamError::NotCurrentTeam => return super::not_current_team_response(),
+            InviteToTeamError::Refused(rejection) => return rejection.into_response(),
             // Domain errors share one mapping - see the IntoResponse impl
             // for InviteUsersToTeamError in this crate's axum_router module.
             InviteToTeamError::InviteUsersToTeamError(e) => return e.into_response(),
@@ -86,6 +101,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
         (status = 304),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse, description = "An agent's program"),
         (status = 404, body = ErrorResponse),
         (status = 409, body = ErrorResponse, description = "`team_id` names a team other than the caller's current team"),
         (status = 500, body = ErrorResponse),
@@ -94,9 +110,19 @@ impl axum::response::IntoResponse for InviteToTeamError {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
     State(state): State<TeamRouterState<T, Eas, Auth>>,
     Json(req): Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {
+    refuse_agent_run(
+        caller
+            .authorization
+            .acting_user()
+            .is_some_and(|user| user.agent_id.is_some()),
+        &headers,
+        PROGRAM_TEAM_INVITE_REFUSAL,
+    )?;
     if !super::is_expected_team(&access.entity_access_receipt, req.team_id) {
         return Err(InviteToTeamError::NotCurrentTeam);
     }

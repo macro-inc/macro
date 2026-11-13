@@ -268,6 +268,7 @@ mod authenticated_join_routes {
             let user_id = match jwt {
                 "member" => "macro|member@example.com",
                 "program" => "macro|member@example.com",
+                "agent" => "macro|member@example.com",
                 "viewer" => "macro|viewer@example.com",
                 _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
             };
@@ -287,6 +288,11 @@ mod authenticated_join_routes {
                 let mut credential = ValidatedCredential::session(context);
                 if jwt == "program" {
                     credential.origin = CredentialOrigin::UserApiKey;
+                }
+                // The member's credential signed for an agent's program.
+                if jwt == "agent" {
+                    credential.origin = CredentialOrigin::MacroApiJwt;
+                    credential.identity.agent_id = Some(bot_id::MACRO_AI_BOT_ID);
                 }
                 credential
             })
@@ -322,6 +328,52 @@ mod authenticated_join_routes {
             .header("content-type", "application/json")
             .body(Body::from("{}"))
             .unwrap()
+    }
+
+    fn meeting_invite(actor: &str, code_mode: bool) -> Request<Body> {
+        let request = Request::post(format!("/meetings/invite/{}", "a".repeat(64)))
+            .header("authorization", format!("Bearer {actor}"))
+            .header("content-type", "application/json");
+        let request = if code_mode {
+            request.header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        } else {
+            request
+        };
+        request
+            .body(Body::from(r#"{"email":"guest@example.com"}"#))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn meeting_invite_refuses_an_agents_program() {
+        for request in [
+            meeting_invite("agent", false),
+            meeting_invite("member", true),
+        ] {
+            let mut service = MockCallService::new();
+            service.expect_invite_to_meeting().never();
+
+            let response = router(service).oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        }
+    }
+
+    #[tokio::test]
+    async fn meeting_invite_sends_for_a_person() {
+        let mut service = MockCallService::new();
+        service
+            .expect_invite_to_meeting()
+            .times(1)
+            .returning(|_, _, email| {
+                assert_eq!(email, "guest@example.com");
+                Box::pin(async { Ok(()) })
+            });
+
+        let response = router(service)
+            .oneshot(meeting_invite("member", false))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]

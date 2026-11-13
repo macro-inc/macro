@@ -642,7 +642,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * Create a webhook that inserts rows into `table`, writing with the
    * caller's access. POST a JSON object (one row) or an array of objects to
    * `/databases/webhooks/{token}` on the storage service; keys name columns.
-   * The token is the whole credential and is answered only here.
+   * The token is the whole credential and is answered only here. An agent's
+   * program (a code-mode run, or a token signed for an agent) is refused
+   * (403): ask the user to create the webhook from the database in Macro.
    *
    * @write
    */

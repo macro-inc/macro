@@ -5,13 +5,13 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
 };
 use macro_authorization::{
     AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState,
+    MacroAuthorizationState, refuse_agent_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -24,6 +24,9 @@ use crate::domain::{
     },
     ports::AccountManagerService,
 };
+
+#[cfg(test)]
+mod test;
 
 /// Router state for account manager endpoints.
 pub struct AccountManagerRouterState<S, Auth> {
@@ -131,7 +134,25 @@ pub struct AccountManagerGrantParams {
     pub id: Uuid,
 }
 
-/// Ask another account for manager access, in your DM with them.
+/// Why an agent's program may not request, answer or claim a manager grant:
+/// a grant hands one account full access to another.
+pub const PROGRAM_ACCOUNT_MANAGER_REFUSAL: &str = "An agent's program cannot request, approve or claim account manager access. Ask the user to do it in Macro.";
+
+/// Refuse an agent's program on the grant routes that give access away.
+fn refuse_program(
+    user: &macro_authorization::MacroUserAuthentication,
+    headers: &HeaderMap,
+) -> Result<(), AccountManagerError> {
+    refuse_agent_run(
+        user.agent_id.is_some(),
+        headers,
+        PROGRAM_ACCOUNT_MANAGER_REFUSAL,
+    )
+    .map_err(|_| AccountManagerError::Forbidden(PROGRAM_ACCOUNT_MANAGER_REFUSAL))
+}
+
+/// Ask another account for manager access, in your DM with them. An agent's
+/// program is refused (403).
 #[utoipa::path(
     post,
     tag = "account-managers",
@@ -150,12 +171,14 @@ pub struct AccountManagerGrantParams {
 pub async fn request_account_manager_handler<S, Auth>(
     State(state): State<AccountManagerRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Json(body): Json<RequestAccountManagerBody>,
 ) -> Result<Json<AccountManagerGrant>, AccountManagerError>
 where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
+    refuse_program(&user.authorization.user, &headers)?;
     let grant = state
         .service
         .request(
@@ -228,7 +251,8 @@ where
     Ok(Json(grant))
 }
 
-/// Approve or decline a request the caller didn't make.
+/// Approve or decline a request the caller didn't make. An agent's program is
+/// refused (403).
 #[utoipa::path(
     post,
     tag = "account-managers",
@@ -249,6 +273,7 @@ where
 pub async fn respond_to_account_manager_request_handler<S, Auth>(
     State(state): State<AccountManagerRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(params): Path<AccountManagerGrantParams>,
     Json(body): Json<RespondToAccountManagerRequestBody>,
 ) -> Result<Json<AccountManagerGrant>, AccountManagerError>
@@ -256,6 +281,7 @@ where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
+    refuse_program(&user.authorization.user, &headers)?;
     let grant = state
         .service
         .respond(
@@ -268,7 +294,7 @@ where
 }
 
 /// Issue the credential to the manager. Works once. A POST, so link previews
-/// and crawlers can't use it up.
+/// and crawlers can't use it up. An agent's program is refused (403).
 #[utoipa::path(
     post,
     tag = "account-managers",
@@ -288,12 +314,14 @@ where
 pub async fn claim_account_manager_token_handler<S, Auth>(
     State(state): State<AccountManagerRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(params): Path<AccountManagerGrantParams>,
 ) -> Result<Json<ClaimedAccountManagerToken>, AccountManagerError>
 where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
+    refuse_program(&user.authorization.user, &headers)?;
     let claimed = state
         .service
         .claim(&user.authorization.user.macro_user_id, params.id)

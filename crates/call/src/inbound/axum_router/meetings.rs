@@ -73,7 +73,12 @@ pub struct InviteMeetingRequest {
     pub email: String,
 }
 
-/// Queue an owner-authorized guest invitation email.
+/// Why an agent's program may not invite a meeting guest: the invitation
+/// email reaches an address outside the workspace.
+pub const PROGRAM_MEETING_INVITE_REFUSAL: &str = "An agent's program cannot email meeting invitations. Give the user the meeting link to share, or ask them to invite guests from the meeting in Macro.";
+
+/// Queue an owner-authorized guest invitation email. An agent's program is
+/// refused (403).
 #[utoipa::path(post, operation_id = "meeting_invite", path = "/call/meetings/invite/{token}",
     params(("token" = String, Path)), request_body = InviteMeetingRequest,
     responses((status = 204), (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse))) ]
@@ -82,8 +87,15 @@ pub async fn invite<S: CallService, Svc: EntityAccessService, Auth: MacroAuthori
     State(state): State<CallRouterState<S, Svc, Auth>>,
     Path(token): Path<String>,
     actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Json(request): Json<InviteMeetingRequest>,
 ) -> Result<StatusCode, CallError> {
+    macro_authorization::refuse_agent_run(
+        actor.authorization.user.agent_id.is_some(),
+        &headers,
+        PROGRAM_MEETING_INVITE_REFUSAL,
+    )
+    .map_err(|refusal| CallError::Forbidden(refusal.message.into_owned()))?;
     state
         .service
         .invite_to_meeting(

@@ -1,7 +1,7 @@
 use axum::{
     Json,
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use entity_access::{
@@ -11,7 +11,10 @@ use entity_access::{
     },
     inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationRejection,
+    MacroAuthorizationService, UserOrInternal, refuse_agent_run,
+};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -99,8 +102,47 @@ impl IntoResponse for JoinTeamByInviteLinkError {
     }
 }
 
+/// Why an agent's program may not read or make the team's invite link: its
+/// token lets anyone holding it join the team.
+pub const PROGRAM_INVITE_LINK_REFUSAL: &str = "An agent's program cannot read or create the team's invite link. Ask the user to share it from the team settings in Macro.";
+
+/// Why the invite link was not read or made.
+#[derive(Debug, thiserror::Error)]
+pub enum InviteLinkHandlerError {
+    /// An agent's program asked for it.
+    #[error(transparent)]
+    Refused(#[from] MacroAuthorizationRejection),
+    /// The team service refused or failed.
+    #[error(transparent)]
+    Link(#[from] ManageTeamInviteLinkError),
+}
+
+impl IntoResponse for InviteLinkHandlerError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Refused(rejection) => rejection.into_response(),
+            Self::Link(error) => error.into_response(),
+        }
+    }
+}
+
+/// Refuse an agent's program on the routes that hand out the link's token.
+fn refuse_program(
+    caller: &MacroAuthorizationExtractor<impl MacroAuthorizationService, AnyPrincipal>,
+    headers: &HeaderMap,
+) -> Result<(), MacroAuthorizationRejection> {
+    refuse_agent_run(
+        caller
+            .authorization
+            .acting_user()
+            .is_some_and(|user| user.agent_id.is_some()),
+        headers,
+        PROGRAM_INVITE_LINK_REFUSAL,
+    )
+}
+
 /// Gets the team's invite link. Anyone who may invite people to the team may
-/// see it.
+/// see it. An agent's program is refused (403).
 #[utoipa::path(
     get,
     path = "/team/invite-link",
@@ -119,8 +161,11 @@ pub async fn get_handler<
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
     State(state): State<TeamRouterState<T, Eas, Auth>>,
-) -> Result<Json<TeamInviteLinkResponse>, ManageTeamInviteLinkError> {
+) -> Result<Json<TeamInviteLinkResponse>, InviteLinkHandlerError> {
+    refuse_program(&caller, &headers)?;
     let token = state
         .service
         .get_team_invite_link(access.entity_access_receipt)
@@ -130,7 +175,7 @@ pub async fn get_handler<
 
 /// Creates the team's invite link, replacing any existing one. Anyone who may
 /// invite people may create the first link; replacing one requires a team
-/// admin or owner.
+/// admin or owner. An agent's program is refused (403).
 #[utoipa::path(
     post,
     path = "/team/invite-link",
@@ -149,8 +194,11 @@ pub async fn create_handler<
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
     State(state): State<TeamRouterState<T, Eas, Auth>>,
-) -> Result<(StatusCode, Json<CreatedTeamInviteLinkResponse>), ManageTeamInviteLinkError> {
+) -> Result<(StatusCode, Json<CreatedTeamInviteLinkResponse>), InviteLinkHandlerError> {
+    refuse_program(&caller, &headers)?;
     let token = state
         .service
         .create_team_invite_link(access.entity_access_receipt)

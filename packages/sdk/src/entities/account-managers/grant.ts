@@ -65,6 +65,7 @@ export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> 
 
   /**
    * Approve a request you didn't make. Only the side that didn't ask can.
+   * An agent's program (a code-mode run, or a token signed for an agent) is refused (403): the person approves in Macro.
    *
    * @destructive
    */
@@ -79,6 +80,7 @@ export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> 
 
   /**
    * Decline a request you didn't make. Only the side that didn't ask can.
+   * An agent's program (a code-mode run, or a token signed for an agent) is refused (403).
    *
    * @destructive
    */
@@ -94,6 +96,7 @@ export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> 
   /**
    * Get the token for the managed account. Only the manager can, and only once:
    * save it now. Use it as the SDK's `token` to act as the managed account.
+   * The agent account claims with its own credential; an agent's program (a code-mode run, or a token signed for an agent) is refused (403).
    *
    * @destructive
    */

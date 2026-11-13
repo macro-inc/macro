@@ -28,6 +28,7 @@ export class ApiKeyNamespace {
 
   /**
    * Create a key. Save the secret now; it cannot be retrieved later.
+   * An agent's program (a code-mode run, or a token signed for an agent) is refused (403): ask the user to create one in Macro's settings.
    *
    * @write
    */
