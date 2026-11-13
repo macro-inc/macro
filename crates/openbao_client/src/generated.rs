@@ -68,6 +68,7 @@ pub mod types {
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
     pub struct LoginAuth {
         pub client_token: crate::SecretString,
+        pub lease_duration: u64,
     }
     ///`LoginRequest`
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]

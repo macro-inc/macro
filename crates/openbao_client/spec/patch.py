@@ -66,7 +66,8 @@ def patch(documents):
         "SecretData": {"type": "object", "additionalProperties": {}},
         "ErrorResponse": obj({"errors": {**array(ref("SecretString")), "default": []}}),
         "LoginRequest": obj({"jwt": ref("SecretString"), "role": STRING}, ("jwt", "role")),
-        "LoginAuth": obj({"client_token": ref("SecretString")}, ("client_token",)),
+        # lease_duration (seconds) bounds how long callers may reuse the token.
+        "LoginAuth": obj({"client_token": ref("SecretString"), "lease_duration": INTEGER}, ("client_token", "lease_duration")),
         "LoginResponse": obj({"auth": ref("LoginAuth")}, ("auth",)),
         "CasOptions": obj({"cas": INTEGER}, ("cas",)),
         "WriteSecretRequest": obj({"data": ref("SecretData"), "options": ref("CasOptions")}, ("data", "options")),
