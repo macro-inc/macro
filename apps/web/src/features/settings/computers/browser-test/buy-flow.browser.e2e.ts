@@ -242,7 +242,7 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     await shoot(page, 'buy-billing');
     await expect(progress.getByRole('listitem')).toHaveText(
       [
-        'Updating billing…',
+        'Billing updated',
         /Creating the computer\s*\d+:\d\d/,
         'Starting up',
         'Connecting to Macro',

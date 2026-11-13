@@ -118,9 +118,10 @@ test('closes during setup, is told the computer is ready, and finishes from the 
   });
 
   await page.goto('/');
+  // A cold dev server can take a while to serve the first page.
   await expect(
     page.getByRole('button', { name: 'Get a computer' })
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 60_000 });
   await pace(page);
   await page.getByRole('button', { name: 'Get a computer' }).click();
   await pace(page);
@@ -169,6 +170,8 @@ test('closes during setup, is told the computer is ready, and finishes from the 
     page.getByText('Your computer is ready: connect your AI and finish setup')
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Maya's Agent Box is up.")).toBeVisible();
+  // The notification refreshes the row behind it: no longer setting up.
+  await expect(row(page)).not.toContainText('Setting up');
   await shoot(page, 'notice-ready');
 
   // Its action reopens the same dialog on Bring your AI.
@@ -256,5 +259,14 @@ test('a failed setup notice says why and reopens setup to Retry', async ({
       .getByRole('list', { name: 'Setup progress' })
       .getByRole('button', { name: 'Retry setup' })
   ).toBeVisible({ timeout: 10_000 });
+  // Setup is stopped: the sign-in step waits on Retry, with nothing spinning
+  // and no action that cannot work.
+  await expect(dialog(page)).toContainText(
+    'Setup stopped before the computer came up'
+  );
+  await expect(dialog(page)).not.toContainText('Preparing sign-in');
+  await expect(
+    dialog(page).getByRole('button', { name: 'Use Macro credits instead' })
+  ).toHaveCount(0);
   await shoot(page, 'notice-failed-reopened');
 });

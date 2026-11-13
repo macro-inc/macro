@@ -125,6 +125,15 @@ export default {
   setupProgressLabel: 'Setup progress',
   stageBilling: 'Updating billing…',
   stageSignIn: 'Sign in to Claude',
+  stageBillingDone: 'Billing updated',
+  stepCreatingDone: 'Computer created',
+  stepBootingDone: 'Started up',
+  stepConnectingDone: 'Connected to Macro',
+  stageSignInDone: 'Signed in to Claude',
+  stageSkipped: '{{stage}} · skipped',
+  skippedStep: 'skipped',
+  signInWaitsForRetry:
+    'Setup stopped before the computer came up, so there is no sign-in yet. Retry setup above; this step continues once the computer connects.',
   signInUnlocksLater:
     'The sign-in link comes from the computer, so this unlocks by itself once it connects.',
   preparingSignIn: 'Preparing sign-in…',

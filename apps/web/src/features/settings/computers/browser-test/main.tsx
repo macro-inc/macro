@@ -31,11 +31,23 @@ fireAndForget(Composer.preload(), 'computers-fixture');
 fireAndForget(AgentSettings.preload(), 'computers-fixture');
 
 // A computer setup notification arriving, as the realtime feed delivers it.
+// It goes through the app's own handler: the computers list refreshes and
+// the notice shows.
 window.computerFixture.notify = async (content) => {
-  const { showComputerSetupToast } = await import(
-    '../../../notifications/computer-setup-toast'
+  const { handleNotificationUpdate } = await import(
+    '../../../notifications/use-notification-updates'
   );
-  showComputerSetupToast(content);
+  handleNotificationUpdate({
+    id: `setup-${content.computerId}-${content.outcome.kind}`,
+    entity_id: 'team-1',
+    entity_type: 'team',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    state: 'unseen',
+    sent: true,
+    notification_event_type: 'computer_setup',
+    notification_metadata: { tag: 'computer_setup', content },
+  });
 };
 
 function Fixture() {

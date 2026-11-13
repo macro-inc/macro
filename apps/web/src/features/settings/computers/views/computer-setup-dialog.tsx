@@ -8,6 +8,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import {
   type AgentWithHarnessId,
   invalidateAgents,
@@ -99,7 +100,9 @@ export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
     >
       <For each={STEP_ORDER}>
         {(step, index) => {
-          const done = () => index() < current();
+          // Skipped, not cancelled: muted with a dash, never struck through.
+          const skipped = () => step === 'claude' && props.skipsClaude;
+          const done = () => index() < current() && !skipped();
           const active = () => index() === current();
           return (
             <li
@@ -107,8 +110,7 @@ export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
                 'flex items-center gap-1.5',
                 active() && 'font-medium text-ink',
                 done() && 'text-ink-muted',
-                !active() && !done() && 'text-ink-extra-muted',
-                step === 'claude' && props.skipsClaude && 'line-through'
+                !active() && !done() && 'text-ink-extra-muted'
               )}
               aria-current={active() ? 'step' : undefined}
             >
@@ -119,20 +121,38 @@ export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
                 />
               </Show>
               <Show
-                when={done()}
+                when={!skipped()}
                 fallback={
-                  <span
+                  <MinusIcon
                     aria-hidden="true"
-                    class={cn(
-                      'size-1.5 shrink-0 rounded-full',
-                      active() ? 'bg-accent' : 'border border-ink-extra-muted'
-                    )}
+                    class="size-3 shrink-0 text-ink-extra-muted"
                   />
                 }
               >
-                <CheckIcon aria-hidden="true" class="size-3 shrink-0" />
+                <Show
+                  when={done()}
+                  fallback={
+                    <span
+                      aria-hidden="true"
+                      class={cn(
+                        'size-1.5 shrink-0 rounded-full',
+                        active() ? 'bg-accent' : 'border border-ink-extra-muted'
+                      )}
+                    />
+                  }
+                >
+                  <CheckIcon aria-hidden="true" class="size-3 shrink-0" />
+                </Show>
               </Show>
-              {stepLabel(step)}
+              <span>
+                {stepLabel(step)}
+                {/* Phones keep the short label; the word stays for assistive tech. */}
+                <Show when={skipped()}>
+                  <span class={isMobile() ? 'sr-only' : undefined}>
+                    {` · ${t('computers.skippedStep')}`}
+                  </span>
+                </Show>
+              </span>
             </li>
           );
         }}
@@ -339,6 +359,11 @@ export function ComputerSetupSteps(props: {
     </div>
   );
 
+  // Failed, or stuck until someone acts: setup is not moving on its own.
+  const setupStopped = () =>
+    props.computer.status === 'failed' ||
+    props.computer.status === 'needs_attention';
+
   // The stage the computer is on, for "Preparing sign-in… starting up · 0:42".
   const elapsed = useSetupElapsed(() => props.computer);
   const currentStage = () =>
@@ -430,23 +455,28 @@ export function ComputerSetupSteps(props: {
               {t('computers.signInToClaude')}
             </ActionDialogShell.Title>
             <ActionDialogShell.Description>
-              {t('computers.signInWaitingBody')}
+              {setupStopped()
+                ? t('computers.signInWaitsForRetry')
+                : t('computers.signInWaitingBody')}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
-          {/* No greyed button: the step says what it is waiting for. */}
-          <p
-            role="status"
-            class="flex items-center gap-2 text-sm font-medium text-ink"
-          >
-            <Spinner size="sm" decorative />
-            {t('computers.preparingSignInStatus', {
-              stage: currentStage()?.label ?? t('computers.computerStarting'),
-              elapsed: elapsed() ?? '0:00',
-            })}
-          </p>
-          <p class="text-sm text-ink-muted">
-            {t('computers.setupContinuesInBackground')}
-          </p>
+          {/* No greyed button: the step says what it is waiting for. A
+              stopped setup is not progressing, so nothing spins or counts. */}
+          <Show when={!setupStopped()}>
+            <p
+              role="status"
+              class="flex items-center gap-2 text-sm font-medium text-ink"
+            >
+              <Spinner size="sm" decorative />
+              {t('computers.preparingSignInStatus', {
+                stage: currentStage()?.label ?? t('computers.computerStarting'),
+                elapsed: elapsed() ?? '0:00',
+              })}
+            </p>
+            <p class="text-sm text-ink-muted">
+              {t('computers.setupContinuesInBackground')}
+            </p>
+          </Show>
           <p class="text-sm text-ink-muted">
             {t('computers.claudeSharedAccount')}
           </p>
@@ -455,9 +485,16 @@ export function ComputerSetupSteps(props: {
           <Button type="button" variant="ghost" onClick={props.onClose}>
             {t('common.close')}
           </Button>
-          <Button type="button" variant="secondary" onClick={useCreditsInstead}>
-            {t('computers.claudeUseCreditsInstead')}
-          </Button>
+          {/* Choosing Macro's Claude cannot finish a computer that is not up. */}
+          <Show when={!setupStopped()}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={useCreditsInstead}
+            >
+              {t('computers.claudeUseCreditsInstead')}
+            </Button>
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
       <Match when={props.step === 'ready'}>

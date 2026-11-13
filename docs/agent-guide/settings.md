@@ -923,8 +923,10 @@ To buy one as a team admin:
 While the computer provisions, a **Setup progress** list under the step bar
 follows the same phases the row shows (Updating billing…, Creating the
 computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
-on every step, the sign-in struck through "Not needed" once Macro's Claude is
-chosen): done stages carry a check, the current one a spinner and how long it
+on every step, the sign-in marked with a dash as "Sign in to Claude · skipped",
+"Not needed", once Macro's Claude is chosen): done stages carry a check and
+read as done (Billing updated, Computer created, Started up, Connected to
+Macro, Signed in to Claude), the current one a spinner and how long it
 has taken (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
 else from when the step was first seen here, the billing wait from the
 purchase), and a stuck one says why (waiting for capacity, or
@@ -952,7 +954,12 @@ Claude, then setup-complete.
   instead**. Once connected, **Open claude.ai** appears and the tab title
   becomes "● Sign in to Claude — Macro". Closed meanwhile, the setup notice
   (below) reopens the modal on that step. The code is pasted in the same modal.
-- **Macro's Claude** skips **Bring your AI**, shown struck through.
+- **Macro's Claude** skips **Bring your AI**, shown muted with a dash as
+  "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
+  through.
+- A **failed** or stuck setup stops the **Bring your AI** step: it says setup
+  stopped before the computer came up and to use **Retry setup** above, with
+  no spinner, no elapsed time and no **Use Macro credits instead**.
 
 Macro creates that agent once, on the computer's first connection, with the
 handle `@<first-name>-s-agent` (`-2`, `-3`… when taken), on Claude Code's

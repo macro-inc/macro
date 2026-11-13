@@ -138,14 +138,16 @@ it('keeps the phone step bar to short labels', () => {
   ]);
 });
 
-it('strikes Bring your AI when the agent runs on Macro credits', () => {
+it('marks Bring your AI skipped, not struck, when the agent runs on Macro credits', () => {
   render(() => <StepHeader step="ready" skipsClaude />);
 
   const items = screen
     .getByRole('list', { name: 'Setup steps' })
     .querySelectorAll('li');
-  expect(items[2].className).toContain('line-through');
-  expect(items[1].className).not.toContain('line-through');
+  expect(items[2].textContent).toBe('Bring your AI · skipped');
+  expect(items[2].className).toContain('text-ink-extra-muted');
+  expect(items[2].className).not.toContain('line-through');
+  expect(items[1].textContent).toBe('Configure agent');
 });
 
 it('opens the composer in Code with the configured agent selected', () => {

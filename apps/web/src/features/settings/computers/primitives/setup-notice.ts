@@ -1,6 +1,5 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import type { NotifEvent } from '@service-notification/generated/schemas/notifEvent';
 import { match } from 'ts-pattern';
 
@@ -33,7 +32,6 @@ export function showComputerSetupNotice(
     open();
   };
   const common = {
-    titleIcon: HardDrivesIcon,
     duration: 60_000,
     onDismiss: () => showing.delete(key),
   };
