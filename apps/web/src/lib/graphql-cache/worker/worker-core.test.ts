@@ -1128,6 +1128,22 @@ describe('CacheWorkerCore', () => {
     resumes.shift()?.();
     await replayed;
     expect(order).toEqual(['search:todo', 'read:replayed']);
+
+    // A typed search that arrives alone starts at once.
+    const alone = core.handleRequest(port, {
+      id: 4,
+      kind: 'search',
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'alone',
+        limit: 20,
+        nowMs: 1,
+      },
+    });
+    expect(resumes).toHaveLength(0);
+    await alone;
+    expect(order.at(-1)).toBe('search:alone');
   });
 
   it('keeps the queue moving when it cannot yield between requests', async () => {

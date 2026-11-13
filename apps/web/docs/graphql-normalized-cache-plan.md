@@ -282,7 +282,8 @@ delivers one message per task and engine calls run to completion, so a request
 started on arrival usually finishes before the next is seen: the queue would
 rarely hold two and its priorities would rarely apply. The worker instead yields
 to its event loop before starting (and again after each request), repeating
-while requests keep arriving (up to a bound), and then picks by priority. A visible consumer starts a one-second read budget
+while requests keep arriving (up to a bound), and then picks by priority. A
+typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.

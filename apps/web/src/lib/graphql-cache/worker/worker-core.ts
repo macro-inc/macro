@@ -537,6 +537,13 @@ export class CacheWorkerCore {
   private collectArrivalsThenDrain(yieldsLeft = MAX_ARRIVAL_YIELDS): void {
     if (this.running || this.yielding || this.queue.length === 0) return;
 
+    // Nothing still on its way would be picked ahead of a typed search, and
+    // it is the one request someone is waiting on.
+    if (this.queue.every((queued) => isTypedSearch(queued.request))) {
+      this.drainQueue();
+      return;
+    }
+
     const seen = this.queue.length;
     const resume = () => {
       this.yielding = false;
