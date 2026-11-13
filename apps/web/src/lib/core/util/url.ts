@@ -58,12 +58,24 @@ export function openExternalUrl(url: string) {
     return;
   }
 
-  if (isTauri()) {
+  // The native command takes only absolute URLs; anything else (a typed
+  // `example.com`) opens as a popup while the click's gesture is still live.
+  if (isTauri() && isAbsoluteUrl(url)) {
     fireAndForget(openFromDesktop(url), 'open-external-url');
     return;
   }
 
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+}
+
+// `URL.canParse` is missing from older WebKitGTK releases.
+function isAbsoluteUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -79,14 +91,15 @@ async function openFromDesktop(url: string) {
   try {
     opened = await invoke<boolean>('open_external_url', { url });
   } catch (error) {
-    // The command is missing on a native shell older than it, and rejects a
-    // string that is not an absolute URL. Either way a popup request reaches
-    // the new-window hook, which keeps the app page in place.
+    // A native shell older than the command, or a failed call. The popup reaches the
+    // new-window hook on macOS and Windows; WebKitGTK may drop it now that
+    // the click's gesture has expired, as it did before the command existed.
     window.open(url, '_blank', 'noopener,noreferrer');
     if (error === 'Command open_external_url not found') return;
     throw error;
   }
-  // A standalone document on the app's origin needs a popup webview.
+  // A standalone document on the app's origin needs a popup webview (no
+  // caller opens one through here today; WebKitGTK may drop it, as above).
   if (!opened) window.open(url, '_blank', 'noopener,noreferrer');
 }
 

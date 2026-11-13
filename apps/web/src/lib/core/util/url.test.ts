@@ -137,23 +137,32 @@ describe('openExternalUrl', () => {
     );
   });
 
-  it.each([
-    'Command open_external_url not found',
-    'invalid args `url` for command `open_external_url`',
-  ])('opens a popup when the command rejects: %s', async (error) => {
+  it('opens a popup on a native shell older than the command', async () => {
     platform.tauri = true;
-    invoke.mockRejectedValue(error);
+    invoke.mockRejectedValue('Command open_external_url not found');
 
-    openExternalUrl('example.com');
+    openExternalUrl('https://example.com');
 
     await vi.waitFor(() =>
       expect(openSpy).toHaveBeenCalledWith(
-        'example.com',
+        'https://example.com',
         '_blank',
         'noopener,noreferrer'
       )
     );
-    expect(openSpy).not.toHaveBeenCalledWith('example.com', '_self');
+  });
+
+  it('opens a popup at once on desktop for a string that is not a URL', () => {
+    platform.tauri = true;
+
+    openExternalUrl('example.com');
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(openSpy).toHaveBeenCalledWith(
+      'example.com',
+      '_blank',
+      'noopener,noreferrer'
+    );
   });
 
   it('navigates in place on mobile, where only navigation reaches native', () => {
