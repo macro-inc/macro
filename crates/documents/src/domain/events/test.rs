@@ -491,4 +491,25 @@ mod exposure {
         });
         assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
     }
+
+    /// A delivered lifecycle event's public body is the broker body, byte
+    /// for byte, under the same audience.
+    #[test]
+    fn a_plain_update_keeps_its_exact_body() {
+        let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+            appearance_change: None,
+            ..match appearance_update() {
+                DocumentTopicEvent::Updated(metadata) => metadata,
+                _ => unreachable!(),
+            }
+        });
+        let public = public(&event);
+        assert_eq!(public.name, "document.updated");
+        assert_eq!(public.stage, Stage::Stable);
+        assert_eq!(public.audience, document_audience());
+        assert_eq!(
+            serde_json::to_string(public.payload.as_ref()).unwrap(),
+            serde_json::to_string(&event).unwrap()
+        );
+    }
 }
