@@ -287,7 +287,13 @@ function resumed({ operation, parent }: HeldOperation): Operation {
  */
 export function liveUpdatesGateExchanges(
   gate: LiveUpdatesGate,
-  options: { cached?: boolean } = {}
+  options: {
+    /**
+     * Whether a read may have a cached result to show while it waits (the
+     * default); false without a cache or with one that starts empty.
+     */
+    cached?: boolean;
+  } = {}
 ): { rereads: Exchange; holds: Exchange } {
   const cached = options.cached ?? true;
   const early = new Map<number, EarlyRead>();

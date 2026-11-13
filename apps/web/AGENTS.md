@@ -843,12 +843,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   uncached client or on a cache whose scope this page created
   (`cacheScopeStartsEmpty`; its misses would come only once it opens), goes at
   once and is read again once live, after the client has its answer
-  (`graphql_soup.live_updates.reread`): its `rereads` exchange goes first,
-  since the cache publishes an answer only once written and urql drops a read
-  of a query whose answer it has not received. A `cache-first` read sets
-  neither and is read again when the subscriptions go live, unless a held read
-  of the same operation key went out then; every read is read again if the
-  hold gave up.
+  (`graphql_soup.live_updates.reread`). A client takes both exchanges: `holds`
+  after the normalized cache and `rereads` first, since the cache publishes an
+  answer only once written and urql drops a read of a query whose answer it
+  has not received. A `cache-first` read sets neither and is read again when
+  the subscriptions go live, unless a held read of the same operation key went
+  out then; every read is read again if the hold gave up.
   The gate sends every held operation, because the normalized cache counts
   each one it forwards until its result arrives. A held operation
   records a `graphql_soup.live_updates.wait` span unless its one-shot trace
