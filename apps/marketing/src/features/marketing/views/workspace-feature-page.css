@@ -44,3 +44,8 @@
 @media (max-width: 640px) {
   .workspace-feature-page[data-feature=spreadsheets] .workspace-feature-preview { height: 650px; }
 }
+
+/* Calendar's title is the longest; on phones it is set small enough for two lines. */
+@media (max-width: 699px) {
+  .feature-page .workspace-feature-page[data-feature=calendar] .email-page-hero h1 { font-size: clamp(22px, 6.6vw, 30px); }
+}

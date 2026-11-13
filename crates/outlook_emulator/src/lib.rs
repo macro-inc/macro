@@ -1,4 +1,5 @@
-//! A stateful fake of the Microsoft Graph mail API Macro's email code calls.
+//! A stateful fake of the Microsoft Graph mail and calendar APIs Macro's
+//! email and calendar code call.
 //!
 //! [`OutlookEmulator::start`] listens on a `127.0.0.1` port and serves, for
 //! any number of mailboxes:
@@ -7,10 +8,17 @@
 //!   folder delta queries (skip and delta tokens, 410 for an expired one),
 //!   drafts, replies and forwards, send, attachments and upload sessions,
 //!   master categories, inbox rules, contacts, `$batch`, and subscriptions;
-//! - Microsoft's OAuth token endpoint ([`OutlookEmulator::token_url`]);
+//!   mailbox settings, calendars, `calendarView` and its delta, events,
+//!   series with their instances, exceptions and deleted occurrences, and
+//!   creating, changing, deleting and answering events;
+//! - the Microsoft identity platform under [`OutlookEmulator::login_url`]:
+//!   a sign-in page that lists the mailboxes as users, authorization codes,
+//!   the token endpoint, ID tokens with their signing keys and OpenID
+//!   discovery document, userinfo, and the admin-consent page;
 //! - a control API under `/_emulator/`, mirrored by the methods of
-//!   [`OutlookEmulator`]: seed mailboxes, deliver mail, inject errors and
-//!   throttling, advance the clock, and read what was received and notified.
+//!   [`OutlookEmulator`]: seed mailboxes and calendars, deliver mail, change
+//!   events, inject errors and throttling, advance the clock, and read what
+//!   was received and notified.
 //!
 //! What a client writes it reads back, and every change shows up in the
 //! folder's next delta round. Creating a subscription validates its
@@ -19,11 +27,13 @@
 //!
 //! The real `email_api_client` Outlook adapter talks to it through
 //! `OutlookApiClientRepository::for_graph_url`, and a running service
-//! through the `OVERRIDE_MICROSOFT_GRAPH_URL` service URL override. Nothing
-//! here talks to Microsoft.
+//! through the `OVERRIDE_MICROSOFT_GRAPH_URL` service URL override. Sign-in
+//! and Outlook linking reach it through `OVERRIDE_MICROSOFT_LOGIN_URL` and
+//! `OVERRIDE_MICROSOFT_LOGIN_PAGE_URL`. Nothing here talks to Microsoft.
 
 #![deny(missing_docs)]
 
+mod calendar;
 mod control;
 mod error;
 mod fault;
@@ -35,6 +45,8 @@ mod oauth;
 mod odata;
 mod render;
 mod seed;
+mod sign_in;
+mod signing_key;
 mod state;
 #[cfg(test)]
 mod test;
@@ -47,14 +59,18 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::net::TcpListener;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{OnceCell, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-pub use control::{MessageChange, MessageSummary, SubscriptionSummary};
+pub use control::{CalendarSummary, MessageChange, MessageSummary, SubscriptionSummary};
 pub use fault::{Fault, FaultError, Route};
-pub use seed::{NewAttachment, NewMessage, Seed, SeedContact, SeedError, SeedFolder, SeedMailbox};
+pub use seed::{
+    NewAttachment, NewEvent, NewMessage, Seed, SeedCalendar, SeedContact, SeedError, SeedFolder,
+    SeedMailbox,
+};
 
+use crate::signing_key::{SigningKey, SigningKeyError};
 use crate::state::{NotificationJob, State};
 
 /// Why a control operation was refused.
@@ -75,6 +91,15 @@ pub enum EmulatorError {
     /// No subscription has this id.
     #[error("no subscription {0}")]
     UnknownSubscription(String),
+    /// The mailbox has no calendar with this name or id.
+    #[error("no calendar {0}")]
+    UnknownCalendar(String),
+    /// The mailbox has no event with this id.
+    #[error("no event {0}")]
+    UnknownEvent(String),
+    /// An event could not be built or changed from what was given.
+    #[error("invalid event: {0}")]
+    InvalidEvent(String),
     /// A message could not be built from what was given.
     #[error("invalid message: {0}")]
     InvalidMessage(String),
@@ -109,6 +134,10 @@ pub struct Options {
     /// The origin links in responses are built on, when clients reach the
     /// emulator through another address than the one it listens on.
     pub public_url: Option<String>,
+    /// The origin a browser reaches the emulator at, when that is another
+    /// address than services reach it at. The sign-in page is advertised
+    /// there.
+    pub browser_url: Option<String>,
 }
 
 /// What [`OutlookEmulator::deliver`] stored.
@@ -189,6 +218,10 @@ pub struct MailboxSummary {
 struct Inner {
     state: Mutex<State>,
     public_url: String,
+    browser_url: String,
+    /// Generated on first use: it takes seconds in a debug build, and most
+    /// tests never sign anything.
+    signing_key: OnceCell<SigningKey>,
     /// Bumped on every state change, to wake waiters.
     changed: watch::Sender<u64>,
     jobs: mpsc::UnboundedSender<NotificationJob>,
@@ -231,13 +264,20 @@ impl OutlookEmulator {
         }
 
         let (jobs, queued) = mpsc::unbounded_channel();
+        let origin = |url: String| url.trim_end_matches('/').to_string();
+        let public_url = options
+            .public_url
+            .map(origin)
+            .unwrap_or_else(|| format!("http://{address}"));
         let emulator = Self {
             inner: Arc::new(Inner {
                 state: Mutex::new(state),
-                public_url: options
-                    .public_url
-                    .map(|url| url.trim_end_matches('/').to_string())
-                    .unwrap_or_else(|| format!("http://{address}")),
+                browser_url: options
+                    .browser_url
+                    .map(origin)
+                    .unwrap_or_else(|| public_url.clone()),
+                public_url,
+                signing_key: OnceCell::new(),
                 changed: watch::Sender::new(0),
                 jobs,
                 http: http.build()?,
@@ -249,6 +289,7 @@ impl OutlookEmulator {
         let app = control::router()
             .merge(graph::router())
             .merge(oauth::router())
+            .merge(sign_in::router())
             .layer(axum::middleware::from_fn_with_state(
                 emulator.clone(),
                 graph::log_request,
@@ -293,6 +334,33 @@ impl OutlookEmulator {
     /// Microsoft's OAuth token endpoint, for the `common` tenant.
     pub fn token_url(&self) -> String {
         format!("{}/common/oauth2/v2.0/token", self.inner.public_url)
+    }
+
+    /// The Microsoft identity platform's root as a service reaches it, for
+    /// `OVERRIDE_MICROSOFT_LOGIN_URL`: the token endpoint, the OpenID
+    /// discovery document and the signing keys of every tenant are under it.
+    pub fn login_url(&self) -> String {
+        format!("{}/", self.inner.public_url)
+    }
+
+    /// The Microsoft identity platform's root as a browser reaches it, for
+    /// `OVERRIDE_MICROSOFT_LOGIN_PAGE_URL`: the sign-in and admin-consent
+    /// pages of every tenant are under it.
+    pub fn login_page_url(&self) -> String {
+        format!("{}/", self.inner.browser_url)
+    }
+
+    /// The origin a browser reaches the emulator at.
+    pub(crate) fn browser_url(&self) -> String {
+        self.inner.browser_url.clone()
+    }
+
+    /// The key ID tokens are signed with.
+    pub(crate) async fn signing_key(&self) -> Result<&SigningKey, SigningKeyError> {
+        self.inner
+            .signing_key
+            .get_or_try_init(|| async { tokio::task::spawn_blocking(SigningKey::generate).await? })
+            .await
     }
 
     /// A stand-in for Macro's authentication service, for
