@@ -10,7 +10,7 @@ export const TASK_TAB_IDS = [
   'created-projects',
 ] as const;
 
-export function isProjectTab(tab: TasksTab): tab is ProjectTab {
+export function isProjectTab(tab: string | undefined): tab is ProjectTab {
   return (
     tab === 'projects' || tab === 'my-projects' || tab === 'created-projects'
   );

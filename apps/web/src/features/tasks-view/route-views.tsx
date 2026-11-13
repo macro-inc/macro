@@ -9,8 +9,10 @@ import {
   createSearchParams,
   SplitRouter,
   useNavigate,
+  usePane,
   useParams,
   useRouteParams,
+  useSplitRouter,
 } from '@app/lib/split-router';
 import {
   projectDetailRoute,
@@ -24,6 +26,7 @@ import {
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
+import { viewRestorationKey } from '@components/app/split-layout/view-restoration-key';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableProjects } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -46,6 +49,10 @@ function TasksLegacyRouteView() {
 export const TasksRouteView = withAuth(() => {
   useViewRestoration();
   const params = useParams<{ taskId?: string; projectId?: string }>();
+  const pane = usePane();
+  const router = useSplitRouter();
+  const workspaceKey = () =>
+    viewRestorationKey('tasks', router.entry(pane())?.location);
   return (
     <AppView
       id="tasks"
@@ -55,7 +62,10 @@ export const TasksRouteView = withAuth(() => {
       }
       detailFallback={<TasksLegacyRouteView />}
     >
-      <TasksView />
+      {/* Each dock destination restores its own entry state on activation. */}
+      <Show keyed when={workspaceKey()}>
+        {(_workspaceKey) => <TasksView />}
+      </Show>
     </AppView>
   );
 }, TasksViewSkeleton);
