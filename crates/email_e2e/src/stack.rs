@@ -23,7 +23,7 @@ use crate::inbox::{Mail, Provider};
 use crate::infra::postgres::Database;
 use crate::infra::redis::RedisDatabase;
 use crate::infra::sqs::Queues;
-use crate::macro_services::{MacroServices, ServiceRequest};
+use crate::macro_services::{HeldRequest, MacroServices, ServiceRequest};
 use crate::process::ServiceProcess;
 use crate::tls::TlsFront;
 use crate::user::User;
@@ -217,6 +217,9 @@ impl Stack {
             let url = format!("http://127.0.0.1:{port}");
             match wait_for_health(&self.http, &url, &mut service).await {
                 Ok(()) => {
+                    if let Some(services) = &self.macro_services {
+                        services.route_document_storage(&url);
+                    }
                     self.graphql_url = Some(format!("{url}{GRAPHQL_PATH}"));
                     self.document_storage = Some(service);
                     return Ok(());
@@ -461,6 +464,22 @@ impl Stack {
             Some(macro_services) => {
                 macro_services.fail_next(service, method, path_prefix, status, body)
             }
+            None => bail!("the stack was torn down"),
+        }
+    }
+
+    /// Keeps the next request to a Macro service stand-in waiting (matched
+    /// as in [`Stack::fail_next_service_request`]) until the scenario
+    /// releases it, so the scenario can change things between a service's
+    /// request and its answer. The request is recorded when it arrives.
+    pub fn hold_next_service_request(
+        &self,
+        service: &str,
+        method: &str,
+        path_prefix: &str,
+    ) -> Result<HeldRequest, Report> {
+        match &self.macro_services {
+            Some(macro_services) => Ok(macro_services.hold_next(service, method, path_prefix)),
             None => bail!("the stack was torn down"),
         }
     }

@@ -20,8 +20,9 @@ scenarios.
   starts the real `document_storage_service` on the same database, Redis
   database, queues and providers: it serves the GraphQL API the web app
   sends mail through. It is a third large process, so only scenarios that
-  need GraphQL ask for it. The email services still call the stand-in for
-  document storage, not this process.
+  need it ask for it. On such a stack the stand-in for document storage
+  records what the email services ask and passes it on to this process, so
+  attachments become real documents.
   Scenarios run in parallel and share nothing but the four servers (Postgres, Redis, SQS, Kafka).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
   started with an environment the harness builds (`src/stack/environment.rs`)
@@ -87,6 +88,8 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Failures of what the services depend on: a provider fault on the emulator,
   `stack.fail_next_service_request` (`_with` for a JSON body) for another
   Macro service,
+  `stack.hold_next_service_request` keeps a call waiting until the scenario
+  releases it, to change things between a service's request and its answer.
   `stack.refuse_queue_sends` for an enqueue (`queue_send_refusals_left`
   tells that the services met it). `stack.redis()` reaches the services'
   Redis database.

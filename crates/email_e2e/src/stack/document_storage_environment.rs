@@ -25,6 +25,11 @@ pub(crate) struct DocumentStorage<'a> {
     pub(crate) email_env: &'a BTreeMap<String, String>,
 }
 
+/// The setting that points a service at the scenario's object storage.
+const LOCAL_AWS_URL: &str = "LOCAL_AWS_URL";
+/// The address every server of a stack listens on.
+const LOOPBACK: &str = "127.0.0.1";
+
 /// The environment of `document_storage_service`.
 pub(crate) fn document_storage_env(service: &DocumentStorage<'_>) -> BTreeMap<String, String> {
     let mut env = service.email_env.clone();
@@ -65,6 +70,16 @@ pub(crate) fn document_storage_env(service: &DocumentStorage<'_>) -> BTreeMap<St
     }
     for name in UNUSED_SETTINGS {
         env.insert((*name).to_owned(), UNUSED.to_owned());
+    }
+    // The service rewrites the upload addresses it signs for a browser,
+    // and only knows object storage under the name `localhost`. The
+    // public address is the one the email services reach it at.
+    if let Some(storage) = env.get(LOCAL_AWS_URL).cloned() {
+        env.insert(
+            LOCAL_AWS_URL.to_owned(),
+            storage.replace(LOOPBACK, "localhost"),
+        );
+        env.insert("LOCAL_AWS_PUBLIC_URL".to_owned(), storage);
     }
     env
 }

@@ -7,7 +7,8 @@
 //! request to the emulator that owns it. Every other service
 //! (static files, document storage, the connection gateway, notifications)
 //! answers `200 {}` and records the request, so a scenario can assert on what
-//! the email services told them.
+//! the email services told them. On a stack that runs the real
+//! `document_storage_service`, its requests are recorded and passed on to it.
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -19,6 +20,7 @@ use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use rootcause::prelude::*;
 use tokio::net::TcpListener;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -55,7 +57,13 @@ struct Routes {
     uploads_url: String,
     requests: Arc<Mutex<Vec<ServiceRequest>>>,
     failures: Failures,
+    holds: Holds,
+    document_storage: RealService,
 }
+
+/// The base URL of a real service that answers in a stand-in's place,
+/// once the stack has started it.
+type RealService = Arc<Mutex<Option<String>>>;
 
 /// An answer a scenario asked a stand-in to give instead of its usual one.
 struct Failure {
@@ -68,11 +76,50 @@ struct Failure {
 
 type Failures = Arc<Mutex<Vec<Failure>>>;
 
+/// A request a scenario asked a stand-in to keep waiting.
+struct Hold {
+    service: String,
+    method: String,
+    path_prefix: String,
+    arrived: oneshot::Sender<()>,
+    release: oneshot::Receiver<()>,
+}
+
+type Holds = Arc<Mutex<Vec<Hold>>>;
+
+/// A request to another Macro service that waits until the scenario lets
+/// it go: what the scenario does meanwhile happens between the caller's
+/// request and its answer. Dropping it lets the request go as well.
+pub struct HeldRequest {
+    arrived: Option<oneshot::Receiver<()>>,
+    release: oneshot::Sender<()>,
+}
+
+impl HeldRequest {
+    /// Waits until the request has been made and is being held.
+    pub async fn arrived(&mut self) -> Result<(), Report> {
+        match self.arrived.take() {
+            Some(arrived) => Ok(arrived
+                .await
+                .context("the stand-in stopped before the request arrived")?),
+            None => Ok(()),
+        }
+    }
+
+    /// Lets the request go on to its answer.
+    pub fn release(self) {
+        // The request may already be gone with its stack.
+        self.release.send(()).ok();
+    }
+}
+
 /// The running stand-in server.
 pub(crate) struct MacroServices {
     address: SocketAddr,
     requests: Arc<Mutex<Vec<ServiceRequest>>>,
     failures: Failures,
+    holds: Holds,
+    document_storage: RealService,
     cancel: CancellationToken,
     tracker: TaskTracker,
 }
@@ -87,6 +134,8 @@ impl MacroServices {
     ) -> Result<Self, Report> {
         let requests = Arc::new(Mutex::new(Vec::new()));
         let failures = Failures::default();
+        let holds = Holds::default();
+        let document_storage = RealService::default();
         let routes = Routes {
             http: reqwest::Client::builder()
                 .timeout(FORWARD_TIMEOUT)
@@ -97,6 +146,8 @@ impl MacroServices {
             uploads_url: uploads_url.to_owned(),
             requests: requests.clone(),
             failures: failures.clone(),
+            holds: holds.clone(),
+            document_storage: document_storage.clone(),
         };
 
         let listener = TcpListener::bind("127.0.0.1:0")
@@ -121,6 +172,8 @@ impl MacroServices {
             address,
             requests,
             failures,
+            holds,
+            document_storage,
             cancel,
             tracker,
         })
@@ -168,6 +221,37 @@ impl MacroServices {
         Ok(())
     }
 
+    /// Keeps the next request to `service` with this method, whose path
+    /// starts with `path_prefix`, waiting until the scenario releases it.
+    pub(crate) fn hold_next(&self, service: &str, method: &str, path_prefix: &str) -> HeldRequest {
+        let (arrived, has_arrived) = oneshot::channel();
+        let (release, released) = oneshot::channel();
+        self.holds
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(Hold {
+                service: service.to_owned(),
+                method: method.to_ascii_uppercase(),
+                path_prefix: path_prefix.to_owned(),
+                arrived,
+                release: released,
+            });
+        HeldRequest {
+            arrived: Some(has_arrived),
+            release,
+        }
+    }
+
+    /// Passes what the email services ask document storage on to the real
+    /// service at `url` from now on. Requests are still recorded, and a
+    /// failure a scenario asked for is still answered here.
+    pub(crate) fn route_document_storage(&self, url: &str) {
+        *self
+            .document_storage
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(url.to_owned());
+    }
+
     /// Stops the server.
     pub(crate) async fn stop(self) {
         self.cancel.cancel();
@@ -205,6 +289,22 @@ async fn answer(State(routes): State<Routes>, request: Request) -> Response {
             body: serde_json::from_slice(&body).ok(),
         });
     let path = format!("/{rest}");
+    let hold = {
+        let mut holds = routes.holds.lock().unwrap_or_else(PoisonError::into_inner);
+        holds
+            .iter()
+            .position(|hold| {
+                hold.service == service
+                    && hold.method == method.as_str()
+                    && path.starts_with(&hold.path_prefix)
+            })
+            .map(|index| holds.remove(index))
+    };
+    if let Some(hold) = hold {
+        // A scenario that no longer waits has let the request go.
+        hold.arrived.send(()).ok();
+        hold.release.await.ok();
+    }
     let failure = {
         let mut failures = routes
             .failures
@@ -221,6 +321,28 @@ async fn answer(State(routes): State<Routes>, request: Request) -> Response {
     };
     if let Some(failure) = failure {
         return (failure.status, axum::Json(failure.body)).into_response();
+    }
+
+    if service == DOCUMENT_STORAGE {
+        let real = routes
+            .document_storage
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        if let Some(real) = real {
+            let mut passed_on = headers;
+            // The client sets these for the request it makes itself.
+            passed_on.remove(axum::http::header::HOST);
+            passed_on.remove(axum::http::header::CONTENT_LENGTH);
+            return forward(
+                &routes.http,
+                method,
+                passed_on,
+                format!("{real}/{rest}"),
+                body,
+            )
+            .await;
+        }
     }
 
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
@@ -248,18 +370,33 @@ async fn forward_token_request(
         &routes.gmail_authentication
     };
 
-    let mut forwarded = routes
-        .http
-        .request(method, format!("{emulator}/{rest}"))
-        .body(body);
+    let mut passed_on = HeaderMap::new();
     if let Some(content_type) = headers.get(axum::http::header::CONTENT_TYPE) {
-        forwarded = forwarded.header(axum::http::header::CONTENT_TYPE, content_type);
+        passed_on.insert(axum::http::header::CONTENT_TYPE, content_type.clone());
     }
+    forward(
+        &routes.http,
+        method,
+        passed_on,
+        format!("{emulator}/{rest}"),
+        body,
+    )
+    .await
+}
 
+/// Makes the request at `url` and answers its status, content type and body.
+async fn forward(
+    http: &reqwest::Client,
+    method: Method,
+    headers: HeaderMap,
+    url: String,
+    body: Bytes,
+) -> Response {
+    let forwarded = http.request(method, &url).headers(headers).body(body);
     let answered = match forwarded.send().await {
         Ok(answered) => answered,
         Err(error) => {
-            tracing::error!(error = ?error, "could not reach an emulator's token stand-in");
+            tracing::error!(error = ?error, url, "could not pass a request on");
             return StatusCode::BAD_GATEWAY.into_response();
         }
     };
