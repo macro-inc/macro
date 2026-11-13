@@ -58,6 +58,8 @@ type Request = {
   refreshPending: boolean;
   answered: boolean;
   awaitingEngine: boolean;
+  /** The cache answered this attempt's search; its rows are still loading. */
+  rowsPending: boolean;
   /** Tells the host to stop holding this search once another replaces it. */
   superseded: AbortController;
   giveUpTimer?: ReturnType<typeof setTimeout>;
@@ -130,6 +132,20 @@ export function createProjectedList<T extends { id: string }>(options: {
     }, UNANSWERED_SEARCH_LIMIT_MS);
   };
 
+  const reportCacheAnswer = (request: Request) => {
+    if (request.answered) return;
+    request.rowsPending = true;
+    setSearching(false);
+  };
+
+  // Rows refused after the cache answered are loaded by the replay, which is
+  // awaited like a first answer.
+  const awaitRefusedRows = (request: Request) => {
+    if (!request.awaitingEngine || !request.rowsPending) return;
+    setSearching(true);
+    stopWaitingAtLimit(request);
+  };
+
   const finishRequest = (request: Request) => {
     if (current !== request) return;
     request.busy = false;
@@ -157,7 +173,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       setSearching(true);
       stopWaitingAtLimit(request);
     }
-    let cacheAnswered = false;
+    request.rowsPending = false;
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
     const visibleIds = new Set([
@@ -206,10 +222,7 @@ export function createProjectedList<T extends { id: string }>(options: {
           }
         );
         if (current !== request) return;
-        if (!request.answered) {
-          cacheAnswered = true;
-          setSearching(false);
-        }
+        reportCacheAnswer(request);
         const materialized = await span.span(
           'quick_access.materialize',
           async (span) => {
@@ -249,12 +262,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       if (current !== request) return;
       span.error('Quick Access cache search failed');
       request.awaitingEngine = isRefusedFirstAnswer(request, error);
-      // The rows were refused after the cache answered, so the replay that
-      // loads them is awaited like a first answer.
-      if (request.awaitingEngine && cacheAnswered) {
-        setSearching(true);
-        stopWaitingAtLimit(request);
-      }
+      awaitRefusedRows(request);
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
@@ -343,6 +351,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       refreshPending: false,
       answered: false,
       awaitingEngine: false,
+      rowsPending: false,
       superseded: new AbortController(),
     };
     current = request;
