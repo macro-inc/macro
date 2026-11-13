@@ -222,9 +222,9 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "auth.joinTeamByInviteLink",
         "auth.toggleTeamNonAdminInvites",
         "auth.postProfilePictures",
+        // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
         "cognition.stopChatStream",
-        "cognition.callTool",
         "email.createDraft",
         "email.deleteDraft",
         "email.deleteScheduledDraft",
@@ -358,6 +358,36 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         }
     }
     assert!(unclassified.is_empty(), "unclassified: {unclassified:#?}");
+}
+
+/// A run that sends nothing starts no work that runs with the person's full
+/// access: no agent session, session control or queued prompt, tool
+/// approval, review decision, session share, or chat tool call.
+#[test]
+fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
+    let operations = code_execution::domain::operations();
+    for key in [
+        "agent-harness.createAgentSession",
+        "agent-harness.controlAgentSession",
+        "agent-harness.editQueuedAction",
+        "agent-harness.steerQueuedAction",
+        "agent-harness.answerAgentSessionToolApproval",
+        "agent-harness.decideSessionReview",
+        "agent-harness.updateAgentSessionPermissions",
+        "agent-harness.startFreshAgentConversation",
+        "agent-harness.retryAgentConversationTurn",
+        "cognition.callTool",
+    ] {
+        let operation = operations
+            .get(key)
+            .unwrap_or_else(|| panic!("{key} is not in the SDK"));
+        assert!(
+            !SessionScope::NoSend.allows(&operation.method, &concrete(&operation.path)),
+            "{key} ({} {})",
+            operation.method,
+            operation.path
+        );
+    }
 }
 
 /// How a host's service holds a scoped session's credential to its scope.

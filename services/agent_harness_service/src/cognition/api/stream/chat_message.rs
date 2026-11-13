@@ -202,6 +202,20 @@ async fn send_chat_message_inner(
     }
     let model = request.model.clone();
 
+    // A scoped hidden session (a generation, or a run that sends nothing)
+    // chats without tools: tools run here with the person's full access,
+    // past the scope its credential carries.
+    if agent_correlation::context::current_scope().is_some()
+        && !matches!(request.toolset, ToolSet::None)
+    {
+        return Err(ChatMessageError {
+            error: "this session's chats take no tools".to_owned(),
+            stream_id: Some(stream_id),
+            status: Some(StatusCode::FORBIDDEN),
+            code: None,
+        });
+    }
+
     // Resolve existing-chat permissions before admission, without creating anything.
     let existing_chat = if requested_chat_id.is_empty() {
         None

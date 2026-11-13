@@ -67,7 +67,8 @@ fn a_scope_is_stored_by_name() {
 }
 
 /// A run that sends nothing changes the person's own items but never sends,
-/// posts, shares, invites or sets up a routine.
+/// posts, shares, invites, sets up a routine, or starts work with the
+/// person's full access.
 #[test]
 fn a_run_that_sends_nothing_reaches_nobody() {
     let scope = SessionScope::NoSend;
@@ -78,12 +79,25 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("POST", "/email/drafts"),
         ("POST", "/dss/search"),
         ("PATCH", "/email/threads/01a1/archived"),
+        // Presenting a review asks the person; removing a queued prompt
+        // starts nothing.
+        ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
+        ("DELETE", "/agent-sessions/01a1/queue/02b2"),
     ] {
         assert!(scope.allows(method, path), "{method} {path}");
     }
     for (method, path) in [
         ("POST", "/email/messages"),
         ("POST", "/cognition/email/send-confirmed"),
+        // Work that runs with the person's full access.
+        ("POST", "/agent-harness/agent-sessions"),
+        ("POST", "/agent-sessions/01a1/control"),
+        ("PUT", "/agent-sessions/01a1/queue/02b2"),
+        ("POST", "/agent-sessions/01a1/queue/02b2/steer"),
+        ("POST", "/agent-sessions/01a1/tool-approvals/02b2"),
+        ("POST", "/agent-sessions/01a1/reviews/02b2"),
+        ("PATCH", "/agent-sessions/01a1/permissions"),
+        ("POST", "/cognition/chats/01a1/tool/call"),
         ("PUT", "/email/drafts/scheduled/01a1"),
         ("POST", "/dss/messages/channel/01a1"),
         ("POST", "/channels/01a1/shares"),

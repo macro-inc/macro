@@ -20,8 +20,11 @@ pub enum SessionScope {
 /// Requests that reach someone else: sending or scheduling mail, invites
 /// and calendar changes guests hear of, posts, reactions, mentions, shares,
 /// channel and call membership, team and booking settings, routines (which
-/// act later), connected apps and their tools, and webhooks. A run that
-/// sends nothing makes none of them.
+/// act later), connected apps and their tools, and webhooks. Also the
+/// requests that start work with the person's full access: a new agent
+/// session, a session's control and queued prompts, its tool approvals and
+/// review decisions, and running a chat's tool call (a chat message's tools
+/// are refused by its route). A run that sends nothing makes none of them.
 const SENDS: &[(&str, &str)] = &[
     ("POST", "/email/messages"),
     ("POST", "/email/send-confirmed"),
@@ -64,6 +67,14 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/external-chats/{id}/sends"),
     ("POST", "/external-chats/{id}/delivery"),
     ("POST", "/external-chats/{id}/messages/attachments"),
+    ("POST", "/agent-sessions"),
+    ("POST", "/agent-sessions/{id}/control"),
+    ("PUT", "/agent-sessions/{id}/queue/{id}"),
+    ("POST", "/agent-sessions/{id}/queue/{id}/steer"),
+    ("POST", "/agent-sessions/{id}/tool-approvals/{id}"),
+    ("POST", "/agent-sessions/{id}/reviews/{id}"),
+    ("PATCH", "/agent-sessions/{id}/permissions"),
+    ("POST", "/chats/{id}/tool/call"),
     ("POST", "/agent-conversations/{id}/{id}/start-fresh"),
     ("POST", "/agent-conversations/{id}/{id}/turns/{id}/retry"),
     (

@@ -19,9 +19,12 @@ code, not in its prompt. The harness also signs the scope into the credential
 - `src/scope.rs`: session scopes and the requests each allows. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
-  someone else (the harness test
-  `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk` makes every
-  send-like SDK write refused or reviewed); the harness test
+  someone else or start work with the person's full access (agent sessions,
+  session control, tool approvals, review decisions, chat tool calls). The
+  harness tests `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk`
+  (every send-like SDK write is refused or reviewed) and
+  `a_run_that_sends_nothing_starts_no_work_with_the_persons_access` hold
+  `no_send` to that; the harness test
   `the_generation_scope_matches_the_sdk_catalog` keeps the lists in step with
   the SDK's operation catalog. A new POST read or session tool route updates
   them. Credentials are not a scope's to decide: a token that signs
