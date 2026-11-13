@@ -18,6 +18,7 @@ import type {
   ExecutionRecord,
 } from '@service-agent-harness/generated/schemas';
 import { createStore, reconcile } from 'solid-js/store';
+import { match } from 'ts-pattern';
 
 export const SESSION_ID = '019a0000-0000-7000-8000-0000000000a1';
 
@@ -132,7 +133,8 @@ const BEATS: Beat[] = [
       op('Read channel thread', 350),
       op('Read channel thread', 350),
       op('Read channel thread', 350),
-      op('Read spreadsheet', 600),
+      // Long enough at 4x for the program record poll to see it running.
+      op('Read spreadsheet', 6000),
     ],
   },
   {
@@ -327,109 +329,22 @@ export async function playTurn(options: { speed: number; summarize: boolean }) {
   commit();
   await sleep(900);
   for (const beat of BEATS) {
-    switch (beat.kind) {
-      case 'text': {
+    await match(beat)
+      .with({ kind: 'text' }, ({ text }) => {
         const index = model.parts.push({ kind: 'text', text: '' }) - 1;
-        const words = beat.text.split(/(?<= )/);
-        for (const [count] of words.entries()) {
-          update(index, { text: words.slice(0, count + 1).join('') });
-          commit();
-          await sleep(35);
-        }
-        break;
-      }
-      case 'thought': {
+        return stream(index, text, 35);
+      })
+      .with({ kind: 'thought' }, ({ text }) => {
         const index = model.parts.push({ kind: 'thought', text: '' }) - 1;
-        const words = beat.text.split(/(?<= )/);
-        for (const [count] of words.entries()) {
-          update(index, { text: words.slice(0, count + 1).join('') });
-          commit();
-          await sleep(70);
-        }
-        break;
-      }
-      case 'lookup': {
+        return stream(index, text, 70);
+      })
+      .with({ kind: 'lookup' }, () => runLookup())
+      .with({ kind: 'call' }, (call) => runCall(call))
+      .with({ kind: 'program' }, (program) => {
         calls += 1;
-        const id = `lookup-${calls}`;
-        const index =
-          model.parts.push({
-            kind: 'tool_use',
-            id,
-            name: {
-              kind: 'mcp',
-              server: 'macro_internal',
-              tool: 'SearchTools',
-            },
-            status: 'running',
-            detail: {
-              kind: 'macro',
-              input: { query: 'email drafts' },
-              output: null,
-              error: null,
-            },
-          }) - 1;
-        commit();
-        await sleep(400);
-        update(index, { status: 'completed' });
-        commit();
-        break;
-      }
-      case 'call': {
-        calls += 1;
-        const id = `call-${calls}`;
-        if (beat.line && options.summarize)
-          publishSessionActivity(SESSION_ID, beat.line);
-        const index =
-          model.parts.push({
-            kind: 'tool_use',
-            id,
-            name: { kind: 'mcp', server: 'macro', tool: beat.tool },
-            status: 'running',
-            detail: {
-              kind: 'macro',
-              input: { query: beat.detail },
-              output: null,
-              error: null,
-            },
-          }) - 1;
-        model.rows.set(id, [
-          {
-            id,
-            label: beat.running,
-            detail: beat.detail,
-            status: 'running',
-            card: null,
-          },
-        ]);
-        commit();
-        await sleep(beat.ms);
-        update(index, {
-          status: 'completed',
-          detail: {
-            kind: 'macro',
-            input: { query: beat.detail },
-            output: { results: [] },
-            error: null,
-          },
-        });
-        model.rows.set(id, [
-          {
-            id,
-            label: beat.done,
-            detail: beat.detail,
-            status: 'completed',
-            card: null,
-          },
-        ]);
-        commit();
-        break;
-      }
-      case 'program': {
-        calls += 1;
-        await runProgram(beat, calls);
-        break;
-      }
-    }
+        return runProgram(program, calls);
+      })
+      .exhaustive();
     await sleep(300);
   }
   if (options.summarize) publishSessionActivity(SESSION_ID, null);
@@ -438,6 +353,92 @@ export async function playTurn(options: { speed: number; summarize: boolean }) {
     reconcile(structuredClone(reply(model, { kind: 'end_turn' })))
   );
   setState({ inFlight: false, done: true });
+
+  /** Writes a part's text a word at a time, as the model streams it. */
+  async function stream(index: number, text: string, msPerWord: number) {
+    const words = text.split(/(?<= )/);
+    for (const [count] of words.entries()) {
+      update(index, { text: words.slice(0, count + 1).join('') });
+      commit();
+      await sleep(msPerWord);
+    }
+  }
+
+  async function runLookup() {
+    calls += 1;
+    const id = `lookup-${calls}`;
+    const index =
+      model.parts.push({
+        kind: 'tool_use',
+        id,
+        name: {
+          kind: 'mcp',
+          server: 'macro_internal',
+          tool: 'SearchTools',
+        },
+        status: 'running',
+        detail: {
+          kind: 'macro',
+          input: { query: 'email drafts' },
+          output: null,
+          error: null,
+        },
+      }) - 1;
+    commit();
+    await sleep(400);
+    update(index, { status: 'completed' });
+    commit();
+  }
+
+  async function runCall(beat: Extract<Beat, { kind: 'call' }>) {
+    calls += 1;
+    const id = `call-${calls}`;
+    if (beat.line && options.summarize)
+      publishSessionActivity(SESSION_ID, beat.line);
+    const index =
+      model.parts.push({
+        kind: 'tool_use',
+        id,
+        name: { kind: 'mcp', server: 'macro', tool: beat.tool },
+        status: 'running',
+        detail: {
+          kind: 'macro',
+          input: { query: beat.detail },
+          output: null,
+          error: null,
+        },
+      }) - 1;
+    model.rows.set(id, [
+      {
+        id,
+        label: beat.running,
+        detail: beat.detail,
+        status: 'running',
+        card: null,
+      },
+    ]);
+    commit();
+    await sleep(beat.ms);
+    update(index, {
+      status: 'completed',
+      detail: {
+        kind: 'macro',
+        input: { query: beat.detail },
+        output: { results: [] },
+        error: null,
+      },
+    });
+    model.rows.set(id, [
+      {
+        id,
+        label: beat.done,
+        detail: beat.detail,
+        status: 'completed',
+        card: null,
+      },
+    ]);
+    commit();
+  }
 
   async function runProgram(
     beat: Extract<Beat, { kind: 'program' }>,

@@ -81,9 +81,11 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
   // The replay runs about 20 seconds after the dev server's first load.
   test.setTimeout(120_000);
   const { session, seen } = await playTurn(page, 'speed=4');
-  // The line moved through the run's steps and its thoughts.
+  // The line moved through the run's steps: a thought, a direct call, and
+  // a program operation the record poll saw running.
   expect(seen.said).toContain('Thinking');
   expect(seen.said).toContain('Searching documents hosting invoice');
+  expect(seen.said).toContain('Read spreadsheet');
   expect(seen.said.length).toBeGreaterThan(5);
 
   // Settled: each run is one row, with the long run's failures counted.
@@ -108,6 +110,7 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
     )
     .toBeLessThanOrEqual(1);
   expect((await calls.boundingBox())?.height).toBeGreaterThan(600);
+
 });
 
 test("the live line carries the session's status line when it has one", async ({
