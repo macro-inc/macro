@@ -716,22 +716,57 @@ fn area_declarations(name: &str, index: &str) -> Vec<(&'static str, &'static str
 /// as `DecisionRequest` from `import type { DecisionRequest } from
 /// '../../../generated/cognition/types.gen';`.
 fn generated_imports(line: &str) -> Vec<String> {
-    let Some((names, from)) = line.split_once('}') else {
-        return Vec::new();
-    };
-    if !from.contains("/generated/") {
-        return Vec::new();
+    match import_line(line) {
+        Ok((_, (names, from))) if from.contains("/generated/") => {
+            names.into_iter().map(str::to_owned).collect()
+        }
+        _ => Vec::new(),
     }
-    let names = names.rsplit('{').next().unwrap_or_default();
-    names
-        .split(',')
-        .filter_map(|name| {
-            let name = name.trim();
-            let name = name.strip_prefix("type ").unwrap_or(name);
-            name.split_whitespace().next()
-        })
-        .map(str::to_owned)
-        .collect()
+}
+
+/// `import [type] { A, type B as C } from '<path>'`: the names as their
+/// module declares them (`A`, `B`), and the path.
+fn import_line(line: &str) -> nom::IResult<&str, (Vec<&str>, &str)> {
+    use nom::Parser;
+    use nom::branch::alt;
+    use nom::bytes::complete::{tag, take_until, take_while1};
+    use nom::character::complete::{char, multispace0, multispace1};
+    use nom::combinator::opt;
+    use nom::multi::separated_list1;
+    use nom::sequence::{delimited, preceded, terminated};
+
+    let identifier = || take_while1(|c: char| c.is_alphanumeric() || c == '_' || c == '$');
+    let type_keyword = || opt(terminated(tag("type"), multispace1));
+    let name = (
+        type_keyword(),
+        identifier(),
+        opt(preceded(
+            (multispace1, tag("as"), multispace1),
+            identifier(),
+        )),
+    )
+        .map(|(_, name, _)| name);
+    let names = delimited(
+        (char('{'), multispace0),
+        separated_list1((multispace0, char(','), multispace0), name),
+        (multispace0, opt(char(',')), multispace0, char('}')),
+    );
+    let path = alt((
+        delimited(char('\''), take_until("'"), char('\'')),
+        delimited(char('"'), take_until("\""), char('"')),
+    ));
+    (
+        tag("import"),
+        multispace1,
+        type_keyword(),
+        names,
+        multispace1,
+        tag("from"),
+        multispace1,
+        path,
+    )
+        .map(|(_, _, _, names, _, _, _, path)| (names, path))
+        .parse(line)
 }
 
 /// The names a reference writes in backticks, such as `SearchOpts`.

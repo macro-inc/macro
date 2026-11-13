@@ -696,6 +696,7 @@ dependencies = [
  "models_ai_projection",
  "models_dcs",
  "models_permissions",
+ "nom 8.0.0",
  "non_empty",
  "notification",
  "onboarding",

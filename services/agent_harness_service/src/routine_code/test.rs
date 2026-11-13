@@ -810,3 +810,20 @@ fn the_area_list_names_each_area_and_when_to_use_it() {
     assert!(areas.lines().any(|line| line.starts_with("- `email`: ")));
     assert_eq!(areas.lines().count(), AREAS.len());
 }
+
+#[test]
+fn an_import_line_gives_the_generated_names_it_takes() {
+    assert_eq!(
+        generated_imports(
+            "import type { DecisionRequest, type Choice as Picked } from '../../../generated/cognition/types.gen';"
+        ),
+        ["DecisionRequest", "Choice"]
+    );
+    assert_eq!(
+        generated_imports("import { a,\tb, } from \"../generated/x\""),
+        ["a", "b"]
+    );
+    // Only the generated clients' types: the SDK's own come with its areas.
+    assert!(generated_imports("import type { Macro } from '../../macro';").is_empty());
+    assert!(generated_imports("import * as all from '../generated/x';").is_empty());
+}
