@@ -24,10 +24,11 @@ code, not in its prompt. The harness also signs the scope into the credential
   send-like SDK write refused or reviewed); the harness test
   `the_generation_scope_matches_the_sdk_catalog` keeps the lists in step with
   the SDK's operation catalog. A new POST read or session tool route updates
-  them. No scope makes `CREDENTIALS` requests (a fresh Macro API token, user
-  API key, bot or account-manager token), reads included: a new route that
-  hands out a credential goes there. `SignedScope` reads the `agent_scope`
-  claim; a name this build doesn't know allows only reads.
+  them. Credentials are not a scope's to decide: a token that signs
+  `agent_scope` authenticates as `ScopedMacroApiJwt`, which
+  `AccountHolderOrInternal` refuses on every route that issues a credential.
+  `SignedScope` reads the `agent_scope` claim; a name this build doesn't know
+  allows only reads.
 - `src/context.rs`: async context (`Attribution`: correlation, routine, the
   display verb sent with a correlated SDK call, and the validated session and
   its scope: `current_session`, `current_scope`); capture before spawning,

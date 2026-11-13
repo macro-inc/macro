@@ -468,7 +468,9 @@ pub(super) fn refuse_code_execution_token(headers: &HeaderMap) -> Result<(), Cal
 fn credential_is_program(origin: &CredentialOrigin) -> bool {
     matches!(
         origin,
-        CredentialOrigin::UserApiKey | CredentialOrigin::MacroApiJwt
+        CredentialOrigin::UserApiKey
+            | CredentialOrigin::MacroApiJwt
+            | CredentialOrigin::ScopedMacroApiJwt
     )
 }
 

@@ -170,9 +170,8 @@ fn concrete(path: &str) -> String {
 }
 
 /// The scope's list of POST reads covers every read the SDK sends as a POST,
-/// the only reads it refuses are the ones that hand out a credential, and the
-/// only writes it lets a generation session make are its own tools and
-/// creating an email draft.
+/// and the only writes it lets a generation session make are its own tools
+/// and creating an email draft.
 #[test]
 fn the_generation_scope_matches_the_sdk_catalog() {
     let intended = [
@@ -185,18 +184,14 @@ fn the_generation_scope_matches_the_sdk_catalog() {
         "email.createDraft",
         "cognition.structuredCompletion",
     ];
-    // Reads that mint a credential no scope could hold.
-    let credentials = ["auth.macroApiToken"];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
         if !operation.write {
-            assert_eq!(
+            assert!(
                 allowed,
-                !credentials.contains(&key.as_str()),
-                "the read {key} ({} {})",
-                operation.method,
-                operation.path
+                "the read {key} ({} {}) is refused",
+                operation.method, operation.path
             );
         } else {
             assert_eq!(
@@ -352,79 +347,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
             continue;
         }
         let refused = !scope.allows(&operation.method, &concrete(&operation.path));
-        if !refused && !reviewed.contains(&key.as_str()) {
-            unclassified.push(format!("{key} {} {}", operation.method, operation.path));
-        }
-    }
-    assert!(unclassified.is_empty(), "unclassified: {unclassified:#?}");
-}
-
-/// A scoped run is refused every SDK operation that issues a Macro credential,
-/// which would not carry its scope. Any operation whose name or path looks
-/// like one is either refused under both scopes or listed here as reviewed,
-/// so a new one is classified before it ships.
-#[test]
-fn a_scoped_run_is_refused_every_credential_in_the_sdk() {
-    let reviewed = [
-        // Third-party keys and sign-ins: a saved key is never readable again,
-        // and none grants access to Macro.
-        "auth.deleteAgentApiKey",
-        "auth.getAgentApiKey",
-        "auth.putAgentApiKey",
-        "auth.deleteCursorApiKey",
-        "auth.getCursorApiKey",
-        "auth.putCursorApiKey",
-        "auth.putCursorDefaultModel",
-        "auth.listCursorModels",
-        "auth.startCodexLogin",
-        "auth.cancelCodexLogin",
-        "auth.pollCodexLogin",
-        "cognition.createPipedreamMcpToken",
-        // Signing in takes a password, an emailed code, a refresh token or an
-        // identity provider's token, none of which a run's credential is.
-        "auth.refresh",
-        "auth.appleLogin",
-        "auth.passwordLogin",
-        "auth.passwordlessLogin",
-        "auth.ssoLogin",
-        "auth.sessionLogin",
-        // Listings show no secret, and revoking issues nothing.
-        "storage.listBotTokens",
-        "storage.revokeBotToken",
-        "storage.listUserApiKeys",
-        "storage.deleteUserApiKey",
-        // A token for editing one document, refused under `Generation`;
-        // `NoSend` lets the run edit documents anyway.
-        "storage.createCollabSurfaceToken",
-        "storage.validateDocumentPermissionsToken",
-        "storage.getDocumentPermissionsToken",
-        // Refreshes a session's changes, not a credential.
-        "agent-harness.refreshAgentSessionChanges",
-    ];
-    let looks_like_a_credential = |key: &str, path: &str| {
-        let text = format!("{key} {path}").to_lowercase();
-        [
-            "token",
-            "api-key",
-            "apikey",
-            "jwt",
-            "login",
-            "credential",
-            "secret",
-            "refresh",
-        ]
-        .iter()
-        .any(|word| text.contains(word))
-    };
-    let mut unclassified = Vec::new();
-    for (key, operation) in code_execution::domain::operations() {
-        let path = concrete(&operation.path);
-        if !looks_like_a_credential(key, &path) {
-            continue;
-        }
-        let refused = [SessionScope::Generation, SessionScope::NoSend]
-            .iter()
-            .all(|scope| !scope.allows(&operation.method, &path));
         if !refused && !reviewed.contains(&key.as_str()) {
             unclassified.push(format!("{key} {} {}", operation.method, operation.path));
         }

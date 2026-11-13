@@ -142,16 +142,6 @@ const GENERATION_WRITES: &[(&str, &str)] = &[
     ("POST", "/structured-completion"),
 ];
 
-/// Requests that hand the caller a credential its session's scope would not
-/// bind: a fresh Macro API token, a user API key, a bot's token or an account
-/// manager's. A scoped session makes none of them, by any method.
-const CREDENTIALS: &[(&str, &str)] = &[
-    ("GET", "/jwt/macro_api_token"),
-    ("POST", "/user-api-keys"),
-    ("POST", "/bots/{id}/tokens"),
-    ("POST", "/account-managers/{id}/token"),
-];
-
 /// Reads the SDK sends as POST (batch lookups, search); the harness checks
 /// this list against the SDK's operation catalog.
 pub const POST_READS: &[(&str, &str)] = &[
@@ -209,16 +199,14 @@ impl SessionScope {
         SENDS
     }
 
-    /// Whether a request with `method` to `path` is inside the scope. No
-    /// scope issues a new credential; other reads by method always are
-    /// inside. A generation session makes other requests only on its list or
-    /// [`POST_READS`]; a run that sends nothing makes any but the ones that
-    /// reach someone else. `path` may carry one service prefix before the
-    /// SDK's path.
+    /// Whether a request with `method` to `path` is inside the scope. Reads
+    /// by method always are. A generation session makes other requests only
+    /// on its list or [`POST_READS`]; a run that sends nothing makes any but
+    /// the ones that reach someone else. `path` may carry one service prefix
+    /// before the SDK's path. Credentials are not decided here: a scoped
+    /// credential is a `ScopedMacroApiJwt`, which `AccountHolderOrInternal`
+    /// refuses on every route that issues one.
     pub fn allows(self, method: &str, path: &str) -> bool {
-        if listed(CREDENTIALS, method, path) {
-            return false;
-        }
         if reads_by_method(method) {
             return true;
         }
@@ -258,7 +246,7 @@ impl SignedScope {
         match self {
             Self::Unscoped => true,
             Self::Known(scope) => scope.allows(method, path),
-            Self::Unknown => reads_by_method(method) && !listed(CREDENTIALS, method, path),
+            Self::Unknown => reads_by_method(method),
         }
     }
 }

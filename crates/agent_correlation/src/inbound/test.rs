@@ -293,10 +293,6 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
             axum::routing::post(|| async { StatusCode::OK }),
         )
         .route(
-            "/jwt/macro_api_token",
-            axum::routing::get(|| async { StatusCode::OK }),
-        )
-        .route(
             "/email/threads",
             axum::routing::get(|| async { StatusCode::OK }),
         )
@@ -312,18 +308,6 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
         ),
         ("no_send", "POST", "/email/messages", StatusCode::FORBIDDEN),
         ("newer", "POST", "/email/messages", StatusCode::FORBIDDEN),
-        (
-            "no_send",
-            "GET",
-            "/jwt/macro_api_token",
-            StatusCode::FORBIDDEN,
-        ),
-        (
-            "newer",
-            "GET",
-            "/jwt/macro_api_token",
-            StatusCode::FORBIDDEN,
-        ),
         ("newer", "GET", "/email/threads", StatusCode::OK),
     ] {
         let bearer = mint(unscoped, agent, None, Some(scope));
