@@ -1,0 +1,31 @@
+apps/web/tauri/src-tauri/tauri.android.conf.json
+  s_1a4b7035344b2c::t_8e4bb0e74a4ed8 5
+apps/web/tauri/src-tauri/gen/apple/project.yml
+  s_1a4b7035344b2c::t_8e4bb0e74a4ed8 61-62,148-149,183-184
+apps/web/tauri/src-tauri/tauri.ios.conf.json
+  s_9b1603f4fd6889::t_3e7f7823cad212 3,6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6c3893a56ede99e1dd5ebb51ad7963c22cd8e170",
+  "prompts": {},
+  "sessions": {
+    "s_1a4b7035344b2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61e2b3a9-5888-47ef-b6a0-5efdb1a003a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9b1603f4fd6889": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512eab67-c98d-4202-9de7-c6977f772667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
