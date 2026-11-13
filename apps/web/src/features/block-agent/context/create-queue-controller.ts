@@ -42,8 +42,8 @@ export type QueueController = {
   /** Whether the server queue still holds this action, shown or not. */
   waiting: (actionId: string) => boolean;
   /** Replace a queued prompt's text. A 404 means it already dispatched —
-   *  the gateway's snapshot reconciles it, not an error. */
-  /** Resolves false when the server kept the old text. */
+   *  the gateway's snapshot reconciles it, not an error — and resolves
+   *  true; false means the server kept the old text. */
   edit: (actionId: string, prompt: string) => Promise<boolean>;
   /** Remove a queued action. Same 404 semantics as `edit`. */
   remove: (actionId: string) => Promise<void>;
@@ -136,7 +136,6 @@ export function createQueueController(options: {
   // No refetch after either mutation: the server publishes a snapshot for
   // every accepted change, and a 404 means the entry dispatched — the
   // dispatch's own snapshot (and the fold dedupe) already retire the row.
-  /** False when the server kept the old text, so the row can show it. */
   const edit = async (actionId: string, prompt: string): Promise<boolean> => {
     const sessionId = untrack(options.sessionId);
     if (!sessionId) return false;

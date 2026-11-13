@@ -422,18 +422,21 @@ function PromptBody(
     const accepted = props.onEdit(
       raw.slice(0, raw.length - visible.length) + text
     );
-    if (accepted === undefined) return;
-    fireAndForget(
-      accepted.then((ok) => {
-        if (ok || synced !== text) return;
-        // The server kept its text: forget the save and show that text,
-        // unless the row has moved on to newer typing.
-        synced = stripAgentContext(props.item.prompt ?? '');
-        promptBeforeSave = undefined;
-        if (editor.controls.getMarkdown() === text) restore();
-      }),
-      'agent-queued-prompt'
-    );
+    if (accepted !== undefined)
+      fireAndForget(settle(accepted, text), 'agent-queue');
+  };
+
+  // A refused save: forget it and show the server's text again, unless the
+  // row has moved on to newer typing, or is gone.
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const settle = async (accepted: Promise<boolean>, text: string) => {
+    if ((await accepted) || disposed || synced !== text) return;
+    synced = stripAgentContext(props.item.prompt ?? '');
+    promptBeforeSave = undefined;
+    if (editor.controls.getMarkdown() === text) restore();
   };
 
   const restore = () => {
@@ -516,7 +519,8 @@ function PromptBody(
   // is rebuilt from every list change, so a snapshot still carrying the
   // prompt from before a save is not a revert; it is skipped until the
   // server echoes the edit. Anything else is re-checked on every rebuild,
-  // so a snapshot skipped over an open row is applied once it is left.
+  // so a snapshot skipped over an open row is applied on the next list
+  // rebuild after the row is left.
   createEffect(
     on(
       () => props.item.prompt,

@@ -116,7 +116,8 @@ describe('view-only session controls', () => {
     mocks.input?.onStop?.();
     mocks.input?.onAttachFiles?.([new File(['text'], 'note.txt')]);
     mocks.model?.onSelect('new-model');
-    mocks.queued?.onEdit('queued-1', 'Edited prompt');
+    // Read-only: the edit is not sent, so nothing is there to await.
+    expect(mocks.queued?.onEdit('queued-1', 'Edited prompt')).toBeUndefined();
     mocks.queued?.onRemove('queued-1');
 
     expect(mocks.issue).not.toHaveBeenCalled();
