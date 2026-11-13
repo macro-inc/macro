@@ -270,6 +270,54 @@ async fn create_tables(ddb: &aws_sdk_dynamodb::Client) -> Result<()> {
         "table static-file-metadata",
     )?;
 
+    // gitai-service-index (pk HASH, sk RANGE; GSI gsi1 gsi1pk HASH + gsi1sk
+    // RANGE; TTL on expires_at), as in infra/stacks/gitai-service.
+    ignore_exists(
+        ddb.create_table()
+            .table_name(resources::GITAI_TABLE)
+            .attribute_definitions(attr("pk")?)
+            .attribute_definitions(attr("sk")?)
+            .attribute_definitions(attr("gsi1pk")?)
+            .attribute_definitions(attr("gsi1sk")?)
+            .key_schema(key("pk", KeyType::Hash)?)
+            .key_schema(key("sk", KeyType::Range)?)
+            .billing_mode(BillingMode::PayPerRequest)
+            .global_secondary_indexes(
+                GlobalSecondaryIndex::builder()
+                    .index_name("gsi1")
+                    .key_schema(key("gsi1pk", KeyType::Hash)?)
+                    .key_schema(key("gsi1sk", KeyType::Range)?)
+                    .projection(all())
+                    .build()
+                    .context("gitai GSI")?,
+            )
+            .send()
+            .await
+            .map(|_| ()),
+        "table gitai-service-index",
+    )?;
+    ddb.update_time_to_live()
+        .table_name(resources::GITAI_TABLE)
+        .time_to_live_specification(
+            ddb_types::TimeToLiveSpecification::builder()
+                .attribute_name("expires_at")
+                .enabled(true)
+                .build()
+                .context("gitai TTL")?,
+        )
+        .send()
+        .await
+        .map(|_| ())
+        .or_else(|error| {
+            // Enabling TTL twice is rejected; a re-provision keeps it on.
+            if format!("{error:?}").contains("TimeToLive is already enabled") {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        })
+        .context("enabling TTL on gitai-service-index")?;
+
     Ok(())
 }
 

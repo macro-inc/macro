@@ -254,6 +254,29 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # gitai_service (Port 8113)
+  # Server for the git-ai client; S3 and DynamoDB in LocalStack
+  # ============================================================================
+  gitai_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/gitai_service"]
+    ports:
+      - "8113:8080"
+    environment:
+      DD_SERVICE: gitai-service
+    networks:
+      databases:
+      services:
+        aliases:
+          - gitai-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================

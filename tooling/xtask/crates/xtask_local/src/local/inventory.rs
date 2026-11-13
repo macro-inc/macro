@@ -290,6 +290,18 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
     },
     RustService {
+        compose_name: "gitai_service",
+        cargo_bin: "gitai_service",
+        package: "gitai_service",
+        host_port: Some(Port::Gitai),
+        // Proxied for the git-ai client and agents; the web app never calls it.
+        path_prefix: Some("/gitai"),
+        is_websocket: false,
+        // Local-only: under `run-dev` it would write to the shared dev buckets.
+        modes: &[Mode::Local],
+        opt_in: false,
+    },
+    RustService {
         compose_name: "whatsapp_session_service",
         cargo_bin: "whatsapp_session_service",
         package: "whatsapp_session_service",

@@ -365,6 +365,11 @@ impl InfraEnv {
             "OVERRIDE_CALENDAR_SERVICE_URL".into(),
             "http://calendar-service:8080".into(),
         );
+        // Same split for gitai_service, whose Local default is its host port.
+        env.insert(
+            "OVERRIDE_GITAI_SERVICE_URL".into(),
+            "http://gitai-service:8080".into(),
+        );
         env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
@@ -707,6 +712,9 @@ impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
         // DSS requires a project key at boot; real flag evaluation needs Doppler.
         env.insert("POSTHOG_API_KEY".into(), "local-posthog-project-key".into());
+        // gitai_service mints device credentials with this; Doppler's
+        // `lcl_personal` may supply a real one.
+        env.insert("GITAI_SHARED_KEY".into(), "local-gitai-shared-key".into());
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
