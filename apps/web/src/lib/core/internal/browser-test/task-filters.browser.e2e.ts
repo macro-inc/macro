@@ -231,9 +231,10 @@ test('Task list header offers no column sort while searching', async ({
 
   await page.getByRole('button', { name: 'Search tasks' }).click();
   await expect(header.getByRole('button')).toHaveCount(0);
-  await expect(
-    header.getByRole('columnheader', { name: 'Updated' })
-  ).toBeVisible();
+  const arrows = (name: string) =>
+    header.getByRole('columnheader', { name }).locator('svg:visible');
+  await expect(arrows('Updated')).toHaveCount(1);
+  await expect(arrows('Due date')).toHaveCount(0);
   await header.getByText('Due date').click();
   await header.getByText('Updated').click();
   await expect(sort).toHaveText(

@@ -164,7 +164,7 @@ timestamps. At 600px, Updated fades and collapses over
 160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
-Updated remains sortable outside a text search. Created by is the final column, with a 16px avatar above
+Updated remains sortable except during a main Tasks or project text search. Created by is the final column, with a 16px avatar above
 840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
 keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. The creator header and avatar
@@ -289,7 +289,7 @@ keyboard shortcut sheet and command menu drop **Sort tasks** (S does nothing), a
 the mobile drawer omits its Sort section. The list's column headers stop sorting:
 Due date shows a plain label, and Updated keeps a static descending arrow whatever
 the stored sort is. Clearing search brings back the stored sort and every control
-unchanged. CRM task lists search through their own sorted query, so their column
+unchanged. CRM task lists search by rerunning their own query, so their column
 headers keep sorting during a search.
 Boards group the loaded search results as before, without complete counts or grouped-search requests.
 
