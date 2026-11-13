@@ -1,0 +1,66 @@
+crates/event_stream/src/domain/filters.rs
+  s_8703f73ae8e37d::t_eba73a19121035 8-9,17-22,174-178,180,186,188
+  s_8703f73ae8e37d::t_6905d059821aba 179
+services/document_storage_service/src/outbound/event_stream.rs
+  s_8703f73ae8e37d::t_48f778b9195d75 6,8-9,51-52,54,57-61,65-77,79,81-94
+  s_8703f73ae8e37d::t_fd8b6dd9fe0818 78,80
+crates/webhook/src/domain/ingestion.rs
+  s_8703f73ae8e37d::t_283ae4416a16b7 259-260,267-268,273,279,285-303
+  s_8703f73ae8e37d::t_ec8a46692ef85f 25-27,37,179-187,189,194-195,198,205-206,211-247,308,314-315,330-339,341-390,547-550,594,600-601,661,664-667,669,684-687,713-714,720-721
+  s_8703f73ae8e37d::t_6465e5d0222db6 188,340,668
+crates/event_stream/src/domain/fan_out.rs
+  s_8703f73ae8e37d::t_b678bb6e760104 65,102-105
+services/document_storage_service/src/api/context.rs
+  s_8703f73ae8e37d::t_72e3e94d6ae44e 934,947
+services/document_storage_service/src/server.rs
+  s_8703f73ae8e37d::t_72e3e94d6ae44e 1036
+  s_8703f73ae8e37d::t_cec395a4636c2d 1105-1107,1109-1116
+  s_8703f73ae8e37d::t_af45fbcd988bd9 1108
+crates/event_stream/src/inbound/log_writer.rs
+  s_8703f73ae8e37d::t_b678bb6e760104 100-110
+crates/event_stream/src/metrics.rs
+  s_8703f73ae8e37d::t_b678bb6e760104 1-61
+crates/event_stream/src/domain/stream.rs
+  s_8703f73ae8e37d::t_b678bb6e760104 309,659
+  s_8703f73ae8e37d::t_eba73a19121035 19-21,245-246
+crates/event_stream/src/lib.rs
+  s_8703f73ae8e37d::t_b678bb6e760104 13
+crates/event_stream/src/domain/test_support.rs
+  s_8703f73ae8e37d::t_48f778b9195d75 376-377,379-382
+  s_8703f73ae8e37d::t_7e7eaaa20d7f6d 378
+crates/event_stream/src/domain/ports.rs
+  s_8703f73ae8e37d::t_48f778b9195d75 204-212,218-224
+crates/webhook/README.md
+  s_8703f73ae8e37d::t_48f778b9195d75 190-192
+  s_8703f73ae8e37d::t_5ca6973b16f4fd 178-185
+crates/webhook/src/domain/service.rs
+  s_8703f73ae8e37d::t_eba73a19121035 115-118
+  s_8703f73ae8e37d::t_478ce58c3a6f8d 119
+crates/event_stream/Cargo.toml
+  s_8703f73ae8e37d::t_b678bb6e760104 66
+crates/webhook/src/domain/service/test.rs
+  s_8703f73ae8e37d::t_8a87dd714e34c7 1435-1444
+crates/event_stream/src/domain/filters/test.rs
+  s_8703f73ae8e37d::t_eba73a19121035 68-75,79,86,91-94
+crates/webhook/src/domain/ingestion/test.rs
+  s_8703f73ae8e37d::t_65ce1398d4790e 2459-2596,2598-2632
+  s_8703f73ae8e37d::t_515d8dae461549 2597
+crates/event_stream/AGENTS.md
+  s_8703f73ae8e37d::t_147c812f5aba8f 72-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "83d5b2e4bfa86c80c32cda5770ebb56c4400e855",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
