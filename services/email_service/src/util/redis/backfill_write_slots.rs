@@ -41,10 +41,24 @@ const KEY: &str = "email:backfill:write_slots";
 /// one domain serialize on its advisory lock, so without a per-team cap a
 /// single team's backfill could hold a database connection per worker.
 const CRM_POPULATION_CAPACITY: u32 = 4;
+/// A population checks its team's slots once. While one team's backlog holds
+/// them, every waiter is that team's own work, so a wait would park a shared
+/// worker per message (each refusal waiting [`WAIT`] took most of the fleet's
+/// workers for one slow team) without freeing a slot any sooner.
+const CRM_POPULATION_WAIT: Duration = Duration::ZERO;
 const CRM_POPULATION_KEY_PREFIX: &str = "email:backfill:crm_population_slots";
 
 fn crm_population_key(team_id: Uuid) -> String {
     format!("{CRM_POPULATION_KEY_PREFIX}:{team_id}")
+}
+
+fn crm_population_slots(key: &str) -> SlotSet<'_> {
+    SlotSet {
+        key,
+        capacity: CRM_POPULATION_CAPACITY,
+        lease: LEASE,
+        wait: CRM_POPULATION_WAIT,
+    }
 }
 
 /// Admits the caller when fewer than `capacity` unexpired leases are held.
@@ -192,20 +206,14 @@ impl RedisClient {
         self.acquire_write_slot(&SLOTS).await
     }
 
-    /// Waits for one of a team's CRM population slots. Returns `None` when
-    /// none frees up in time; the caller defers its operation.
+    /// Takes one of a team's CRM population slots if one is free. Returns
+    /// `None` when all are taken; the caller defers its operation.
     pub async fn acquire_crm_population_slot(
         &self,
         team_id: Uuid,
     ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
         let key = crm_population_key(team_id);
-        self.acquire_write_slot(&SlotSet {
-            key: &key,
-            capacity: CRM_POPULATION_CAPACITY,
-            lease: LEASE,
-            wait: WAIT,
-        })
-        .await
+        self.acquire_write_slot(&crm_population_slots(&key)).await
     }
 
     #[tracing::instrument(

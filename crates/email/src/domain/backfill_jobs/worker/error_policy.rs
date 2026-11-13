@@ -123,13 +123,15 @@ where
     E: BackfillEffects,
     C: BackfillCrm,
 {
-    let delay_seconds = deferral::delay_seconds(deferrals, retry_after);
+    let delay_seconds = deferral::delay_seconds(e.reason, deferrals, retry_after);
     if let Err(error) = ctx.queue.defer(data, delay_seconds, deferrals + 1).await {
         tracing::warn!(error = ?error, "Failed to defer a rate-limited backfill operation; it will be redelivered");
         handle_retryable_error(data, e).await?;
         return Ok(BackfillDeferral::LeaveForRedelivery);
     }
     tracing::debug!(
+        reason = %e.reason,
+        error = format!("{:#}", e.source),
         deferrals,
         delay_seconds,
         "Rate-limited backfill operation deferred"
@@ -154,7 +156,9 @@ pub async fn handle_retryable_error(
     // throttling at ERROR.
     if matches!(
         _e.reason,
-        FailureReason::GmailApiRateLimited | FailureReason::BackfillWritesBusy
+        FailureReason::GmailApiRateLimited
+            | FailureReason::BackfillWritesBusy
+            | FailureReason::CrmPopulationBusy
     ) {
         tracing::debug!("Refused backfill operation will be redelivered");
         return Ok(());

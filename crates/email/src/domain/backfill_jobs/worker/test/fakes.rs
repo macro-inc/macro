@@ -31,6 +31,7 @@ pub(super) struct State {
     pub team: Option<Uuid>,
     pub consent: bool,
     pub crm_contended: bool,
+    pub crm_rejected: bool,
     pub document: bool,
     pub remaining_messages: bool,
     pub failed_transition: bool,
@@ -55,6 +56,7 @@ impl Default for State {
             team: Some(TEAM),
             consent: true,
             crm_contended: true,
+            crm_rejected: false,
             document: false,
             remaining_messages: false,
             failed_transition: true,
@@ -102,10 +104,13 @@ impl Fake {
     }
     fn crm_call(&self, name: &'static str) -> Result<(), CrmError> {
         self.call(name).map_err(|_| {
-            if self.0.lock().unwrap().crm_contended {
+            let s = self.0.lock().unwrap();
+            if s.crm_contended {
                 CrmError::Contended
+            } else if s.crm_rejected {
+                CrmError::InvalidRequest("email has no '@' separator".into())
             } else {
-                CrmError::InvalidRequest("provider failure".into())
+                CrmError::StorageLayerError(anyhow::anyhow!("provider failure"))
             }
         })
     }

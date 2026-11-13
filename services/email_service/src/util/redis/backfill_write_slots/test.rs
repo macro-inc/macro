@@ -177,3 +177,34 @@ async fn an_expired_lease_is_not_renewed_back_into_a_full_set() {
     other.release().await;
     cleanup(&client, &key).await;
 }
+
+#[tokio::test]
+async fn a_team_with_every_crm_population_slot_taken_refuses_without_waiting() {
+    let client = client();
+    let key = unique_key();
+    let slots = crm_population_slots(&key);
+    let mut held = Vec::new();
+    for _ in 0..CRM_POPULATION_CAPACITY {
+        held.push(
+            client
+                .acquire_write_slot(&slots)
+                .await
+                .unwrap()
+                .expect("the team has a free slot"),
+        );
+    }
+
+    let started = std::time::Instant::now();
+    let refused = client.acquire_write_slot(&slots).await.unwrap();
+
+    assert!(refused.is_none(), "a fifth population must be refused");
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "the refusal took {:?}; it must not wait for a slot",
+        started.elapsed()
+    );
+    for slot in held {
+        slot.release().await;
+    }
+    cleanup(&client, &key).await;
+}

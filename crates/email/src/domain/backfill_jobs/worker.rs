@@ -27,7 +27,7 @@ mod test;
 mod threads;
 mod write_slot;
 
-pub use deferral::rate_limit;
+pub use deferral::{rate_limit, redelivery_delay_seconds};
 pub use email_api_error::map_email_api_error;
 pub use error_policy::handle_retryable_error;
 pub use import_ports::*;

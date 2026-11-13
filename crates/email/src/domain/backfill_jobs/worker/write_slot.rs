@@ -1,6 +1,6 @@
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-/// Preserve refusal policy for both CRM populations and bulk backfill writes.
+/// Preserve refusal policy for bulk backfill writes.
 pub fn admit_write_slot<P>(
     acquired: Result<Option<P>, anyhow::Error>,
 ) -> Result<P, ProcessingError> {

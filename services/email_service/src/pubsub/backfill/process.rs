@@ -44,7 +44,9 @@ pub(crate) async fn process_message(
             error_handlers::defer_rate_limited_operation(&ctx, message, &data, &error, retry_after)
                 .await
         }
-        BackfillDisposition::LeaveForRedelivery(e) => error_handlers::retry(&data, &e).await,
+        BackfillDisposition::LeaveForRedelivery(e) => {
+            error_handlers::retry(&ctx, message, &data, &e).await
+        }
     }
 }
 

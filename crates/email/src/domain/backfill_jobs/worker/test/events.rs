@@ -131,6 +131,7 @@ async fn user_crm_skip_events_have_no_payload_fields() {
 async fn each_refused_reason_emits_one_debug_event_with_its_error_chain_in_retry_span() {
     for reason in [
         FailureReason::BackfillWritesBusy,
+        FailureReason::CrmPopulationBusy,
         FailureReason::GmailApiRateLimited,
     ] {
         let output = Output::default();
@@ -171,6 +172,6 @@ async fn successful_deferral_emits_one_debug_event_with_the_original_count_and_d
     .await;
     assert_eq!(
         lines(&output),
-        "DEBUG defer_rate_limited_operation: Rate-limited backfill operation deferred deferrals=2 delay_seconds=31\n"
+        "DEBUG defer_rate_limited_operation: Rate-limited backfill operation deferred reason=BackfillWritesBusy error=\"busy\" deferrals=2 delay_seconds=31\n"
     );
 }

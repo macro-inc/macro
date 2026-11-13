@@ -26,8 +26,15 @@ use models_email::service::{
 /// Each population holds one of its team's CRM population slots, so one
 /// team's consent backfill can't occupy a database connection per worker.
 /// A refused slot, or a population that timed out waiting for a CRM lock,
-/// is deferred like a busy backfill write instead of spending a delivery.
-#[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
+/// is deferred with the CRM refusal backoff instead of spending a delivery.
+/// The slot is refused without waiting: while one team's backlog holds its
+/// slots, waiting would park a shared worker on every one of its messages.
+/// A population the CRM rejects outright, such as a malformed address, is
+/// dropped instead of retried.
+///
+/// The dispatcher logs each outcome with its reason and error chain, so the
+/// span records no error event of its own: a refusal is not a failure.
+#[tracing::instrument(skip_all, fields(link_id = %link.id))]
 pub(super) async fn populate_crm_contact<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
@@ -57,19 +64,45 @@ where
         return Ok(());
     };
 
-    let slot = super::admit_write_slot(ctx.effects.acquire_crm(team_id).await)?;
+    let slot = match ctx.effects.acquire_crm(team_id).await {
+        Ok(Some(slot)) => slot,
+        Ok(None) => {
+            return Err(crm_population_busy(anyhow::anyhow!(
+                "every CRM population slot of team {team_id} is taken"
+            )));
+        }
+        Err(error) => {
+            return Err(crm_population_busy(
+                error.context("CRM population slots are unavailable"),
+            ));
+        }
+    };
     slot.hold(ctx.crm.populate_contact(&team_id, link, p))
         .await
-        .map_err(|e| {
-            let reason = match e {
-                CrmError::Contended => FailureReason::BackfillWritesBusy,
-                _ => FailureReason::DatabaseQueryFailed,
-            };
-            ProcessingError::Retryable(DetailedError {
-                reason,
-                source: anyhow::Error::from(e).context("Failed to populate CRM contact"),
-            })
-        })?;
+        .map_err(population_error)?;
 
     Ok(())
+}
+
+fn crm_population_busy(source: anyhow::Error) -> ProcessingError {
+    ProcessingError::Retryable(DetailedError {
+        reason: FailureReason::CrmPopulationBusy,
+        source,
+    })
+}
+
+fn population_error(error: CrmError) -> ProcessingError {
+    let retryable = match error {
+        CrmError::Contended => Some(FailureReason::CrmPopulationBusy),
+        CrmError::StorageLayerError(_) => Some(FailureReason::DatabaseQueryFailed),
+        _ => None,
+    };
+    let detail = |reason| DetailedError {
+        reason,
+        source: anyhow::Error::from(error).context("Failed to populate CRM contact"),
+    };
+    match retryable {
+        Some(reason) => ProcessingError::Retryable(detail(reason)),
+        None => ProcessingError::NonRetryable(detail(FailureReason::InvalidData)),
+    }
 }
