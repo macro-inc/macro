@@ -2171,6 +2171,13 @@ export function mapGraphqlSoupItem(
                     createdAt: notification.createdAt,
                   }))
                 : undefined,
+            unreadMentions:
+              'unreadMentions' in entity
+                ? entity.unreadMentions.map((notification) => ({
+                    id: notification.id,
+                    state: notificationStateFromGraphql(notification.state),
+                  }))
+                : undefined,
           },
         }) as SoupApiItem
     )
