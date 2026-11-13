@@ -1,12 +1,12 @@
 //! Native AI-edit operations: the Source `Doc.apply` semantics of the
 //! ai-editing worker's `DocumentOp`s, over the native model.
 //!
-//! Each op is one application input. The host sends `merge: true` for every op
-//! after the first of an edit, so the whole edit is one undo step regardless of
-//! timing. A refused op changes no document, selection, tag or history state:
-//! it emits one typed `group-c.ai-op-refused` event and reports `Handled::No`;
-//! the host stops there and keeps the ops already applied, as Source's per-op
-//! transactions do.
+//! Each op is one application input, grouped for undo by the editor's history
+//! rule like any other commit (Source groups AI edits by its 400 ms merge
+//! window, not per edit). A refused op changes no document, selection, tag or
+//! history state: it emits one typed `group-c.ai-op-refused` event and reports
+//! `Handled::No`; the host reports it and applies the ops after it, as the app's
+//! Source editor drops a failing update and carries on.
 //!
 //! The op types and appliers depend only on the model, so the worker could
 //! adopt them later.
@@ -164,6 +164,9 @@ pub enum AiOpRefusal {
 pub struct AiOpRefused {
     /// The typed cause.
     pub cause: AiOpRefusal,
+    /// The host's token for the `group-c.ai-op` input that was refused, so a
+    /// refusal is attributed to its own input and never to nested work.
+    pub invocation: u32,
 }
 
 pub(crate) static AI_OP_REFUSED: EventKey<AiOpRefused> = EventKey::new("group-c.ai-op-refused");
@@ -225,19 +228,40 @@ fn validate(op: WireOp) -> Result<AiOp, AiOpRefusal> {
 struct AiOpCommand {
     /// The validated op, or the refusal the handler reports.
     op: Result<AiOp, AiOpRefusal>,
-    merge: bool,
+    invocation: u32,
 }
 
 static AI_OP: CommandKey<AiOpCommand> = CommandKey::new("group-c.ai-op");
-static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
-    command: CommandKind::Extension(&AI_OP),
-    priority: CommandPriority::Normal,
-    placement: Placement::After,
-}];
+/// Source applyAiOps' first update: `$setSelection(null)`, even for no ops.
+static AI_EDIT_CLEAR_SELECTION: CommandKey<()> = CommandKey::new("group-c.ai-edit-clear-selection");
+static COMMANDS: [CommandRegistration; 2] = [
+    CommandRegistration {
+        command: CommandKind::Extension(&AI_OP),
+        priority: CommandPriority::Normal,
+        placement: Placement::After,
+    },
+    CommandRegistration {
+        command: CommandKind::Extension(&AI_EDIT_CLEAR_SELECTION),
+        priority: CommandPriority::Normal,
+        placement: Placement::After,
+    },
+];
 
-/// Decode `group-c.ai-op {op, merge}`. A malformed envelope is a decode error;
+/// Decode `group-c.ai-op {op, invocation}`. A malformed envelope is a decode error;
 /// an unsupported kind or out-of-domain number decodes to a typed refusal.
 pub(super) fn decode(name: &str, json: &str, _generation: u32) -> Result<Option<Command>, Error> {
+    if name == AI_EDIT_CLEAR_SELECTION.name() {
+        // Closed payload: the clear takes no arguments.
+        if serde_json::from_str::<serde_json::Value>(json)? != serde_json::json!({}) {
+            return Err(Error::Invariant(
+                "group-c.ai-edit-clear-selection payload must be {}",
+            ));
+        }
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &AI_EDIT_CLEAR_SELECTION,
+            (),
+        ))));
+    }
     if name != AI_OP.name() {
         return Ok(None);
     }
@@ -245,10 +269,22 @@ pub(super) fn decode(name: &str, json: &str, _generation: u32) -> Result<Option<
     let serde_json::Value::Object(envelope) = value else {
         return Err(Error::Invariant("group-c.ai-op payload must be an object"));
     };
-    let merge = match envelope.get("merge") {
-        None => false,
-        Some(serde_json::Value::Bool(merge)) => *merge,
-        Some(_) => return Err(Error::Invariant("group-c.ai-op merge must be a boolean")),
+    // Closed envelope: a stale `merge` from an older host must not be ignored.
+    if envelope
+        .keys()
+        .any(|key| key != "op" && key != "invocation")
+    {
+        return Err(Error::Invariant(
+            "group-c.ai-op payload takes only op and invocation",
+        ));
+    }
+    let invocation = match envelope
+        .get("invocation")
+        .and_then(serde_json::Value::as_u64)
+    {
+        Some(token) => u32::try_from(token)
+            .map_err(|_| Error::Invariant("group-c.ai-op invocation must be a u32"))?,
+        None => return Err(Error::Invariant("group-c.ai-op invocation must be a u32")),
     };
     let Some(op @ serde_json::Value::Object(fields)) = envelope.get("op") else {
         return Err(Error::Invariant("group-c.ai-op op must be an object"));
@@ -265,7 +301,7 @@ pub(super) fn decode(name: &str, json: &str, _generation: u32) -> Result<Option<
     };
     Ok(Some(Command::Extension(ExtensionCommand::new(
         &AI_OP,
-        AiOpCommand { op, merge },
+        AiOpCommand { op, invocation },
     ))))
 }
 
@@ -287,6 +323,11 @@ impl Plugin for AiOps {
         let Command::Extension(command) = command else {
             return Ok(Handled::No);
         };
+        if command.payload(&AI_EDIT_CLEAR_SELECTION).is_some() {
+            // Selection only, untagged, like Source's discrete clear update.
+            tx.set_selection(None)?;
+            return Ok(Handled::Yes);
+        }
         let Some(command) = command.payload(&AI_OP) else {
             return Ok(Handled::No);
         };
@@ -300,15 +341,18 @@ impl Plugin for AiOps {
             Ok(writes) => {
                 // Source applyAiOps drops the selection before an edit's ops run.
                 tx.set_selection(None)?;
-                if command.merge {
-                    tx.add_tag(UpdateTag::HistoryMerge);
-                }
                 text::execute(tx, writes)?;
                 Ok(Handled::Yes)
             }
             Err(cause) => {
                 // Event-only commit: no document, selection, tag or history change.
-                tx.emit(&AI_OP_REFUSED, AiOpRefused { cause });
+                tx.emit(
+                    &AI_OP_REFUSED,
+                    AiOpRefused {
+                        cause,
+                        invocation: command.invocation,
+                    },
+                );
                 Ok(Handled::No)
             }
         }
@@ -320,7 +364,15 @@ pub(super) fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Va
     let Some(refused) = event.payload(&AI_OP_REFUSED) else {
         return Ok(None);
     };
-    Ok(Some(serde_json::to_value(refused.cause)?))
+    // `{"cause": …, …fields, "invocation": n}`; the cause stays a closed tag.
+    let mut payload = serde_json::to_value(refused.cause)?;
+    let serde_json::Value::Object(fields) = &mut payload else {
+        return Err(Error::Invariant(
+            "group-c.ai-op-refused cause must encode as an object",
+        ));
+    };
+    fields.insert("invocation".into(), refused.invocation.into());
+    Ok(Some(payload))
 }
 
 /// Plan one op without writing: its ordered writes, or the typed refusal.
