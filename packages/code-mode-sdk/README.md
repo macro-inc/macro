@@ -55,8 +55,8 @@ bun run --cwd packages/code-mode-sdk test
 
 The generated `sdk.mjs`, `handlebars.mjs`, `documentation.json`,
 `operations.json` (each SDK operation's label, method, path and whether it
-writes), `hosts.json` (every service the SDK can reach, with its production
-host) and `sdk-types.json` (the SDK's declarations routine code is
+writes), `hosts.json` (every service the SDK can reach, with its host in each
+environment) and `sdk-types.json` (the SDK's declarations routine code is
 type-checked against, with their fingerprint) are build outputs, never
 committed. `crates/code_mode_assets`
 builds them when it compiles: local cargo runs `scripts/generate.ts` with bun,

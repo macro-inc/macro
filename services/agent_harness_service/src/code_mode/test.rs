@@ -407,20 +407,31 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
             panic!("the SDK reaches {name}, which code mode doesn't know: add it to SdkHost")
         })
     };
-    let sdk: std::collections::BTreeMap<String, String> =
+    type Hosts = std::collections::BTreeMap<String, String>;
+    let environments: std::collections::BTreeMap<String, Hosts> =
         serde_json::from_str(code_mode_assets::HOSTS).unwrap();
-    assert!(sdk.contains_key("static-files"), "{sdk:?}");
-    for (name, url) in &sdk {
-        let path = url
-            .split_once("://")
-            .and_then(|(_, rest)| rest.find('/').map(|slash| &rest[slash..]))
-            .unwrap_or("");
-        match enforcement(host(name)) {
-            ScopeEnforcement::Propagate | ScopeEnforcement::SignedScope => assert!(
-                agent_correlation::scope::matches(&format!("{path}/suggestions"), "/suggestions"),
-                "{name} ({url}) serves under a prefix the scope doesn't strip"
-            ),
-            ScopeEnforcement::NoMacroCredential => {}
+    assert_eq!(
+        environments.keys().collect::<Vec<_>>(),
+        ["dev", "local", "prod"]
+    );
+    for (environment, sdk) in &environments {
+        assert!(sdk.contains_key("static-files"), "{environment}: {sdk:?}");
+        for (name, url) in sdk {
+            let path = url::Url::parse(url)
+                .unwrap()
+                .path()
+                .trim_end_matches('/')
+                .to_owned();
+            match enforcement(host(name)) {
+                ScopeEnforcement::Propagate | ScopeEnforcement::SignedScope => assert!(
+                    agent_correlation::scope::matches(
+                        &format!("{path}/suggestions"),
+                        "/suggestions"
+                    ),
+                    "{environment} {name} ({url}) serves under a prefix the scope doesn't strip"
+                ),
+                ScopeEnforcement::NoMacroCredential => {}
+            }
         }
     }
     for (key, operation) in code_execution::domain::operations() {
