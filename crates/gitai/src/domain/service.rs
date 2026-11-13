@@ -129,7 +129,9 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
 
     /// The identity behind a device credential. The shared key is not a
     /// device credential and is refused here.
-    #[tracing::instrument(name = "gitai.authenticate", skip_all, fields(credential_id = Empty), err)]
+    /// A refused key is expected client behaviour, so it is logged as a
+    /// warning; storage failures are logged as errors where they are answered.
+    #[tracing::instrument(name = "gitai.authenticate", skip_all, fields(credential_id = Empty), err(level = "warn"))]
     pub async fn authenticate_device(
         &self,
         presented: Option<&str>,
@@ -171,7 +173,7 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
     }
 
     /// Mints a device credential bound to a person and machine.
-    #[tracing::instrument(name = "gitai.credentials.mint", skip_all, fields(credential_id = Empty), err)]
+    #[tracing::instrument(name = "gitai.credentials.mint", skip_all, fields(credential_id = Empty), err(level = "warn"))]
     pub async fn mint_credential(
         &self,
         presented: Option<&str>,
@@ -212,7 +214,11 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
     }
 
     /// Revokes a credential; its next request gets 401.
-    #[tracing::instrument(name = "gitai.credentials.revoke", skip(self, presented), err)]
+    #[tracing::instrument(
+        name = "gitai.credentials.revoke",
+        skip(self, presented),
+        err(level = "warn")
+    )]
     pub async fn revoke_credential(
         &self,
         presented: Option<&str>,
@@ -296,7 +302,7 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
             sessions = Empty,
             token_buckets = Empty,
         ),
-        err
+        err(level = "warn")
     )]
     async fn ingest_batch(
         &self,
