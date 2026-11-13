@@ -1,0 +1,23 @@
+crates/github_pull_requests/src/broker/test.rs
+  s_800cdee5095ae4::t_156d4cdea9e6e0 1-67
+crates/event_exposure/src/lib.rs
+  s_800cdee5095ae4::t_156d4cdea9e6e0 170
+crates/github_pull_requests/src/broker.rs
+  s_800cdee5095ae4::t_156d4cdea9e6e0 2-4,18-40,45,53-56,58-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "29f870465dcee37717b1ba94119ec8550360d072",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
