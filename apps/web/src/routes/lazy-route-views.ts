@@ -147,6 +147,14 @@ export const PasswordsRouteView = lazyNamed(
   () => import('@app/features/passwords/route-views'),
   'PasswordsRouteView'
 );
+export const AgentDashboardRouteView = lazyNamed(
+  () => import('@app/features/agent-dashboards/route-views'),
+  'AgentDashboardRouteView'
+);
+export const DashboardRouteView = lazyNamed(
+  () => import('@app/features/agent-dashboards/route-views'),
+  'DashboardRouteView'
+);
 export const NotFound = lazy(
   () => import('@core/component/AccessErrorViews/NotFound')
 );
@@ -197,4 +205,6 @@ export const OTHER_APP_VIEWS = [
   ExternalRouteView,
   ExternalChatRouteView,
   PasswordsRouteView,
+  AgentDashboardRouteView,
+  DashboardRouteView,
 ];

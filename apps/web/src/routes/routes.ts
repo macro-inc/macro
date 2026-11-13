@@ -624,6 +624,29 @@ export const routineDetailRoute = defineRoute({
   toReference: ({ routineId }) => uuidRouteReference(routineId, 'routine'),
 });
 
+/**
+ * An agent account's page: its identity and its home dashboard. Not under
+ * `agent/`, which legacy agent-session links own, nor the Agents workspace.
+ */
+export const agentDashboardRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'agent-dashboard',
+  path: 'agent-accounts/:userId',
+  params: z.object({ userId: z.string().min(1) }),
+  remountKey: ({ userId }) => userId,
+  claim: ({ userId }) => ({ namespace: 'agent-account', id: userId }),
+});
+
+/** Any dashboard by id, read-only. */
+export const dashboardRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'dashboard',
+  path: 'dashboard/:dashboardId',
+  params: z.object({ dashboardId: z.string().min(1) }),
+  remountKey: ({ dashboardId }) => dashboardId,
+  claim: ({ dashboardId }) => ({ namespace: 'dashboard', id: dashboardId }),
+});
+
 export const agentsViewRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'view-agents',

@@ -40,6 +40,7 @@ import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
+  AgentDashboardRouteView,
   AgentsRouteView,
   BookingLinksRouteView,
   CalendarRouteView,
@@ -49,6 +50,7 @@ import {
   ChannelDetailRouteView,
   ChannelsRouteView,
   CompaniesRouteView,
+  DashboardRouteView,
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
@@ -92,6 +94,7 @@ import {
   accountManagerRoute,
   activityRoute,
   agentChatsRoute,
+  agentDashboardRoute,
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
@@ -124,6 +127,7 @@ import {
   crmRecordRoute,
   crmRetiredDatabaseRoute,
   crmRetiredRecordDatabasesRoute,
+  dashboardRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -374,6 +378,11 @@ export function appRouteElements(): JSX.Element {
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route definition={passwordsRoute} component={PasswordsRouteView} />
+        <Route
+          definition={agentDashboardRoute}
+          component={AgentDashboardRouteView}
+        />
+        <Route definition={dashboardRoute} component={DashboardRouteView} />
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}

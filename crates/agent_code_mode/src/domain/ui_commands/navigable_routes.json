@@ -87,6 +87,8 @@
     {"route":"agents","navigable":true,"segments":["agents",":"]},
     {"route":"coders","navigable":true,"segments":["coders",":"]},
     {"route":"agent-chats","navigable":true,"segments":["agent-chats",":"]},
+    {"route":"agent-dashboard","navigable":true,"segments":["agent-accounts",":"]},
+    {"route":"dashboard","navigable":true,"segments":["dashboard",":"]},
     {"route":"mail-thread","navigable":true,"segments":["mail",":"]},
     {"route":"tasks-task","navigable":true,"segments":["tasks",":"]},
     {"route":"view-calendar","navigable":true,"segments":["calendar",":"]},
