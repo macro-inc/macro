@@ -6,7 +6,7 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';

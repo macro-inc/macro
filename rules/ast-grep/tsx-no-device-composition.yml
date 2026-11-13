@@ -23,16 +23,20 @@ ignores:
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
   - apps/web/src/features/block-ai/ai-block.tsx
+  - apps/web/src/features/block-call/component/CallBlockAdapter.tsx
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-fig/fig-block.tsx
+  - apps/web/src/features/block-form/form-block.tsx
   - apps/web/src/features/block-image/component/Block.tsx
   - apps/web/src/features/block-md/component/Block.tsx
   - apps/web/src/features/block-pdf/component/Block.tsx
   - apps/web/src/features/block-pptx/pptx-block.tsx
+  - apps/web/src/features/block-project/component/Block.tsx
   - apps/web/src/features/block-psd/psd-block.tsx
+  - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-unknown/component/Block.tsx
   - apps/web/src/features/block-video/component/Block.tsx
   - apps/web/src/features/block-write/DocxBlock.tsx
@@ -52,7 +56,6 @@ ignores:
   - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
-  - apps/web/src/features/block-call/component/CallRecording/CallRecordingSplitHeader.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
   - apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
   - apps/web/src/features/block-call/views/CallDetailView.tsx
@@ -61,7 +64,6 @@ ignores:
   - apps/web/src/features/block-company/component/CompanyBlockAdapter.tsx
   - apps/web/src/features/block-contact/component/ContactBlockAdapter.tsx
   - apps/web/src/features/block-database/component/TopBar.tsx
-  - apps/web/src/features/block-form/form-block.tsx
   - apps/web/src/features/block-form/views/builder-view.tsx
   - apps/web/src/features/block-image/component/ImageContent.tsx
   - apps/web/src/features/block-md/comments/CommentMargin.tsx
@@ -69,9 +71,6 @@ ignores:
   - apps/web/src/features/block-pr/component/Block.tsx
   - apps/web/src/features/block-pr/hooks/usePrShare.tsx
   - apps/web/src/features/block-pr/views/PrDetail.tsx
-  - apps/web/src/features/block-project/component/ProjectCreateMenu.tsx
-  - apps/web/src/features/block-project/component/TopBar.tsx
-  - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-spreadsheet/components/FormulaInput.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetSheetTabs.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetToolbar.tsx

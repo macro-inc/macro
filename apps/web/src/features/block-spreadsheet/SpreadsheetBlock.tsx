@@ -1,15 +1,7 @@
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import {
   useCanAutofocusSplitContent,
   useSplitPanel,
@@ -17,19 +9,14 @@ import {
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   createParamsState,
   ParamsProvider,
 } from '@core/component/ParamsProvider';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
@@ -37,11 +24,6 @@ import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/share.svg';
-import DownloadSimple from '@icon/system/regular/download-simple.svg';
-import FileCsv from '@icon/system/regular/file-csv.svg';
-import FileXls from '@icon/system/regular/file-xls.svg';
-import { Badge } from '@ui';
 import { onCleanup, onMount, Show } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
 import { clipboardTargetInScope } from './core/clipboard-scope';
@@ -52,7 +34,9 @@ import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
 import { createSpreadsheetSession } from './queries/spreadsheet-session';
 import { SpreadsheetComments } from './SpreadsheetComments';
 import { spreadsheetMentions } from './spreadsheet-mentions';
+import { MobileSpreadsheetHeader } from './views/mobile/spreadsheet-header';
 import { SpreadsheetEditor } from './views/SpreadsheetEditor';
+import { SpreadsheetHeader } from './views/spreadsheet-header';
 
 export default function SpreadsheetBlock(props: { share?: string }) {
   const enabled = useSpreadsheetAccess();
@@ -119,59 +103,24 @@ function SpreadsheetBlockContent(props: { share?: string }) {
   return (
     <DocumentBlockContainer>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <SplitHeaderLeft>
-          <BlockItemSplitLabel
-            trailingBadges={
-              <Show when={!isMobile()}>
-                <Badge variant="outline" size="xs">
-                  Beta
-                </Badge>
-              </Show>
-            }
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <SpreadsheetHeader
+              documentId={documentId}
+              name={() => name() ?? ''}
+              openShare={openShare}
+              download={sheetDownload.download}
+            />
+          }
+        >
+          <MobileSpreadsheetHeader
+            documentId={documentId}
+            name={() => name() ?? ''}
+            openShare={openShare}
+            download={sheetDownload.download}
           />
-        </SplitHeaderLeft>
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-        </SplitHeaderRight>
-        <ResponsivePermissionsBadge />
-        <ResponsiveBlockToolbar
-          id={documentId}
-          itemType="document"
-          name={name()}
-          ops={[
-            { op: 'rename' },
-            { op: 'copy' },
-            { op: 'moveToProject' },
-            {
-              group: 'file',
-              label: 'Download',
-              icon: DownloadSimple,
-              children: [
-                {
-                  label: 'Download as Excel (.xlsx)',
-                  icon: FileXls,
-                  action: () => sheetDownload.download('xlsx'),
-                },
-                {
-                  label: 'Download as CSV',
-                  icon: FileCsv,
-                  action: () => sheetDownload.download('csv'),
-                },
-              ],
-            },
-            { op: 'delete' },
-          ]}
-          tools={[
-            {
-              group: 'sharing',
-              label: 'Share',
-              icon: IconShared,
-              action: openShare,
-              buttonComponent: () => <ShareTrigger onClick={openShare} />,
-              focusTarget: getShareDrawerRecipientInput,
-            },
-          ]}
-        />
+        </Show>
         <Show when={data()?.syncSource} keyed>
           {(syncSource) => {
             onCleanup(sheetDownload.clear);
