@@ -9,7 +9,7 @@ const PAGE_CREATE_TOKENS: Partial<Record<MobileNavViewId, HotkeyToken>> = {
   channels: TOKENS.create.message,
   documents: TOKENS.create.note,
   tasks: TOKENS.create.task,
-  projects: TOKENS.create.project,
+  projects: TOKENS.create.initiative,
 };
 
 /** Resolve from the available launcher entries so feature gates apply here too. */

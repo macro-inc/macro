@@ -131,6 +131,48 @@ describe('mobile create availability', () => {
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 
+  it('creates an initiative rather than a Drive folder from Projects', () => {
+    const { setBlocks } = setup('projects');
+    const createProject = vi.fn(() => true);
+    const createFolder = vi.fn(() => true);
+    setBlocks([
+      {
+        label: 'Folder',
+        description: 'Create folder',
+        blockName: 'project',
+        hotkeyToken: TOKENS.create.project,
+        keyDownHandler: createFolder,
+      },
+      {
+        label: 'Project',
+        description: 'Create project',
+        blockName: 'initiative',
+        hotkeyToken: TOKENS.create.initiative,
+        keyDownHandler: createProject,
+      },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    expect(createProject).toHaveBeenCalledOnce();
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a folder when project creation is unavailable', () => {
+    const { setBlocks } = setup('projects');
+    const createFolder = vi.fn(() => true);
+    setBlocks([
+      {
+        label: 'Folder',
+        description: 'Create folder',
+        blockName: 'project',
+        hotkeyToken: TOKENS.create.project,
+        keyDownHandler: createFolder,
+      },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    expect(sources.openMenu).toHaveBeenCalledWith(true);
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
   it('uses a Calendar New menu when enabled and keeps the default fallback', async () => {
     const { setCalendar, setBlocks } = setup('calendar');
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
