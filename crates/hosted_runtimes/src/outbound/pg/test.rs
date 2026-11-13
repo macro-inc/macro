@@ -780,3 +780,18 @@ async fn awake_computers_are_those_awake_with_a_harness(pool: PgPool) {
         )]
     );
 }
+
+/// A pool timeout reaches the domain as unavailable storage, which the
+/// passes skip quietly; any other database error is still a failure.
+#[test]
+fn only_a_pool_timeout_is_unavailable_storage() {
+    let timed_out = crate::domain::service::ComputerError::Internal(
+        rootcause::Report::new(PgComputerError::from(sqlx::Error::PoolTimedOut)).into_dynamic(),
+    );
+    let missing = crate::domain::service::ComputerError::Internal(
+        rootcause::Report::new(PgComputerError::from(sqlx::Error::RowNotFound)).into_dynamic(),
+    );
+
+    assert!(timed_out.is_storage_unavailable());
+    assert!(!missing.is_storage_unavailable());
+}
