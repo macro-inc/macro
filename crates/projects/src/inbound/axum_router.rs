@@ -98,6 +98,7 @@ impl IntoResponse for ProjectError {
         let status = match &self {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Unauthorized | Self::UnauthorizedWithMessage(_) => StatusCode::UNAUTHORIZED,
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::BadRequest(_)
             | Self::NameTooLong { .. }
             | Self::CannotModifyDeleted
