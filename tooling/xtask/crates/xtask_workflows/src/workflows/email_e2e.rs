@@ -9,8 +9,8 @@
 //! red run on the merge commit; nothing is reverted or blocked by it.
 
 use gh_workflow::{
-    Container, Env, Event, Expression, Job, Port, Push, Run, Step, Use, Workflow, WorkflowCall,
-    WorkflowDispatch,
+    Concurrency, Container, Env, Event, Expression, Job, Port, Push, Run, Step, Use, Workflow,
+    WorkflowCall, WorkflowDispatch,
 };
 use xtask_paths::RepoGlob;
 
@@ -64,9 +64,20 @@ pub fn email_e2e() -> Workflow {
             .push(push)
             .workflow_dispatch(WorkflowDispatch::default())
             .workflow_call(WorkflowCall::default()))
-        .concurrency(vars::concurrency("email-e2e"))
+        .concurrency(concurrency())
         .map(vars::with_global_env)
         .add_job("email-e2e", suite())
+}
+
+/// Every commit on `main` gets its own result: a later merge does not cancel
+/// the run of an earlier one, so a break can be traced to its commit. Within
+/// `PR CI` the group is that run's own, because `PR CI` cancels its own
+/// superseded runs.
+fn concurrency() -> Concurrency {
+    Concurrency::new(Expression::new(
+        "email-e2e-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}",
+    ))
+    .cancel_in_progress(true)
 }
 
 /// Build the two services and run the scenarios against Postgres, Redis, an

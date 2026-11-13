@@ -52,12 +52,24 @@ struct Routes {
     /// scenario's object storage.
     uploads_url: String,
     requests: Arc<Mutex<Vec<ServiceRequest>>>,
+    failures: Failures,
 }
+
+/// An answer a scenario asked a stand-in to give instead of its usual one.
+struct Failure {
+    service: String,
+    method: String,
+    path_prefix: String,
+    status: StatusCode,
+}
+
+type Failures = Arc<Mutex<Vec<Failure>>>;
 
 /// The running stand-in server.
 pub(crate) struct MacroServices {
     address: SocketAddr,
     requests: Arc<Mutex<Vec<ServiceRequest>>>,
+    failures: Failures,
     cancel: CancellationToken,
     tracker: TaskTracker,
 }
@@ -71,6 +83,7 @@ impl MacroServices {
         uploads_url: &str,
     ) -> Result<Self, Report> {
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let failures = Failures::default();
         let routes = Routes {
             http: reqwest::Client::builder()
                 .build()
@@ -79,6 +92,7 @@ impl MacroServices {
             outlook_authentication: format!("{outlook_url}{EMULATOR_AUTHENTICATION_PATH}"),
             uploads_url: uploads_url.to_owned(),
             requests: requests.clone(),
+            failures: failures.clone(),
         };
 
         let listener = TcpListener::bind("127.0.0.1:0")
@@ -102,6 +116,7 @@ impl MacroServices {
         Ok(Self {
             address,
             requests,
+            failures,
             cancel,
             tracker,
         })
@@ -123,6 +138,28 @@ impl MacroServices {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    /// Makes the next request to `service` with this method, whose path
+    /// starts with `path_prefix`, answer `status` and an empty JSON object.
+    pub(crate) fn fail_next(
+        &self,
+        service: &str,
+        method: &str,
+        path_prefix: &str,
+        status: u16,
+    ) -> Result<(), Report> {
+        let status = StatusCode::from_u16(status).context("not an HTTP status")?;
+        self.failures
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(Failure {
+                service: service.to_owned(),
+                method: method.to_ascii_uppercase(),
+                path_prefix: path_prefix.to_owned(),
+                status,
+            });
+        Ok(())
     }
 
     /// Stops the server.
@@ -161,6 +198,25 @@ async fn answer(State(routes): State<Routes>, request: Request) -> Response {
             path: format!("/{rest}"),
             body: serde_json::from_slice(&body).ok(),
         });
+    let path = format!("/{rest}");
+    let failure = {
+        let mut failures = routes
+            .failures
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        failures
+            .iter()
+            .position(|failure| {
+                failure.service == service
+                    && failure.method == method.as_str()
+                    && path.starts_with(&failure.path_prefix)
+            })
+            .map(|index| failures.remove(index).status)
+    };
+    if let Some(status) = failure {
+        return (status, axum::Json(serde_json::json!({}))).into_response();
+    }
+
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
     axum::Json(stand_in_answer(
         &routes.uploads_url,

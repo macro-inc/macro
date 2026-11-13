@@ -3,6 +3,8 @@
 //! Scenarios run as separate processes, so the databases are handed out
 //! through leases held in database 0 of the same server.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
@@ -40,6 +42,8 @@ pub(crate) struct RedisDatabase {
     lease_key: String,
     owner: String,
     registry: MultiplexedConnection,
+    /// Set when a renewal found the lease expired or held by someone else.
+    lost: Arc<AtomicBool>,
     cancel: CancellationToken,
     tracker: TaskTracker,
 }
@@ -81,10 +85,12 @@ impl RedisDatabase {
         let lease_key = lease_key(index);
         let cancel = CancellationToken::new();
         let tracker = TaskTracker::new();
+        let lost = Arc::new(AtomicBool::new(false));
         tracker.spawn(renew(
             registry.clone(),
             lease_key.clone(),
             owner.clone(),
+            lost.clone(),
             cancel.clone(),
         ));
 
@@ -93,6 +99,7 @@ impl RedisDatabase {
             lease_key,
             owner,
             registry,
+            lost,
             cancel,
             tracker,
         })
@@ -101,6 +108,27 @@ impl RedisDatabase {
     /// The URL the services connect with.
     pub(crate) fn url(&self) -> &str {
         &self.url
+    }
+
+    /// Opens a connection to the database.
+    pub(crate) async fn connect(&self) -> Result<MultiplexedConnection, Report> {
+        let connection = redis::Client::open(self.url.as_str())?
+            .get_multiplexed_async_connection()
+            .await
+            .context("could not connect to the scenario's Redis database")?;
+        Ok(connection)
+    }
+
+    /// Fails when the lease ran out while the scenario was using the
+    /// database: another scenario may have taken and emptied it since.
+    pub(crate) fn ensure_held(&self) -> Result<(), Report> {
+        if self.lost.load(Ordering::Relaxed) {
+            bail!(
+                "the scenario lost its Redis database lease ({}): renewals stalled for over {LEASE:?}",
+                self.lease_key
+            );
+        }
+        Ok(())
     }
 
     /// Gives the database back.
@@ -161,6 +189,7 @@ async fn renew(
     mut registry: MultiplexedConnection,
     lease_key: String,
     owner: String,
+    lost: Arc<AtomicBool>,
     cancel: CancellationToken,
 ) {
     loop {
@@ -174,8 +203,15 @@ async fn renew(
             .arg(LEASE.as_millis() as u64)
             .invoke_async(&mut registry)
             .await;
-        if let Err(error) = renewed {
-            tracing::warn!(error = ?error, "could not renew the Redis database lease");
+        match renewed {
+            Ok(0) => {
+                lost.store(true, Ordering::Relaxed);
+                return;
+            }
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not renew the Redis database lease");
+            }
         }
     }
 }
