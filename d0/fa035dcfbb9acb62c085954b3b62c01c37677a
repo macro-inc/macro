@@ -1,0 +1,21 @@
+apps/web/src/features/block-agent/component/AgentMessage.test.tsx
+  s_d00e338e45c834::t_86adf09487888a 716-754
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_d00e338e45c834::t_b9313591d362bb 207-219,222,227,234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d0fa035dcfbb9acb62c085954b3b62c01c37677a",
+  "prompts": {},
+  "sessions": {
+    "s_d00e338e45c834": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a708dad4-5170-4bd3-9426-fb7e05f663a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
