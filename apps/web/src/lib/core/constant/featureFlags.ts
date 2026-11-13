@@ -173,9 +173,9 @@ export const macroConnect = defineFlag({
 });
 
 /**
- * Agent dashboards: the grid and tabs layouts and the data panes (stat, chart,
- * table, saved view) in dynamic-UI views. Same key as the backend flag, which
- * decides whether models are told about them.
+ * Agent dashboards: the dashboard panes in dynamic-UI views (the agent
+ * panes: sessions, activity, routines, spend). Same key as the backend flag,
+ * which decides whether models are told about them.
  */
 export const enableAgentDashboards = defineFlag({
   key: 'enable-agent-dashboards',

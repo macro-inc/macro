@@ -1923,8 +1923,19 @@ or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
 from the viewer's calendars and groups them by day. A tags widget nests tags
 to any depth as coloured pills. A list holds a fixed height and says how many
-items are below it. The dynamic UI gallery (`/app/component/dynamic-ui`) shows
-each widget. Task list titles wrap above their live properties and timestamps;
+items are below it. With `enable-agent-dashboards`, a view also holds agent
+panes, each for an agent account (its `agentId`, or the view's agent from
+`AgentScope`) and read as the viewer: `sessions` (the agent's sessions as
+Agents list rows, sub-agents nested under the session that started them, with
+how many wait for input), `activity` (the Activity feed narrowed to the agent,
+or one session's activity panel), `routines` (Routines list rows with next
+run and last result, read-only) and `spend` (AI cost bars by day, week, month
+or year, switchable in the pane). Routines and spend are readable by the agent
+and by owners and admins of its teams; anyone else sees **No access**. Panes
+load when scrolled near. Without the flag the model is never told about them
+and the web draws a neutral placeholder. The dynamic UI gallery
+(`/app/component/dynamic-ui`) shows each widget; its **Agent panes** section
+reads the agent typed above it (yours when empty). Task list titles wrap above their live properties and timestamps;
 side-by-side project groups stack below 672px of available container width,
 including a narrow split on a wide screen. Check full long and unbroken titles
 at phone width and in a narrow split, then open a task from its title.
