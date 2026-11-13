@@ -1,0 +1,23 @@
+agent-teammates/muppet/packages/lib/utilities/traces/redact.ts
+  s_82939d9d17c700::t_6b6d768ff84904 7-10,23-27,57-71,106-107,116-122,124,128-130
+agent-teammates/muppet/packages/lib/utilities/traces/test/redact.test.ts
+  s_82939d9d17c700::t_60795e54decdaa 130,138
+  s_82939d9d17c700::t_011334c26c2826 175-177
+  s_82939d9d17c700::t_bed8ea40ee737d 112,115-124,126,131-137,139-174,178-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "303fbe6f2af62e011efc3baecdcad7385787675f",
+  "prompts": {},
+  "sessions": {
+    "s_82939d9d17c700": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bebbfa1f-b141-4a2c-ae6c-41735d9a70be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
