@@ -2323,6 +2323,21 @@ export function mapGraphqlSoupItem(
         }) as SoupApiItem
     )
     .with(
+      { __typename: 'GraphqlSoupTeam' },
+      (entity) =>
+        ({
+          tag: 'team',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.teamName,
+            ownerId: entity.ownerId,
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
       { __typename: 'GraphqlSoupForeignEntity' },
       (entity) =>
         ({

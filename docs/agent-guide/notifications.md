@@ -434,3 +434,11 @@ persistence, previews, and delivery through a stand-in notification feed:
 (from `apps/web`). To check real delivery, turn sounds on, click anywhere in
 Macro, and trigger a mention from another session; then turn Mentions off and
 check that the next mention is quiet.
+
+
+Password access requests can be grouped under the current team. These are
+notification-only groups: a card or stack notification opens its requested
+item in Passwords, with no separate Team page or generic preview. The group
+is hidden while Passwords or the current team is unavailable, when Passwords
+is disabled, or when its request does not belong to the current team. Other
+notification groups keep their existing navigation.

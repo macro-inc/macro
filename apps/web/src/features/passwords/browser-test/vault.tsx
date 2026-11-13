@@ -120,8 +120,15 @@ function approved(
     },
   };
 }
+let agentListCalls = 0;
 const agentRequests: AgentRequestSource = {
   async forItem(itemId) {
+    agentListCalls++;
+    if (
+      (search.has('agentListFailure') && agentListCalls === 1) ||
+      (search.has('agentRefreshFailure') && agentListCalls === 2)
+    )
+      return err('failed');
     return ok(itemId === AGENT_ITEM ? [agentState] : []);
   },
   async resolve(itemId, requestId, decision) {

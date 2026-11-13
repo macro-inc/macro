@@ -68,13 +68,17 @@ picks a length (12–128) and character classes; every selected class is always
 present, and characters are drawn uniformly with rejection sampling.
 
 When an agent asks to use an item, the item's human creator and the team's
-admins get an inbox row, "<agent> requested access to <item>". Opening it
-shows Passwords with that item selected when it belongs to the viewer's current
-team, and otherwise opens the vault without a selection. In the detail pane,
+admins get an inbox row, "<agent> requested access to <item>", grouped under
+the current team while Passwords is enabled. Opening the row or a notification
+in its stack selects the requested item in Passwords; teams have no separate
+inbox page, and requests for another team are hidden. In the detail pane,
 people who can manage the item see Agent access: a pending request offers Allow
 view, Allow edit and Deny, and an agent that can use the item offers Remove
 access ("Remove approval" also appears for an approved shared grant). A request
-that changed meanwhile shows the latest state with a notice. The section is
+that changed meanwhile shows the latest state with a notice after a successful
+refresh. The section loads inside the item pane using a local skeleton; a
+failed read offers Retry, and obsolete actions stay hidden until that retry
+succeeds. The section is
 hidden when the agent vault is off or the viewer can't review, and ordinary
 sharing never lists agents.
 
@@ -87,3 +91,4 @@ bunx playwright test --config src/features/passwords/browser-test/playwright.con
 
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the Nix Chrome binary when required.
 The fixture suite complements authenticated local-stack verification.
+

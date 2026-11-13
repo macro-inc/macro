@@ -30,9 +30,11 @@ export function createAgentRequests(
   const [busy, setBusy] = createSignal(false);
   const [stale, setStale] = createSignal(false);
   const [failed, setFailed] = createSignal(false);
-  /** Agents waiting for, or holding, access. */
+  const pending = () =>
+    states.isPending || (stale() && (busy() || states.isFetching));
+  /** Agents waiting for, or holding, access, only after a successful current read. */
   const shown = (): PasswordAgentAccessRequestState[] =>
-    states.isSuccess
+    states.isSuccess && !pending()
       ? states.data.filter(
           (state) =>
             state.status === 'pending' || state.access.useBasis !== null
@@ -42,7 +44,7 @@ export function createAgentRequests(
   async function settle(
     work: () => Promise<Result<unknown, AgentRequestFailure>>
   ) {
-    if (busy()) return;
+    if (busy() || states.isFetching || !states.isSuccess) return;
     setBusy(true);
     setStale(false);
     setFailed(false);
@@ -91,5 +93,17 @@ export function createAgentRequests(
       'passwords-agent-requests'
     );
 
-  return { shown, nameOf: displayName, busy, stale, failed, resolve, revoke };
+  return {
+    shown,
+    nameOf: displayName,
+    busy: () => busy() || states.isFetching,
+    pending,
+    error: () => states.isError,
+    retry: () =>
+      fireAndForget(states.refetch(), 'passwords-agent-requests-retry'),
+    stale: () => stale() && states.isSuccess && !busy() && !states.isFetching,
+    failed,
+    resolve,
+    revoke,
+  };
 }

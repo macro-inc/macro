@@ -417,3 +417,73 @@ describe('toInboxGroup for a runtime', () => {
     });
   });
 });
+
+describe('toInboxGroup for a team', () => {
+  it('lists a vault access request filed under the team as a row about it', () => {
+    const group = toInboxGroup({
+      groupId: 'team:0198a4cc-e138-7670-a308-a6b766602799',
+      sortAt: '2026-02-01T10:09:00Z',
+      entity: {
+        __typename: 'GraphqlSoupTeam',
+        id: '0198a4cc-e138-7670-a308-a6b766602799',
+        entityType: 'TEAM',
+        teamName: 'Synthetic team',
+        ownerId: 'macro|viewer@example.com',
+      },
+      rows: [
+        {
+          id: 'team:0198a4cc-e138-7670-a308-a6b766602799#password_access_requested:request-1',
+          rowType: 'ACCESS_REQUESTED',
+          revision: 'rev',
+          latestAt: '2026-02-01T10:09:00Z',
+          unseen: true,
+          count: 1,
+          actor: null,
+          actions: [],
+          notifications: [
+            {
+              id: 'n-1',
+              eventType: 'password_access_requested',
+              entityType: 'TEAM',
+              targetEntityType: 'TEAM',
+              entityId: '0198a4cc-e138-7670-a308-a6b766602799',
+              sent: false,
+              state: 'UNSEEN',
+              createdAt: '2026-02-01T10:09:00Z',
+              viewedAt: null,
+              updatedAt: '2026-02-01T10:09:00Z',
+              senderId: 'macro|agent@example.com',
+              metadata: {
+                __typename: 'GraphqlPasswordAccessRequestedMetadata',
+                passwordAccessRequestedRequestId: 'request-1',
+                passwordAccessRequestedTeamId:
+                  '0198a4cc-e138-7670-a308-a6b766602799',
+                passwordAccessRequestedItemId: 'item-1',
+                passwordAccessRequestedItemName: 'Synthetic login',
+              },
+            },
+          ],
+        },
+      ],
+    } as unknown as NotificationInboxEntryFieldsFragment);
+
+    expect(group?.rows).toHaveLength(1);
+    expect(group?.rows[0]).toMatchObject({
+      type: 'access_requested',
+      content: {
+        entity: {
+          type: 'team',
+          id: '0198a4cc-e138-7670-a308-a6b766602799',
+          name: 'Synthetic team',
+          ownerId: 'macro|viewer@example.com',
+        },
+        notifications: [
+          {
+            entity_type: 'team',
+            notification_metadata: { tag: 'password_access_requested' },
+          },
+        ],
+      },
+    });
+  });
+});

@@ -1,3 +1,4 @@
+import { isVisibleInboxRow } from '../open-notification-in-split';
 // The real inbox row, avatar and card text over synthetic channel
 // notifications; no network.
 import '@app/index.css';
@@ -16,7 +17,7 @@ import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
-import { For } from 'solid-js';
+import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
@@ -118,12 +119,69 @@ const ROWS = [
   channelRow('dm', 'Ana', 'directMessage', ['Ana']),
 ];
 
+const teamNotification: UnifiedNotification = {
+  id: 'vault-request',
+  entity_type: 'team',
+  entity_id: 'team-1',
+  notification_event_type: 'password_access_requested',
+  notification_metadata: {
+    tag: 'password_access_requested',
+    content: {
+      teamId: 'team-1',
+      itemId: 'vault-item',
+      requestId: 'vault-request',
+      itemName: 'Synthetic login',
+    },
+  },
+  created_at: '2026-11-13T00:00:00Z',
+  updated_at: '2026-11-13T00:00:00Z',
+  sent: true,
+  state: 'unseen',
+};
+const teamRow: NotificationInboxRow = {
+  id: 'vault-request',
+  type: 'access_requested',
+  revision: 'rev-1',
+  latestAt: Date.parse(teamNotification.created_at),
+  unseen: true,
+  count: 1,
+  actions: [{ kind: 'open' }],
+  content: {
+    entity: {
+      type: 'team',
+      id: 'team-1',
+      name: 'Synthetic team',
+      ownerId: 'viewer',
+    },
+    notifications: [teamNotification],
+  },
+};
+if (new URLSearchParams(location.search).has('passwordRequests')) {
+  ROWS.push(teamRow, {
+    ...teamRow,
+    id: 'invalid-vault-request',
+    content: {
+      ...teamRow.content,
+      notifications: [{ ...teamNotification, entity_id: 'foreign-team' }],
+    },
+  });
+}
+
 const names = { userName: nameOf, senderName: () => undefined };
 
 function Fixture() {
+  const [enabled, setEnabled] = createSignal(true);
+  const [teamId, setTeamId] = createSignal('team-1');
+  const passwords = { enabled, teamId };
   return (
     <main class="flex w-full max-w-[640px] flex-col bg-panel text-ink">
-      <For each={ROWS}>
+      <button type="button" onClick={() => setEnabled((value) => !value)}>
+        Toggle vault visibility
+      </button>
+      <button type="button" onClick={() => setTeamId('other-team')}>
+        Change current team
+      </button>
+      <For each={ROWS.filter((row) => isVisibleInboxRow(row, passwords))}>
         {(row) => {
           const display = () => describeInboxCard(row, names);
           return (
@@ -139,7 +197,9 @@ function Fixture() {
                 unfolded={false}
                 unseen={row.unseen}
                 highlighted={false}
-                onClick={() => {}}
+                onClick={() => {
+                  document.body.dataset.openedInboxRow = row.id;
+                }}
                 onHover={() => {}}
                 onDone={() => {}}
                 onToggleStack={() => {}}

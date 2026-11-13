@@ -236,7 +236,10 @@ it('shows nothing when the agent vault is off or the viewer cannot review', asyn
   const { source, calls } = fakeSource(['unavailable']);
   const listed = calls.nextList();
   mount(source);
+  const pending = screen.getByRole('status');
+  const settled = waitForElementToBeRemoved(pending);
   await listed;
+  await settled;
   expect(calls.lists).toBe(1);
   expect(screen.queryByRole('region', { name: 'Agent access' })).toBeNull();
   expect(screen.queryByRole('button')).toBeNull();
@@ -288,4 +291,67 @@ it('keeps the item on screen while its agent list loads', async () => {
   expect(screen.queryByText('vault loading')).toBeNull();
   answer?.();
   expect(await screen.findByText(/asked to edit this item/)).toBeTruthy();
+});
+
+it('offers local retry after an agent-list failure', async () => {
+  const { source, calls } = fakeSource(['failed', [PENDING]]);
+  mount(source);
+  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Allow view' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(await screen.findByText(/asked to edit this item/)).toBeTruthy();
+  expect(calls.lists).toBe(2);
+});
+
+it('withholds cached decisions after a stale answer and failed refresh until retry succeeds', async () => {
+  const { source, calls } = fakeSource(
+    [[PENDING], 'failed', [APPROVED]],
+    'stale'
+  );
+  mount(source);
+  await screen.findByText(/asked to edit this item/);
+  fireEvent.click(screen.getByRole('button', { name: 'Allow edit' }));
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('button', { name: 'Allow edit' })).toBeNull();
+  expect(
+    screen.queryByText('This request changed. Showing the latest.')
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(await screen.findByText(/can view this item/)).toBeTruthy();
+  expect(
+    await screen.findByText('This request changed. Showing the latest.')
+  ).toBeTruthy();
+  expect(calls.resolves).toHaveLength(1);
+  expect(calls.lists).toBe(3);
+});
+
+it('withholds stale cached controls while the replacement read is still pending', async () => {
+  const { source } = fakeSource([[PENDING], [APPROVED]], 'stale');
+  const read = source.forItem;
+  let answer: (() => void) | undefined;
+  let started: () => void = () => {};
+  const refreshing = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let reads = 0;
+  source.forItem = (itemId) => {
+    if (++reads === 2) {
+      return new Promise((resolve) => {
+        answer = () => resolve(read(itemId));
+        started();
+      });
+    }
+    return read(itemId);
+  };
+  mount(source);
+  await screen.findByText(/asked to edit this item/);
+  fireEvent.click(screen.getByRole('button', { name: 'Allow edit' }));
+  await refreshing;
+  expect(screen.getByRole('status')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Allow edit' })).toBeNull();
+  expect(
+    screen.queryByText('This request changed. Showing the latest.')
+  ).toBeNull();
+  answer?.();
+  expect(await screen.findByText(/can view this item/)).toBeTruthy();
 });

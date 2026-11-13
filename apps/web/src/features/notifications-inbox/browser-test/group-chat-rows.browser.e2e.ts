@@ -56,3 +56,26 @@ for (const size of SIZES) {
     });
   });
 }
+
+test('Team request cards follow current vault visibility and pass their row to the opener', async ({
+  page,
+}) => {
+  await page.goto(`${PAGE}?passwordRequests=1`);
+  const row = page.getByTestId('vault-request');
+  await expect(row).toBeVisible({ timeout: 180_000 });
+  await expect(row).toContainText('Synthetic login');
+  await expect(page.getByTestId('invalid-vault-request')).toHaveCount(0);
+  await row.locator('[data-notification-row]').click();
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-opened-inbox-row',
+    'vault-request'
+  );
+  await page.getByRole('button', { name: 'Toggle vault visibility' }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByTestId('dm')).toBeVisible();
+  await page.getByRole('button', { name: 'Toggle vault visibility' }).click();
+  await expect(row).toBeVisible();
+  await page.getByRole('button', { name: 'Change current team' }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByTestId('dm')).toBeVisible();
+});

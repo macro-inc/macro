@@ -689,3 +689,40 @@ for (const viewport of VIEWPORTS.slice(1)) {
     });
   });
 }
+
+test('agent list failures remain in the item pane and retry replaces obsolete actions', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const target =
+    '/src/features/passwords/browser-test/vault.html?focus=019a0000-0000-7000-8000-0000000000bb';
+  await page.goto(`${target}&agentListFailure=1`, { timeout: 240_000 });
+  const section = page.getByRole('region', { name: 'Agent access' });
+  await expect(section.getByRole('alert')).toBeVisible({ timeout: 180_000 });
+  await expect(
+    page.getByRole('heading', { name: 'Agent requested login', exact: true })
+  ).toBeVisible();
+  await section.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(
+    section.getByRole('button', { name: 'Allow edit', exact: true })
+  ).toBeVisible();
+  await page.goto(`${target}&agentStale=1&agentRefreshFailure=1`);
+  await section
+    .getByRole('button', { name: 'Allow edit', exact: true })
+    .click();
+  await expect(section.getByRole('alert')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Agent requested login', exact: true })
+  ).toBeVisible();
+  await expect(
+    section.getByRole('button', { name: 'Allow edit', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    section.getByText('This request changed. Showing the latest.')
+  ).toHaveCount(0);
+  await section.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(section.getByText(/can view this item/)).toBeVisible();
+  await expect(
+    section.getByText('This request changed. Showing the latest.')
+  ).toBeVisible();
+});

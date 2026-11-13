@@ -327,6 +327,10 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		createdAt
 		updatedAt
 	}
+	... on GraphqlSoupTeam {
+		teamName: name
+		ownerId
+	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
 		foreignEntitySource

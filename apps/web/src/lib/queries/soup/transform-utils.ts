@@ -31,6 +31,7 @@ import type {
   Notification,
   ProjectEntity,
   SearchData,
+  TeamEntity,
   WithSearch,
 } from '@entity';
 import { type GithubPullRequestLabel, toSubType } from '@entity/types/entity';
@@ -97,7 +98,8 @@ type SoupEntity =
   | CrmContactEntity
   | CalendarEventEntity
   | ForeignEntity
-  | HarnessEntity;
+  | HarnessEntity
+  | TeamEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
@@ -991,6 +993,12 @@ export const mapApiSoupItemToEntity = (
       createdAt: item.data.createdAt,
       updatedAt: item.data.updatedAt,
       type: 'harness' as const,
+    }))
+    .with({ tag: 'team' }, (item) => ({
+      id: item.data.id,
+      name: item.data.name,
+      ownerId: item.data.ownerId,
+      type: 'team' as const,
     }))
     .with({ tag: 'document' }, (item) => ({
       ...item.data,
