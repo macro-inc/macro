@@ -98,9 +98,7 @@ export function ImportFilePicker(props: {
           <FileDropOverlay>{t('passwords.importDrop')}</FileDropOverlay>
         </Show>
         <TrayArrowDownIcon class="size-5 text-ink-extra-muted" />
-        <p class="text-sm text-ink-muted touch:hidden">
-          {t('passwords.importDrop')}
-        </p>
+        <p class="text-sm text-ink-muted">{t('passwords.importDrop')}</p>
         <input
           ref={input}
           type="file"
