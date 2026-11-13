@@ -1,0 +1,39 @@
+.sqlx/query-0e1221efe30b4bb9e5512c867f87eb2d65a430df9e15cc124f8186a485593bff.json
+  s_395ce1e1803595::t_72ee3d54ac07fd 1-23
+crates/webhook/src/domain/ingestion.rs
+  s_99d4b98f7ef6e5::t_2865d5ad44246f 14,189,197,200-202,211,216-228,287,292,298,306,316,324-341,346,354,635,643,654-663,765-766,774
+crates/webhook/src/domain/ingestion/test.rs
+  s_99d4b98f7ef6e5::t_5fa2afc5242b15 2660-2694
+crates/webhook/src/domain/ports.rs
+  s_99d4b98f7ef6e5::t_c2215169de4244 89-103
+crates/webhook/src/outbound/pg_repository.rs
+  s_99d4b98f7ef6e5::t_9c4cf5f36dfb33 11,187-232,334
+crates/webhook/src/outbound/pg_repository_test.rs
+  s_99d4b98f7ef6e5::t_75d4265b268474 777-835
+services/document_storage_service/src/server.rs
+  s_99d4b98f7ef6e5::t_c89ce512ca9c7f 1100,1103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7e4d44794a0a09b587485d02192b9b7631307da9",
+  "prompts": {},
+  "sessions": {
+    "s_395ce1e1803595": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd67b15d-a0f0-45c2-9a11-632923825196",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_99d4b98f7ef6e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "98861507-c8a2-4a70-9b5a-ab1a5ab8eacf",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
