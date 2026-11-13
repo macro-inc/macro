@@ -417,6 +417,8 @@ fn the_routines_guide_carries_the_compose_routines_skill_each_host_can_follow() 
         .iter()
         .find(|doc| doc.name == "routines")
         .expect("routines is in the catalog");
+    // The catalog stays as generated; only the guides handed out add the skill.
+    assert!(!guide.contains(&skill), "{guide}");
     assert_eq!(routines.guide.as_deref(), Some(guide));
     let carried = with_attached_skill(routines)
         .guide

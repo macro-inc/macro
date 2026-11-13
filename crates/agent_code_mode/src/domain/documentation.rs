@@ -88,6 +88,11 @@ pub fn with_attached_skill(doc: &SdkDocumentation) -> SdkDocumentation {
     }
 }
 
+/// The bytes of `doc`'s index and guide.
+fn documentation_size(doc: &SdkDocumentation) -> usize {
+    doc.index.as_ref().map_or(0, String::len) + doc.guide.as_ref().map_or(0, String::len)
+}
+
 /// Every SDK entity with its index and guide, supplied at build time. Byte
 /// budgets count these; a session gets an entity's attached skill on top
 /// ([`with_attached_skill`]).
@@ -390,8 +395,7 @@ pub async fn documentation_for_task(
     let mut entities = Vec::new();
     let mut omitted = Vec::new();
     for doc in ranking.entities {
-        let size =
-            doc.index.as_ref().map_or(0, String::len) + doc.guide.as_ref().map_or(0, String::len);
+        let size = documentation_size(doc);
         if bytes + size <= DOCUMENTATION_BYTES {
             bytes += size;
             entities.push(with_attached_skill(doc));
@@ -403,7 +407,12 @@ pub async fn documentation_for_task(
     span.record("batches", ranking.batches);
     span.record("selected", entities.len());
     span.record("omitted", omitted.len());
-    span.record("bytes", bytes);
+    // What the result holds, the attached skill included, like the routed
+    // prompt's `bytes`.
+    span.record(
+        "bytes",
+        entities.iter().map(documentation_size).sum::<usize>(),
+    );
     span.record("selection_status", ranking.status.as_str());
     span.record(
         "selected_entities",

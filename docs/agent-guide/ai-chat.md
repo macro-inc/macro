@@ -2504,9 +2504,10 @@ names from a knob holding its name, which it looks up when it runs. Hosts
 without code get the skill in the form they can follow: each kind's lookup
 tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the like), then
 `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`. Both end with the rules
-the routine drafter also follows (`routine_program::WRITING`); the
-without-code form leaves out its code-step half, which `CreateRoutine`'s
-description already carries.
+on writing a routine (`routine_program::WRITING`); the without-code form
+leaves out its code-step half, which `CreateRoutine`'s description already
+carries. The routine drafter follows the same rules (`ROUTINE_RULES`), plus
+the code-step half only when code steps can be written.
 GitHub triggers are set on the routine's page, not through these tools.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's
 title) opens a

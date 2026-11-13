@@ -234,7 +234,7 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     }
 }
 
-/// Stands in for `routine_program::WRITING`.
+/// Stands in for `routine_program::ROUTINE_RULES`.
 const GUIDE: &str = "Find the item whose name is exactly the name used.";
 
 fn agent() -> DraftAgent {
@@ -417,6 +417,8 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         "{prompt}"
     );
     assert!(prompt.contains("You can't ask them anything"), "{prompt}");
+    // Where code steps can be written, the brief adds their contract.
+    assert!(prompt.contains(routine_program::CODE_STEPS), "{prompt}");
     // The writing text leaves out how the SDK spells a filter's items, and
     // what to create beforehand; drafting says both.
     assert!(prompt.contains(super::FILTER_ITEMS), "{prompt}");
@@ -823,6 +825,7 @@ async fn without_code_the_brief_has_no_code_examples() {
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
     assert!(prompt.contains("Code steps can't be used"), "{prompt}");
     assert!(!prompt.contains("<example>"), "{prompt}");
+    assert!(!prompt.contains(routine_program::CODE_STEPS), "{prompt}");
 }
 
 #[tokio::test]

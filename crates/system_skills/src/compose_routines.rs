@@ -3,8 +3,9 @@
 //! It ends with `routine_program::WRITING`, the text every writer of routines
 //! follows; this module adds only how a session finds the items, checks and
 //! saves the routine, and answers. The skill ([`PROMPT`]) says that for code,
-//! then briefly for the routine tools; [`DIRECT`] is the routine-tools part
-//! alone, for hosts without code.
+//! then briefly for the routine tools; [`CODE`] is the code part alone, which
+//! code mode carries after the routines guide, and [`DIRECT`] the
+//! routine-tools part alone, for hosts without code.
 
 use prompt::{ComposedPrompt, StaticPrompt};
 
