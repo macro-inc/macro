@@ -10,6 +10,10 @@ import {
   EditorInputMsg,
   type IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  type DecodedViewEffect,
+  withCodeTokenCause,
+} from '@macro-inc/collaboration/session/output';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   batch,
@@ -454,12 +458,17 @@ export class EditorView implements ViewSink {
   apply(
     words: Uint32Array,
     strings: Uint8Array,
-    effects: IViewEffectMsg[] = []
+    effects: DecodedViewEffect[] = []
   ): void {
     if (this.disposed) throw new Error('Diff applied to a disposed view');
     for (const effect of effects) {
       if (effect.kind === 2)
-        this.options.onError(new Error(effect.text || 'Editor session failed'));
+        this.options.onError(
+          withCodeTokenCause(
+            new Error(effect.text || 'Editor session failed'),
+            effect
+          )
+        );
     }
     const initialize = effects.some((effect) => effect.kind === 8);
     const paste = effects.some(

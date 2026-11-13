@@ -108,6 +108,16 @@ impl<Value> Causes<Value> {
         })?;
         self.recorded.remove(index).map(|recorded| recorded.value)
     }
+    /// Retire the current entry's `cause` as a counted drop.
+    pub(crate) fn discard(&mut self, cause: u32) {
+        let entry = self.entry;
+        let before = self.recorded.len();
+        self.recorded
+            .retain(|recorded| recorded.entry != entry || recorded.cause != cause);
+        if self.recorded.len() != before {
+            self.dropped = self.dropped.saturating_add(1);
+        }
+    }
     pub(crate) fn dropped(&self) -> u32 {
         self.dropped
     }
@@ -126,6 +136,9 @@ pub(crate) fn begin_entry(token: u64, entry: u64) {
 }
 pub(crate) fn carry(token: u64, cause: u32) -> bool {
     with_causes(token, |causes| causes.carry(cause)).unwrap_or(false)
+}
+pub(crate) fn discard(token: u64, cause: u32) {
+    with_causes(token, |causes| causes.discard(cause));
 }
 pub(crate) fn end_entry(token: u64) {
     with_causes(token, Causes::end);
@@ -304,13 +317,14 @@ fn thrown_cause(error: &lexical_model::Error) -> Option<u32> {
 }
 
 /// Tag-16 ordinals and cause ids of the recorded throws an output reports, from every Session
-/// path (local, remote, restore), in the decoded numbering JS sees.
-pub(crate) fn thrown_ordinals(view: &[document_session::ViewEffect]) -> Vec<(u32, u32)> {
+/// path (local, remote, restore), in the decoded numbering JS sees; `None` when the ordinal
+/// cannot be represented.
+pub(crate) fn thrown_ordinals(view: &[document_session::ViewEffect]) -> Vec<(Option<u32>, u32)> {
     view.iter()
         .enumerate()
         .filter_map(|(index, effect)| {
             let cause = crate::view_command_scope::model_error(effect).and_then(thrown_cause)?;
-            let ordinal = crate::view_command_scope::effect_ordinal(view, index).ok()?;
+            let ordinal = crate::view_command_scope::effect_ordinal(view, index).ok();
             Some((ordinal, cause))
         })
         .collect()
@@ -325,9 +339,14 @@ pub(crate) fn bind_output(
 ) -> Option<CodeTokenFailure> {
     let (mut ordinals, mut causes) = (Vec::new(), Vec::new());
     for (ordinal, cause) in thrown_ordinals(view) {
-        if carry(token, cause) {
-            ordinals.push(ordinal);
-            causes.push(cause);
+        match ordinal {
+            Some(ordinal) if carry(token, cause) => {
+                ordinals.push(ordinal);
+                causes.push(cause);
+            }
+            Some(_) => {}
+            // Reported but not addressable: retire it as a counted drop.
+            None => discard(token, cause),
         }
     }
     (!causes.is_empty()).then_some(CodeTokenFailure {

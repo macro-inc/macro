@@ -179,7 +179,8 @@ impl EditorSession {
             .take_code_token_cause(entry, cause)
             .map(|value| js_sys::Array::of1(&value))
     }
-    /// Throws this session's tokenizer could not retain (a second in one entry, or past the bound).
+    /// Tokenizer throws never handed back: a second in one call, one outside any call, or one
+    /// not taken before the next call began.
     #[wasm_bindgen(js_name=codeTokenCausesDropped)]
     pub fn code_token_causes_dropped(&self) -> u32 {
         self.machine.code_token_causes_dropped()

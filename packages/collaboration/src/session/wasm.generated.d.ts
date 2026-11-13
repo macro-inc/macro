@@ -2,6 +2,28 @@
 /* eslint-disable */
 
 /**
+ * The recorded throws reported in one native output, by tag-16 view-effect ordinal.
+ * Copy it before consuming that output, then take each cause by (entry, cause).
+ */
+export class CodeTokenFailure {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Cause ids to take with `takeCodeTokenCause(entry, cause)`.
+     */
+    causes(): Uint32Array;
+    /**
+     * View-effect ordinals of the reported errors, parallel to `causes`.
+     */
+    effectOrdinals(): Uint32Array;
+    /**
+     * The session entry whose output reported these errors.
+     */
+    readonly entry: bigint;
+}
+
+/**
  * One host-owned generic document session.
  */
 export class DocSession {
@@ -101,6 +123,11 @@ export class EditorSession {
      * Browser clipboard DOM, using the caller's configured theme and native selection export.
      */
     clipboardDom(kind: number, theme: string): Uint8Array;
+    /**
+     * Tokenizer throws never handed back: a second in one call, one outside any call, or one
+     * not taken before the next call began.
+     */
+    codeTokenCausesDropped(): number;
     /**
      * Dispatch an allocation-light standard command.
      */
@@ -257,6 +284,15 @@ export class EditorSession {
      * Durable load completion.
      */
     storageLoaded(op: number, msg: Uint8Array | null | undefined, failure: number, now: number, wall: number): number;
+    /**
+     * The original thrown value as `[value]`, so a thrown `undefined` is distinguishable;
+     * `undefined` for any pair this session did not report or already gave out.
+     */
+    takeCodeTokenCause(entry: bigint, cause: number): Array<any> | undefined;
+    /**
+     * Recorded code-tokenizer throws reported in the latest output, taken once.
+     */
+    takeCodeTokenFailure(): CodeTokenFailure | undefined;
     /**
      * Copy pending output; no borrowed linear-memory view escapes.
      * Observation validation failure preserves queued output and returns an error.
@@ -545,12 +581,16 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_codetokenfailure_free: (a: number, b: number) => void;
     readonly __wbg_docsession_free: (a: number, b: number) => void;
     readonly __wbg_editorsession_free: (a: number, b: number) => void;
     readonly __wbg_inputcommitreceipt_free: (a: number, b: number) => void;
     readonly __wbg_syncrouter_free: (a: number, b: number) => void;
     readonly __wbg_viewcommandfailure_free: (a: number, b: number) => void;
     readonly debugCodeTokenProviders: () => number;
+    readonly codetokenfailure_causes: (a: number) => [number, number];
+    readonly codetokenfailure_effectOrdinals: (a: number) => [number, number];
+    readonly codetokenfailure_entry: (a: number) => bigint;
     readonly docsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -572,6 +612,7 @@ export interface InitOutput {
     readonly editorsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_clipboard: (a: number, b: number) => [number, number, number, number];
     readonly editorsession_clipboardDom: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly editorsession_codeTokenCausesDropped: (a: number) => number;
     readonly editorsession_command: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_composition: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly editorsession_compositionEnd: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
@@ -608,6 +649,8 @@ export interface InitOutput {
     readonly editorsession_storageAdopted: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_storageDone: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_storageLoaded: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly editorsession_takeCodeTokenCause: (a: number, b: bigint, c: number) => any;
+    readonly editorsession_takeCodeTokenFailure: (a: number) => number;
     readonly editorsession_takeOutput: (a: number) => [number, number, number, number];
     readonly editorsession_takeViewCommandFailure: (a: number) => [number, number, number];
     readonly editorsession_textContent: (a: number) => [number, number];

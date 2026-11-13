@@ -18,7 +18,13 @@ import {
 } from './abi.generated';
 import { emptyInput } from './input';
 import { SessionLease } from './lease';
-import { decodeOutput, type Effect, Flag } from './output';
+import {
+  bindCodeTokenCauses,
+  decodeOutput,
+  type Effect,
+  Flag,
+  withSingleCodeTokenCause,
+} from './output';
 import type { SessionRouter } from './router';
 import { StorageAdapter, type StorageResult } from './storage';
 import type { SessionTelemetry } from './telemetry';
@@ -527,14 +533,17 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     if (!(flags & (Flag.View | Flag.Io | Flag.NeedPeerIds | Flag.Error)))
       return;
     const out = decodeOutput(this.session.takeOutput());
-    if (entry && flags & Flag.Error)
+    if (flags & Flag.Error && 'takeCodeTokenFailure' in this.session)
+      bindCodeTokenCauses(this.session, out.viewEffects);
+    if (entry && flags & Flag.Error) {
+      const failed = out.viewEffects.filter(
+        (effect) => effect.kind === 2 || effect.kind === 6
+      );
+      // The cause only when exactly one failed effect carries a tokenizer throw.
       entry.native = {
-        error: new SessionInputError(
-          out.viewEffects.filter(
-            (effect) => effect.kind === 2 || effect.kind === 6
-          )
-        ),
+        error: withSingleCodeTokenCause(new SessionInputError(failed), failed),
       };
+    }
     this.options.view.apply(out.view, out.strings, out.viewEffects);
     for (const effect of out.viewEffects) {
       if (effect.kind === 3) this.options.onStatus?.(effect);

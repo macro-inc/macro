@@ -186,5 +186,19 @@ fn thrown_ordinals_use_the_decoded_tag16_numbering() {
     ];
     // Raw indices 3 and 6. Decoded: Initialize 1 + Cursors 3 + Diff 0 = 4; then that error 1,
     // Diff 0 and the Host error 1 = 6.
-    assert_eq!(thrown_ordinals(&view), vec![(4, 4), (6, 4)]);
+    assert_eq!(thrown_ordinals(&view), vec![(Some(4), 4), (Some(6), 4)]);
+}
+
+#[test]
+fn a_discarded_cause_is_retired_and_counted() {
+    let mut causes = Causes::default();
+    causes.begin(1);
+    let cause = causes.record("unaddressable").unwrap();
+    causes.discard(cause + 1);
+    assert_eq!(causes.dropped(), 0);
+    causes.discard(cause);
+    assert_eq!(causes.dropped(), 1);
+    assert!(!causes.carry(cause));
+    causes.end();
+    assert_eq!(causes.take(1, cause), None);
 }

@@ -1,7 +1,9 @@
+import { Telemetry } from '@macro-inc/observability';
 import {
   ABI_MAJOR,
   DIFF_FORMAT_VERSION,
   FLAG_HANDLED,
+  type IViewEffectMsg,
   ViewEffectMsg,
 } from './abi.generated';
 
@@ -51,7 +53,7 @@ export function decodeOutput(bytes: Uint8Array) {
   const view = new Uint32Array(viewBytes.buffer, viewBytes.byteOffset, words);
   const text = blob(strings);
   const effects: Effect[] = [];
-  const viewEffects = [];
+  const viewEffects: DecodedViewEffect[] = [];
   for (let i = 0; i < count; i++) {
     const tag = word(),
       a = word(),
@@ -63,4 +65,106 @@ export function decodeOutput(bytes: Uint8Array) {
   }
   if (at !== bytes.byteLength) throw new Error('Trailing session output');
   return { view, strings: text, viewEffects, effects };
+}
+
+/** The original value a host code tokenizer threw, carried by the error effect reporting it. */
+export interface CodeTokenCause {
+  readonly value: unknown;
+}
+/** Anything that may carry a tokenizer throw for the current output only. */
+export interface CodeTokenCauseCarrier {
+  codeTokenCause?: CodeTokenCause;
+}
+/** A decoded view effect; an error effect may carry its tokenizer throw for this output only. */
+export type DecodedViewEffect = IViewEffectMsg & CodeTokenCauseCarrier;
+
+/** The per-call record of `EditorSession.takeCodeTokenFailure`. */
+interface CodeTokenFailureRecord {
+  readonly entry: bigint;
+  effectOrdinals(): Uint32Array;
+  causes(): Uint32Array;
+  free(): void;
+}
+/** The `EditorSession` exports that hand recorded tokenizer throws back. */
+interface CodeTokenCauseSource {
+  takeCodeTokenFailure(): CodeTokenFailureRecord | undefined;
+  takeCodeTokenCause(entry: bigint, cause: number): unknown[] | undefined;
+}
+
+/** Native carried exactly these pairs for this call; any gap breaks its contract. */
+function reportBindingBreak(
+  reason: 'no-effect' | 'no-cause-id' | 'take-missed',
+  ordinal: number
+): void {
+  try {
+    Telemetry.error(new Error('Code token cause binding broke its contract'), {
+      surface: 'code-token-cause.binding',
+      reason,
+      ordinal,
+    });
+  } catch {
+    // Reporting must not replace the session error.
+  }
+}
+
+/**
+ * Take the latest call's recorded code tokenizer throws and put each original value on the
+ * error effect of THIS decoded output that reported it. Call once per output, right after
+ * takeOutput and before any other session call: the next call retires untaken values.
+ */
+export function bindCodeTokenCauses(
+  session: CodeTokenCauseSource,
+  effects: readonly CodeTokenCauseCarrier[]
+): void {
+  const failure = session.takeCodeTokenFailure();
+  if (!failure) return;
+  try {
+    const ordinals = failure.effectOrdinals();
+    const causes = failure.causes();
+    ordinals.forEach((ordinal, index) => {
+      const effect = effects[ordinal];
+      const cause = causes[index];
+      if (!effect) return reportBindingBreak('no-effect', ordinal);
+      if (cause === undefined)
+        return reportBindingBreak('no-cause-id', ordinal);
+      const taken = session.takeCodeTokenCause(failure.entry, cause);
+      if (taken?.length !== 1)
+        return reportBindingBreak('take-missed', ordinal);
+      effect.codeTokenCause = { value: taken[0] };
+    });
+  } finally {
+    failure.free();
+  }
+}
+
+/**
+ * Attach the effect's tokenizer throw, if any, as the error's own `cause` without reading or
+ * coercing it. The error is returned whether or not attaching succeeds.
+ */
+export function withCodeTokenCause<Raised extends Error>(
+  error: Raised,
+  effect: CodeTokenCauseCarrier
+): Raised {
+  const cause = effect.codeTokenCause;
+  if (!cause) return error;
+  try {
+    Object.defineProperty(error, 'cause', {
+      value: cause.value,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  } catch {
+    // The error is still raised without its cause.
+  }
+  return error;
+}
+
+/** As `withCodeTokenCause`, only when exactly one of the effects carries a throw. */
+export function withSingleCodeTokenCause<Raised extends Error>(
+  error: Raised,
+  effects: readonly CodeTokenCauseCarrier[]
+): Raised {
+  const carrying = effects.filter((effect) => effect.codeTokenCause);
+  return carrying.length === 1 ? withCodeTokenCause(error, carrying[0]) : error;
 }

@@ -49,7 +49,8 @@ const loadedReply = (loaded: boolean) =>
 
 function surfaceWith(
   provider: Provider,
-  loaded: (language: string) => string = () => loadedReply(true)
+  loaded: (language: string) => string = () => loadedReply(true),
+  bindCauses = false
 ) {
   // Native setState runs the code transform (Source setEditorState does not); keep setup untokenized.
   let armed = false;
@@ -64,6 +65,7 @@ function surfaceWith(
           : provider(language, text, profile);
       },
       profile: 'native-fixture',
+      bindCauses,
     }
   );
   fixture.port.setState(
@@ -579,6 +581,66 @@ test('guard: the failure ordinal indexes the decoded error effect', () => {
     const [ordinal] = failure.effectOrdinals();
     expect(effects[ordinal]?.kind).toBe(2);
     expect(effects[ordinal]?.text).toBe(HOST);
+  } finally {
+    fixture.close();
+  }
+});
+
+// Phase 2: the view error raised for a tokenizer throw carries the original value as its own
+// `cause`, bound by the executor right after the output is taken.
+test.each([
+  ['an Error', new Error(SENTINEL)],
+  ['undefined', undefined],
+  ['null', null],
+  ['a plain object', { content: SENTINEL }],
+])('the view error for a thrown %s has it as its own cause', (_, value) => {
+  const { fixture, setLanguage } = surfaceWith(
+    () => {
+      throw value;
+    },
+    () => loadedReply(true),
+    true
+  );
+  try {
+    const raised: unknown[] = [];
+    try {
+      setLanguage('rust');
+    } catch (error) {
+      raised.push(error);
+    }
+    expect(fixture.errors).toEqual([HOST]);
+    const [error] = raised;
+    if (!(error instanceof Error)) throw new Error('missing raised error');
+    expect(error.message).toBe(HOST);
+    // Own presence tells a thrown undefined from no cause.
+    expect(Object.hasOwn(error, 'cause')).toBe(true);
+    expect(error.cause).toBe(value);
+    expect(Object.keys(error)).not.toContain('cause');
+    // Bound once: nothing is left to take.
+    expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
+    expect(fixture.session.codeTokenCausesDropped()).toBe(0);
+  } finally {
+    fixture.close();
+  }
+});
+
+test('the view error for an unrelated tokenizer failure has no cause', () => {
+  const { fixture, setLanguage } = surfaceWith(
+    () => '{',
+    () => loadedReply(true),
+    true
+  );
+  try {
+    const raised: unknown[] = [];
+    try {
+      setLanguage('rust');
+    } catch (error) {
+      raised.push(error);
+    }
+    expect(fixture.errors).toEqual([HOST]);
+    const [error] = raised;
+    if (!(error instanceof Error)) throw new Error('missing raised error');
+    expect(Object.hasOwn(error, 'cause')).toBe(false);
   } finally {
     fixture.close();
   }

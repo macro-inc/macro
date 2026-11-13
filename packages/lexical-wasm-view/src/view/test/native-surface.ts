@@ -8,7 +8,10 @@ import {
   Transport,
 } from '@macro-inc/collaboration/session/abi.generated';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
-import { decodeOutput } from '@macro-inc/collaboration/session/output';
+import {
+  bindCodeTokenCauses,
+  decodeOutput,
+} from '@macro-inc/collaboration/session/output';
 import * as nativeModule from '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { EditorView } from '../editor-view';
 import {
@@ -39,6 +42,8 @@ export function nativeSurface(
   codeTokens?: {
     provider: NativeCodeTokenProvider;
     profile: string;
+    /** Bind thrown tokenizer values to error effects, as the production executor does. */
+    bindCauses?: boolean;
   },
   create?: (config: Uint8Array) => nativeModule.EditorSession
 ) {
@@ -98,6 +103,8 @@ export function nativeSurface(
       const flags = call();
       if (flags & (1 | 2 | 8 | 16)) {
         const output = decodeOutput(session.takeOutput());
+        if (flags & 16 && codeTokens?.bindCauses)
+          bindCodeTokenCauses(session, output.viewEffects);
         sink.apply(output.view, output.strings, output.viewEffects);
       }
       after?.(flags);
