@@ -67,6 +67,7 @@ export function ToolGroup(props: ToolGroupProps) {
           }
         >
           <ActivityLine
+            inline
             class="my-0 shrink"
             steps={props.steps ?? []}
             summary={props.summary}

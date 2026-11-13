@@ -1,6 +1,7 @@
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { TextShimmer } from './TextShimmer';
 import { WorkingDots } from './WorkingDots';
 
@@ -15,6 +16,11 @@ export interface ActivityLineProps {
   steps: readonly ActivityLineStep[];
   /** The session's live status line, which stands for the steps it names. */
   summary?: string;
+  /**
+   * Inside a control, such as a disclosure button: inline content with no
+   * live region of its own, since a control's content is its name.
+   */
+  inline?: boolean;
   class?: string;
 }
 
@@ -56,12 +62,13 @@ export function ActivityLine(props: ActivityLineProps) {
     return step ? [step] : [];
   };
   return (
-    <div
+    <Dynamic
+      component={props.inline ? 'span' : 'div'}
       class={cn(
         'my-1 flex min-h-6 min-w-0 items-center gap-2 overflow-hidden text-ink-extra-muted',
         props.class
       )}
-      role="status"
+      role={props.inline ? undefined : 'status'}
     >
       <WorkingDots />
       {/* Keyed by step: the next step slides in, while a step repainted as
@@ -78,6 +85,6 @@ export function ActivityLine(props: ActivityLineProps) {
           </span>
         )}
       </Key>
-    </div>
+    </Dynamic>
   );
 }

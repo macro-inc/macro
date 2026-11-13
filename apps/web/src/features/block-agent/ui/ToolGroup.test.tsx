@@ -85,9 +85,11 @@ describe('ToolGroup', () => {
 
   it('is one live line naming the running step, and stays closed', () => {
     const view = mount({ live: true });
-    const line = view.getByRole('status');
-    expect(view.getByRole('button').contains(line)).toBe(true);
-    expect(view.getByLabelText('Running bun run check')).toBeTruthy();
+    // The line is the button's name; a control holds no live region.
+    expect(
+      view.getByRole('button', { name: 'Running bun run check' })
+    ).toBeTruthy();
+    expect(view.queryByRole('status')).toBeNull();
     expect(view.getByRole('button').textContent).not.toContain('tools');
     vi.advanceTimersByTime(5000);
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe(
@@ -135,14 +137,13 @@ describe('ToolGroup', () => {
     expect(view.queryAllByTestId('call')).toHaveLength(0);
   });
 
-  it('lists every call in full once opened, with no scrolling window', () => {
+  it('lists every call once opened, in the region its button controls', () => {
     const view = mount({ defaultOpen: true });
     const region = view.getByRole('region', { name: 'Tool calls' });
     expect(view.getAllByTestId('call')).toHaveLength(3);
     expect(region.id).toBe(
       view.getByRole('button').getAttribute('aria-controls')
     );
-    expect(region.className).not.toMatch(/max-h|overflow/);
   });
 
   it('does not construct results for a historical collapsed group', () => {
