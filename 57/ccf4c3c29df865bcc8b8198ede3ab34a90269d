@@ -1,0 +1,25 @@
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_4d1afaa24b4f16::t_b5a96f21516203 653
+packages/sdk/specs/scheduled-action.json
+  s_4d1afaa24b4f16::t_b5a96f21516203 3517-3518
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/entityType.ts
+  s_4d1afaa24b4f16::t_bafe8f669a1ff9 41
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_4d1afaa24b4f16::t_4f3756875581da 3517-3518
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "57ccf4c3c29df865bcc8b8198ede3ab34a90269d",
+  "prompts": {},
+  "sessions": {
+    "s_4d1afaa24b4f16": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2abaa39a-520f-4af0-a096-69c498e5e256",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
