@@ -36,4 +36,6 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   agent_session_waiting_for_input: 'ASKING',
   agent_session_mentioned: 'MENTION',
   routine_run_finished: 'ROUTINE',
+  agent_sign_in_expiry: 'COMPUTER',
+  computer_setup: 'COMPUTER',
 } as const;

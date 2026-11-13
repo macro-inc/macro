@@ -428,6 +428,14 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
 
+    // Gmail send-as lookups for the composer and the Macro agent's email tools.
+    let send_as_auth_client = Arc::new(authentication_service_client::AuthServiceClient::new(
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        macro_service_urls::AuthServiceUrl::new()?.to_string(),
+    ));
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
@@ -442,13 +450,7 @@ async fn run_server() -> anyhow::Result<()> {
         gmail_client::GmailClient::without_watch(),
         email::outbound::GmailTokenProviderImpl::lazy(
             redis_client.clone(),
-            Arc::new(authentication_service_client::AuthServiceClient::new(
-                config
-                    .authentication_service_secret_key
-                    .as_ref()
-                    .to_string(),
-                macro_service_urls::AuthServiceUrl::new()?.to_string(),
-            )),
+            send_as_auth_client.clone(),
         ),
     ))
     .with_shared_thread_replies(email::outbound::EntityAccessSharedThreadReplies::new(
@@ -1549,6 +1551,13 @@ async fn run_server() -> anyhow::Result<()> {
                 ),
             ),
         )),
+        email::outbound::GmailSenderProvider::new(
+            gmail_client::GmailClient::without_watch(),
+            email::outbound::GmailTokenProviderImpl::lazy(
+                redis_client.clone(),
+                send_as_auth_client,
+            ),
+        ),
     )
     .await
     .context("failed to build Macro agent tool context")?;

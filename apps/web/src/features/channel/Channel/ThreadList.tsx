@@ -107,6 +107,13 @@ type ThreadListProps = {
    * scrolls behind the floating chrome. Included in virtual measurements and navigation.
    */
   insets?: ScrollInsets;
+  /**
+   * Pressing a disclosure (`[aria-expanded]`) in a row stops following the
+   * end until the reader scrolls back to it or navigates. Rows that keep
+   * growing below, like a streaming reply, then leave what they opened under
+   * the pointer instead of carrying it away.
+   */
+  holdOnDisclosure?: boolean;
   /** Keep a tall thread's reading gap through responsive width changes. */
   preserveReflowGap?: boolean;
 };
@@ -131,6 +138,7 @@ export function ThreadList(props: ThreadListProps) {
   let contentRef: HTMLDivElement | undefined;
   const [scrollEl, setScrollEl] = createSignal<HTMLDivElement>();
   const [viewportSize, setViewportSize] = createSignal(0);
+  const [holding, setHolding] = createSignal(false);
   const insets = () => props.insets ?? NO_SCROLL_INSETS;
   // Capture each key array so the previous virtualizer options still describe
   // the previous page while TanStack resolves its prepend anchor.
@@ -178,8 +186,12 @@ export function ThreadList(props: ThreadListProps) {
   let releaseNavigation: void | (() => void);
   // Rows that mounted or moved in the current tick, measured together.
   const pendingRows = new Set<HTMLDivElement>();
-  // Heights read for the batch being applied; see flushRowMeasurements.
-  const batchHeights = new Map<Element, number>();
+  // Sizes read for the batch being applied; see flushRowMeasurements.
+  const batchSizes = new Map<Element, { height: number; width: number }>();
+  // Each row's width when it was last measured. A row measured at another
+  // width rewrapped because the pane resized (a split opened beside it).
+  const measuredWidths = new Map<string, number>();
+  let measuringRewrap = false;
   let applyingBatch = false;
   let deferredScroll: Parameters<ScrollToFn> | undefined;
   // Rows shift by the gesture adjustment. The sizer's end moves with them, so
@@ -320,10 +332,13 @@ export function ThreadList(props: ThreadListProps) {
     // height. The default sync path returns cached sizes, exposing the old
     // layout until ResizeObserver fires. Read mounted rows before first paint.
     measureElement: (element, entry, instance) => {
-      const unmeasured =
-        element.offsetWidth === 0 || element.offsetHeight === 0;
-      const hiddenViewport = !scrollEl()?.clientHeight;
-      if (props.preserveReflowGap && (unmeasured || hiddenViewport)) {
+      // A hidden pane (mid-reflow) keeps its cached sizes and widths.
+      if (
+        props.preserveReflowGap &&
+        (element.offsetWidth === 0 ||
+          element.offsetHeight === 0 ||
+          !scrollEl()?.clientHeight)
+      ) {
         const index = Number(element.getAttribute('data-index'));
         const key = instance.options.getItemKey(index);
         return (
@@ -332,11 +347,24 @@ export function ThreadList(props: ThreadListProps) {
           BASE_ITEM_SIZE
         );
       }
-      if (props.preserveReflowGap)
-        return batchHeights.get(element) ?? element.offsetHeight;
-      return entry
-        ? measureElement(element, entry, instance)
-        : (batchHeights.get(element) ?? element.offsetHeight);
+      const batched = batchSizes.get(element);
+      // Like the core's measureElement, read the element without a box size.
+      const width =
+        entry?.borderBoxSize?.[0]?.inlineSize ??
+        batched?.width ??
+        element.offsetWidth;
+      const key = String(
+        instance.options.getItemKey(instance.indexFromElement(element))
+      );
+      const previousWidth = measuredWidths.get(key);
+      // A restored size has no recorded width, so its first measurement may
+      // be a rewrap too.
+      measuringRewrap =
+        previousWidth === undefined || Math.abs(previousWidth - width) >= 1;
+      measuredWidths.set(key, width);
+      if (entry && !props.preserveReflowGap)
+        return measureElement(element, entry, instance);
+      return batched?.height ?? element.offsetHeight;
     },
     // Apply row and composer measurements before paint. Deferring them to the
     // next frame exposes stale geometry and can lose the end anchor on send.
@@ -350,7 +378,11 @@ export function ThreadList(props: ThreadListProps) {
     },
     // Use the same end tolerance for append, resize, navigation, and snapshots.
     // A loose tolerance also mistakes optimistic row estimates for a pin.
-    scrollEndThreshold: NEAR_BOTTOM_THRESHOLD,
+    // While the reader holds a position, no offset counts as the end, so the
+    // core neither pins it across row growth nor follows appended rows.
+    get scrollEndThreshold() {
+      return holding() ? Number.NEGATIVE_INFINITY : NEAR_BOTTOM_THRESHOLD;
+    },
     // The core reads scrollHeight for the end offset, forcing a layout whenever
     // rows just mounted (the initial scroll to latest, each reconcile frame,
     // every end check). The scroller holds only the sizer, max(viewport,
@@ -441,7 +473,17 @@ export function ThreadList(props: ThreadListProps) {
             offset,
             isScrolling && !isOwnScroll
           ) ?? offset;
+        const previousOffset = instance.scrollOffset ?? 0;
         callback(logicalOffset, isScrolling && !isOwnScroll);
+        // Scrolling back down to the end resumes following.
+        if (
+          holding() &&
+          isScrolling &&
+          !isOwnScroll &&
+          logicalOffset > previousOffset &&
+          instance.getDistanceFromEnd() <= NEAR_BOTTOM_THRESHOLD
+        )
+          setHolding(false);
       };
       const cleanup = observeElementOffset(instance, reportOffset);
       // A short list clamps the initial end scroll to zero without emitting a
@@ -490,7 +532,12 @@ export function ThreadList(props: ThreadListProps) {
         scheduleScrollState();
         // The core anchors item resizes; viewport resizes (composer, keyboard,
         // split pane) need an explicit end scroll when previously pinned.
-        if (previousHeight > 0 && previousHeight !== rect.height && wasAtEnd) {
+        if (
+          previousHeight > 0 &&
+          previousHeight !== rect.height &&
+          wasAtEnd &&
+          !holding()
+        ) {
           scrollCompensation?.finish();
           instance.scrollToEnd();
         }
@@ -561,13 +608,18 @@ export function ThreadList(props: ThreadListProps) {
   function flushRowMeasurements() {
     const rows = [...pendingRows].filter((row) => row.isConnected);
     pendingRows.clear();
-    for (const row of rows) batchHeights.set(row, row.offsetHeight);
+    for (const row of rows) {
+      batchSizes.set(row, {
+        height: row.offsetHeight,
+        width: row.offsetWidth,
+      });
+    }
     applyingBatch = true;
     try {
       for (const row of rows) virtualizer.measureElement(row);
     } finally {
       applyingBatch = false;
-      batchHeights.clear();
+      batchSizes.clear();
     }
     const scroll = deferredScroll;
     deferredScroll = undefined;
@@ -581,21 +633,26 @@ export function ThreadList(props: ThreadListProps) {
     if (pendingRows.size === 1) queueMicrotask(flushRowMeasurements);
   };
 
-  if (scrollCompensation) {
-    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
-      item,
-      _delta,
-      instance
-    ) => {
-      const offset = (instance.scrollOffset ?? 0) + instance.scrollAdjustments;
-      // The core skips remeasurement corrections while scrolling backward.
-      // Our counter-translation makes these safe: a late-loading image above
-      // the viewport must preserve the reading anchor in either direction.
-      return instance.itemSizeCache.has(item.key)
-        ? item.end <= offset
-        : item.start < offset;
-    };
-  }
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+    item,
+    _delta,
+    instance
+  ) => {
+    const offset = (instance.scrollOffset ?? 0) + instance.scrollAdjustments;
+    // A first measurement or a rewrap also resizes the row spanning the top
+    // edge. Compensate it too, so the first message starting in view stays
+    // where it is when a split opens beside the channel.
+    if (measuringRewrap || !instance.itemSizeCache.has(item.key))
+      return item.start < offset;
+    // The core skips remeasurement corrections while scrolling backward.
+    // WebKit's counter-translation makes these safe: a late-loading image
+    // above the viewport must preserve the reading anchor in either direction.
+    return (
+      item.end <= offset &&
+      (scrollCompensation !== undefined ||
+        instance.scrollDirection !== 'backward')
+    );
+  };
 
   const shortListOffset = () =>
     props.shortListAlign === 'start'
@@ -633,6 +690,7 @@ export function ThreadList(props: ThreadListProps) {
       if (!canNavigate() || !props.keys().length) return false;
       cancelReflow();
       lifecycle.send('navigate');
+      setHolding(false);
       scrollCompensation?.finish();
       readingGap = 0;
       virtualizer.scrollToEnd({ behavior });
@@ -642,6 +700,7 @@ export function ThreadList(props: ThreadListProps) {
     scrollToMessage: (id, options) => {
       if (!canNavigate() || !props.keys().includes(id)) return false;
       lifecycle.send('navigate');
+      setHolding(false);
       if (options?.userIntent) scrollIntent.markUserIntent(options.userIntent);
       return scrollToMessage(id, options?.align);
     },
@@ -650,6 +709,7 @@ export function ThreadList(props: ThreadListProps) {
       if (!canNavigate() || !el || !el.contains(targetElement)) return false;
       cancelReflow();
       lifecycle.send('navigate');
+      setHolding(false);
       scrollCompensation?.finish();
       // Both rects come from the same committed layout, including short-list
       // bottom alignment and floating chrome. No stale estimate is involved.
@@ -759,13 +819,45 @@ export function ThreadList(props: ThreadListProps) {
         delta -
         viewportSize() -
         (virtualizer.scrollOffset ?? 0);
-      if (delta !== 0 && previousDistance <= NEAR_BOTTOM_THRESHOLD) {
+      if (
+        delta !== 0 &&
+        previousDistance <= NEAR_BOTTOM_THRESHOLD &&
+        !holding()
+      ) {
         scrollCompensation?.finish();
         virtualizer.scrollToEnd();
       }
       scheduleScrollState();
     })
   );
+
+  // Capture phase: a disclosure may stop propagation of its own events.
+  createEffect(() => {
+    const element = scrollEl();
+    if (!element || !props.holdOnDisclosure) return;
+    const holdOnDisclosure = (target: EventTarget | null) => {
+      if (
+        target instanceof Element &&
+        contentRef?.contains(target) &&
+        target.closest('[aria-expanded]')
+      )
+        setHolding(true);
+    };
+    const onPointerDown = (event: PointerEvent) =>
+      holdOnDisclosure(event.target);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ')
+        holdOnDisclosure(event.target);
+    };
+    element.addEventListener('pointerdown', onPointerDown, { capture: true });
+    element.addEventListener('keydown', onKeyDown, { capture: true });
+    onCleanup(() => {
+      element.removeEventListener('pointerdown', onPointerDown, {
+        capture: true,
+      });
+      element.removeEventListener('keydown', onKeyDown, { capture: true });
+    });
+  });
 
   onMount(() => {
     // Suspense can construct a channel in an inert template document and

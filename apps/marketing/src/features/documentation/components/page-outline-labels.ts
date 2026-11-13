@@ -1,7 +1,9 @@
 /** Short labels keyed to heading IDs, or step text when the ID is generated. */
 export const pageOutlineLabels: Record<string, string> = {
   'email-accounts-title': 'Unified Inbox',
+  'email-providers-title': 'Google and Outlook',
   'auto-tags-title': 'Email tags',
+  'email-routines-title': 'Email routines',
   'email-sharing-title': 'Collaboration',
   'email-crm-title': 'CRM integration',
   'email-to-task-title': 'Email to tasks',
@@ -26,6 +28,7 @@ export const pageOutlineLabels: Record<string, string> = {
   'crm-from-email-title': 'Email integration',
   'crm-enrichment-title': 'Customer records',
   'crm-context-title': 'Customer discussions',
+  'crm-databases-title': 'Pipelines as databases',
   'crm-tasks-title': 'Task integration',
   'crm-agents-title': 'Agent updates',
   'agent-sources-title': 'Team context',

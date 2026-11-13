@@ -2,7 +2,11 @@ import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { routineContent } from '../../routines/routine-navigation';
 import type { AgentsPage } from '../core/pages';
 
-/** Open a workspace page, also when an Agents split is already mounted. */
+/**
+ * Open a workspace page, also when an Agents split is already mounted. The
+ * new-conversation page takes `composerAgentId` to start in Code with that
+ * coding agent selected.
+ */
 export function openAgentsPage(
   layout: Pick<SplitManager, 'openWithSplit'>,
   page: AgentsPage,

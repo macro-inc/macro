@@ -240,6 +240,10 @@ fn a_held_call_names_its_tool_while_it_waits() {
         "Waiting for the session owner to allow `ListEntities`."
     );
     assert_eq!(
+        held("macro", "Macro", "ExecuteCode"),
+        "Waiting for the session owner to allow a step in their workspace."
+    );
+    assert_eq!(
         held("linear", "Linear", "create_issue"),
         "Waiting for the session owner to allow `create_issue` from Linear."
     );

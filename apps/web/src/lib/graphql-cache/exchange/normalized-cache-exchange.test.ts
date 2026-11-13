@@ -1120,6 +1120,30 @@ describe('normalizedCacheExchange', () => {
     });
   });
 
+  it('delivers an uncached subscription without writing it to the cache', async () => {
+    const data = {
+      activityUpdates: { __typename: 'GraphqlActivityEvent', id: 'event-1' },
+    };
+    const uncached = makeSubscriptionOp(23);
+    const { ops, results } = harness(
+      host,
+      (op) => (op.kind === 'subscription' ? { data } : {}),
+      { isUncachedSubscription: (op) => op.key === uncached.key }
+    );
+
+    ops.next(uncached);
+    ops.next(makeSubscriptionOp(24));
+    await tick();
+
+    expect(results.map((result) => result.data)).toEqual([data, data]);
+    expect(host.writes).toHaveLength(1);
+    expect(normalizedCacheResultMetadata(results[0]!)).toBeUndefined();
+    expect(normalizedCacheResultMetadata(results[1]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: true,
+    });
+  });
+
   it('deletes the exact normalized key from subscription patches', async () => {
     const data = {
       soupUpdates: [
@@ -3064,6 +3088,30 @@ describe('normalizedCacheExchange', () => {
         expect(results).toEqual([]);
         expect(host.writes).toEqual([]);
         expect(forwarded).toHaveLength(2);
+      }
+    );
+
+    it.each([false, true])(
+      'fences pre-existing reads after a REST write is acknowledged (hydration=%s)',
+      async (hydration) => {
+        let externalMutationVersion = 0;
+        const { ops, network, forwarded, results } = controlledQueryHarness(
+          host,
+          {
+            externalMutationVersion: () => externalMutationVersion,
+          }
+        );
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        externalMutationVersion += 1;
+        network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        network.next(queryResult(forwarded[1], { from: 'fresh' }));
+        await tick();
+        expect(results.at(-1)?.data).toEqual({ from: 'fresh' });
       }
     );
 

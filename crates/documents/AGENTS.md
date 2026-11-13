@@ -38,6 +38,9 @@ word docs, Illustrator/Photoshop files).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
   serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
   from live collaborative storage, not the legacy S3 export.
+- `axum_router/appearance.rs` edits ordinary Markdown/snippet appearance through
+  Edit receipts with atomic attributed history; copies and metadata reads retain
+  overrides without changing content dates.
 - `src/domain/ai_edit.rs`: SDK editing of markdown documents and tasks by
   instructions. `POST /{id}/ai-edit` runs EditDocument's `AiEditingService`
   (admission, models, metering) with a token minted like EditDocument's: 422
@@ -129,10 +132,15 @@ word docs, Illustrator/Photoshop files).
   migrating (run via `just backfill_markdown_content_location_dev` from this
   crate's `justfile`).
 
+Appearance writes use `activity::AppearanceUpdate` in the repository transaction;
+realtime appearance events do not re-ingest history.
+
 ## Checks
 
 - `cargo test -p documents --all-features` (`SQLX_OFFLINE` unset; needs a
   migrated local MacroDB for `outbound`/`document_create_adapters` tests).
+- Point `REDIS_URL` at the local Redis endpoint for editing-session tests;
+  the default is `redis://127.0.0.1:6379`.
 - `just -f crates/documents/justfile check` for an all-features `cargo check`.
 
 ## Gotchas

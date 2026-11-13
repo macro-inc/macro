@@ -257,8 +257,28 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         name: &str,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Add a missing email without merging identities; an identical retry is safe.
+    /// Make an address the contact's primary, adding it when the contact does
+    /// not hold it yet. Never merges identities; an identical retry is safe.
     fn set_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// Add a further address the contact is known by. It must not belong to
+    /// another contact in the team, and becomes the primary only when the
+    /// contact has none. An identical retry is safe.
+    fn add_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// Remove one of the contact's addresses. Nothing else is deleted: the
+    /// contact stops matching that address's mail. Removing the primary
+    /// promotes the oldest address left. The last address on a domain of the
+    /// contact's company cannot be removed while the contact is linked to it.
+    fn remove_contact_email(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
         email: &str,
@@ -269,6 +289,13 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
         company_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// Remove the contact's company link. A contact with an address on one
+    /// of its company's domains cannot be unlinked.
+    fn unlink_contact_company(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Batched authorization probe for a CRM-scoped email query. See
@@ -1007,6 +1034,55 @@ where
             .await
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn add_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        let email = normalize_contact_email(email)?;
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::AddEmail(email),
+                access.include_hidden(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn remove_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        let email = normalize_contact_email(email)?;
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::RemoveEmail(email),
+                access.include_hidden(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn unlink_contact_company(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+    ) -> Result<CrmContact, CrmError> {
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::NoCompany,
+                access.include_hidden(),
+            )
+            .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn crm_scope_precheck(
         &self,
@@ -1418,6 +1494,29 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmContactReceipt<EditAccessLevel>,
         _company_id: uuid::Uuid,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn add_contact_email(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn remove_contact_email(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn unlink_contact_company(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
     ) -> Result<CrmContact, CrmError> {
         Err(CrmError::CrmDisabledForTeam)
     }

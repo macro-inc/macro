@@ -24,6 +24,7 @@ type Item = { id: string; label: string };
 type ToastOptions = {
   persistent?: boolean;
   region?: string;
+  dismissStyle?: 'button' | 'icon';
   onDismiss?: () => void;
 };
 
@@ -59,6 +60,8 @@ describe('useKeyedPersistentToasts', () => {
     options?: {
       persistKey?: string;
       itemsLoaded?: boolean;
+      dismissStyle?: (item: Item) => 'button' | 'icon' | undefined;
+      onUserDismiss?: (item: Item) => void;
     }
   ) {
     let setItems!: (items: Item[]) => void;
@@ -77,6 +80,8 @@ describe('useKeyedPersistentToasts', () => {
         key: (item) => item.id,
         persistKey: options?.persistKey,
         itemsLoaded: loaded,
+        dismissStyle: options?.dismissStyle,
+        onUserDismiss: options?.onUserDismiss,
         toast: (item, dismiss) => ({
           title: item.label,
           actions: [{ label: 'Go', onClick: dismiss }],
@@ -111,6 +116,38 @@ describe('useKeyedPersistentToasts', () => {
     ]);
     expect(toastOptionsAt(0).region).toBe('prompt-region');
     expect(toastOptionsAt(1).region).toBe('prompt-region');
+    dispose();
+  });
+
+  it('gives each toast the dismiss style its item asks for', () => {
+    const { dispose } = mount(
+      [
+        { id: 'a', label: 'A' },
+        { id: 'b', label: 'B' },
+      ],
+      { dismissStyle: (item) => (item.id === 'a' ? 'icon' : undefined) }
+    );
+    expect(toastOptionsAt(0).dismissStyle).toBe('icon');
+    expect(toastOptionsAt(1).dismissStyle).toBeUndefined();
+    dispose();
+  });
+
+  it('reports a close by the person, not one made for them', () => {
+    const onUserDismiss = vi.fn();
+    const { setItems, dispose } = mount(
+      [
+        { id: 'a', label: 'A' },
+        { id: 'b', label: 'B' },
+      ],
+      { onUserDismiss }
+    );
+    toastOptionsAt(0).onDismiss?.();
+    expect(onUserDismiss).toHaveBeenCalledWith({ id: 'a', label: 'A' });
+
+    // B leaving the set tears its toast down: not the person's close.
+    setItems([{ id: 'a', label: 'A' }]);
+    toastOptionsAt(1).onDismiss?.();
+    expect(onUserDismiss).toHaveBeenCalledTimes(1);
     dispose();
   });
 
