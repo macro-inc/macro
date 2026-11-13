@@ -1,0 +1,2047 @@
+.github/services-config.json
+  s_8703f73ae8e37d::t_0e1f94a26cd551 13-16
+.github/workflows/pr-ci.yml
+  s_8703f73ae8e37d::t_c2c10c2bb744dc 526
+.github/workflows/sdk-check.yml
+  s_8703f73ae8e37d::t_3968186b7a6aba 10
+.github/workflows/web-app-check-main.yml
+  s_8703f73ae8e37d::t_494dcc5fad2398 53-55,359-361,387-388
+.sqlx/query-0016805a8bd69613c35ebd46cedc5d28fdd0572a4392a96be58eab3bc9c7d3a1.json
+  s_8703f73ae8e37d::t_adab5487271ae9 3,9-10,16
+.sqlx/query-013135609e97e530f5bfa0730db45353b5695f6946c5bf0751aed52556d53f58.json
+  s_8703f73ae8e37d::t_b5a3e5b253ef44 1-136
+.sqlx/query-03e6fb7773248fd837613854e577e4767d844fe88fbf3a49c408cf4b1ed1afc5.json
+  s_8703f73ae8e37d::t_67e63c990501cb 1-22
+.sqlx/query-04e3158033d435d212f208aa0f47a701b139c0376ea38cb27b2c24f385a5e220.json
+  s_8703f73ae8e37d::t_77a7dd19d18d0e 1-22
+.sqlx/query-06237e8bee0d6244666113ba5eb5079aa1190ab6e94e8232f34a9b1bb327f3a1.json
+  s_8703f73ae8e37d::t_55cbbcd01eabd4 3,14,21
+.sqlx/query-063dac649756acf4546a1fa89c40b7717d412a4a84671ae0441f2cb8da17e2e7.json
+  s_8703f73ae8e37d::t_d7043fe7a27060 1-16
+.sqlx/query-0648a1ebe91b82102c64798e25c0dc2534964b4fc41e4dad5a98e9b401c35834.json
+  s_8703f73ae8e37d::t_413508d62fb407 3,21
+.sqlx/query-0d505c90bc55c2edce40b236b9d6aa068b40a5d8a5953aa03331368e74ca64f1.json
+  s_8703f73ae8e37d::t_86267018f5b61d 1-16
+.sqlx/query-0ea6b44a6cec6e9847295550358668d06ae80b084fc0f1a1cad533a89fda61b3.json
+  s_8703f73ae8e37d::t_dd6fed7a79f458 1-43
+.sqlx/query-0f898799ed9178cefa28ec7cf62235882613ed0f1b2fdd4141003df6ec2b3501.json
+  s_8703f73ae8e37d::t_0fdb93ff9e8d9d 3,22
+.sqlx/query-0fe9af214c7740d9d174a41e836cc8c4a655a9f5de32a5896a7f48382f2bc076.json
+  s_8703f73ae8e37d::t_b9600f0740de62 1-28
+.sqlx/query-13c4535a85f80ced665121cec2d252fcae8c7150b1574b0a5720cbe9c735b965.json
+  s_8703f73ae8e37d::t_77f4a76b021d14 1-17
+.sqlx/query-154a7cdea2cba555530eaee8ffcd5d73916d500e67cb3afc048072d1b76a6951.json
+  s_8703f73ae8e37d::t_7ef2f1d6466542 3,14
+.sqlx/query-1851e902ea8b5ad42b16d9e5d790ed912b2f9c430fd7cb5f86a58c26c8a21885.json
+  s_8703f73ae8e37d::t_77c969f3e86776 3,13
+.sqlx/query-191cf561b07f3139d803e3c5c72b85d7dfcd0ab4129f64e625e780eb009a3c75.json
+  s_8703f73ae8e37d::t_cb2edc72d3d76c 3,13
+.sqlx/query-19457d149a97d9212fce834039e93b98be27d37027562a7d3d06843e492e6d40.json
+  s_8703f73ae8e37d::t_2abaf864f70fcd 1-15
+.sqlx/query-19f5563cc3d6c3820a125c58ebb5fcd2db8c8e1db4c5a1a1fde32f23e7042c8b.json
+  s_8703f73ae8e37d::t_4c8fb34f9cef89 1-42
+.sqlx/query-1a7dc4d6de068567eeb8b01c9ac598d0df97763ddbb096f1cede4b4f1083f194.json
+  s_8703f73ae8e37d::t_c03170dcb27085 1-22
+.sqlx/query-1b5601db319e0357f24213d8ab4a84dd73d36bf506e8b2fde8f64322f9d39f8c.json
+  s_8703f73ae8e37d::t_33f93b64c8296c 1-22
+.sqlx/query-1b98f9b245ff5f3c68c12c6f58ce5f3b45bd4a2c7dcd68a52618eb4aa1f12d89.json
+  s_8703f73ae8e37d::t_523806939cd06e 1-135
+.sqlx/query-1c48f830d510216d23476bfe7de075ed1ae4893db0b4b5b477a17c31cfa594b3.json
+  s_8703f73ae8e37d::t_c0461ef16d901e 1-14
+.sqlx/query-1d75e5cc7de8c554b277b0929a5c3d4972c32475dee65dfa2a19b1cb83a0525a.json
+  s_8703f73ae8e37d::t_3667289579657a 1-14
+.sqlx/query-1f8c312c970fb02eb844ea11cf5b1ad536f7133b089f4855479fe3f8997c7efb.json
+  s_8703f73ae8e37d::t_b4155c0fe8ccbd 1-46
+.sqlx/query-1fa51e15f2e1cb9958a41bd37981bc9204fbe0d6742566133cbccfd8e2d37b34.json
+  s_8703f73ae8e37d::t_7e238bc346b282 1-22
+.sqlx/query-203667c846c59f9ce32a9b8eded585726a57060b2b5461f2d3822294a8f68ca9.json
+  s_8703f73ae8e37d::t_7c179f2614155e 3,8,14
+.sqlx/query-21bdea397ce4fb5341f5644493b590444fabc5bd426e7990f97521a96da296f7.json
+  s_8703f73ae8e37d::t_116c8705733485 1-14
+.sqlx/query-22d5772beb139be447af43f38fabff0a3504d5b1e573effa9855cda14f5f6de0.json
+  s_8703f73ae8e37d::t_ab9fdccf78fd76 3,16
+.sqlx/query-22f1d2d7f155a31ff0493f853038c32a4699e691e4d4738b3382d877a8632c01.json
+  s_8703f73ae8e37d::t_929411cdb45d4d 3,13
+.sqlx/query-2411dbfc7af93bc5c06a09e1e95fbed3c79cb2836dab92080a10dfeca8069514.json
+  s_8703f73ae8e37d::t_259d308cbd1a89 3,88-102,130-132,136
+.sqlx/query-26b41b2211fecc0601e81157c91013fb6a03bb94a199241aa8c3d75165a7d4c0.json
+  s_8703f73ae8e37d::t_d05abc918b6810 1-22
+.sqlx/query-2807ce0078cf85c871add60d9464dd28a4f73e742d626acf43ef931ff1d1d911.json
+  s_8703f73ae8e37d::t_f47aa64f780051 3,16
+.sqlx/query-28ceb2e3c814a95d506933277f877e20a1efb1470b0dd588a97e83cec7f837ab.json
+  s_8703f73ae8e37d::t_2a3683c8dfe348 1-22
+.sqlx/query-29098ee291ac1a36f3aab99346e3a6e545b9ef69ff8f09c8aef1944aebefdb7e.json
+  s_8703f73ae8e37d::t_5710ddb3582c9b 1-20
+.sqlx/query-2a20f064b3c94f04ee442ec61202c4839e297ac086d2ed2981fe60f4483d3e37.json
+  s_8703f73ae8e37d::t_9233138fa19cfc 1-46
+.sqlx/query-2b2e2c97e858b09859076c567d6d2ef91ae794c18d8193eb44c3f6a6d4b33dd9.json
+  s_8703f73ae8e37d::t_8ca205f4764a74 3,8,15
+.sqlx/query-2b537e3acc2d9c2bf306bfd55ec2736b888e9a31c82f2f811f20a1d0f006c499.json
+  s_8703f73ae8e37d::t_f4f7acdb631159 1-16
+.sqlx/query-2c7432c451c6b48fef57b1c1e8351c2c0c365d8104c0f1f3526b6a2383f951f6.json
+  s_8703f73ae8e37d::t_4946250965f7cc 1-14
+.sqlx/query-31ed0496ad3add328514f2e8732b69611987753114d2342c404b3da4c9055d5a.json
+  s_8703f73ae8e37d::t_6ef03464131c76 1-16
+.sqlx/query-370a921ec1f6ca87aeb5fecbeab00c7befe15de02e314d1c6c7c5483417cdd9b.json
+  s_8703f73ae8e37d::t_97404010bcc352 3,8,13,18-19,23,25-29,34,41,45
+.sqlx/query-37f337de357b0715612bb050985c7e5363563f86fd32e1649559aa2e348d5a7a.json
+  s_8703f73ae8e37d::t_705203531a2512 3,8,21
+.sqlx/query-3ad4dd2fb8641576219456acb70d8a3ee00b2fc25b9a5e72f80947b30a9c3cae.json
+  s_8703f73ae8e37d::t_ba5f5afe8dbc30 1-18
+.sqlx/query-3b2dbc5b0affbcf53cfe76fe5210b7e4d96dad61a84d4a87dced9d2f66dc6ff1.json
+  s_8703f73ae8e37d::t_6eac3d951efbaa 1-15
+.sqlx/query-3ba2817523bfa951299b8a9a23292b504e5967bcb0a4f4c68b06071931c1b245.json
+  s_8703f73ae8e37d::t_794f925a8f7531 3,43-47,52,57,75,81
+.sqlx/query-3cad1115b73520ff628f716fad77857fcb20d38f466a93d993b9945abf6b17c1.json
+  s_8703f73ae8e37d::t_687c1f05574382 1-71
+.sqlx/query-3de736724f6f2bf1b40e91d71c33482ba17e714329b3ba8081d8c21ffd239110.json
+  s_8703f73ae8e37d::t_622990e9a8d09a 1-14
+.sqlx/query-3f993c5f78cc8f6619ba1f58bc5b5b2b330cfbbd422122680f28fa151a41b7e9.json
+  s_8703f73ae8e37d::t_8e57dbb1b90b5d 3,34
+.sqlx/query-3fd0caa0bb093f665978599c929ed979009ff0f0896abcfb1a10f4f52852de24.json
+  s_8703f73ae8e37d::t_2f434b224505ac 1-18
+.sqlx/query-3fdbcbab595290e20f665e36def1e3fb80b1e74eceae1422942e8d0064f9b465.json
+  s_8703f73ae8e37d::t_507b5b2cce4ff5 1-72
+.sqlx/query-400724052eb0c3347a8adf73490ed285c04202b465e9fbdd01eb3f2e0ddc8c86.json
+  s_8703f73ae8e37d::t_0172398c90d69b 1-15
+.sqlx/query-40136efce925b1ee3e660a5f630495d6d7e0f9376ba5e7158f73b4bf2585b905.json
+  s_8703f73ae8e37d::t_85404a9503c84d 1-14
+.sqlx/query-41e1d1cf74595eaea987e0e8cd10f301e77c7dbd573fa5dfdd455dec1f8739ca.json
+  s_8703f73ae8e37d::t_7a3fcdb7c2d2be 1-135
+.sqlx/query-42b9295f8c0a611acae94b37be51ce8311e2aad8b5cd12efb4e747ae43d825a5.json
+  s_8703f73ae8e37d::t_2dd6d0432dafef 1-23
+.sqlx/query-43521150b6c23d47e117f97511872b8d076810849b3ba978538dfdaa3186eb85.json
+  s_8703f73ae8e37d::t_0cae46393a7ece 3,40
+.sqlx/query-4555980c2b9992385d982c5e2ce218d2524c5a892c7552ab6cec349d9d34be19.json
+  s_8703f73ae8e37d::t_98a23d24f3cadb 3,14
+.sqlx/query-472eeb0a785fae7b99906f72a7493402d2ab4e1d7522712d4a5d8fc37f4524f4.json
+  s_8703f73ae8e37d::t_40bfd264a6c52e 1-16
+.sqlx/query-481144f12fed183bd341029ad1a50386a1e87ad02a144d374b9a4dcc41d2393a.json
+  s_8703f73ae8e37d::t_dc3ccab91f0c7e 1-14
+.sqlx/query-48204a5524cfb427e07ea9d4cbf2687e67340c1842cc444d56070387024dba0f.json
+  s_8703f73ae8e37d::t_7b555decf2c5db 1-20
+.sqlx/query-48ace5ed35ed498a7a29157bda61da2ee04db7aff4b61fdef206f156f7c4c7fc.json
+  s_8703f73ae8e37d::t_a035e79f7c1525 1-24
+.sqlx/query-4dbfdd060697ce250d3fd8b6441ff3c4ecfa7b7366cb8871a84e262f5318aac3.json
+  s_8703f73ae8e37d::t_18a8e8bb5d57a1 1-14
+.sqlx/query-52f76afa4ae449aecead8932b12ff52e810f2662ba46b05fbe8f3624f2651db8.json
+  s_8703f73ae8e37d::t_27878e54fb06b2 1-18
+.sqlx/query-53476484d0a2deaed37f45de035100a45f0648763ffa777d7a4bf1d12ff16811.json
+  s_8703f73ae8e37d::t_a93569f354d71e 1-14
+.sqlx/query-539bb7d38306403500d491032be39fb9e5dc41cc2e166f7fa4150a0a78223073.json
+  s_8703f73ae8e37d::t_8077afefead1ba 1-34
+.sqlx/query-5400796fbaa6802de2d80bd191f69716cbd8c419976fcf8e22a39955de00548b.json
+  s_8703f73ae8e37d::t_139743b03eb0b8 3,14-15,20
+.sqlx/query-573f87d8d4aa8df081a3ce92e501e13810309b106ea9d28519f8754fa5429580.json
+  s_8703f73ae8e37d::t_8b14eda962a26e 1-12
+.sqlx/query-58bf5dcafca4ae277b73c3f2946c4aca9c0841a0057f4256147a1dd39fbb0690.json
+  s_8703f73ae8e37d::t_f7761f1f094afa 1-24
+.sqlx/query-58df3e0e86c31f970183ef49489d371774a9617d8e7eb009b3ff7cb9e8b22eed.json
+  s_8703f73ae8e37d::t_2568808ed342bf 1-15
+.sqlx/query-5abe01d67743d42faea898e38dff55064db31cf10884a22b02a7f4f72eb2fa68.json
+  s_8703f73ae8e37d::t_8d79ff5e9f0c5d 3,10-12,18
+.sqlx/query-5d2917704c6e97517d6e7cc3e3cfa1fed21d56a85a82c2d0e289b99e4c0c7f0d.json
+  s_8703f73ae8e37d::t_9f861418c1037b 3,9,11,17
+.sqlx/query-5e6b6be448ba2cbcf6344344bd974b34fcc6c8040a041119077456b5490e08f2.json
+  s_8703f73ae8e37d::t_d3736cd3d4bed9 1-15
+.sqlx/query-5e834a5ae2dcbdac215ea2c76685cb205f9f62a6e4def7cbfb5f706f95d762b0.json
+  s_8703f73ae8e37d::t_97bfb526d9ee71 3,38-48,54,64-65,69
+.sqlx/query-5ec492d161c6c813f7f325ed3e986a21d141f2d508a77b93bb834919bf838e65.json
+  s_8703f73ae8e37d::t_0a2ee2d7d39baa 1-23
+.sqlx/query-60c56455a1e28d7c75184a845af52613fc6361883b292614bd4d4d9b5dd6b2f3.json
+  s_8703f73ae8e37d::t_df59b7ea8ecf38 1-16
+.sqlx/query-6150193885406dff458b70d16b9f79d74d6f025877621cbe002e17c9e2be0407.json
+  s_8703f73ae8e37d::t_901df34a0fb34c 1-16
+.sqlx/query-620182bb175c7d8fdea9ebd5e37031e15b57b9a42b6b262c05106454fd76b86c.json
+  s_8703f73ae8e37d::t_cc0c50fac21496 1-22
+.sqlx/query-6292f0cb845c1b31665004fd091cee648b9ec4b3ae8155658d6a20d17205a26d.json
+  s_8703f73ae8e37d::t_04e582cc06b110 1-15
+.sqlx/query-641ba16eb6d55992a0df18b1e4ff27e392d76f328dee88fefd32805bc192b0c3.json
+  s_8703f73ae8e37d::t_f41a5b11b891ad 1-14
+.sqlx/query-64370f5d601fdb6d26bac3fec031e4b0248c0d2374871230831051feba6098dc.json
+  s_8703f73ae8e37d::t_e45ac8efa78db4 1-15
+.sqlx/query-64e7370be6e0fcc431806a5cac9786d554a30e36e37f25e97c61e5a6e1437a47.json
+  s_8703f73ae8e37d::t_3b864585fd6a01 1-14
+.sqlx/query-682a1fdf962eca2c7739cededf1142ebc011120676e6fb4ef673f5b2ed314049.json
+  s_8703f73ae8e37d::t_b929e590564f51 1-41
+.sqlx/query-6a50d30ba5dae90a8d12b7c0e7f7b06ef766901dfa17a62a1c9a0fc0a42a04c7.json
+  s_8703f73ae8e37d::t_59248bec6482c4 1-17
+.sqlx/query-6c7e8e246950a82e8e5d9b867aec20fb0478d07c83dd63aee312fbb2f4ed4295.json
+  s_8703f73ae8e37d::t_cf4269fb4a6d2e 1-15
+.sqlx/query-6d823e371f16c753434fcf8280cf81b4fdb1391b92f67ff962259cb0c803eae2.json
+  s_8703f73ae8e37d::t_60b406b027f934 1-52
+.sqlx/query-6dfc58e5b02cca8c23c398dc84f8d5911f0acf113e69d69c646cd9ce2a38a91b.json
+  s_8703f73ae8e37d::t_d53e5e78719384 1-42
+.sqlx/query-6f06591c7010f704424d40d1749bebe37e23727b6ac57039e02289a0d4d64273.json
+  s_8703f73ae8e37d::t_fd08b3b5ebf60a 1-12
+.sqlx/query-72962c1c5f5f127667650f46140f090f3d37da8f5136f8fbcd425eb809a8c64e.json
+  s_8703f73ae8e37d::t_58e270c2b6798b 1-16
+.sqlx/query-736afeacfb9ffb362dda069a77d4997fd2818f17283cbbb2db8d45dcb4f4dca1.json
+  s_8703f73ae8e37d::t_e9eda7248eda20 1-14
+.sqlx/query-7656db9a41b221871e4616a74b57bafd7d03e49c78aff4039268eafb11d84fbd.json
+  s_8703f73ae8e37d::t_b2fc44dbc12854 1-18
+.sqlx/query-765ba90f44012f4b7b9d80b43807e2e92d0f4f91c5f1eca20f1d00070091abc8.json
+  s_8703f73ae8e37d::t_abe1555584fdea 1-22
+.sqlx/query-77620450f2d94e8f76a5b3e9a0a551b31475f92aeb3bebdd973d059b2ec9f67a.json
+  s_8703f73ae8e37d::t_bcc87a5678bd38 3,21
+.sqlx/query-786423c126573e9226aa72ab9f7e4d99d4aeabefa5cac6e73a714dfb2a4f0e38.json
+  s_8703f73ae8e37d::t_3b1af4df6c5ea7 3,8,14,21
+.sqlx/query-78da7ab927e5186259f655943f8c2874667cd93d95cf0335f6baac2bb820b181.json
+  s_8703f73ae8e37d::t_e8a132cab399df 1-12
+.sqlx/query-790d41e9a3bfc482d623cc1a58c8e313ee023d31b2bec95b88f2e8929480f2b2.json
+  s_8703f73ae8e37d::t_255d8a171c30ee 1-23
+.sqlx/query-7f08d83c7255e9eea3d6a749d736ca2ff3563eb57edc627e1fecaaf8815e2eff.json
+  s_8703f73ae8e37d::t_bf368b46126ea2 1-20
+.sqlx/query-7fb3fb4d792bb2335c281301739a4f8b5a2bc92db87efa5828bf509d03ae433e.json
+  s_8703f73ae8e37d::t_707a6e6f208446 1-16
+.sqlx/query-8010e4f893f3ed9f1f560ea8ef9221405076f075c8dfe40748034f3068a2010d.json
+  s_8703f73ae8e37d::t_0e822130b1e56c 1-22
+.sqlx/query-807d1ddcf8a6990014874e4a13e20c9577fcec8c89070b25d73aa578482a4028.json
+  s_8703f73ae8e37d::t_1bd3f0d6d0bb24 1-17
+.sqlx/query-82057dc0144ed1a0f8d671140338f7ac8d0f59019edbec02b96c7dd0d6f29199.json
+  s_8703f73ae8e37d::t_beb1b64c37873f 1-15
+.sqlx/query-831dbd91a9609ec3306925a4a8b6ab08509d9f294db6fef5c824f2e0d177ba7f.json
+  s_8703f73ae8e37d::t_ec846df438b83d 1-12
+.sqlx/query-836f2b4e388baadff186eacc8f7d74881de66b0b281a4a8d8119f70a2805f76e.json
+  s_8703f73ae8e37d::t_8ec8136d7d198f 1-15
+.sqlx/query-842c19e2b022e5adbf8cbf280473ce7d26edf9773be9757c22f2bcdcae4a07a0.json
+  s_8703f73ae8e37d::t_bf60b481be967f 1-15
+.sqlx/query-8526480676333b836da43443a917355cd3d79656d4bb3381bf85433f99e0f81d.json
+  s_8703f73ae8e37d::t_290762b1f2cc6c 3,9-10,15
+.sqlx/query-884ba2279aec801e572642a342f901a5f4580b4c9a2666bbdf5e8b1ed79d3f14.json
+  s_8703f73ae8e37d::t_abbf6e1bd7aeff 1-46
+.sqlx/query-88d599f4114779cfca62759706db26c012bea861d57b14a3b6c1a715d474a369.json
+  s_8703f73ae8e37d::t_ae66fedb577b21 1-15
+.sqlx/query-8a3abd9a6a1a0f9db7c3e16eea8944752c1c86263ab891ba75d6ff19d0b7fa9f.json
+  s_8703f73ae8e37d::t_0344915e6ec9b5 1-20
+.sqlx/query-8a9eba70f155de72c682c085ce05f8818c97b0e314a38a8fc81487e8cbef49c5.json
+  s_8703f73ae8e37d::t_f90938e3ea57c9 3,8,13-14,18-19,24,30,33
+.sqlx/query-8dac0b68e84412dea67ddfb23d45abef4f2b41d64948b6a92f2daa7abacc4c8b.json
+  s_8703f73ae8e37d::t_2f9b1b0794075d 1-41
+.sqlx/query-8e67d0c6153af7336398c621792b073ca2f05709068028624ca0c07b5a48b423.json
+  s_8703f73ae8e37d::t_c9a206c993c4f1 1-39
+.sqlx/query-8fc339af79aea03badbdf3b6c929662d07c346b58fe6594bcb96367b804066f0.json
+  s_8703f73ae8e37d::t_f39066e434680e 1-12
+.sqlx/query-90efc5fbcdecc53683038980e096044f451d109f949a14ae606f93409a0d5557.json
+  s_8703f73ae8e37d::t_ba4550234c4584 1-12
+.sqlx/query-91b5d37f09ef339009ba5a971211f42c4d3670962bdac93c2157e87a7d7ecf9a.json
+  s_8703f73ae8e37d::t_c37fad798c663c 1-22
+.sqlx/query-92400ccd3e1fa6e1e684cc8b63a3c645487a967b13b49277982f9e6f825b5d98.json
+  s_8703f73ae8e37d::t_66fd54e3896395 1-15
+.sqlx/query-92dc8aeda6dc7f87ab24c56783aa2691059b335c8b32d51bdb188cc859cdecc7.json
+  s_8703f73ae8e37d::t_9bf86bd3cbeeac 1-30
+.sqlx/query-932581c88c746c4d4bb7bd6339707360b5191ff997a44f6ac8c934f909e595f1.json
+  s_8703f73ae8e37d::t_df54623f2b6006 1-14
+.sqlx/query-93fd66731bf1fe6ae791664821c27cedceeee063fef948dc95e94afa61f40aae.json
+  s_8703f73ae8e37d::t_498439c9fec064 1-14
+.sqlx/query-94e95d5ac43446603ce293d74ff67e5e126bd0ff5eddd59eb6e28d3f5f3c03ae.json
+  s_8703f73ae8e37d::t_0cc21cd1478f2a 1-15
+.sqlx/query-9793b4c788c851ee00e4f798094e249c5ad122e5496cf7c5521f069dbbd13ee7.json
+  s_8703f73ae8e37d::t_d2076d75e5b97f 1-23
+.sqlx/query-97ab4903b2f156d4da91f281b9d340fd0701252074b156ad216fc4ad9c6ac01f.json
+  s_8703f73ae8e37d::t_7ea5249419a7d5 3,88-102,130-132,136
+.sqlx/query-985b62951247f2b9f53b99bc6b790a8710a90103e58eee35a99dfc4d2b1df0c1.json
+  s_8703f73ae8e37d::t_85721d91c50114 3,8-10,15
+.sqlx/query-9a225535e72b1daaaecc91fa33b08019f33aa551b4c96e0d4bd74d2aeb64843a.json
+  s_8703f73ae8e37d::t_0ace1c06340651 1-14
+.sqlx/query-9b23c111f3d3e4b074f1e9ce43f30d4cfcfd4a95a657b428e897cdeb54d4fa47.json
+  s_8703f73ae8e37d::t_43b98cbb87dd01 1-12
+.sqlx/query-9b4bab51cfcec28ae336bc4cd7cecc3d817acad4121fa5247dfff62761553c65.json
+  s_8703f73ae8e37d::t_7165cfe778210b 1-14
+.sqlx/query-9f1372584372a47b031bdb2a87d9da1ed56b517af0a241d5baa53c6dc79cba92.json
+  s_8703f73ae8e37d::t_b89ab4d6d0e3cf 3,8,18,24,35
+.sqlx/query-a25430b1def7970ec4ff859aa2036b14d0f3e3c241472ace2ef368cf5d7978c8.json
+  s_8703f73ae8e37d::t_60f7d3d5c10731 1-48
+.sqlx/query-a4e4549d6546ac1295005c5fafcc8e8a86caf521a3bd78514c0d6a5cb7f226e0.json
+  s_8703f73ae8e37d::t_1c1aed37ab3d6b 3,8,17
+.sqlx/query-a554e3390f30c03c89874b23ba29662d8c93175d456ed34d837ff9bf6045cee6.json
+  s_8703f73ae8e37d::t_0dad1fed8fd0cf 1-22
+.sqlx/query-ac17b832b8ce48630f8b76a6d1e837234ecda48475b6de3d20152f39d64702a7.json
+  s_8703f73ae8e37d::t_6a9904c5e1067d 1-15
+.sqlx/query-ac8a0b1e11419d170a7eda0efdcabff88928ea681970678735071d4001fb2e17.json
+  s_8703f73ae8e37d::t_e80485b6861565 1-16
+.sqlx/query-ada9b271dfd8213e55bb3a6290c73a80b9f56e9356bc226424950d7b3f1aae55.json
+  s_8703f73ae8e37d::t_d9e89193a3b516 1-14
+.sqlx/query-adb66f586a701f982d98b2f67a13008902ef99296242307e3ddccb1fda834b77.json
+  s_8703f73ae8e37d::t_f6f28d52578198 1-22
+.sqlx/query-aec90d57c02b4f1f8c28bdbc481f5d2c91773ffc2db540f9fbce89bb2194343b.json
+  s_8703f73ae8e37d::t_0761677b13da04 1-22
+.sqlx/query-b10b9ad0240aa9954e68f9018b2078763f0499fb55cc0a2bbe91402c6c9626d5.json
+  s_8703f73ae8e37d::t_1b3288158245b1 3,133
+.sqlx/query-b5c1e234bf93d667fb759dcab9a690ac337ca9a5d064647d2ae5637b65a40cd7.json
+  s_8703f73ae8e37d::t_1a6ea9614a4837 1-23
+.sqlx/query-b5f17315c79e7463aad47bb9f2631893e0c56453f3a317e0196d99bce3527b44.json
+  s_8703f73ae8e37d::t_e89ff1169af7e3 1-16
+.sqlx/query-ba4a086ebfa588d23fc14e1da711b6beed13c8552f8eab53486c8499e619dfd7.json
+  s_8703f73ae8e37d::t_0b9c7cdaa32c06 1-15
+.sqlx/query-bb65029afeb7622f835b16950b1641140a303b906dc4a8a1fb1e814f8271e809.json
+  s_8703f73ae8e37d::t_b9f6811651be18 1-22
+.sqlx/query-bbe1689151d11d0dcce780b9e47bdde8ad35cad2bc82a9f63e3c1da9dc44bf25.json
+  s_8703f73ae8e37d::t_2f1bc7a628c5a8 1-12
+.sqlx/query-bd5b4f2a7dae97dd189404915a6c6bb072323b6e6898f46790d048a304361ed1.json
+  s_8703f73ae8e37d::t_f251e46d02cdb4 1-14
+.sqlx/query-be6acd044d4ad3dd1e0165756ae84f6a20ad1463670e32e3fb188673efa93f61.json
+  s_8703f73ae8e37d::t_2e6facc8615522 1-14
+.sqlx/query-bf308cb5e9c0a65d57feabcd2e918c697825f3bc72396718a900a189f1fd3b93.json
+  s_8703f73ae8e37d::t_57719ed09fabf9 3,8,19,22
+.sqlx/query-bf6dc4d215d0bd1c82ab4eb9e9be2027b154007cac61050cd21cff01f284ffb8.json
+  s_8703f73ae8e37d::t_2503d6ce39697f 1-15
+.sqlx/query-c001bc997d0f533b368fe2c7c9ed5733bff2618bc435807059b707ba8d5ce9dc.json
+  s_8703f73ae8e37d::t_7d70a3af32edfa 1-15
+.sqlx/query-c0797b89a70a09fece2bc860d77f4d68c1a5af1105f39a82686373e84da3a5cf.json
+  s_8703f73ae8e37d::t_e59b4b38547449 1-15
+.sqlx/query-c71af7108acc8a5ef46b97906f43c3d8c9b6477c276271ebfc29226a1d5fd253.json
+  s_8703f73ae8e37d::t_495e13185bed7c 3,39-40,52
+.sqlx/query-c8d1bbd88252a134f3a6a5c0b614e6aa1610b88f8561c1f18d94c8285f885e92.json
+  s_8703f73ae8e37d::t_13cf63678a5f46 3,88-102,130-132,136
+.sqlx/query-c9c21f384314cf0b4020ca34ec243b7c4f6197f1afb4baff688b813563edf951.json
+  s_8703f73ae8e37d::t_848622ebcc0278 3,11-12,19
+.sqlx/query-cb26d0878080d8e5be8eb22e6e6a16be6f189a48e837ab24a5f32305f2e8cf22.json
+  s_8703f73ae8e37d::t_d46b58bc487a6d 1-14
+.sqlx/query-ce207adbaf7cbb334edaf2cbc69f234bac4ef62e6da1948a11c7cbfb71b6dda4.json
+  s_8703f73ae8e37d::t_f67c22fa615927 1-15
+.sqlx/query-d0f10583cc302b4e42b37983e49e9ebd269f7a32a408541abd2105d0b412c8f5.json
+  s_8703f73ae8e37d::t_adc82c5fda8d1e 1-16
+.sqlx/query-d18502c2001b20d23716cf18efb48d82ea0c4d20559c20e4fd10e3a88e32bc7e.json
+  s_8703f73ae8e37d::t_1e237892d3e76d 3,8,14-15,22
+.sqlx/query-d2813a8640cf4c6773832774dd3a43ba2c5cdf6165f8af9a78768e8a230a3e5a.json
+  s_8703f73ae8e37d::t_5de31e3b708609 1-20
+.sqlx/query-d540b9abf057c600eee8f464a7ab447daba1e8c2be418b680d1d9ef640c077fa.json
+  s_8703f73ae8e37d::t_7fb474bb5c9a1b 1-17
+.sqlx/query-d64623c090ffa2eb3cd676c01c73c10aa1da96bb861327d99b35ce74b0eb978f.json
+  s_8703f73ae8e37d::t_c4db95c4c2678d 3,8,24-25,28
+.sqlx/query-d7038a10d5c3e516cacfb68f3b5c02f64adceb5dd9073ba7f901910080c384ac.json
+  s_8703f73ae8e37d::t_c4e2be9fe79b71 1-29
+.sqlx/query-d73665d943da6f108ed3bd8f704e75994033cf07cac8ea44fa8d045710f57eae.json
+  s_8703f73ae8e37d::t_3016422aec2ca2 1-15
+.sqlx/query-d8d4646ac3bdefb640c5a11d0cb6b53b1557725c866d7c51fd13bc4ad40e80ba.json
+  s_8703f73ae8e37d::t_b86aad8b83f573 1-14
+.sqlx/query-d95a652f9d2a61348c71fb8128f9f6bced32c3cd332514fb08f6f1b1b088ec42.json
+  s_8703f73ae8e37d::t_fc0bc16fa0e9c3 1-14
+.sqlx/query-ddd445486fce0bcae45101fca5a59fc28c41d81082d915565db9344a491a13a2.json
+  s_8703f73ae8e37d::t_78c20d1f8f52b4 1-14
+.sqlx/query-de6c846bd3db24ef98904be1c580b31fbc56020a0726c1ee430ebd99bc965570.json
+  s_8703f73ae8e37d::t_7cb22755747469 1-135
+.sqlx/query-e1372e7003ef11b175d529f65e5675a8faa37b06aecb6d169713e0e70fd414e1.json
+  s_8703f73ae8e37d::t_09bde65a621bfe 1-14
+.sqlx/query-e508e5035090853c776d9f7817f38d26f4741c8e9ffb1a08d36a699169614f3c.json
+  s_8703f73ae8e37d::t_4ed02c9c57a7d9 3,38-48,54,64-65,69
+.sqlx/query-e6de8995b9dda707c6d2c2fa5f538257783db13209413000a3e9000688950581.json
+  s_8703f73ae8e37d::t_50df69067b39a7 1-135
+.sqlx/query-e7ca4b2aa05108f16b41b1a5445dcb0abbf1a47ae4aac7d001deb765f9bcea2b.json
+  s_8703f73ae8e37d::t_969ec3e288bd8e 1-15
+.sqlx/query-e8706c0de871b446d41316c233871110f1166a54987473ed987740d78dc5d31b.json
+  s_8703f73ae8e37d::t_cd6eb86f70a070 1-14
+.sqlx/query-e87ab69b663d012fcb4f2fc4727d8b6e98d99d93801fb37db769ab5f6fca22d5.json
+  s_8703f73ae8e37d::t_ec696f1cf98281 1-15
+.sqlx/query-e919916a28f66bd03e3e3e37601d1d84e646d633c1197ffe148c1df7d10bc652.json
+  s_8703f73ae8e37d::t_3c87e23506df46 1-23
+.sqlx/query-ea9229d2262beedd59b10431ee8d7c316e86454774a817d486b6a46e96710a5d.json
+  s_8703f73ae8e37d::t_d85e0d5e28508a 1-14
+.sqlx/query-ecfdc274c52a83d1a3fdb65149a889727f517bfd9ea94caef4c91e0c9f1e49ad.json
+  s_8703f73ae8e37d::t_6204d7e521e438 1-16
+.sqlx/query-f13b897743a5908aacba9ec8b2e268c5ca3e2ad2de88ecce5a4cd5260f6ed7d4.json
+  s_8703f73ae8e37d::t_fe1b6aedb8e110 1-16
+.sqlx/query-f2cba12a2dd88b0957d9a3a7ae7815208bb5b4667427b55e2cecd78d35fc7f8c.json
+  s_8703f73ae8e37d::t_b4f43da167b1f3 1-59
+.sqlx/query-f348a9149e64764eb5f6eacff16028876b0ebba13c64a96b9ada041fa9e51492.json
+  s_8703f73ae8e37d::t_784d1946337a9c 1-16
+.sqlx/query-f45def37c0edf429e974231fe5bee8fb2228b41a879b3421856b12f20d0f118a.json
+  s_8703f73ae8e37d::t_b8864621901784 1-22
+.sqlx/query-f4eb148aaae33b62666d1d9e5381b8b32a1ad402bed548f4e6793bddf2e60f61.json
+  s_8703f73ae8e37d::t_2577c94af6c540 3,88-102,130-132,136
+.sqlx/query-f4fd5f8226139f69ea345f89c16cf6bfbfa52aed5ae2c18b7736c52e7ebbe1f3.json
+  s_8703f73ae8e37d::t_66bd7d7a67b400 3,10-11,16
+.sqlx/query-f52d9024376b88709ab67f0f58834dcdd618f735508dfd2400bfb76d2ba95264.json
+  s_8703f73ae8e37d::t_579e3575b686de 1-19
+.sqlx/query-f95969e69b38faeb42117c7ec3e2479d13384464751d5e9eb09107f4f7ed1d72.json
+  s_8703f73ae8e37d::t_cab0737573cb5a 1-16
+.sqlx/query-faeaa59104baa5c8b4dbe4da5fbdee2fe3f28c67915e85cda858567f97aea778.json
+  s_8703f73ae8e37d::t_85b6d054666e4a 1-14
+.sqlx/query-faed3016092df0e10a2b872d1a26332673fbdb29daa10e69a2befd783d617083.json
+  s_8703f73ae8e37d::t_eab85aecdd6c57 1-14
+.sqlx/query-fb20b2ddca0d1fe62538d882440683714b38f2b23b2d15643f91f4e2a0d0382b.json
+  s_8703f73ae8e37d::t_d4375561f50a2d 3,16,24
+.sqlx/query-fc731179bb5c7572d9118193dd72d124359cadfd56e622f3410eceb5049c4ce1.json
+  s_8703f73ae8e37d::t_e0add50ef4ccba 1-12
+.sqlx/query-fdbbc7b3c6134816f41af5d16924f438945613a214f5d150414a78c3f9a042d0.json
+  s_8703f73ae8e37d::t_e24d2c7813bef1 1-22
+CLAUDE.md
+  s_8703f73ae8e37d::t_ef7b5a49949b0f 31
+Cargo.lock
+  s_8703f73ae8e37d::t_9f0248ce18d8f8 402-418,498-535,636,639,665,673,722,797,804,813,2295,2405,13200,13202,17646,20312,20315,20321,20335,20348,20771-20799
+Cargo.toml
+  s_8703f73ae8e37d::t_51b6d94e07d80e 11-13,335
+apps/web/AGENTS.md
+  s_8703f73ae8e37d::t_a4a7edba4f2c08 356-362,885-892,899-902,1462-1464
+apps/web/docs/graphql-normalized-cache-plan.md
+  s_8703f73ae8e37d::t_422b68ac09eaf3 212-219,287-294,300-305,333-339
+apps/web/src/features/block-agent/CHANNEL_BLOCK_NOTES.md
+  s_8703f73ae8e37d::t_70f47e35e5a2c2 215-217
+apps/web/src/features/block-agent/browser-test/activity-turn.ts
+  s_8703f73ae8e37d::t_e5f6e7a78acbe3 109-111,160
+apps/web/src/features/block-agent/browser-test/session.ts
+  s_8703f73ae8e37d::t_1bfeac20520f3f 30-31,85-92
+apps/web/src/features/block-agent/browser-test/transcript.browser.e2e.ts
+  s_8703f73ae8e37d::t_24ca582e24798b 1-46
+apps/web/src/features/block-agent/browser-test/transcript.html
+  s_8703f73ae8e37d::t_b54aa87390aeb1 1-5
+apps/web/src/features/block-agent/browser-test/transcript.tsx
+  s_8703f73ae8e37d::t_fb3b007c184f98 1-100
+apps/web/src/features/block-agent/component/AgentMessage.test.tsx
+  s_8703f73ae8e37d::t_3dc243cc7c31ab 322-347
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_8703f73ae8e37d::t_f280c2e496b298 44,237-238
+apps/web/src/features/block-agent/component/Transcript.tsx
+  s_8703f73ae8e37d::t_8ae8a8b39f2b09 159-160
+apps/web/src/features/block-agent/state/tool-groups.test.ts
+  s_8703f73ae8e37d::t_0c5e99748b0bf5 195-214
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_8703f73ae8e37d::t_1d2ba0a96c65dc 18-21,69-73,78
+apps/web/src/features/channel/Channel/ThreadList.tsx
+  s_8703f73ae8e37d::t_6633e9d4696d70 110-116,141,381-385,476,478-486,535-540,693,703,712,822-826,834-861
+apps/web/src/features/channel/Channel/tests/thread-list-hold.test.tsx
+  s_8703f73ae8e37d::t_b63640da82d4fd 1-223
+apps/web/src/features/command/queries/entity-search.ts
+  s_8703f73ae8e37d::t_8fdae7f69c1eff 38-46,122-124,148-150
+apps/web/src/features/command/rank-command-search-items.test.ts
+  s_8703f73ae8e37d::t_d4f80b33c049b3 3-6,622-657
+apps/web/src/features/command/rank-command-search-items.ts
+  s_8703f73ae8e37d::t_2c8df7cd43298b 1,63-82
+apps/web/src/features/command/useCommandItems.test.tsx
+  s_8703f73ae8e37d::t_d02cc281eb98c3 32,59,96,175-237
+apps/web/src/features/command/useCommandItems.ts
+  s_8703f73ae8e37d::t_32cee5ba3e125a 27,416-418,431
+apps/web/src/features/email-compose/queued-send-status.test.tsx
+  s_8703f73ae8e37d::t_f898f45d8fe7e5 44-45
+apps/web/src/features/email-thread/views/bottom-reply-buttons.tsx
+  s_8703f73ae8e37d::t_63b72ea9551501 4,15,22-26,35-52
+apps/web/src/features/settings/Team.tsx
+  s_8703f73ae8e37d::t_d7d572266368a9 2-4,25,45,51-52,472-473,478-483,512,540-555,579-587,590
+apps/web/src/features/settings/TeamMembers.tsx
+  s_8703f73ae8e37d::t_0708c09fc9a138 4,6,8-11,42-45,51,53-62,294-313,356-368,426-439,528,541,586-599,693-704,722-726,730
+apps/web/src/features/settings/browser-test/team-agents/fixture.tsx
+  s_8703f73ae8e37d::t_ea69dc09437352 1-59
+apps/web/src/features/settings/browser-test/team-agents/index.html
+  s_8703f73ae8e37d::t_fbaef2e498499d 1
+apps/web/src/features/settings/browser-test/team-agents/playwright.config.ts
+  s_8703f73ae8e37d::t_687626510ea9f7 1-48
+apps/web/src/features/settings/browser-test/team-agents/team-agents.browser.e2e.ts
+  s_8703f73ae8e37d::t_20bae40636558b 1-308
+apps/web/src/features/settings/browser-test/team-agents/vite.config.ts
+  s_8703f73ae8e37d::t_d39f25b7e0245c 1-35
+apps/web/src/features/settings/components/agent-voice-dialog.tsx
+  s_8703f73ae8e37d::t_e97f7256ac3ce8 1-160
+apps/web/src/features/settings/components/invite-agent-form.tsx
+  s_8703f73ae8e37d::t_5493c8e20564c0 1-333
+apps/web/src/features/settings/components/team-agent-row.tsx
+  s_8703f73ae8e37d::t_d855083ee3ae31 1-75
+apps/web/src/features/settings/components/team-agent-status.tsx
+  s_8703f73ae8e37d::t_b0832b02990e6e 1-47
+apps/web/src/features/settings/components/voice-picker.tsx
+  s_8703f73ae8e37d::t_2152de4d3f51f3 1-240
+apps/web/src/features/settings/connections/integrations-view.test.tsx
+  s_8703f73ae8e37d::t_ccbe55aa64e3f4 43-44
+apps/web/src/features/settings/core/team-agent-draft.test.ts
+  s_8703f73ae8e37d::t_d0f4fcf731a402 1-88
+apps/web/src/features/settings/core/team-agent-draft.ts
+  s_8703f73ae8e37d::t_599428f4d89256 1-82
+apps/web/src/features/settings/core/voices.test.ts
+  s_8703f73ae8e37d::t_ca5da49da394f0 1-43
+apps/web/src/features/settings/core/voices.ts
+  s_8703f73ae8e37d::t_d62f4286d15aa7 1-38
+apps/web/src/features/settings/invite-to-team-dialog.test.tsx
+  s_8703f73ae8e37d::t_3bcdbc4f2eab34 2-3,5-86,103-117,121,173-278
+apps/web/src/features/settings/views/invite-agent-panel.tsx
+  s_8703f73ae8e37d::t_d4e5380bac2f11 1-84
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_8703f73ae8e37d::t_7cd5d44d5ab31c 216-225
+apps/web/src/lib/core/constant/servers.ts
+  s_8703f73ae8e37d::t_c65f79d95cb832 24,57,145,256-257
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.test.ts
+  s_8703f73ae8e37d::t_4a0374b9ad2512 1117-1118,1154-1155,1302-1303,1417-1418,1505-1506,1583-1598,1721-1722
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.tsx
+  s_8703f73ae8e37d::t_3a88e120f310ca 88,1350,1402-1406
+apps/web/src/lib/core/context/quickAccess/person-list.test.tsx
+  s_8703f73ae8e37d::t_1599564438ad37 214-216,223
+apps/web/src/lib/core/context/quickAccess/person-list.ts
+  s_8703f73ae8e37d::t_fe493990e327bd 13,82-85,131-135
+apps/web/src/lib/core/context/quickAccess/projected-list.test.ts
+  s_8703f73ae8e37d::t_48955e9ca44d5d 11,19,60-117,320-408
+apps/web/src/lib/core/context/quickAccess/projected-list.ts
+  s_8703f73ae8e37d::t_d017d49cab18dd 20,44-50,61-63,112-115,117,121-131,155-158,192-201,237-240,244,307,334
+apps/web/src/lib/core/context/quickAccess/unchanged-rows.test.ts
+  s_8703f73ae8e37d::t_55ff3dc0369c67 1-65
+apps/web/src/lib/core/context/quickAccess/unchanged-rows.ts
+  s_8703f73ae8e37d::t_a3bd0bd33c7e43 1-24
+apps/web/src/lib/core/util/compareUtils.test.ts
+  s_8703f73ae8e37d::t_5126c182a43658 1-23
+apps/web/src/lib/core/util/compareUtils.ts
+  s_8703f73ae8e37d::t_a05f0a2386838a 74,87-93
+apps/web/src/lib/core/util/safeFetch.ts
+  s_8703f73ae8e37d::t_6d4e37c69abaf6 340
+apps/web/src/lib/core/util/steady-flag.test.ts
+  s_8703f73ae8e37d::t_fecbc56b0c8e00 34,56,64-85
+apps/web/src/lib/core/util/steady-flag.ts
+  s_8703f73ae8e37d::t_c4a274d22fa9a8 5-6,19-22,25-33
+apps/web/src/lib/graphql-cache/exchange/normalized-cache-exchange.test.ts
+  s_8703f73ae8e37d::t_8c208c7a1cb47f 1123-1146
+apps/web/src/lib/graphql-cache/exchange/normalized-cache-exchange.ts
+  s_8703f73ae8e37d::t_6b5a93b46fe571 481-487,1489-1493
+apps/web/src/lib/graphql-cache/host/retirable-host.ts
+  s_8703f73ae8e37d::t_ed30bcee6581be 80
+apps/web/src/lib/graphql-cache/host/types.ts
+  s_8703f73ae8e37d::t_58df2ecef5bfcd 159-164
+apps/web/src/lib/graphql-cache/host/worker-host.test.ts
+  s_8703f73ae8e37d::t_4fd111c5fa55e0 831,843-914
+apps/web/src/lib/graphql-cache/host/worker-host.ts
+  s_8703f73ae8e37d::t_c2b55480e21d61 515-525,1113-1132,1151-1152,1154,1171-1180,1182-1189,1207,1220,1386-1387,1390-1399,1403,1492-1495,1497-1501
+apps/web/src/lib/graphql-cache/worker/cache-engine-runtime.ts
+  s_8703f73ae8e37d::t_5eedc79e868e4e 16,47,607-609,615,628,632-634
+apps/web/src/lib/graphql-cache/worker/compiled-engine.test.ts
+  s_8703f73ae8e37d::t_494660ea1e1ef1 1-70
+apps/web/src/lib/graphql-cache/worker/compiled-engine.ts
+  s_8703f73ae8e37d::t_e292819f636229 1-94
+apps/web/src/lib/graphql-cache/worker/coordinator-page-adapter.ts
+  s_8703f73ae8e37d::t_7ed47b69d63ea5 10,173,867,879,881-882,885-886,918-919
+apps/web/src/lib/graphql-cache/worker/wasm-module.ts
+  s_8703f73ae8e37d::t_5cfe7898a137fd 54,285,289-297,317-344,347-416,418-431,433-434,436-441,443-446,448-454
+apps/web/src/lib/graphql-cache/worker/worker-core.test.ts
+  s_8703f73ae8e37d::t_1e0de76d2576ad 1071-1178,2245-2253
+apps/web/src/lib/graphql-cache/worker/worker-core.ts
+  s_8703f73ae8e37d::t_0094e4bb944ba3 100-114,228-230,257-258,433,444,454,524,529-567
+apps/web/src/lib/i18n/locales/en.ts
+  s_8703f73ae8e37d::t_06c621d672c8f1 36,80
+apps/web/src/lib/i18n/locales/en/team-agents.ts
+  s_8703f73ae8e37d::t_07d80512c04fab 1-73
+apps/web/src/lib/queries/email/server-sends.test.ts
+  s_8703f73ae8e37d::t_3df8f919a86395 4,15-18,39-70,73-76,78-84,145-331
+apps/web/src/lib/queries/email/server-sends.ts
+  s_8703f73ae8e37d::t_fdc6f0567f9172 6,38-53,57-61,86-87,91,93,100-106,130,132-151,154,166
+apps/web/src/lib/queries/team-agents/keys.ts
+  s_8703f73ae8e37d::t_3dd5cc61102b6d 1-8
+apps/web/src/lib/queries/team-agents/team-agents.test.tsx
+  s_8703f73ae8e37d::t_909af84b8ed8b2 1-139
+apps/web/src/lib/queries/team-agents/team-agents.ts
+  s_8703f73ae8e37d::t_31fbf22e847f32 1-143
+apps/web/src/lib/queries/team-agents/voices.ts
+  s_8703f73ae8e37d::t_84a20c7c20a246 1-108
+apps/web/src/lib/service-clients/service-agent-harness/client.ts
+  s_8703f73ae8e37d::t_d6da0674ffd84e 42,85-94
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_8703f73ae8e37d::t_518d9ef34ffd5e 53,85,4859-4989
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/errorResponse.ts
+  s_8703f73ae8e37d::t_6cc821c9a87773 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_8703f73ae8e37d::t_9aaca6bf18cd0a 259,505
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/voice.ts
+  s_8703f73ae8e37d::t_b7e4d429a8bcdf 1-22
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_8703f73ae8e37d::t_3c17977e400231 4070-4196,6719-6729,8872-8904,9005-9008
+apps/web/src/lib/service-clients/service-auth/generated/client.ts
+  s_8703f73ae8e37d::t_51ec832729af22 10,29,119-120,6496-6880
+apps/web/src/lib/service-clients/service-auth/generated/schemas/agentVoice.ts
+  s_8703f73ae8e37d::t_4ff49a1d8d0d41 1-14
+apps/web/src/lib/service-clients/service-auth/generated/schemas/createTeamAgent.ts
+  s_8703f73ae8e37d::t_d43d80566e9b3d 1-30
+apps/web/src/lib/service-clients/service-auth/generated/schemas/createTeamAgentAvatarUrl.ts
+  s_8703f73ae8e37d::t_aed60f71150e02 1-11
+apps/web/src/lib/service-clients/service-auth/generated/schemas/createTeamAgentVoice.ts
+  s_8703f73ae8e37d::t_94338602b7f0bd 1-12
+apps/web/src/lib/service-clients/service-auth/generated/schemas/index.ts
+  s_8703f73ae8e37d::t_cc028bcb5e4d0e 13,66-68,288-292
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgent.ts
+  s_8703f73ae8e37d::t_37eaad484d7563 1-34
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgentComputerId.ts
+  s_8703f73ae8e37d::t_c81cc833351346 1-11
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgentCreatedBy.ts
+  s_8703f73ae8e37d::t_03fbf64b3e04e7 1-11
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgentStatus.ts
+  s_8703f73ae8e37d::t_b04f0973e77738 1-21
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgents.ts
+  s_8703f73ae8e37d::t_afa554218063e0 1-15
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_8703f73ae8e37d::t_bffc51b80cbd6c 5589-5995,7431-7441,8026-8066,10501-10573
+apps/web/src/lib/service-clients/service-auth/team-agents.test.ts
+  s_8703f73ae8e37d::t_2649144357ec7a 1-144
+apps/web/src/lib/service-clients/service-auth/team-agents.ts
+  s_8703f73ae8e37d::t_0e0c7054a049d0 1-110
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_8703f73ae8e37d::t_faf8c41d2ab4ce 13,24,32-34,1974,1986-1990,2006,2206-2359,2498-2567,2645-2649,2666-2670,2692,2731,2743-2747,2763,2797-2950
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/acceptSuggestionRequest.ts
+  s_8703f73ae8e37d::t_503bed4f8098f3 14-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/attachDraft.ts
+  s_8703f73ae8e37d::t_be636318744a66 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/feedCounts.ts
+  s_8703f73ae8e37d::t_0ee0eb1a3b46a7 1-33
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverview.ts
+  s_8703f73ae8e37d::t_6749fdcb8f3805 1-30
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewLastFinishedAt.ts
+  s_8703f73ae8e37d::t_2809322c943f98 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewLastOutcome.ts
+  s_8703f73ae8e37d::t_b3de32bbd36cf2 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewRegenerateAvailableAt.ts
+  s_8703f73ae8e37d::t_7ba04a2a259f0a 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewStartedAt.ts
+  s_8703f73ae8e37d::t_651283ed4ee05c 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationOverviewTrigger.ts
+  s_8703f73ae8e37d::t_695aa2ded27f4d 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationState.ts
+  s_8703f73ae8e37d::t_82d3d9d617e66e 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationTrigger.ts
+  s_8703f73ae8e37d::t_8e42b6e2033807 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_8703f73ae8e37d::t_769ea04b5e0850 44,135-141,143,145,171-174,207,226,248,292,296-298,300,302,307,309,311-313,318
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/listSuggestionsParams.ts
+  s_8703f73ae8e37d::t_0768f7f87095bc 15-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerateSuggestionsParams.ts
+  s_8703f73ae8e37d::t_4dd9a300684b1d 1-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerationCooldown.ts
+  s_8703f73ae8e37d::t_9c5ac9c2c02f68 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerationRefusal.ts
+  s_8703f73ae8e37d::t_ebe279225e6b99 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/regenerationRunning.ts
+  s_8703f73ae8e37d::t_440d145f65f634 1-16
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedState.ts
+  s_8703f73ae8e37d::t_0987f5873591dd 10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineSentencePart.ts
+  s_8703f73ae8e37d::t_af0e3f26d00afe 1-17
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineText.ts
+  s_8703f73ae8e37d::t_7632a31446b07c 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/runStateName.ts
+  s_8703f73ae8e37d::t_0046129505f124 1-24
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOf.ts
+  s_8703f73ae8e37d::t_f2f93d114c9b49 10,14,34-36,39,47-48
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOfResult.ts
+  s_8703f73ae8e37d::t_f12611b14c78c4 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionChanged.ts
+  s_8703f73ae8e37d::t_c9e5cfa563a9ae 11-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionDraft.ts
+  s_8703f73ae8e37d::t_d6b269f84af9f5 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionDraftAllOf.ts
+  s_8703f73ae8e37d::t_9caa914fad060a 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionDraftAllOfPreview.ts
+  s_8703f73ae8e37d::t_689703fd19d36a 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionFeed.ts
+  s_8703f73ae8e37d::t_ec6627c56610ae 8,10,14-15,18-24
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionFeedDone.ts
+  s_8703f73ae8e37d::t_fa259664ed58ba 1-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionGenerationStatus.ts
+  s_8703f73ae8e37d::t_3110673358e3d5 1-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKind.ts
+  s_8703f73ae8e37d::t_358ed8a945d887 10,18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFour.ts
+  s_8703f73ae8e37d::t_a181c3197a82a0 10,12,21-22,24-26
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourDraft.ts
+  s_8703f73ae8e37d::t_91083641a8a17d 8,10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourFrom.ts
+  s_8703f73ae8e37d::t_36bc0c89d43a01 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourWaitingSince.ts
+  s_8703f73ae8e37d::t_e7949253425326 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfNine.ts
+  s_8703f73ae8e37d::t_848d37e7c8f93b 8-9,14-16
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfNineKind.ts
+  s_8703f73ae8e37d::t_5de6375ebd1a70 9-10,13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfNineRoutine.ts
+  s_8703f73ae8e37d::t_07b12766e4f58a 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionRun.ts
+  s_8703f73ae8e37d::t_a658a42e11bdf7 8,15,19-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionStatus.ts
+  s_8703f73ae8e37d::t_0d1b3658a40ef1 10,12-13,16-17,20-21
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_8703f73ae8e37d::t_ba7584569d0cdf 1890,1901-1911,1916,1935-1944,2105-2233,2336-2387,2420-2553,2558,2567-2589,2602,2612,2634-2635,2637-2638,2654,2661-2669,2691-2692,2701-2702,2704,2706,2724,2727-2728,2742,2754-2763,2765-2775,2898,3248-3264,4335-4413,4425-4429,4435-4439,4674-4701,4728,5038-5052,5276-5293,5449-5462,5979-5981,6018-6021,6029-6039,6064-6067,6088,6101-6118,6121-6122,6124-6127,6129,6133,6140,6149-6160,6201-6202,6206-6209,6213-6217,6230-6240,6273,6278,6284-6292,6308-6312
+apps/web/src/lib/service-clients/service-storage/generated/schemas/teamJoinKind.ts
+  s_8703f73ae8e37d::t_2adec0f29ea6cf 18
+apps/web/src/lib/service-clients/service-storage/graphql-activity-updates.test.ts
+  s_8703f73ae8e37d::t_e3679c82172809 1,4-11,152-165
+apps/web/src/lib/service-clients/service-storage/graphql-activity-updates.ts
+  s_8703f73ae8e37d::t_7dac7bd25d05a6 1-2,12-24
+apps/web/src/lib/service-clients/service-storage/graphql-soup.test.ts
+  s_8703f73ae8e37d::t_507922f22ff07b 1236-1260
+apps/web/src/lib/service-clients/service-storage/graphql-soup.ts
+  s_8703f73ae8e37d::t_6389d01fbc3604 118,936
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_8703f73ae8e37d::t_c394bd5ca4b7aa 65707
+bun.lock
+  s_8703f73ae8e37d::t_2d14e1e8b7ac76 407-423,451-479,522-554,778-797,1048-1049,1058,1240-1251,1262,1264,1266,1268,1270,1272,1274,1276,1278,1280,1282,1284,1286,1288,1290,1292,1294,1296,1298,1300,1302,1304,1306,1308-1312,1462-1491,1494-1505,1510-1525,1528-1529,1532-1533,1550-1551,1554-1555,1562-1563,1610,1614-1619,1622-1627,1632,1636-1638,1640,1642,1808-1809,1986-1987,2170-2171,2174-2175,2362-2363,2450-2451,2494-2495,2518-2521,2540-2541,2672-2673,2706-2707,2720-2721,2758-2759,2896-2897,2906-2907,2922-2923,2926-2927,2964-2965,3040-3041,3106-3109,3152-3153,3222-3223,3300-3301,3322-3323,3344-3345,3410-3411,3662-3663,3696-3699,3736-3741,3752,3840-3841,3850-3859,3862-3863,3866,3876-3877,3892-3893,3924-3925,3948-3949,3966-3967,4010-4011,4040-4041,4066,4080-4081,4106,4180-4181,4202-4203,4290-4295,4300-4301,4348-4349,4392-4393,4516,4544,4592-4593,4654-4659,4684-4695,4710-4713,4720-4723,4726-4727,4730-4735,4740-4761,4766-4779,4790-4791,4794-4798,4800-4806,4816-4819,4836-4837,4938-4939,4966-4967,4984-4985,5006-5007,5044-5045,5082-5085,5142-5143,5176-5181,5184-5187,5302-5303,5336-5359,5434-5449,5456-5474,5476,5604-5605,5702-5749,5830-5839,5894-5895,5916-5917
+crates/agent_correlation/src/scope.rs
+  s_8703f73ae8e37d::t_b40b58463bfddb 140
+crates/agent_correlation/src/scope/test.rs
+  s_8703f73ae8e37d::t_42702f9c7b48f6 15
+crates/agent_credentials/AGENTS.md
+  s_8703f73ae8e37d::t_c9ac4400bb98e6 1-29
+crates/agent_credentials/CLAUDE.md
+  s_8703f73ae8e37d::t_c7de81f1ab0193 1
+crates/agent_credentials/Cargo.toml
+  s_8703f73ae8e37d::t_a19784e48bfa11 1-20
+crates/agent_credentials/src/api_key.rs
+  s_8703f73ae8e37d::t_bfd7ba3401b3a9 1-69
+crates/agent_credentials/src/api_key/test.rs
+  s_8703f73ae8e37d::t_a2a34a48b59845 1-21
+crates/agent_credentials/src/lib.rs
+  s_8703f73ae8e37d::t_8a42618c43026d 1-25
+crates/agent_credentials/src/repo_token.rs
+  s_8703f73ae8e37d::t_0e1cdab37c3234 1-131
+crates/agent_credentials/src/repo_token/test.rs
+  s_8703f73ae8e37d::t_2fd9c6eb1fb1df 1-36
+crates/agent_git/AGENTS.md
+  s_8703f73ae8e37d::t_8187620fa57ac1 1-113
+crates/agent_git/CLAUDE.md
+  s_8703f73ae8e37d::t_9327d43322fcde 1
+crates/agent_git/Cargo.toml
+  s_8703f73ae8e37d::t_d81c03b72c9c9a 1-53
+crates/agent_git/build.rs
+  s_8703f73ae8e37d::t_1752154166a2ee 1-84
+crates/agent_git/src/api.rs
+  s_8703f73ae8e37d::t_7027998fcf1144 1-80
+crates/agent_git/src/client.rs
+  s_8703f73ae8e37d::t_6cba06578fbbef 1-218
+crates/agent_git/src/domain.rs
+  s_8703f73ae8e37d::t_25c3aa9e036a27 1-7
+crates/agent_git/src/domain/models.rs
+  s_8703f73ae8e37d::t_ff608d4648596d 1-203
+crates/agent_git/src/domain/ports.rs
+  s_8703f73ae8e37d::t_d35d499c86e6d3 1-207
+crates/agent_git/src/domain/service.rs
+  s_8703f73ae8e37d::t_0e4403a4ab31f3 1-438
+crates/agent_git/src/domain/service/test.rs
+  s_8703f73ae8e37d::t_c64eb80de53e4f 1-1108
+crates/agent_git/src/domain/template.rs
+  s_8703f73ae8e37d::t_b71d41f7875059 1-170
+crates/agent_git/src/domain/template/test.rs
+  s_8703f73ae8e37d::t_d400c3f5581e36 1-75
+crates/agent_git/src/domain/voice.rs
+  s_8703f73ae8e37d::t_1b5e9e87fc1764 1-94
+crates/agent_git/src/domain/voice/test.rs
+  s_8703f73ae8e37d::t_c123a768ecee38 1-38
+crates/agent_git/src/inbound.rs
+  s_8703f73ae8e37d::t_5bd719f1f8d3be 1-3
+crates/agent_git/src/inbound/http.rs
+  s_8703f73ae8e37d::t_a2f20c34b921cc 1-445
+crates/agent_git/src/inbound/http/credential.rs
+  s_8703f73ae8e37d::t_ce4077d31b07b3 1-80
+crates/agent_git/src/lib.rs
+  s_8703f73ae8e37d::t_3cb2b792d3e7be 1-22
+crates/agent_git/src/outbound.rs
+  s_8703f73ae8e37d::t_314d2ba939e227 1-8
+crates/agent_git/src/outbound/bare_repo_store.rs
+  s_8703f73ae8e37d::t_d49336d94402da 1-501
+crates/agent_git/src/outbound/git_http_backend.rs
+  s_8703f73ae8e37d::t_8669ae73d75ce3 1-301
+crates/agent_git/src/outbound/git_http_backend/test.rs
+  s_8703f73ae8e37d::t_688aa17dd19a36 1-219
+crates/agent_git/src/outbound/pg_repo_repository.rs
+  s_8703f73ae8e37d::t_0a08cb5877d6ce 1-205
+crates/agent_git/src/outbound/push_rate_limiter.rs
+  s_8703f73ae8e37d::t_de5c6690c38b76 1-64
+crates/agent_git/src/outbound/repo_directories.rs
+  s_8703f73ae8e37d::t_a645a7aece3361 1-52
+crates/agent_git/src/outbound/team_admins.rs
+  s_8703f73ae8e37d::t_66f53d4833cae0 1-34
+crates/agent_git/tests/smart_http.rs
+  s_8703f73ae8e37d::t_8142e5bd9c5062 1-703
+crates/ai_billing/src/outbound/entitlement.rs
+  s_8703f73ae8e37d::t_3792755f074a3d 144-145,150-162
+crates/client/README.md
+  s_8703f73ae8e37d::t_ddbc8d2e00c333 133-137
+crates/client/cache-core/src/engine.rs
+  s_8703f73ae8e37d::t_05f9d40fd264c9 1420-1424,1595-1596
+crates/client/cache-core/src/engine/test/query_search_changes.rs
+  s_8703f73ae8e37d::t_7fad108b5d0c57 49-94
+crates/client/cache-core/src/search/changes.rs
+  s_8703f73ae8e37d::t_c99fa704371552 31-32,35-46,51,55,84-91
+crates/client/cache-core/src/search/changes/test.rs
+  s_8703f73ae8e37d::t_4ed5c7e39d89e7 184-215
+crates/coding_agent_worker/AGENTS.md
+  s_8703f73ae8e37d::t_1fe87503b9a7f8 59-61
+crates/coding_agent_worker/src/enroll.rs
+  s_8703f73ae8e37d::t_7d529059d63fbb 16,160,171,186-191,382-432,449-470
+crates/coding_agent_worker/src/enroll/test.rs
+  s_8703f73ae8e37d::t_f275435bfc5459 372-428
+crates/crm/AGENTS.md
+  s_8703f73ae8e37d::t_e515f49d6eac3d 89-96,171-176
+crates/crm/src/outbound/call_link.rs
+  s_8703f73ae8e37d::t_d0abd0500c5d57 34-40,59-61,83,87-104,112
+crates/crm/src/outbound/call_link/test.rs
+  s_8703f73ae8e37d::t_e5d684c41a46f4 285-434
+crates/crm/src/outbound/companies_repo/association.rs
+  s_8703f73ae8e37d::t_9c62cdf219d77b 53-72,75-81,83-85,87-98,101-110,117,120-123
+crates/crm/src/outbound/companies_repo/test/resolve_association.rs
+  s_8703f73ae8e37d::t_9a2a0c3d2212e3 241-308
+crates/email/AGENTS.md
+  s_8703f73ae8e37d::t_fed2d8629e9f14 201-213
+crates/email/fixtures/email_inbox_viewed_sort.sql
+  s_8703f73ae8e37d::t_63ae41dfeda482 1-76
+crates/email/src/outbound/email_pg_repo/preview_views/new_inbox.rs
+  s_8703f73ae8e37d::t_3959e14b470ed3 21,23-31
+crates/email/src/outbound/email_pg_repo/preview_views/new_inbox.sql
+  s_8703f73ae8e37d::t_d99b1555851cc7 1-305
+crates/email/src/outbound/email_pg_repo/test.rs
+  s_8703f73ae8e37d::t_cd0caa370f379c 8
+crates/email/src/outbound/email_pg_repo/test/inbox_viewed_sort.rs
+  s_8703f73ae8e37d::t_ed56f2db96f146 1-272
+crates/email_utils/AGENTS.md
+  s_8703f73ae8e37d::t_d47b3934582aa8 17-18
+crates/email_utils/src/body_parsed.rs
+  s_8703f73ae8e37d::t_936c4dca3bffb7 60-75
+crates/email_utils/src/body_parsed/test.rs
+  s_8703f73ae8e37d::t_2a35cdb107e8a8 116-125
+crates/entity_access/src/outbound/pg_access_repo/queries.rs
+  s_8703f73ae8e37d::t_cc1f2f2c36d8d0 58,69-90,100,103,105,117
+crates/feature_flags/AGENTS.md
+  s_8703f73ae8e37d::t_56ecffae30f2bf 27-30
+crates/hosted_runtimes/examples/incus_fleet_smoke.rs
+  s_8703f73ae8e37d::t_77e910d2a8751f 12-13,20-22,30,60-62,106-118,188
+crates/hosted_runtimes/src/domain.rs
+  s_8703f73ae8e37d::t_d0aa0ce1c5ecde 3
+crates/hosted_runtimes/src/domain/agent.rs
+  s_8703f73ae8e37d::t_91762d512e4b1b 1-186
+crates/hosted_runtimes/src/domain/agent/test.rs
+  s_8703f73ae8e37d::t_a05200178ecc8f 1-79
+crates/hosted_runtimes/src/domain/enrollment.rs
+  s_8703f73ae8e37d::t_2b1e6fde92f956 39-42
+crates/hosted_runtimes/src/domain/fakes.rs
+  s_8703f73ae8e37d::t_e257acd40b653b 6,115-153,287,878-899
+crates/hosted_runtimes/src/domain/image.rs
+  s_8703f73ae8e37d::t_d41718221d77ce 6,62-95
+crates/hosted_runtimes/src/domain/image/test.rs
+  s_8703f73ae8e37d::t_69b4f79477643a 30-51
+crates/hosted_runtimes/src/domain/models.rs
+  s_8703f73ae8e37d::t_0461680c030698 321-322,354-355
+crates/hosted_runtimes/src/domain/operator.rs
+  s_8703f73ae8e37d::t_084c397f909e41 63,77,100,109-118,365,705-708,728-747,855,875-884,900
+crates/hosted_runtimes/src/domain/operator/test.rs
+  s_8703f73ae8e37d::t_242e95680074d2 2,379,421,484-509
+crates/hosted_runtimes/src/domain/operator/test/agent.rs
+  s_8703f73ae8e37d::t_9fbf9e461457cb 1-82
+crates/hosted_runtimes/src/domain/service.rs
+  s_8703f73ae8e37d::t_a620a21a4885da 204-233
+crates/hosted_runtimes/src/domain/service/purchase.rs
+  s_8703f73ae8e37d::t_f598d6a2fb3f98 6,49-64,71-74,76-78,81-85,132
+crates/hosted_runtimes/src/outbound/docker_fleet.rs
+  s_8703f73ae8e37d::t_2f45736e5861ce 28,63-66,293,295,310
+crates/hosted_runtimes/src/outbound/docker_fleet/test.rs
+  s_8703f73ae8e37d::t_74998a7cbacf76 10-13
+crates/hosted_runtimes/src/outbound/docker_fleet/test/enrollment.rs
+  s_8703f73ae8e37d::t_23852619e0e2de 56,76-79,184-187,205-316
+crates/hosted_runtimes/src/outbound/incus_fleet.rs
+  s_8703f73ae8e37d::t_a3d465dac07fd6 2-3,32,65-67,144-161,174,178,358-360,383,653,660,664,683
+crates/hosted_runtimes/src/outbound/incus_fleet/test.rs
+  s_8703f73ae8e37d::t_34ea4ed62213d7 44-84,102,148,207-217,257
+crates/hosted_runtimes/src/outbound/pg.rs
+  s_8703f73ae8e37d::t_51d99562d88bca 24,218,271-272,292,342,358,377
+crates/hosted_runtimes/src/outbound/pg/agents.rs
+  s_8703f73ae8e37d::t_1b68badd4e8e9a 1-81
+crates/hosted_runtimes/src/outbound/pg/reservations.rs
+  s_8703f73ae8e37d::t_0e2a1e39cc8f6a 41,124-125,145,167
+crates/hosted_runtimes/src/outbound/pg/row.rs
+  s_8703f73ae8e37d::t_dce6f7903c712d 62,170-174
+crates/hosted_runtimes/src/outbound/pg/test.rs
+  s_8703f73ae8e37d::t_a7ab0552a39b02 5,77
+crates/hosted_runtimes/src/outbound/pg/test/agents.rs
+  s_8703f73ae8e37d::t_0242dd90b2bec6 1-112
+crates/macro_db_client/migrations/20261110011716_delete_suggestions_with_their_kind_rows.sql
+  s_8703f73ae8e37d::t_12942ceb33c6fc 5-6
+crates/macro_db_client/migrations/20261112203532_email_user_history_link_viewed_index.down.sql
+  s_8703f73ae8e37d::t_a1eca31b236050 1-2
+crates/macro_db_client/migrations/20261112203532_email_user_history_link_viewed_index.up.sql
+  s_8703f73ae8e37d::t_e4c4ce91c2465b 1-15
+crates/macro_db_client/migrations/20261112203545_email_threads_inbox_id_index.down.sql
+  s_8703f73ae8e37d::t_3e386a9116b661 1-2
+crates/macro_db_client/migrations/20261112203545_email_threads_inbox_id_index.up.sql
+  s_8703f73ae8e37d::t_99b5aa626555f3 1-14
+crates/macro_db_client/migrations/20261113000000_agent_teammates.sql
+  s_8703f73ae8e37d::t_9390db1aacb07c 1-64
+crates/macro_db_client/migrations/20261113000001_agent_repo_push_budget.sql
+  s_8703f73ae8e37d::t_9948be555e4ffd 1-5
+crates/macro_db_client/migrations/20261113000002_livekit_call_pricing.sql
+  s_8703f73ae8e37d::t_c07705418d172f 1-10
+crates/macro_db_client/migrations/20261113042516_routine_suggestion_state.sql
+  s_8703f73ae8e37d::t_528bd62abb28a1 1-25
+crates/macro_db_client/migrations/20261113042517_backfill_routine_suggestion_state.sql
+  s_8703f73ae8e37d::t_bf8e518290727e 1-61
+crates/macro_db_client/migrations/20261113042518_routine_suggestion_open_catalog_key_concurrently.sql
+  s_8703f73ae8e37d::t_7be90d360a025f 1-20
+crates/macro_db_client/migrations/20261113043329_harden_suggestion_generation.down.sql
+  s_8703f73ae8e37d::t_a419f18a064cb6 1-37
+crates/macro_db_client/migrations/20261113043329_harden_suggestion_generation.up.sql
+  s_8703f73ae8e37d::t_bab0e0957e0c35 1-69
+crates/macro_db_client/migrations/20261113044136_suggestion_run_state.down.sql
+  s_8703f73ae8e37d::t_ce6f8dab16dd37 1-18
+crates/macro_db_client/migrations/20261113044136_suggestion_run_state.up.sql
+  s_8703f73ae8e37d::t_b0089ee55a42ef 1-42
+crates/macro_db_client/migrations/20261113060906_suggestion_feed_view.down.sql
+  s_8703f73ae8e37d::t_3b7cb5f5c94802 1-3
+crates/macro_db_client/migrations/20261113060906_suggestion_feed_view.up.sql
+  s_8703f73ae8e37d::t_0e427df758621a 1-8
+crates/macro_db_client/migrations/20261113062043_suggestion_reply_facts.down.sql
+  s_8703f73ae8e37d::t_4c5f1e43f993b7 1-6
+crates/macro_db_client/migrations/20261113062043_suggestion_reply_facts.up.sql
+  s_8703f73ae8e37d::t_a417794cc349af 1-12
+crates/macro_db_client/migrations/20261113095436_validate_routine_suggestion_state.sql
+  s_8703f73ae8e37d::t_4e2f5104cdfaa2 1-6
+crates/macro_db_client/src/item_access/get_accessible_items.rs
+  s_8703f73ae8e37d::t_212fd0a2e0d038 11,23-46,56,61,76
+crates/macro_service_urls/src/lib.rs
+  s_8703f73ae8e37d::t_7172a9f7cdc47b 566-574,654-661
+crates/opensearch_client/AGENTS.md
+  s_8703f73ae8e37d::t_c26c026830ffca 67-70
+crates/opensearch_client/src/search/agent_sessions.rs
+  s_8703f73ae8e37d::t_f11e2d02f5cc8c 45-48,91-92
+crates/opensearch_client/src/search/agent_sessions/test.rs
+  s_8703f73ae8e37d::t_c0f25b8fe302f8 51-85
+crates/opensearch_query_builder/src/query/has_child.rs
+  s_8703f73ae8e37d::t_60ed9c74ee1380 8-10,52-55,65,88-97,104-109,132-138
+crates/opensearch_query_builder/src/query/has_child/test.rs
+  s_8703f73ae8e37d::t_7bc9e2d6cd29e0 1-35
+crates/routine_program/AGENTS.md
+  s_8703f73ae8e37d::t_0af03625e48968 26-29
+crates/routine_program/Cargo.toml
+  s_8703f73ae8e37d::t_6f4ae14b321b6d 9
+crates/routine_program/src/knob.rs
+  s_8703f73ae8e37d::t_e5d2daeafb1860 6-14,111-121,220-255,258-298
+crates/routine_program/src/knob/test.rs
+  s_8703f73ae8e37d::t_c0880dadf2d4e8 35-91
+crates/routine_program/src/lib.rs
+  s_8703f73ae8e37d::t_edc5adb803f5f3 24-27
+crates/scheduled_action/AGENTS.md
+  s_8703f73ae8e37d::t_ab32a8dda7a6e9 127,131-133,141-166,174-177,180,235-236
+crates/scheduled_action/src/domain/event_trigger.rs
+  s_8703f73ae8e37d::t_92a7d2762046b7 39
+crates/scheduled_action/src/domain/event_trigger/describe.rs
+  s_8703f73ae8e37d::t_fc27ac8db9eb55 1-256
+crates/scheduled_action/src/domain/event_trigger/describe/test.rs
+  s_8703f73ae8e37d::t_5f0116447eb3b4 1-202
+crates/scheduled_action/src/domain/suggestions.rs
+  s_8703f73ae8e37d::t_291e2d926801a6 21-24,30-31,44,48,55,257-258,261,337-347,451-473,531,544,546,588-598,622,624-627,762-765,777-780,800
+crates/scheduled_action/src/domain/suggestions/model.rs
+  s_8703f73ae8e37d::t_3fd037b4cc2390 10,219,222,228,230,233-240,252,281
+crates/scheduled_action/src/domain/suggestions/ports.rs
+  s_8703f73ae8e37d::t_29c9a8f05071dd 13,19-20,32-39,49-53,77-81,86,100-107,164-177,243-246
+crates/scheduled_action/src/domain/suggestions/prompt.md
+  s_8703f73ae8e37d::t_722487da8e6c7b 18
+crates/scheduled_action/src/domain/suggestions/prompt.rs
+  s_8703f73ae8e37d::t_782d2c7890e2da 51-65,76-77,79-85,89
+crates/scheduled_action/src/domain/suggestions/prompt/test.rs
+  s_8703f73ae8e37d::t_b84d2a72e6bb76 62-85
+crates/scheduled_action/src/domain/suggestions/state.rs
+  s_8703f73ae8e37d::t_f47eede89bccf0 1-98
+crates/scheduled_action/src/domain/suggestions/state/test.rs
+  s_8703f73ae8e37d::t_c0ee037627ab69 1-111
+crates/scheduled_action/src/domain/suggestions/test.rs
+  s_8703f73ae8e37d::t_497ea781a662ec 10,28-53,73-93,101,124,126-136,147-148,159-176,215-218,547,577,647,860,899,940-1029
+crates/scheduled_action/src/domain/suggestions/text.rs
+  s_8703f73ae8e37d::t_3b0144f64e9068 1-50
+crates/scheduled_action/src/domain/suggestions/text/test.rs
+  s_8703f73ae8e37d::t_52f42d9343f580 1-106
+crates/scheduled_action/src/inbound/suggestion_router/test.rs
+  s_8703f73ae8e37d::t_18e103a2b0365d 66-75
+crates/scheduled_action/src/outbound/pg_scheduled_action_repo.rs
+  s_8703f73ae8e37d::t_aa3fb22edaa7c9 263-264,266
+crates/scheduled_action/src/outbound/pg_suggestion_repo.rs
+  s_8703f73ae8e37d::t_7670c62753a3fb 1-2,9,11-12,15-17,22-25,36-118,205-232,235-236,249-253,311-312,314-315,318-341,343-345,353,358,364,390,408,410-411,413-415,417,419,443-460
+crates/scheduled_action/src/outbound/pg_suggestion_repo/test.rs
+  s_8703f73ae8e37d::t_6fe241342a364c 3,131,184-193,195,212-219,251,267,353-816
+crates/scheduled_action/src/swagger.rs
+  s_8703f73ae8e37d::t_ec738aadbfe058 101
+crates/single_flight/AGENTS.md
+  s_8703f73ae8e37d::t_660a50f374cbd8 21
+crates/soup_filter_cache_adapter/AGENTS.md
+  s_8703f73ae8e37d::t_aab1ff4de7fe7b 69-73
+crates/soup_filter_cache_adapter/src/lib.rs
+  s_8703f73ae8e37d::t_3a653bbab677bc 7-8,33,156
+crates/soup_filter_cache_adapter/src/mail.rs
+  s_8703f73ae8e37d::t_29b724d362f5db 3,248,376
+crates/soup_filter_cache_adapter/src/notifications.rs
+  s_8703f73ae8e37d::t_da8223e336ce7e 4,316
+crates/soup_filter_cache_adapter/src/parsed_document.rs
+  s_8703f73ae8e37d::t_a65dabe839d404 1-39
+crates/soup_filter_cache_adapter/src/parsed_document/test.rs
+  s_8703f73ae8e37d::t_a13b1814664501 1-26
+crates/soup_filter_cache_adapter/src/properties/prepare.rs
+  s_8703f73ae8e37d::t_393f971f60ddcb 2,4,220,341
+crates/suggestion_generation/AGENTS.md
+  s_8703f73ae8e37d::t_064e76609e0627 6-9,13-21,24-25,28-29,35-62,65-71,81-105,109,125-126,130-138,140-141
+crates/suggestion_generation/src/domain.rs
+  s_8703f73ae8e37d::t_0925b1c9ef37bd 4-5,8,11
+crates/suggestion_generation/src/domain/cadence.rs
+  s_8703f73ae8e37d::t_57fd12bfe47eff 1-37
+crates/suggestion_generation/src/domain/cadence/test.rs
+  s_8703f73ae8e37d::t_8723b485101299 1-40
+crates/suggestion_generation/src/domain/generation.rs
+  s_8703f73ae8e37d::t_9d35ebd80e2a79 1-315
+crates/suggestion_generation/src/domain/generation/test.rs
+  s_8703f73ae8e37d::t_6271a0efd5d81e 1-295
+crates/suggestion_generation/src/domain/model.rs
+  s_8703f73ae8e37d::t_7ba7a784bf0f61 9,12-14,103,112-153,175-207,213,216-224
+crates/suggestion_generation/src/domain/nightly.rs
+  s_8703f73ae8e37d::t_f7a364f1d9fd65 1-141
+crates/suggestion_generation/src/domain/nightly/test.rs
+  s_8703f73ae8e37d::t_b6729964c40dd0 1-184
+crates/suggestion_generation/src/domain/ports.rs
+  s_8703f73ae8e37d::t_ade4b45fa34818 1,5,12-15,18-20,25-27,31-46,48,50-52,56-65,82-90,92-115,118,122-124,127,129-132,135-147,184,190-195,205-213
+crates/suggestion_generation/src/domain/service.rs
+  s_8703f73ae8e37d::t_db787133a3d5e4 4-6,14-18,20,22,30-31,33,45,50-53,55,58-60,67-68,72-73,75-85,97,121-123,131,139-152,155,157-206,237,263-285,304-364,367,369,373,378-387,393-413,417,419,429-430,433-435,437-450,452-469,485-493,503,507-508,511,514,519-520,522-523,529-530,537-539,541-546,548-565,570-576,580-581,585,588-618,620-624,628-632,635-673,677,679,683-688,699,742-743,746-749,751-770,772-774,776,778-812,816-818,821,824,826-833,836,844-845,850-869,875,878-879,881,883,896-897,906,908,913-915,917-919,922,925-927,929-932,934-937,948,959-961,970,974-976,984-986,997-999,1002,1023-1029,1031-1038,1041,1043,1048-1051,1056-1082,1088-1114,1119-1120,1155,1157-1162,1174-1189,1191-1206,1208-1217,1219-1237
+crates/suggestion_generation/src/domain/service/test.rs
+  s_8703f73ae8e37d::t_1d5faa77b0b360 3,6-7,9,17-18,22-37,40,43-44,46-49,51-80,84-94,96,98-100,103-118,126,150-158,167,169-181,184-188,203-208,213-219,227,240-250,254,262,272,276,285,289-297,303,305,307-315,321,325,328-334,337-343,350-351,359,368,378,388,390-436,439-448,450-451,454-456,458-467,470-492,494-580,583-589,594,596,598,600-613,615-622,624-625,627-637,640,643-697,700,706-708,711,713-728,732-814,816-833,837,839-841,843-852,878-880,883-901,903,905-922,924,926-940,944-945,948-950,954-956,961-962,964,967-970,972-984,988-990,993-994,996,998-999,1003-1011,1018-1024,1029-1030,1032,1036-1039,1041,1054-1063,1065-1070,1074-1118,1121,1123-1124,1139-1147,1149,1158-1160,1164,1180-1185,1187-1228,1232,1234-1235,1238,1240,1243-1262,1265-1266,1268-1273,1277-1281,1286-1345,1347,1349-1352,1354-1356,1359-1424,1426-1494,1497-1545,1548-1553,1555-1556,1558-1559,1562,1565-1568,1571-1596,1598-1649,1652-1815,1817-1874,1876-1895,1899-1927,1944-1946,1948,1954,1960
+crates/suggestion_generation/src/domain/session.rs
+  s_8703f73ae8e37d::t_b5736872b969ec 1-240
+crates/suggestion_generation/src/domain/session/test.rs
+  s_8703f73ae8e37d::t_ddef085250dcc1 1-144
+crates/suggestion_generation/src/inbound.rs
+  s_8703f73ae8e37d::t_781fafce749ba8 1
+crates/suggestion_generation/src/inbound/router.rs
+  s_8703f73ae8e37d::t_057152c091cbf9 1-3,10,21-25,39-51,90,100-101,129-144,146,198-216,265-330
+crates/suggestion_generation/src/inbound/router/test.rs
+  s_8703f73ae8e37d::t_6349ed0cafa93a 45-56,58-68,76,83-106,112,161,185-214,216-217,220-340
+crates/suggestion_generation/src/outbound/pg_generation_repo.rs
+  s_8703f73ae8e37d::t_8c5f40db5cecd1 4-9,15,18,22-26,28,41,58-109,115,119-132,136,138-144,146-148,150-152,155-156,158-164,166,169,172,175,177-196,199,202-228,230-238,253-254,262,269-308,310-313,316-346,348-358,361,364,368-376,378,385-387,391-393,399-457,465-466,474,522,527,529,532-533,535,546,552-597,606,609-611,613,634-659,664-669,671,678
+crates/suggestion_generation/src/outbound/pg_generation_repo/test.rs
+  s_8703f73ae8e37d::t_f0cb7e8efe6e97 1,10,32-35,37-123,126-131,134-170,172,174,176-192,194-195,197-272,274-275,277-298,300-305,307-314,316-329,331-334,336-372,374-375,377-388,392-396,398-431,433-446,448-458,460-461,464-466,468,470,472-597,600-631,633,637,639,641-642,651-700,703-726,728-729,731,734,738-740,742,744-798,800-804,806,808-811,813-815,818-844,847-873,875,878-884,887-908,911-912,914,917-920,923-924,927-929,934,936-937,940-941,943,945-947,950,953-954,956,958-965,968-969,971-975,978-986,989-990,992-1004,1006-1057,1059-1090,1092-1094,1119,1122,1126,1131,1141-1142,1158-1159,1161-1166,1176
+crates/suggestion_generation/src/swagger.rs
+  s_8703f73ae8e37d::t_174922be77d07e 1-2,6,9-24
+crates/suggestions/AGENTS.md
+  s_8703f73ae8e37d::t_5c6ab1058073e7 21-68,94-105,117-118,122-124,138-152,156,160-161,164-207,209-217
+crates/suggestions/Cargo.toml
+  s_8703f73ae8e37d::t_daacdc5e1755c5 9,17,46,48,51
+crates/suggestions/src/domain.rs
+  s_8703f73ae8e37d::t_6b8e599e737a3f 5,10
+crates/suggestions/src/domain/check.rs
+  s_8703f73ae8e37d::t_3cc918bc5c9101 14,178-201
+crates/suggestions/src/domain/lifecycle.rs
+  s_8703f73ae8e37d::t_b134cecc977b40 1-114
+crates/suggestions/src/domain/lifecycle/test.rs
+  s_8703f73ae8e37d::t_41f930fa1c2cc8 1-107
+crates/suggestions/src/domain/model.rs
+  s_8703f73ae8e37d::t_d7a4efbf4781a3 10-14,47-51,54-58,64-102,105-106,109-116,118,120-141,144-150,154-169,208,223-228,254-261,269-272,276-346,394,519-520,524,526-564,660-673,726-729,750-762,782-784,786-796,799,805-807,851-864,934-939,942-950
+crates/suggestions/src/domain/model/test.rs
+  s_8703f73ae8e37d::t_24a6dcaf3b809c 1-233
+crates/suggestions/src/domain/ports.rs
+  s_8703f73ae8e37d::t_ea652d330d9617 12-16,19,43-44,59-72,105-110,115,118-119,121-122,124-126,128,132-135,138-140,142-143,146-157,159,176-177,191-193,204-226,248,284-285,289-325,334-335,338-339,344-348,366,374-383,402-407,410-412,415-420,424,426,429-442,446,451,455-465,473-476,515-524,535-590
+crates/suggestions/src/domain/prompt.md
+  s_8703f73ae8e37d::t_c5b2f05d927390 3,41-42,44,49,89,121-133
+crates/suggestions/src/domain/prompt.rs
+  s_8703f73ae8e37d::t_27cfdf05a42e0c 46-48,85-89
+crates/suggestions/src/domain/prompt/test.rs
+  s_8703f73ae8e37d::t_cc316e9f1edf5d 40-69
+crates/suggestions/src/domain/resolution/test.rs
+  s_8703f73ae8e37d::t_4eaaa3a0bfb47d 96
+crates/suggestions/src/domain/run.rs
+  s_8703f73ae8e37d::t_7ea96438b232bb 1-485
+crates/suggestions/src/domain/run/test.rs
+  s_8703f73ae8e37d::t_0a452b73f945eb 1-568
+crates/suggestions/src/domain/service.rs
+  s_8703f73ae8e37d::t_0e1ab0d7778332 1-2,10,13,15,18,22,24-28,31-32,35,37-38,40,52-54,58-68,79-81,84,88,90,96-99,108,112,116,120,124,130,136,140-141,167-177,180-215,218-224,226-235,237,281-283,288-306,351-380,440-483,502-548,563,571-578,582,586-587,591-593,598,600,603,605,608-615,618-621,627-628,630-675,688,695-698,702,707,714-720,729,736,749,754-755,765,774-776,781,785,798,817,827,832-867,978,987,995-1005,1060-1079,1081,1197,1207,1211-1221,1233,1309,1323-1437
+crates/suggestions/src/domain/service/recent.rs
+  s_8703f73ae8e37d::t_e92108da08640f 1-51
+crates/suggestions/src/domain/service/recent/test.rs
+  s_8703f73ae8e37d::t_2f3d0ee1d0668e 1-46
+crates/suggestions/src/domain/service/runs.rs
+  s_8703f73ae8e37d::t_8defce6b43bbb5 1-485
+crates/suggestions/src/domain/service/test.rs
+  s_8703f73ae8e37d::t_15979048f70e48 11-15,18-20,23,27-29,31,33,36-40,42,45-47,56-114,137,152-163,186-188,190-195,198,204,207-223,226-227,229-230,232-233,235,239,254-255,257,262,266,268-269,271-272,274,304,325-341,344,357,369,405-407,423-427,476-481,484,491,555-561,590,628,633,716,869-873,892-896,904-908,913-1055,1072-1076,1078-1080,1083-1085,1091-1097,1099,1102-1110,1112-1127,1131,1133,1136-1145,1149-1150,1153,1158-1163,1166-1173,1176,1178-1184,1187,1191-1195,1197,1201-1231,1233-1237,1239-1241,1244,1248-1249,1251-1279,1281-1304,1306-1313,1315-1317,1321-1339,1342-1351,1356,1358-1359,1365-1366,1368-1374,1378-1382,1386-1387,1389-1390,1393-1397,1399-1416,1419-1454,1456-1478,1482-1488,1492-1493,1495-1500,1503-1580,1584-1586,1590-1591,1593-1597,1602-1670,1674-1689,1693,1697-1705,1709-1736,1777-1781,1791,1799-1800,1802-1803,1805-1845,1850,1852-1857,1863-1892,1894-1896,1898-1910,1913-1914,1916-1917,1920,1924-1958,1960,1963-1998,2000-2002,2007-2022,2024-2066,2069-2077,2079-2093
+crates/suggestions/src/domain/service/test/runs.rs
+  s_8703f73ae8e37d::t_1b7ed254155b2f 1-1349
+crates/suggestions/src/inbound.rs
+  s_8703f73ae8e37d::t_3c699aa68cba13 1-2,6
+crates/suggestions/src/inbound/router.rs
+  s_8703f73ae8e37d::t_862b4acbd6eabd 1-2,10,14-15,22-23,27-29,74-77,86-89,98-101,129-133,135-137,160-161,175-176,180-188,190-194,197,206-210,220,222,227,231,238,242-247,252-283,293,295-296,301-305,318,321,325,339,344,348-383,390,393,535-572
+crates/suggestions/src/inbound/router/test.rs
+  s_8703f73ae8e37d::t_951146684b7dca 1-480
+crates/suggestions/src/inbound/run_consumer.rs
+  s_8703f73ae8e37d::t_8f738247be653f 1-193
+crates/suggestions/src/inbound/run_consumer/test.rs
+  s_8703f73ae8e37d::t_afa84c2a221357 1-322
+crates/suggestions/src/outbound.rs
+  s_8703f73ae8e37d::t_33472ddb739618 1,3,5
+crates/suggestions/src/outbound/email_drafts.rs
+  s_8703f73ae8e37d::t_9fa8f2463280aa 1-82
+crates/suggestions/src/outbound/email_drafts/test.rs
+  s_8703f73ae8e37d::t_2b98f12dedc0a4 1-161
+crates/suggestions/src/outbound/pg_suggestion_repo.rs
+  s_8703f73ae8e37d::t_b734abc6bbf629 13,15-17,20,66-68,102-103,128-129,156-157,177-178,202-212,232-243,247-248,261-262,277-282,287,309,312,316-319,341-343,358-360,364-422,436-438,444-448,545-573,624,628-629,631-633,635-636,641-642,651,653-656,663-666,674-687,689-690,694-700,704-727,730-736,738-745,747,749,752,754-755,757,764,766-768,770,773-783,786-813,815-818,820,822-825,827-828,830-832,896,898-899,902-903,934-953,986-995,1039-1041,1046-1090,1119-1143,1207,1214,1219,1221-1233,1241
+crates/suggestions/src/outbound/pg_suggestion_repo/test.rs
+  s_8703f73ae8e37d::t_84ec63ee5ff6d4 6-8,56,333-347,350-360,362-363,368-387,389-391,394-399,401-408,410,413-426,428-429,432-445,448
+crates/suggestions/src/outbound/pg_suggestion_repo/test/lifecycle.rs
+  s_8703f73ae8e37d::t_9cbc9d826eeb7e 1-464
+crates/suggestions/src/outbound/pg_suggestion_repo/test/runs.rs
+  s_8703f73ae8e37d::t_986b7bfa774746 1-372
+crates/suggestions/src/outbound/reply_waits.rs
+  s_8703f73ae8e37d::t_d395cc0ac545dd 1-127
+crates/suggestions/src/outbound/reply_waits/test.rs
+  s_8703f73ae8e37d::t_182b8941008b1f 1-211
+crates/suggestions/src/swagger.rs
+  s_8703f73ae8e37d::t_bb7a6f6888eb8f 11,14,19,26-28,34-35,42
+crates/suggestions_db_utils/AGENTS.md
+  s_8703f73ae8e37d::t_649bb88784d414 26-29
+crates/suggestions_db_utils/src/lib.rs
+  s_8703f73ae8e37d::t_a302d76ac65076 194-198,200-202,204-206,208-212,215-216,219-221,223,225,236
+crates/suggestions_db_utils/src/test.rs
+  s_8703f73ae8e37d::t_cfdb363a3e7e50 65-66,68,77-82,84-85,87-88,90-91,93-95,97-98,105,126,128,134,137-141,143-161
+crates/team_agents/AGENTS.md
+  s_8703f73ae8e37d::t_c1c727781f1cbc 1-75
+crates/team_agents/CLAUDE.md
+  s_8703f73ae8e37d::t_6fb2a22af43ff5 1
+crates/team_agents/Cargo.toml
+  s_8703f73ae8e37d::t_85515adff72e1f 1-53
+crates/team_agents/src/domain.rs
+  s_8703f73ae8e37d::t_c740a1f71cc23f 1-7
+crates/team_agents/src/domain/admission.rs
+  s_8703f73ae8e37d::t_f5b4d2be71757d 1-205
+crates/team_agents/src/domain/admission/test.rs
+  s_8703f73ae8e37d::t_5e19a17bded009 1-273
+crates/team_agents/src/domain/models.rs
+  s_8703f73ae8e37d::t_fec4248ba8b71f 1-265
+crates/team_agents/src/domain/ports.rs
+  s_8703f73ae8e37d::t_c73ea5bc3afa96 1-239
+crates/team_agents/src/domain/service.rs
+  s_8703f73ae8e37d::t_53fdce40edc686 1-609
+crates/team_agents/src/domain/service/test.rs
+  s_8703f73ae8e37d::t_a45dca3e0360bb 1-666
+crates/team_agents/src/domain/voice.rs
+  s_8703f73ae8e37d::t_76d5a6961e7085 1-110
+crates/team_agents/src/domain/voice/test.rs
+  s_8703f73ae8e37d::t_e7e959da53089b 1-110
+crates/team_agents/src/inbound.rs
+  s_8703f73ae8e37d::t_8e95e4f4fb6239 1-3
+crates/team_agents/src/inbound/axum_router.rs
+  s_8703f73ae8e37d::t_1cd677ebf45214 1-403
+crates/team_agents/src/lib.rs
+  s_8703f73ae8e37d::t_00f258be9a9177 1-21
+crates/team_agents/src/outbound.rs
+  s_8703f73ae8e37d::t_7bdce940ef2027 1-7
+crates/team_agents/src/outbound/agent_api_keys.rs
+  s_8703f73ae8e37d::t_22d734b9d3f05b 1-56
+crates/team_agents/src/outbound/agent_git_repos.rs
+  s_8703f73ae8e37d::t_590d3c341bf70a 1-154
+crates/team_agents/src/outbound/agent_git_repos/test.rs
+  s_8703f73ae8e37d::t_3b9ecf6b2ee5e0 1-32
+crates/team_agents/src/outbound/hosted_runtimes_computers.rs
+  s_8703f73ae8e37d::t_88acc54f80e427 1-181
+crates/team_agents/src/outbound/hosted_runtimes_computers/test.rs
+  s_8703f73ae8e37d::t_ab527c5d56869d 1-68
+crates/team_agents/src/outbound/pg_team_agents_repo.rs
+  s_8703f73ae8e37d::t_78ac7d97e1ef70 1-271
+crates/team_agents/src/outbound/pg_team_agents_repo/test.rs
+  s_8703f73ae8e37d::t_db4d6f65b56341 1-237
+crates/team_agents/src/outbound/team_membership.rs
+  s_8703f73ae8e37d::t_9a0e24afddeaad 1-59
+crates/teams/README.md
+  s_8703f73ae8e37d::t_e2b2cb6047a9a6 24,60-62,75,82
+crates/teams/src/domain/events.rs
+  s_8703f73ae8e37d::t_916d561fe65893 152-156
+crates/teams/src/domain/events/public.rs
+  s_215e3dd2aaef2c::t_9ab3384829eb82 195-196,205
+crates/teams/src/domain/model/error.rs
+  s_8703f73ae8e37d::t_f2f3dd3217944d 80-83,105-107,178-180,278-280
+crates/teams/src/domain/team_repo.rs
+  s_8703f73ae8e37d::t_018f463bc8a9d0 24-31,185-186,190,351-352,357,630-657
+crates/teams/src/domain/team_service.rs
+  s_8703f73ae8e37d::t_f3cdfb03f33ef2 99-107,339,348-365,371,378-379,470,808,839,968-974,1046,1080,1106,1133,1772-1780,1784-1801,2315-2321,2768-2835
+crates/teams/src/domain/team_service/invite_link.rs
+  s_8703f73ae8e37d::t_cd9628c5a8c931 11,194-199
+crates/teams/src/domain/team_service/test.rs
+  s_8703f73ae8e37d::t_dc5ac6fd5ef09c 74,134-139,232-234,287-295,657,660-663,951,954
+crates/teams/src/domain/team_service/test/team_agent.rs
+  s_8703f73ae8e37d::t_0e7ba450e7884c 1-604
+crates/teams/src/inbound/axum_router.rs
+  s_8703f73ae8e37d::t_0158fa65960ac6 415-421,457-462
+crates/teams/src/inbound/axum_router/invite_link.rs
+  s_8703f73ae8e37d::t_68e4a2bc66b2c7 98-104
+crates/teams/src/inbound/axum_router/test.rs
+  s_8703f73ae8e37d::t_62f47b639796a1 526-549
+crates/teams/src/outbound/team_repo.rs
+  s_8703f73ae8e37d::t_ab5ca31d32432e 223-243,1067,1071,1073-1074,1077-1081,1783,1789-1790,1795
+crates/teams/src/outbound/team_repo/test.rs
+  s_8703f73ae8e37d::t_1c081156e9fd5c 1247,1252,1870,1877,1889-1891,1900-1954
+docker/Dockerfile
+  s_8703f73ae8e37d::t_e9ea4b11ccc871 42-49
+docker/Dockerfile.dev
+  s_8703f73ae8e37d::t_502f7c0a6068ba 49-50,52
+docker/Dockerfile.prebuilt
+  s_8703f73ae8e37d::t_285080e4caa65c 18-25
+docker/Dockerfile.runtime
+  s_8703f73ae8e37d::t_0d65243f929967 14-15,17
+docker/docker-compose.yml
+  s_8703f73ae8e37d::t_5642fb6c74a644 339-341,744-745
+docs/agent-guide/ai-chat.md
+  s_8703f73ae8e37d::t_40c936d0687e7f 156-161,1882-1883
+docs/agent-guide/calls.md
+  s_8703f73ae8e37d::t_34cb098d3dfd24 852-862
+docs/agent-guide/email.md
+  s_8703f73ae8e37d::t_b17f281af6c89e 781-782,1233-1238
+docs/agent-guide/settings.md
+  s_8703f73ae8e37d::t_812898deec7d75 208,233-261
+docs/architecture/email.md
+  s_8703f73ae8e37d::t_853920121613f3 697-702
+docs/architecture/macro-computers.md
+  s_8703f73ae8e37d::t_7b15e38b27b600 59,269-270,308,324-330,382-395
+docs/design/agent-teammates.md
+  s_8703f73ae8e37d::t_a932502bc2c64b 1-148
+docs/design/crm-contact-creation.md
+  s_8703f73ae8e37d::t_4fd9da477ca5cd 35,37-39,63
+docs/development/running-locally.md
+  s_8703f73ae8e37d::t_bf62b3e25b5355 665,668-674,758-759,844
+docs/runbooks/routine-suggestions.md
+  s_8703f73ae8e37d::t_9ee1b75c69b716 7-9,11-13,43-46
+infra/packages/shared/src/gateway_priorities.ts
+  s_8703f73ae8e37d::t_6b3b5290a75325 26,59
+infra/stacks/agent-harness-service/agent_harness_service.ts
+  s_8703f73ae8e37d::t_34ebcd558c1422 34-37,40-42,113-148,254,274-312,402,513-525,544-550,596-597,599,743-828
+infra/stacks/monitoring/monitors/routine-suggestions.ts
+  s_8703f73ae8e37d::t_79302a1f85ca6f 2,12
+nix-support/node_modules-hashes.json
+  s_8703f73ae8e37d::t_e167b5ad66a341 3-4
+nix-support/node_modules.nix
+  s_8703f73ae8e37d::t_5f3253ad4c1c7b 82-88
+nix/cloud-storage.nix
+  s_8703f73ae8e37d::t_301346145bf6c7 82-93,103,199-204,1162-1170
+nix/macro-box/AGENTS.md
+  s_8703f73ae8e37d::t_d22035db0e0784 33-43,57-61,65-67,95-155,269-290,294-296
+nix/macro-box/_agent-runtime.nix
+  s_8703f73ae8e37d::t_a894d697a23ee5 1-102
+nix/macro-box/_agent.nix
+  s_8703f73ae8e37d::t_c073bead637069 1-477
+nix/macro-box/_computer-use-linux.nix
+  s_8703f73ae8e37d::t_e6e27f1ea663e5 1-49
+nix/macro-box/_guest.nix
+  s_8703f73ae8e37d::t_841c8dbadb80e7 95-96,459
+nix/macro-box/_vm-test.nix
+  s_8703f73ae8e37d::t_3967f478df83d1 2-4,31-61,75,104-126,130-386
+nix/macro-box/files/agent-env-setting
+  s_8703f73ae8e37d::t_2b74d1586f4646 1-12
+nix/macro-box/files/agent-stopped
+  s_8703f73ae8e37d::t_a3fd7cbe8db816 1-18
+nix/macro-box/files/git-credential-agent
+  s_8703f73ae8e37d::t_86461bd787c36a 1-17
+nix/macro-box/files/start-agent
+  s_8703f73ae8e37d::t_85102eaebc4aac 1-131
+nix/macro-box/files/test-agent-probe.ts
+  s_8703f73ae8e37d::t_652629bd2dcb9b 1-22
+nix/macro-box/files/test-browser-escape.ts
+  s_8703f73ae8e37d::t_abb9323a4895e4 1-27
+nix/macro-box/files/test-computer-use.py
+  s_8703f73ae8e37d::t_1a3be0f32cf1a0 1-70
+nix/macro-box/files/test-git-server.py
+  s_8703f73ae8e37d::t_c7c9cfce2386a1 1-54
+nix/macro-box/files/test-start-agent.sh
+  s_8703f73ae8e37d::t_1260d576fc2ebd 1-167
+nix/macro-box/macro-box.nix
+  s_8703f73ae8e37d::t_6395c6dacf85a9 37-42,45-46,60-64,66-67,69-74,78,87-97,138-153
+package.json
+  s_8703f73ae8e37d::t_b21022ec42898e 92-95
+packages/muppet/AGENTS.md
+  s_8703f73ae8e37d::t_a918260c7c466b 1-77
+packages/muppet/CLAUDE.md
+  s_8703f73ae8e37d::t_69197d7bd03413 1
+packages/muppet/DESIGN.md
+  s_8703f73ae8e37d::t_e70762242b5772 1-220
+packages/muppet/STYLE.md
+  s_8703f73ae8e37d::t_fc2ba7cf9b0dd0 1-7
+packages/muppet/agents/claude-code.ts
+  s_8703f73ae8e37d::t_8800bafb4a9b92 1-78
+packages/muppet/biome.jsonc
+  s_8703f73ae8e37d::t_82b01df6bd2a0d 1-11
+packages/muppet/bunfig.toml
+  s_8703f73ae8e37d::t_01915575885b97 1-5
+packages/muppet/core/agent.ts
+  s_8703f73ae8e37d::t_0f8f4d5522fe7e 1-31
+packages/muppet/core/behavior.ts
+  s_8703f73ae8e37d::t_26cc325f9cf52c 1-367
+packages/muppet/core/capability.ts
+  s_8703f73ae8e37d::t_f9d52aea36566c 1-130
+packages/muppet/core/code.ts
+  s_8703f73ae8e37d::t_fa63c42a331323 1-249
+packages/muppet/core/error.ts
+  s_8703f73ae8e37d::t_214ceb061251c7 1-7
+packages/muppet/core/event.ts
+  s_8703f73ae8e37d::t_88bb1eafad8327 1-130
+packages/muppet/core/hook.ts
+  s_8703f73ae8e37d::t_74f478a872f061 1-86
+packages/muppet/core/prompt.ts
+  s_8703f73ae8e37d::t_b10efa0b204fb2 1-34
+packages/muppet/core/runtime.ts
+  s_8703f73ae8e37d::t_1d7292ca312970 1-18
+packages/muppet/core/state.ts
+  s_8703f73ae8e37d::t_a9b07dc9632f77 1-18
+packages/muppet/core/test/behavior.test.ts
+  s_8703f73ae8e37d::t_aae986cd4a27de 1-127
+packages/muppet/core/test/capability.test.ts
+  s_8703f73ae8e37d::t_7fa0d0da5f4953 1-91
+packages/muppet/core/test/code.test.ts
+  s_8703f73ae8e37d::t_8155a88d53aea7 1-172
+packages/muppet/core/test/event.test.ts
+  s_8703f73ae8e37d::t_2624260a3901c6 1-168
+packages/muppet/examples/heartbeat/AGENT.md
+  s_8703f73ae8e37d::t_e6b5dfd19e7973 1-11
+packages/muppet/examples/heartbeat/agent.ts
+  s_8703f73ae8e37d::t_4fe44e0d6978c9 1-47
+packages/muppet/examples/heartbeat/behavior.ts
+  s_8703f73ae8e37d::t_ee842bd6fa3e62 1-68
+packages/muppet/examples/heartbeat/capabilities.ts
+  s_8703f73ae8e37d::t_e3a460a200512b 1-52
+packages/muppet/examples/heartbeat/context.ts
+  s_8703f73ae8e37d::t_15f51154aab915 1-39
+packages/muppet/examples/heartbeat/index.ts
+  s_8703f73ae8e37d::t_697c57e01d0d48 1-35
+packages/muppet/examples/mail-triage/AGENT.md
+  s_8703f73ae8e37d::t_fb5cee6a68d4b5 1-6
+packages/muppet/examples/mail-triage/agent.ts
+  s_8703f73ae8e37d::t_c6a030400ff46c 1-44
+packages/muppet/examples/mail-triage/behavior.ts
+  s_8703f73ae8e37d::t_10dc77abd0b4ba 1-18
+packages/muppet/examples/mail-triage/capabilities.ts
+  s_8703f73ae8e37d::t_581d1431e4c06a 1-70
+packages/muppet/examples/mail-triage/context.ts
+  s_8703f73ae8e37d::t_6476ba04578181 1-33
+packages/muppet/examples/mail-triage/handlers.ts
+  s_8703f73ae8e37d::t_3d4f44b07e5d02 1-55
+packages/muppet/examples/mail-triage/index.ts
+  s_8703f73ae8e37d::t_4667f4537e2151 1-23
+packages/muppet/examples/mail-triage/sources.ts
+  s_8703f73ae8e37d::t_6a294fd8facfa5 1-30
+packages/muppet/examples/scripts.ts
+  s_8703f73ae8e37d::t_1ca79584ea46ed 1-33
+packages/muppet/package.json
+  s_8703f73ae8e37d::t_10b82cf17512f0 1-30
+packages/muppet/runtimes/parallel.ts
+  s_8703f73ae8e37d::t_cee35847124421 1-34
+packages/muppet/runtimes/pieces.ts
+  s_8703f73ae8e37d::t_8fb1a060f63e1c 1-153
+packages/muppet/runtimes/simple.ts
+  s_8703f73ae8e37d::t_3cd44632cd2ed5 1-45
+packages/muppet/runtimes/test/parallel.test.ts
+  s_8703f73ae8e37d::t_b1c2bd0653de7e 1-92
+packages/muppet/runtimes/test/scripts.ts
+  s_8703f73ae8e37d::t_0694c4d691d96c 1-14
+packages/muppet/runtimes/test/simple.test.ts
+  s_8703f73ae8e37d::t_1cae33b82f8ddd 1-223
+packages/muppet/tsconfig.json
+  s_8703f73ae8e37d::t_0f0b24514c3664 1-21
+packages/muppet/utilities/browser/index.ts
+  s_8703f73ae8e37d::t_7132e8911410c5 1-135
+packages/muppet/utilities/browser/tab.ts
+  s_8703f73ae8e37d::t_9a9328e8fd7a42 1-98
+packages/muppet/utilities/browser/test/browser.test.ts
+  s_8703f73ae8e37d::t_c7b7b37a280012 1-50
+packages/muppet/utilities/credentials/env-file.ts
+  s_8703f73ae8e37d::t_09abfd1c0fd6eb 1-125
+packages/muppet/utilities/credentials/index.ts
+  s_8703f73ae8e37d::t_f64d73a6d3388b 1-43
+packages/muppet/utilities/credentials/sops.ts
+  s_8703f73ae8e37d::t_390e65ddb01ef1 1-77
+packages/muppet/utilities/credentials/test/credentials.test.ts
+  s_8703f73ae8e37d::t_95b7d5213f090f 1-95
+packages/muppet/utilities/credentials/test/env-file.test.ts
+  s_8703f73ae8e37d::t_8dba84cf09bc63 1-103
+packages/muppet/utilities/failures/index.ts
+  s_8703f73ae8e37d::t_4ae6b458fce9ea 1-107
+packages/muppet/utilities/failures/test/failures.test.ts
+  s_8703f73ae8e37d::t_5279cb5b181a1f 1-118
+packages/muppet/utilities/jobs/herdr.ts
+  s_8703f73ae8e37d::t_31d58d7bd012e9 1-311
+packages/muppet/utilities/jobs/index.ts
+  s_8703f73ae8e37d::t_7513db9a303cec 1-238
+packages/muppet/utilities/jobs/test/jobs.test.ts
+  s_8703f73ae8e37d::t_6da1113ec9151a 1-275
+packages/muppet/utilities/macro/chat/index.ts
+  s_8703f73ae8e37d::t_8a1caa5701ad8f 1-528
+packages/muppet/utilities/macro/chat/test/chat.test.ts
+  s_8703f73ae8e37d::t_fad38298f9a130 1-219
+packages/muppet/utilities/macro/index.ts
+  s_8703f73ae8e37d::t_3ceff29e2af266 1-119
+packages/muppet/utilities/macro/test/presence.test.ts
+  s_8703f73ae8e37d::t_5ca64bb1b25c10 1-53
+packages/muppet/utilities/schedules/due.ts
+  s_8703f73ae8e37d::t_7ca5dc7205a1ae 1-192
+packages/muppet/utilities/schedules/index.ts
+  s_8703f73ae8e37d::t_d44fcc17558025 1-91
+packages/muppet/utilities/schedules/rrule.ts
+  s_8703f73ae8e37d::t_146ef9f1013f37 1-223
+packages/muppet/utilities/schedules/schedule.ts
+  s_8703f73ae8e37d::t_db846de3c1244c 1-96
+packages/muppet/utilities/schedules/scheduler.ts
+  s_8703f73ae8e37d::t_871a49d6f77250 1-279
+packages/muppet/utilities/schedules/schedules.ts
+  s_8703f73ae8e37d::t_800f639e10b0a6 1-55
+packages/muppet/utilities/schedules/store.ts
+  s_8703f73ae8e37d::t_be2a9a36695245 1-51
+packages/muppet/utilities/schedules/test/due.test.ts
+  s_8703f73ae8e37d::t_9c0765a810e719 1-89
+packages/muppet/utilities/schedules/test/rrule.test.ts
+  s_8703f73ae8e37d::t_db13a44b94115d 1-65
+packages/muppet/utilities/schedules/test/scheduler.test.ts
+  s_8703f73ae8e37d::t_a8e56d6a578b0c 1-189
+packages/muppet/utilities/scripts/index.ts
+  s_8703f73ae8e37d::t_a24167b0e5d2a8 1-271
+packages/muppet/utilities/scripts/test/agent/greeting.ts
+  s_8703f73ae8e37d::t_96c02e999a9d9c 1-27
+packages/muppet/utilities/scripts/test/scripts.test.ts
+  s_8703f73ae8e37d::t_06752006c36883 1-182
+packages/muppet/utilities/time/index.ts
+  s_8703f73ae8e37d::t_91d7c4e1d57bdd 1-104
+packages/muppet/utilities/time/test/runtime.test.ts
+  s_8703f73ae8e37d::t_ce8a49557fd215 1-27
+packages/muppet/utilities/time/test/time.test.ts
+  s_8703f73ae8e37d::t_bd82a4b139947c 1-36
+packages/observability/package.json
+  s_8703f73ae8e37d::t_45a26f0323cdf2 11-12
+packages/observability/src/config.ts
+  s_8703f73ae8e37d::t_c5cf03de2d6be9 45
+packages/observability/src/logging.ts
+  s_8703f73ae8e37d::t_8425f95c0afc85 24-33,44-47,61
+packages/observability/src/server.test.ts
+  s_8703f73ae8e37d::t_37c61c944d2f94 1-19,21-76
+packages/observability/src/server.ts
+  s_8703f73ae8e37d::t_84937e97202f64 1-79
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_8703f73ae8e37d::t_02f9eded374c31 41
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_8703f73ae8e37d::t_d7c36538820fab 524
+packages/sdk/AGENTS.md
+  s_8703f73ae8e37d::t_02294295205332 202-203
+packages/sdk/RELEASING.md
+  s_8703f73ae8e37d::t_a96a94eaa9dfdf 26-27
+packages/sdk/generated/agent-harness/index.ts
+  s_8703f73ae8e37d::t_fafe609242d546 4
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_8703f73ae8e37d::t_1d55faf8c32e5a 5,856-870
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_8703f73ae8e37d::t_e55823f6244f06 1889-1899,3192-3217,5169-5219
+packages/sdk/generated/auth/index.ts
+  s_8703f73ae8e37d::t_3153f492441f78 4
+packages/sdk/generated/auth/sdk.gen.ts
+  s_8703f73ae8e37d::t_5f8a44f8260301 5,1076-1128
+packages/sdk/generated/auth/types.gen.ts
+  s_8703f73ae8e37d::t_df026280f638fb 41-50,494-529,2341-2398,5117-5248
+packages/sdk/generated/scheduled-action/index.ts
+  s_8703f73ae8e37d::t_607e4dfe3a4811 4
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_8703f73ae8e37d::t_79613c99654c64 5,276,304-318,333-340,356-360,374,380-402
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_8703f73ae8e37d::t_bdbdeb87e7a5ef 13-14,201-217,766-812,823-827,833-839,987-1011,1033,1243-1256,1383-1397,1478-1482,1783-1787,1792,1806-1809,1825-1826,1839-1848,1851-1852,1856-1862,1864,1866,1876-1880,1906-1910,1912-1916,1919,1943,1950-1957,1965-1969,2908-2912,2919-2922,2934,3005-3071,3131-3161,3212-3214,3217-3220,3226,3257-3260,3279-3355
+packages/sdk/generated/storage/types.gen.ts
+  s_8703f73ae8e37d::t_b70830f6b0f603 23388
+packages/sdk/scripts/check-pack.ts
+  s_8703f73ae8e37d::t_d5c973a7e5949d 80,82,133
+packages/sdk/specs/agent-harness.json
+  s_8703f73ae8e37d::t_bd43789c223a1c 4070-4196,6719-6729,8872-8904,9005-9008
+packages/sdk/specs/auth.json
+  s_8703f73ae8e37d::t_1bd5ed78ad86d5 5589-5995,7431-7441,8026-8066,10501-10573
+packages/sdk/specs/scheduled-action.json
+  s_8703f73ae8e37d::t_8f4103ca11eaa9 1890,1901-1911,1916,1935-1944,2105-2233,2336-2387,2420-2553,2558,2567-2589,2602,2612,2634-2635,2637-2638,2654,2661-2669,2691-2692,2701-2702,2704,2706,2724,2727-2728,2742,2754-2763,2765-2775,2898,3248-3264,4335-4413,4425-4429,4435-4439,4674-4701,4728,5038-5052,5276-5293,5449-5462,5979-5981,6018-6021,6029-6039,6064-6067,6088,6101-6118,6121-6122,6124-6127,6129,6133,6140,6149-6160,6201-6202,6206-6209,6213-6217,6230-6240,6273,6278,6284-6292,6308-6312
+packages/sdk/specs/storage.json
+  s_8703f73ae8e37d::t_7b95831e20fd0c 65707
+packages/sdk/src/coverage/skipped.ts
+  s_8703f73ae8e37d::t_6a4cf816a99db4 43-44,158-162,310-312,317-318
+packages/sdk/src/entities/email/thread.ts
+  s_8703f73ae8e37d::t_b3f05903d2cb35 25,326-337
+packages/sdk/src/entities/suggestions/namespace.ts
+  s_8703f73ae8e37d::t_64584b261aa563 8,28-39,77,82-93,96,103-129
+packages/sdk/src/entities/suggestions/suggestion.test.ts
+  s_8703f73ae8e37d::t_81954fbba2c3f5 1-238
+packages/sdk/src/entities/suggestions/suggestion.ts
+  s_8703f73ae8e37d::t_31ab0306f0fbd9 5,8,14,16,18,77-78,138-147,181-184,187-192,199-200,205-218,224-299,318-339
+packages/sdk/src/utils/verbs.ts
+  s_8703f73ae8e37d::t_51b183e01ff811 94,105-108
+packages/starter-agent/.gitignore
+  s_8703f73ae8e37d::t_2c213a36e9d2a2 1-13
+packages/starter-agent/AGENT.md
+  s_8703f73ae8e37d::t_dbd4ae735bd11c 1-184
+packages/starter-agent/AGENTS.md
+  s_8703f73ae8e37d::t_c5618eef834c45 1-41
+packages/starter-agent/ARCHITECTURE.md
+  s_8703f73ae8e37d::t_7176867b4d2607 1-166
+packages/starter-agent/CLAUDE.md
+  s_8703f73ae8e37d::t_97bcbf47f6f82b 1
+packages/starter-agent/ENGINEERING.md
+  s_8703f73ae8e37d::t_9496e68b2c674b 1-54
+packages/starter-agent/README.md
+  s_8703f73ae8e37d::t_64e0be5fef3773 1-168
+packages/starter-agent/agent.example.json
+  s_8703f73ae8e37d::t_015ae33201ac31 1-10
+packages/starter-agent/behavior/agent/authority.ts
+  s_8703f73ae8e37d::t_346fbbc9806e30 1-103
+packages/starter-agent/behavior/agent/budget.ts
+  s_8703f73ae8e37d::t_36017f99527a45 1-181
+packages/starter-agent/behavior/agent/claude.ts
+  s_8703f73ae8e37d::t_d00e94f027fba3 1-268
+packages/starter-agent/behavior/agent/guard.ts
+  s_8703f73ae8e37d::t_6d03419e4530ca 1-57
+packages/starter-agent/behavior/agent/guards/config.ts
+  s_8703f73ae8e37d::t_6eabe72a720574 1-12
+packages/starter-agent/behavior/agent/guards/gh-identity.ts
+  s_8703f73ae8e37d::t_203157701a3208 1-45
+packages/starter-agent/behavior/agent/guards/git-identity.ts
+  s_8703f73ae8e37d::t_a49c01322965d1 1-163
+packages/starter-agent/behavior/agent/guards/index.ts
+  s_8703f73ae8e37d::t_017119be4ece72 1-11
+packages/starter-agent/behavior/agent/guards/no-email.ts
+  s_8703f73ae8e37d::t_a4477190a629bf 1-37
+packages/starter-agent/behavior/agent/guards/path.ts
+  s_8703f73ae8e37d::t_4058fa65fbf532 1-60
+packages/starter-agent/behavior/agent/guards/session.ts
+  s_8703f73ae8e37d::t_1e90940f47ac78 1-73
+packages/starter-agent/behavior/agent/guards/shell.ts
+  s_8703f73ae8e37d::t_00602eca9db8a3 1-407
+packages/starter-agent/behavior/agent/guards/test/gh-identity.test.ts
+  s_8703f73ae8e37d::t_f338802e9bb51d 1-68
+packages/starter-agent/behavior/agent/guards/test/git-identity.test.ts
+  s_8703f73ae8e37d::t_ccdb1ebcd68045 1-150
+packages/starter-agent/behavior/agent/guards/test/path.test.ts
+  s_8703f73ae8e37d::t_7dba76b71b7c0a 1-53
+packages/starter-agent/behavior/agent/guards/test/shell.test.ts
+  s_8703f73ae8e37d::t_91ced4a4daafbd 1-206
+packages/starter-agent/behavior/agent/profile.ts
+  s_8703f73ae8e37d::t_d40ff471b23421 1-29
+packages/starter-agent/behavior/agent/test/authority.test.ts
+  s_8703f73ae8e37d::t_6736cf0ce43b5a 1-120
+packages/starter-agent/behavior/agent/test/budget.test.ts
+  s_8703f73ae8e37d::t_743d3161bf1107 1-179
+packages/starter-agent/behavior/agent/test/claude.test.ts
+  s_8703f73ae8e37d::t_033b045b681c1a 1-212
+packages/starter-agent/behavior/agent/test/profile.test.ts
+  s_8703f73ae8e37d::t_8ac5dc2b3bd298 1-20
+packages/starter-agent/behavior/capabilities/browser/DESIGN.md
+  s_8703f73ae8e37d::t_bc3c9cf669e8d4 1-24
+packages/starter-agent/behavior/capabilities/browser/browse.ts
+  s_8703f73ae8e37d::t_432580fabe0009 1-95
+packages/starter-agent/behavior/capabilities/browser/config.ts
+  s_8703f73ae8e37d::t_d0757c8c33f4b9 1-31
+packages/starter-agent/behavior/capabilities/browser/context.ts
+  s_8703f73ae8e37d::t_6afc8827806008 1-32
+packages/starter-agent/behavior/capabilities/browser/index.ts
+  s_8703f73ae8e37d::t_ff6c699bc6ca84 1-111
+packages/starter-agent/behavior/capabilities/browser/test/browse.test.ts
+  s_8703f73ae8e37d::t_26ea60343ca041 1-119
+packages/starter-agent/behavior/capabilities/browser/test/chromium.test.ts
+  s_8703f73ae8e37d::t_2865118b2b6697 1-82
+packages/starter-agent/behavior/capabilities/browser/test/config.test.ts
+  s_8703f73ae8e37d::t_5f30d272f6af10 1-15
+packages/starter-agent/behavior/capabilities/calls/DESIGN.md
+  s_8703f73ae8e37d::t_4b99b2573ecffa 1-407
+packages/starter-agent/behavior/capabilities/calls/arbiter.ts
+  s_8703f73ae8e37d::t_96ad5bcf409b1e 1-1144
+packages/starter-agent/behavior/capabilities/calls/asks.ts
+  s_8703f73ae8e37d::t_e96015b14648bb 1-252
+packages/starter-agent/behavior/capabilities/calls/audio.ts
+  s_8703f73ae8e37d::t_244317d4fc7b31 1-113
+packages/starter-agent/behavior/capabilities/calls/brain.ts
+  s_8703f73ae8e37d::t_3074b294c1bff2 1-795
+packages/starter-agent/behavior/capabilities/calls/capabilities/chat.ts
+  s_8703f73ae8e37d::t_7cca55443bd4f7 1-50
+packages/starter-agent/behavior/capabilities/calls/capabilities/filled.ts
+  s_8703f73ae8e37d::t_cbb2e7cd60813f 1-10
+packages/starter-agent/behavior/capabilities/calls/capabilities/ledgers.ts
+  s_8703f73ae8e37d::t_8b16ee8d8f4c5c 1-203
+packages/starter-agent/behavior/capabilities/calls/capabilities/voice.ts
+  s_8703f73ae8e37d::t_a6c1dbd56cc898 1-140
+packages/starter-agent/behavior/capabilities/calls/capabilities/watch.ts
+  s_8703f73ae8e37d::t_7af3ccde5a11f6 1-136
+packages/starter-agent/behavior/capabilities/calls/config.ts
+  s_8703f73ae8e37d::t_7712ac6abcc387 1-117
+packages/starter-agent/behavior/capabilities/calls/context.ts
+  s_8703f73ae8e37d::t_621882436c35be 1-128
+packages/starter-agent/behavior/capabilities/calls/context/desktop.ts
+  s_8703f73ae8e37d::t_c6452e445031d5 1-126
+packages/starter-agent/behavior/capabilities/calls/context/disk-worker.ts
+  s_8703f73ae8e37d::t_4a22a41c7552a4 1-57
+packages/starter-agent/behavior/capabilities/calls/context/disk.ts
+  s_8703f73ae8e37d::t_be76588b841fdd 1-129
+packages/starter-agent/behavior/capabilities/calls/context/ledgers.ts
+  s_8703f73ae8e37d::t_a4a5d840b73edf 1-294
+packages/starter-agent/behavior/capabilities/calls/context/processes.ts
+  s_8703f73ae8e37d::t_e887254710cdd1 1-156
+packages/starter-agent/behavior/capabilities/calls/context/rooms.ts
+  s_8703f73ae8e37d::t_36b6f11a017f0a 1-24
+packages/starter-agent/behavior/capabilities/calls/context/share-feed.ts
+  s_8703f73ae8e37d::t_c0a1419fcd6ded 1-82
+packages/starter-agent/behavior/capabilities/calls/context/share-frames.ts
+  s_8703f73ae8e37d::t_088c97a6e36d00 1-52
+packages/starter-agent/behavior/capabilities/calls/context/share-sound.ts
+  s_8703f73ae8e37d::t_86e2c80e625e23 1-88
+packages/starter-agent/behavior/capabilities/calls/context/share.ts
+  s_8703f73ae8e37d::t_446a3d77263f5f 1-45
+packages/starter-agent/behavior/capabilities/calls/context/speech.ts
+  s_8703f73ae8e37d::t_f3c4b88129d0d2 1-118
+packages/starter-agent/behavior/capabilities/calls/context/voice.ts
+  s_8703f73ae8e37d::t_37e9e4ac56decd 1-225
+packages/starter-agent/behavior/capabilities/calls/context/voiceLive.ts
+  s_8703f73ae8e37d::t_a0e569f22381cb 1-475
+packages/starter-agent/behavior/capabilities/calls/events.ts
+  s_8703f73ae8e37d::t_2494a0415d2287 1-209
+packages/starter-agent/behavior/capabilities/calls/index.ts
+  s_8703f73ae8e37d::t_64033e624a49c3 1-64
+packages/starter-agent/behavior/capabilities/calls/join.ts
+  s_8703f73ae8e37d::t_383e50e4675931 1-654
+packages/starter-agent/behavior/capabilities/calls/judge.ts
+  s_8703f73ae8e37d::t_0f7932474a18a5 1-369
+packages/starter-agent/behavior/capabilities/calls/ledger.ts
+  s_8703f73ae8e37d::t_1f01dc7e8300df 1-78
+packages/starter-agent/behavior/capabilities/calls/macro.ts
+  s_8703f73ae8e37d::t_aa50a39ac1eea5 1-380
+packages/starter-agent/behavior/capabilities/calls/place.ts
+  s_8703f73ae8e37d::t_8ae6c469b3bfc6 1-283
+packages/starter-agent/behavior/capabilities/calls/replay.ts
+  s_8703f73ae8e37d::t_e3471b42179645 1-91
+packages/starter-agent/behavior/capabilities/calls/report.ts
+  s_8703f73ae8e37d::t_def6618aac0fea 1-207
+packages/starter-agent/behavior/capabilities/calls/retry.ts
+  s_8703f73ae8e37d::t_0d3c2a489a1457 1-97
+packages/starter-agent/behavior/capabilities/calls/room.ts
+  s_8703f73ae8e37d::t_a2ae7818155330 1-244
+packages/starter-agent/behavior/capabilities/calls/session.ts
+  s_8703f73ae8e37d::t_2d4c117e2a018d 1-575
+packages/starter-agent/behavior/capabilities/calls/share.ts
+  s_8703f73ae8e37d::t_c4ec32b0ae7439 1-254
+packages/starter-agent/behavior/capabilities/calls/test/arbiter.test.ts
+  s_8703f73ae8e37d::t_a02239c39fd1ee 1-1222
+packages/starter-agent/behavior/capabilities/calls/test/asks.test.ts
+  s_8703f73ae8e37d::t_0d140b2b286b33 1-415
+packages/starter-agent/behavior/capabilities/calls/test/audio.test.ts
+  s_8703f73ae8e37d::t_9038b91630ebd4 1-32
+packages/starter-agent/behavior/capabilities/calls/test/brain.test.ts
+  s_8703f73ae8e37d::t_8f0979526c2392 1-316
+packages/starter-agent/behavior/capabilities/calls/test/chat.test.ts
+  s_8703f73ae8e37d::t_db1b3361daebd9 1-14
+packages/starter-agent/behavior/capabilities/calls/test/events.test.ts
+  s_8703f73ae8e37d::t_ef71faf0c41acd 1-276
+packages/starter-agent/behavior/capabilities/calls/test/inputs.test.ts
+  s_8703f73ae8e37d::t_cf84ba4d12688d 1-94
+packages/starter-agent/behavior/capabilities/calls/test/join.test.ts
+  s_8703f73ae8e37d::t_ba537dfc97793e 1-594
+packages/starter-agent/behavior/capabilities/calls/test/judge.test.ts
+  s_8703f73ae8e37d::t_2e8e7548c2dbcd 1-627
+packages/starter-agent/behavior/capabilities/calls/test/macro.test.ts
+  s_8703f73ae8e37d::t_809a830062fe5c 1-723
+packages/starter-agent/behavior/capabilities/calls/test/place.test.ts
+  s_8703f73ae8e37d::t_55e9a737ddaa17 1-580
+packages/starter-agent/behavior/capabilities/calls/test/processes.test.ts
+  s_8703f73ae8e37d::t_4bc116131ae4a6 1-69
+packages/starter-agent/behavior/capabilities/calls/test/report.test.ts
+  s_8703f73ae8e37d::t_25bb25d2d5911d 1-128
+packages/starter-agent/behavior/capabilities/calls/test/retry.test.ts
+  s_8703f73ae8e37d::t_069bfbfe55fd46 1-159
+packages/starter-agent/behavior/capabilities/calls/test/room.test.ts
+  s_8703f73ae8e37d::t_48b6b28a4e3062 1-227
+packages/starter-agent/behavior/capabilities/calls/test/session.test.ts
+  s_8703f73ae8e37d::t_d6fea36d8673e2 1-602
+packages/starter-agent/behavior/capabilities/calls/test/share.test.ts
+  s_8703f73ae8e37d::t_d22886ef123f8c 1-338
+packages/starter-agent/behavior/capabilities/calls/test/speech.test.ts
+  s_8703f73ae8e37d::t_30188cc745adfe 1-123
+packages/starter-agent/behavior/capabilities/calls/test/watch.test.ts
+  s_8703f73ae8e37d::t_4ac841e4175670 1-505
+packages/starter-agent/behavior/capabilities/calls/test/working.test.ts
+  s_8703f73ae8e37d::t_a985100cd5c364 1-199
+packages/starter-agent/behavior/capabilities/calls/types.ts
+  s_8703f73ae8e37d::t_f8af9450cf63d7 1-223
+packages/starter-agent/behavior/capabilities/calls/voices.ts
+  s_8703f73ae8e37d::t_9ba9361c02acd2 1-58
+packages/starter-agent/behavior/capabilities/calls/watch.ts
+  s_8703f73ae8e37d::t_310d736642ab1e 1-701
+packages/starter-agent/behavior/capabilities/calls/working.ts
+  s_8703f73ae8e37d::t_5544e230f1c0dd 1-194
+packages/starter-agent/behavior/capabilities/chat/DESIGN.md
+  s_8703f73ae8e37d::t_1d06038d48f02c 1-46
+packages/starter-agent/behavior/capabilities/chat/context.ts
+  s_8703f73ae8e37d::t_b92b9ce47f0f02 1-54
+packages/starter-agent/behavior/capabilities/chat/entry.ts
+  s_8703f73ae8e37d::t_d5cf102710b518 1-55
+packages/starter-agent/behavior/capabilities/chat/history.ts
+  s_8703f73ae8e37d::t_f69cf809b3fdb2 1-70
+packages/starter-agent/behavior/capabilities/chat/index.ts
+  s_8703f73ae8e37d::t_887098ee71393e 1-233
+packages/starter-agent/behavior/capabilities/chat/listen.ts
+  s_8703f73ae8e37d::t_64ef05a2467161 1-125
+packages/starter-agent/behavior/capabilities/chat/macro.ts
+  s_8703f73ae8e37d::t_1935b1d3d6439e 1-265
+packages/starter-agent/behavior/capabilities/chat/presence.ts
+  s_8703f73ae8e37d::t_08e79080d6809a 1-51
+packages/starter-agent/behavior/capabilities/chat/prompt.ts
+  s_8703f73ae8e37d::t_c9647b5b31b3bb 1-51
+packages/starter-agent/behavior/capabilities/chat/screen.ts
+  s_8703f73ae8e37d::t_0ac358e958ddc3 1-17
+packages/starter-agent/behavior/capabilities/chat/test/capabilities.test.ts
+  s_8703f73ae8e37d::t_fd6a2172271040 1-111
+packages/starter-agent/behavior/capabilities/chat/test/listen.test.ts
+  s_8703f73ae8e37d::t_a3f53758ef16f3 1-145
+packages/starter-agent/behavior/capabilities/chat/test/queue.test.ts
+  s_8703f73ae8e37d::t_0de2ac7e807d36 1-88
+packages/starter-agent/behavior/capabilities/chat/typing.ts
+  s_8703f73ae8e37d::t_752aa5d2a228f7 1-54
+packages/starter-agent/behavior/capabilities/heartbeat/collect.ts
+  s_8703f73ae8e37d::t_fccd0db123c779 1-63
+packages/starter-agent/behavior/capabilities/heartbeat/commit.ts
+  s_8703f73ae8e37d::t_14d0a0ea2e9093 1-206
+packages/starter-agent/behavior/capabilities/heartbeat/config.ts
+  s_8703f73ae8e37d::t_30422edf54c295 1-71
+packages/starter-agent/behavior/capabilities/heartbeat/context.ts
+  s_8703f73ae8e37d::t_aeea9154558b93 1-139
+packages/starter-agent/behavior/capabilities/heartbeat/guard.ts
+  s_8703f73ae8e37d::t_6ad82ec1cefc0a 1-29
+packages/starter-agent/behavior/capabilities/heartbeat/index.ts
+  s_8703f73ae8e37d::t_8b8319dd507f7a 1-410
+packages/starter-agent/behavior/capabilities/heartbeat/land.ts
+  s_8703f73ae8e37d::t_457b960c425f68 1-451
+packages/starter-agent/behavior/capabilities/heartbeat/live.ts
+  s_8703f73ae8e37d::t_8b4a8e5c06395d 1-350
+packages/starter-agent/behavior/capabilities/heartbeat/prompt.ts
+  s_8703f73ae8e37d::t_06b7f79e9dbfa6 1-21
+packages/starter-agent/behavior/capabilities/heartbeat/prune.ts
+  s_8703f73ae8e37d::t_7a55e4b4130e28 1-178
+packages/starter-agent/behavior/capabilities/heartbeat/repository.ts
+  s_8703f73ae8e37d::t_a15fb0a74605b7 1-73
+packages/starter-agent/behavior/capabilities/heartbeat/restart.ts
+  s_8703f73ae8e37d::t_e036f0fa1e52b1 1-56
+packages/starter-agent/behavior/capabilities/heartbeat/schedules.ts
+  s_8703f73ae8e37d::t_36cecc68ffb0b5 1-79
+packages/starter-agent/behavior/capabilities/heartbeat/state.ts
+  s_8703f73ae8e37d::t_b8fbf5fe1ec04f 1-44
+packages/starter-agent/behavior/capabilities/heartbeat/test/collect.test.ts
+  s_8703f73ae8e37d::t_82fd59b71c02f0 1-53
+packages/starter-agent/behavior/capabilities/heartbeat/test/commit.test.ts
+  s_8703f73ae8e37d::t_0a673df787c7cd 1-243
+packages/starter-agent/behavior/capabilities/heartbeat/test/github.test.ts
+  s_8703f73ae8e37d::t_1749f3f1b35f85 1-9
+packages/starter-agent/behavior/capabilities/heartbeat/test/handlers.test.ts
+  s_8703f73ae8e37d::t_14afdea91fcf4c 1-356
+packages/starter-agent/behavior/capabilities/heartbeat/test/land.test.ts
+  s_8703f73ae8e37d::t_6b96d7436043a3 1-480
+packages/starter-agent/behavior/capabilities/heartbeat/test/landing.test.ts
+  s_8703f73ae8e37d::t_9b901469accf1e 1-26
+packages/starter-agent/behavior/capabilities/heartbeat/test/prune.test.ts
+  s_8703f73ae8e37d::t_bb832d6ecb159c 1-128
+packages/starter-agent/behavior/capabilities/heartbeat/test/restart.test.ts
+  s_8703f73ae8e37d::t_2f940c00720872 1-55
+packages/starter-agent/behavior/capabilities/heartbeat/test/rules.test.ts
+  s_8703f73ae8e37d::t_2bb477b9e4ac66 1-81
+packages/starter-agent/behavior/capabilities/heartbeat/test/sandbox.ts
+  s_8703f73ae8e37d::t_6f0a68f6c7b0c0 1-152
+packages/starter-agent/behavior/capabilities/heartbeat/test/schedules.test.ts
+  s_8703f73ae8e37d::t_89051b7e2580fb 1-82
+packages/starter-agent/behavior/capabilities/heartbeat/test/state.test.ts
+  s_8703f73ae8e37d::t_4d57790d58b1c1 1-23
+packages/starter-agent/behavior/capabilities/heartbeat/test/tick.test.ts
+  s_8703f73ae8e37d::t_5b5eccfa7eebc0 1-248
+packages/starter-agent/behavior/capabilities/heartbeat/tick.ts
+  s_8703f73ae8e37d::t_51040fbf941875 1-214
+packages/starter-agent/behavior/capabilities/identity/index.ts
+  s_8703f73ae8e37d::t_b4d41ab8310773 1-61
+packages/starter-agent/behavior/capabilities/identity/prompt.ts
+  s_8703f73ae8e37d::t_341a5d1f091d05 1-28
+packages/starter-agent/behavior/capabilities/identity/test/identity.test.ts
+  s_8703f73ae8e37d::t_27a060d2bccafa 1-80
+packages/starter-agent/behavior/capabilities/later/context.ts
+  s_8703f73ae8e37d::t_614e664453a216 1-15
+packages/starter-agent/behavior/capabilities/later/index.ts
+  s_8703f73ae8e37d::t_bd646241dd753b 1-101
+packages/starter-agent/behavior/capabilities/later/test/later.test.ts
+  s_8703f73ae8e37d::t_19cdb77783986a 1-65
+packages/starter-agent/behavior/capabilities/people/DESIGN.md
+  s_8703f73ae8e37d::t_7df9c0d79dddf5 1-83
+packages/starter-agent/behavior/capabilities/people/appraise.ts
+  s_8703f73ae8e37d::t_bc5af181c47de6 1-378
+packages/starter-agent/behavior/capabilities/people/ask.ts
+  s_8703f73ae8e37d::t_aefd79c899f9de 1-87
+packages/starter-agent/behavior/capabilities/people/card.ts
+  s_8703f73ae8e37d::t_a8392a5a65419c 1-130
+packages/starter-agent/behavior/capabilities/people/config.ts
+  s_8703f73ae8e37d::t_0ec9438c8d3213 1-16
+packages/starter-agent/behavior/capabilities/people/context.ts
+  s_8703f73ae8e37d::t_627eaf713f0b89 1-51
+packages/starter-agent/behavior/capabilities/people/index.ts
+  s_8703f73ae8e37d::t_517ab704ecab66 1-177
+packages/starter-agent/behavior/capabilities/people/keep.ts
+  s_8703f73ae8e37d::t_aef0e518e26536 1-146
+packages/starter-agent/behavior/capabilities/people/macro.ts
+  s_8703f73ae8e37d::t_2ca6196fb27260 1-29
+packages/starter-agent/behavior/capabilities/people/memory.ts
+  s_8703f73ae8e37d::t_45716ddc17b574 1-51
+packages/starter-agent/behavior/capabilities/people/rules.ts
+  s_8703f73ae8e37d::t_ff4b8f9331c793 1-381
+packages/starter-agent/behavior/capabilities/people/store.ts
+  s_8703f73ae8e37d::t_6ce6aabffa7e34 1-155
+packages/starter-agent/behavior/capabilities/people/test/ask.test.ts
+  s_8703f73ae8e37d::t_229a792d0c1c68 1-98
+packages/starter-agent/behavior/capabilities/people/test/fakes.ts
+  s_8703f73ae8e37d::t_ce4a6382eddba6 1-128
+packages/starter-agent/behavior/capabilities/people/test/people.test.ts
+  s_8703f73ae8e37d::t_d53d70e4b43835 1-630
+packages/starter-agent/behavior/capabilities/people/test/wiring.test.ts
+  s_8703f73ae8e37d::t_3420a36c1d8c2b 1-303
+packages/starter-agent/behavior/capabilities/people/transcript.ts
+  s_8703f73ae8e37d::t_e5aefccdae5de5 1-78
+packages/starter-agent/behavior/capabilities/secrets/access.ts
+  s_8703f73ae8e37d::t_9bbb66cac0271c 1-165
+packages/starter-agent/behavior/capabilities/secrets/attribution.ts
+  s_8703f73ae8e37d::t_f3938d97a0317e 1-59
+packages/starter-agent/behavior/capabilities/secrets/clipboard.ts
+  s_8703f73ae8e37d::t_95eac3dff2a0c4 1-73
+packages/starter-agent/behavior/capabilities/secrets/config.ts
+  s_8703f73ae8e37d::t_357a8b2e384574 1-29
+packages/starter-agent/behavior/capabilities/secrets/context.ts
+  s_8703f73ae8e37d::t_f842774f20e22a 1-70
+packages/starter-agent/behavior/capabilities/secrets/index.ts
+  s_8703f73ae8e37d::t_e1a879844a512a 1-565
+packages/starter-agent/behavior/capabilities/secrets/ports.ts
+  s_8703f73ae8e37d::t_1a1e615694201d 1-38
+packages/starter-agent/behavior/capabilities/secrets/test/access.test.ts
+  s_8703f73ae8e37d::t_3814e078f04745 1-119
+packages/starter-agent/behavior/capabilities/secrets/test/attribution.test.ts
+  s_8703f73ae8e37d::t_599a80e3747cef 1-29
+packages/starter-agent/behavior/capabilities/secrets/test/clipboard.test.ts
+  s_8703f73ae8e37d::t_469433f78a8efb 1-95
+packages/starter-agent/behavior/capabilities/secrets/test/rig.ts
+  s_8703f73ae8e37d::t_8f6eb4537ca185 1-86
+packages/starter-agent/behavior/capabilities/secrets/test/secrets.test.ts
+  s_8703f73ae8e37d::t_ffec15e048784c 1-548
+packages/starter-agent/behavior/capabilities/secrets/test/stub.ts
+  s_8703f73ae8e37d::t_2ce724d98db2cb 1-616
+packages/starter-agent/behavior/capabilities/secrets/test/vault.test.ts
+  s_8703f73ae8e37d::t_fdf0cbac87797b 1-213
+packages/starter-agent/behavior/capabilities/secrets/test/wiring.test.ts
+  s_8703f73ae8e37d::t_61454e39b0d0bb 1-47
+packages/starter-agent/behavior/capabilities/secrets/vault.ts
+  s_8703f73ae8e37d::t_f6f6251aba6090 1-230
+packages/starter-agent/behavior/capabilities/secrets/wire.ts
+  s_8703f73ae8e37d::t_b4c869a4586579 1-202
+packages/starter-agent/behavior/capabilities/tools/config.ts
+  s_8703f73ae8e37d::t_959012eaab3c07 1-21
+packages/starter-agent/behavior/capabilities/tools/context.ts
+  s_8703f73ae8e37d::t_1a04d705344486 1-17
+packages/starter-agent/behavior/capabilities/tools/index.ts
+  s_8703f73ae8e37d::t_a56c12f2a82763 1-186
+packages/starter-agent/behavior/capabilities/tools/secrets.ts
+  s_8703f73ae8e37d::t_597a108a747703 1-63
+packages/starter-agent/behavior/capabilities/tools/test/capabilities.test.ts
+  s_8703f73ae8e37d::t_a6938b9086b093 1-145
+packages/starter-agent/behavior/capabilities/tools/test/tools.test.ts
+  s_8703f73ae8e37d::t_623590fb2ad409 1-15
+packages/starter-agent/behavior/capabilities/tools/totp.ts
+  s_8703f73ae8e37d::t_e4463e73e61b4b 1-43
+packages/starter-agent/behavior/context/addresses.ts
+  s_8703f73ae8e37d::t_4da097288c4df8 1-181
+packages/starter-agent/behavior/context/children.ts
+  s_8703f73ae8e37d::t_2a79e9a460f30d 1-91
+packages/starter-agent/behavior/context/config.ts
+  s_8703f73ae8e37d::t_17814df1bbe17d 1-94
+packages/starter-agent/behavior/context/credentials.ts
+  s_8703f73ae8e37d::t_33b3db73159635 1-35
+packages/starter-agent/behavior/context/disk.ts
+  s_8703f73ae8e37d::t_d144831726a2ff 1-66
+packages/starter-agent/behavior/context/identity.ts
+  s_8703f73ae8e37d::t_dbf68714b4798f 1-65
+packages/starter-agent/behavior/context/index.ts
+  s_8703f73ae8e37d::t_30b638415c3a5e 1-472
+packages/starter-agent/behavior/context/log.ts
+  s_8703f73ae8e37d::t_df3c08311b94cd 1-35
+packages/starter-agent/behavior/context/relay.ts
+  s_8703f73ae8e37d::t_61d06940b514ba 1-370
+packages/starter-agent/behavior/context/settings.ts
+  s_8703f73ae8e37d::t_dcfa4e8f300cb2 1-39
+packages/starter-agent/behavior/context/shell.ts
+  s_8703f73ae8e37d::t_9c6114996e9939 1-53
+packages/starter-agent/behavior/context/sops.ts
+  s_8703f73ae8e37d::t_076a402426cab6 1-56
+packages/starter-agent/behavior/context/startup.ts
+  s_8703f73ae8e37d::t_7042b5331f3825 1-272
+packages/starter-agent/behavior/context/state.ts
+  s_8703f73ae8e37d::t_e562751fdaf539 1-58
+packages/starter-agent/behavior/context/stream.ts
+  s_8703f73ae8e37d::t_89f71fb60336ab 1-82
+packages/starter-agent/behavior/context/telemetry.ts
+  s_8703f73ae8e37d::t_c91689b4fd37d7 1-92
+packages/starter-agent/behavior/context/test/children.test.ts
+  s_8703f73ae8e37d::t_244155aa07d40a 1-84
+packages/starter-agent/behavior/context/test/fakes.ts
+  s_8703f73ae8e37d::t_b44426a571bd9c 1-61
+packages/starter-agent/behavior/context/test/identity.test.ts
+  s_8703f73ae8e37d::t_874751f479f0c8 1-45
+packages/starter-agent/behavior/context/test/relay.test.ts
+  s_8703f73ae8e37d::t_9927d423c87124 1-490
+packages/starter-agent/behavior/context/test/startup.test.ts
+  s_8703f73ae8e37d::t_8ac1673bd8b231 1-318
+packages/starter-agent/behavior/context/test/subprocess.test.ts
+  s_8703f73ae8e37d::t_415b70404397ba 1-213
+packages/starter-agent/behavior/context/test/telemetry.test.ts
+  s_8703f73ae8e37d::t_b7945a9042b0cf 1-38
+packages/starter-agent/behavior/contracts.ts
+  s_8703f73ae8e37d::t_51d4c5b81bad3a 1-44
+packages/starter-agent/behavior/events/handlers/calls.ts
+  s_8703f73ae8e37d::t_42baa8908bbb8d 1-19
+packages/starter-agent/behavior/events/handlers/chat.ts
+  s_8703f73ae8e37d::t_2a102a24542511 1-114
+packages/starter-agent/behavior/events/handlers/failures.ts
+  s_8703f73ae8e37d::t_8cd2242ccb3243 1-31
+packages/starter-agent/behavior/events/handlers/heartbeat.ts
+  s_8703f73ae8e37d::t_66a1488c0fc8ed 1-143
+packages/starter-agent/behavior/events/handlers/identity.ts
+  s_8703f73ae8e37d::t_5cb6ebd2277cc0 1-54
+packages/starter-agent/behavior/events/handlers/later.ts
+  s_8703f73ae8e37d::t_22f987957d443a 1-32
+packages/starter-agent/behavior/events/handlers/people.ts
+  s_8703f73ae8e37d::t_9b88af6b16efb4 1-75
+packages/starter-agent/behavior/events/handlers/secrets.ts
+  s_8703f73ae8e37d::t_2d826fc80d5804 1-57
+packages/starter-agent/behavior/events/sources/calls.ts
+  s_8703f73ae8e37d::t_98425464f7e1d1 1-47
+packages/starter-agent/behavior/events/sources/chat.ts
+  s_8703f73ae8e37d::t_ee07901aec7a51 1-35
+packages/starter-agent/behavior/index.ts
+  s_8703f73ae8e37d::t_50b1b0f40c010e 1-116
+packages/starter-agent/bin/agent
+  s_8703f73ae8e37d::t_31f1bfc7782771 1-4
+packages/starter-agent/bin/guard-hook
+  s_8703f73ae8e37d::t_10c4d0d5abdafa 1-34
+packages/starter-agent/biome.jsonc
+  s_8703f73ae8e37d::t_79d6532909ca3a 1-11
+packages/starter-agent/bun.lock
+  s_8703f73ae8e37d::t_5300ba61eb8af6 6,8-27,30-35,40-42,44,46,48,50,52,54,56,58-60,66-67,120-166,168,170,172,174,176,178-216,220-222,224,226,228,230,232,234,236,240-252,254-282,286-287,290-294,296,298,300,302,304-306,310-319,322,324,326,328,332-338,340-344,350,352,354,358-364,368-377,380-385,388-394,396-400,404-418,420-434,438,440,442,444,446,448-450,452,454-458,462-466,468,470,472-486,490-506,510-511,514-516,520-526,528,530,532,534,536,538,540,542,546-547,550-552,554,558-560,562,564-566,570-574,576,578,580-582,588-596,600-616,618,622,624,628-632,636,638,642-742,744,746,748
+packages/starter-agent/bunfig.toml
+  s_8703f73ae8e37d::t_553715c755a293 1-5
+packages/starter-agent/cli.ts
+  s_8703f73ae8e37d::t_581cfbe89cbb2e 1-234
+packages/starter-agent/index.ts
+  s_8703f73ae8e37d::t_0de28c69cb1e9a 1-245
+packages/starter-agent/package.json
+  s_8703f73ae8e37d::t_8f61c53f0ede73 1-41
+packages/starter-agent/test/guard-hook.test.ts
+  s_8703f73ae8e37d::t_5a770de6af103e 1-52
+packages/starter-agent/test/invoke.ts
+  s_8703f73ae8e37d::t_a3eb7d9a4caadc 1-74
+packages/starter-agent/test/no-audio.test.ts
+  s_8703f73ae8e37d::t_12445eaf794007 1-15
+packages/starter-agent/test/speech-live.ts
+  s_8703f73ae8e37d::t_64dae744bc3e00 1-147
+packages/starter-agent/tsconfig.json
+  s_8703f73ae8e37d::t_6322af1e36ec94 1-22
+services/agent_harness_service/AGENTS.md
+  s_8703f73ae8e37d::t_d19b991dfd720f 56-83,94-96,230-238,251-264,333
+services/agent_harness_service/Cargo.toml
+  s_8703f73ae8e37d::t_dee4d82e66001b 42,76,78,113-114,126,200,206
+services/agent_harness_service/src/agent_git.rs
+  s_8703f73ae8e37d::t_0e149232344633 1-135
+services/agent_harness_service/src/agent_git/test.rs
+  s_8703f73ae8e37d::t_4de0021a82f8a8 1-26
+services/agent_harness_service/src/anthropic_gateway.rs
+  s_8703f73ae8e37d::t_6204fc94cf494e 36,142-145,175-176,179-190,193-196,211-223,338-370,455-472,631-639,649-657
+services/agent_harness_service/src/anthropic_gateway/brain.rs
+  s_8703f73ae8e37d::t_26dd00480637b3 1-110
+services/agent_harness_service/src/anthropic_gateway/test.rs
+  s_8703f73ae8e37d::t_75f92abda63e46 492-656
+services/agent_harness_service/src/api.rs
+  s_8703f73ae8e37d::t_d7467d2453f94f 79,85,137,143,202-214,367-373,379,397,405-408,469
+services/agent_harness_service/src/api/swagger.rs
+  s_8703f73ae8e37d::t_c209a2131a89ec 72-73,145,233-234
+services/agent_harness_service/src/code_mode.rs
+  s_8703f73ae8e37d::t_119f0c4f5b29b7 32-34,43
+services/agent_harness_service/src/code_mode/test.rs
+  s_8703f73ae8e37d::t_0168d44000fa36 321
+services/agent_harness_service/src/computers.rs
+  s_8703f73ae8e37d::t_43d5eefcc4e1e5 8,38,108-117,134-138,167-172
+services/agent_harness_service/src/computers/agent_enrollment.rs
+  s_8703f73ae8e37d::t_6f8a291f4f614c 1-87
+services/agent_harness_service/src/config.rs
+  s_8703f73ae8e37d::t_fd333ef5976343 53-57,206-209,266-272,501,525,542,587
+services/agent_harness_service/src/config/test.rs
+  s_8703f73ae8e37d::t_977bbcc8b2458d 52-57,135-140,262,280-299,334-349
+services/agent_harness_service/src/main.rs
+  s_8703f73ae8e37d::t_3b44dac7776f1a 10,35,37,839-842,1409-1419,1422-1427,1429-1440,1923-1930,2102-2114,2135,2165,2632-2634
+services/agent_harness_service/src/openapi.rs
+  s_8703f73ae8e37d::t_4ced1855f1f038 5
+services/agent_harness_service/src/public_mcp.rs
+  s_8703f73ae8e37d::t_4f2d2f8710bacc 2,68,80-88,151-159,161-166
+services/agent_harness_service/src/public_mcp/agent_keys.rs
+  s_8703f73ae8e37d::t_5461f8a4d01828 1-76
+services/agent_harness_service/src/public_mcp/agent_keys/test.rs
+  s_8703f73ae8e37d::t_81711ee41c65f0 1-56
+services/agent_harness_service/src/scheduling.rs
+  s_8703f73ae8e37d::t_bc4d41252bb559 81-82,84,104-105,107-109,117-120,124,128-160,212-232,361-372,403-406,409,431-442,812-813,818-820,825,847-853,869-878,880-896,899-911,913-923,925-926,936,949-950,954-955,970-991,1139-1168
+services/agent_harness_service/src/speech_gateway.rs
+  s_8703f73ae8e37d::t_906457669079b6 1-494
+services/agent_harness_service/src/speech_gateway/protocol.rs
+  s_8703f73ae8e37d::t_dad7b9b3f31d6f 1-276
+services/agent_harness_service/src/speech_gateway/test.rs
+  s_8703f73ae8e37d::t_76593a9518fc4e 1-544
+services/agent_harness_service/src/speech_gateway/voices.rs
+  s_8703f73ae8e37d::t_65c6bd0b4a35e7 1-269
+services/agent_harness_service/src/voice_gateway.rs
+  s_8703f73ae8e37d::t_ce2f00f2041929 1-148
+services/authentication_service/AGENTS.md
+  s_8703f73ae8e37d::t_b2a75222605525 30-32
+services/authentication_service/Cargo.toml
+  s_8703f73ae8e37d::t_cac329a2284186 87-88
+services/authentication_service/src/api.rs
+  s_8703f73ae8e37d::t_5a4795fc95d6e4 140-148,181-190
+services/authentication_service/src/api/context.rs
+  s_8703f73ae8e37d::t_40c238ec46e91d 187-207,302-303
+services/authentication_service/src/api/swagger.rs
+  s_8703f73ae8e37d::t_7d6c636f31b16f 208-212,387-391
+services/authentication_service/src/api/user/stripe/shared.rs
+  s_8703f73ae8e37d::t_1bc745ee0c2ea3 125
+services/authentication_service/src/outbound.rs
+  s_8703f73ae8e37d::t_631170d4ce9ea7 3
+services/authentication_service/src/outbound/agent_addresses.rs
+  s_8703f73ae8e37d::t_0ecf9bc1fbcd11 1-129
+services/authentication_service/src/outbound/agent_addresses/test.rs
+  s_8703f73ae8e37d::t_1e0c0c9f100302 1-27
+services/authentication_service/src/server.rs
+  s_8703f73ae8e37d::t_a170a0d9a979f1 739-762,899
+services/mcp_auth_proxy/AGENTS.md
+  s_8703f73ae8e37d::t_47fd446d899442 128-135
+services/mcp_auth_proxy/Cargo.toml
+  s_8703f73ae8e37d::t_ed0eace06a1265 16,44,70
+services/mcp_auth_proxy/README.md
+  s_8703f73ae8e37d::t_6fb0279f4e1dd2 273-285
+services/mcp_auth_proxy/src/domain.rs
+  s_8703f73ae8e37d::t_9434e3f4264068 19-22
+services/mcp_auth_proxy/src/domain/user_api_keys.rs
+  s_8703f73ae8e37d::t_9533bcbdf7f188 1-29
+services/mcp_auth_proxy/src/inbound.rs
+  s_8703f73ae8e37d::t_a1dc4e53ef9c15 8
+services/mcp_auth_proxy/src/inbound/axum_router.rs
+  s_8703f73ae8e37d::t_a57b5a6da416b3 931-935,943,962-966,1017
+services/mcp_auth_proxy/src/inbound/axum_router/test.rs
+  s_8703f73ae8e37d::t_845b1abac7ecd0 1608,1628-1789
+services/mcp_auth_proxy/src/inbound/middleware.rs
+  s_8703f73ae8e37d::t_8e392c2c0433e7 1,35-36,118,126,133-145
+tooling/scripts/starter-agent-lock.sh
+  s_8703f73ae8e37d::t_646ee86379bdb6 1-29
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_8703f73ae8e37d::t_e763fc11683fe4 34-36,40-41,83-85,188-198,226,249,264,290,331,336-341,344-349,587-592,595-612,614,617,622,634,638,655-656,672-673,675
+tooling/xtask/crates/xtask_local/src/local/computers/test.rs
+  s_8703f73ae8e37d::t_e7d56715a462da 33,95-98,114,122,180-183,284,345-351,357,382-387,465
+tooling/xtask/crates/xtask_local/src/local/local_env.rs
+  s_8703f73ae8e37d::t_24cdedd1fe65c9 372-382,727-729
+tooling/xtask/crates/xtask_local/src/local/local_env/test.rs
+  s_8703f73ae8e37d::t_3ce3627138a430 161-163,281-284
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
+  s_8703f73ae8e37d::t_84a9f436a6d94b 12-13
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+  s_8703f73ae8e37d::t_e2358149cb7239 106-112,119-120,180-190,521
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7a53279ce4c0d55273188035f0eb2b63d92bcded",
+  "prompts": {},
+  "sessions": {
+    "s_215e3dd2aaef2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c170c79b-2fc2-4bd0-9af9-94c4a5cf85ca",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
