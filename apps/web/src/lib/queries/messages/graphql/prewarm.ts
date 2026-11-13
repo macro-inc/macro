@@ -150,10 +150,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** The read's answer, or a failure once it has taken too long to give one. */
-async function answered<T extends object>(read: Promise<T>): Promise<T> {
-  const answer = await Promise.race([read, sleep(SERVER_READ_TIMEOUT_MS)]);
-  if (!answer) throw new Error('Channel prewarm read timed out');
+/**
+ * The read's answer, or a failure once it has taken too long to give one.
+ * A read that timed out is cancelled, so an open of the same channel starts
+ * its own request instead of joining the one that hangs.
+ */
+async function answered<T extends object>(
+  read: (signal: AbortSignal) => Promise<T>
+): Promise<T> {
+  const controller = new AbortController();
+  const answer = await Promise.race([
+    read(controller.signal),
+    sleep(SERVER_READ_TIMEOUT_MS),
+  ]);
+  if (!answer) {
+    controller.abort();
+    throw new Error('Channel prewarm read timed out');
+  }
   return answer;
 }
 
@@ -278,7 +291,7 @@ async function catchUpCachedPage(
     span.setAttr('channel.prewarm.change_pages', pages);
     const since = latest.seq;
     const changes = await span.run(() =>
-      answered(fetchChannelChanges(channelId, since))
+      answered(() => fetchChannelChanges(channelId, since))
     );
     if (changes.reset) return undefined;
     latest = {
@@ -325,7 +338,7 @@ async function readWarmPage(
     // describe rows that are gone, so it is read whole like a miss.
     if (!cached || cached.page.entries.length === 0) {
       const latest = await span.run(() =>
-        answered(fetchLatestChannelPage(channelId))
+        answered((signal) => fetchLatestChannelPage(channelId, signal))
       );
       return { outcome: 'fetched', latest };
     }
@@ -336,7 +349,7 @@ async function readWarmPage(
         : { outcome: 'caught_up', latest: caughtUp };
     }
     const latest = await span.run(() =>
-      answered(fetchLatestChannelPage(channelId))
+      answered((signal) => fetchLatestChannelPage(channelId, signal))
     );
     return { outcome: 'read_again', latest };
   } catch (error) {
