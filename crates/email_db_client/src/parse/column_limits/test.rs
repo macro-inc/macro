@@ -48,3 +48,36 @@ fn clamp_opt_truncates_some() {
         Some("abcde".to_string())
     );
 }
+
+#[test]
+fn a_cut_file_name_keeps_its_extension() {
+    let name = format!("{}.pdf", "Überblick ".repeat(60));
+    let clamped = clamp_filename_opt(Some(name), 512, "test").unwrap();
+    assert_eq!(clamped.chars().count(), 512);
+    assert!(clamped.ends_with(".pdf"), "{clamped}");
+    assert!(clamped.starts_with("Überblick Überblick"));
+}
+
+#[test]
+fn a_file_name_that_fits_is_left_alone() {
+    assert_eq!(
+        clamp_filename_opt(Some("report.final.pdf".into()), 512, "test"),
+        Some("report.final.pdf".into())
+    );
+    assert_eq!(clamp_filename_opt(None, 512, "test"), None);
+}
+
+#[test]
+fn a_long_name_without_a_real_extension_is_cut_from_the_end() {
+    // No dot, and a "extension" with a space, are cut like any other value.
+    let no_dot = "a".repeat(20);
+    assert_eq!(
+        clamp_filename_opt(Some(no_dot), 10, "test").unwrap(),
+        "a".repeat(10)
+    );
+    let spaced = format!("{}.not an extension", "a".repeat(20));
+    assert_eq!(
+        clamp_filename_opt(Some(spaced), 10, "test").unwrap(),
+        "a".repeat(10)
+    );
+}

@@ -152,7 +152,7 @@ pub fn map_service_attachments_to_db(
                 id: service_attachment.db_id,
                 message_id: message_db_id,
                 provider_attachment_id: service_attachment.provider_id.clone(),
-                filename: column_limits::clamp_opt(
+                filename: column_limits::clamp_filename_opt(
                     filename,
                     column_limits::ATTACHMENT_FILENAME,
                     "email_attachments.filename",
