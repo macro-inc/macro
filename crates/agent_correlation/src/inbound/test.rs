@@ -36,6 +36,15 @@ impl CorrelationRepository for Repository {
     }
 }
 fn token(correlation: Option<Uuid>, agent: Option<Uuid>) -> String {
+    mint(correlation, agent, None, None)
+}
+
+fn mint(
+    correlation: Option<Uuid>,
+    agent: Option<Uuid>,
+    routine: Option<Uuid>,
+    scope: Option<&str>,
+) -> String {
     encode_macro_api_token(EncodeMacroApiTokenArgs {
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|owner@example.com".into(),
@@ -47,8 +56,8 @@ fn token(correlation: Option<Uuid>, agent: Option<Uuid>) -> String {
         agent_via: None,
         agent_correlation_id: correlation,
         agent_session_id: None,
-        routine_id: None,
-        agent_scope: None,
+        routine_id: routine,
+        agent_scope: scope.map(str::to_owned),
     })
     .unwrap()
 }
@@ -119,21 +128,7 @@ async fn optional_claim_is_validated_before_a_handler_can_use_it() {
 }
 
 fn routine_token(routine: Uuid, correlation: Option<Uuid>, agent: Option<Uuid>) -> String {
-    encode_macro_api_token(EncodeMacroApiTokenArgs {
-        fusionauth_id: "fixture".into(),
-        macro_user_id: "macro|owner@example.com".into(),
-        organization_id: None,
-        issuer: "fixture".into(),
-        private_key: PRIVATE.into(),
-        expiry_seconds: 60,
-        agent_id: agent,
-        agent_via: None,
-        agent_correlation_id: correlation,
-        agent_session_id: None,
-        routine_id: Some(routine),
-        agent_scope: None,
-    })
-    .unwrap()
+    mint(correlation, agent, Some(routine), None)
 }
 
 #[tokio::test]
@@ -276,4 +271,156 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         refused.err().unwrap().into_response().status(),
         StatusCode::FORBIDDEN
     );
+}
+
+/// A credential's signed scope is enforced before its correlation is looked
+/// up, even when the stored correlation is unscoped, and a name this build
+/// doesn't know allows only reads.
+#[tokio::test]
+async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
+    use tower::ServiceExt;
+
+    let repository = Arc::new(Repository {
+        calls: AtomicUsize::new(0),
+    });
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: repository.clone(),
+    };
+    let app = axum::Router::new()
+        .route(
+            "/email/messages",
+            axum::routing::post(|| async { StatusCode::OK }),
+        )
+        .route(
+            "/jwt/macro_api_token",
+            axum::routing::get(|| async { StatusCode::OK }),
+        )
+        .route(
+            "/email/threads",
+            axum::routing::get(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    let unscoped = Some(Uuid::from_u128(1));
+    let agent = Some(Uuid::from_u128(3));
+    for (scope, method, path, expected) in [
+        (
+            "generation",
+            "POST",
+            "/email/messages",
+            StatusCode::FORBIDDEN,
+        ),
+        ("no_send", "POST", "/email/messages", StatusCode::FORBIDDEN),
+        ("newer", "POST", "/email/messages", StatusCode::FORBIDDEN),
+        (
+            "no_send",
+            "GET",
+            "/jwt/macro_api_token",
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            "newer",
+            "GET",
+            "/jwt/macro_api_token",
+            StatusCode::FORBIDDEN,
+        ),
+        ("newer", "GET", "/email/threads", StatusCode::OK),
+    ] {
+        let bearer = mint(unscoped, agent, None, Some(scope));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{scope} {method} {path}");
+    }
+    // Only the one request inside its signed scope reached the lookup.
+    assert_eq!(repository.calls.load(Ordering::SeqCst), 1);
+}
+
+/// A service with no database refuses requests outside a credential's signed
+/// scope, and lets unscoped credentials and other callers through.
+#[tokio::test]
+async fn a_service_without_a_database_enforces_the_signed_scope() {
+    use tower::ServiceExt;
+
+    let app = axum::Router::new()
+        .route(
+            "/api/file/{id}",
+            axum::routing::delete(|| async { StatusCode::OK }).get(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            enforce_signed_scope,
+        ));
+    let scoped = |scope| {
+        mint(
+            Some(Uuid::from_u128(1)),
+            Some(Uuid::from_u128(3)),
+            None,
+            scope,
+        )
+    };
+    for (bearer, method, query, expected) in [
+        (
+            Some(scoped(Some("generation"))),
+            "DELETE",
+            false,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some(scoped(Some("generation"))),
+            "DELETE",
+            true,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some(scoped(Some("generation"))),
+            "GET",
+            false,
+            StatusCode::OK,
+        ),
+        (
+            Some(scoped(Some("newer"))),
+            "DELETE",
+            false,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some(scoped(Some("no_send"))),
+            "DELETE",
+            false,
+            StatusCode::OK,
+        ),
+        (Some(scoped(None)), "DELETE", false, StatusCode::OK),
+        (
+            Some("not a token".to_owned()),
+            "DELETE",
+            false,
+            StatusCode::OK,
+        ),
+        (None, "DELETE", false, StatusCode::OK),
+    ] {
+        let mut request = Request::builder().method(method);
+        request = match (&bearer, query) {
+            (Some(bearer), true) => request.uri(format!("/api/file/01a1?macro-api-token={bearer}")),
+            (Some(bearer), false) => request
+                .uri("/api/file/01a1")
+                .header("authorization", format!("Bearer {bearer}")),
+            (None, _) => request.uri("/api/file/01a1"),
+        };
+        let response = app
+            .clone()
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{method} {query} {bearer:?}");
+    }
 }

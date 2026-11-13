@@ -142,6 +142,16 @@ const GENERATION_WRITES: &[(&str, &str)] = &[
     ("POST", "/structured-completion"),
 ];
 
+/// Requests that hand the caller a credential its session's scope would not
+/// bind: a fresh Macro API token, a user API key, a bot's token or an account
+/// manager's. A scoped session makes none of them, by any method.
+const CREDENTIALS: &[(&str, &str)] = &[
+    ("GET", "/jwt/macro_api_token"),
+    ("POST", "/user-api-keys"),
+    ("POST", "/bots/{id}/tokens"),
+    ("POST", "/account-managers/{id}/token"),
+];
+
 /// Reads the SDK sends as POST (batch lookups, search); the harness checks
 /// this list against the SDK's operation catalog.
 pub const POST_READS: &[(&str, &str)] = &[
@@ -199,24 +209,69 @@ impl SessionScope {
         SENDS
     }
 
-    /// Whether a request with `method` to `path` is inside the scope. Reads
-    /// by method always are. A generation session makes other requests only
-    /// on its list or [`POST_READS`]; a run that sends nothing makes any but
-    /// the ones that reach someone else. `path` may carry one service prefix
-    /// before the SDK's path.
+    /// Whether a request with `method` to `path` is inside the scope. No
+    /// scope issues a new credential; other reads by method always are
+    /// inside. A generation session makes other requests only on its list or
+    /// [`POST_READS`]; a run that sends nothing makes any but the ones that
+    /// reach someone else. `path` may carry one service prefix before the
+    /// SDK's path.
     pub fn allows(self, method: &str, path: &str) -> bool {
-        if matches!(method, "GET" | "HEAD" | "OPTIONS") {
+        if listed(CREDENTIALS, method, path) {
+            return false;
+        }
+        if reads_by_method(method) {
             return true;
         }
-        let listed = |list: &[(&str, &str)]| {
-            list.iter()
-                .any(|(listed, template)| *listed == method && matches(path, template))
-        };
         match self {
-            Self::Generation => listed(GENERATION_WRITES) || listed(POST_READS),
-            Self::NoSend => !listed(SENDS),
+            Self::Generation => {
+                listed(GENERATION_WRITES, method, path) || listed(POST_READS, method, path)
+            }
+            Self::NoSend => !listed(SENDS, method, path),
         }
     }
+}
+
+/// The scope a credential signs (`agent_scope`), for a service that has no
+/// database to look its correlation up in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignedScope {
+    /// The credential signs no scope.
+    Unscoped,
+    /// A scope this build knows.
+    Known(SessionScope),
+    /// A name this build doesn't know, signed by a newer harness: only reads
+    /// by method are inside it.
+    Unknown,
+}
+
+impl SignedScope {
+    /// The scope signed as `claim`.
+    pub fn from_claim(claim: Option<&str>) -> Self {
+        match claim {
+            None => Self::Unscoped,
+            Some(name) => SessionScope::parse(name).map_or(Self::Unknown, Self::Known),
+        }
+    }
+
+    /// Whether a request with `method` to `path` is inside the signed scope.
+    pub fn allows(self, method: &str, path: &str) -> bool {
+        match self {
+            Self::Unscoped => true,
+            Self::Known(scope) => scope.allows(method, path),
+            Self::Unknown => reads_by_method(method) && !listed(CREDENTIALS, method, path),
+        }
+    }
+}
+
+/// Requests whose method says they only read.
+fn reads_by_method(method: &str) -> bool {
+    matches!(method, "GET" | "HEAD" | "OPTIONS")
+}
+
+/// Whether `list` holds a request with `method` whose template `path` matches.
+fn listed(list: &[(&str, &str)], method: &str, path: &str) -> bool {
+    list.iter()
+        .any(|(listed, template)| *listed == method && matches(path, template))
 }
 
 /// The path prefixes services are reached under through the gateway, as the

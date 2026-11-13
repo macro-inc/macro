@@ -9,7 +9,9 @@ against its session; a routine id is a signed Macro API token claim
 JWT's acting user. A correlation may carry a `SessionScope`, set where the
 harness mints the credential: then every service that accepts it refuses
 requests outside the scope (`403`), so a hidden session's limits hold in
-code, not in its prompt.
+code, not in its prompt. The harness also signs the scope into the credential
+(`agent_scope`), so a service with no database enforces it too
+(`enforce_signed_scope`).
 
 ## Start here
 
@@ -22,7 +24,10 @@ code, not in its prompt.
   send-like SDK write refused or reviewed); the harness test
   `the_generation_scope_matches_the_sdk_catalog` keeps the lists in step with
   the SDK's operation catalog. A new POST read or session tool route updates
-  them.
+  them. No scope makes `CREDENTIALS` requests (a fresh Macro API token, user
+  API key, bot or account-manager token), reads included: a new route that
+  hands out a credential goes there. `SignedScope` reads the `agent_scope`
+  claim; a name this build doesn't know allows only reads.
 - `src/context.rs`: async context (`Attribution`: correlation, routine, the
   display verb sent with a correlated SDK call, and the validated session and
   its scope: `current_session`, `current_scope`); capture before spawning,
@@ -31,7 +36,9 @@ code, not in its prompt.
   on routine writes.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
-  (`propagate` scopes the validated correlation, its verb and the signed routine).
+  (`propagate` checks the signed scope, then scopes the validated
+  correlation, its verb and the signed routine). `enforce_signed_scope` is the
+  check alone, for a service with no database to look a correlation up in.
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries

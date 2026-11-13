@@ -99,3 +99,55 @@ fn a_run_that_sends_nothing_reaches_nobody() {
     }
     assert_eq!(SessionScope::parse(scope.as_str()), Some(scope));
 }
+
+/// A scoped session never gets a credential its scope would not bind, not
+/// even by a read; listing the person's keys is still a read.
+#[test]
+fn no_scope_issues_a_new_credential() {
+    for scope in [
+        SignedScope::Known(SessionScope::Generation),
+        SignedScope::Known(SessionScope::NoSend),
+        SignedScope::Unknown,
+    ] {
+        for (method, path) in [
+            ("GET", "/auth/jwt/macro_api_token"),
+            ("GET", "/jwt/macro_api_token"),
+            ("POST", "/dss/user-api-keys"),
+            ("POST", "/dss/bots/01a1/tokens"),
+            ("POST", "/dss/account-managers/01a1/token"),
+        ] {
+            assert!(!scope.allows(method, path), "{scope:?} {method} {path}");
+        }
+        assert!(scope.allows("GET", "/dss/user-api-keys"), "{scope:?}");
+    }
+    assert!(SignedScope::Unscoped.allows("GET", "/auth/jwt/macro_api_token"));
+}
+
+/// A service with no database reads the scope from the credential's signed
+/// claim; a name it doesn't know allows only reads.
+#[test]
+fn a_signed_scope_is_read_from_its_claim() {
+    assert_eq!(SignedScope::from_claim(None), SignedScope::Unscoped);
+    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+        assert_eq!(
+            SignedScope::from_claim(Some(scope.as_str())),
+            SignedScope::Known(scope)
+        );
+    }
+    let unknown = SignedScope::from_claim(Some("newer"));
+    assert_eq!(unknown, SignedScope::Unknown);
+    assert!(unknown.allows("GET", "/api/file/01a1/presigned-url"));
+    for (method, path) in [
+        ("DELETE", "/api/file/01a1"),
+        ("PUT", "/api/file"),
+        ("POST", "/dss/search"),
+    ] {
+        assert!(!unknown.allows(method, path), "{method} {path}");
+    }
+
+    let generation = SignedScope::Known(SessionScope::Generation);
+    assert!(!generation.allows("DELETE", "/api/file/01a1"));
+    assert!(!generation.allows("POST", "/internal/file/bulk-delete"));
+    assert!(generation.allows("POST", "/dss/search"));
+    assert!(SignedScope::Unscoped.allows("DELETE", "/api/file/01a1"));
+}

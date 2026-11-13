@@ -3,6 +3,7 @@
 use crate::{
     context::Attribution,
     domain::{Correlation, CorrelationError, CorrelationRepository, validate},
+    scope::SignedScope,
 };
 use axum::{
     Json,
@@ -59,6 +60,9 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
         let token = verified_api_token(parts, &state.jwt).await;
+        if outside_signed_scope(token.as_ref(), parts) {
+            return Err(CorrelationRejection(CorrelationError::OutOfScope));
+        }
         let correlation = accept_correlation(&state, token.as_ref()).await?;
         if let Some((_, correlation)) = correlation
             && let Some(scope) = correlation.scope
@@ -93,6 +97,21 @@ async fn verified_api_token(parts: &mut Parts, jwt: &JwtValidationArgs) -> Optio
         Ok(JwtToken::MacroApiToken(token)) => Some(token),
         _ => None,
     }
+}
+
+/// Whether the request is outside the scope `token` signs. The signature is
+/// the claim's authority, so this needs no lookup.
+fn outside_signed_scope(token: Option<&MacroApiToken>, parts: &Parts) -> bool {
+    let scope = SignedScope::from_claim(token.and_then(|token| token.agent_scope.as_deref()));
+    let outside = !scope.allows(parts.method.as_str(), parts.uri.path());
+    if outside {
+        tracing::warn!(
+            ?scope,
+            method = %parts.method,
+            "refused a request outside its credential's signed scope"
+        );
+    }
+    outside
 }
 
 /// The SDK's display verb. Callers read it only after the correlation that
@@ -168,6 +187,9 @@ async fn propagate_request(
 ) -> Response {
     let (mut parts, body) = request.into_parts();
     let token = verified_api_token(&mut parts, &state.jwt).await;
+    if outside_signed_scope(token.as_ref(), &parts) {
+        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
+    }
     let correlation = match accept_correlation(&state, token.as_ref()).await {
         Ok(correlation) => correlation,
         Err(error) => return error.into_response(),
@@ -201,6 +223,31 @@ async fn propagate_request(
             routine_id = attribution.routine_id.map(|id| id.to_string()),
         ))
         .await
+}
+
+/// The scope check for a service with no database to look a correlation up
+/// in: refuse a request outside the scope its credential signs before any
+/// handler runs. Install it wherever a code-mode credential is accepted and
+/// [`propagate`] is not.
+pub fn enforce_signed_scope(
+    state: State<JwtValidationArgs>,
+    request: Request,
+    next: Next,
+) -> impl Future<Output = Response> + Send {
+    enforce_signed_scope_request(state, request, next)
+}
+
+async fn enforce_signed_scope_request(
+    State(jwt): State<JwtValidationArgs>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let (mut parts, body) = request.into_parts();
+    let token = verified_api_token(&mut parts, &jwt).await;
+    if outside_signed_scope(token.as_ref(), &parts) {
+        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
+    }
+    next.run(Request::from_parts(parts, body)).await
 }
 
 #[cfg(test)]
