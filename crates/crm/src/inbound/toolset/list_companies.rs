@@ -33,7 +33,7 @@ const MAX_LIMIT: u16 = 200;
 const FETCH_LIMIT: i64 = 500;
 
 /// A CRM company row returned by [`ListCompanies`].
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CompanyListItem {
     /// The CRM company id. Use with GetCompany, GetEntityProperties /
@@ -60,11 +60,15 @@ pub struct CompanyListItem {
 }
 
 /// Response from the [`ListCompanies`] tool.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListCompaniesResponse {
     /// The matching CRM companies.
     pub companies: Vec<CompanyListItem>,
+    /// How many companies matched before the limit. Filters cover only the
+    /// team's 500 most recently active companies (and 500 more hidden ones
+    /// with `include_hidden`), so this is a lower bound for larger teams.
+    pub total_matching: usize,
     /// Human-readable summary of the results.
     pub summary: String,
 }
@@ -130,186 +134,231 @@ where
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List CRM companies");
+        list_team_companies(&service_context, &request_context, self)
+            .await
+            .map_err(ToolCallError::from)
+    }
+}
 
-        let (team_receipt, role) =
-            caller_team_receipt(&*service_context.entity_access_service, &request_context).await?;
+/// Why the team's companies could not be listed.
+#[derive(Debug, thiserror::Error)]
+pub enum ListCompaniesError {
+    /// Hidden companies were asked for by a member below admin.
+    #[error("include_hidden requires team admin or owner role")]
+    AdminRequired,
+    /// The stage filter names no stage of the team's; says which exist.
+    #[error("{0}")]
+    UnknownStage(String),
+    /// The team, its companies or their properties could not be read.
+    #[error("{}", .0.description)]
+    Failed(ToolCallError),
+}
 
-        let include_hidden = self.include_hidden.unwrap_or(false);
-        if include_hidden && !matches!(role, TeamRole::Admin | TeamRole::Owner) {
-            return Err(ToolCallError {
-                description: "include_hidden requires team admin or owner role".to_string(),
-                internal_error: anyhow::anyhow!("caller is not a team admin/owner"),
-            });
+impl From<ToolCallError> for ListCompaniesError {
+    fn from(error: ToolCallError) -> Self {
+        Self::Failed(error)
+    }
+}
+
+impl From<ListCompaniesError> for ToolCallError {
+    fn from(error: ListCompaniesError) -> Self {
+        match error {
+            ListCompaniesError::Failed(error) => error,
+            other => ToolCallError {
+                description: other.to_string(),
+                internal_error: anyhow::anyhow!("{other}"),
+            },
         }
+    }
+}
 
-        let limit = usize::from(self.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT));
-        let user_id: &str = request_context.user_id.0.as_ref();
+/// The caller's team's CRM companies matching `filters`, most recent
+/// interaction first. Shared by the tool and `GET /crm/companies`.
+pub async fn list_team_companies<CSvc, ESvc, PSvc>(
+    context: &CrmToolContext<CSvc, ESvc, PSvc>,
+    request_context: &RequestContext,
+    filters: &ListCompanies,
+) -> Result<ListCompaniesResponse, ListCompaniesError>
+where
+    CSvc: CrmService,
+    ESvc: EntityAccessService,
+    PSvc: PropertiesService,
+{
+    let (team_receipt, role) =
+        caller_team_receipt(&*context.entity_access_service, request_context).await?;
 
-        // Fetch visible companies (and hidden ones when requested), most
-        // recently active first, then filter in memory.
-        let mut companies = service_context
+    let include_hidden = filters.include_hidden.unwrap_or(false);
+    if include_hidden && !matches!(role, TeamRole::Admin | TeamRole::Owner) {
+        return Err(ListCompaniesError::AdminRequired);
+    }
+
+    let limit = usize::from(filters.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT));
+    let user_id: &str = request_context.user_id.0.as_ref();
+
+    // Fetch visible companies (and hidden ones when requested), most
+    // recently active first, then filter in memory.
+    let mut companies = context
+        .service
+        .list_companies_for_soup(
+            &team_receipt,
+            user_id,
+            &[],
+            Some(false),
+            CrmCompanyListSort::UpdatedAt,
+            None,
+            FETCH_LIMIT,
+        )
+        .await
+        .map_err(crm_error)?;
+    if include_hidden {
+        let hidden = context
             .service
             .list_companies_for_soup(
                 &team_receipt,
                 user_id,
                 &[],
-                Some(false),
+                Some(true),
                 CrmCompanyListSort::UpdatedAt,
                 None,
                 FETCH_LIMIT,
             )
             .await
             .map_err(crm_error)?;
-        if include_hidden {
-            let hidden = service_context
-                .service
-                .list_companies_for_soup(
-                    &team_receipt,
-                    user_id,
-                    &[],
-                    Some(true),
-                    CrmCompanyListSort::UpdatedAt,
-                    None,
-                    FETCH_LIMIT,
-                )
-                .await
-                .map_err(crm_error)?;
-            companies.extend(hidden);
-            companies.sort_by(|a, b| {
-                b.company
-                    .updated_at
-                    .cmp(&a.company.updated_at)
-                    .then_with(|| b.company.id.cmp(&a.company.id))
-            });
-        }
+        companies.extend(hidden);
+        companies.sort_by(|a, b| {
+            b.company
+                .updated_at
+                .cmp(&a.company.updated_at)
+                .then_with(|| b.company.id.cmp(&a.company.id))
+        });
+    }
 
-        // Text filter first so the property fetch only covers candidates.
-        if let Some(search) = self
-            .search
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            let needle = search.to_lowercase();
-            companies.retain(|c| matches_search(c, &needle));
-        }
+    // Text filter first so the property fetch only covers candidates.
+    if let Some(search) = filters
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let needle = search.to_lowercase();
+        companies.retain(|c| matches_search(c, &needle));
+    }
 
-        let stage_catalog =
-            load_stage_option_catalog(&*service_context.properties, team_receipt.receipt()).await?;
+    let stage_catalog =
+        load_stage_option_catalog(&*context.properties, team_receipt.receipt()).await?;
 
-        // Resolve the stage filter to option ids up front so an unknown
-        // stage fails with an actionable error instead of an empty list.
-        let stage_option_ids = match self
-            .stage
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            Some(stage) => {
-                let ids = stage_catalog.matching_option_ids(stage);
-                if ids.is_empty() {
-                    return Err(ToolCallError {
-                        description: format!(
-                            "unknown stage '{stage}'. Known stages for this team: {}",
-                            stage_catalog.known_labels().join(", ")
-                        ),
-                        internal_error: anyhow::anyhow!("unknown stage filter"),
-                    });
-                }
-                Some(ids)
+    // Resolve the stage filter to option ids up front so an unknown
+    // stage fails with an actionable error instead of an empty list.
+    let stage_option_ids = match filters
+        .stage
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        Some(stage) => {
+            let ids = stage_catalog.matching_option_ids(stage);
+            if ids.is_empty() {
+                return Err(ListCompaniesError::UnknownStage(format!(
+                    "unknown stage '{stage}'. Known stages for this team: {}",
+                    stage_catalog.known_labels().join(", ")
+                )));
             }
-            None => None,
-        };
+            Some(ids)
+        }
+        None => None,
+    };
 
-        // Attach Stage / Owner / Revenue for the remaining candidates.
-        // Teams with customized pipelines store stage values under a
-        // team-scoped "Stage" definition rather than the system one, so
-        // include those definition ids in the fetch filter too.
-        // Access to these companies is proven by the caller's team receipt:
-        // the list is the caller's own team's CRM listing.
-        let company_access = company_view_receipts(
-            &request_context.user_id,
-            companies.iter().map(|c| c.company.id),
-        );
-        let mut property_ids = vec![
-            SystemPropertyKey::STAGE_UUID,
-            SystemPropertyKey::COMPANY_OWNER_UUID,
-            SystemPropertyKey::REVENUE_UUID,
-        ];
-        property_ids.extend_from_slice(stage_catalog.team_stage_definition_ids());
-        let properties_map = service_context
-            .properties
-            .get_bulk_entity_properties(&company_access, property_ids)
-            .await
-            .map_err(|e| ToolCallError {
+    // Attach Stage / Owner / Revenue for the remaining candidates.
+    // Teams with customized pipelines store stage values under a
+    // team-scoped "Stage" definition rather than the system one, so
+    // include those definition ids in the fetch filter too.
+    // Access to these companies is proven by the caller's team receipt:
+    // the list is the caller's own team's CRM listing.
+    let company_access = company_view_receipts(
+        &request_context.user_id,
+        companies.iter().map(|c| c.company.id),
+    );
+    let mut property_ids = vec![
+        SystemPropertyKey::STAGE_UUID,
+        SystemPropertyKey::COMPANY_OWNER_UUID,
+        SystemPropertyKey::REVENUE_UUID,
+    ];
+    property_ids.extend_from_slice(stage_catalog.team_stage_definition_ids());
+    let properties_map = context
+        .properties
+        .get_bulk_entity_properties(&company_access, property_ids)
+        .await
+        .map_err(|e| {
+            ListCompaniesError::Failed(ToolCallError {
                 description: "failed to load company properties".to_string(),
                 internal_error: e.into(),
-            })?;
+            })
+        })?;
 
-        let mut items: Vec<CompanyListItem> = Vec::new();
-        let mut total_matching = 0usize;
-        for company in companies {
-            let props_key = PropertyTargetKey {
-                entity_id: company.company.id.to_string(),
-                entity_type: EntityType::CrmCompany,
-            };
-            let props = properties_map
-                .get(&props_key)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            let crm_props = extract_company_crm_props(props, &stage_catalog);
+    let mut items: Vec<CompanyListItem> = Vec::new();
+    let mut total_matching = 0usize;
+    for company in companies {
+        let props_key = PropertyTargetKey {
+            entity_id: company.company.id.to_string(),
+            entity_type: EntityType::CrmCompany,
+        };
+        let props = properties_map
+            .get(&props_key)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let crm_props = extract_company_crm_props(props, &stage_catalog);
 
-            if let Some(stage_ids) = &stage_option_ids {
-                let matches_stage = crm_props
-                    .stage
-                    .as_ref()
-                    .is_some_and(|stage| stage_ids.contains(&stage.option_id));
-                if !matches_stage {
-                    continue;
-                }
+        if let Some(stage_ids) = &stage_option_ids {
+            let matches_stage = crm_props
+                .stage
+                .as_ref()
+                .is_some_and(|stage| stage_ids.contains(&stage.option_id));
+            if !matches_stage {
+                continue;
             }
-            if let Some(owner_filter) = self
+        }
+        if let Some(owner_filter) = filters
+            .owner_user_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            let matches_owner = crm_props
                 .owner_user_id
                 .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            {
-                let matches_owner = crm_props
-                    .owner_user_id
-                    .as_deref()
-                    .is_some_and(|owner| owner.eq_ignore_ascii_case(owner_filter));
-                if !matches_owner {
-                    continue;
-                }
-            }
-
-            total_matching += 1;
-            if items.len() < limit {
-                items.push(to_list_item(company, crm_props));
+                .is_some_and(|owner| owner.eq_ignore_ascii_case(owner_filter));
+            if !matches_owner {
+                continue;
             }
         }
 
-        let summary = if items.is_empty() {
-            "No CRM companies match the given filters.".to_string()
-        } else if total_matching > items.len() {
-            format!(
-                "Showing {} of {} matching CRM companies (sorted by most recent interaction). Narrow with search/stage/owner filters or raise limit.",
-                items.len(),
-                total_matching
-            )
-        } else {
-            format!(
-                "Found {} CRM compan{} (sorted by most recent interaction).",
-                items.len(),
-                if items.len() == 1 { "y" } else { "ies" }
-            )
-        };
-
-        Ok(ListCompaniesResponse {
-            companies: items,
-            summary,
-        })
+        total_matching += 1;
+        if items.len() < limit {
+            items.push(to_list_item(company, crm_props));
+        }
     }
+
+    let summary = if items.is_empty() {
+        "No CRM companies match the given filters.".to_string()
+    } else if total_matching > items.len() {
+        format!(
+            "Showing {} of {} matching CRM companies (sorted by most recent interaction). Narrow with search/stage/owner filters or raise limit.",
+            items.len(),
+            total_matching
+        )
+    } else {
+        format!(
+            "Found {} CRM compan{} (sorted by most recent interaction).",
+            items.len(),
+            if items.len() == 1 { "y" } else { "ies" }
+        )
+    };
+
+    Ok(ListCompaniesResponse {
+        companies: items,
+        total_matching,
+        summary,
+    })
 }
 
 fn matches_search(company: &CrmCompanyForSoup, needle: &str) -> bool {

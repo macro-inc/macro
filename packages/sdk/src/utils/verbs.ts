@@ -243,7 +243,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
       listTeamCalendar listTeamOutOfOffice meetingList meetingListActive listChannelLabels
       getChannelAttachments listChannelBots getChannelParticipants getChannels listCrmBlockedDomains
-      listCompanyContacts listCrmPipelines listCrmPipelineDetails getCrmPipelineRows listDatabases listDatabaseColumnCasts
+      listCompanies listCompanyContacts listCrmPipelines listCrmPipelineDetails getCrmPipelineRows listDatabases listDatabaseColumnCasts
       listDatabaseWebhooks getUserDocumentsHandler getSystemSkillsHandler externalChats
       externalChatMessages externalChatMessageAttachments listFavorites listForms
       listAccessibleForms getGithubPullRequestFacets getGithubPullRequestTasks listHarnesses

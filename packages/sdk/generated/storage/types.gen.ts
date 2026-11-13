@@ -4689,6 +4689,42 @@ export type CompanyImportResponse = {
 };
 
 /**
+ * A CRM company row returned by [`ListCompanies`].
+ */
+export type CompanyListItem = {
+    /**
+     * The company's email domains, primary domain first.
+     */
+    domains: Array<string>;
+    /**
+     * Whether the company is hidden from the team's CRM listings.
+     */
+    hidden: boolean;
+    /**
+     * The CRM company id. Use with GetCompany, GetEntityProperties /
+     * SetEntityProperty (entity_type=company).
+     */
+    id: string;
+    /**
+     * Most recent known email interaction with this company.
+     */
+    lastInteraction: string;
+    /**
+     * Company display name, when resolved.
+     */
+    name?: string | null;
+    /**
+     * Macro user id of the company's owner, if set.
+     */
+    ownerUserId?: string | null;
+    /**
+     * The company's revenue (dollars), if set.
+     */
+    revenue?: number | null;
+    stage?: null | ToolCompanyStage;
+};
+
+/**
  * Explicit upload completion; a seal can be submitted separately with an empty list.
  */
 export type CompleteUploads = {
@@ -13472,6 +13508,26 @@ export type LinePatch = {
 export type LinkShare = 'PUBLIC' | 'TEAM';
 
 /**
+ * Response from the [`ListCompanies`] tool.
+ */
+export type ListCompaniesResponse = {
+    /**
+     * The matching CRM companies.
+     */
+    companies: Array<CompanyListItem>;
+    /**
+     * Human-readable summary of the results.
+     */
+    summary: string;
+    /**
+     * How many companies matched before the limit. Filters cover only the
+     * team's 500 most recently active companies (and 500 more hidden ones
+     * with `include_hidden`), so this is a lower bound for larger teams.
+     */
+    totalMatching: number;
+};
+
+/**
  * A database's webhooks.
  */
 export type ListDatabaseWebhooksResponse = {
@@ -21758,6 +21814,21 @@ export type TimelineActivity = {
 };
 
 /**
+ * A company's own Stage property: the select option id currently set plus its
+ * human-readable label.
+ */
+export type ToolCompanyStage = {
+    /**
+     * The stage's display label (e.g. "Lead", "Customer").
+     */
+    label: string;
+    /**
+     * The stage property option id (usable with SetEntityProperty).
+     */
+    optionId: string;
+};
+
+/**
  * A column a table's changes since some version touched.
  */
 export type TouchedColumn = {
@@ -26962,6 +27033,56 @@ export type BlockCrmDomainResponses = {
 };
 
 export type BlockCrmDomainResponse = BlockCrmDomainResponses[keyof BlockCrmDomainResponses];
+
+export type ListCompaniesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Case-insensitive substring of a company name or domain.
+         */
+        search?: string;
+        /**
+         * The company's own Stage property: a stage label (case-insensitive) or
+         * stage option id.
+         */
+        stage?: string;
+        /**
+         * Only companies whose Owner property is this Macro user id.
+         */
+        ownerUserId?: string;
+        /**
+         * Also include hidden companies (team admin or owner only).
+         */
+        includeHidden?: boolean;
+        /**
+         * Maximum companies to return (1-200, default 50).
+         */
+        limit?: number;
+    };
+    url: '/crm/companies';
+};
+
+export type ListCompaniesErrors = {
+    /**
+     * Unknown stage
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * Hidden companies need team admin or owner
+     */
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListCompaniesError = ListCompaniesErrors[keyof ListCompaniesErrors];
+
+export type ListCompaniesResponses = {
+    200: ListCompaniesResponse;
+};
+
+export type ListCompaniesResponse2 = ListCompaniesResponses[keyof ListCompaniesResponses];
 
 export type CreateCrmCompanyData = {
     body: CreateCrmCompanyRequest;

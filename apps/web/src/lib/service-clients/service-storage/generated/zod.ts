@@ -7455,6 +7455,111 @@ export const unblockCrmDomainParams = zod.object({
 });
 
 /**
+ * @summary List the caller's team's CRM companies, most recent interaction first,
+with each company's own Stage, Owner and Revenue.
+ */
+export const listCompaniesQueryLimitMin = 0;
+
+export const listCompaniesQueryParams = zod.object({
+  search: zod
+    .string()
+    .optional()
+    .describe('Case-insensitive substring of a company name or domain.'),
+  stage: zod
+    .string()
+    .optional()
+    .describe(
+      "The company's own Stage property: a stage label (case-insensitive) or\nstage option id."
+    ),
+  ownerUserId: zod
+    .string()
+    .optional()
+    .describe('Only companies whose Owner property is this Macro user id.'),
+  includeHidden: zod
+    .boolean()
+    .optional()
+    .describe('Also include hidden companies (team admin or owner only).'),
+  limit: zod
+    .number()
+    .min(listCompaniesQueryLimitMin)
+    .optional()
+    .describe('Maximum companies to return (1-200, default 50).'),
+});
+
+export const listCompaniesResponseTotalMatchingMin = 0;
+
+export const listCompaniesResponse = zod
+  .object({
+    companies: zod
+      .array(
+        zod
+          .object({
+            domains: zod
+              .array(zod.string())
+              .describe("The company's email domains, primary domain first."),
+            hidden: zod
+              .boolean()
+              .describe(
+                "Whether the company is hidden from the team's CRM listings."
+              ),
+            id: zod
+              .uuid()
+              .describe(
+                'The CRM company id. Use with GetCompany, GetEntityProperties \/\nSetEntityProperty (entity_type=company).'
+              ),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe(
+                'Most recent known email interaction with this company.'
+              ),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Company display name, when resolved.'),
+            ownerUserId: zod
+              .string()
+              .nullish()
+              .describe("Macro user id of the company's owner, if set."),
+            revenue: zod
+              .number()
+              .nullish()
+              .describe("The company's revenue (dollars), if set."),
+            stage: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    label: zod
+                      .string()
+                      .describe(
+                        'The stage\'s display label (e.g. \"Lead\", \"Customer\").'
+                      ),
+                    optionId: zod
+                      .uuid()
+                      .describe(
+                        'The stage property option id (usable with SetEntityProperty).'
+                      ),
+                  })
+                  .describe(
+                    "A company's own Stage property: the select option id currently set plus its\nhuman-readable label."
+                  ),
+              ])
+              .optional(),
+          })
+          .describe('A CRM company row returned by [`ListCompanies`].')
+      )
+      .describe('The matching CRM companies.'),
+    summary: zod.string().describe('Human-readable summary of the results.'),
+    totalMatching: zod
+      .number()
+      .min(listCompaniesResponseTotalMatchingMin)
+      .describe(
+        "How many companies matched before the limit. Filters cover only the\nteam's 500 most recently active companies (and 500 more hidden ones\nwith `include_hidden`), so this is a lower bound for larger teams."
+      ),
+  })
+  .describe('Response from the [`ListCompanies`] tool.');
+
+/**
  * @summary Manually create a CRM company for the caller's team. Any team member
 may create one. A domain, when given, must not already be tracked by the team
 (409), and the team's CRM killswitch must be on (403). Returns the

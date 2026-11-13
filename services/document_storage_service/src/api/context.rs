@@ -227,6 +227,14 @@ pub(crate) type DssPipelineWorkflowState =
         AuthorizationService,
     >;
 
+/// `GET /crm/companies`: the `ListCompanies` listing over HTTP.
+pub(crate) type DssCrmCompanyListState = crm::inbound::company_list::CompanyListState<
+    DssCrmService,
+    EntityAccessService,
+    PropertiesService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -1058,6 +1066,7 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub crm_company_list_state: DssCrmCompanyListState,
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
     pub pipeline_workflow_state: DssPipelineWorkflowState,

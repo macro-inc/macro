@@ -245,6 +245,7 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "UpdateSharing",
         "SaveDatabaseQuery",
         "GetCompany",
+        "ListCompanies",
         "CreateCompany",
         "CreateContact",
         "ImportCompaniesCsv",

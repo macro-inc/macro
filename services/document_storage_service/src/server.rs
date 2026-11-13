@@ -2742,6 +2742,14 @@ async fn run_server() -> anyhow::Result<()> {
             transfer: crm_transfer,
             authorization: authorization_state.clone(),
         },
+        crm_company_list_state: crm::inbound::company_list::CompanyListState {
+            tools: crm::inbound::toolset::CrmToolContext {
+                service: Arc::new(crm_service.clone()),
+                entity_access_service: entity_access_service.clone(),
+                properties: properties_service.clone(),
+            },
+            authorization_state: authorization_state.clone(),
+        },
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
             stage_service: Arc::new(crm::domain::stages::CrmStageServiceImpl::new(

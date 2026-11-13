@@ -378,9 +378,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.databases.saveQuery(), Database.saveQuery() and
                 // DatabaseTable.saveQuery().
                 | "SaveDatabaseQuery"
-                // macro.crm: companyById(), createCompany(), createContact()
-                // and importCompaniesCsv().
+                // macro.crm: companyById(), listCompanies(), createCompany(),
+                // createContact() and importCompaniesCsv().
                 | "GetCompany"
+                | "ListCompanies"
                 | "CreateCompany"
                 | "CreateContact"
                 | "ImportCompaniesCsv"

@@ -27,6 +27,10 @@ tools/HTTP/GraphQL surfaces over them.
   with its fields and version, as `ListPipelines` sees them) backs
   `crm.pipelines.listWithFields()`.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
+- `src/inbound/company_list.rs`: `GET /crm/companies`, merged into `/crm`,
+  runs the `ListCompanies` tool's listing (`toolset/list_companies.rs`
+  `list_team_companies`) over HTTP for the SDK's `crm.listCompanies()`; its
+  state carries the properties service the main CRM router does not.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
 
