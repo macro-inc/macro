@@ -463,7 +463,7 @@ impl<
             .get(computer_id)
             .await
             .map_err(internal)?
-            .filter(|computer| computer.team_id() == team_id)
+            .filter(|computer| computer.team_id() == Some(team_id))
         {
             return Ok(record);
         }

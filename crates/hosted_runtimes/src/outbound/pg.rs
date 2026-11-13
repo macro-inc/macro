@@ -16,12 +16,13 @@ use crate::domain::lifecycle::{
 };
 use crate::domain::models::{
     Computer, ComputerRecord, Funding, Host, HostAllocation, HostRegistration, NewReservation,
-    Reservation, Reserved, SanitizedReason,
+    Ownership, Reservation, Reserved, SanitizedReason,
 };
 use crate::domain::ports::{Applied, ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::{ComputerResources, ComputerSize};
 
 mod apply;
+mod pool;
 mod records;
 mod reservations;
 mod row;
@@ -50,6 +51,9 @@ pub enum PgComputerError {
     /// A row violates a field rule; this diagnostic cannot contain stored values.
     #[error("{0}")]
     InvalidRow(#[from] SanitizedReason),
+    /// Handing a pool computer's harness to its team failed.
+    #[error("{0:?}")]
+    Harness(rootcause::Report),
     /// Only fleet and billing effects are stored in the outbox.
     #[error("{0:?} effects are not stored in the outbox")]
     NotAnOutboxWorker(EffectWorker),
@@ -234,7 +238,9 @@ impl ComputerRepo for PgComputerRepo {
         .await?;
         let (mut state, effects) = provision(
             billing,
-            crate::domain::setup::SetupTimeline::started(reservation.created_at),
+            Some(crate::domain::setup::SetupTimeline::started(
+                reservation.created_at,
+            )),
             reservation.provision_traceparent.clone(),
             Context {
                 host: reservation.host,
@@ -294,17 +300,19 @@ impl ComputerRepo for PgComputerRepo {
         Self::store_effects(&mut tx, reservation.id, effects, now).await?;
         let computer = Computer {
             id: reservation.id,
-            team_id: reservation.team_id,
+            owner: Some(Ownership {
+                team_id: reservation.team_id,
+                created_by: reservation.created_by,
+                funding: reservation.funding,
+            }),
             name: reservation.name,
             size: reservation.size,
             resources: reservation.resources,
             catalog_entry: reservation.catalog_entry,
-            funding: reservation.funding,
             host: reservation.host,
             state,
             harness_id: None,
             enrollment_generation: generation,
-            created_by: reservation.created_by,
             created_at: reservation.created_at,
             enrolled_at: None,
             setup_completed_at: None,
@@ -314,6 +322,30 @@ impl ComputerRepo for PgComputerRepo {
         tx.commit().await?;
         Self::record_setup(&computer, &computer.state, &finished_setup);
         Ok(Some(computer))
+    }
+
+    #[tracing::instrument(name = "computer.pool.claim", skip(self, purchase, billing), fields(team_id = %purchase.team_id, size = purchase.size.as_ref()), err)]
+    async fn claim_pool_computer(
+        &self,
+        purchase: &NewReservation,
+        billing: crate::domain::lifecycle::ClaimBilling,
+        now: DateTime<Utc>,
+    ) -> Result<crate::domain::models::Claim, PgComputerError> {
+        self.claim(purchase, billing, now).await
+    }
+
+    async fn pool_computers(&self, host: HostId) -> Result<Vec<Computer>, PgComputerError> {
+        self.live_pool_computers(host).await
+    }
+
+    #[tracing::instrument(skip(self, computer), fields(computer_id = %computer.id, size = computer.size.as_ref()), err)]
+    async fn add_pool_computer(
+        &self,
+        computer: crate::domain::models::NewPoolComputer,
+        target: u32,
+        now: DateTime<Utc>,
+    ) -> Result<Option<Computer>, PgComputerError> {
+        self.insert_pool_computer(computer, target, now).await
     }
 
     async fn delete_reservation(
@@ -467,7 +499,7 @@ impl ComputerRepo for PgComputerRepo {
             r#"
             SELECT id, harness_id AS "harness_id!"
             FROM hosted_runtime
-            WHERE awake AND harness_id IS NOT NULL
+            WHERE awake AND harness_id IS NOT NULL AND team_id IS NOT NULL
             "#,
         )
         .fetch_all(&self.pool)
@@ -843,11 +875,12 @@ impl ComputerRepo for PgComputerRepo {
         let sold = i32::try_from(registration.sold_capacity_units())?;
         let row = sqlx::query!(
             r#"
-            INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units, image)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (name) DO UPDATE
             SET awake_capacity_units = EXCLUDED.awake_capacity_units,
                 sold_capacity_units = EXCLUDED.sold_capacity_units,
+                image = EXCLUDED.image,
                 updated_at = now()
             RETURNING id, name, awake_capacity_units, sold_capacity_units
             "#,
@@ -855,6 +888,7 @@ impl ComputerRepo for PgComputerRepo {
             registration.name,
             awake,
             sold,
+            registration.image.as_str(),
         )
         .fetch_one(&self.pool)
         .await?;
@@ -885,12 +919,14 @@ impl ComputerRepo for PgComputerRepo {
 
     #[tracing::instrument(skip(self), err)]
     async fn allocation(&self) -> Result<Vec<HostAllocation>, PgComputerError> {
-        // The same holdings `reserve` checks: live computers and every reservation.
+        // The same holdings `reserve` checks: live bought computers and every
+        // reservation. Pool computers hold awake units, never sold ones.
         let rows = sqlx::query!(
             r#"
             WITH held AS (
                 SELECT host_id, vcpus, memory_gib, disk_gib
-                FROM hosted_runtime WHERE (state->'phase'->>'phase') <> 'destroying'
+                FROM hosted_runtime
+                WHERE (state->'phase'->>'phase') <> 'destroying' AND team_id IS NOT NULL
                 UNION ALL
                 SELECT host_id, vcpus, memory_gib, disk_gib
                 FROM computer_reservation
@@ -940,7 +976,8 @@ impl ComputerRepo for PgComputerRepo {
             r#"
             WITH held AS (
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4) AS units
-                FROM hosted_runtime WHERE (state->'phase'->>'phase') <> 'destroying'
+                FROM hosted_runtime
+                WHERE (state->'phase'->>'phase') <> 'destroying' AND team_id IS NOT NULL
                 UNION ALL
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
                 FROM computer_reservation

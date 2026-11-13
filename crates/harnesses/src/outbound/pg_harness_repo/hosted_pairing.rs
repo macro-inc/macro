@@ -67,6 +67,63 @@ pub(super) async fn grant_team_access(
     })
 }
 
+/// See [`super::join_hosted_harness`].
+pub(super) async fn join_hosted_harness(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    computer_id: ComputerId,
+    team_id: Uuid,
+    name: &str,
+    owner: &str,
+) -> Result<bool, HarnessPersistenceError> {
+    let failed = |context: &'static str| {
+        move |error: sqlx::Error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context(context)
+                    .into_dynamic(),
+            )
+        }
+    };
+    // The same order as registration: the computer's pairing lock, then its harness row.
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))",
+        computer_id.as_uuid(),
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failed("failed to lock the computer's pairing"))?;
+    let harness_id = sqlx::query_scalar!(
+        r#"
+        UPDATE harnesses
+        SET name = $2, owner_user_id = $3, created_by = $3, updated_at = now()
+        WHERE id = (
+            SELECT id FROM harnesses
+            WHERE computer_id = $1 AND deleted_at IS NULL
+            FOR UPDATE
+        )
+        RETURNING id
+        "#,
+        computer_id.as_uuid(),
+        name,
+        owner,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(failed("failed to give the computer's harness to its team"))?;
+    let Some(harness_id) = harness_id else {
+        return Ok(false);
+    };
+    team_share::acquire_guard(tx).await.map_err(|error| {
+        HarnessPersistenceError::Internal(
+            rootcause::report!("{error}")
+                .context("failed to acquire team-share guard")
+                .into_dynamic(),
+        )
+    })?;
+    grant_team_access(tx, HarnessId::new_from_uuid(harness_id), team_id).await?;
+    Ok(true)
+}
+
 pub(super) async fn insert_hosted_pairing(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     pairing: &NewPairing,

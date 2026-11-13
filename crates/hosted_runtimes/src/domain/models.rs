@@ -80,13 +80,29 @@ impl ControlPlaneId {
     }
 }
 
-/// One computer allocated to a team.
+/// The harness owner of a pool computer, which no person owns yet. Nothing
+/// is granted through it: a computer harness's access comes from its team.
+pub const POOL_HARNESS_OWNER: &str = "macro|computer-pool@macro.com";
+
+/// Who bought a computer and how it is paid for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ownership {
+    /// Team that owns the computer.
+    pub team_id: Uuid,
+    /// Macro user who purchased the computer.
+    pub created_by: MacroUserIdStr<'static>,
+    /// How the purchase was funded: the saved Stripe price, or the comp reason.
+    pub funding: Funding,
+}
+
+/// One computer allocated to a team, or waiting in the warm pool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Computer {
     /// Stable resource identity.
     pub id: ComputerId,
-    /// Team that owns the computer.
-    pub team_id: Uuid,
+    /// Who bought it; `None` while it waits in the warm pool
+    /// ([`crate::domain::lifecycle::Billing::Pool`]).
+    pub owner: Option<Ownership>,
     /// Display name.
     pub name: ComputerName,
     /// Purchased catalog size.
@@ -95,8 +111,6 @@ pub struct Computer {
     pub resources: ComputerResources,
     /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
-    /// How the purchase was funded: the saved Stripe price, or the comp reason.
-    pub funding: Funding,
     /// The fleet host holding the computer.
     pub host: HostId,
     /// Persisted lifecycle state: the machine phase and its billing.
@@ -105,8 +119,6 @@ pub struct Computer {
     pub harness_id: Option<HarnessId>,
     /// Last guest creation begun by the fleet; retries keep the same generation.
     pub enrollment_generation: crate::domain::enrollment::EnrollmentGeneration,
-    /// Macro user who purchased the computer.
-    pub created_by: MacroUserIdStr<'static>,
     /// Time the computer was reserved.
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
@@ -130,8 +142,8 @@ pub enum ComputerRecord {
     NeedsAttention {
         /// Stable resource identity.
         id: ComputerId,
-        /// Owning team.
-        team_id: Uuid,
+        /// Owning team; `None` for a pool computer.
+        team_id: Option<Uuid>,
         /// Host recorded independently of the lifecycle payload.
         host_id: Option<HostId>,
         /// Field and validation rule, without stored values.
@@ -172,7 +184,7 @@ impl From<&Computer> for ComputerDisplayMetadata {
             disk_gib: i64::from(computer.resources.disk_gib.get()),
             catalog_entry: computer.catalog_entry.as_str().to_owned(),
             created_at: computer.created_at,
-            purchased_by: computer.created_by.to_string(),
+            purchased_by: computer.purchased_by(),
         }
     }
 }
@@ -198,10 +210,10 @@ impl ComputerRecord {
         }
     }
 
-    /// Ownership survives payload decoding failure.
-    pub fn team_id(&self) -> Uuid {
+    /// Ownership survives payload decoding failure; `None` for a pool computer.
+    pub fn team_id(&self) -> Option<Uuid> {
         match self {
-            Self::Healthy(computer) => computer.team_id,
+            Self::Healthy(computer) => computer.team_id(),
             Self::NeedsAttention { team_id, .. } => *team_id,
         }
     }
@@ -353,10 +365,16 @@ pub struct Reservation {
     pub created_at: DateTime<Utc>,
 }
 
+/// The Stripe idempotency key of the purchase charge of computer `id`: a
+/// reservation's, or a taken pool computer's (each computer is bought once).
+pub fn charge_key(id: ComputerId) -> String {
+    format!("computer-add:{id}")
+}
+
 impl Reservation {
     /// The Stripe idempotency key of this purchase's charge.
     pub fn charge_key(&self) -> String {
-        format!("computer-add:{}", self.id)
+        charge_key(self.id)
     }
 
     /// A reservation as its team sees it: purchasing, setup step
@@ -404,6 +422,35 @@ pub enum Reserved {
     Pending(Reservation),
     /// This key already bought a computer.
     Purchased(Box<ComputerRecord>),
+}
+
+/// What a purchase's attempt to take a pool computer did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Claim {
+    /// The purchase took this pool computer; its charge, if any, settles
+    /// after the purchase returns.
+    Taken(Box<Computer>),
+    /// No pool computer fits (none of the size on the host's image, no sold
+    /// capacity, the team has an unpaid one already, or the purchase key was
+    /// used before): the purchase creates one instead.
+    Unavailable,
+}
+
+/// A pool computer to create on a host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewPoolComputer {
+    /// Its id.
+    pub id: ComputerId,
+    /// The host to create it on.
+    pub host: HostId,
+    /// Its catalog size.
+    pub size: ComputerSize,
+    /// Its resources, from the catalog.
+    pub resources: ComputerResources,
+    /// The catalog entry it was created from.
+    pub catalog_entry: CatalogEntryId,
+    /// The name its harness shows until a team names it.
+    pub name: ComputerName,
 }
 
 /// How a purchase ended in the request that made it.
@@ -560,6 +607,8 @@ pub struct HostRegistration {
     pub reserve_gb: u32,
     /// How many units are sold per awake unit.
     pub oversell_factor: u32,
+    /// The image the host's fleet creates computers from.
+    pub image: crate::domain::image::GuestImage,
 }
 
 impl HostRegistration {
@@ -731,9 +780,32 @@ pub struct ComputerStatus {
 }
 
 impl Computer {
+    /// The team that bought it; `None` for a pool computer.
+    pub fn team_id(&self) -> Option<Uuid> {
+        self.owner.as_ref().map(|owner| owner.team_id)
+    }
+
+    /// How it is paid for; `None` for a pool computer.
+    pub fn funding(&self) -> Option<&Funding> {
+        self.owner.as_ref().map(|owner| &owner.funding)
+    }
+
+    /// `"stripe"`, `"comped"` or `"pool"`, for telemetry.
+    pub fn funding_kind(&self) -> &'static str {
+        self.funding().map_or("pool", Funding::kind)
+    }
+
+    /// The buyer's id, empty for a pool computer.
+    pub fn purchased_by(&self) -> String {
+        self.owner
+            .as_ref()
+            .map(|owner| owner.created_by.to_string())
+            .unwrap_or_default()
+    }
+
     /// The saved comp reason, for a comped purchase.
     pub fn comp_reason(&self) -> Option<&str> {
-        match &self.funding {
+        match self.funding()? {
             Funding::Comped { reason } => Some(reason),
             Funding::Stripe { .. } => None,
         }
@@ -783,6 +855,7 @@ impl Computer {
                 None,
             ),
             Billing::Comped { .. } => (BillingStatus::Comped, None, None, None),
+            Billing::Pool | Billing::Charging => (BillingStatus::Purchasing, None, None, None),
         };
         let live = self.state.is_live();
 
@@ -826,7 +899,7 @@ impl Computer {
             past_due_since,
             harness_id: self.harness_id,
             created_at: self.created_at,
-            purchased_by: self.created_by.to_string(),
+            purchased_by: self.purchased_by(),
             setup_completed_at: self.setup_completed_at,
             default_agent_id: self.default_agent_id,
             agent_count,

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH held AS (\n                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4) AS units\n                FROM hosted_runtime\n                WHERE (state->'phase'->>'phase') <> 'destroying' AND team_id IS NOT NULL\n                UNION ALL\n                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)\n                FROM computer_reservation\n            )\n            SELECT COALESCE(MAX(free), 0)::INTEGER AS \"free!\"\n            FROM (\n                SELECT host.sold_capacity_units - COALESCE(SUM(held.units), 0) AS free\n                FROM hosted_runtime_host host\n                LEFT JOIN held ON held.host_id = host.id\n                GROUP BY host.id, host.sold_capacity_units\n            ) hosts\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "free!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6a59f0a63c299b3747a903c19b783dad9f37b3b09bf1987be2365df1f2596305"
+}

@@ -18,6 +18,7 @@ use crate::domain::models::{
 use crate::domain::ports::{ChargeStatus, ItemCharge, StaticFleetAttachment};
 
 mod comped;
+mod pool;
 mod quarantine;
 mod rollout;
 mod sold_resources;
@@ -300,13 +301,20 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
         },
         BillingState::Active { .. }
         | BillingState::PastDue { .. }
-        | BillingState::EndsAt { .. } => Funding::Stripe {
+        | BillingState::EndsAt { .. }
+        | BillingState::Pool
+        | BillingState::Charging => Funding::Stripe {
             price_id: stripe::PriceId::from_str("price_standard").unwrap(),
         },
     };
+    let owner = (billing != BillingState::Pool).then(|| crate::domain::models::Ownership {
+        team_id: TEAM,
+        created_by: admin(),
+        funding,
+    });
     Computer {
         id,
-        team_id: TEAM,
+        owner,
         name: ComputerName::try_new("Build box").unwrap(),
         size: ComputerSize::Standard,
         resources: crate::domain::size::ComputerResources {
@@ -316,7 +324,6 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
         },
         catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-11".to_owned())
             .unwrap(),
-        funding,
         host: HOST,
         state: ComputerState {
             phase,
@@ -334,7 +341,6 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
             failure: None,
         },
         harness_id: None,
-        created_by: admin(),
         created_at: now() - chrono::Duration::days(30),
         enrolled_at: Some(now() - chrono::Duration::days(30)),
         setup_completed_at: None,
@@ -418,10 +424,10 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         .unwrap();
     assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
     assert_eq!(
-        stored.funding,
-        Funding::Stripe {
+        stored.funding(),
+        Some(&Funding::Stripe {
             price_id: stripe::PriceId::from_str("price_standard").unwrap()
-        }
+        })
     );
     assert_eq!(
         stored.state.billing,

@@ -121,7 +121,7 @@ async fn main() -> Result<(), rootcause::Report> {
         Billing::Comped {
             reason: "fleet smoke test".to_owned(),
         },
-        hosted_runtimes::domain::setup::SetupTimeline::started(now),
+        Some(hosted_runtimes::domain::setup::SetupTimeline::started(now)),
         None,
         Context {
             host,
@@ -133,7 +133,15 @@ async fn main() -> Result<(), rootcause::Report> {
     );
     let computer = Computer {
         id: ComputerId::new_from_uuid(Uuid::now_v7()),
-        team_id: Uuid::now_v7(),
+        owner: Some(hosted_runtimes::domain::models::Ownership {
+            team_id: Uuid::now_v7(),
+            created_by: macro_user_id::user_id::MacroUserIdStr::try_from(
+                "macro|smoke@example.com".to_owned(),
+            )?,
+            funding: hosted_runtimes::domain::models::Funding::Comped {
+                reason: "fleet smoke test".to_owned(),
+            },
+        }),
         name: ComputerName::try_new("fleet smoke test")?,
         size: ComputerSize::Standard,
         resources: hosted_runtimes::domain::size::ComputerResources {
@@ -144,15 +152,9 @@ async fn main() -> Result<(), rootcause::Report> {
         catalog_entry: hosted_runtimes::domain::size::CatalogEntryId::try_new(
             "standard@2026-11".to_owned(),
         )?,
-        funding: hosted_runtimes::domain::models::Funding::Comped {
-            reason: "fleet smoke test".to_owned(),
-        },
         host,
         state,
         harness_id: None,
-        created_by: macro_user_id::user_id::MacroUserIdStr::try_from(
-            "macro|smoke@example.com".to_owned(),
-        )?,
         created_at: now,
         enrolled_at: None,
         setup_completed_at: None,

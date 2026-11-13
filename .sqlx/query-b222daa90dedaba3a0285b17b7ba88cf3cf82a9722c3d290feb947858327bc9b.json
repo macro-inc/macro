@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) AS \"pooled!\" FROM hosted_runtime\n            WHERE host_id = $1 AND team_id IS NULL AND size = $2\n              AND (state->'phase'->>'phase') <> 'destroying'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pooled!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "computer_size",
+            "kind": {
+              "Enum": [
+                "standard",
+                "large",
+                "xl"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b222daa90dedaba3a0285b17b7ba88cf3cf82a9722c3d290feb947858327bc9b"
+}

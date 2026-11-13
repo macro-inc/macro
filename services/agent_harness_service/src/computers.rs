@@ -27,6 +27,7 @@ use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -64,6 +65,7 @@ pub(crate) async fn operator(
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    redis: redis::Client,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
@@ -138,12 +140,14 @@ pub(crate) async fn operator(
         HostedHarnesses {
             service: harnesses,
             default_agents,
+            redis,
         },
         SystemClock,
         Arc::new(ServiceDeployment),
     )
     .await
-    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
+    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
+    .with_pool(config.computer_pool());
     Ok(Some(Arc::new(operator)))
 }
 
@@ -424,6 +428,9 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
 pub struct HostedHarnesses {
     service: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    /// The runtime command bus, which reaches the replica holding a
+    /// harness's connection.
+    redis: redis::Client,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -432,18 +439,32 @@ pub enum HostedHarnessError {
     Harness(#[from] HarnessError),
     #[error(transparent)]
     DefaultAgent(#[from] default_agent::DefaultAgentError),
+    #[error("a pool computer has no team")]
+    NoTeam,
+    #[error("could not reach the runtime command bus: {0:?}")]
+    Bus(anyhow::Error),
+}
+
+/// The pool's harness owner, which grants nothing.
+fn pool_harness_owner() -> Result<MacroUserIdStr<'static>, HarnessError> {
+    MacroUserIdStr::try_from(hosted_runtimes::domain::models::POOL_HARNESS_OWNER.to_owned())
+        .map_err(|_| HarnessError::BadRequest("invalid pool harness owner".to_owned()))
 }
 
 impl Harnesses for HostedHarnesses {
     type Err = HostedHarnessError;
 
     async fn create_hosted_pairing(&self, computer: &Computer) -> Result<HostedPairing, Self::Err> {
+        let (team_id, created_by) = match &computer.owner {
+            Some(owner) => (Some(owner.team_id), owner.created_by.clone()),
+            None => (None, pool_harness_owner()?),
+        };
         let pairing = self
             .service
             .create_hosted_pairing(CreateHostedPairing {
-                team_id: computer.team_id,
+                team_id,
                 name: computer.name.as_str().to_owned(),
-                created_by: computer.created_by.clone(),
+                created_by,
                 computer_id: computer.id,
             })
             .await?;
@@ -469,14 +490,24 @@ impl Harnesses for HostedHarnesses {
         // bind, and a computer's agents stay bound to a deleted harness: the
         // deletion below finds every one, on a retried effect too.
         self.service.revoke_hosted_harness(computer.id).await?;
+        // Nobody can bind an agent to a pool computer's harness.
+        let Some(owner) = &computer.owner else {
+            return Ok(());
+        };
         for harness_id in self.service.computer_harnesses(computer.id).await? {
             let deleted = self
                 .default_agents
-                .delete_bound(computer.created_by.clone(), harness_id)
+                .delete_bound(owner.created_by.clone(), harness_id)
                 .await?;
             tracing::info!(computer_id = %computer.id, %harness_id, deleted, "deleted the computer's agents");
         }
         Ok(())
+    }
+
+    async fn reconnect(&self, harness_id: HarnessId) -> Result<(), Self::Err> {
+        crate::runtime_commands::publish_disconnect(&self.redis, harness_id)
+            .await
+            .map_err(HostedHarnessError::Bus)
     }
 
     async fn create_default_agent(
@@ -484,11 +515,12 @@ impl Harnesses for HostedHarnesses {
         computer: &Computer,
         harness_id: HarnessId,
     ) -> Result<DefaultAgent, Self::Err> {
+        let owner = computer.owner.as_ref().ok_or(HostedHarnessError::NoTeam)?;
         Ok(self
             .default_agents
             .create(DefaultAgentRequest {
-                team_id: computer.team_id,
-                buyer: computer.created_by.clone(),
+                team_id: owner.team_id,
+                buyer: owner.created_by.clone(),
                 harness_id,
             })
             .await?)

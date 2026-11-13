@@ -162,10 +162,11 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
             .unwrap()
             .into_healthy()
             .unwrap()
-            .funding,
-        Funding::Stripe {
+            .funding()
+            .cloned(),
+        Some(Funding::Stripe {
             price_id: stripe::PriceId::from_str("price_old").unwrap()
-        }
+        })
     );
 }
 

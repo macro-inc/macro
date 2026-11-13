@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT EXISTS (\n                    SELECT 1 FROM hosted_runtime\n                    WHERE team_id = $1 AND (state->'billing'->>'billing') = 'charging'\n                ) AS \"unpaid!\"\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unpaid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a9a9e54bfe8ef85ee2d9dc2f33528066d66b6175bc0961ff8e4cc8b2c7a8fc69"
+}

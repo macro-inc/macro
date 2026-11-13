@@ -47,6 +47,7 @@ async fn peer() -> Peer {
             let registry = Arc::clone(&registry);
             Arc::new(move |harness| registry.is_connected(harness))
         },
+        Arc::new(|_| false),
         Arc::new(NoCommands),
         ready,
         models.clone(),

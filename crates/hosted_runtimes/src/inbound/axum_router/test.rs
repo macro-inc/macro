@@ -368,20 +368,18 @@ async fn finishing_setup_follows_the_team_admin_role_not_the_buyer() {
             ..crate::domain::fakes::FakeRepo::default()
         };
         let id = crate::domain::ids::ComputerId::new_from_uuid(Uuid::now_v7());
-        repo.computers.lock().unwrap().insert(
+        let mut computer = crate::domain::service::test::computer(
             id,
-            crate::domain::models::Computer {
-                created_by: macro_user_id::user_id::MacroUserIdStr::try_from(buyer.to_owned())
-                    .unwrap(),
-                ..crate::domain::service::test::computer(
-                    id,
-                    crate::domain::lifecycle::Phase::Running,
-                    crate::domain::lifecycle::Billing::Active {
-                        subscription_item: crate::domain::service::test::item("si_1"),
-                    },
-                )
+            crate::domain::lifecycle::Phase::Running,
+            crate::domain::lifecycle::Billing::Active {
+                subscription_item: crate::domain::service::test::item("si_1"),
             },
         );
+        if let Some(owner) = computer.owner.as_mut() {
+            owner.created_by =
+                macro_user_id::user_id::MacroUserIdStr::try_from(buyer.to_owned()).unwrap();
+        }
+        repo.computers.lock().unwrap().insert(id, computer);
         let service = Arc::new(
             ComputerService::new(
                 repo,

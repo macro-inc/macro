@@ -81,7 +81,7 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
     let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
     HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))
         .create_hosted_pairing(CreateHostedPairing {
-            team_id,
+            team_id: Some(team_id),
             name: "Ada".to_owned(),
             created_by: MacroUserIdStr::try_from(BUYER.to_owned()).unwrap(),
             computer_id,
@@ -264,7 +264,13 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         .unwrap();
     let computer = Computer {
         id: computer_id,
-        team_id,
+        owner: Some(hosted_runtimes::domain::models::Ownership {
+            team_id,
+            created_by: buyer.clone(),
+            funding: hosted_runtimes::domain::models::Funding::Comped {
+                reason: "default agent test".to_owned(),
+            },
+        }),
         name: ComputerName::try_new("Ada").unwrap(),
         size: ComputerSize::Standard,
         resources: ComputerResources {
@@ -273,9 +279,6 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
             disk_gib: DiskGib::new(100),
         },
         catalog_entry: CatalogEntryId::try_new("standard@2026-11".to_owned()).unwrap(),
-        funding: hosted_runtimes::domain::models::Funding::Comped {
-            reason: "default agent test".to_owned(),
-        },
         host: HostId::new(Uuid::new_v4()),
         state: ComputerState {
             provision_traceparent: None,
@@ -296,7 +299,6 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         },
         harness_id: Some(harness_id),
         enrollment_generation: Default::default(),
-        created_by: buyer.clone(),
         created_at: chrono::Utc::now(),
         enrolled_at: None,
         setup_completed_at: None,
@@ -306,6 +308,8 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
     let harnesses = HostedHarnesses {
         service: Arc::new(HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))),
         default_agents: Arc::new(agents),
+        // Revoking never reaches the runtime command bus.
+        redis: redis::Client::open("redis://127.0.0.1:6379").unwrap(),
     };
     let computers = PgComputerRepo::new(
         pool.clone(),

@@ -16,8 +16,9 @@ use crate::domain::lifecycle::{
     Billing, BillingPolicy, Context, Effect, EffectWorker, Event, HostId, provision, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRegistration,
-    NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
+    Claim, Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation,
+    HostRegistration, NewPoolComputer, NewReservation, Ownership, PurchaseKey, Reservation,
+    Reserved, SanitizedReason,
 };
 use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
@@ -116,7 +117,7 @@ impl FakeRepo {
         if self.corrupt_ids.lock().unwrap().contains(&computer.id) {
             ComputerRecord::NeedsAttention {
                 id: computer.id,
-                team_id: computer.team_id,
+                team_id: computer.team_id(),
                 host_id: Some(computer.host),
                 display: ComputerDisplayMetadata::from(&computer),
                 reason: SanitizedReason::new("state must satisfy lifecycle field rules"),
@@ -132,7 +133,7 @@ impl FakeRepo {
             .lock()
             .unwrap()
             .values()
-            .filter(|computer| computer.state.is_live())
+            .filter(|computer| computer.state.is_live() && computer.owner.is_some())
             .map(|computer| computer.resources.units())
             .sum();
         let held: u32 = self
@@ -261,7 +262,9 @@ impl ComputerRepo for FakeRepo {
         };
         let (mut state, effects) = provision(
             billing,
-            crate::domain::setup::SetupTimeline::started(reservation.created_at),
+            Some(crate::domain::setup::SetupTimeline::started(
+                reservation.created_at,
+            )),
             reservation.provision_traceparent.clone(),
             Context {
                 host: reservation.host,
@@ -277,16 +280,18 @@ impl ComputerRepo for FakeRepo {
         }
         let mut computer = Computer {
             id: reservation.id,
-            team_id: reservation.team_id,
+            owner: Some(Ownership {
+                team_id: reservation.team_id,
+                created_by: reservation.created_by,
+                funding: reservation.funding,
+            }),
             name: reservation.name,
             size: reservation.size,
             resources: reservation.resources,
             catalog_entry: reservation.catalog_entry,
-            funding: reservation.funding,
             host: reservation.host,
             state,
             harness_id: None,
-            created_by: reservation.created_by,
             created_at: reservation.created_at,
             enrolled_at: None,
             setup_completed_at: None,
@@ -300,6 +305,148 @@ impl ComputerRepo for FakeRepo {
             .unwrap()
             .insert(computer.id, computer.clone());
         Ok(Some(computer))
+    }
+
+    async fn claim_pool_computer(
+        &self,
+        purchase: &NewReservation,
+        billing: crate::domain::lifecycle::ClaimBilling,
+        now: DateTime<Utc>,
+    ) -> Result<Claim, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if self
+            .purchase_keys
+            .lock()
+            .unwrap()
+            .contains_key(&purchase.purchase_key)
+        {
+            return Ok(Claim::Unavailable);
+        }
+        let sold_room = self.live_units() + purchase.resources.units() <= self.sold_units;
+        let mut computers = self.computers.lock().unwrap();
+        let unpaid = computers.values().any(|computer| {
+            computer.team_id() == Some(purchase.team_id)
+                && computer.state.billing == Billing::Charging
+        });
+        if !sold_room
+            || (unpaid
+                && matches!(
+                    purchase.funding,
+                    crate::domain::models::Funding::Stripe { .. }
+                ))
+        {
+            return Ok(Claim::Unavailable);
+        }
+        let Some(computer) = computers.values_mut().find(|computer| {
+            computer.owner.is_none()
+                && computer.size == purchase.size
+                && computer.resources == purchase.resources
+                && computer.state.claimable()
+        }) else {
+            return Ok(Claim::Unavailable);
+        };
+        let Ok((state, effects)) = transition(
+            &computer.state,
+            &Event::Claimed { billing },
+            Context {
+                host: computer.host,
+                enrollment_generation: computer.enrollment_generation,
+                now,
+                host_has_room: true,
+                policy: policy(),
+            },
+        ) else {
+            return Ok(Claim::Unavailable);
+        };
+        computer.owner = Some(Ownership {
+            team_id: purchase.team_id,
+            created_by: purchase.created_by.clone(),
+            funding: purchase.funding.clone(),
+        });
+        computer.name = purchase.name.clone();
+        computer.catalog_entry = purchase.catalog_entry.clone();
+        computer.created_at = now;
+        computer.state = state;
+        self.push_effects(computer, effects, now);
+        self.purchase_keys
+            .lock()
+            .unwrap()
+            .insert(purchase.purchase_key.clone(), computer.id);
+        Ok(Claim::Taken(Box::new(computer.clone())))
+    }
+
+    async fn pool_computers(&self, host: HostId) -> Result<Vec<Computer>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut pooled: Vec<Computer> = self
+            .computers
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|computer| {
+                computer.host == host && computer.owner.is_none() && computer.state.is_live()
+            })
+            .cloned()
+            .collect();
+        pooled.sort_by_key(|computer| computer.created_at);
+        Ok(pooled)
+    }
+
+    async fn add_pool_computer(
+        &self,
+        computer: NewPoolComputer,
+        target: u32,
+        now: DateTime<Utc>,
+    ) -> Result<Option<Computer>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let pooled = self
+            .computers
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|existing| {
+                existing.owner.is_none()
+                    && existing.size == computer.size
+                    && existing.state.is_live()
+            })
+            .count();
+        if pooled >= target as usize {
+            return Ok(None);
+        }
+        let (state, effects) = provision(
+            Billing::Pool,
+            None,
+            None,
+            Context {
+                host: computer.host,
+                enrollment_generation: Default::default(),
+                now,
+                host_has_room: true,
+                policy: policy(),
+            },
+        );
+        let mut added = Computer {
+            id: computer.id,
+            owner: None,
+            name: computer.name,
+            size: computer.size,
+            resources: computer.resources,
+            catalog_entry: computer.catalog_entry,
+            host: computer.host,
+            state,
+            harness_id: None,
+            created_at: now,
+            enrolled_at: None,
+            setup_completed_at: None,
+            default_agent_id: None,
+            image: None,
+            enrollment_generation: Default::default(),
+        };
+        self.push_effects(&mut added, effects, now);
+        self.computers
+            .lock()
+            .unwrap()
+            .insert(added.id, added.clone());
+        Ok(Some(added))
     }
 
     async fn delete_reservation(&self, reservation_id: ComputerId) -> Result<bool, FakeError> {
@@ -417,7 +564,7 @@ impl ComputerRepo for FakeRepo {
             .lock()
             .unwrap()
             .values()
-            .filter(|computer| computer.team_id == team_id && computer.state.is_live())
+            .filter(|computer| computer.team_id() == Some(team_id) && computer.state.is_live())
             .cloned()
             .collect();
         computers.sort_by_key(|computer| computer.created_at);

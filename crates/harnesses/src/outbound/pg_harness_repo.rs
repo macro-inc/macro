@@ -36,6 +36,28 @@ use crate::domain::{
     },
 };
 
+/// Give a warm-pool computer's live harness to the team that bought it,
+/// inside the caller's transaction: rename it, record `owner` as its owner
+/// and creator (which confers nothing on a computer's harness), and grant
+/// `team_id` `edit` on it. Takes the computer's pairing lock, then its
+/// harness row, the order registration uses. False when the computer has no
+/// live harness.
+///
+/// For the hosted runtime control plane only, which takes the computer in
+/// the same transaction, so a purchase either gets the whole computer or
+/// leaves it in the pool.
+pub async fn join_hosted_harness(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    computer_id: ComputerId,
+    team_id: Uuid,
+    name: &str,
+    owner: &MacroUserIdStr<'_>,
+) -> Result<bool, rootcause::Report> {
+    hosted_pairing::join_hosted_harness(tx, computer_id, team_id, name, owner.as_ref())
+        .await
+        .map_err(|error| rootcause::report!("{error}"))
+}
+
 /// Postgres-backed harness repository.
 #[derive(Clone, Debug)]
 pub struct PgHarnessRepo {

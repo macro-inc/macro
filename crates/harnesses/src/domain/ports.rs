@@ -400,8 +400,9 @@ pub trait HarnessService: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessSession>, HarnessError>> + Send;
 
-    /// Register a Macro computer's team harness, already approved, and return
-    /// the claim material its macrod enrolls with.
+    /// Register a Macro computer's team harness (or a warm-pool computer's,
+    /// with no team grant), already approved, and return the claim material
+    /// its macrod enrolls with.
     ///
     /// Trusted in-process callers only (the hosted runtime control plane,
     /// after it authorized the team admin): this takes no caller to check and

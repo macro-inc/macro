@@ -18,9 +18,35 @@ use tracing::Instrument as _;
 #[cfg(test)]
 mod test;
 
+/// Drop a harness's runtime connection on whichever replica holds it, so its
+/// daemon dials again (a Macro computer a team just took from the pool).
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct DisconnectRuntime {
+    pub(crate) disconnect_harness: HarnessId,
+}
+
+/// Broadcast a [`DisconnectRuntime`] to every replica.
+pub(crate) async fn publish_disconnect(
+    redis: &redis::Client,
+    harness: HarnessId,
+) -> anyhow::Result<()> {
+    let payload = serde_json::to_string(&DisconnectRuntime {
+        disconnect_harness: harness,
+    })?;
+    redis
+        .get_multiplexed_async_connection()
+        .await?
+        .publish::<_, _, ()>(COMMAND_CHANNEL, payload)
+        .await?;
+    Ok(())
+}
+
+// Untagged: a disconnect's one required field appears in no other event, so
+// it is tried first.
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RuntimeBusEvent {
+    Disconnect(DisconnectRuntime),
     Models(ModelProbeEvent),
     Command(Box<RuntimeCommandRequest>),
 }
@@ -29,6 +55,7 @@ pub(crate) async fn consume_runtime_commands<Harness>(
     redis: redis::Client,
     replica: ReplicaId,
     connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
+    disconnect: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
     models: MacrodModels,
@@ -69,6 +96,10 @@ where
             }
         };
         let request = match event {
+            RuntimeBusEvent::Disconnect(request) => {
+                disconnect(request.disconnect_harness);
+                continue;
+            }
             RuntimeBusEvent::Command(request) => *request,
             RuntimeBusEvent::Models(event) => {
                 let models = models.clone();

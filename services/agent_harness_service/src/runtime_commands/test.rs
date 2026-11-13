@@ -76,6 +76,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         redis.clone(),
         origin,
         Arc::new(|_| false),
+        Arc::new(|_| false),
         Arc::clone(&origin_harness),
         origin_ready,
         empty_models(redis.clone()),
@@ -84,6 +85,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
     let peer_consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         peer,
+        Arc::new(|_| false),
         Arc::new(|_| false),
         Arc::clone(&peer_harness),
         peer_ready,
@@ -118,6 +120,7 @@ async fn a_responsible_replicas_error_does_not_fail_the_publish() {
         redis.clone(),
         replica,
         Arc::new(|_| false),
+        Arc::new(|_| false),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
@@ -146,6 +149,7 @@ async fn publishing_without_an_owner_still_succeeds() {
     let consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         ReplicaId::mint(),
+        Arc::new(|_| false),
         Arc::new(|_| false),
         Arc::clone(&harness),
         ready_tx,
@@ -179,6 +183,7 @@ async fn overlapping_harness_connections_execute_once() {
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(move |harness| harness == target),
+        Arc::new(|_| false),
         Arc::clone(&first),
         first_ready,
         empty_models(redis.clone()),
@@ -188,6 +193,7 @@ async fn overlapping_harness_connections_execute_once() {
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(move |harness| harness == target),
+        Arc::new(|_| false),
         Arc::clone(&second),
         second_ready,
         empty_models(redis.clone()),
@@ -217,6 +223,35 @@ async fn overlapping_harness_connections_execute_once() {
     );
     first_consumer.abort();
     second_consumer.abort();
+}
+
+#[tokio::test]
+async fn a_disconnect_reaches_every_replica_and_runs_no_command() {
+    let redis = redis_client();
+    let harness = harness(false);
+    let target = harness_id();
+    let (dropped_tx, mut dropped) = tokio::sync::mpsc::unbounded_channel();
+    let (ready_tx, mut readiness) = tokio::sync::watch::channel(false);
+    let consumer = tokio::spawn(consume_runtime_commands(
+        redis.clone(),
+        ReplicaId::mint(),
+        Arc::new(|_| false),
+        Arc::new(move |harness| dropped_tx.send(harness).is_ok()),
+        Arc::clone(&harness),
+        ready_tx,
+        empty_models(redis.clone()),
+    ));
+    ready(&mut readiness).await;
+
+    publish_disconnect(&redis, target).await.unwrap();
+
+    let disconnected = tokio::time::timeout(std::time::Duration::from_secs(2), dropped.recv())
+        .await
+        .expect("the disconnect arrives")
+        .expect("the consumer is running");
+    assert_eq!(disconnected, target);
+    assert_eq!(harness.calls.load(Ordering::SeqCst), 0);
+    consumer.abort();
 }
 
 fn empty_models(redis: redis::Client) -> MacrodModels {

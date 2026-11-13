@@ -87,19 +87,21 @@ fn recorded_limits_and_units_survive_catalog_changes() {
     assert_eq!(purchased.units(), 2);
     let computer = Computer {
         id: COMPUTER_ID,
-        team_id: Uuid::nil(),
+        owner: Some(crate::domain::models::Ownership {
+            team_id: Uuid::nil(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+            funding: crate::domain::models::Funding::Stripe {
+                price_id: stripe::PriceId::from_str("price_saved").unwrap(),
+            },
+        }),
         name: crate::domain::models::ComputerName::try_new("Recorded computer").unwrap(),
         size: crate::domain::size::ComputerSize::Standard,
         resources: purchased,
         catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-10".to_owned())
             .unwrap(),
-        funding: crate::domain::models::Funding::Stripe {
-            price_id: stripe::PriceId::from_str("price_saved").unwrap(),
-        },
         host: crate::domain::ids::HostId::new(Uuid::nil()),
         state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Stopped),
         harness_id: None,
-        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
         setup_completed_at: None,
@@ -189,7 +191,13 @@ fn a_remote_image_names_its_server_and_protocol() {
 
     let computer = Computer {
         id: COMPUTER_ID,
-        team_id: Uuid::nil(),
+        owner: Some(crate::domain::models::Ownership {
+            team_id: Uuid::nil(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+            funding: crate::domain::models::Funding::Stripe {
+                price_id: stripe::PriceId::from_str("price_saved").unwrap(),
+            },
+        }),
         name: crate::domain::models::ComputerName::try_new("Recorded computer").unwrap(),
         size: crate::domain::size::ComputerSize::Standard,
         resources: crate::domain::size::ComputerResources {
@@ -199,13 +207,9 @@ fn a_remote_image_names_its_server_and_protocol() {
         },
         catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-10".to_owned())
             .unwrap(),
-        funding: crate::domain::models::Funding::Stripe {
-            price_id: stripe::PriceId::from_str("price_saved").unwrap(),
-        },
         host: crate::domain::ids::HostId::new(Uuid::nil()),
         state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Stopped),
         harness_id: None,
-        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
         setup_completed_at: None,

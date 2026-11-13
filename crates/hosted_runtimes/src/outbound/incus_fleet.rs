@@ -501,6 +501,7 @@ impl Fleet for IncusFleet {
             memory_gb,
             reserve_gb: self.config.reserve_gb,
             oversell_factor: self.config.oversell_factor,
+            image: self.image.clone(),
         })
     }
 

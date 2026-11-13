@@ -423,6 +423,7 @@ impl Fleet for DockerFleet {
             memory_gb: self.config.memory_gb,
             reserve_gb: self.config.reserve_gb,
             oversell_factor: self.config.oversell_factor,
+            image: self.config.image.clone(),
         })
     }
 

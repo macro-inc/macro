@@ -10,10 +10,12 @@ use chrono::{DateTime, Duration, Utc};
 use crate::domain::claude_sign_in::{self, ClaudeSignInNotices, ClaudeSignInPass, ClaudeSignIns};
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
+use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::{
     Backoff, Effect, EffectWorker, Event, Failure, HostId, MACROD_GRACE, Phase, TimerKind, backoff,
 };
-use crate::domain::models::{Computer, ComputerRecord};
+use crate::domain::models::{Computer, ComputerName, ComputerRecord, NewPoolComputer};
+use crate::domain::pool::PoolTargets;
 use crate::domain::ports::{
     ComputerRepo, DefaultAgent, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses,
     InstanceStatus, PendingEffect,
@@ -37,6 +39,8 @@ pub const HOST_REGISTRATION_BACKOFF: Backoff = Backoff {
 };
 /// Minimum guest age before orphan deletion, to avoid racing creation.
 pub const ORPHAN_GRACE: Duration = Duration::minutes(10);
+/// What a pool computer's harness is called until a purchase names it.
+const POOL_COMPUTER_NAME: &str = "Macro computer";
 const EFFECT_BATCH: u32 = 16;
 const TIMER_BATCH: u32 = 64;
 /// How long a leased effect stays hidden from other workers.
@@ -60,11 +64,14 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time> {
     clock: Time,
     deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
+    pool: PoolTargets,
 }
 
 #[derive(Default)]
 struct HostReadiness {
     id: Option<HostId>,
+    /// The image the registered host creates computers from.
+    image: Option<GuestImage>,
     retry_at: Option<DateTime<Utc>>,
     failures: u8,
 }
@@ -92,6 +99,7 @@ where
             clock,
             deployment,
             host: tokio::sync::Mutex::new(HostReadiness::default()),
+            pool: PoolTargets::NONE,
         };
         // Fleet connectivity is independent of the harness's other routes.
         // Keep the operator so its periodic passes can recover registration.
@@ -99,10 +107,21 @@ where
         Ok(operator)
     }
 
+    /// Keep `pool` computers per size on the host, ready for purchases to take.
+    pub fn with_pool(mut self, pool: PoolTargets) -> Self {
+        self.pool = pool;
+        self
+    }
+
     async fn host_id(&self) -> Result<HostId, ComputerError> {
+        Ok(self.registered_host().await?.0)
+    }
+
+    /// The registered host and the image it creates computers from.
+    async fn registered_host(&self) -> Result<(HostId, GuestImage), ComputerError> {
         let mut readiness = self.host.lock().await;
-        if let Some(id) = readiness.id {
-            return Ok(id);
+        if let (Some(id), Some(image)) = (readiness.id, &readiness.image) {
+            return Ok((id, image.clone()));
         }
         let now = self.clock.now();
         if readiness.retry_at.is_some_and(|at| now < at) {
@@ -112,14 +131,17 @@ where
         }
         let registration = async {
             let registration = self.fleet.host().await.map_err(internal)?;
-            self.repo
+            let image = registration.image.clone();
+            let host = self
+                .repo
                 .register_host(registration)
                 .await
-                .map_err(internal)
+                .map_err(internal)?;
+            Ok::<_, ComputerError>((host, image))
         }
         .await;
         match registration {
-            Ok(host) => {
+            Ok((host, image)) => {
                 self.repo
                     .postpone_macrod_timers(host.id, self.clock.now() + MACROD_GRACE)
                     .await
@@ -128,8 +150,9 @@ where
                     awake_units = host.awake_capacity_units, sold_units = host.sold_capacity_units,
                     "computer host registered");
                 readiness.id = Some(host.id);
+                readiness.image = Some(image.clone());
                 readiness.retry_at = None;
-                Ok(host.id)
+                Ok((host.id, image))
             }
             Err(error) => {
                 let delay = backoff(HOST_REGISTRATION_BACKOFF, readiness.failures);
@@ -197,7 +220,7 @@ where
                 let work = async {
                     use tracing::Instrument;
                     let computer = self.computer(pending.computer_id).await?;
-                    let span = tracing::info_span!("computer.fleet.work", computer_id = %pending.computer_id, team_id = %computer.team_id, size = computer.size.as_ref());
+                    let span = tracing::info_span!("computer.fleet.work", computer_id = %pending.computer_id, team_id = ?computer.team_id(), size = computer.size.as_ref());
                     super::telemetry::adopt(&span, &computer.state);
                     self.run_one(pending).instrument(span).await
                 };
@@ -247,7 +270,7 @@ where
     async fn run_one(&self, pending: PendingEffect) -> Result<(), ComputerError> {
         let computer = self.computer(pending.computer_id).await?;
         super::telemetry::resume(computer.state.provision_traceparent.as_deref());
-        tracing::Span::current().record("team_id", tracing::field::display(computer.team_id));
+        tracing::Span::current().record("team_id", tracing::field::debug(computer.team_id()));
         tracing::Span::current().record("size", computer.size.as_ref());
         let phase = serde_json::to_value(&pending.effect).map_err(internal)?;
         let phase = phase
@@ -413,11 +436,15 @@ where
                 tracing::error!(computer_id = %computer_id, reason = %reason, "computer needs an operator");
                 Ok(None)
             }
-            Effect::RemoveBillingItem { .. } | Effect::ScheduleTimer { .. } => {
-                Err(ComputerError::Internal(rootcause::report!(
-                    "a non-fleet effect reached the fleet worker"
-                )))
+            Effect::JoinTeam => {
+                self.join_team(computer_id).await?;
+                Ok(None)
             }
+            Effect::RemoveBillingItem { .. }
+            | Effect::Charge { .. }
+            | Effect::ScheduleTimer { .. } => Err(ComputerError::Internal(rootcause::report!(
+                "a non-fleet effect reached the fleet worker"
+            ))),
         }
     }
 
@@ -573,6 +600,12 @@ where
                 self.fleet.destroy(*orphan).await.map_err(internal)?;
             }
         }
+        self.fill_pool()
+            .await
+            .inspect_err(
+                |error| tracing::warn!(error = ?error, "could not refill the computer pool"),
+            )
+            .ok();
         Ok(())
     }
 
@@ -639,7 +672,7 @@ where
         };
         let computer = self.computer(computer_id).await?;
         use tracing::Instrument;
-        let span = tracing::info_span!("computer.macrod.connected", computer_id = %computer.id, team_id = %computer.team_id, first = computer.enrolled_at.is_none());
+        let span = tracing::info_span!("computer.macrod.connected", computer_id = %computer.id, team_id = ?computer.team_id(), pool = computer.state.in_pool(), first = computer.enrolled_at.is_none());
         super::telemetry::adopt(&span, &computer.state);
         self.record_macrod_connected(harness_id, computer)
             .instrument(span)
@@ -656,15 +689,20 @@ where
             .set_harness(computer.id, harness_id)
             .await
             .map_err(internal)?;
-        self.repo
-            .mark_enrolled(computer.id, now)
-            .await
-            .map_err(internal)?;
+        // A pool computer's setup is its team's to finish: enrollment and
+        // the default agent wait for the purchase that takes it (`JoinTeam`).
+        let pooled = computer.state.in_pool();
+        if !pooled {
+            self.repo
+                .mark_enrolled(computer.id, now)
+                .await
+                .map_err(internal)?;
+        }
         self.repo
             .apply(computer.id, Event::MacrodConnected, now)
             .await
             .map_err(internal)?;
-        if computer.enrolled_at.is_none() {
+        if computer.enrolled_at.is_none() && !pooled {
             super::telemetry::provisioned(
                 (now - computer.created_at).num_milliseconds() as f64 / 1000.0,
             );
@@ -686,7 +724,7 @@ where
     #[tracing::instrument(
         name = "computer.default_agent",
         skip_all,
-        fields(computer_id = %computer.id, team_id = %computer.team_id, harness_id = %harness_id, outcome = tracing::field::Empty),
+        fields(computer_id = %computer.id, team_id = ?computer.team_id(), harness_id = %harness_id, outcome = tracing::field::Empty),
         err
     )]
     async fn create_default_agent(
@@ -708,6 +746,99 @@ where
         let name: &'static str = outcome.into();
         tracing::Span::current().record("outcome", name);
         Ok(outcome)
+    }
+
+    /// Finish a purchase that took a pool computer, whose harness the
+    /// purchase already gave the team: record its enrollment and the team's
+    /// default agent (what the first connection does for a created
+    /// computer), make macrod reconnect as the team's, then refill the pool.
+    /// Safe to repeat. A failed default agent, reconnect or refill is
+    /// logged, not retried: the computer is the team's either way, and
+    /// reconcile refills.
+    #[tracing::instrument(name = "computer.pool.join_team", skip(self), err)]
+    async fn join_team(&self, computer_id: ComputerId) -> Result<(), ComputerError> {
+        let computer = self.computer(computer_id).await?;
+        if computer.owner.is_none() {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "a computer still in the pool cannot join a team"
+            )));
+        }
+        if let Some(harness_id) = computer.harness_id {
+            if computer.enrolled_at.is_none() {
+                self.repo
+                    .mark_enrolled(computer.id, self.clock.now())
+                    .await
+                    .map_err(internal)?;
+                // A convenience: the span records a failure, and setup carries on.
+                self.create_default_agent(&computer, harness_id).await.ok();
+            }
+            self.harnesses
+                .reconnect(harness_id)
+                .await
+                .inspect_err(|error| tracing::warn!(computer_id = %computer.id, error = ?error, "could not make macrod reconnect"))
+                .ok();
+        }
+        self.fill_pool()
+            .await
+            .inspect_err(
+                |error| tracing::warn!(error = ?error, "could not refill the computer pool"),
+            )
+            .ok();
+        Ok(())
+    }
+
+    /// Keep the host's warm pool at its targets: drain pool computers on an
+    /// older image (or that gave up or are off), and create the missing ones
+    /// while the host has awake room. See [`crate::domain::pool::plan`].
+    #[tracing::instrument(name = "computer.pool.fill", skip(self), fields(drained, created), err)]
+    pub async fn fill_pool(&self) -> Result<(), ComputerError> {
+        let (host, image) = self.registered_host().await?;
+        let members = self.repo.pool_computers(host).await.map_err(internal)?;
+        let plan = crate::domain::pool::plan(self.pool, &image, &members);
+        let span = tracing::Span::current();
+        span.record("drained", plan.drain.len() as i64);
+
+        for computer_id in plan.drain {
+            tracing::info!(%computer_id, "draining a pool computer");
+            self.repo
+                .apply(computer_id, Event::Drain, self.clock.now())
+                .await
+                .map_err(internal)?;
+        }
+
+        let catalog = crate::domain::size::current_catalog();
+        let mut created = 0_i64;
+        for size in plan.create {
+            let Some(entry) = catalog.iter().find(|entry| entry.size == size) else {
+                continue;
+            };
+            let added = self
+                .repo
+                .add_pool_computer(
+                    NewPoolComputer {
+                        id: ComputerId::new_from_uuid(uuid::Uuid::now_v7()),
+                        host,
+                        size,
+                        resources: entry.resources,
+                        catalog_entry: entry.id.clone(),
+                        name: ComputerName::try_new(POOL_COMPUTER_NAME).map_err(internal)?,
+                    },
+                    self.pool.target(size),
+                    self.clock.now(),
+                )
+                .await
+                .map_err(internal)?;
+            match added {
+                Some(computer) => {
+                    created += 1;
+                    tracing::info!(computer_id = %computer.id, size = size.as_ref(), "created a pool computer");
+                }
+                // Purchased computers come first; the next pass tries again.
+                None => break,
+            }
+        }
+        span.record("created", created);
+        Ok(())
     }
 
     /// Record a lost macrod connection for the guest harness.
@@ -763,8 +894,10 @@ fn effect_failure(effect: &Effect) -> Failure {
         | Effect::RestartMacrod { .. }
         | Effect::Destroy { .. }
         | Effect::RevokeHarness
+        | Effect::JoinTeam
         | Effect::PageOperator { .. }
         | Effect::RemoveBillingItem { .. }
+        | Effect::Charge { .. }
         | Effect::ScheduleTimer { .. } => Failure::Power,
     }
 }
@@ -784,7 +917,9 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::RestartMacrod { host }
         | Effect::Destroy { host } => Some(*host),
         Effect::RemoveBillingItem { .. }
+        | Effect::Charge { .. }
         | Effect::RevokeHarness
+        | Effect::JoinTeam
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. } => None,
     }

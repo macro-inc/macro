@@ -100,6 +100,41 @@ pub enum Event {
     PastDueGrace,
     /// Timer: the retained disk may now be deleted.
     RetentionExpired,
+    /// A purchase took this pool computer for a team.
+    Claimed {
+        /// How the team pays for it.
+        billing: ClaimBilling,
+    },
+    /// The purchase's charge reached the subscription as `subscription_item`.
+    ChargeSucceeded {
+        /// The computer's new item.
+        subscription_item: SubscriptionItemId,
+    },
+    /// The purchase's charge was refused, or given up with nothing
+    /// charged: the computer is released.
+    ChargeFailed,
+    /// The warm pool no longer wants this computer (an older image, or it
+    /// gave up): destroy it.
+    Drain,
+}
+
+/// How a team pays for a pool computer it took.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ClaimBilling {
+    /// Charge the computer's own item at `price_id`, plus `extra_items`,
+    /// after the purchase returns.
+    Charge {
+        /// The saved price.
+        price_id: stripe::PriceId,
+        /// Joined into the same subscription update.
+        extra_items: Vec<crate::domain::models::SubscriptionItem>,
+    },
+    /// Provided without a charge.
+    Comped {
+        /// Why the computer is free.
+        reason: String,
+    },
 }
 
 /// Why a requested change does not apply in the computer's state. Only
@@ -131,6 +166,15 @@ pub enum Rejected {
     /// The subscription is past due beyond its grace.
     #[error("the team subscription is past due; update the payment method first")]
     PastDue,
+    /// The computer is in the warm pool: no team bought it.
+    #[error("this computer has not been bought")]
+    InPool,
+    /// Only a pool computer that is up and connected can be taken.
+    #[error("this computer is not available to take")]
+    NotAvailable,
+    /// The purchase's charge has not settled yet.
+    #[error("this computer's payment is still being confirmed")]
+    PaymentPending,
 }
 
 /// Timers a computer can have pending; at most one of each kind.
@@ -231,6 +275,17 @@ pub enum Effect {
     },
     /// Delete the computer's harness and its credential.
     RevokeHarness,
+    /// Charge a taken pool computer's purchase on the team subscription.
+    Charge {
+        /// The saved price.
+        price_id: stripe::PriceId,
+        /// Joined into the same subscription update.
+        extra_items: Vec<crate::domain::models::SubscriptionItem>,
+    },
+    /// Finish a taken pool computer's handover (its harness is already the
+    /// team's): record enrollment and the default agent, make macrod
+    /// reconnect as the team's, and refill the pool.
+    JoinTeam,
     /// Fire `kind` at `at`, replacing a pending timer of that kind. Timers
     /// need no cancel: a timer that fires in a state it no longer applies to
     /// is ignored by [`transition`].
@@ -251,7 +306,7 @@ impl Effect {
     /// Which worker carries the effect out. Billing runs where Stripe lives.
     pub fn worker(&self) -> EffectWorker {
         match self {
-            Self::RemoveBillingItem { .. } => EffectWorker::Billing,
+            Self::RemoveBillingItem { .. } | Self::Charge { .. } => EffectWorker::Billing,
             Self::ScheduleTimer { .. } => EffectWorker::Timers,
             Self::Create { .. }
             | Self::Start { .. }
@@ -260,6 +315,7 @@ impl Effect {
             | Self::RestartMacrod { .. }
             | Self::Destroy { .. }
             | Self::RevokeHarness
+            | Self::JoinTeam
             | Self::PageOperator { .. } => EffectWorker::Fleet,
         }
     }

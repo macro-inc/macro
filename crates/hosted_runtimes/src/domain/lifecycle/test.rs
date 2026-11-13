@@ -8,6 +8,7 @@ use super::*;
 mod billing;
 mod comped;
 mod instance_lost;
+mod pool;
 
 const HOST: HostId = HostId::new(uuid::Uuid::from_u128(
     0x0000_0000_0000_4000_8000_0000_0000_0001,
@@ -116,7 +117,9 @@ fn a_confirmed_purchase_provisions_with_room() {
         Billing::Active {
             subscription_item: item(),
         },
-        crate::domain::setup::SetupTimeline::started(now() - Duration::seconds(5)),
+        Some(crate::domain::setup::SetupTimeline::started(
+            now() - Duration::seconds(5),
+        )),
         None,
         context(true),
     );
@@ -141,7 +144,7 @@ fn a_confirmed_purchase_on_a_full_host_creates_stopped_and_waits() {
         Billing::Active {
             subscription_item: item(),
         },
-        crate::domain::setup::SetupTimeline::started(now()),
+        Some(crate::domain::setup::SetupTimeline::started(now())),
         None,
         context(false),
     );
@@ -963,7 +966,7 @@ proptest! {
                 .map(|units| {
                     let (state, _) = provision(
                         active(),
-                        crate::domain::setup::SetupTimeline::started(now()),
+                        Some(crate::domain::setup::SetupTimeline::started(now())),
                         None,
                         Context {
                             host: HOST,

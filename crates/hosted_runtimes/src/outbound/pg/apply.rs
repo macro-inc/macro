@@ -58,9 +58,8 @@ impl PgComputerRepo {
         Ok(())
     }
 
-    /// Run the transition for a computer already locked in `tx`, and store
-    /// its state, effects and timers. A rejected request writes nothing.
-    #[tracing::instrument(name = "computer.lifecycle.event", skip_all, fields(%computer_id, event, phase, team_id, size, billing_kind, rejected, otel.status_code), err)]
+    /// Lock the computer (after its host) in `tx`, run the transition, and
+    /// store its state, effects and timers. A rejected request writes nothing.
     pub(super) async fn apply_locked(
         tx: &mut Tx<'_>,
         computer_id: ComputerId,
@@ -85,12 +84,29 @@ impl PgComputerRepo {
         let Some(row) = row else {
             return Ok(None);
         };
-        let mut computer = Computer::try_from(row)?;
+        let computer = Computer::try_from(row)?;
+        Self::apply_to(tx, computer, event, now, policy)
+            .await
+            .map(Some)
+    }
+
+    /// Run the transition for `computer`, whose row and host `tx` already
+    /// locked, and store its state, effects and timers. A rejected request
+    /// writes nothing.
+    #[tracing::instrument(name = "computer.lifecycle.event", skip_all, fields(computer_id = %computer.id, event, phase, team_id, size, billing_kind, rejected, otel.status_code), err)]
+    pub(super) async fn apply_to(
+        tx: &mut Tx<'_>,
+        mut computer: Computer,
+        event: &Event,
+        now: DateTime<Utc>,
+        policy: BillingPolicy,
+    ) -> Result<Applied, PgComputerError> {
+        let computer_id = computer.id;
         crate::domain::telemetry::resume(computer.state.provision_traceparent.as_deref());
         let span = tracing::Span::current();
-        span.record("team_id", tracing::field::display(computer.team_id));
+        span.record("team_id", tracing::field::debug(computer.team_id()));
         span.record("size", computer.size.as_ref());
-        span.record("billing_kind", computer.funding.kind());
+        span.record("billing_kind", computer.funding_kind());
         // Read only the enum tag; reasons and other event payloads are private.
         if let Some(tag) = serde_json::to_value(event)?
             .get("event")
@@ -116,11 +132,11 @@ impl PgComputerRepo {
             Ok(next) => next,
             Err(rejected) => {
                 span.record("rejected", tracing::field::debug(rejected));
-                return Ok(Some(Applied::Rejected(rejected)));
+                return Ok(Applied::Rejected(rejected));
             }
         };
         if state == computer.state && effects.is_empty() {
-            return Ok(Some(Applied::Changed(Box::new(computer))));
+            return Ok(Applied::Changed(Box::new(computer)));
         }
         for effect in &effects {
             if let Effect::Create { generation, .. } = effect {
@@ -197,7 +213,7 @@ impl PgComputerRepo {
         }
         Self::record_setup(&computer, &state, &finished_setup);
         computer.state = state;
-        Ok(Some(Applied::Changed(Box::new(computer))))
+        Ok(Applied::Changed(Box::new(computer)))
     }
 
     pub(super) fn record_setup(
@@ -212,11 +228,14 @@ impl PgComputerRepo {
                 finished,
                 &crate::domain::telemetry::SetupAttributes {
                     computer_id: computer.id.to_string(),
-                    team_id: computer.team_id.to_string(),
+                    team_id: computer
+                        .team_id()
+                        .map(|team_id| team_id.to_string())
+                        .unwrap_or_default(),
                     size: computer.size.as_ref().to_owned(),
                     host_id: Some(computer.host.to_string()),
                     generation: i64::from(computer.enrollment_generation.get()),
-                    billing_kind: computer.funding.kind(),
+                    billing_kind: computer.funding_kind(),
                 },
             );
         }

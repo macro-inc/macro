@@ -527,7 +527,7 @@ where
 
     #[tracing::instrument(
         skip(self, req),
-        fields(team_id = %req.team_id, computer_id = %req.computer_id, created_by = %req.created_by),
+        fields(team_id = ?req.team_id, computer_id = %req.computer_id, created_by = %req.created_by),
         err
     )]
     async fn create_hosted_pairing(
@@ -561,7 +561,7 @@ where
                     owner: HarnessOwner::User {
                         user_id: req.created_by.as_ref().to_owned(),
                     },
-                    team_grant: Some(req.team_id),
+                    team_grant: req.team_id,
                     created_by: req.created_by,
                     computer_id: Some(req.computer_id),
                 },

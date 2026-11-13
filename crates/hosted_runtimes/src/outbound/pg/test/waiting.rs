@@ -9,6 +9,7 @@ async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: Pg
         memory_gb: 8,
         reserve_gb: 0,
         oversell_factor: 9,
+        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
     })
     .await
     .unwrap();

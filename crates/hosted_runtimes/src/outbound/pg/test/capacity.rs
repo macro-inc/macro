@@ -10,6 +10,7 @@ async fn offers_use_free_sold_units_per_size(pool: PgPool) {
         memory_gb: 24,
         reserve_gb: 0,
         oversell_factor: 3,
+        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
     })
     .await
     .unwrap();
@@ -39,6 +40,7 @@ async fn concurrent_purchases_share_the_sold_unit_limit(pool: PgPool) {
         memory_gb: 24,
         reserve_gb: 0,
         oversell_factor: 3,
+        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
     })
     .await
     .unwrap();
