@@ -1,0 +1,20 @@
+[package]
+name = "agent_credentials"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+constant_time_eq = { workspace = true }
+hex = { workspace = true }
+lazy-regex = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { workspace = true }
+user_api_key = { path = "../user_api_key", default-features = false }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

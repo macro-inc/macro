@@ -1,6 +1,7 @@
 import type { ReplyType } from '@app/features/email-compose/core/reply-type';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { MobileDockIsland } from '@components/app/mobile/MobileDockIsland';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -11,13 +12,18 @@ import ArrowDown from '@icon/system/regular/arrow-down.svg';
 import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import { type Component, Show } from 'solid-js';
 import type { EmailThreadListNavigation } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
 
+/**
+ * A floating pill on the dock's own surface. The island stays opaque when the
+ * action is unavailable; only its content dims, so the thread never shows
+ * through.
+ */
 function ReplyActionButton(props: {
   icon: Component<{ class?: string }>;
   label?: string;
@@ -26,24 +32,24 @@ function ReplyActionButton(props: {
   onClick: () => void;
 }) {
   return (
-    <Button
-      variant="secondary"
-      aria-label={props.ariaLabel}
-      disabled={props.disabled}
-      class={cn(
-        // Island pills when floating in the mobile/tablet accessory region.
-        'touch:island touch:bg-chrome touch:text-ink touch:h-8 touch:border-0',
-        !props.label && 'touch:w-9 touch:p-0'
-      )}
-      onClick={props.onClick}
-    >
-      <props.icon
-        class={cn('size-4 shrink-0', !props.label && 'touch:size-6')}
-      />
-      <Show when={props.label}>
-        <span>{props.label}</span>
-      </Show>
-    </Button>
+    <MobileDockIsland class="shrink-0">
+      <button
+        type="button"
+        aria-label={props.ariaLabel}
+        disabled={props.disabled}
+        class={cn(
+          // Literal px like the dock: chrome must not track the OS text size.
+          'flex h-[40px] shrink-0 items-center justify-center gap-2 rounded-full text-sm font-medium disabled:opacity-50',
+          props.label ? 'px-3' : 'w-[40px]'
+        )}
+        onClick={props.onClick}
+      >
+        <props.icon class={cn('shrink-0', props.label ? 'size-4' : 'size-6')} />
+        <Show when={props.label}>
+          <span>{props.label}</span>
+        </Show>
+      </button>
+    </MobileDockIsland>
   );
 }
 

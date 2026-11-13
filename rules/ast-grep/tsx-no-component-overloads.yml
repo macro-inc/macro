@@ -1,0 +1,29 @@
+id: tsx-no-component-overloads
+language: tsx
+severity: error
+message: Don't overload a component function. Declare it as a `const` typed with call signatures, assigned a function expression.
+note: |-
+  In the dev server, Solid Refresh rewrites a top-level component function into
+  `const Name = $$component(...)` and leaves its overload signatures in place.
+  Vite's Oxc transform then rejects the file ("Identifier has already been
+  declared"), so every page that imports it fails to load. Production builds
+  and tests don't run Solid Refresh, so only the dev server and the browser
+  tests that use it show the error. Write instead:
+    export const Name: {
+      (props: A): JSX.Element;
+      (props: B): JSX.Element;
+    } = function Name(props: A | B) { ... };
+  Ambient declarations (`declare function`, `declare module`) have no function
+  to rewrite and are allowed.
+files:
+  - apps/**
+  - packages/**
+rule:
+  kind: function_signature
+  has:
+    field: name
+    regex: '^[A-Z]'
+  not:
+    inside:
+      kind: ambient_declaration
+      stopBy: end

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_entity (suggestion_id, action, waiting_since, waiting_from)\n                       VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0016805a8bd69613c35ebd46cedc5d28fdd0572a4392a96be58eab3bc9c7d3a1"
+}

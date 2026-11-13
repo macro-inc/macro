@@ -24,12 +24,20 @@ import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Button, confirmDialog, Dialog, Input, Panel } from '@ui';
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
-import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
+import {
+  ConnectedRuntimesSection,
+  MachineSection,
+} from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
 import { PendingRequestsSection } from './components/pending-requests-section';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
+import {
+  COMPUTER_SETUP_PARAM,
+  parseComputerSetupParam,
+  requestComputerSetup,
+} from './computers/primitives/setup-request';
 import { useTeamComputers } from './computers/primitives/team-computers';
 import { MacroComputers } from './computers/views/MacroComputers';
 import {
@@ -105,6 +113,14 @@ export function Harness(
     if (typeof pair === 'string' && pair.length > 0) {
       setPairingDialog({ initialCode: pair });
       setSearchParams({ pair: undefined }, { replace: true });
+    }
+    // A computer setup notification's link, opened cold.
+    const computerId = parseComputerSetupParam(
+      searchParams[COMPUTER_SETUP_PARAM]
+    );
+    if (computerId) {
+      requestComputerSetup(computerId);
+      setSearchParams({ [COMPUTER_SETUP_PARAM]: undefined }, { replace: true });
     }
   });
 
@@ -224,8 +240,8 @@ export function Harness(
               <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
                 Built-in machines
               </h2>
-              <SettingsCard>
-                <section class="flex gap-4 px-6 py-5">
+              <SettingsCard inset="wide">
+                <MachineSection>
                   <HarnessIcon>
                     <HardDrivesIcon />
                   </HarnessIcon>
@@ -243,9 +259,9 @@ export function Harness(
                       Macro tools and MCPs to get the job done.
                     </p>
                   </div>
-                </section>
+                </MachineSection>
 
-                <section class="flex gap-4 px-6 py-5">
+                <MachineSection>
                   <HarnessIcon>
                     <CursorIcon />
                   </HarnessIcon>
@@ -356,7 +372,7 @@ export function Harness(
                       </Show>
                     </Show>
                   </div>
-                </section>
+                </MachineSection>
 
                 <Show when={canUseCodex()}>
                   <CodexHarness />

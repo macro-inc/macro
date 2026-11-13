@@ -1120,6 +1120,30 @@ describe('normalizedCacheExchange', () => {
     });
   });
 
+  it('delivers an uncached subscription without writing it to the cache', async () => {
+    const data = {
+      activityUpdates: { __typename: 'GraphqlActivityEvent', id: 'event-1' },
+    };
+    const uncached = makeSubscriptionOp(23);
+    const { ops, results } = harness(
+      host,
+      (op) => (op.kind === 'subscription' ? { data } : {}),
+      { isUncachedSubscription: (op) => op.key === uncached.key }
+    );
+
+    ops.next(uncached);
+    ops.next(makeSubscriptionOp(24));
+    await tick();
+
+    expect(results.map((result) => result.data)).toEqual([data, data]);
+    expect(host.writes).toHaveLength(1);
+    expect(normalizedCacheResultMetadata(results[0]!)).toBeUndefined();
+    expect(normalizedCacheResultMetadata(results[1]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: true,
+    });
+  });
+
   it('deletes the exact normalized key from subscription patches', async () => {
     const data = {
       soupUpdates: [

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::CalendarEventDetailsReader;
 
 const ORGANIZER: &str = "olivia@example.com";
 const RECURRENCE_ID: &str = "2026-08-06T14:00:00+00:00";
@@ -392,4 +393,79 @@ async fn an_occurrence_time_that_is_not_stored_counts_as_a_change() {
 
     assert!(matches!(error, CalendarMutationError::GuestsCannotModify));
     assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn details_for_an_update_read_the_addressed_occurrence() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        event_details: Some(stored_details()),
+        ..FakeRepo::default()
+    };
+    let details_requests = repo.details_requests.clone();
+
+    let details = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .details_for_update(
+        "macro|user",
+        Uuid::now_v7(),
+        None,
+        &CalendarUpdateScope::ThisEvent {
+            recurrence_id: RECURRENCE_ID.to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(details.title, "Planning");
+    assert_eq!(
+        *details_requests.lock().unwrap(),
+        vec![Some(RECURRENCE_ID.to_string())]
+    );
+}
+
+#[tokio::test]
+async fn details_for_an_update_are_refused_without_write_access() {
+    let read_only = FakeRepo {
+        mutation_target: Some(mutation_target(true)),
+        event_details: Some(stored_details()),
+        ..FakeRepo::default()
+    };
+    let error = service(
+        read_only,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .details_for_update(
+        "macro|user",
+        Uuid::now_v7(),
+        None,
+        &CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, CalendarMutationError::ReadOnly));
+
+    let unreachable_event = FakeRepo {
+        mutation_target: None,
+        event_details: Some(stored_details()),
+        ..FakeRepo::default()
+    };
+    let error = service(
+        unreachable_event,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .details_for_update(
+        "macro|user",
+        Uuid::now_v7(),
+        None,
+        &CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, CalendarMutationError::NotFound));
 }

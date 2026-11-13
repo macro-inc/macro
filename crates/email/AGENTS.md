@@ -198,7 +198,27 @@ tools — hexagonal, heavily feature-gated.
   Synced Macro drafts in junk/trash must not advance All Mail timestamps.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
+- The unfiltered inbox's viewed sorts (`preview_views/new_inbox.sql`) never sort
+  the inbox: each inbox takes a page of opened threads and a page of
+  never-opened threads (`idx_email_threads_inbox_reminder_sort` for
+  `viewed_updated`, `idx_email_threads_inbox_id` for `viewed_at`), and the
+  pages are sorted together. Never-opened threads are read only down to the
+  page's last opened thread. Opened threads come from the inbox's newest views
+  (`idx_email_user_history_link_viewed`), capped at four pages' worth; an
+  inbox that archives what it reads would otherwise walk its whole history, so
+  when the cap neither fills the page nor ends the history its inbox threads
+  are read instead. That index must not gain `thread_id`: the planner would
+  then scan an inbox's history for every per-thread history lookup. Keep the
+  `OFFSET 0` fences: without them the planner joins and sorts the whole inbox
+  or walks the whole history.
 - Spam and Trash seed candidates from indexed provider labels/folder state plus pending positive moves, then recheck canonical mailbox facts before pagination. Order by the latest matching message date; metadata touches and unrelated replies must not move folder rows. Only Trash relaxes the default trash exclusion.
+- A thread read by id (`emailThread`, `soupUpdates` hydration, mutation replies)
+  renders as All Mail shows it, else as its Spam or Trash row
+  (`thread_previews_by_id` in `domain/service/previews.rs`); All Mail alone
+  misses every spam-only or trash-only thread. Read the folders one thread at a
+  time, at most `MAX_FOLDER_LOOKUPS` per read: the folder scan reaches only that
+  thread's messages through an equality on its id, and an `OR` of ids reads the
+  inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
 
@@ -329,7 +349,10 @@ tools — hexagonal, heavily feature-gated.
   index bound and every enqueue's `available_at = now()` revives it. Any query
   that reads queued or import-running state must leave those rows out, as
   `settle_import`, the health snapshot, the backfill status and resync do.
-  Throttling and token refusals give their claim back to `attempts`.
+  Throttling and token refusals give their claim back to `attempts`, and so
+  does a transient provider failure (Graph 5xx or 408, a request Graph never
+  answered) once its backoff is at 30 minutes, so a provider outage never
+  abandons a message.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
   link with `needs_reauth`; clearing the flag resumes them.
 - Process deleted-user bindings in the domain by link id, custodian before
@@ -341,6 +364,14 @@ tools — hexagonal, heavily feature-gated.
   makes), and the discover span sums it as `outlook.provider_item_count`. It
   counts what the folder holds at the provider, imported or not, so an import
   is checked against it.
+- `email_sync_streams.reader_revision` is the folder reader revision a mail
+  folder stream's current delta round started at, written by `commit_page` on
+  the round's first page and copied by `rebind_work`. `domain/mailbox/reimport.rs`
+  restarts streams whose round started at an older revision (or none), Inbox
+  and Sent first, through the Outlook resync's reset limited to those folders;
+  a new query that copies or resets streams keeps the column consistent.
+  `PgMailboxSync::with_imports_paused` makes `claim_message` take only live
+  rows (`is_import IN (false,$2)` keeps both values named for the claim index).
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.
@@ -349,6 +380,9 @@ tools — hexagonal, heavily feature-gated.
   `pending`, since claims skip `confirming` ones while those still block later
   commands, as reconnect (`email_service` `mailbox_init.rs`) and `rebind_work` in
   `outbound/mailbox_pg/lifecycle.rs` do; thread operations omit older generations.
+  The same bumps delete older generations' `email_sync_streams` and
+  `email_message_reconciliation` rows: claims never take them, and left in place
+  they stay due and every lease claim reads past them.
 
 ## Related
 

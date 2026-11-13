@@ -353,7 +353,7 @@ Integrated documentation below for content ownership and navigation behavior.
 The product entry preloads the requested lazy route and its CSS before replacing
 prerendered HTML, avoiding a header-only flash on first load. Run this preload
 inside the asynchronous startup function, never with a module-level await:
-Rollup can place route dependencies in the entry chunk, which must finish
+the bundler can place route dependencies in the entry chunk, which must finish
 evaluating before those routes can load.
 
 Person and agent mentions use `--marketing-mention` with a soft tint in both
@@ -1038,7 +1038,9 @@ Closing restores focus to the mention. Editing a linked cell into plain text
 removes its reference; undo restores it. Check mouse and keyboard opening,
 Escape/close, and phone-width record tabs.
 
-Use `EmailShareStory` for the Mail feature-page illustration: one compact panel changes from email to channel picker to chat, then shows a new reply in the shared thread. Keep the three-step navigation and stop autoplay on the completed result. Avoid stacked email/chat windows and internal scrollbars; reduced motion shows the final result immediately. The separate interactive inbox sandbox retains `EmailSharingDemo` and its `DocMention` link for opening the complete sample thread.
+The Drive page is `DriveStories`: eight sections that all read one small set of files from `driveFiles.ts`, so a file keeps its name, kind, source, and tags from graphic to graphic. `DriveFileRows` is the shared file list, with entity icons coloured as the app colours them. Sharing reuses `DocumentSharingDemo`, the agent section uses the agent session replica, and the record section opens the CRM record on its Files tab. Paper graphics on the Drive and Spreadsheets pages sit in the section's glass frame (`demo={{ tone, glassFrame: true }}` with `backdrop={false}` on the graphic) so they get the same dot-matrix and glow as the product demos.
+
+The Mail feature page's sharing, drafting, and routine sections use the app's own replicas, not drawn diagrams. Sharing is `EmailSharingDemo` (the email block, its Share form, and the channel it posts to), also used by the inbox sandbox. Drafting is `EmailDraftStory`, the homepage's conversation and composer; both read their messages from `emailDraftMessages`. `EmailRoutineDemo` shows a routine's effects in order: the email arrives in the inbox, Macro posts it to a channel, and a push notification drops in. Reduced motion shows each finished result immediately.
 
 The retained `HomepageCrm` illustration has no playback footer or Pause/Replay controls;
 it still pauses offscreen and when a visitor enters the demo.
@@ -1255,7 +1257,7 @@ Feature hero videos render with `TutorialVideoEmbed`, using the shared player di
 
 `/replace-apps` is the first Main benefits link. It shares feature hero typography, combines app selection with the existing pricing `SavingsCalculator`. Keep its route registered for preload, prerender, and site search.
 
-Use `ProductCopy` in feature section headings and descriptions to render explicit product names as linked icon-and-name mentions. Display only the icon and short product name (Mail, Tasks, etc.), omitting the Macro prefix. Keep them contextual: only the products a section links to, with no pills in hero copy or decorative examples. Agents appears on nearly every page, so mention it in one section per page, the one about agents. Keep each section heading to one line on desktop; a pill's icon adds about a character's width. A product must be listed in `ProductMention.tsx` to render as a mention. Link to the product page, preserve readable mobile wrapping, and use the actual product icon. Render mentions as underlined inline links with no border, padding, or resting background; show a subtly rounded background only on hover, fading over 160ms and respecting reduced motion.
+Use `ProductCopy` in feature section headings and descriptions to render explicit product names as linked icon-and-name mentions. Every mention's `href` must be a prerendered route (benefit pages live under `/docs/product/`): the build's link check in `scripts/verify-seo.ts` fails the deploy on a broken internal link, and pull request CI does not run it, so run `bun run build` after adding one. Display only the icon and short product name (Mail, Tasks, etc.), omitting the Macro prefix. Keep them contextual: only the products a section links to, with no pills in hero copy or decorative examples. Agents appears on nearly every page, so mention it in one section per page, the one about agents. Keep each section heading to one line on desktop; a pill's icon adds about a character's width. A product must be listed in `ProductMention.tsx` to render as a mention. Link to the product page, preserve readable mobile wrapping, and use the actual product icon. Render mentions as underlined inline links with no border, padding, or resting background; show a subtly rounded background only on hover, fading over 160ms and respecting reduced motion.
 
 Pricing uses `ProductPage` and `ProductHero`, open Free/Pro/Max plan rows, an expandable semantic comparison table, the shared savings calculator, and `FeaturePageFaq`. Keep pricing FAQ typography identical to feature FAQs; do not reintroduce slab FAQ headings or separate pricing disclosure styles. Use `HomepageClosing` inside the feature-page wrapper.
 
