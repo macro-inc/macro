@@ -47,7 +47,7 @@ import { WebNamespace } from './entities/web/namespace';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
 import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
-import type { MacroEvents } from './events/receiver';
+import { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
 export type {
@@ -338,7 +338,10 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.users = new UserNamespace(client);
     this.webhooks = new WebhooksNamespace(client);
     this.workspace = new WorkspaceNamespace(client);
-    this.events = client.events;
+    // Built here, not in MacroClient: the receiver imports every hydrated
+    // entity, and entities import the client, so the client importing the
+    // receiver would make module load order decide which class exists first.
+    this.events = new MacroEvents(client, client.webhookSecret);
     this.webAppUrl = client.webAppUrl;
   }
 
