@@ -289,7 +289,7 @@ async fn additions_commit_before_removals_and_events_preserve_fixed_order_and_la
     ));
     let calls = fake.calls();
     assert_eq!(
-        &calls[6..15],
+        &calls[6..16],
         &[
             Call::Begin("labels"),
             Call::Add(
@@ -298,6 +298,7 @@ async fn additions_commit_before_removals_and_events_preserve_fixed_order_and_la
                     .to_vec()
             ),
             Call::SetRead(false),
+            Call::SetStarred(true),
             Call::ThreadUpdate,
             Call::Commit,
             Call::Begin("labels"),
@@ -498,6 +499,7 @@ async fn reverse_provider_changes_publish_false_flags_and_the_removed_user_label
     let calls = fake.calls();
     assert!(calls.contains(&Call::Add(vec!["INBOX".into()])));
     assert!(calls.contains(&Call::SetRead(true)));
+    assert!(calls.contains(&Call::SetStarred(false)));
     let events = events(&calls);
     assert_eq!(events.len(), 6);
     assert_eq!(events[0]["metadata"]["archived"], false);
@@ -510,4 +512,31 @@ async fn reverse_provider_changes_publish_false_flags_and_the_removed_user_label
         "Label_old"
     );
     assert_eq!(events[5]["metadata"]["added"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn a_star_set_or_removed_in_gmail_sets_the_starred_flag_the_inbox_shows() {
+    for starred in [true, false] {
+        let (service, fake) = make_service(false);
+        {
+            let mut state = fake.0.lock().unwrap();
+            state.labels = if starred {
+                vec![label("INBOX")]
+            } else {
+                vec![label("INBOX"), label("STARRED")]
+            };
+            state.provider = Ok(Some(if starred {
+                vec!["INBOX".into(), "STARRED".into()]
+            } else {
+                vec!["INBOX".into()]
+            }));
+        }
+        assert!(matches!(
+            service.process(Ok(input(operation()))).await,
+            InboxSyncDisposition::DoneDelete
+        ));
+        let calls = fake.calls();
+        assert!(calls.contains(&Call::SetStarred(starred)), "{calls:?}");
+        assert!(!calls.contains(&Call::SetStarred(!starred)), "{calls:?}");
+    }
 }

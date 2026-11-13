@@ -51,6 +51,23 @@ pub(super) async fn add_message_labels<R: InboxSyncRepository>(
                 })?;
         }
 
+        // Gmail's STARRED label is the starred flag the inbox shows.
+        if provider_label_ids
+            .iter()
+            .any(|provider_id| provider_id == service::label::system_labels::STARRED)
+        {
+            tx.set_starred(link.id, message_db_id, true)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e
+                            .into_original()
+                            .context("Failed to update message starred status"),
+                    })
+                })?;
+        }
+
         tx.update_thread(link.id, thread_db_id).await.map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
@@ -106,6 +123,23 @@ pub(super) async fn remove_message_labels<R: InboxSyncRepository>(
                         source: e
                             .into_original()
                             .context("Failed to update message read status"),
+                    })
+                })?;
+        }
+
+        // Gmail's STARRED label is the starred flag the inbox shows.
+        if provider_label_ids
+            .iter()
+            .any(|provider_id| provider_id == service::label::system_labels::STARRED)
+        {
+            tx.set_starred(link.id, message_db_id, false)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e
+                            .into_original()
+                            .context("Failed to update message starred status"),
                     })
                 })?;
         }

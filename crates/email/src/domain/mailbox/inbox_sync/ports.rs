@@ -98,6 +98,14 @@ pub trait InboxSyncLabelTransaction: InboxSyncTransaction {
         is_read: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Update the denormalized starred state in the same transaction.
+    fn set_starred(
+        &mut self,
+        link_id: Uuid,
+        message_id: Uuid,
+        is_starred: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Recompute metadata after changing the message.
     fn update_thread(
         &mut self,
