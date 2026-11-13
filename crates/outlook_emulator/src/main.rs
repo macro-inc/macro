@@ -9,7 +9,8 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use outlook_emulator::{Options, OutlookEmulator, Seed, SeedError, StartError};
 
-/// A stateful fake of the Microsoft Graph mail API Macro's email code calls.
+/// A stateful fake of the Microsoft Graph mail API and the Microsoft
+/// identity platform Macro's email and sign-in code call.
 #[derive(Parser)]
 struct Args {
     /// The address to listen on.
@@ -22,6 +23,11 @@ struct Args {
     /// emulator through another address than the one it listens on.
     #[arg(long)]
     public_url: Option<String>,
+    /// The origin a browser reaches the emulator at, when that is another
+    /// address than services reach it at: the sign-in page is advertised
+    /// there.
+    #[arg(long)]
+    browser_url: Option<String>,
     /// Accept `http://` notification URLs. Graph, and the emulator by
     /// default, accept only HTTPS.
     #[arg(long)]
@@ -54,6 +60,7 @@ async fn main() -> Result<(), RunError> {
     let mut options = Options {
         allow_http_notification_urls: args.allow_http_notification_urls,
         public_url: args.public_url,
+        browser_url: args.browser_url,
         trusted_certificates: Vec::new(),
     };
     for path in &args.trust_certificate {
@@ -63,7 +70,8 @@ async fn main() -> Result<(), RunError> {
     let emulator = OutlookEmulator::start_on(args.listen, seed, options).await?;
     tracing::info!(
         graph_url = %emulator.graph_url(),
-        token_url = %emulator.token_url(),
+        login_url = %emulator.login_url(),
+        login_page_url = %emulator.login_page_url(),
         authentication_service_url = %emulator.authentication_service_url(),
         control_url = %format!("{}/_emulator", emulator.base_url()),
         mailboxes = emulator.mailboxes().len(),

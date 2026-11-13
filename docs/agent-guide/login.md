@@ -43,6 +43,23 @@ place (see [running locally](../development/running-locally.md#google-sign-in-an
 4. `/app/mail` lists the seeded mail of every connected mailbox once the
    backfill finishes, a few seconds after connecting.
 
+## Microsoft sign-in on a local stack
+
+A local stack without a real Microsoft client runs the Outlook emulator in
+Microsoft's place (see [running locally](../development/running-locally.md#microsoft-sign-in-and-outlook-without-a-microsoft-account)).
+
+1. On `/app/welcome`, click `Continue with Microsoft`. The browser goes through
+   FusionAuth to the emulator's page, titled `Pick an account`, at
+   `http://localhost:<outlook_emulator port>/common/oauth2/v2.0/authorize`.
+2. Click the button of a seeded user, such as `Ada Example`. `Cancel` and
+   `Need admin approval` return what Microsoft returns for a declined consent
+   and for a directory that requires an administrator.
+3. A first sign-in lands on onboarding at `/app/welcome`. Its work email step
+   opens the emulator's page again for the Outlook consent: pick the same user
+   to connect their mailbox. A returning user lands in the app.
+4. `/app/mail` lists the mailbox's seeded mail once the backfill finishes, a
+   few seconds after connecting.
+
 ## Agent accounts
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without

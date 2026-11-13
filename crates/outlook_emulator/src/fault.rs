@@ -147,6 +147,23 @@ pub enum Route {
     /// stand-in.
     #[strum(serialize = "oauth.token")]
     OauthToken,
+    /// `GET` and `POST /{tenant}/oauth2/v2.0/authorize`: the sign-in page
+    /// and its form.
+    #[strum(serialize = "oauth.authorize")]
+    OauthAuthorize,
+    /// `GET` and `POST /{tenant}/v2.0/adminconsent`: the admin-consent page
+    /// and its form.
+    #[strum(serialize = "oauth.adminconsent")]
+    OauthAdminConsent,
+    /// `GET /{tenant}/v2.0/.well-known/openid-configuration`
+    #[strum(serialize = "oauth.discovery")]
+    OauthDiscovery,
+    /// `GET /{tenant}/discovery/v2.0/keys`
+    #[strum(serialize = "oauth.keys")]
+    OauthKeys,
+    /// `GET /oidc/userinfo`
+    #[strum(serialize = "oauth.userinfo")]
+    OauthUserInfo,
 }
 
 impl TryFrom<String> for Route {

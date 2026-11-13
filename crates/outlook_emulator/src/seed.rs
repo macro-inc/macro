@@ -67,6 +67,11 @@ pub struct SeedMailbox {
     /// `refresh-<email>`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
+    /// Leaves `xms_edov` out of the user's ID tokens: Microsoft has not
+    /// verified that the account's organization owns the address's domain,
+    /// so Sign in with Microsoft is refused.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unverified_email_domain: bool,
     /// The Macro email link (`email_links.id`) this mailbox is connected
     /// as, which the authentication-service stand-in answers tokens for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
