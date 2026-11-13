@@ -46,3 +46,18 @@ fn skills_render_non_empty_titled_markdown() {
         assert!(content.starts_with(&format!("# {}", skill.name)));
     }
 }
+
+/// The Compose Routines skill ends with the text every writer of routines
+/// follows, whole, so a chat session and the drafter write by the same rules.
+#[test]
+fn compose_routines_carries_the_shared_writing_text() {
+    let content = compose_routines::SKILL.render_content();
+    assert!(content.contains(routine_program::WRITING));
+    for rule in [
+        "one `macro.search.names([...])` call",
+        "macro.routines.check(routine, { created })",
+        "## Without code",
+    ] {
+        assert!(content.contains(rule), "{rule}");
+    }
+}
