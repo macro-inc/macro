@@ -63,6 +63,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         completed_files: 0,
         completed_removals: 0,
         transfer: None,
+        resubmissions: 0,
     });
     Harness(Arc::new(Mutex::new(State {
         lease: DraftLease {
@@ -360,12 +361,7 @@ async fn unknown_send_is_only_read_back_until_a_sent_copy_is_confirmed() {
     assert_eq!(h.0.lock().unwrap().submissions, 1);
 }
 
-#[tokio::test]
-async fn crash_after_submission_marker_never_replays_the_send() {
-    let h = harness(Some(DraftStage::Submitting));
-    let service = service(&h);
-    service.execute_once().await.unwrap();
-    assert_eq!(h.0.lock().unwrap().submissions, 0);
+fn wait_runs_out(h: &Harness) {
     h.0.lock()
         .unwrap()
         .lease
@@ -373,11 +369,83 @@ async fn crash_after_submission_marker_never_replays_the_send() {
         .as_mut()
         .unwrap()
         .stage_started_at = Utc::now() - Duration::minutes(11);
+}
+
+#[tokio::test]
+async fn crash_after_submission_marker_is_not_replayed_while_the_send_may_be_in_flight() {
+    let h = harness(Some(DraftStage::Submitting));
+    let service = service(&h);
+    for _ in 0..3 {
+        service.execute_once().await.unwrap();
+    }
+    let s = h.0.lock().unwrap();
+    assert_eq!(s.submissions, 0);
+    assert!(s.failure.is_none());
+}
+
+#[tokio::test]
+async fn a_draft_outlook_still_holds_unsent_after_the_wait_is_submitted_again_once() {
+    let h = harness(Some(DraftStage::Confirming));
+    let service = service(&h);
+    wait_runs_out(&h);
+
     service.execute_once().await.unwrap();
-    assert!(matches!(
-        h.0.lock().unwrap().failure,
-        Some(DraftFailure::SendUnknown)
-    ));
+
+    {
+        let s = h.0.lock().unwrap();
+        assert_eq!(s.submissions, 1);
+        assert!(s.failure.is_none());
+        let checkpoint = s.lease.checkpoint.as_ref().unwrap();
+        assert_eq!(checkpoint.resubmissions, 1);
+        assert_eq!(checkpoint.stage, DraftStage::Confirming);
+    }
+    h.0.lock().unwrap().remote.as_mut().unwrap().is_draft = false;
+    service.execute_once().await.unwrap();
+    assert!(h.0.lock().unwrap().sent);
+    assert_eq!(h.0.lock().unwrap().submissions, 1);
+}
+
+#[tokio::test]
+async fn a_send_outlook_may_have_received_is_never_submitted_again() {
+    type Change = fn(&mut State);
+    let cases: [(&str, Change); 4] = [
+        ("the draft is gone", |s| s.remote = None),
+        ("the draft changed", |s| {
+            s.remote.as_mut().unwrap().version = Some("v2".into());
+        }),
+        ("the owner discarded it", |s| {
+            s.lease.delete_requested = true
+        }),
+        ("it was already submitted again", |s| {
+            s.lease.checkpoint.as_mut().unwrap().resubmissions = 1;
+        }),
+    ];
+    for (case, change) in cases {
+        let h = harness(Some(DraftStage::Confirming));
+        change(&mut h.0.lock().unwrap());
+        wait_runs_out(&h);
+
+        let _ = service(&h).execute_once().await;
+
+        let s = h.0.lock().unwrap();
+        assert_eq!(s.submissions, 0, "{case}");
+        assert!(s.failure.is_some(), "{case}");
+    }
+}
+
+#[tokio::test]
+async fn a_resubmission_outlook_also_leaves_unsent_is_not_submitted_a_third_time() {
+    let h = harness(Some(DraftStage::Confirming));
+    let service = service(&h);
+    wait_runs_out(&h);
+    service.execute_once().await.unwrap();
+    wait_runs_out(&h);
+
+    service.execute_once().await.unwrap();
+
+    let s = h.0.lock().unwrap();
+    assert_eq!(s.submissions, 1);
+    assert!(matches!(s.failure, Some(DraftFailure::SendUnknown)));
 }
 
 #[tokio::test]

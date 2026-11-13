@@ -167,8 +167,10 @@ Outlook. Where Microsoft APIs cannot reproduce a behavior, investigate an
 equivalent implementation and bring any material limitation back for a product
 decision. Capability errors must be explicit, including missing consent.
 
-Confirmation runs silently, as Gmail sends do; an unresolved outcome shows as
-unknown and requires deliberate user resend rather than automatic duplication. The user can supply test accounts at the live-validation stage.
+Confirmation runs silently, as Gmail sends do. A draft Outlook still holds
+unsent and unchanged once the confirmation wait runs out is submitted once more;
+any other unresolved outcome shows as unknown and requires deliberate user
+resend rather than automatic duplication. The user can supply test accounts at the live-validation stage.
 Contract and implementation work can start beforehand; account-dependent gates
 remain unverified until the appropriate personal and organizational accounts exist.
 
@@ -385,7 +387,8 @@ conflict instead of guessing. [Draft update API](https://learn.microsoft.com/en-
 Replace the required immediate SentIds result with accepted/pending/confirmed/
 unknown outcomes and optional provider IDs. Graph accepts a send without returning
 a sent message body. A lost response leaves the same command under reconciliation;
-it never automatically creates a second send. Confirmation records the sent copy,
+it never creates a second message, and submits the same draft again only once,
+when Outlook still holds it unsent and unchanged after the confirmation wait. Confirmation records the sent copy,
 not recipient delivery. A deliberate resend is a new command, as already agreed.
 [Send response](https://learn.microsoft.com/en-us/graph/api/message-send?view=graph-rest-1.0).
 
@@ -803,7 +806,9 @@ enforce a tested size limit before accepting the command.
 
 A timeout or crash after submission starts triggers reconciliation by recorded
 draft identity/correlation. It never automatically creates and sends another
-message. Draft visibility alone is not proof that an in-flight send failed.
+message. Draft visibility right after submission is not proof that an in-flight
+send failed; the same draft, unchanged (same `changeKey`) and still unsent ten
+minutes later, is, and is then submitted once more.
 Retain ambiguity when the provider cannot establish an outcome, expose it to the
 user, and make an intentional resend a separate command. This avoids claiming
 exactly-once delivery from an external API that provides no such contract.
@@ -864,7 +869,7 @@ mailboxes cover behavior mocks cannot establish.
 | Move, delete, new folder, or folder deletion during import | No mistaken permanent deletion or identity replacement. |
 | Expired delta cursor | Targeted rebuild retains existing data until a complete reconciliation. |
 | Throttling and long provider outage | Work remains durable; live operations retain quota; status shows degradation. |
-| Accepted send with lost response or failed local completion | Reconcile existing command; no blind resend. |
+| Accepted send with lost response or failed local completion | Reconcile existing command; no blind resend. A draft still unsent and unchanged after the confirmation wait is submitted once more. |
 | Mixed Gmail/Outlook and same-looking IDs | Provider state, caches, grants, and local metadata remain isolated. |
 | Calendar/contact consent absent or revoked | Mail access remains correctly scoped; reconnect/permission flows are explicit and restore the missing parity features. |
 | Gmail feature matrix | Every exposed behavior is validated for Outlook, including classification, calendar, contacts, sender policies, and imported drafts. |
