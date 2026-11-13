@@ -1,0 +1,19 @@
+packages/sdk/package.json
+  s_78e4d4c9c30c69::t_45e5a7f166bd73 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3de96eb2c43844a56859eb0f69af94ef8e446648",
+  "prompts": {},
+  "sessions": {
+    "s_78e4d4c9c30c69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fe79474-5242-4476-b7a6-a36107ecbeb5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
