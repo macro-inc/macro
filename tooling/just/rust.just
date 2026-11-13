@@ -51,6 +51,15 @@ email-e2e-known-bugs *args:
     SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p document_storage_service --bin document_storage_service
     SQLX_OFFLINE=true crates/email_e2e/scripts/known_bugs.sh {{ args }}
 
+# The email browser suite (apps/web/tests/email-e2e): the built web app in
+# Chromium against the same stack as `email-e2e`, one stack per test. Needs
+# what `email-e2e` needs and the web app's `bun install`. Arguments go to
+# Playwright, e.g. `just email-e2e-browser reply` or `--repeat-each 5`.
+email-e2e-browser *args:
+    SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p document_storage_service --bin document_storage_service -p email_e2e --bin email_e2e_stacks
+    just apps/web/build-email-e2e
+    just apps/web/test-email-e2e-browser {{ args }}
+
 # Build dev service Docker images to pre-warm the cache used by root `run_local`.
 build_dev_service_images:
   docker build -f docker/Dockerfile.dev --target services_bundle -t macro-local-rust-services:dev .

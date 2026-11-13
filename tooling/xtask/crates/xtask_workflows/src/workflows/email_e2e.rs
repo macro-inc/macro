@@ -119,7 +119,7 @@ fn suite() -> Job {
 }
 
 /// ElasticMQ: the SQS-compatible server the scenarios' queues live on.
-fn sqs_service() -> Container {
+pub(crate) fn sqs_service() -> Container {
     Container::default()
         .image("softwaremill/elasticmq-native:1.7.1")
         .ports(vec![Port::Name("9324:9324".to_string())])
@@ -127,7 +127,7 @@ fn sqs_service() -> Container {
 
 /// A single-node Kafka, the version the local stack runs. The services only
 /// publish to it.
-fn kafka_service() -> Container {
+pub(crate) fn kafka_service() -> Container {
     Container::default()
         .image("apache/kafka:3.9.1")
         .env(
@@ -159,7 +159,7 @@ fn kafka_service() -> Container {
 }
 
 /// Room for every scenario's connection pools.
-fn raise_connection_limit() -> Step<Run> {
+pub(crate) fn raise_connection_limit() -> Step<Run> {
     Step::new("raise the postgres connection limit")
         .run(include_str!("scripts/email_e2e_postgres.sh"))
 }

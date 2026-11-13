@@ -25,6 +25,7 @@ jobs:
       tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
       sdk: ${{ steps.filter.outputs.sdk }}
       email_e2e: ${{ steps.filter.outputs.email_e2e }}
+      email_e2e_browser: ${{ steps.filter.outputs.email_e2e_browser }}
       observability_image: ${{ steps.filter.outputs.observability_image }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
     timeout-minutes: 5
@@ -536,6 +537,23 @@ jobs:
             - 'crates/macro_db_client/migrations/**'
             - '.config/nextest.toml'
             - '.github/workflows/email_e2e.yml'
+          email_e2e_browser:
+            - 'services/email_service/**'
+            - 'crates/email/**'
+            - 'crates/email_*/**'
+            - 'crates/graphql_email/**'
+            - 'crates/gmail_*/**'
+            - 'crates/outlook_*/**'
+            - 'crates/macro_db_client/migrations/**'
+            - 'apps/web/tests/email-e2e/**'
+            - 'apps/web/src/features/email-*/**'
+            - 'apps/web/src/features/block-email/**'
+            - 'apps/web/src/features/calendar*/**'
+            - 'apps/web/src/features/block-calendar/**'
+            - 'apps/web/src/lib/queries/email/**'
+            - 'apps/web/src/lib/queries/calendar/**'
+            - 'apps/web/justfile'
+            - '.github/workflows/email_e2e_browser.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'
             - 'infra/stacks/observability/flake.lock'
@@ -618,6 +636,13 @@ jobs:
     name: Email end-to-end
     uses: ./.github/workflows/email_e2e.yml
     secrets: inherit
+  email-e2e-browser:
+    needs:
+    - start
+    if: needs.start.outputs.email_e2e_browser == 'true'
+    name: Email end-to-end (browser)
+    uses: ./.github/workflows/email_e2e_browser.yml
+    secrets: inherit
   observability-image:
     needs:
     - start
@@ -646,6 +671,7 @@ jobs:
     - tauri-lockfiles
     - sdk
     - email-e2e
+    - email-e2e-browser
     - observability-image
     - macrod-update
     if: '!cancelled() && needs.start.result != ''skipped'''

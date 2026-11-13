@@ -138,6 +138,9 @@ local-email: ensure-cache-wasm
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
 node_heap := "--max-old-space-size=8192"
+
+# Features whose browser-test suites `test-email-fixtures-browser` runs.
+email_fixture_suites := "email-compose email-message email-view calendar-view"
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
@@ -249,6 +252,27 @@ test-calendar-details-browser *ARGS:
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/functional/playwright.config.ts {{ARGS}}
+
+# The bundle the email browser suite serves (tests/email-e2e): every service on
+# the page's own origin, where the suite's front proxies to the email stack.
+build-email-e2e: build-wasm
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true VITE_ENABLE_GRAPHQL_SOUP=true VITE_ENABLE_BROWSER_OTEL=false NODE_OPTIONS="{{node_heap}}" bun run --bun build
+
+# The built app in Chromium against the email stack; the root
+# `just email-e2e-browser` builds what this needs. Same LD_LIBRARY_PATH caveat
+# as the sign-up browser tests above.
+test-email-e2e-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
+
+# The email and calendar features' fixture suites (real components over
+# scripted data, no backend), one after another. Tests tagged `@known-bug`
+# assert behaviour that is not fixed yet and stay out.
+test-email-fixtures-browser *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for feature in {{email_fixture_suites}}; do
+        env -u LD_LIBRARY_PATH bunx playwright test --config "src/features//browser-test/playwright.config.ts" --grep-invert @known-bug {{ARGS}}
+    done
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test

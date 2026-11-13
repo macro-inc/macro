@@ -102,8 +102,12 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Owns: the harness and the email scenarios.
 - Not here: the fakes of Google and Microsoft → `crates/gmail_emulator`,
   `crates/outlook_emulator`. Tests of one crate's logic → that crate.
-- Not started yet: `calendar_service`, search, the real notification and
-  authentication services, and the web app. `document_storage_service` is
+- The web app against this stack: `apps/web/tests/email-e2e` (its README).
+  `src/stack_server.rs` and the `email_e2e_stacks` binary serve stacks over
+  HTTP for it, one per browser test; add a route there when a browser test
+  needs another of the harness's levers.
+- Not started yet: `calendar_service`, search, and the real notification and
+  authentication services. `document_storage_service` is
   started only for its GraphQL API; its document, search and AI features
   run on placeholder settings.
 
@@ -122,6 +126,8 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - CI: the `Email end-to-end` workflow (`xtask_workflows`' `email_e2e.rs`)
   runs the suite on pushes to `main` that change backend code and, within
   `PR CI`, on pull requests that touch email, the emulators or the schema.
+  `Email end-to-end (browser)` (`email_e2e_browser.rs`) runs the browser suite.
+- A change to `src/stack_server.rs`: `just email-e2e-browser`.
 
 ## Gotchas
 
