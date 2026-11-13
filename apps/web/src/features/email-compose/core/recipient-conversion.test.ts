@@ -42,8 +42,8 @@ describe('canReplyAll', () => {
       to: [{ email: 'one@example.com' }, { email: 'two@example.com' }],
     });
 
-    expect(
-      canReplyAll(sent, ['viewer@example.com', 'alias@example.com'])
-    ).toBe(false);
+    expect(canReplyAll(sent, ['viewer@example.com', 'alias@example.com'])).toBe(
+      false
+    );
   });
 });

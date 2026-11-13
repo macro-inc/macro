@@ -5,6 +5,7 @@ import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatR
 import { MobileDockIsland } from '@components/app/mobile/MobileDockIsland';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
 import ArrowBendDoubleUpLeft from '@icon/system/regular/arrow-bend-double-up-left.svg';
@@ -15,7 +16,7 @@ import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
-import { type Component, Show } from 'solid-js';
+import { type Component, createSignal, Show } from 'solid-js';
 import type { EmailThreadListNavigation } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
@@ -91,6 +92,18 @@ export function BottomReplyButtons(props: {
       viewContext.compose.accounts.inboxes()
     );
 
+  const showForward = () => ctx.permissions().isOwner;
+
+  // A narrow phone row drops these labels one at a time, in this order.
+  const [actionRow, setActionRow] = createSignal<HTMLElement>();
+  const labelCollapsed = createLabelCollapse(actionRow, () => [
+    'reply',
+    ...(showForward() ? ['forward'] : []),
+    ...(showReplyAll() ? ['reply-all'] : []),
+  ]);
+  const shownLabel = (id: string, label: string) =>
+    labelCollapsed(id) ? undefined : label;
+
   const isDone = () => ctx.isThreadDone();
 
   // Matches TopBar: a send-only thread is permanently done, so the toggle
@@ -133,24 +146,30 @@ export function BottomReplyButtons(props: {
     >
       <FloatRegionOrInline region="accessory">
         <div class="w-full p-2 pb-2 pt-4 touch:px-(--mobile-chrome-gutter) touch:py-0">
-          <div class="flex flex-row flex-wrap items-center gap-2 justify-between touch:pointer-events-auto">
+          <div
+            ref={setActionRow}
+            class="flex flex-row flex-wrap items-center gap-2 justify-between touch:pointer-events-auto"
+          >
             <div class="flex flex-row items-center gap-2">
               <ReplyActionButton
                 icon={ArrowBendUpLeft}
-                label={t('emailThread.reply')}
+                label={shownLabel('reply', t('emailThread.reply'))}
+                ariaLabel={t('emailThread.reply')}
                 onClick={open('reply')}
               />
               <Show when={showReplyAll()}>
                 <ReplyActionButton
                   icon={ArrowBendDoubleUpLeft}
-                  label={t('emailThread.replyAll')}
+                  label={shownLabel('reply-all', t('emailThread.replyAll'))}
+                  ariaLabel={t('emailThread.replyAll')}
                   onClick={open('reply-all')}
                 />
               </Show>
-              <Show when={ctx.permissions().isOwner}>
+              <Show when={showForward()}>
                 <ReplyActionButton
                   icon={ArrowBendUpRight}
-                  label={t('emailThread.forward')}
+                  label={shownLabel('forward', t('emailThread.forward'))}
+                  ariaLabel={t('emailThread.forward')}
                   onClick={open('forward')}
                 />
               </Show>

@@ -540,7 +540,7 @@ export function createThreadNavigation(
       });
     }
 
-    // No message focused: reply all to the latest message, same as 'opt+r'
+    // No message focused: reply all to the latest message.
     return openHotkeyTarget('reply-all');
   };
   const cancel = () => {
@@ -629,7 +629,6 @@ export function createThreadNavigation(
   onMount(() =>
     host.registerKeyboard?.({
       replyToFocusedMessage: () => openHotkeyTarget('reply'),
-      replyAllToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
       canActOnSender: context.canActOnSender,
       blockSender: context.blockSender,

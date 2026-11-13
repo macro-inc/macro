@@ -777,9 +777,16 @@ the same subtle 3D rim in dark mode, and a faint hover tint. The selected
 card uses a 2% ink wash, brighter than that hover and lighter than a hovered
 settings row. Desktop selection does not add an accent-colored ring; keyboard
 focus has a neutral outline.
-On touch, the floating Reply, Forward, previous/next email, and done controls
-sit on the mobile dock's own surface (`MobileDockIsland`) in both themes. An
-unavailable previous/next control dims its arrow while its island stays opaque.
+On touch, the floating Reply, Reply all, Forward, previous/next email, and done
+controls sit on the mobile dock's own surface (`MobileDockIsland`) in both
+themes. An unavailable previous/next control dims its arrow while its island
+stays opaque. When the row is too narrow for every label, Reply, then Forward,
+then Reply all drop to icon-only pills until it fits on one line; check at 320,
+375, 390 and 430px.
+Reply all, in the message header and on touch, shows only when it reaches
+someone Reply doesn't: a To or Cc recipient other than the sender and the
+viewer's own inboxes and aliases. A reply to the viewer's own message already
+goes to everyone, so it has no Reply all.
 Replies appear inline on desktop and in a full-screen composer on touch devices,
 including tablets. Reply, Reply all, and Forward use the same grouped header
 actions as new email: attach, schedule, and send. The schedule clock matches
@@ -807,8 +814,10 @@ delete, attach, insert image, format, schedule, and send. Touch compose uses its
 header toolbar, which has no insert image button. **Insert image** opens an
 image-only picker and inlines the chosen images at the cursor, uploading and
 sized like pasted ones; a video chosen there is ignored.
-`R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
-or the latest message when none is selected. `F` opens a forward and focuses To.
+`R` replies to the sender of the selected message, or of the latest message
+when none is selected. `Enter` (after expanding a collapsed selected message)
+and the desktop **Reply...** box open reply-all;
+there is no separate reply-all shortcut. `F` opens a forward and focuses To.
 A new email also focuses To once it mounts, unless the user already moved to
 another field: with the CPU throttled, click Subject right after opening compose
 and type; every character must stay in Subject.
