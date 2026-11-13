@@ -19,6 +19,7 @@ mod date_mention_actions;
 mod decorator_actions;
 mod decorator_content_actions;
 mod diff;
+mod document_find;
 mod equation_insert;
 mod focus;
 mod format_facts;
@@ -329,6 +330,9 @@ pub fn query(
         return Ok(Some(reply));
     }
     if let Some(reply) = pinned_properties::query(name, data, state)? {
+        return Ok(Some(reply));
+    }
+    if let Some(reply) = document_find::query(name, data, generation, state)? {
         return Ok(Some(reply));
     }
     selection_snippet::query(name, data, generation, state)

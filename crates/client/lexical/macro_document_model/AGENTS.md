@@ -10,6 +10,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Read document Find through the closed current-generation `group-b.document-find` query, preserving Source UTF-16 literal legacy-case matching, keyed leaf pieces and ownerless block separators; use the existing regress UCS-2 path, with no state/selection writes or panel, replacement or statistics policy.
+
 - Run Code vertical navigation on generic KeyDown LOW with its immutable Up/Down eligibility; keep key-specific application stopping after generic dispatch and ordinary Core movement at Editor priority.
 
 - Prepare vertical block stops with block_navigation from the pending tree and selection; select only actual noninline keyboard-selectable image, video, horizontalrule, database-query and document-card nodes, using fresh host edge rectangles only when the caret is inside a block.
