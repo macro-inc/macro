@@ -46,8 +46,9 @@ database. Nothing talks to WhatsApp or AWS (the KMS is
 - Pictures (`src/test/pictures.rs`): an added group's and a sender's
   pictures are staged for the chat owner's account, an unchanged one is
   kept without a download, a change notification fetches the new one, a
-  hidden one is dropped with its file, and no query runs while the day's
-  budget is spent.
+  hidden one is dropped with its file, and a check cycle that claims while
+  the day's budget is spent asks nothing (its claim prunes a day-old query
+  row, the signal the test waits on).
 
 ## Checks
 

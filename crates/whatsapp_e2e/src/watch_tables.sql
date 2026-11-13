@@ -34,3 +34,5 @@ CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_lookup
     FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
 CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_profile_picture
     FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
+CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_picture_query
+    FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
