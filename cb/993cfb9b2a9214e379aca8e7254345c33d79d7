@@ -1,0 +1,35 @@
+.sqlx/query-6a6e937343fc1e26d6d5c7280dd58d9521e2baaff47d00efbaacb8b8473a728e.json
+  s_3cd5e4b6ad5d00::t_0180255760b711 3,55
+apps/docs/account/teams.mdx
+  s_3cd5e4b6ad5d00::t_9cafb69e27be50 46
+apps/docs/product/calls.mdx
+  s_3cd5e4b6ad5d00::t_02a60150b35d51 20
+apps/docs/product/sharing.mdx
+  s_3cd5e4b6ad5d00::t_06aaa90d6ca7c2 71
+apps/docs/product/unified-memory.mdx
+  s_3cd5e4b6ad5d00::t_6b6097c2f3f6ae 188
+apps/docs/support.mdx
+  s_3cd5e4b6ad5d00::t_ed11139415e657 51
+crates/call/src/outbound/pg_call_repo.rs
+  s_3cd5e4b6ad5d00::t_d1c7caecdc929c 504-507,510-514
+crates/call/src/outbound/pg_call_repo/team_share/test.rs
+  s_3cd5e4b6ad5d00::t_67414f609472dc 883-935
+docs/agent-guide/calls.md
+  s_3cd5e4b6ad5d00::t_85f74a18abd429 779-781
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cb993cfb9b2a9214e379aca8e7254345c33d79d7",
+  "prompts": {},
+  "sessions": {
+    "s_3cd5e4b6ad5d00": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e861b70f-c961-4c7c-9f37-d389374dc105",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
