@@ -69,10 +69,26 @@ pub(super) fn validate_rule(
 }
 
 impl<R: PipelineRepo, D: DatabaseStorageService, A, S> PipelineServiceImpl<R, D, A, S> {
+    /// The pipeline's one table with its columns and views.
+    pub(super) async fn pipeline_table(
+        &self,
+        pipeline: &Pipeline,
+    ) -> Result<TableDetail, PipelineError> {
+        self.databases
+            .storage_tables(pipeline.database_id)
+            .await?
+            .into_iter()
+            .find(|table| table.table.id == pipeline.table_id)
+            .ok_or(PipelineError::NotFound)
+    }
+
+    /// `table` is the pipeline's table when the caller already read it under
+    /// the write guard; it is read here only when a rule needs it.
     #[tracing::instrument(skip_all, fields(pipeline_id = %pipeline.id), err)]
     pub(super) async fn validate_stage_requirements(
         &self,
         pipeline: &Pipeline,
+        table: Option<TableDetail>,
         batch: &mut OpBatch,
     ) -> Result<(), PipelineError> {
         let rules = self
@@ -83,13 +99,10 @@ impl<R: PipelineRepo, D: DatabaseStorageService, A, S> PipelineServiceImpl<R, D,
         if rules.is_empty() {
             return Ok(());
         }
-        let table = self
-            .databases
-            .storage_tables(pipeline.database_id)
-            .await?
-            .into_iter()
-            .find(|t| t.table.id == pipeline.table_id)
-            .ok_or(PipelineError::NotFound)?;
+        let table = match table {
+            Some(table) => table,
+            None => self.pipeline_table(pipeline).await?,
+        };
         let version = batch
             .base_versions
             .entry(pipeline.table_id)

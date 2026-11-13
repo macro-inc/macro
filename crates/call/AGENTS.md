@@ -22,7 +22,8 @@ in-call chat.
   (`src/domain/service/orphan_rooms.rs`).
 - `src/outbound/livekit_rtc_client.rs`: LiveKit adapter.
 - `src/outbound/programmatic_calls.rs`: per-caller server flag for explicit
-  start, join, and leave routes. The legacy GET flow remains available.
+  start and leave, and nonhuman join-by-ID requests. Human sessions can join
+  existing calls by ID while the flag is disabled; legacy GET remains available.
 - `src/outbound/pg_call_repo.rs`, `src/outbound/pg_voice_repo.rs`: Postgres.
 - `src/outbound/pg_call_repo/lifecycle.rs`: atomic empty and program-only
   archival checks; the latter uses the last human departure and a 60-second grace.
@@ -75,8 +76,12 @@ in-call chat.
   candidate rooms have no `calls` row yet and must be left alone.
 - Bot RTC identities use `bot|<uuid>`. Webhooks never write bot attendance or
   participant events; an archived call's recreated room evicts the bot.
-- `enable-programmatic-calls` fails closed for the explicit start, join, and
-  leave routes. Meeting join ignores optional join settings while disabled.
+- `enable-programmatic-calls` fails closed for explicit start and leave. For
+  `POST /call/record/{call_id}/join`, only `MacroUserAuthentication::is_human_session()`
+  bypasses the flag; API credentials and agent-attributed sessions remain gated.
+  The handler still refuses code-execution tokens, and the domain service still
+  checks live-call admission and returns Gone for ended calls. Meeting join
+  ignores optional join settings while disabled.
 - Accept bodyless meeting joins even with `Content-Type: application/json`;
   shipped app clients send that header, while nonempty SDK bodies retain JSON validation and body limits.
 - `GET /call/{channel_id}` remains the shipped get-or-create path. New callers
@@ -86,6 +91,10 @@ in-call chat.
   standalone ownership, attendance, or an explicit invite is required.
 - Every token-producing HTTP route refuses `x-macro-code-execution` because
   tokens can outlive a code execution and cannot be revoked.
+- `edit_call_record_handler` refuses share permission and team sharing
+  changes from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

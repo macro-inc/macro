@@ -123,6 +123,11 @@ export type SplitPanelContextType = {
    * composes.
    */
   mobileHeaderOwner: Signal<symbol | undefined>;
+  /**
+   * How many header contributions declared 32px controls (`SplitHeaderRight`
+   * with `size="md"`), so the header's own controls match them.
+   */
+  headerMdControls?: Signal<number>;
   titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
   setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;
   titleFileMenuTrigger: Accessor<(() => void) | undefined>;

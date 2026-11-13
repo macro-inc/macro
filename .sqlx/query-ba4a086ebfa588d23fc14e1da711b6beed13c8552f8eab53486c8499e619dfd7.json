@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after) VALUES ($1, 'billing', '{\"effect\":\"remove_billing_item\",\"subscription_item\":\"si_quarantine\"}', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba4a086ebfa588d23fc14e1da711b6beed13c8552f8eab53486c8499e619dfd7"
+}

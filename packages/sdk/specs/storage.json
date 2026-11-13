@@ -33916,6 +33916,10 @@
           "requester_id": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "Person asking to join."
+          },
+          "requester_name": {
+            "type": ["string", "null"],
+            "description": "The requester's profile name when they asked, if they had one. Absent\non events from before it was added."
           }
         }
       },
@@ -35707,6 +35711,24 @@
           "markedText": {
             "type": "string",
             "description": "The text the comment is anchored to, as the document reads."
+          }
+        }
+      },
+      "CommercialFields": {
+        "type": "object",
+        "description": "CRM-owned roles for columns in the reusable table.",
+        "properties": {
+          "money": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyColumn"
+            },
+            "description": "Monetary fields, each with an independent per-row currency."
+          },
+          "outcome": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Outcome column, absent only for a pipeline from a pre-migration writer."
           }
         }
       },
@@ -43413,6 +43435,10 @@
               }
             ]
           },
+          "afterCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount now."
+          },
           "before": {
             "oneOf": [
               {
@@ -43423,6 +43449,10 @@
                 "description": "Its value before; missing when it was empty."
               }
             ]
+          },
+          "beforeCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount before."
           },
           "field": {
             "type": "string",
@@ -45155,6 +45185,10 @@
         "description": "The sum of a number field over the matched entries.",
         "required": ["field", "sum"],
         "properties": {
+          "currency": {
+            "type": ["string", "null"],
+            "description": "The currency code of a monetary field's amounts; such a field has one\ntotal per currency, never converted or combined. Absent for other numbers."
+          },
           "field": {
             "type": "string",
             "description": "The field."
@@ -51498,6 +51532,23 @@
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
+      "MoneyColumn": {
+        "type": "object",
+        "description": "Stable association between a numeric amount and its per-row denomination.",
+        "required": ["amount", "currency"],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The numeric column; renaming it preserves this association."
+          },
+          "currency": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The select column containing the currency code."
+          }
+        }
+      },
       "MyResponse": {
         "oneOf": [
           {
@@ -53885,11 +53936,16 @@
           "databaseId",
           "tableId",
           "primaryColumnId",
+          "commercialFields",
           "sharing",
           "createdAt",
           "trashedAt"
         ],
         "properties": {
+          "commercialFields": {
+            "$ref": "#/components/schemas/CommercialFields",
+            "description": "Stable identities for Outcome and amount/currency fields."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -54062,6 +54118,10 @@
           "readOnly"
         ],
         "properties": {
+          "currencyField": {
+            "type": ["string", "null"],
+            "description": "For a monetary amount, the field holding each entry's currency code."
+          },
           "multiple": {
             "type": "boolean",
             "description": "Whether it holds several values."

@@ -153,6 +153,12 @@ assets; importing the client alone should not construct a worker. A
 `data:video/mp2t` worker URL indicates raw TypeScript was packaged as an asset.
 An empty worker startup error does not by itself establish that the tab is stale.
 
+While a reply streams, the transcript follows its end. Pressing a disclosure in
+it (a tool group, a tool row, a thought) stops following, so what you open stays
+under the pointer while text keeps arriving below; scrolling back to the bottom
+or the jump-to-latest button follows again. The backend-free desktop/phone check
+is `bunx playwright test --config apps/web/src/features/block-agent/browser-test/playwright.config.ts transcript.browser.e2e.ts`.
+
 Repeat from Home, Agents, and the create menu with an already-ready session.
 The first prompt can be accepted before its destination mounts; navigating into
 the session must keep the same streamed turn without restarting its load. Also
@@ -690,8 +696,12 @@ the shimmer.
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
   back after opening a session and returning, the same way channel replies persist
-  when switching channels. Home's agent input also restores unsent text, under a
-  separate key from the Agents page composer. Check the Home path explicitly:
+  when switching channels. The phone Agents list's composer and the desktop
+  list views' AI input hold that same draft and attachments, so an edit in one
+  shows in the other at once: type on the composer page, go Back to the list,
+  edit there, and return; neither should show an older version. Home's agent
+  input also restores unsent text, under a separate key from the Agents page
+  composer. Check the Home path explicitly:
   type a prompt on Home, visit an agent session, then return using the Home sidebar
   button or Back. The Home prompt should remain after returning and after a reload.
   Sending or clearing the input removes only that surface's saved text draft.
@@ -953,6 +963,24 @@ the routine can't be created until it is drafted again or the step is
 removed. Saving checks every id again. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
+
+With `enable-routine-background-drafts` (PostHog, on in development builds),
+Draft it starts the same draft in the background instead
+(`POST /scheduled-actions/draft-jobs`), answered once its session is admitted.
+The box gives way to the request, three milestones (**Read your request** or
+**Found what it names**, **Writing the steps**, **Check that it runs**, with
+**Fixing a problem the check found** while it fixes one) and **Cancel draft**,
+which puts the request back in the box. **Close this anytime**: the draft
+carries on. While New routine is closed, a **Drafting routine** pill sits at
+the bottom right (above the dock on phones) with the current stage, and opens
+New routine. A finished draft gets a toast: **Routine draft ready** with
+**Review**, or **Couldn’t draft that routine** with the reason and **Edit
+request**, which reopens New routine with the request back in the box and the
+reason under it. A ready draft waits until it is opened or discarded, also
+across reloads and devices: New routine shows **Your draft is ready** with
+**Discard** and **Review**, and closing its toast only closes the toast.
+Reloading mid-draft brings the pill back. Off, the dialog waits on the
+blocking request as before; older clients keep using it.
 
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
@@ -1342,9 +1370,13 @@ The transcript never shows that code mode exists: no program, source, raw
 returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
 of its turn segment and shows only its observed SDK operations, each a compact
 row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
-`DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group with
-a program never opens on its own, so a step that failed and was recovered from
-shows only in the expanded list. There is no
+`DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group
+never opens on its own, so a step that failed and was recovered from is counted
+on the finished row (**Used 6 tools · 1 failed**) and shown in the expanded
+list; a program that failed or timed out before reporting a step is one failed
+step, one that reported steps counts the ones that failed, and one that was
+cancelled is not counted as failed. While the program
+runs, the group's live line names its observed operations. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
 survives reload, and is capped at the first 128 requests. These are advisory
@@ -1849,23 +1881,30 @@ Only tools with a supported result view can expand. Unknown tools, unsupported
 drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
-Tool runs keep one group from their first call. Historical runs start collapsed;
-live calls get a 150 ms buffer, so fast parallel bursts can finish as **Used N
-tools** without flashing a list. Ongoing work (except a run with an `ExecuteCode`
-program) opens a scrollable window of at
-most five compact rows. The window follows unfinished calls first, keeping slow
-work visible even when later calls finish, until you scroll or interact with it;
-scrolling back to the bottom resumes following. An automatically opened window
-stays visible for at least 600 ms and waits for 150 ms without an active call
-before collapsing smoothly. These delays are shared by the group, never queued
-per call, and do not delay answer text or tool execution. Manually opening,
-closing, or interacting with a group overrides automatic collapse. Subagents
-and tools requiring user input remain outside these groups so they stay visible
-during other tool bursts. A subagent row is titled by the call's short
-description, else the first line of its brief, and says **Running**, **Done**,
-or **Failed**; expanding it shows the **Instructions** and the **Result**. A long
-title truncates before the state, never over it, on phones too. Nested agent
-activity uses the same peek window.
+Consecutive tool calls, programs and thoughts between two pieces of the agent's
+text form one group, with the thoughts before, between and after its calls; a
+run of thoughts with no call stays as separate rows. A blank line the agent
+emits between calls is not text and does not split the group. Subagents, tools requiring user input, presented views and tools that
+render their own answer stay outside groups so they stay visible during other
+tool bursts. A group never opens on its own and has no scrolling window: opened,
+it lists every call in full, and that stays open as the group settles.
+
+Only one group of a turn is live: the last one, while it closes the message,
+or while one of its calls is still out and only a prompt waiting on the person
+about it follows. Its row is the turn's one
+working indicator, the same activity line a channel reply shows: the working
+dots and the step the agent is on (**Reading AgentMessage.tsx**, **Running bun
+run check**), taking turns every 2s among steps running at once and otherwise
+naming the latest; **Thinking** while the trailing thought streams. No working
+row stacks under it, and an earlier group never shows as working. Once the turn
+moves on, the group settles to **Used N tools**, with failed steps counted in
+the failure color (**· 2 failed**).
+
+A subagent row is titled by the call's short description, else the first line
+of its brief, and says **Running**, **Done**, or **Failed**; expanding it shows
+the **Instructions** and the **Result**, its own steps in a bounded scrolling
+area inside its card. A long title truncates before the state, never over it,
+on phones too.
 
 The group and thought carets sit immediately after their labels and appear on
 hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
@@ -1906,9 +1945,9 @@ with no view shows **Couldn't render dashboard**; failed calls show a
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
-ongoing rows accumulate in the five-row window, completed calls stop shimmering,
-fast batches stay compact, and the group collapses smoothly after completion.
-Its carets should still expand the results, and reduced motion disables animation.
+the group stays one live line naming the running step, never opens on its own,
+and settles to **Used N tools**. Its carets should still expand the results,
+and reduced motion disables animation.
 Check that rich result controls still work and a presented view stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
@@ -1918,14 +1957,10 @@ opens every group and tool result at once.
 
 While a turn runs tool calls, the server words them as one live status line
 ("Searching your workspace…", "Reading your emails…") with a cheap model and
-pushes it to every viewer (`agent_session_activity`). It replaces the
-**Using N tools** label of the run the turn is in: one with a call in flight,
-or the newest run while the agent thinks between calls. The line carries no
-count (the server drops a trailing "(N)" the model adds), and it is the turn's
-only working indicator: no separate working row shows under it. Without a line,
-the indicator is the group's own **Using N tools** while a call runs, or a single
-**Working** row between calls. The caret still opens the raw calls; a
-settled run reads **Used N tools**.
+pushes it to every viewer (`agent_session_activity`). It replaces the steps on
+the live line of the group the turn is in. The line carries no count (the
+server drops a trailing "(N)" the model adds), and nothing stands beside it;
+the caret still opens the calls, and a settled group reads **Used N tools**.
 It also replaces the
 open activity line of an agent reply in a channel, and shows under a working
 session's row in the Agents list. It is
@@ -1938,10 +1973,11 @@ off for an owner.
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
-trailing thought at the end of a message stays outside the tool group so live
-reasoning stays visible; thoughts followed by prose stay inside the group.
+thought after a tool call belongs to that call's group, at the end of a message
+too: the group's live line says **Thinking** while it streams. A run of
+thoughts with no call in it stays as separate rows.
 Only the newest turn can be live: once the composer stops showing the
-agent as working, every Thinking label, **Using N tools** row, shimmering
+agent as working, every Thinking label, live group line, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.

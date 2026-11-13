@@ -39,6 +39,7 @@ pub fn check_tauri_lockfiles() -> Workflow {
 
 fn check_tauri_lockfiles_job() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .name("check Tauri lockfiles")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output(
@@ -80,6 +81,7 @@ fn vendoring_inputs_filter() -> Step<Use> {
 
 fn check_tauri_vendoring_job() -> Job {
     Job::default()
+        .timeout_minutes(45u32)
         .name("check Tauri vendoring")
         .needs(vec!["check-tauri-lockfiles".to_string()])
         .cond(Expression::new(

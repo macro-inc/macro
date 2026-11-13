@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE harness_runtime_connection\n        SET lease_expires_at = statement_timestamp()\n        WHERE harness_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1c48f830d510216d23476bfe7de075ed1ae4893db0b4b5b477a17c31cfa594b3"
+}

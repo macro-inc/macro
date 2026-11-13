@@ -81,6 +81,11 @@ and operation waiting.
   success (volume create is sync, rebuild is async).
 - Deleting an instance leaves attached custom volumes; `delete_volume` them
   after the instance.
+- `create_block_volume` returns `VolumeCreation::AlreadyExists` for Incus's
+  409 "Volume by that name already exists", so a retried create neither fails
+  nor logs an error on its `incus.create_block_volume` span.
+- The `test-support` feature adds `IncusClient::over_plain_http`, so dependent
+  crates (hosted_runtimes) can test against wiremock without mTLS.
 - `exec_attached` connects all four operation websockets (`control`, `0`, `1`,
   `2`) with the API's mTLS identity before Incus starts the program; the secret
   rides in the URL, so never log it. Stdin ends with a close frame; output ends

@@ -29,6 +29,25 @@ The channel/contact option opens the recipient picker. Starting a channel call
 connects the creator without waiting for recording, transcription, or recipient
 notification delivery. Verify that a second participant still receives the ring
 and can join, and that leaving immediately does not leave a recording running.
+Join actions target the selected live call ID. If that session ends, Join and
+recovery show an ended-call error instead of starting another session. Leaving
+while others remain and then joining keeps the same call history entry; after
+the last participant leaves, use Start call or Call again to start a new entry.
+Check a stale incoming notification and a disconnect during permission setup:
+neither may create or join a replacement call. These joins work for signed-in
+human sessions with `enable-programmatic-calls` off as well as on.
+
+Channel navigation carries `join_call=<callId>` for a selected call,
+`join_call=true` to look up a live session without creating one, and
+`join_call=start` only for an explicit new-call action. Each intent is consumed
+once. A retry retains the original call ID, including after a Start request
+allocated a session but media connection failed. If Start timed out before its
+response arrived, Retry waits for that request instead of sending another Start.
+If the response was lost, Retry only looks up and joins an existing call.
+Native token skipping also requires the selected session to match the native call.
+The `call.join` trace records the intent, source, session ID, and outcome.
+Its `call.lookup` and `call.token` phases share the trace with the HTTP request;
+media connection also runs in that trace. No RTC tokens are recorded.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
@@ -849,3 +868,14 @@ push producer, notification/activity, permission and answer phases, and status
 HTTP requests; connection and cancellation outcomes end the incoming trace.
 For local collector verification and the exporter fixture, see
 [native call tracing](../development/android.md#native-call-tracing).
+
+### Calling an agent teammate
+
+An agent teammate (`enable-agent-teammates`) joins calls from its own computer
+and speaks with the voice in its repository's `config/voice.json`: the one
+picked when it was invited, or set later from **Team → Members** (see
+[agent teammates](settings.md#agent-teammates)). A changed voice applies from
+the agent's next call. Its speech runs through Macro's speech gateway on the
+agent harness service (`/brain/inference/stt` and `/brain/inference/tts`, the
+agent's own key), so call audio and synthesized text are billed as the agent's
+AI usage.

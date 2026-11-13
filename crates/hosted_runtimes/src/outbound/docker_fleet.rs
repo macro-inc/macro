@@ -25,7 +25,7 @@ use macro_env::Environment;
 
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
-use crate::domain::image::{GuestImage, InvalidGuestImage};
+use crate::domain::image::{GuestImage, GuestImages, InvalidGuestImage};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{
     Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, InstanceStatus,
@@ -60,9 +60,10 @@ trait DockerCommand: std::fmt::Debug + Send + Sync {
 pub struct DockerFleetConfig {
     /// Owner identity shared by control-plane replicas.
     pub control_plane_id: ControlPlaneId,
-    /// The image new computers are created from, e.g. `macro-box:latest`
-    /// (`nix build .#macro-box-docker`).
-    pub image: GuestImage,
+    /// The images new computers are created from: `macro-box:latest`
+    /// (`nix build .#macro-box-docker`) and `macro-box-agent:latest`
+    /// (`.#macro-box-agent-docker`).
+    pub images: GuestImages<GuestImage>,
     /// The local stack's Docker network, so computers reach its services by name.
     pub network: String,
     /// Host directory holding one enrollment directory per computer.
@@ -226,6 +227,10 @@ impl FleetError for DockerFleetError {
         matches!(self, Self::Missing { .. })
             || matches!(self, Self::Command { stderr, .. } if stderr.contains("No such container"))
     }
+
+    fn is_permanent(&self) -> bool {
+        matches!(self, Self::NotLocal(_) | Self::Encode(_))
+    }
 }
 
 impl Fleet for DockerFleet {
@@ -285,8 +290,9 @@ impl Fleet for DockerFleet {
             }
             let enrollment = enrollment.issue().await?;
             let dir = self.write_enrollment(computer.id, &enrollment).await?;
+            let image = self.config.images.for_enrollment(&enrollment).clone();
             let spec = CreateSpec {
-                image: self.config.image.clone(),
+                image: image.clone(),
                 network: self.config.network.clone(),
                 computer_id: computer.id,
                 control_plane_id: self.config.control_plane_id.clone(),
@@ -301,7 +307,7 @@ impl Fleet for DockerFleet {
             if start {
                 self.start(computer.id).await?;
             }
-            Ok(self.config.image.clone())
+            Ok(image)
         }
     }
 

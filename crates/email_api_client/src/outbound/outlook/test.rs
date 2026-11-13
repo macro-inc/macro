@@ -859,6 +859,49 @@ async fn a_throttled_invitation_source_still_fails_the_read() {
 }
 
 #[tokio::test]
+async fn a_sender_or_recipient_without_an_address_is_left_out() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"m1", "conversationId":"conversation", "subject":"Newsletter",
+            "from":{"emailAddress":{"name":"Sender without an address"}},
+            "toRecipients":[
+                {"emailAddress":{"name":"Undisclosed recipients"}},
+                {"emailAddress":{"address":"me@example.com","name":"Me"}},
+                {"emailAddress":{"address":null,"name":"Null"}}
+            ],
+            "ccRecipients":[{"emailAddress":{}}, {"emailAddress":null}, {}],
+            "bccRecipients":[{"emailAddress":{"address":"  ","name":"Blank"}}]
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/attachments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+        .mount(&server)
+        .await;
+
+    let read = api
+        .message(&token, Uuid::now_v7(), &ProviderId::new("m1").unwrap(), &[])
+        .await
+        .unwrap()
+        .unwrap();
+
+    let message = &read.content.message;
+    assert_eq!(message.subject.as_deref(), Some("Newsletter"));
+    assert!(message.from.is_none());
+    let to: Vec<_> = message
+        .to
+        .iter()
+        .map(|contact| (contact.email.as_str(), contact.name.as_deref()))
+        .collect();
+    assert_eq!(to, [("me@example.com", Some("Me"))]);
+    assert!(message.cc.is_empty());
+    assert!(message.bcc.is_empty());
+}
+
+#[tokio::test]
 async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
     let (server, api, token) = setup().await;
     Mock::given(method("GET"))

@@ -22,7 +22,8 @@ export function RoutineRunButton(props: {
       <ButtonGroup
         finish="raised"
         variant="secondary"
-        size="sm"
+        size="md"
+        class="border-0"
         aria-label="Run routine"
       >
         <ButtonGroup.Button
@@ -38,7 +39,7 @@ export function RoutineRunButton(props: {
         <Dropdown.Trigger
           as={ButtonGroup.Button}
           variant="ghost"
-          size="icon-sm"
+          size="icon-md"
           aria-label="Run options"
         >
           <CaretDownIcon class="size-3.5" />

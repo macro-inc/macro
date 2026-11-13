@@ -3535,6 +3535,11 @@ export type ChannelAccessRequestedMetadata = {
      * Person asking to join.
      */
     requester_id: MacroUserIdStr;
+    /**
+     * The requester's profile name when they asked, if they had one. Absent
+     * on events from before it was added.
+     */
+    requester_name?: string | null;
 };
 
 /**
@@ -4644,6 +4649,20 @@ export type CommentOnTextResponse = {
      * The text the comment is anchored to, as the document reads.
      */
     markedText: string;
+};
+
+/**
+ * CRM-owned roles for columns in the reusable table.
+ */
+export type CommercialFields = {
+    /**
+     * Monetary fields, each with an independent per-row currency.
+     */
+    money?: Array<MoneyColumn>;
+    /**
+     * Outcome column, absent only for a pipeline from a pre-migration writer.
+     */
+    outcome?: string | null;
 };
 
 /**
@@ -9524,7 +9543,15 @@ export type EntryChanges = {
  */
 export type EntryFieldChange = {
     after?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount now.
+     */
+    afterCurrency?: string | null;
     before?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount before.
+     */
+    beforeCurrency?: string | null;
     /**
      * The field.
      */
@@ -10662,6 +10689,11 @@ export type FieldRename = {
  * The sum of a number field over the matched entries.
  */
 export type FieldTotal = {
+    /**
+     * The currency code of a monetary field's amounts; such a field has one
+     * total per currency, never converted or combined. Absent for other numbers.
+     */
+    currency?: string | null;
     /**
      * The field.
      */
@@ -14559,6 +14591,20 @@ export type MessageTopicEvent = {
 };
 
 /**
+ * Stable association between a numeric amount and its per-row denomination.
+ */
+export type MoneyColumn = {
+    /**
+     * The numeric column; renaming it preserves this association.
+     */
+    amount: string;
+    /**
+     * The select column containing the currency code.
+     */
+    currency: string;
+};
+
+/**
  * A signed-in respondent's own response.
  */
 export type MyResponse = {
@@ -16026,6 +16072,10 @@ export type PinnedItem = {
  */
 export type Pipeline = {
     /**
+     * Stable identities for Outcome and amount/currency fields.
+     */
+    commercialFields: CommercialFields;
+    /**
      * Creation time.
      */
     createdAt: string;
@@ -16149,6 +16199,10 @@ export type PipelineExportResponse = {
  * One field of a pipeline, named as people see it.
  */
 export type PipelineFieldSummary = {
+    /**
+     * For a monetary amount, the field holding each entry's currency code.
+     */
+    currencyField?: string | null;
     /**
      * Whether it holds several values.
      */

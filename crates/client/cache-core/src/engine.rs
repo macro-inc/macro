@@ -1417,6 +1417,11 @@ impl<S: Storage> Engine<S> {
             ));
         }
         let is_query = op.kind == OperationKind::Query;
+        // A subscription event is a network snapshot of its records like a
+        // query response, so the same before/after comparison is exact for it.
+        // Leaving it unscoped made every open Quick Access list replay its
+        // search on each event, whatever the event touched.
+        let reports_search_changes = is_query || op.kind == OperationKind::Subscription;
         let normalized =
             normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
@@ -1587,7 +1592,8 @@ impl<S: Storage> Engine<S> {
                 mutation_uuid: None,
                 revision,
                 revision_advanced,
-                search_changed_buckets: is_query.then(|| search_changed_buckets.clone()),
+                search_changed_buckets: reports_search_changes
+                    .then(|| search_changed_buckets.clone()),
                 changed,
                 affected_ops,
                 reset: false,

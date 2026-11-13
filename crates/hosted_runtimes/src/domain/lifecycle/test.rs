@@ -8,6 +8,7 @@ use super::*;
 mod billing;
 mod comped;
 mod instance_lost;
+mod setup_notice;
 
 const HOST: HostId = HostId::new(uuid::Uuid::from_u128(
     0x0000_0000_0000_4000_8000_0000_0000_0001,
@@ -42,6 +43,7 @@ fn billed(phase: Phase) -> ComputerState {
         power_on_requested: false,
         capacity_wait: None,
         retried_by_team: false,
+        failure: None,
     }
 }
 
@@ -72,6 +74,7 @@ fn stopped_computer_starts_on_power_on() {
         power_on_requested: false,
         capacity_wait: None,
         retried_by_team: false,
+        failure: None,
     };
 
     let (next, effects) = transition(&state, &Event::PowerOn, context(true)).unwrap();
@@ -93,6 +96,7 @@ fn stopped_computer_starts_on_power_on() {
             power_on_requested: false,
             capacity_wait: None,
             retried_by_team: false,
+            failure: None,
         }
     );
     assert_eq!(
@@ -547,6 +551,7 @@ fn cases() -> Vec<Case> {
             recent_crashes: vec![],
             power_on_requested: false,
             event: Event::EffectFailed {
+                failure: Failure::Create,
                 reason: "create failed".to_owned(),
             },
             host_has_room: true,
@@ -840,6 +845,7 @@ fn check(cases: Vec<Case>) {
             power_on_requested: case.power_on_requested,
             capacity_wait: None,
             retried_by_team: false,
+            failure: None,
         };
 
         let outcome = transition(&state, &case.event, context(case.host_has_room));
@@ -903,6 +909,7 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::RetentionExpired),
         Just(Event::OperatorRetry),
         Just(Event::EffectFailed {
+            failure: Failure::Create,
             reason: "boom".to_owned()
         }),
     ]
@@ -1036,6 +1043,7 @@ fn a_team_retry_that_gives_up_again_is_logged_not_paged() {
     let (again, effects) = transition(
         &retried,
         &Event::EffectFailed {
+            failure: Failure::Create,
             reason: "create failed".to_owned(),
         },
         context(true),
@@ -1050,6 +1058,15 @@ fn a_team_retry_that_gives_up_again_is_logged_not_paged() {
         }
     );
     assert_eq!(effects, vec![]);
+}
+
+#[test]
+fn a_give_up_records_why_and_a_retry_clears_it() {
+    let (failed, _) = transition(&billed(Phase::Running), &Event::HostLost, context(true)).unwrap();
+    assert_eq!(failed.failure, Some(Failure::HostLost));
+
+    let (retried, _) = transition(&failed, &Event::TeamRetry, context(true)).unwrap();
+    assert_eq!(retried.failure, None);
 }
 
 #[test]

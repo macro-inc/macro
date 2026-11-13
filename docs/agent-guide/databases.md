@@ -163,7 +163,9 @@ all records, including records beyond the first page, and that opening a record
 keeps it available when a view filter excludes it. Cell edits and **Add column**
 use pipeline authorization. Viewer grants hide editing controls. The CRM editor
 fixture (`features/crm/browser-test/editor.html`) covers the real pipeline API
-adapter and shared provider against local test responses.
+adapter and shared provider against local test responses, including wrapped and
+multi-line notes; the plain-database counterpart is
+`features/block-database/browser-test/records.html?multiline`.
 Pipelines poll every five seconds. A poll that returns unchanged data must not
 remount company previews or request them again.
 
@@ -333,10 +335,14 @@ whole cell takes the click, including the space below its value when wrapped
 pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty
 new-record row. Typing there starts the next record without waiting for the
-previous save. Shift+Enter moves up. Both place the typing cursor at the end of
+previous save. Shift+Enter moves up, except in a text cell, where it starts a new
+line, as Alt+Enter does. Moving places the typing cursor at the end of
 the destination cell's text, ready to type. The active cell has one subtle outline,
-with no additional border around its editor. Arrow keys inside a text editor keep their native cursor
-behavior. Escape cancels. Tab saves and immediately edits the next writable cell;
+with no additional border around its editor. A text cell opens in place at the
+weight and line height it shows, and its row grows to fit a long or multi-line
+value; closed, the cell shows a multi-line value's lines joined on one line. Arrow
+keys inside a text editor move through its lines, wrapped or not, and leave the
+cell only from its first or last line. Escape cancels. Tab saves and immediately edits the next writable cell;
 Shift+Tab moves backward, and both wrap between rows. Read-only columns are
 skipped. If a pending save infers a column's type, the cell currently being typed
 in keeps its editor, draft and focus until it is committed or canceled.
@@ -382,7 +388,8 @@ Drag across table cells to select a rectangle, or Shift-click another cell to
 extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
 rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
 data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
-cell; a plain arrow collapses it. Inside an open cell editor Shift+Arrow selects
+cell; a plain arrow collapses it. The grid marks itself
+`data-owns-arrow-keys`, so these keys don't move split focus. Inside an open cell editor Shift+Arrow selects
 text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears

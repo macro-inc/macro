@@ -1,6 +1,7 @@
-.homepage-crm .mdf-frame { height: auto; padding: 48px 32px; background: none; }
+.homepage-crm .mdf-frame { height: auto; padding: 0; background: none; }
 .homepage-crm .mdf-frame::before { display: none; }
-.homepage-crm .mds-card { max-width: none; height: auto; overflow: hidden; }
+.homepage-crm .mds-card { position: relative; max-width: none; height: auto; overflow: hidden; padding: 0 16px 16px; border: 0; border-radius: 26.25px; background: oklch(0.17 0.002 250); box-shadow: 0 10px 40px -8px #0004; }
+.homepage-crm .mds-card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; border: 1px solid #ffffff08; background: linear-gradient(135deg, #ffffff18, transparent 45%) border-box; mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0); mask-composite: exclude; padding: 1px; }
 .homepage-crm-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--color-edge-muted); font-size: 14px; }
 .homepage-crm-viewport { height: 330px; overflow: hidden; position: relative; }
 .homepage-crm-canvas { width: 864px; height: 330px; position: relative; transform-origin: top left; }
@@ -11,13 +12,13 @@
 .homepage-crm-drag { position: absolute; top: 0; left: 0; width: 256px; z-index: 2; pointer-events: none; border-radius: 8px; box-shadow: 0 12px 24px rgb(0 0 0 / 0.22); transform-origin: top left; will-change: transform; }
 .homepage-crm-cursor { z-index: 3; transform-origin: top left; will-change: transform; }
 @media (max-width: 699px) {
-  .homepage-crm .mdf-frame { padding: 24px 12px; }
+  .homepage-crm .mds-card { padding: 0 12px 12px; }
   .homepage-crm-header { padding: 16px 12px; }
   .homepage-crm-viewport { height: 280px; }
 }
 
 /* This fixed-coordinate illustration must not inherit rem-sized app geometry
-   or interactive hover transitions. Mobile scales the entire artboard once. */
+   or interactive hover transitions. The camera scales the entire artboard once. */
 .homepage-crm-columns { box-sizing: border-box; pointer-events: none; }
 .homepage-crm-columns > div { box-sizing: border-box; }
 .homepage-crm-columns > div > div:first-child { box-sizing: border-box; height: 36px; flex: none; padding: 10px 12px; font-size: 12px; line-height: 16px; }
@@ -28,3 +29,15 @@
 .homepage-crm-card-surface > div:first-child > img { width: 20px; height: 20px; }
 .homepage-crm-card-surface > div:last-child { font-size: 12px; line-height: 16px; }
 .homepage-crm-cursor { transition: none; }
+
+.homepage-crm-header { gap: 12px; flex-wrap: wrap; padding: 16px 12px; }
+.homepage-crm-title { flex-shrink: 0; }
+.homepage-crm-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; color: var(--color-ink-muted); }
+.homepage-crm-control { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--color-ink) 5%, transparent); box-shadow: inset 0 .4px 0 #ffffff12, inset 0 0 0 .4px #ffffff0d; font-size: 12px; line-height: 16px; white-space: nowrap; }
+.homepage-crm-control svg { width: 14px; height: 14px; flex: none; }
+.homepage-crm-control-group { gap: 12px; }
+@media (max-width: 699px) {
+  .homepage-crm-controls { gap: 4px; flex-wrap: wrap; }
+  .homepage-crm-control { padding-inline: 6px; }
+  .homepage-crm-control-group { gap: 8px; }
+}

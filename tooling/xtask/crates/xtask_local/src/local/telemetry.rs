@@ -469,7 +469,7 @@ fn common_fields(
     if let Ok(cpus) = std::thread::available_parallelism() {
         fields.insert("cpus".to_owned(), Value::from(cpus.get()));
     }
-    if let Some(host) = host_name() {
+    if let Some(host) = xtask_local_telemetry::host_name() {
         fields.insert("host".to_owned(), Value::from(opaque_id(&host)));
     }
     if let Some(sha) = git(&["rev-parse", "--short=12", "HEAD"]) {
@@ -495,17 +495,6 @@ fn git(args: &[&str]) -> Option<String> {
     let text = String::from_utf8(output.stdout).ok()?;
     let text = text.trim();
     (output.status.success() && !text.is_empty()).then(|| text.to_owned())
-}
-
-fn host_name() -> Option<String> {
-    let mut buffer = [0u8; 256];
-    // SAFETY: gethostname writes at most `len` bytes into the buffer we own.
-    let status = unsafe { libc::gethostname(buffer.as_mut_ptr().cast(), buffer.len()) };
-    if status != 0 {
-        return None;
-    }
-    let end = buffer.iter().position(|byte| *byte == 0)?;
-    String::from_utf8(buffer[..end].to_vec()).ok()
 }
 
 /// Unit counts from cargo's own progress lines.

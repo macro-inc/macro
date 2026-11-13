@@ -13,7 +13,7 @@ use crate::{
         self, CalEventTypeContentNamesKey, CalWebhookSecretKey, Config, Environment,
         MetaAccessToken, MetaPixelId, MetaTestEventCode,
     },
-    outbound,
+    db_pools, outbound,
     service::{self, s3::S3},
 };
 use account_manager::{
@@ -242,52 +242,47 @@ async fn run_server() -> anyhow::Result<()> {
 
     tracing::trace!("initialized config");
 
-    // Per task. Normally each task runs about one query at a time; a larger
-    // max only lets a slow database pile up more sessions.
-    let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (10, 50),
-        Environment::Develop => (25, 100),
-        Environment::Local => (15, 50),
-    };
+    let primary_limits = db_pools::primary_limits(config.environment);
 
     let db = PgPoolOptions::new()
-        .min_connections(min_connections)
-        .max_connections(max_connections)
-        .connect(&config.database_url)
+        .min_connections(primary_limits.min_connections)
+        .max_connections(primary_limits.max_connections)
+        .acquire_timeout(primary_limits.acquire_timeout)
+        .connect_with(
+            db_pools::connect_options(&config.database_url).context("could not parse db url")?,
+        )
         .await
         .context("could not connect to db")?;
 
     tracing::trace!(
-        min_connections,
-        max_connections,
+        min_connections = primary_limits.min_connections,
+        max_connections = primary_limits.max_connections,
         "initialized db connection"
     );
 
-    let (readonly_min_connections, readonly_max_connections) = match config.environment {
-        // Once all tasks use this cap, three dev tasks allow 60 replica sessions,
-        // or 120 during a full rolling overlap.
-        // Keep excess reads queued in the service instead of exhausting replica memory.
-        Environment::Develop => (2, 20),
-        Environment::Production | Environment::Local => (min_connections, max_connections),
+    let readonly_limits = db_pools::readonly_limits(config.environment);
+
+    let readonly_connection = async {
+        PgPoolOptions::new()
+            .min_connections(readonly_limits.min_connections)
+            .max_connections(readonly_limits.max_connections)
+            .acquire_timeout(readonly_limits.acquire_timeout)
+            .connect_with(db_pools::connect_options(&config.database_url_readonly)?)
+            .await
     };
 
-    let readonly_db = match PgPoolOptions::new()
-        .min_connections(readonly_min_connections)
-        .max_connections(readonly_max_connections)
-        .connect(&config.database_url_readonly)
-        .await
-    {
+    let (readonly_db, readonly_is_replica) = match readonly_connection.await {
         Ok(pool) => {
             tracing::trace!(
-                min_connections = readonly_min_connections,
-                max_connections = readonly_max_connections,
+                min_connections = readonly_limits.min_connections,
+                max_connections = readonly_limits.max_connections,
                 "initialized readonly db connection"
             );
-            pool
+            (pool, true)
         }
         Err(e) => {
             tracing::warn!(error=?e, "failed to connect to readonly db, falling back to primary");
-            db.clone()
+            (db.clone(), false)
         }
     };
 
@@ -371,6 +366,18 @@ async fn run_server() -> anyhow::Result<()> {
     let consumer_cancellation_token = CancellationToken::new();
     let consumer_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
+    consumer_tracker.spawn(db_pools::report_usage(
+        "primary",
+        db.clone(),
+        consumer_cancellation_token.clone(),
+    ));
+    if readonly_is_replica {
+        consumer_tracker.spawn(db_pools::report_usage(
+            "readonly",
+            readonly_db.clone(),
+            consumer_cancellation_token.clone(),
+        ));
+    }
     let import_jobs = ai_tools::ImportJobs::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
@@ -950,6 +957,11 @@ async fn run_server() -> anyhow::Result<()> {
             call_root_poster.clone(),
         ),
     ));
+    let search_term_matching: Arc<dyn search_service::TermMatchingRollout> =
+        match config.environment {
+            Environment::Local => Arc::new(search_service::LocalTermMatching),
+            _ => Arc::new(search_service::FlaggedTermMatching::new(flags.clone())),
+        };
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
         call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
     );
@@ -2451,6 +2463,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
     let api_context = ApiContext {
+        search_term_matching,
         saved_views,
         sync_sessions,
         dictation_state,

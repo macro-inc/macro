@@ -14,6 +14,16 @@ import {
 
 const NOW = 1_800_000_000_000;
 const USER = 'macro|a@example.com';
+const OTHER_USER = 'macro|b@example.com';
+
+/** What the browser fires in this tab when another tab writes storage. */
+function storageChangedInAnotherTab(userId: string) {
+  window.dispatchEvent(
+    new StorageEvent('storage', {
+      key: `folder-uploads:pending:v1:${encodeURIComponent(userId)}`,
+    })
+  );
+}
 
 beforeEach(() => {
   localStorage.clear();
@@ -117,7 +127,7 @@ describe('useResumeFolderUploads', () => {
   });
 
   it('starts nothing when the account has nothing pending', async () => {
-    rememberPendingFolderUpload('macro|b@example.com', {
+    rememberPendingFolderUpload(OTHER_USER, {
       requestId: 'r1',
       name: 'A',
       sentAt: NOW,
@@ -127,5 +137,65 @@ describe('useResumeFolderUploads', () => {
 
     expect(mocks.resume).not.toHaveBeenCalled();
     dispose();
+  });
+
+  it('follows a folder another tab sends while this tab is open', async () => {
+    const { dispose } = mountWith(USER);
+    await vi.dynamicImportSettled();
+    expect(mocks.resume).not.toHaveBeenCalled();
+
+    rememberPendingFolderUpload(USER, {
+      requestId: 'r1',
+      name: 'A',
+      sentAt: NOW,
+    });
+    storageChangedInAnotherTab(USER);
+    await vi.dynamicImportSettled();
+
+    expect(mocks.resume).toHaveBeenCalledWith(USER);
+    dispose();
+  });
+
+  it('re-reads pending folders when another tab clears storage', async () => {
+    const { dispose } = mountWith(USER);
+    rememberPendingFolderUpload(USER, {
+      requestId: 'r1',
+      name: 'A',
+      sentAt: NOW,
+    });
+
+    window.dispatchEvent(new StorageEvent('storage', { key: null }));
+    await vi.dynamicImportSettled();
+
+    expect(mocks.resume).toHaveBeenCalledWith(USER);
+    dispose();
+  });
+
+  it('listens only for the signed-in account while mounted', async () => {
+    const { setUserId, dispose } = mountWith(USER);
+    rememberPendingFolderUpload(USER, {
+      requestId: 'r1',
+      name: 'A',
+      sentAt: NOW,
+    });
+    rememberPendingFolderUpload(OTHER_USER, {
+      requestId: 'r2',
+      name: 'B',
+      sentAt: NOW,
+    });
+
+    storageChangedInAnotherTab(OTHER_USER);
+    await vi.dynamicImportSettled();
+    expect(mocks.resume).not.toHaveBeenCalled();
+
+    setUserId(OTHER_USER);
+    await vi.dynamicImportSettled();
+    mocks.resume.mockClear();
+    storageChangedInAnotherTab(USER);
+    dispose();
+    storageChangedInAnotherTab(OTHER_USER);
+    await vi.dynamicImportSettled();
+
+    expect(mocks.resume).not.toHaveBeenCalled();
   });
 });

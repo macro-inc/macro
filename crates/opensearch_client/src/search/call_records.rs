@@ -33,6 +33,17 @@ const MIN_PREFIX_LEN: usize = 3;
 /// with many matching segments.
 const INNER_HITS_PER_TERM: u32 = 100;
 
+/// The segment `_source` fields a `SearchHit` carries. Inner hits do not
+/// inherit the request-level `_source` filter, so without this every segment
+/// comes back with its full `content`, which only the highlight needs.
+const SEGMENT_SOURCE_FIELDS: [&str; 5] = [
+    "transcript_id",
+    "speaker_id",
+    "sequence_num",
+    "started_at_millis",
+    "ended_at_millis",
+];
+
 const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -239,6 +250,7 @@ impl CallRecordQueryBuilder {
                 let inner_hits = InnerHits::new()
                     .name(format!("term_{idx}"))
                     .size(INNER_HITS_PER_TERM)
+                    .source_fields(SEGMENT_SOURCE_FIELDS)
                     .highlight(inner_hits_content_highlight(&highlight_query));
                 HasChildQuery::new(CHILD_RELATION, inner_query)
                     .inner_hits(inner_hits)
@@ -429,3 +441,6 @@ pub(crate) fn expand_inner_hits_to_search_hits(
     }
     out
 }
+
+#[cfg(test)]
+mod test;

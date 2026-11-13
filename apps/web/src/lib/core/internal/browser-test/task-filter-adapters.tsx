@@ -33,6 +33,7 @@ export function useTasksView() {
       setTaskState('facets', reconcile(facets)),
     savedViews: { view: () => ({ kind: 'builtin' }) },
     savedViewScope: navigation,
+    source: { sortsSearchResults: false },
     setPrimarySort: (id: string) =>
       setTaskState('sort', [{ id, reversed: false }]),
   };
