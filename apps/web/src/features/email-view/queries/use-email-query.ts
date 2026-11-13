@@ -630,7 +630,9 @@ export function useEmailDataSource(
       return (
         search.isLoading() || aliasSearchPending() || aliasAdvance.isFetching()
       );
-    return search.isLoading();
+    // Not `search.isLoading()`: it keeps the previous query's hits for a
+    // moment, which would read as "no results" before the spinner.
+    return search.isSearchServiceLoading();
   };
 
   return {
