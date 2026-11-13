@@ -32,9 +32,12 @@ interface SearchQueryOptions {
   staleTime?: number;
 }
 
-/** The search service accepts any query that has a character left after trimming. */
+/**
+ * The search service accepts a query from one character. It strips double
+ * quotes, so text made only of quotes and spaces holds nothing to search for.
+ */
 export const validateSearchServiceText = (text: string) => {
-  return text.trim().length > 0;
+  return text.replaceAll('"', '').trim().length > 0;
 };
 
 // Only plain request values and channel metadata enter the cached callbacks.

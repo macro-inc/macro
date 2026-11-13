@@ -7,7 +7,7 @@ export function useSearchSoupQuery() {
   return { status: 'success', data: [] };
 }
 export const validateSearchServiceText = (text: string) =>
-  text.trim().length > 0;
+  text.replaceAll('"', '').trim().length > 0;
 export const Entity = {
   Icon: () => {
     throw new Error('Unexpected non-user entity');

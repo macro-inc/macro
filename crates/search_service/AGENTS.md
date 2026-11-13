@@ -59,7 +59,7 @@ per-entity-type search plus a unified search across them — mounted into
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
-  blank one). Short queries stay bounded in the query builders, not here: a
+  blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
   and email content, and name, channel, project and calendar prefixes stop at
   256 expansions. Measure a common one-letter word before loosening either.

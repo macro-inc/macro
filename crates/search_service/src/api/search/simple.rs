@@ -36,7 +36,7 @@ pub enum SearchError {
     /// Invalid page size
     #[error("page_size must be between 0 and 100")]
     InvalidPageSize,
-    /// The query is empty once trimmed
+    /// The query holds no search term
     #[error("query must not be empty")]
     EmptyQuery,
     /// Query expands into too many search terms

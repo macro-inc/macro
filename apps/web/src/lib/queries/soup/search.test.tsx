@@ -127,3 +127,9 @@ it('does not send a blank query to the search service', () => {
   expect(searchFor('   ').at(-1)).toBe(false);
   expect(server.search).not.toHaveBeenCalled();
 });
+
+it('does not send quote marks around nothing to the search service', () => {
+  expect(searchFor('"').at(-1)).toBe(false);
+  expect(searchFor('" "').at(-1)).toBe(false);
+  expect(server.search).not.toHaveBeenCalled();
+});

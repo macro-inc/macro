@@ -13,7 +13,8 @@ vi.mock('@components/app/GlobalAppState', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ isSuccess: false }),
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
 }));
 vi.mock('@app/features/next-soup/filters/configs/', () => ({
   SOUP_FILTERS: [],

@@ -204,3 +204,13 @@ fn trimmed_query_rejects_a_blank_query() {
         Err(SearchError::EmptyQuery)
     ));
 }
+
+#[test]
+fn trimmed_query_rejects_quotes_around_nothing() {
+    assert!(matches!(trimmed_query("\""), Err(SearchError::EmptyQuery)));
+    assert!(matches!(
+        trimmed_query("\" \""),
+        Err(SearchError::EmptyQuery)
+    ));
+    assert_eq!(trimmed_query("\"a\"").ok(), Some("\"a\""));
+}

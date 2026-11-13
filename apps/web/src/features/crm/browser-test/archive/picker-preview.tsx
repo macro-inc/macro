@@ -10,7 +10,7 @@ export const useAugmentUserWithDmActivity = () => (user: unknown) => user;
 export const emailToId = (email: string) => email;
 export const UserIcon = () => null;
 export const validateSearchServiceText = (text: string) =>
-  text.trim().length > 0;
+  text.replaceAll('"', '').trim().length > 0;
 
 const params = new URLSearchParams(location.search);
 const selector = params.get('selector');

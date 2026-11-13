@@ -14,13 +14,14 @@ use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_D
 use crate::TermMatchingRollout;
 use crate::api::search::simple::SearchError;
 
-/// Trims a query and rejects one with nothing left. One character is enough:
-/// the query builders match a term under three characters as a whole word in
-/// content and cap its prefix expansion in names, so a short query costs no
-/// more than a common longer word.
+/// Trims a query and rejects one that holds no search term: only whitespace
+/// and the double quotes [`split_search_terms`] strips. One character is
+/// enough: the query builders match a term under three characters as a whole
+/// word in document, chat, call and email content and cap every prefix
+/// expansion, so a short query costs no more than a common longer word.
 pub(in crate::api::search) fn trimmed_query(query: &str) -> Result<&str, SearchError> {
     let query = query.trim();
-    if query.is_empty() {
+    if query.chars().all(|c| c.is_whitespace() || c == '"') {
         return Err(SearchError::EmptyQuery);
     }
     Ok(query)
