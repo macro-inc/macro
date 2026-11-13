@@ -140,7 +140,10 @@ type ListAndAliases = (SelectList, Vec<(usize, Identifier)>);
 fn items(input: Tokens<'_>) -> ParseResult<'_, ListAndAliases> {
     alt((
         keyword(TokenKind::Star).map(|()| (SelectList::Star, Vec::new())),
-        separated_list1(comma, aliased_item).map(|entries| {
+        // After a comma another item must follow: a refused item is named
+        // where it stands, not reported as a stray comma before FROM.
+        (aliased_item, many0(preceded(comma, cut(aliased_item)))).map(|(first, rest)| {
+            let entries: Vec<_> = std::iter::once(first).chain(rest).collect();
             let mut items = Vec::with_capacity(entries.len());
             let mut aliases = Vec::new();
             for (index, (item, alias)) in entries.into_iter().enumerate() {
