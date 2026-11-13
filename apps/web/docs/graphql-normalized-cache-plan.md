@@ -970,19 +970,15 @@ coordinating query lifetimes.
 
 A predicate that still trails the observed cache revision after three consecutive
 reads reports a cache error instead of holding initial hydration indefinitely.
-For channel-list projections, the existing network path then refreshes every
-requested identity once per failure, including previously cached rows. Other
-cache-first readers retain their existing missing-record hydration policy, so a
-cache failure does not trigger one full refresh per warm favorite. Existing
-channel rows remain visible while loading; a complete recovery response replaces
-them, including removals. A later cache change can recover the local predicate
-without publishing stale replies.
+The existing missing-record hydration path can then fetch unresolved identities.
+Already-resolved rows remain visible without a forced full-identity refresh;
+a later cache change retries the predicate and replaces its membership on success.
+Explicit refreshes still use the existing query refresh path. Recovery does not
+depend on the selected projection or add a second row/removal store.
 A change received during the final stale read is deferred to a new task rather
-than lost or retried indefinitely in the same microtask chain. If the predicate
-recovers before its network refresh finishes, its confirmed removals remain
-hidden from late network responses and persistence acknowledgements. Identities
-not previously covered by the local view remain eligible for hydration; a later
-local re-addition releases the removal guard.
+than lost or retried indefinitely in the same microtask chain. Revision and
+generation checks continue to govern which local or network snapshot is shown;
+there is no separate recovery authority.
 
 Deletion markers use the same `typename:id` identity through pending mutations,
 retention, display filtering, and restore confirmation. Deleting or restoring a

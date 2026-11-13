@@ -135,20 +135,6 @@ export function createSoupLiveQuery(
     input: GraphqlSoupInput | undefined;
   };
   const [entityHydration, setEntityHydration] = createSignal<EntityHydration>();
-  type FailedHydration = {
-    scope: GraphqlSoupInput;
-    generation: number;
-    records: GraphqlSoupItem[];
-    knownKeys: ReadonlySet<string>;
-    phase: 'waiting' | 'fetching' | 'complete';
-  };
-  const [failedHydrationRows, setFailedHydrationRows] =
-    createSignal<FailedHydration>();
-  const [recoveryRemovals, setRecoveryRemovals] = createSignal<{
-    scope: GraphqlSoupInput;
-    generation: number;
-    keys: ReadonlySet<string>;
-  }>();
   const cacheFirstEntities = () => options().cacheFirstEntities !== undefined;
   const networkInput = () => {
     if (!cacheFirstEntities()) return firstPageInput();
@@ -239,7 +225,6 @@ export function createSoupLiveQuery(
   let localEvaluationPending = false;
   let cacheGeneration = 0;
   let cacheObservation = 0;
-  let observedCacheRevision: CacheRevision | undefined;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -299,23 +284,14 @@ export function createSoupLiveQuery(
     )
       return;
     batch(() => {
-      // An acknowledgement cannot reclaim authority after a newer observed
-      // revision, but an equal revision push is the same persisted page.
-      const newerRevision = [
-        currentCacheRevision(),
-        observedCacheRevision,
-      ].some(
-        (observed) =>
-          observed !== undefined && BigInt(revision) < BigInt(observed)
-      );
-      if (!newerRevision) {
-        if (cacheObservation === page.observation) {
-          setCurrentCacheRevision(revision);
-          cacheObservation += 1;
-        }
-        networkAuthorityInput = page.input;
-        setNetworkAuthorityRevision(revision);
+      // Cache pushes (including optimistic writes) can arrive before this ack.
+      // Never rewind their watermark or republish/clear the visible row data.
+      if (cacheObservation === page.observation) {
+        setCurrentCacheRevision(revision);
+        cacheObservation += 1;
       }
+      networkAuthorityInput = page.input;
+      setNetworkAuthorityRevision(revision);
       forgetUnpersistedPage(index);
     });
   };
@@ -357,7 +333,6 @@ export function createSoupLiveQuery(
     const unsubscribeChanges = host.onCacheChanged(
       (revision) => {
         cacheObservation += 1;
-        observedCacheRevision = revision;
         if (
           networkAuthorityRevision() !== undefined &&
           networkAuthorityRevision() !== revision &&
@@ -377,7 +352,6 @@ export function createSoupLiveQuery(
       cacheGeneration += 1;
       invalidateGeneration();
       latestRevision = undefined;
-      observedCacheRevision = undefined;
       deferral.request();
     });
     fireAndForget(observeCurrentRevision(), 'soup-live-query');
@@ -470,14 +444,6 @@ export function createSoupLiveQuery(
           forgetUnpersistedPage(page.pageIndex);
           return;
         }
-        const recovery = untrack(failedHydrationRows);
-        if (
-          recovery?.phase === 'fetching' &&
-          recovery.scope === firstInput &&
-          recovery.generation === cacheGeneration
-        ) {
-          setFailedHydrationRows({ ...recovery, phase: 'complete' });
-        }
         if (metadata.persistence) {
           if (
             page.pageIndex === inStepPageIndex &&
@@ -518,17 +484,7 @@ export function createSoupLiveQuery(
           return;
         }
         forgetUnpersistedPage(page.pageIndex);
-        const responseRevision = metadata.revision;
-        if (
-          page.pageIndex !== 0 ||
-          !responseRevision ||
-          [currentCacheRevision(), observedCacheRevision].some(
-            (observed) =>
-              observed !== undefined &&
-              BigInt(responseRevision) < BigInt(observed)
-          )
-        )
-          return;
+        if (page.pageIndex !== 0 || !metadata.revision) return;
         networkAuthorityInput = firstInput;
         cacheObservation += 1;
         batch(() => {
@@ -726,9 +682,6 @@ export function createSoupLiveQuery(
     };
   });
 
-  let failedPredicateScope:
-    | { input: GraphqlSoupInput; generation: number }
-    | undefined;
   createEffect(() => {
     const entities = options().cacheFirstEntities;
     const input = firstPageInput();
@@ -736,125 +689,8 @@ export function createSoupLiveQuery(
     if (options().enabled === false) return;
     const current = entityHydration();
     const cacheStatus = live.status();
-    if (cacheStatus === 'ready') {
-      const snapshot = live.data();
-      const recovery = untrack(failedHydrationRows);
-      if (
-        snapshot &&
-        recovery?.scope === input &&
-        recovery.generation === cacheGeneration
-      ) {
-        const present = new Set([...snapshot.keys, ...snapshot.retainedKeys]);
-        const removed = new Set(
-          [...recovery.knownKeys].filter((key) => !present.has(key))
-        );
-        setRecoveryRemovals({
-          scope: input,
-          generation: cacheGeneration,
-          keys: removed,
-        });
-      } else {
-        const protectedRows = untrack(recoveryRemovals);
-        if (
-          snapshot &&
-          protectedRows?.scope === input &&
-          protectedRows.generation === cacheGeneration
-        ) {
-          const present = new Set([...snapshot.keys, ...snapshot.retainedKeys]);
-          const removed = new Set(
-            [...protectedRows.keys].filter((key) => !present.has(key))
-          );
-          if (removed.size !== protectedRows.keys.size)
-            setRecoveryRemovals({ ...protectedRows, keys: removed });
-        }
-      }
-      failedPredicateScope = undefined;
-    }
     const sameScope =
       current?.scope === input && current.generation === cacheGeneration;
-    // Force warm membership recovery only for channel navigation. Other
-    // cache-first readers keep their existing missing-record hydration policy.
-    if (
-      options().projection === 'channel-list' &&
-      cacheStatus === 'error' &&
-      (failedPredicateScope?.input !== input ||
-        failedPredicateScope.generation !== cacheGeneration)
-    ) {
-      failedPredicateScope = { input, generation: cacheGeneration };
-      const lookup = buildGraphqlEntitiesSoupInput(entities);
-      if (!lookup?.initial) return;
-      // A failed predicate cannot prove that its retained rows are complete.
-      // Keep the displayed network rows while refreshing every requested ID.
-      const alreadyRequested =
-        sameScope &&
-        current.input?.initial?.limit === lookup.initial.limit &&
-        current.entities.length === entities.length &&
-        current.entities.every(
-          (entity, index) =>
-            soupEntityRefKey(entity) === soupEntityRefKey(entities[index])
-        );
-      const records = query.data?.records() ?? [];
-      const recovery: FailedHydration = {
-        scope: input,
-        generation: cacheGeneration,
-        records,
-        knownKeys: new Set([
-          ...records.map(soupItemKey),
-          ...(untrack(displayLocalProjection)?.records ?? []).map(soupItemKey),
-        ]),
-        phase: alreadyRequested ? 'waiting' : 'fetching',
-      };
-      setFailedHydrationRows(recovery);
-      if (alreadyRequested) {
-        // An older full lookup can still be in flight. Wait for it before
-        // refetching, since the query observer coalesces concurrent refetches.
-        const refetchAfterCurrent = async () => {
-          const isCurrent = () =>
-            !disposed &&
-            firstPageInput() === recovery.scope &&
-            cacheGeneration === recovery.generation &&
-            failedHydrationRows() === recovery;
-          if (query.isFetching) {
-            try {
-              await runWithOwner(owner, () =>
-                until(() => !query.isFetching || !isCurrent())
-              );
-            } catch (cause) {
-              if (disposed) return;
-              throw cause;
-            }
-          }
-          if (!isCurrent()) return;
-          setFailedHydrationRows({ ...recovery, phase: 'fetching' });
-          const request = query.refetch({ requestPolicy: 'network-only' });
-          if (query.isFetching) {
-            await request;
-            return;
-          }
-          // The observer publishes idle before clearing its completed refetch
-          // promise. Drain that promise before starting the required fresh read.
-          await request;
-          if (disposed || firstPageInput() !== input) return;
-          if (cacheGeneration !== recovery.generation) return;
-          await query.refetch({ requestPolicy: 'network-only' });
-        };
-        fireAndForget(refetchAfterCurrent(), 'soup-live-query');
-      } else {
-        setEntityHydration({
-          scope: input,
-          generation: cacheGeneration,
-          entities,
-          input: {
-            initial: {
-              ...input.initial,
-              limit: lookup.initial.limit,
-              filters: lookup.initial.filters,
-            },
-          },
-        });
-      }
-      return;
-    }
     // Keep variables and continuation cursors fixed through success or retry.
     if (sameScope && (query.isFetching || query.hasNextPage || query.error))
       return;
@@ -864,7 +700,12 @@ export function createSoupLiveQuery(
       (cacheStatus === 'idle' || cacheStatus === 'loading')
     )
       return;
-    const known = new Set(liveRecords().map(soupItemKey));
+    // Resubscribing after a network page can clear the predicate snapshot.
+    // Use the scoped display projection so a failed read does not refetch rows
+    // that are already resolved and still visible.
+    const known = new Set(
+      (displayLocalProjection()?.records ?? liveRecords()).map(soupItemKey)
+    );
     const requested = sameScope ? current.entities : [];
     const requestedKeys = new Set(requested.map(soupEntityRefKey));
     const missing = entities.filter((entity) => {
@@ -1168,65 +1009,19 @@ export function createSoupLiveQuery(
   // rows in server-page order until a successful reconciliation orders the union.
   const displayData = createMemo((): GraphqlSoupItem[] | undefined => {
     const local = displayLocalProjection();
-    const fallback = failedHydrationRows();
-    const recovering =
-      fallback !== undefined &&
-      fallback.scope === firstPageInput() &&
-      fallback.generation === cacheGeneration;
-    const protection = recoveryRemovals();
-    const removed =
-      protection !== undefined &&
-      protection.scope === firstPageInput() &&
-      protection.generation === cacheGeneration
-        ? protection.keys
-        : undefined;
-    const visible = (records: GraphqlSoupItem[]) =>
-      removed?.size
-        ? records.filter((record) => !removed.has(soupItemKey(record)))
-        : records;
-    const retained = recovering ? visible(fallback.records) : [];
-    // Filter late network rows even when the predicate recovered before reply.
-    if (recovering && fallback.phase === 'complete' && !query.hasNextPage) {
-      const fetched = query.data?.records();
-      if (fetched !== undefined)
-        return visible(
-          local && live.status() === 'ready'
-            ? [
-                ...new Map(
-                  [...local.records, ...fetched].map((record) => [
-                    soupItemKey(record),
-                    record,
-                  ])
-                ).values(),
-              ]
-            : fetched
-        );
-    }
     if (networkIsAuthoritative()) {
       const fetched = query.data?.records();
-      if (!cacheFirstEntities() || !local)
-        return fetched
-          ? visible(fetched)
-          : retained.length
-            ? retained
-            : undefined;
-      return visible([
+      if (!cacheFirstEntities() || !local) return fetched;
+      return [
         ...new Map(
-          [...local.records, ...(fetched ?? retained)].map((record) => [
+          [...local.records, ...(fetched ?? [])].map((record) => [
             soupItemKey(record),
             record,
           ])
         ).values(),
-      ]);
+      ];
     }
-    if (!local) {
-      const fetched = query.data?.records();
-      return fetched
-        ? visible(fetched)
-        : retained.length
-          ? retained
-          : undefined;
-    }
+    if (!local) return query.data?.records();
     // Mail merges new server evidence in its ordered through-read. Appending
     // it here would bypass membership decisions and the local cursor order.
     if (local.mail) return local.records;
@@ -1235,15 +1030,7 @@ export function createSoupLiveQuery(
       local.baselineKeys,
       local.displayedKeys
     );
-    const rows = visible(
-      additions.length ? [...local.records, ...additions] : local.records
-    );
-    if (!retained.length) return rows;
-    const displayedKeys = new Set(rows.map(soupItemKey));
-    const missing = retained.filter(
-      (record) => !displayedKeys.has(soupItemKey(record))
-    );
-    return missing.length ? [...rows, ...missing] : rows;
+    return additions.length ? [...local.records, ...additions] : local.records;
   });
 
   // Keeps the server pages as deep as a local Mail list, so it stays as deep
