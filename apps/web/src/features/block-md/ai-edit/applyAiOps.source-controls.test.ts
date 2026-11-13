@@ -71,6 +71,8 @@ type Commit = {
   readonly selection: string;
   readonly text: string;
   readonly dirtyElements: number;
+  /** Nodes created, updated or destroyed, over every node class. */
+  readonly mutated: number;
 };
 
 type Reported = {
@@ -157,14 +159,20 @@ async function rig(markdown: string): Promise<Rig> {
 
   const commits: Commit[] = [];
   const mutations: string[] = [];
-  editor.registerUpdateListener(({ editorState, tags, dirtyElements }) => {
-    commits.push({
-      tags: [...tags].sort(),
-      selection: editorState.read(() => describeSelection()),
-      text: editorState.read(() => $getRoot().getTextContent()),
-      dirtyElements: dirtyElements.size,
-    });
-  });
+  editor.registerUpdateListener(
+    ({ editorState, tags, dirtyElements, mutatedNodes }) => {
+      commits.push({
+        tags: [...tags].sort(),
+        selection: editorState.read(() => describeSelection()),
+        text: editorState.read(() => $getRoot().getTextContent()),
+        dirtyElements: dirtyElements.size,
+        mutated: [...(mutatedNodes?.values() ?? [])].reduce(
+          (total, nodes) => total + nodes.size,
+          0
+        ),
+      });
+    }
+  );
   for (const klass of [TextNode, ParagraphNode])
     editor.registerMutationListener(
       klass,
@@ -343,7 +351,11 @@ describe('Source applyAiOps controls', () => {
     const summary = captures.map((c) => ({
       name: c.name,
       threw: c.threw,
-      commits: c.commitsDuringApply.map((x) => [x.text, x.dirtyElements]),
+      commits: c.commitsDuringApply.map((x) => [
+        x.text,
+        x.dirtyElements,
+        x.mutated,
+      ]),
       reported: c.reported.map(({ kind, attributes }) => ({
         kind,
         attributes,
@@ -358,7 +370,7 @@ describe('Source applyAiOps controls', () => {
       {
         name: 'empty',
         threw: null,
-        commits: [[seed, 0]],
+        commits: [[seed, 0, 0]],
         reported: [],
         text: seed,
         selection: 'null',
@@ -369,9 +381,9 @@ describe('Source applyAiOps controls', () => {
         name: 'success',
         threw: null,
         commits: [
-          [seed, 0],
-          ['ALPHA beta gamma\n\nSecond line', 2],
-          ['ALPHA beta gamma (AI)\n\nSecond line', 2],
+          [seed, 0, 0],
+          ['ALPHA beta gamma\n\nSecond line', 2, 1],
+          ['ALPHA beta gamma (AI)\n\nSecond line', 2, 1],
         ],
         reported: [],
         text: 'ALPHA beta gamma (AI)\n\nSecond line',
@@ -383,9 +395,9 @@ describe('Source applyAiOps controls', () => {
         name: 'first refusal',
         threw: null,
         commits: [
-          [seed, 0],
-          [seed, 0],
-          ['Alpha beta gamma after\n\nSecond line', 2],
+          [seed, 0, 0],
+          [seed, 0, 0],
+          ['Alpha beta gamma after\n\nSecond line', 2, 1],
         ],
         reported: [reportedAs],
         text: 'Alpha beta gamma after\n\nSecond line',
@@ -397,10 +409,10 @@ describe('Source applyAiOps controls', () => {
         name: 'mid refusal',
         threw: null,
         commits: [
-          [seed, 0],
-          ['Omega\n\nSecond line', 2],
-          ['Omega\n\nSecond line', 0],
-          ['Omega\n\napplied after', 2],
+          [seed, 0, 0],
+          ['Omega\n\nSecond line', 2, 1],
+          ['Omega\n\nSecond line', 0, 0],
+          ['Omega\n\napplied after', 2, 1],
         ],
         reported: [reportedAs],
         text: 'Omega\n\napplied after',
@@ -504,6 +516,16 @@ describe('Source applyAiOps controls', () => {
       ['Alpha beta gamma\n\nkept\n\nSecond line', 0],
       ['kept\n\nSecond line', 3],
     ]);
+    // The refused op's commit: no tags, no dirty or mutated nodes, selection
+    // still null. Update listeners see it; none that guard on dirty or mutated
+    // nodes act on it (seam README, rev 7.1).
+    expect(result.commitsDuringApply[2]).toEqual({
+      tags: [],
+      selection: 'null',
+      text: 'Alpha beta gamma\n\nkept\n\nSecond line',
+      dirtyElements: 0,
+      mutated: 0,
+    });
     expect(result.reported).toEqual([
       {
         kind: 'Error',
