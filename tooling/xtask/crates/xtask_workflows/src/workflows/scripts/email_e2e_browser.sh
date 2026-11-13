@@ -15,7 +15,7 @@ bundle_built="$RUNNER_TEMP/email-e2e-bundle.built"
 web=$!
 # A service that does not compile ends the step: say what the web side was
 # doing and stop it.
-trap 'kill "$web" 2>/dev/null || true; tail -n 40 "$bundle_log" || true' ERR
+trap 'pkill -P "$web" 2>/dev/null || true; kill "$web" 2>/dev/null || true; tail -n 40 "$bundle_log" || true' ERR
 
 # The same builds as the Rust suite, so both share sccache entries.
 flags=(--locked --config 'profile.dev.package."*".debug=false')

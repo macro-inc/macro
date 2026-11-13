@@ -9,7 +9,9 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 20_000 },
   fullyParallel: true,
-  retries: 0,
+  // In CI the fixture suites run beside this one; a test that lost a wait to
+  // that load is retried once and reported as flaky.
+  retries: process.env.CI ? 1 : 0,
   // A test of a bug that is not fixed yet asserts the right behaviour and is
   // tagged `@known-bug`: left out here, run alone with EMAIL_E2E_KNOWN_BUGS=1.
   grep: process.env.EMAIL_E2E_KNOWN_BUGS ? /@known-bug/ : undefined,

@@ -11,6 +11,8 @@ import type { Page } from '@playwright/test';
  * before the routes that answer the services: routes added later win.
  */
 export async function serveFromNode(page: Page) {
+  // Sockets do not pass through `page.route`.
+  await page.routeWebSocket(/.*/, (socket) => socket.close());
   await page.route(
     (url) => /^https?:$/.test(url.protocol) && url.hostname !== '127.0.0.1',
     (route) => route.abort()

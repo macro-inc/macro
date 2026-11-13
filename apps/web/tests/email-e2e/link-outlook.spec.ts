@@ -27,6 +27,8 @@ test.describe('an Outlook inbox in Settings', () => {
     await expect(
       page.getByText('Outlook / Microsoft 365').first()
     ).toBeVisible();
+    // The status is part of the row's own data and an inbox that is up to
+    // date shows none, so the row being there is what these wait on.
     await expect(page.getByText('Syncing…')).toBeHidden();
     await expect(page.getByText('Reconnect to resume sync')).toBeHidden();
   });

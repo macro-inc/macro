@@ -38,6 +38,10 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("apps/web/src/lib/queries/email/**"),
     xtask_paths::repo_glob!("apps/web/src/lib/queries/calendar/**"),
     xtask_paths::repo_glob!("apps/web/src/lib/core/email-link/**"),
+    xtask_paths::repo_glob!("apps/web/src/features/settings/browser-test/signatures/**"),
+    xtask_paths::repo_glob!(
+        "apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/**"
+    ),
     xtask_paths::repo_glob!("packages/email-renderer/**"),
     xtask_paths::repo_glob!("apps/web/justfile"),
     xtask_paths::repo_glob!(".github/workflows/email_e2e_browser.yml"),

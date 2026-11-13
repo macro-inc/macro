@@ -13,8 +13,13 @@ interface Absence {
   inDays: number;
 }
 
+// The page's clock is held at this instant, the same calendar day in UTC and
+// in the suite's time zone, so the dates below do not depend on when the
+// test runs.
+const NOW = new Date('2030-01-02T17:00:00Z');
+
 const day = (inDays: number) =>
-  new Date(Date.now() + inDays * 86_400_000).toISOString().slice(0, 10);
+  new Date(NOW.getTime() + inDays * 86_400_000).toISOString().slice(0, 10);
 
 const item = (absence: Absence) => ({
   eventId: absence.eventId,
@@ -60,6 +65,10 @@ const absences = (list: Absence[]) => ({
 });
 
 test.describe('team out of office in the calendar sidebar', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+  });
+
   // Class cal-team-ooo-overlay: when this fails, teammates' out-of-office
   // rows are replaced by a loading skeleton each time an unrelated calendar
   // of the viewer syncs, or a busy-only teammate's row shows a title.
@@ -68,13 +77,18 @@ test.describe('team out of office in the calendar sidebar', () => {
   }) => {
     await routeTeam(page);
     let reloading = false;
-    let heldReload: ((route: Route) => void) | undefined;
-    const reloadHeld = new Promise<Route>((resolve) => {
-      heldReload = resolve;
+    let current = TEAM_ABSENCES;
+    // The sidebar may ask for more than one window of dates: every request
+    // of the reload is held, and every one answered.
+    const held: Route[] = [];
+    let firstHeld: (() => void) | undefined;
+    const reloadHeld = new Promise<void>((resolve) => {
+      firstHeld = resolve;
     });
     await page.route(OOO_ROUTE, async (route) => {
-      if (!reloading) return route.fulfill(absences(TEAM_ABSENCES));
-      heldReload?.(route);
+      if (!reloading) return route.fulfill(absences(current));
+      held.push(route);
+      firstHeld?.();
     });
 
     await openFixture(page, '/team-ooo.html');
@@ -93,23 +107,22 @@ test.describe('team out of office in the calendar sidebar', () => {
         team_ooo_changed: false,
       })
     );
-    const route = await reloadHeld;
+    await reloadHeld;
     // The reload is in flight and unanswered: the rows are still the list.
     await expect(busyRow).toBeVisible();
     await expect(detailsRow).toContainText('Hiking trip');
 
+    current = [
+      ...TEAM_ABSENCES,
+      {
+        eventId: 'event-later',
+        ownerId: SHARES_DETAILS,
+        title: 'Conference',
+        inDays: 20,
+      },
+    ];
     reloading = false;
-    await route.fulfill(
-      absences([
-        ...TEAM_ABSENCES,
-        {
-          eventId: 'event-later',
-          ownerId: SHARES_DETAILS,
-          title: 'Conference',
-          inDays: 20,
-        },
-      ])
-    );
+    for (const route of held) await route.fulfill(absences(current));
     await expect(
       page.getByRole('button', { name: /Conference/ })
     ).toBeVisible();

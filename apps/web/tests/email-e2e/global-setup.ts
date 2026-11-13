@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
 
-export default async function globalSetup(): Promise<(() => void) | undefined> {
+export default async function globalSetup(): Promise<
+  (() => Promise<void>) | undefined
+> {
   if (process.env.EMAIL_E2E_STACKS_URL) return undefined;
 
   const binary =
@@ -27,7 +29,13 @@ export default async function globalSetup(): Promise<(() => void) | undefined> {
     createInterface({ input: server.stdout }).once('line', resolve);
   });
   process.env.EMAIL_E2E_STACKS_URL = url;
-  return () => {
+  // The server ends the stacks it still holds before it exits: wait for it,
+  // so nothing of this run is left when the next one starts.
+  return async () => {
+    const exited = new Promise<void>((resolve) => {
+      server.once('exit', () => resolve());
+    });
     server.kill();
+    await exited;
   };
 }

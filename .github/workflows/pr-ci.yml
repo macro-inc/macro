@@ -553,6 +553,8 @@ jobs:
             - 'apps/web/src/lib/queries/email/**'
             - 'apps/web/src/lib/queries/calendar/**'
             - 'apps/web/src/lib/core/email-link/**'
+            - 'apps/web/src/features/settings/browser-test/signatures/**'
+            - 'apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/**'
             - 'packages/email-renderer/**'
             - 'apps/web/justfile'
             - '.github/workflows/email_e2e_browser.yml'
