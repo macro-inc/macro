@@ -352,6 +352,23 @@ async fn agent_sets_where_a_senders_mail_lands(provider: Provider) -> Result<(),
         filed_away(&blocked, provider),
         "the provider let the blocked sender's mail into the inbox: {blocked:?}"
     );
+    eventually(
+        "the blocked sender's mail in Trash or Spam",
+        DEFAULT_TIMEOUT,
+        async || {
+            for view in ["trash", "spam"] {
+                let previews = inbox.previews(view).await?;
+                if previews
+                    .iter()
+                    .any(|preview| preview["name"] == "Last chance")
+                {
+                    return Ok(Some(()));
+                }
+            }
+            Ok(None)
+        },
+    )
+    .await?;
     inbox.deliver(&Mail::new(
         "Grace <grace@example.com>",
         "Compiler notes",
