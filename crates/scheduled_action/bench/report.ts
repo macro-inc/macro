@@ -57,16 +57,20 @@ export type Results = {
 export const passedAll = (attempt: Attempt) =>
   attempt.quality.length > 0 && attempt.quality.every((check) => check.holds) && (attempt.run?.holds ?? true);
 
+/** A bare session asked which item the person meant where the case leaves it open: the right answer, with no routine. */
+const askedRightly = (attempt: Attempt) => attempt.arm === 'bare' && attempt.asked === true && passedAll(attempt);
+
 /**
- * It came back with a routine or a step: only these are timed. A draft that
- * failed or timed out, a bare turn that ended without a routine, and errors
- * still count against quality (unless asking was right), as not under 15 s,
- * and in the time verdict as slower than the other side's routine, so a
- * build can't look faster by failing fast or by timing out on its slowest
- * drafts.
+ * It came back with an answer: a routine or a step, or in the `bare` arm the
+ * question the case wants asked (timed to its turn's end). Only these are
+ * timed. A draft that failed or timed out and a bare turn that ended with
+ * neither still count against quality, as not under 15 s, and in the time
+ * verdict as slower than the other side's answer, so a build can't look
+ * faster by failing fast or by timing out on its slowest drafts.
  */
 export const delivered = (attempt: Attempt) =>
-  attempt.error === undefined && (attempt.draft?.outcome === 'routine' || attempt.draft?.outcome === 'step');
+  attempt.error === undefined &&
+  (attempt.draft?.outcome === 'routine' || attempt.draft?.outcome === 'step' || askedRightly(attempt));
 
 const graded = (attempt: Attempt) =>
   attempt.grade && 'score' in attempt.grade ? attempt.grade.score : undefined;
@@ -184,7 +188,7 @@ export type Verdict = {
   verdict: 'win' | 'loss' | 'noise';
   why: string;
   pairs: number;
-  /** Pairs where either side came back with a routine, which the time compares. */
+  /** Pairs where either side answered and the eval failed on neither, which the time compares. */
   timedPairs: number;
   /** B's time over A's, per pair: median and 95% interval. */
   timeRatio: number;
@@ -199,7 +203,7 @@ export type Verdict = {
 /** How much slower a side with no routine counts than one with: more than any two drafts differ. */
 const NO_ROUTINE = Math.log(1000);
 
-/** log(B's time over A's) for a pair where either side came back with a routine. */
+/** log(B's time over A's) for a pair where either side came back with an answer. */
 const logRatio = (pair: Pair) =>
   delivered(pair.a) && delivered(pair.b)
     ? Math.log(pair.b.wallMs / pair.a.wallMs)
@@ -207,19 +211,25 @@ const logRatio = (pair: Pair) =>
       ? NO_ROUTINE
       : -NO_ROUTINE;
 
+/** Shares are counts over the same pairs; this keeps a move of exactly the margin on one side of it whatever the shares. */
+const SLACK = 1e-9;
+
 /**
  * B against A. Time: the median of B's time over A's across pairs of the
  * same case and round, a win or loss only when its 95% interval leaves 1;
- * a side that got no routine counts as the slower, and pairs where neither
- * did are left out.
+ * a side with no answer counts as the slower, and pairs where neither side
+ * answered or the eval failed on either side are left out.
  * Quality: the share passing every check may not fall by more than `margin`.
  */
 export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Verdict {
   const sample = pairs(a, b);
   if (sample.length < 5) throw new Error(`only ${sample.length} paired attempts; run both sides on the same rounds`);
-  // Time compares the pairs where either side came back with a routine; quality counts every pair.
-  const timedPairs = sample.filter((pair) => delivered(pair.a) || delivered(pair.b));
-  if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where either side came back with a routine`);
+  // Time compares the pairs where either side answered and the eval itself
+  // failed on neither, which says nothing of a build's speed; quality counts every pair.
+  const timedPairs = sample.filter(
+    (pair) => pair.a.error === undefined && pair.b.error === undefined && (delivered(pair.a) || delivered(pair.b)),
+  );
+  if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where either side answered`);
   const ratio = (drawn: Pair[]) => Math.exp(median(drawn.map(logRatio)));
   const share = (drawn: Pair[], side: 'a' | 'b') => drawn.filter((pair) => passedAll(pair[side])).length / drawn.length;
   const delta = (drawn: Pair[]) => share(drawn, 'b') - share(drawn, 'a');
@@ -231,7 +241,7 @@ export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Ve
   const quality: [number, number] = [share(sample, 'a'), share(sample, 'b')];
   let result: Verdict['verdict'];
   let why: string;
-  if (qualityDelta < -margin) {
+  if (qualityDelta < -margin - SLACK) {
     result = 'loss';
     why = `quality fell ${pct(-qualityDelta)}, more than the ${pct(margin)} margin`;
   } else if (timeVerdict === 'win') {
@@ -240,7 +250,7 @@ export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Ve
   } else if (timeVerdict === 'loss') {
     result = 'loss';
     why = `slower (×${timeRatio.toFixed(2)})`;
-  } else if (qualityDelta > margin) {
+  } else if (qualityDelta > margin + SLACK) {
     result = 'win';
     why = `quality rose ${pct(qualityDelta)}, time within noise`;
   } else {
