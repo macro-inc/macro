@@ -121,10 +121,23 @@ export default {
   stepConfigureAgentShort: 'Agent',
   stepBringAiShort: 'Your AI',
   loadingSizes: 'Loading computer sizes',
+  setupProgressLabel: 'Setup progress',
+  stageSignIn: 'Sign in to Claude',
+  signInUnlocksLater:
+    'The sign-in link comes from the computer, so this unlocks by itself once it connects.',
+  preparingSignIn: 'Preparing sign-in…',
+  preparingSignInStatus: 'Preparing sign-in… {{stage}} · {{elapsed}}',
+  computerStarting: 'computer starting',
+  setupFailedReason:
+    'The computer could not be set up. Retry sets it up again at no extra charge; contact support if it fails again.',
+  retrySetup: 'Retry setup',
+  setupFailedTitle: 'Setup failed',
+  setupContinuesInBackground:
+    'You can close this; setup carries on and the computer’s row shows its progress.',
+  signInWaitingBody:
+    "Your computer is still starting. The sign-in link comes from the computer, so this step unlocks by itself once it connects; you'll open claude.ai, sign in, and paste a code back here.",
   setupSteps: 'Setup steps',
   signInToClaude: 'Sign in to Claude',
-  signInLinkWaiting:
-    "Your sign-in link will be ready in a moment. Keep this open; you'll open claude.ai, sign in, and paste a code back here.",
   signInTabTitle: '● Sign in to Claude — Macro',
   signInReadyToast: '{{name}} is ready — sign in to Claude',
   signInReadyAction: 'Sign in',

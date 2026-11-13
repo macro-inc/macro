@@ -919,20 +919,31 @@ To buy one as a team admin:
    with the computer listed as `purchasing`. Either way the modal moves
    straight to **Configure agent**.
 
-While the computer provisions, a thin bar at the top of the modal follows the
-same three phases the row shows (Creating the computer → Starting up →
-Connecting to Macro). **Let's set up an agent on it** names the agent Macro
+While the computer provisions, a **Setup progress** list under the step bar
+follows the same phases the row shows (Creating the computer, Starting up,
+Connecting to Macro, then Sign in to Claude when the agent uses the team's
+own account): done stages carry a check, the current one a spinner and how
+long it has taken (`0:42`, counted from when the step was first seen, the
+first from the purchase), and a stuck one says why (waiting for capacity, or
+`failed` with "The computer could not be set up…" and **Retry setup**, which is
+`POST .../retry`). The row in Machines shows the same live line, `Setting up ·
+Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
+carries on; the row's **Finish setup** reopens the same dialog where it left
+off. **Let's set up an agent on it** names the agent Macro
 creates on the computer ("<buyer first name>'s Agent", a coding agent that
 bypasses permission prompts) and asks for an explicit choice between **Your
 Claude account** and **Macro's Claude**; nothing is preselected. The name and
 choice apply once the computer is up: the rename (`PATCH /bots/{bot_id}`), then
 Claude, then setup-complete.
 
-- **Your Claude account** goes to **Bring your AI**, titled **Sign in to Claude**. Until the computer
-  connects it says "Your sign-in link will be ready in a moment. Keep this
-  open; you'll open claude.ai, sign in, and paste a code back here." Then
-  **Open claude.ai** turns primary and the tab title becomes "● Sign in to
-  Claude — Macro". Closed meanwhile, a toast "<computer> is ready — sign in to
+- **Your Claude account** goes to **Bring your AI**, titled **Sign in to
+  Claude**. The sign-in link is minted by harnessd inside the computer, so
+  nothing of it can start before the computer connects: until then the step
+  explains that, shows a live status line ("Preparing sign-in… starting up ·
+  0:42") instead of a greyed button, lists the sign-in as a later stage that
+  unlocks by itself, and offers only **Close** and **Use Macro credits
+  instead**. Once connected, **Open claude.ai** appears and the tab title
+  becomes "● Sign in to Claude — Macro". Closed meanwhile, a toast "<computer> is ready — sign in to
   Claude" reopens the modal on that step. The code is pasted in the same modal.
 - **Macro's Claude** skips **Bring your AI**, shown struck through.
 

@@ -66,7 +66,8 @@ const computer: ComputerStatus = {
   canUndoCancel: false,
   canRestore: false,
   purchasedBy: 'maya@example.com',
-  createdAt: '2026-01-01T00:00:00Z',
+  // The first setup stage counts from the purchase.
+  createdAt: new Date().toISOString(),
   harnessId: null,
   defaultAgentId: null,
   setupCompletedAt: null,
@@ -201,6 +202,17 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
   ).toHaveAttribute('aria-current', 'step');
   await shoot(page, 'buy-agent');
 
+  // Setup carries on behind the step, with the stage and its elapsed time.
+  const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
+  await expect(progress.getByRole('listitem')).toHaveText([
+    /Creating the computer\s*\d+:\d\d/,
+    'Starting up',
+    'Connecting to Macro',
+  ]);
+  await expect(
+    page.locator('[data-runtime-row="Maya\'s Agent Box"]')
+  ).toContainText(/Setting up · Creating the computer \(1 of 3\) · \d+:\d\d/);
+
   await dialog(page)
     .getByRole('radio', { name: 'Your Claude account' })
     .check();
@@ -208,6 +220,17 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
   await expect(
     dialog(page).getByRole('heading', { name: 'Sign in to Claude' })
   ).toBeVisible();
+  // Nothing greyed out: the step says what it waits for, and the sign-in
+  // stage is listed as a later one that unlocks by itself.
+  await expect(dialog(page).getByRole('status')).toHaveText(
+    /Preparing sign-in… creating the computer · \d+:\d\d/
+  );
+  await expect(
+    dialog(page).getByRole('button', { disabled: true })
+  ).toHaveCount(0);
+  await expect(progress.getByRole('listitem').nth(3)).toContainText(
+    'Sign in to Claude'
+  );
   await shoot(page, 'buy-claude-waiting');
 
   // The computer connects: the row behind refreshes, and the link is ready.
@@ -259,6 +282,44 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
     steps.getByRole('listitem').filter({ hasText: 'Ready' })
   ).toHaveAttribute('aria-current', 'step');
   await shoot(page, 'buy-ready');
+});
+
+test('a failed setup says why, offers Retry, and carries on after it', async ({
+  page,
+}) => {
+  let computers: ComputerStatus[] = [];
+  await page.route('**/auth/team/computers', async (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, computers);
+    computers = [{ ...computer, status: 'failed' }];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+  await page.route('**/auth/team/computers/*/retry', (route) => {
+    computers = [computer];
+    return json(route, 200, computer);
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+
+  const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
+  const stuck = progress.getByRole('listitem').first();
+  await expect(stuck).toContainText('The computer could not be set up');
+  await expect(
+    page.locator('[data-runtime-row="Maya\'s Agent Box"]')
+  ).toContainText('Failed');
+  await shoot(page, 'setup-failed');
+
+  await stuck.getByRole('button', { name: 'Retry setup' }).click();
+  await expect(stuck).not.toContainText('could not be set up', {
+    timeout: 10_000,
+  });
+  await expect(stuck).toContainText(/Creating the computer\s*\d+:\d\d/);
 });
 
 test('a team without a paid plan is told so and sent to Billing', async ({

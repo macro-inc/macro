@@ -523,11 +523,15 @@ export function MacroComputers(props: {
         </div>
       </Show>
 
-      <ComputerBuyFlow open={buying()} onClose={() => setBuying(false)} />
+      {/* One dialog for buying and for Finish setup, so a computer bought
+          here reopens where its setup left off. */}
       <ComputerBuyFlow
-        open={!!settingUp()}
+        open={buying() || !!settingUp()}
         computerId={settingUp()}
-        onClose={() => setSettingUp(undefined)}
+        onClose={() => {
+          setBuying(false);
+          setSettingUp(undefined);
+        }}
       />
       <Show when={byId(signingIn())?.harnessId}>
         {(harnessId) => (

@@ -1,0 +1,142 @@
+import type { ComputerStatus } from '@service-auth/computers';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  forgetSetupTiming,
+  formatElapsed,
+  setupStages,
+  setupStepStartedAt,
+} from './setup-progress';
+
+const computer: ComputerStatus = {
+  id: 'computer-1',
+  name: 'Build machine',
+  size: 'standard',
+  vcpus: 4,
+  memoryGib: 8,
+  diskGib: 100,
+  catalogEntry: 'standard@2026-11',
+  status: 'setting_up',
+  billing: 'active',
+  setup: { step: 'booting', position: 2, total: 4 },
+  poweredOn: false,
+  agentCount: 0,
+  canUndoCancel: false,
+  canRestore: false,
+  purchasedBy: 'viewer',
+  createdAt: '2026-11-01T00:00:00Z',
+};
+
+afterEach(() => {
+  forgetSetupTiming(computer.id);
+  vi.useRealTimers();
+});
+
+describe('formatElapsed', () => {
+  it('reads as minutes and seconds, with hours only once needed', () => {
+    expect(formatElapsed(0)).toBe('0:00');
+    expect(formatElapsed(42_000)).toBe('0:42');
+    expect(formatElapsed(725_000)).toBe('12:05');
+    expect(formatElapsed(3_729_000)).toBe('1:02:09');
+    expect(formatElapsed(-5)).toBe('0:00');
+  });
+});
+
+describe('setupStages', () => {
+  it('marks the phases before the current one done and the sign-in as a later stage', () => {
+    const stages = setupStages(computer, {
+      signsIn: true,
+      connected: false,
+      signedIn: false,
+    });
+    expect(stages.map((stage) => [stage.id, stage.state])).toEqual([
+      ['creating', 'done'],
+      ['booting', 'current'],
+      ['connecting', 'upcoming'],
+      ['sign_in', 'upcoming'],
+    ]);
+    expect(stages[1].detail).toBeUndefined();
+  });
+
+  it('leaves the sign-in out for an agent on Macro credits', () => {
+    const stages = setupStages(computer, {
+      signsIn: false,
+      connected: false,
+      signedIn: false,
+    });
+    expect(stages.map((stage) => stage.id)).toEqual([
+      'creating',
+      'booting',
+      'connecting',
+    ]);
+  });
+
+  it('makes the sign-in current once the computer is up, saying why it waits until connected', () => {
+    const up: ComputerStatus = {
+      ...computer,
+      status: 'ready',
+      setup: undefined,
+    };
+    const waiting = setupStages(up, {
+      signsIn: true,
+      connected: false,
+      signedIn: false,
+    });
+    expect(waiting[3]).toMatchObject({
+      id: 'sign_in',
+      state: 'current',
+      detail: expect.stringContaining('unlocks by itself'),
+    });
+    const connected = setupStages(up, {
+      signsIn: true,
+      connected: true,
+      signedIn: false,
+    });
+    expect(connected[3].detail).toBeUndefined();
+    const done = setupStages(up, {
+      signsIn: true,
+      connected: true,
+      signedIn: true,
+    });
+    expect(done.every((stage) => stage.state === 'done')).toBe(true);
+  });
+
+  it('fails the current phase with the reason, and explains a capacity wait', () => {
+    const failed = setupStages(
+      { ...computer, status: 'failed' },
+      { signsIn: false, connected: false, signedIn: false }
+    );
+    expect(failed[1]).toMatchObject({
+      state: 'failed',
+      detail: expect.stringContaining('Retry'),
+    });
+    const waiting = setupStages(
+      { ...computer, status: 'waiting_for_capacity', setup: undefined },
+      { signsIn: false, connected: false, signedIn: false }
+    );
+    expect(waiting[0]).toMatchObject({
+      state: 'current',
+      detail: 'Turn off or release another computer on this host to make room',
+    });
+  });
+});
+
+describe('setupStepStartedAt', () => {
+  it('counts the first step from the purchase and later steps from when they were first seen', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-01T00:05:00Z'));
+    const creating: ComputerStatus = {
+      ...computer,
+      setup: { step: 'creating', position: 1, total: 4 },
+    };
+    expect(setupStepStartedAt(creating)).toBe(
+      new Date('2026-11-01T00:00:00Z').getTime()
+    );
+
+    vi.setSystemTime(new Date('2026-11-01T00:06:00Z'));
+    const bootingSeenAt = setupStepStartedAt(computer);
+    expect(bootingSeenAt).toBe(new Date('2026-11-01T00:06:00Z').getTime());
+
+    vi.setSystemTime(new Date('2026-11-01T00:07:00Z'));
+    expect(setupStepStartedAt(computer)).toBe(bootingSeenAt);
+  });
+});
