@@ -27,7 +27,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { ChoiceRow } from '../../primitives';
 import {
   isProvisioning,
@@ -61,12 +61,16 @@ const STEP_ORDER: readonly SetupStepId[] = [
   'ready',
 ];
 
+/** Phones get Buy › Agent › Your AI › Ready, so the bar stays on one line. */
 function stepLabel(step: SetupStepId): string {
-  return match(step)
-    .with('computer', () => t('computers.stepBuy'))
-    .with('agent', () => t('computers.stepConfigureAgent'))
-    .with('claude', () => t('computers.stepBringAi'))
-    .with('ready', () => t('computers.stepReady'))
+  return match([step, isMobile()] as const)
+    .with(['computer', true], () => t('computers.stepBuyShort'))
+    .with(['computer', false], () => t('computers.stepBuy'))
+    .with(['agent', true], () => t('computers.stepConfigureAgentShort'))
+    .with(['agent', false], () => t('computers.stepConfigureAgent'))
+    .with(['claude', true], () => t('computers.stepBringAiShort'))
+    .with(['claude', false], () => t('computers.stepBringAi'))
+    .with(['ready', P.boolean], () => t('computers.stepReady'))
     .exhaustive();
 }
 

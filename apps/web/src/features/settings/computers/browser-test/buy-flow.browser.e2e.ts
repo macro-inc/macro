@@ -170,12 +170,19 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
 
   releaseOffers();
   const steps = dialog(page).getByRole('list', { name: 'Setup steps' });
-  await expect(steps.getByRole('listitem')).toHaveText([
-    'Buy computer',
-    'Configure agent',
-    'Bring your AI',
-    'Ready',
-  ]);
+  const phone = test.info().project.name === 'phone';
+  await expect(steps.getByRole('listitem')).toHaveText(
+    phone
+      ? ['Buy', 'Agent', 'Your AI', 'Ready']
+      : ['Buy computer', 'Configure agent', 'Bring your AI', 'Ready']
+  );
+  // One line on a phone: every step shares the first step's top edge.
+  const tops = await steps
+    .getByRole('listitem')
+    .evaluateAll((items) =>
+      items.map((item) => item.getBoundingClientRect().top)
+    );
+  expect(new Set(tops).size).toBe(1);
   await expect(
     dialog(page).getByRole('radio', { name: 'Large' })
   ).toBeVisible();
@@ -190,7 +197,7 @@ test('shows a skeleton while sizes load, then the sizes, and buys through to Rea
     dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
   ).toBeVisible();
   await expect(
-    steps.getByRole('listitem').filter({ hasText: 'Configure agent' })
+    steps.getByRole('listitem').filter({ hasText: 'Agent' })
   ).toHaveAttribute('aria-current', 'step');
   await shoot(page, 'buy-agent');
 

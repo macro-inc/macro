@@ -887,7 +887,8 @@ To buy one as a team admin:
    sizes already there.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
    step header, **Buy computer → Configure agent → Bring your AI → Ready**
-   (done steps carry a check, the current one is in ink), that stays open from
+   (**Buy → Agent → Your AI → Ready** on phones, so it stays on one line;
+   done steps carry a check, the current one is in ink), that stays open from
    Buy to Try it. The Buy computer step has the size radios (**Standard**,
    **Large**, **XL**) with price per interval, a sold-out size disabled and
    marked **Sold out**; **Name**, prefilled "<first name>'s Agent Box" (**Agent

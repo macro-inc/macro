@@ -4,6 +4,28 @@ import { LANGUAGES } from '../languages';
 test.beforeEach(async ({ page }) => {
   await page.routeWebSocket('**', (socket) => socket.close());
   await page.route('https://**', (route) => route.abort());
+  // A page that never reports ready is only diagnosable from what it logged.
+  page.on('pageerror', (error) => console.log(`[page error] ${error.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.log(`[console] ${message.text()}`);
+  });
+  page.on('requestfailed', (request) =>
+    console.log(
+      `[request failed] ${request.url()} ${request.failure()?.errorText}`
+    )
+  );
+});
+
+test.afterEach(async ({ page }, info) => {
+  if (info.status === info.expectedStatus) return;
+  const state = await page
+    .evaluate(() => ({
+      lang: document.documentElement.lang,
+      ready: document.querySelector('[data-translation-ready]') !== null,
+      text: document.body.innerText.slice(0, 300),
+    }))
+    .catch((error: unknown) => String(error));
+  console.log(`[page state] ${JSON.stringify(state)}`);
 });
 
 for (const { code } of LANGUAGES) {
