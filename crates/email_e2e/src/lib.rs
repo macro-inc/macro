@@ -12,6 +12,7 @@
 
 mod api;
 mod aws;
+mod email_tools;
 mod inbox;
 mod infra;
 mod lambda;
@@ -24,6 +25,7 @@ mod wait;
 
 pub use api::ApiResponse;
 pub use aws::StoredObject;
+pub use email_tools::EmailTools;
 /// The Gmail emulator's own API, for what the inbox methods do not cover.
 pub use gmail_emulator;
 pub use inbox::{Inbox, Mail, MailAttachment, Provider, ProviderMessage};

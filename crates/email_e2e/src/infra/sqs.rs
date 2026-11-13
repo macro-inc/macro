@@ -188,6 +188,11 @@ impl Queues {
         Ok(())
     }
 
+    /// The client the queues were made with.
+    pub(crate) fn client(&self) -> &aws_sdk_sqs::Client {
+        &self.client
+    }
+
     /// Every queue of the scenario.
     pub(crate) fn all(&self) -> &[Queue] {
         &self.queues

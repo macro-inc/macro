@@ -6,14 +6,22 @@ version = "0.1.0"
 description = "Test support: runs the real email_service and pubsub_workers binaries against the Gmail and Outlook emulators, and the end-to-end email scenarios written on top."
 
 [dependencies]
+ai_toolset = { path = "../ai_toolset" }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
+crm = { path = "../crm" }
+email = { path = "../email", features = ["ai_tools", "inbound", "outbound", "sqs"] }
+entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management" }
+frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 hex = { workspace = true }
+lexical_client = { path = "../lexical_client" }
 gmail_emulator = { path = "../gmail_emulator" }
 macro_aws_config = { path = "../macro_aws_config", features = ["sqs"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_event_topics = { path = "../macro_event_topics" }
+macro_user_id = { path = "../macro_user_id" }
 outlook_emulator = { path = "../outlook_emulator" }
 rdkafka = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp"] }
@@ -22,6 +30,7 @@ rootcause = { workspace = true }
 rustls = { workspace = true, features = ["std"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 tokio-rustls = { workspace = true }
