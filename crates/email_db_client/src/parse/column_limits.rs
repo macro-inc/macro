@@ -65,5 +65,44 @@ pub(crate) fn clamp_opt(
     })
 }
 
+/// The longest extension [`clamp_filename_opt`] keeps when it shortens a
+/// file name.
+const KEPT_EXTENSION: usize = 16;
+
+/// Clamps an optional file name like [`clamp_opt`], but shortens the name
+/// before its extension, so a cut name still opens in the right application.
+/// An extension longer than [`KEPT_EXTENSION`] characters, or one with a
+/// space, isn't treated as one.
+pub(crate) fn clamp_filename_opt(
+    value: Option<String>,
+    limit: usize,
+    column: &'static str,
+) -> Option<String> {
+    value.map(|value| {
+        if fits(&value, limit) {
+            return value;
+        }
+        tracing::warn!(
+            column,
+            limit,
+            length = value.chars().count(),
+            "truncating oversized provider file name to fit its column"
+        );
+        let extension = value.rsplit_once('.').filter(|(stem, extension)| {
+            !stem.is_empty()
+                && !extension.is_empty()
+                && extension.chars().count() <= KEPT_EXTENSION
+                && !extension.chars().any(char::is_whitespace)
+        });
+        match extension {
+            Some((stem, extension)) if extension.chars().count() < limit => {
+                let stem_limit = limit - extension.chars().count() - 1;
+                format!("{}.{extension}", clamp(stem.to_string(), stem_limit))
+            }
+            _ => clamp(value, limit),
+        }
+    })
+}
+
 #[cfg(test)]
 mod test;
