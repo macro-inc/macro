@@ -56,7 +56,11 @@ export interface ListedCompany {
 export interface CompanyListing {
   /** The companies, at most the requested limit. */
   companies: ListedCompany[];
-  /** How many companies matched before the limit. */
+  /**
+   * How many companies matched before the limit. A lower bound for teams with
+   * more than 500 companies: filters cover only the 500 most recently active
+   * (and 500 more hidden ones with `includeHidden`).
+   */
   totalMatching: number;
 }
 
@@ -285,6 +289,9 @@ export class CrmNamespace {
    * company's own Stage and Owner properties, name or domain text, and whether
    * hidden companies are included. Each row carries the company's own Stage,
    * Owner and Revenue; pipeline deals have their own (`crm.pipelines`).
+   * Filters cover only the team's 500 most recently active companies (and 500
+   * more hidden ones with `includeHidden`); use `searchCompanies` to find an
+   * older company by name.
    *
    * @example Customers owned by me
    * ```js

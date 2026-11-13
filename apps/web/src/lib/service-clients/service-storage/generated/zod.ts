@@ -7553,7 +7553,9 @@ export const listCompaniesResponse = zod
     totalMatching: zod
       .number()
       .min(listCompaniesResponseTotalMatchingMin)
-      .describe('How many companies matched before the limit.'),
+      .describe(
+        "How many companies matched before the limit. Filters cover only the\nteam's 500 most recently active companies (and 500 more hidden ones\nwith `include_hidden`), so this is a lower bound for larger teams."
+      ),
   })
   .describe('Response from the [`ListCompanies`] tool.');
 

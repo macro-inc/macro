@@ -65,7 +65,9 @@ pub struct CompanyListItem {
 pub struct ListCompaniesResponse {
     /// The matching CRM companies.
     pub companies: Vec<CompanyListItem>,
-    /// How many companies matched before the limit.
+    /// How many companies matched before the limit. Filters cover only the
+    /// team's 500 most recently active companies (and 500 more hidden ones
+    /// with `include_hidden`), so this is a lower bound for larger teams.
     pub total_matching: usize,
     /// Human-readable summary of the results.
     pub summary: String,

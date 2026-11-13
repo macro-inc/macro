@@ -15,7 +15,9 @@ export interface ListCompaniesResponse {
   /** Human-readable summary of the results. */
   summary: string;
   /**
-   * How many companies matched before the limit.
+   * How many companies matched before the limit. Filters cover only the
+team's 500 most recently active companies (and 500 more hidden ones
+with `include_hidden`), so this is a lower bound for larger teams.
    * @minimum 0
    */
   totalMatching: number;
