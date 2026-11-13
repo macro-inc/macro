@@ -285,6 +285,19 @@ list rereads and past generation checks and operation teardowns. It registers
 nothing and writes nothing, so those fences do not order it; it never passes
 `init` or `clear`. It can run before a write queued ahead of it, returning rows
 that are only older; that write's cache change then refreshes the list.
+The record reads that load the rows a typed search named (`read-records-by-keys`
+with `priority: 'typed-search'`, set by Quick Access through `searchRowHost`)
+rank with it: they run ahead of list rereads and past the same fences, since the
+search is not answered for the user until its rows list. Like the search they
+can run before a network result queued ahead of them, whose cache change then
+refreshes the list. The list keeps those rows until that refresh, so a row read
+that arrives while a change made on this device is queued (an optimistic
+mutation or its settlement) orders like any other record read instead.
+The desktop host ignores the field.
+Rereads of mounted queries are `user-visible` reads, ahead of ordinary ones. A
+query that feeds app state rather than a view sets `backgroundReader` in its
+operation context and is reread at ordinary rank, behind the views on screen;
+the notification feed (500 entities with their notifications) does.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request
 started on arrival usually finishes before the next is seen: the queue would
@@ -861,10 +874,12 @@ separate assignment mutations no longer exist. Task creation includes that
 property in its ordinary create request. Project descriptions use the project's
 collaborative surface, provisioned by an authoritative ensure mutation.
 
-Permissions and server-owned membership still revalidate on activity, focus, and
-the existing project polling interval. Project denials are scoped to the client,
-viewer, project, and operation, surviving row remounts until a fresh authorized
-network response succeeds. Recovery requests capture the current denial version;
+Permissions and server-owned membership revalidate only through the activity
+registry: activity pushes, Soup websocket connects and reconnects, and the app's
+own project writes. Projects have no polling or focus refetch, so an access
+change reaches an open project with the next of those or a reopen. Project
+denials are scoped to the client, viewer, project, and operation, surviving row
+remounts until a fresh authorized network response succeeds. Recovery requests capture the current denial version;
 older responses and cache updates cannot clear a newer denial. A rejected
 previous-viewer cache hit triggers one immediate network recovery per activation.
 Disabled reads and results for another viewer are not exposed. Other query

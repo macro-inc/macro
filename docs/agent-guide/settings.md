@@ -237,7 +237,7 @@ Behind `enable-agent-teammates` (on in dev), owners and admins see a
 everyone while the flag is off or still loading, see the people form unchanged.
 **Agent** asks for a name, job description, personality, an optional picture
 (**Upload**), and the agent's computer size from the same catalog and prices as
-Buy a computer (sold-out sizes offer **Notify me**). The agent's seat is
+Buy a computer (sold-out sizes are disabled and marked **Sold out**). The agent's seat is
 included, so **Invite agent · $X/month** shows the computer's price, or
 **Invite agent** when it is included. Inviting calls `POST /team_agents` on the
 auth service, which creates the agent's account, buys its computer and adds it
@@ -894,13 +894,17 @@ is retained (`billing: ended`). The list polls every 3 seconds while any
 computer is purchasing, setting up, waiting for capacity, starting or
 stopping.
 
-The row's one action is **Finish setup** while guided setup is incomplete
-(only for the team's owner and admins), else **Sign in with Claude** when the
-computer is on its own Claude account but signed out, else none. **⋯** holds,
+The row's one action is **Retry setup** on a `failed` computer (team owner
+and admins; it sets it up again, billing untouched), else **Finish setup**
+while guided setup is incomplete (only for the team's owner and admins), else
+**Sign in with Claude** when the computer is on its own Claude account but
+signed out, else none. A failed row's line reads `Setup failed: <reason>`
+with the API's `failureReason`, else `Failed`. A row with no action keeps its
+**⋯** on the name's line on phones. **⋯** holds,
 in order: **Don't ask before acting** (the computer's permission bypass, for
 the team's owner and admins; a computer belongs to its team, so it has no Share
-menu); **Retry** on a `failed` computer
-(sets it up again, billing untouched); **Turn off** (confirm: agents on it stop
+menu); **Retry** on a `failed` computer when the row does not already offer
+**Retry setup**; **Turn off** (confirm: agents on it stop
 until it is turned back on) or **Turn on**; **Switch to Macro credits** or
 **Sign in with Claude** (confirm: it affects everyone on the team); **Cancel at
 period end**, **Undo cancel** while the cancellation is pending, or **Restore**
@@ -916,19 +920,24 @@ release; whoever manages the runtime gets the Claude items.
 
 To buy one as a team admin:
 
-1. Open `/app/settings/runtimes` (mobile: Settings sheet → Machines). The last
-   row of **Macro computers** reads **Get a Macro computer** ("A full computer,
-   with your Claude sub, and a Macro agent, ready to go · from <price>/month"),
-   with **Get a computer** on its right. In **Settings →
+1. Open `/app/settings/runtimes` (mobile: Settings sheet → Machines). The top
+   of the page, above every other section, is the **Get a Macro computer**
+   panel: "A hosted computer where your team's agents run.", three facts
+   (**Always on, never sleeps**, **Runs on your Claude plan or Macro
+   credits**, **From <price>/month** from the cheapest size on sale, or
+   **Included**), and a large primary **Get a computer** (full width on
+   phones). It stays the same once the team has computers; a compact
+   one-row variant (`variant="compact"`: "Hosted, always on · from
+   <price>/month" with a small **Get a computer**) exists for comparison. In **Settings →
    Agents**, a team without a computer also sees **Run coding agents on a Macro
    computer** in the agents list, and **Where it runs** ends with **New Macro
    computer**. Computers are for paying teams: on a trialing subscription the
-   row instead reads "Computers can be added once your trial ends and your
+   panel instead reads "Computers can be added once your trial ends and your
    team is on a paid plan." and on a team with no paid plan (offers answers
    422) "Computers need a paid Macro plan. Your team does not have one yet.",
    each with **Go to Billing**, and the Agents entries are hidden. The API
    answers 403 with `code: "team_on_trial"` to offers, purchase, undo and
-   restore. Showing the row loads the offers, so the dialog opens with the
+   restore. Showing the panel loads the offers, so the dialog opens with the
    sizes already there.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
    step header, **Buy computer → Configure agent → Bring your AI → Create agent**
@@ -936,8 +945,10 @@ To buy one as a team admin:
    done steps carry a check, the current one is in ink), that stays open from
    Buy to Try it. The Buy computer step has the size radios (**Standard**,
    **Large**, **XL**) with price per interval, a sold-out size disabled and
-   marked **Sold out**, a size too large for every host left out (none left
-   says "No computer sizes are available right now."); **Name**, prefilled "<first name>'s Agent Box" (**Agent
+   marked **Sold out**, a size too large for every host left out (with none
+   left the step shows only "No computer sizes are available right now." and
+   "Macro's hosts have no room for a new computer. Try again later.", with
+   **Close** and no Name, price line, heads-up or Buy); **Name**, prefilled "<first name>'s Agent Box" (**Agent
    Box** without a first name); the price breakdown; and under **Buy** the
    heads-up "Next you'll name your agent and sign in to Claude (Pro or Max) —
    have claude.ai handy." While the sizes load, three shimmering size cards
@@ -962,7 +973,8 @@ To buy one as a team admin:
    (502), a timeout, or sales unavailable (503). A 200 (`state: ready`) toasts "Computer
    purchased. Provisioning now."; a 202 (`state: confirming`) is a success too
    and toasts "Confirming your payment. Setup starts once it goes through.",
-   with the computer listed as `purchasing`. Either way the modal moves
+   with the computer listed as `purchasing`. Phones skip that toast, which
+   would cover the sheet's footer; the progress list says the same. Either way the modal moves
    straight to **Configure agent**.
 
 While the computer provisions, a **Setup progress** list under the step bar
@@ -1001,10 +1013,12 @@ Claude, then setup-complete.
   (below) reopens the modal on that step. The code is pasted in the same modal.
 - **Macro's Claude** skips **Bring your AI**, shown muted with a dash as
   "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
-  through.
+  through. Choosing **Use Macro credits instead** after opening **Bring your
+  AI** marks it done instead: a check and "Bring your AI · Macro credits".
 - A **failed** or stuck setup stops the **Bring your AI** step: it says setup
   stopped before the computer came up and to use **Retry setup** above, with
-  no spinner, no elapsed time and no **Use Macro credits instead**.
+  no spinner, no elapsed time, no shared-sign-in note and no **Use Macro
+  credits instead**.
 
 Macro creates that agent once, on the computer's first connection, with the
 handle `@<first-name>-s-agent` (`-2`, `-3`… when taken), on Claude Code's

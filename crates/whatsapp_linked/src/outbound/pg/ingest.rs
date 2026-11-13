@@ -181,6 +181,19 @@ pub(super) async fn reserve_in(
         macro_user = stored.macro_user,
     )
     .in_scope(|| {});
+    // A new person's picture is checked once; Macro users show their Macro
+    // avatar. Phones key people by LID, so ask by LID when one is known.
+    // A direct chat's other person is already tracked by the chat's
+    // `remote_id` from adoption.
+    let direct_peer =
+        binding.kind == ExternalChatKind::Direct && aliases.contains(&binding.remote_id);
+    if stored.created && !stored.macro_user && !group_itself && !direct_peer {
+        let preferred = aliases
+            .iter()
+            .find(|jid| jid.ends_with("@lid"))
+            .unwrap_or(&sender.jid);
+        super::pictures::track_person_in(tx, &binding.user_id, preferred, &aliases).await?;
+    }
     for alias in &aliases {
         sqlx::query!(
             r#"INSERT INTO whatsapp_identity_alias (chat_id, jid, person_id, evidence_account_id, verified_at)

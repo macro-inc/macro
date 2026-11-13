@@ -83,7 +83,7 @@ pub async fn get_user_source_ids(
 /// is opened only when the cache misses.
 #[tracing::instrument(
     name = "get_user_source_ids",
-    skip(pool),
+    skip(pool, user_id),
     err,
     fields(coalesced = tracing::field::Empty)
 )]

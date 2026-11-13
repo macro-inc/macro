@@ -28,7 +28,8 @@
             NULL::jsonb as "calendar_event",
             NULL::jsonb as "database_row"
         FROM TopItems t
-        INNER JOIN initiative i ON i.id::text = t.id
+        -- Keep the indexed UUID column bare. Other Soup kinds can have legacy text ids.
+        INNER JOIN initiative i ON i.id = (CASE WHEN t.item_type = 'initiative' THEN t.id END)::uuid
         LEFT JOIN "UserHistory" uh
             ON uh."itemId" = i.id::text
             AND uh."itemType" = 'initiative'

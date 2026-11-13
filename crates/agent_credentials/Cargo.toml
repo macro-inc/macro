@@ -4,17 +4,29 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+postgres = ["dep:sqlx"]
+
 [dependencies]
 constant_time_eq = { workspace = true }
+feature_flags = { path = "../feature_flags" }
 hex = { workspace = true }
 lazy-regex = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
 rand = { workspace = true }
+rootcause = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 zeroize = { workspace = true }
 user_api_key = { path = "../user_api_key", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

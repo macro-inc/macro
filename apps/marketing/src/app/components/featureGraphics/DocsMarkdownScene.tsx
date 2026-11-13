@@ -732,10 +732,10 @@ const CHIP_ICON_EM: Record<ChipKind | 'doc', number> = {
 };
 
 const CHIP_COLOR: Record<ChipKind | 'doc', string> = {
-  person: 'var(--a0)',
+  person: 'var(--mds-mention-color, var(--a0))',
   doc: HUE_DOC,
   task: HUE_TASK,
-  date: 'var(--a0)',
+  date: 'var(--mds-mention-color, var(--a0))',
   email: HUE_EMAIL,
   channel: HUE_CHANNEL,
 };
@@ -757,10 +757,10 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
           class="mds-chip-person"
           style={{
             'background-color':
-              'color-mix(in srgb, var(--a0) 20%, transparent)',
+              'var(--mds-mention-background, color-mix(in srgb, var(--a0) 20%, transparent))',
             'border-radius': '0.22em',
-            color: 'var(--a0)',
-            'font-weight': '500',
+            color: 'var(--mds-mention-color, var(--a0))',
+            'font-weight': 'var(--mds-mention-weight, 500)',
             padding: '0.1em 0.14em',
             'white-space': 'nowrap',
           }}
@@ -778,8 +778,9 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
           props.kind === 'date'
             ? {
                 'background-color':
-                  'color-mix(in srgb, var(--a0) 20%, transparent)',
+                  'var(--mds-mention-background, color-mix(in srgb, var(--a0) 20%, transparent))',
                 'border-radius': '0.22em',
+                'font-weight': 'var(--mds-mention-weight, inherit)',
                 padding: '0.1em 0.16em',
               }
             : undefined
@@ -800,7 +801,11 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
         />
         <Show
           when={props.kind !== 'date'}
-          fallback={<span style={{ color: 'var(--a0)' }}>{props.label}</span>}
+          fallback={
+            <span style={{ color: 'var(--mds-mention-color, var(--a0))' }}>
+              {props.label}
+            </span>
+          }
         >
           <span class="mds-u">{props.label}</span>
         </Show>
@@ -1395,7 +1400,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
         }
         .mds-title {
           font-size: 1.36em;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           margin: 0 0 1.8em;
         }
@@ -1406,7 +1411,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
            column the task line broke with its closing full stop alone on the
            last line, which reads as a rendering fault rather than as a wrap. */
         .mds-line { margin: 0 0 0.86em; min-height: 1.5em; position: relative; text-wrap: pretty; }
-        .mds-line.h2 { font-size: 1.2em; font-weight: 600; }
+        .mds-line.h2 { font-size: 1.2em; font-weight: 500; }
         .mds-line.row { display: flex; gap: 0.6em; }
         .mds-line.rowmid { margin-bottom: 0.36em; }
         /* The commented row carries its badge at the far end. */
@@ -1450,7 +1455,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
           color: var(--c1);
           display: inline-grid;
           flex: none;
-          font-weight: 600;
+          font-weight: 500;
           line-height: 1;
           place-items: center;
         }
