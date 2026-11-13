@@ -318,6 +318,17 @@
       "deploy_binaries": [
         "whatsapp_session_service"
       ]
+    },
+    "gitai-service": {
+      "bootstrap_pending": "Doppler project and first deploy pending",
+      "source_paths": [
+        "services/gitai_service/**",
+        "crates/gitai/**"
+      ],
+      "stack_path": "infra/stacks/gitai-service/**",
+      "deploy_binaries": [
+        "gitai_service"
+      ]
     }
   }
 }

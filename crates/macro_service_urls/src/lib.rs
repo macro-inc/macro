@@ -660,6 +660,12 @@ service_url! {
             dev: "https://sync-service-dev3.macroverse.workers.dev",
             prod: "https://sync-service-prod2.macroverse.workers.dev",
         },
+        /// gitai-service API URL: Macro's server for the git-ai client.
+        pub GitaiServiceUrl {
+            local: "http://localhost:8113",
+            dev: "https://dev-gateway.macro.com/gitai",
+            prod: "https://gateway.macro.com/gitai",
+        },
         /// AI editing worker API URL.
         pub AiEditingWorkerUrl {
             local: "http://localhost:8933",

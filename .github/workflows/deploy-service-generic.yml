@@ -24,6 +24,7 @@ on:
           - document-text-extractor
           - email-service
           - email-suppression
+          - gitai-service
           - image-proxy-service
           - lambda-aggregate-frecency
           - lexical-service

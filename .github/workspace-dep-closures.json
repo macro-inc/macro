@@ -7716,6 +7716,24 @@
       "crates/git_patch",
       "crates/workspace-hack"
     ],
+    "gitai": [
+      "crates/gitai",
+      "crates/workspace-hack"
+    ],
+    "gitai_service": [
+      "crates/gitai",
+      "crates/macro_aws_config",
+      "crates/macro_config",
+      "crates/macro_config_derive",
+      "crates/macro_cors",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_tower_layers",
+      "crates/remote_env_var",
+      "crates/workspace-hack",
+      "services/gitai_service"
+    ],
     "github": [
       "crates/activity",
       "crates/agent",
