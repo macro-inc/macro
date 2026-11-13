@@ -712,6 +712,12 @@ function TagPickerRow(props: {
           checked={props.checked}
           onChange={props.onToggle}
           onClick={(event: MouseEvent) => event.stopPropagation()}
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            event.stopPropagation();
+            props.onToggle();
+          }}
         >
           <Checkbox.Control />
           <Checkbox.Label class="sr-only">{label()}</Checkbox.Label>

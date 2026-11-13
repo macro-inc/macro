@@ -217,6 +217,26 @@ it('keeps checkbox selections open and saves them together with a row pick', asy
   expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull();
 });
 
+it('toggles the focused checkbox with Enter without picking the highlighted row', async () => {
+  setup();
+  const search = await openTags();
+  const checkbox = screen.getByRole('checkbox', { name: 'Follow up' });
+  checkbox.focus();
+  fireEvent.keyDown(checkbox, { key: 'Enter' });
+  expect(checkbox).toHaveProperty('checked', true);
+  expect(document.activeElement).toBe(checkbox);
+  expect(screen.getByRole('checkbox', { name: 'Urgent' })).toHaveProperty(
+    'checked',
+    false
+  );
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(screen.getByPlaceholderText('Change or add tags')).toBe(search);
+
+  fireEvent.keyDown(checkbox, { key: 'Enter' });
+  expect(checkbox).toHaveProperty('checked', false);
+  expect(mocks.save).not.toHaveBeenCalled();
+});
+
 it('goes back through creation steps without losing the name or chosen color', async () => {
   setup();
   const search = await openTags();
