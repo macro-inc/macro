@@ -57,7 +57,6 @@ type Request = {
   refreshPending: boolean;
   answered: boolean;
   awaitingEngine: boolean;
-  startedAt: number;
   /** Tells the host to stop holding this search once another replaces it. */
   superseded: AbortController;
   giveUpTimer?: ReturnType<typeof setTimeout>;
@@ -118,19 +117,15 @@ export function createProjectedList<T extends { id: string }>(options: {
     current = undefined;
   });
 
-  // The replacement engine still replays the search whenever it arrives; this
-  // only stops telling the user that an answer is on its way.
+  // The search stays pending and the replacement engine still replays it
+  // whenever it arrives; this only stops telling the user that an answer is
+  // on its way. It runs from the start of the attempt because a host that is
+  // waiting for an owner has paused its own read timeouts.
   const stopWaitingAtLimit = (request: Request) => {
     clearTimeout(request.giveUpTimer);
-    const remaining =
-      UNANSWERED_SEARCH_LIMIT_MS - (performance.now() - request.startedAt);
-    request.giveUpTimer = setTimeout(
-      () => {
-        if (current === request && request.awaitingEngine && !request.busy)
-          setSearching(false);
-      },
-      Math.max(0, remaining)
-    );
+    request.giveUpTimer = setTimeout(() => {
+      if (current === request && !request.answered) setSearching(false);
+    }, UNANSWERED_SEARCH_LIMIT_MS);
   };
 
   const finishRequest = (request: Request) => {
@@ -138,8 +133,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     request.busy = false;
     // A read refused while the cache moves between owners is replayed when
     // the replacement engine arrives, so the query is still unanswered.
-    if (request.awaitingEngine) stopWaitingAtLimit(request);
-    else setSearching(false);
+    if (!request.awaitingEngine) setSearching(false);
     if (request.refreshPending) {
       // Publish the completed window before replaying changes received during
       // search/materialization (or a load-more operation).
@@ -157,7 +151,10 @@ export function createProjectedList<T extends { id: string }>(options: {
     request.busy = true;
     request.refreshPending = false;
     setLoading(append ? 'more' : 'initial');
-    if (!request.answered) setSearching(true);
+    if (!request.answered) {
+      setSearching(true);
+      stopWaitingAtLimit(request);
+    }
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
     const visibleIds = new Set([
@@ -330,7 +327,6 @@ export function createProjectedList<T extends { id: string }>(options: {
       refreshPending: false,
       answered: false,
       awaitingEngine: false,
-      startedAt: performance.now(),
       superseded: new AbortController(),
     };
     current = request;

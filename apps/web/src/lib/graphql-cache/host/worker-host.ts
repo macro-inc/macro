@@ -1112,6 +1112,24 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   const supersededError = () => new Error('cache request was superseded');
 
+  /** Ends this caller's wait on abort; the shared work itself carries on. */
+  async function untilAborted<T>(
+    work: Promise<T>,
+    signal: AbortSignal
+  ): Promise<T> {
+    let onAbort = () => {};
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(supersededError());
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      return await Promise.race([work, aborted]);
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+    }
+  }
+
   function armRequestTimeout(
     id: number,
     entry: Pending,
@@ -1369,14 +1387,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     signal?: AbortSignal
   ): Promise<unknown> {
     const generation = transportGeneration;
-    if (state === 'ready') {
-      await ensureInitialized();
-    } else {
-      await readAvailability.waitUntilReady(
-        ensureInitialized,
-        isReadOnlyCacheRequest(msg.kind)
-      );
-    }
+    const ready =
+      state === 'ready'
+        ? ensureInitialized()
+        : readAvailability.waitUntilReady(
+            ensureInitialized,
+            isReadOnlyCacheRequest(msg.kind)
+          );
+    // Every other caller keeps its exact place in line: no extra hop.
+    if (signal) await untilAborted(ready, signal);
+    else await ready;
     // Never admit an interrupted operation to a different transport generation.
     if (generation !== transportGeneration)
       throw transportInterruption ?? new CacheNavigationError();

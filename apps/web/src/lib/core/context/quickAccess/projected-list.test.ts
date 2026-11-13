@@ -299,6 +299,24 @@ describe('Quick Access local projection', () => {
     expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }]);
   });
 
+  it('stops reporting a search the host never answers as pending after the limit', async () => {
+    vi.useFakeTimers();
+    const search = vi.fn(() => new Promise<SearchCachePage>(() => {}));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.advanceTimersByTimeAsync(UNANSWERED_SEARCH_LIMIT_MS - 1);
+    expect(list.isSearching()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(list.isSearching()).toBe(false);
+  });
+
   it('tells the host to release a search once another query supersedes it', async () => {
     const [query, setQuery] = createSignal('to');
     const signals: (AbortSignal | undefined)[] = [];

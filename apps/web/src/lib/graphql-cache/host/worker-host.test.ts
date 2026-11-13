@@ -887,6 +887,31 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('releases a superseded search that is still waiting for the host to initialize', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const superseded = new AbortController();
+    const search = host.search(
+      {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'to',
+        limit: 20,
+      },
+      { signal: superseded.signal }
+    );
+    const dropped = expect(search).rejects.toThrow('superseded');
+    await vi.advanceTimersByTimeAsync(0);
+
+    superseded.abort();
+    await dropped;
+    expect(requireAdapter().requests.map((request) => request.kind)).toEqual([
+      'init',
+    ]);
+    host.dispose();
+  });
+
   it('queues parked reads, writes, and teardown in call order without background timeouts', async () => {
     vi.useFakeTimers();
     const host = createWorkerCacheHost({
