@@ -118,6 +118,16 @@ where
             .get_channel_metadata(channel_id, user.clone())
             .await
             .map_err(repo_err)?;
+        // The timeline shows this name until current names load. Without it,
+        // the entry falls back to the email, so a failed lookup isn't fatal.
+        let requester_name = self
+            .repo
+            .get_user_display_names(std::slice::from_ref(&user))
+            .await
+            .map_err(Into::<anyhow::Error>::into)
+            .inspect_err(|error| tracing::warn!(?error, "requester name lookup failed"))
+            .ok()
+            .and_then(|mut names| names.remove(&user));
         let (request, created) = self
             .repo
             .create_access_request(&ChannelAccessRequest {
@@ -134,6 +144,7 @@ where
         if created {
             self.events.dispatch(ChannelEvent::AccessRequested {
                 request: request.clone(),
+                requester_name,
                 participant_user_ids: participant_ids(&participants),
                 metadata,
             });
