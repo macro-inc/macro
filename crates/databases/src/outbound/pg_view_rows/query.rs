@@ -66,7 +66,7 @@ impl Columns<'_> {
 
 /// Only IDs and compiler-generated aliases become SQL identifiers. Every
 /// caller-supplied value, option ID and cursor is a bind parameter.
-pub(super) fn page(
+pub(crate) fn page(
     table: &Table,
     query: &SelectQuery,
     after: Option<RowId>,
@@ -313,8 +313,8 @@ fn literal(sql: &mut Sql, value: &Value) -> Result<(), ViewRowsError> {
 fn predicate(sql: &mut Sql, columns: &Columns<'_>, filter: &Filter) -> Result<(), ViewRowsError> {
     sql.push("(");
     // The typed expressions below retain scalar/list and empty-cell semantics.
-    // Expose positive membership separately so the property GIN index can prune
-    // candidates before PostgreSQL expands JSON arrays.
+    // Expose positive membership separately so idx_ep_database_row_value_gin
+    // can prune candidates before PostgreSQL expands JSON arrays.
     match filter {
         Filter::Has {
             column,
@@ -469,6 +469,9 @@ fn range_comparison(
     Ok(())
 }
 
+/// `raw->>'type' = '<tag>' AND (raw->'value' @> $1 OR …)`: the type literal
+/// and the join's `entity_type = 'DATABASE_ROW'` imply the partial index's
+/// predicate, which a bind parameter could not do under a generic plan.
 fn membership_index(
     sql: &mut Sql,
     columns: &Columns<'_>,
@@ -476,25 +479,37 @@ fn membership_index(
     values: &[Value],
 ) -> Result<(), ViewRowsError> {
     let index = columns.index(column)?;
-    let needles = values
-        .iter()
-        .map(|value| match (&columns.0[index].kind, value) {
-            (ColumnKind::Select { .. }, Value::Option(option)) => Some(serde_json::json!({
-                "type": "SelectOption", "value": [option.to_string()]
-            })),
-            (ColumnKind::Entity { .. }, Value::Entity(entity)) => Some(serde_json::json!({
-                "type": "EntityReference", "value": [{"entity_id": entity}]
-            })),
-            _ => None,
-        })
-        .collect::<Option<Vec<_>>>();
+    let (tag, needles) = match &columns.0[index].kind {
+        ColumnKind::Select { .. } => (
+            "SelectOption",
+            values
+                .iter()
+                .map(|value| match value {
+                    Value::Option(option) => Some(serde_json::json!([option.to_string()])),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>(),
+        ),
+        ColumnKind::Entity { .. } => (
+            "EntityReference",
+            values
+                .iter()
+                .map(|value| match value {
+                    Value::Entity(entity) => Some(serde_json::json!([{ "entity_id": entity }])),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>(),
+        ),
+        _ => return Ok(()),
+    };
     if let Some(needles) = needles.filter(|values| !values.is_empty()) {
-        sql.push("(");
+        sql.push(format!("raw{index}->>'type' = '{tag}' AND ("));
         for (at, needle) in needles.into_iter().enumerate() {
             if at > 0 {
                 sql.push(" OR ");
             }
-            sql.push(format!("raw{index} @> ")).push_bind(needle);
+            sql.push(format!("raw{index}->'value' @> "))
+                .push_bind(needle);
         }
         sql.push(") AND ");
     }
