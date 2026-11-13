@@ -5,6 +5,7 @@ use crate::api::context::SearchHandlerState;
 pub(in crate::api) mod agent_session;
 pub(in crate::api) mod calendar_event;
 pub(in crate::api) mod call_record;
+pub(in crate::api::search) mod caller;
 pub(in crate::api) mod channel;
 pub(in crate::api) mod chat;
 pub(in crate::api) mod crm_company;
@@ -14,6 +15,8 @@ pub(in crate::api::search) mod enrich;
 pub(in crate::api) mod names;
 pub(in crate::api) mod project;
 pub mod simple;
+#[cfg(test)]
+pub(in crate::api::search) mod span_capture;
 pub(in crate::api::search) mod terms;
 pub mod unified;
 

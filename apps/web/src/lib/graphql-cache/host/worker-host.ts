@@ -31,6 +31,7 @@ import {
   type HydrationResult,
   isCachePush,
   isCacheResponse,
+  isTypedSearch,
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
@@ -98,6 +99,8 @@ type Pending = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   kind: CacheRequest['kind'];
+  /** Stays queued for the replacement engine when a handoff blocks reads. */
+  typedSearch: boolean;
   opKey?: number;
   admitted: boolean;
   startedAt: number;
@@ -505,6 +508,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         entry.timer = undefined;
       }
       if (!isReadOnlyCacheRequest(entry.kind)) continue;
+      // A typed search has no network fallback to hurry to. The coordinator
+      // still holds it for the replacement engine, so refusing it would only
+      // drop its place in line and leave the caller to ask again behind the
+      // rest. A host on its way out keeps nothing waiting.
+      if (entry.typedSearch && state !== 'disposing') continue;
       pending.delete(id);
       if (entry.timer !== undefined) clearTimeout(entry.timer);
       recordRequestOutcome(entry, 'error', error);
@@ -1132,6 +1140,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         resolve,
         reject,
         kind: msg.kind,
+        typedSearch: isTypedSearch({ ...msg, id }),
         opKey,
         admitted: false,
         startedAt: now(),

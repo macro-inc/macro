@@ -95,7 +95,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     read: 'getScheduledAction getScheduledActionTemplate',
     created: 'createScheduledAction',
     deleted: 'deleteScheduledAction',
-    edited: 'updateScheduledAction detachScheduledAction',
+    edited:
+      'updateScheduledAction setScheduledActionAppearance detachScheduledAction',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
@@ -132,7 +133,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     cancelled: 'discardCalendarReplacement',
   },
   cognition: {
-    listed: 'listSkills',
+    listed: 'listSkills listImportEntities',
+    added: 'trackImportEntity',
+    rejected: 'declineImportEntity',
+    imported: 'importNotionPage',
     read: `
       getUsageHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
@@ -234,7 +238,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
       listTeamCalendar listTeamOutOfOffice meetingList meetingListActive listChannelLabels
       getChannelAttachments listChannelBots getChannelParticipants getChannels listCrmBlockedDomains
-      listCompanyContacts listCrmPipelines getCrmPipelineRows listDatabases listDatabaseColumnCasts
+      listCompanyContacts listCrmPipelines listCrmPipelineDetails getCrmPipelineRows listDatabases listDatabaseColumnCasts
       listDatabaseWebhooks getUserDocumentsHandler getSystemSkillsHandler externalChats
       externalChatMessages externalChatMessageAttachments listFavorites listForms
       listAccessibleForms getGithubPullRequestFacets getGithubPullRequestTasks listHarnesses
@@ -260,7 +264,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     created: `
       getOrCreateDm getOrCreatePrivate createAgent createAnchor createBot createBotToken
       createChannelLabel meetingCreate createChannel createCrmCompany createCrmContact
-      createCrmTeamContact createCrmPipeline createDatabase createDatabaseWebhook createDocument
+      createCrmTeamContact createCrmPipelineWithFields createDatabase createDatabaseWebhook createDocument
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
@@ -277,7 +281,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateForm putFormLayout updateFormPermissions editMyFormResponse patchHarness
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -339,6 +344,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createEntityMention
       setCrmContactCompany
     `,
+    unlinked: 'unlinkCrmContactCompany',
     reordered: `
       reorderFavorites reorderPinsHandler
       reorderSavedViewDefinitions

@@ -98,6 +98,16 @@ export function computerStatusLabel(computer: ComputerStatus): {
     .returnType<{ label: string; detail?: string; tone: StatusTone }>()
     .with('setting_up', 'purchasing', () => {
       const setup = computer.setup;
+      // Billing comes first; the API's step is a string it may widen before
+      // this client's generated type does.
+      const reportedStep: string | undefined = setup?.step;
+      if (computer.status === 'purchasing' || reportedStep === 'billing') {
+        return {
+          label: t('computers.settingUp'),
+          detail: t('computers.stageBilling'),
+          tone: 'progress',
+        };
+      }
       const step = setup && setupStepLabel(setup.step);
       // The same three phases guided setup shows; the server's final "ready"
       // step is the Ready status itself.
@@ -198,7 +208,66 @@ export function computerFailureMessage(
     .with('PAYMENT_FAILED', () => t('computers.errorPaymentFailed'))
     .with('NOT_PURCHASABLE', () => t('computers.errorNotPurchasable'))
     .with('SALES_UNAVAILABLE', () => t('computers.errorSalesUnavailable'))
+    .with('COMPUTERS_UNAVAILABLE', () =>
+      t('computers.errorComputersUnavailable')
+    )
     .with('NOT_RESTORABLE', () => t('computers.errorNotRestorable'))
     .with('NAME_MISMATCH', () => t('computers.errorNameMismatch'))
+    .with('NO_PAID_PLAN', () => t('computers.noPaidPlan'))
+    .with('ROLLOUT_DISABLED', () => t('computers.rolloutDisabled'))
+    .with('BILLING_PROVIDER_FAILED', () => t('computers.errorBillingProvider'))
+    .with('TIMED_OUT', () => t('computers.errorTimedOut'))
+    .with('NETWORK_ERROR', () => t('computers.errorNetwork'))
     .otherwise(() => fallback);
+}
+
+/** Why the sizes could not load, and what gets the team past it. */
+export type OffersFailure = {
+  message: string;
+  /** Billing for a plan problem, a retry for a transient one, else nothing. */
+  remedy: 'billing' | 'retry' | 'none';
+};
+
+/**
+ * What to tell a team whose sizes request failed. Plan problems (a trial,
+ * no paid plan) end in Billing; a missing rollout ends nowhere; everything
+ * else is worth a retry, named when the cause is known.
+ */
+export function offersFailure(error: unknown): OffersFailure {
+  const code =
+    error instanceof ThrownResultError ? error.errors[0]?.code : undefined;
+  return match(code)
+    .returnType<OffersFailure>()
+    .with('TEAM_ON_TRIAL', () => ({
+      message: t('computers.trialBlocked'),
+      remedy: 'billing',
+    }))
+    .with('NO_PAID_PLAN', () => ({
+      message: t('computers.noPaidPlan'),
+      remedy: 'billing',
+    }))
+    .with('ROLLOUT_DISABLED', () => ({
+      message: t('computers.rolloutDisabled'),
+      remedy: 'none',
+    }))
+    .with('COMPUTERS_UNAVAILABLE', () => ({
+      message: t('computers.errorComputersUnavailable'),
+      remedy: 'retry',
+    }))
+    .with('BILLING_PROVIDER_FAILED', () => ({
+      message: t('computers.errorBillingProvider'),
+      remedy: 'retry',
+    }))
+    .with('TIMED_OUT', () => ({
+      message: t('computers.offersTimedOut'),
+      remedy: 'retry',
+    }))
+    .with('NETWORK_ERROR', () => ({
+      message: t('computers.errorNetwork'),
+      remedy: 'retry',
+    }))
+    .otherwise(() => ({
+      message: t('computers.offersFailed'),
+      remedy: 'retry',
+    }));
 }

@@ -64,6 +64,9 @@ impl FromStr for InitiativeId {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeBasic {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.
@@ -77,6 +80,9 @@ pub struct InitiativeBasic {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeSummary {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.
@@ -90,6 +96,9 @@ pub struct InitiativeSummary {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeDetail {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.

@@ -67,6 +67,7 @@ export type PreviewFrameProps = {
  */
 export function PreviewFrame(props: PreviewFrameProps) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
+  const mobileHeaderOwner = createSignal<symbol>();
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
   const [interactedWith, setInteractedWith] = createSignal(false);
@@ -163,6 +164,7 @@ export function PreviewFrame(props: PreviewFrameProps) {
             splitHotkeyScope: previewHotkeyScope,
             isInlinePreview: true,
             layoutRefs: scopedLayoutRefs,
+            mobileHeaderOwner,
             headerCollapser: headerCollapseController.collapser,
             toolbarCollapser: toolbarCollapseController.collapser,
           }}

@@ -1,47 +1,41 @@
-import JSZip from 'jszip';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-
-type WorkerMessage = { type: string; data: { zipBlob?: Blob } };
-
-const posted: WorkerMessage[] = [];
-
-beforeAll(async () => {
-  vi.stubGlobal('self', {
-    postMessage: (message: WorkerMessage) => posted.push(message),
-  });
-  // The worker is plain JS with no types; importing it installs `onmessage`.
-  const workerModule = '../../workers/folder-upload/zip-worker.js';
-  await import(/* @vite-ignore */ workerModule);
-});
-
-afterEach(() => {
-  posted.length = 0;
-});
+// @vitest-environment node
+import { strFromU8, unzipSync } from 'fflate';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  installZipWorker,
+  type ZipWorkerPort,
+  type ZipWorkerRequest,
+  type ZipWorkerResponse,
+} from '../../workers/folder-upload/zip-worker';
 
 async function runZip(
   files: { path: string; contents: string }[],
   folderPaths?: string[]
 ) {
-  const self = globalThis.self as unknown as {
-    onmessage: (event: { data: unknown }) => void;
+  const posted: ZipWorkerResponse[] = [];
+  const port: ZipWorkerPort = {
+    postMessage: (message) => posted.push(message),
+    onmessage: null,
   };
-  self.onmessage({
-    data: {
-      taskId: 't',
-      action: 'zipFiles',
-      files: files.map((f) => new Blob([f.contents])),
-      fileDetails: files.map((f) => ({ path: f.path })),
-      folderPaths,
-    },
-  });
+  installZipWorker(port);
+
+  const request: ZipWorkerRequest = {
+    taskId: 't',
+    action: 'zipFiles',
+    files: files.map((f) => new File([f.contents], f.path)),
+    fileDetails: files.map((f) => ({ path: f.path })),
+    folderPaths,
+  };
+  port.onmessage?.({ data: request } as MessageEvent<ZipWorkerRequest>);
+
   await vi.waitFor(() => {
     expect(
       posted.some((m) => m.type === 'complete' || m.type === 'error')
     ).toBe(true);
   });
   const done = posted.find((m) => m.type === 'complete');
-  if (!done?.data.zipBlob) throw new Error(JSON.stringify(posted.at(-1)));
-  return JSZip.loadAsync(done.data.zipBlob);
+  if (done?.type !== 'complete') throw new Error(JSON.stringify(posted.at(-1)));
+  return unzipSync(new Uint8Array(await done.data.zipBlob.arrayBuffer()));
 }
 
 describe('zip worker', () => {
@@ -55,10 +49,8 @@ describe('zip worker', () => {
       ['Pack', 'Pack/Finance', 'Pack/Finance/Forecasts', 'Pack/Decks']
     );
 
-    expect(
-      await zip.file('Pack/Finance/Forecasts/Q4.xlsx')?.async('string')
-    ).toBe('xlsx');
-    expect(await zip.file('Pack/Decks/Old.PPTX')?.async('string')).toBe('pptx');
+    expect(strFromU8(zip['Pack/Finance/Forecasts/Q4.xlsx'])).toBe('xlsx');
+    expect(strFromU8(zip['Pack/Decks/Old.PPTX'])).toBe('pptx');
   });
 
   it('keeps empty folders as directory entries', async () => {
@@ -67,9 +59,8 @@ describe('zip worker', () => {
       ['Pack', 'Pack/Empty', 'Pack/Nested/Empty Leaf']
     );
 
-    const folders = Object.values(zip.files)
-      .filter((entry) => entry.dir)
-      .map((entry) => entry.name)
+    const folders = Object.keys(zip)
+      .filter((name) => name.endsWith('/'))
       .sort();
     expect(folders).toEqual([
       'Pack/',
@@ -82,12 +73,12 @@ describe('zip worker', () => {
   it('zips a folder that has no files', async () => {
     const zip = await runZip([], ['Shell', 'Shell/A']);
 
-    expect(Object.keys(zip.files).sort()).toEqual(['Shell/', 'Shell/A/']);
+    expect(Object.keys(zip).sort()).toEqual(['Shell/', 'Shell/A/']);
   });
 
   it('accepts messages without folder paths', async () => {
     const zip = await runZip([{ path: 'Pack/a.docx', contents: 'a' }]);
 
-    expect(zip.file('Pack/a.docx')).not.toBeNull();
+    expect(strFromU8(zip['Pack/a.docx'])).toBe('a');
   });
 });

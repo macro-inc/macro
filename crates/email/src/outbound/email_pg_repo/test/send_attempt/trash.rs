@@ -1,7 +1,5 @@
 use super::*;
-use email_db_client::messages::scheduled::delivery::{
-    begin_submission, claim_delivery, pause_delivery,
-};
+use crate::domain::scheduled_delivery::state::{begin_submission, claim_delivery, pause_delivery};
 
 async fn preserve_attempt(pool: Pool<Postgres>, unconfirmed: bool) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());

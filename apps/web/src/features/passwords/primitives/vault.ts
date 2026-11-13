@@ -529,14 +529,12 @@ export function createVault() {
     await items.refetch();
     return true;
   }
+  /** The new folder; false when the vault refused or failed to create it. */
   async function createFolder(name: string, parentId: string | null) {
     if (!name.trim()) return;
     const response = await source.createFolder(name.trim(), parentId);
     if (stale()) return;
-    if (response.isErr()) {
-      setFailure(response.error);
-      return;
-    }
+    if (response.isErr()) return false;
     await folders.refetch();
     return response.value;
   }

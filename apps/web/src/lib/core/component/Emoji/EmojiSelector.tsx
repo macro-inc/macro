@@ -35,6 +35,8 @@ interface EmojiPickerProps {
   nameFilter?: string;
   onEmojiClick: (emoji: SimpleEmoji) => void;
   columns?: number;
+  /** Restrict picker keyboard handling to its search/grid region when embedded. */
+  keyboardScope?: HTMLElement;
 }
 
 interface EmojiOptionProps {
@@ -111,6 +113,12 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   );
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (
+      props.keyboardScope &&
+      e.target instanceof Node &&
+      !props.keyboardScope.contains(e.target)
+    )
+      return;
     const emojisToUse = flatEmojis();
     if (emojisToUse.length === 0) return;
 

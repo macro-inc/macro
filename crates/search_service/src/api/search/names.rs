@@ -17,10 +17,9 @@ use entity_access::domain::models::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use futures::{StreamExt, TryStreamExt};
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_search::{
     MatchType, SearchOn,
     names::{NameKind, NameSearchRequest, NameSearchResponse, NamedItem},
@@ -105,8 +104,8 @@ pub(in crate::api) async fn handler(
     authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
     Json(request): Json<NameSearchRequest>,
 ) -> Result<Json<NameSearchResponse>, NamesError> {
-    let user = authorization.authorization.user.macro_user_id;
-    let user_context = authorization.authorization.user.user_context;
+    let caller = authorization.authorization.user;
+    let user = caller.macro_user_id.clone();
     let team = if wants_team(&request) {
         team_receipt(&ctx, &user).await?
     } else {
@@ -118,7 +117,7 @@ pub(in crate::api) async fn handler(
         Arc::new(ChannelNames::new(ctx.db.clone())),
         Arc::new(IndexedDocuments {
             ctx: ctx.clone(),
-            user_context,
+            caller,
         }),
     ];
     sources.extend(ctx.name_sources.iter().cloned());
@@ -169,7 +168,7 @@ async fn team_receipt(
 /// same access, as a name search of documents.
 struct IndexedDocuments {
     ctx: SearchHandlerState,
-    user_context: UserContext,
+    caller: MacroUserAuthentication,
 }
 
 #[async_trait::async_trait]
@@ -202,7 +201,7 @@ impl NameSource for IndexedDocuments {
         let ids: Vec<String> = hits.iter().map(Uuid::to_string).collect();
         let documents = macro_db_client::document::get_document_history::get_document_history_info(
             &self.ctx.db,
-            &self.user_context.user_id,
+            &self.caller.user_context.user_id,
             &ids,
         )
         .await
@@ -252,7 +251,7 @@ impl IndexedDocuments {
         filters.project_filters.project_ids = vec![EXCLUDED.to_string()];
         let (hits, _) = perform_unified_search(
             &self.ctx,
-            &self.user_context,
+            &self.caller,
             None,
             SearchPaginationParams {
                 page: None,

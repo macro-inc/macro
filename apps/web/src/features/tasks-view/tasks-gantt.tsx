@@ -105,7 +105,7 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
             optionId={getTaskStatusOptionId(task()) ?? ''}
             class="size-3.5 shrink-0"
           />
-          <span class="min-w-0 truncate">{task().name}</span>
+          <Gantt.BarTitle>{task().name}</Gantt.BarTitle>
         </Gantt.Bar>
       </SoupEntityContextMenu>
     );
