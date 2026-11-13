@@ -130,15 +130,17 @@ impl<Store: AgentRoutineStore, Runs, Flags: FeatureFlags>
             .is_ok_and(|snapshot| snapshot.is_enabled(AGENT_DASHBOARDS_FLAG))
     }
 
-    /// Whether `viewer` may read `agent`'s routines, and as whom. Anyone
-    /// else gets the same answer as for an agent that doesn't exist.
+    /// Whether `viewer` may read `agent`'s routines, and as whom. Only an
+    /// agent account has a summary, even for itself; anyone else gets the
+    /// same answer as for an agent that doesn't exist.
     async fn viewer(
         &self,
         viewer: &MacroUserIdStr<'_>,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<Option<Viewer>> {
         if viewer == agent {
-            return Ok(Some(Viewer::Agent));
+            let is_agent = self.store.is_agent(agent).await?;
+            return Ok(is_agent.then_some(Viewer::Agent));
         }
         if self.store.oversees(viewer, agent).await? {
             return Ok(Some(Viewer::Overseer));

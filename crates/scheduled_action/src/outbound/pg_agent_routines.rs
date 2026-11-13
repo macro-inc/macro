@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -15,7 +15,7 @@ use crate::domain::ports::AgentRoutineStore;
 mod test;
 
 /// Reads `scheduled_action` for the list and `"User"` with `team_user` for
-/// the oversight check.
+/// the agent and oversight checks.
 pub struct PgAgentRoutines {
     pool: PgPool,
 }
@@ -27,6 +27,16 @@ impl PgAgentRoutines {
 }
 
 impl AgentRoutineStore for PgAgentRoutines {
+    async fn is_agent(&self, user: &MacroUserIdStr<'_>) -> Result<bool> {
+        let is_agent = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM "User" WHERE id = $1 AND "isAgent") AS "is_agent!""#,
+            user.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(is_agent)
+    }
+
     async fn oversees(
         &self,
         viewer: &MacroUserIdStr<'_>,
@@ -80,11 +90,21 @@ impl AgentRoutineStore for PgAgentRoutines {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|row| {
+        // A trigger type this code doesn't know (a newer replica's) leaves
+        // that routine out of the summary instead of failing the list.
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
                 let trigger_kind = TriggerKind::from_str(&row.trigger_type)
-                    .with_context(|| format!("unknown trigger type {}", row.trigger_type))?;
-                Ok(AgentRoutine {
+                    .inspect_err(|_| {
+                        tracing::warn!(
+                            routine.id = %row.id,
+                            routine.trigger_type = %row.trigger_type,
+                            "unknown trigger type; routine left out of the agent summary"
+                        );
+                    })
+                    .ok()?;
+                Some(AgentRoutine {
                     id: row.id,
                     name: row.name,
                     enabled: row.enabled,
@@ -94,6 +114,6 @@ impl AgentRoutineStore for PgAgentRoutines {
                     last_run: None,
                 })
             })
-            .collect()
+            .collect())
     }
 }

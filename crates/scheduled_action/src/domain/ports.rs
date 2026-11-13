@@ -623,6 +623,9 @@ impl RequestSessions for NoRequestSessions {
 
 /// Reads behind an agent's routines summary.
 pub trait AgentRoutineStore: Send + Sync + 'static {
+    /// Whether `user` is an agent account (`"User"."isAgent"`).
+    fn is_agent(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<bool>> + Send;
+
     /// Whether `agent` is an agent account and `viewer` is an owner or admin
     /// of a team it belongs to.
     fn oversees(

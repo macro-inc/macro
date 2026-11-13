@@ -31,6 +31,10 @@ struct FakeStore {
 }
 
 impl AgentRoutineStore for FakeStore {
+    async fn is_agent(&self, user: &MacroUserIdStr<'_>) -> Result<bool> {
+        Ok(user.as_ref() == AGENT)
+    }
+
     async fn oversees(
         &self,
         viewer: &MacroUserIdStr<'_>,
@@ -158,19 +162,15 @@ async fn anyone_else_is_told_the_agent_has_nothing_to_show() {
 }
 
 #[tokio::test]
-async fn a_person_is_not_an_agent_so_only_they_read_their_routines() {
+async fn a_person_is_not_an_agent_so_nobody_reads_their_routines_here() {
     let service = service();
-    let error = service
-        .agent_routines(&id(TEAM_ADMIN), &id(PERSON))
-        .await
-        .unwrap_err();
-    assert!(is_not_found(&error), "{error}");
-
-    let own = service
-        .agent_routines(&id(PERSON), &id(PERSON))
-        .await
-        .unwrap();
-    assert_eq!(own.routines.len(), 2);
+    for viewer in [TEAM_ADMIN, PERSON] {
+        let error = service
+            .agent_routines(&id(viewer), &id(PERSON))
+            .await
+            .unwrap_err();
+        assert!(is_not_found(&error), "{viewer}: {error}");
+    }
 }
 
 #[tokio::test]

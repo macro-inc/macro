@@ -78,6 +78,10 @@ async fn owners_and_admins_of_an_agents_team_oversee_it(pool: PgPool) {
     assert!(!store.oversees(&id(OTHER_ADMIN), &id(AGENT)).await.unwrap());
     // A person on the team is no agent, so their admins don't oversee them.
     assert!(!store.oversees(&id(ADMIN), &id(USER_A)).await.unwrap());
+
+    assert!(store.is_agent(&id(AGENT)).await.unwrap());
+    assert!(!store.is_agent(&id(USER_A)).await.unwrap());
+    assert!(!store.is_agent(&id(USER_B)).await.unwrap(), "no such user");
 }
 
 /// A one-time sub-routine of `parent` that already ran.
@@ -155,4 +159,37 @@ async fn lists_an_owners_top_level_routines_oldest_first_up_to_the_limit(pool: P
     let first_two = store.top_level_routines(&id(USER_A), 2).await.unwrap();
     let ids: Vec<Uuid> = first_two.iter().map(|r| r.id).collect();
     assert_eq!(ids, [top_level[0].id.unwrap(), top_level[1].id.unwrap()]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_routine_with_an_unknown_trigger_type_is_left_out(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let kept = repo
+        .create_action(sample_action(user_owner(USER_A), "kept"))
+        .await
+        .unwrap();
+    let newer = repo
+        .create_action(sample_action(user_owner(USER_A), "newer kind"))
+        .await
+        .unwrap();
+    // A newer release widens the constraints before this code is replaced.
+    sqlx::query!(
+        "ALTER TABLE scheduled_action DROP CONSTRAINT scheduled_action_supported_triggers_check, DROP CONSTRAINT scheduled_action_trigger_shape_check"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE scheduled_action SET trigger_type = 'from_the_future' WHERE id = $1",
+        newer.id.unwrap(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let store = PgAgentRoutines::new(pool);
+    let listed = store.top_level_routines(&id(USER_A), 10).await.unwrap();
+    let ids: Vec<Uuid> = listed.iter().map(|r| r.id).collect();
+    assert_eq!(ids, [kept.id.unwrap()]);
 }

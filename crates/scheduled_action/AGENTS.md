@@ -239,7 +239,7 @@ each run.
   owner or admin of a team the agent account (`"User"."isAgent"`) belongs
   to, may list that it has routines and how they ran, never their content.
   It needs the caller's `enable-agent-dashboards` PostHog flag; everyone
-  else, a target that is not an agent account (unless it is the caller), and
+  else, a target that is not an agent account (even the caller itself), and
   a missing, off or failed flag answer 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
