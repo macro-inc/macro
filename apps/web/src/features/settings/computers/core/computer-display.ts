@@ -98,6 +98,16 @@ export function computerStatusLabel(computer: ComputerStatus): {
     .returnType<{ label: string; detail?: string; tone: StatusTone }>()
     .with('setting_up', 'purchasing', () => {
       const setup = computer.setup;
+      // Billing comes first; the API's step is a string it may widen before
+      // this client's generated type does.
+      const reportedStep: string | undefined = setup?.step;
+      if (computer.status === 'purchasing' || reportedStep === 'billing') {
+        return {
+          label: t('computers.settingUp'),
+          detail: t('computers.stageBilling'),
+          tone: 'progress',
+        };
+      }
       const step = setup && setupStepLabel(setup.step);
       // The same three phases guided setup shows; the server's final "ready"
       // step is the Ready status itself.
