@@ -12,6 +12,8 @@ cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
 # calendar_service, which the calendar scenarios start, has no such test
 # target: its binary is built directly.
 cargo build "${flags[@]}" -p calendar_service --bin calendar_service
+# The scheduled-send sweep, which scenarios run as the cron does.
+cargo build "${flags[@]}" -p email_scheduled_handler
 
 started=$(date +%s)
 cargo nextest run -P email-e2e -p email_e2e "${flags[@]}"

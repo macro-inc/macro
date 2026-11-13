@@ -106,7 +106,7 @@ pub(crate) fn ensure_built(names: &[&str]) -> Result<(), Report> {
         let binary = dir.join(name);
         if !binary.is_file() {
             bail!(
-                "{} is missing: build it with `cargo build -p email_service --bin email_service --bin pubsub_workers -p calendar_service --bin calendar_service`, \
+                "{} is missing: build it with `cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p calendar_service --bin calendar_service`, \
                  or run the suite with `just email-e2e`",
                 binary.display()
             );

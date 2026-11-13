@@ -57,8 +57,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   ends when its condition holds, so the 120 s limit only costs time on failure.
 - To prove something does *not* happen, make a later event happen and wait
   for that (deliver a second mail, then assert the first has no duplicate).
-- Work the crons do in production is enqueued by the scenario:
-  `stack.send_to_queue("scheduled" | "link-manager" | "sfs-delete", …)`.
+- The scheduled-send cron: `stack.run_scheduled_sweep()` runs the real
+  `email_scheduled_handler` once. Work of the other crons is enqueued by the
+  scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`.
 - One file per area in `tests/` (`gmail.rs`, `outlook.rs`, …); each file is a
   test binary, so keep shared helpers in the harness, not in `tests/`.
 - Every scenario is `#[tokio::test(flavor = "multi_thread")]`: the stack's
@@ -70,6 +71,10 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   email-e2e-known-bugs` (a non-gating CI step) runs only those and reports
   which still fail and which now pass. Remove the attribute with the fix.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
+- Failures of what the services depend on: a provider fault on the emulator,
+  `stack.fail_next_service_request` for another Macro service,
+  `stack.refuse_queue_sends` for an enqueue. `stack.redis()` reaches the
+  services' Redis database.
 
 ## Calendar scenarios
 
