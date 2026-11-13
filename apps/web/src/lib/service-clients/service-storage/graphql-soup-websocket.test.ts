@@ -35,12 +35,20 @@ afterEach(() => {
   setVisibility('visible');
 });
 
+import { createRequest, gql } from '@urql/core';
+import { registerActivityRevalidator } from '../../queries/activity/push-registry';
+import {
+  type ChannelNotificationReader,
+  channelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../queries/channel/notification-refresh';
 import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
   NotificationUpdatesDocument,
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
+import { LIVE_UPDATES_HOLD_MS } from './graphql-live-updates';
 import {
   buildGraphqlSoupWebSocketUrl,
   createGraphqlSoupSubscriptionsLifecycle,
@@ -451,10 +459,184 @@ describe('GraphQL Soup subscription lifecycle', () => {
     lifecycle.replace(client as never);
 
     receive[0]?.({ error: new Error('first outage') });
-    lifecycle.connected();
+    lifecycle.connected(() => false);
     receive[0]?.({ error: new Error('second outage') });
 
     expect(telemetryError).toHaveBeenCalledTimes(2);
     lifecycle.dispose();
+  });
+});
+
+describe('GraphQL Soup connection recovery', () => {
+  // Past the activity push debounce and its jitter.
+  const settle = () => vi.advanceTimersByTimeAsync(1_001);
+
+  function connectedApp() {
+    vi.useFakeTimers();
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+      })),
+      query: vi.fn(),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    const followed = vi.fn();
+    const other = vi.fn();
+    const unregister = [
+      registerActivityRevalidator({
+        client: () => client as never,
+        refresh: followed,
+        followsLiveUpdates: true,
+      }),
+      registerActivityRevalidator({
+        client: () => client as never,
+        refresh: other,
+      }),
+    ];
+    const live = async () => {
+      lifecycle.connected(() => true);
+      await vi.advanceTimersByTimeAsync(0);
+      lifecycle.pong(true);
+    };
+    const dispose = () => {
+      for (const stop of unregister) stop();
+      lifecycle.dispose();
+    };
+    return { lifecycle, followed, other, live, dispose };
+  }
+
+  it('reads again at the first connection only what did not wait for it', async () => {
+    const app = connectedApp();
+    app.lifecycle.connected(() => true);
+    await settle();
+    expect(app.other).not.toHaveBeenCalled();
+
+    app.lifecycle.pong(true);
+    await settle();
+    expect(app.followed).not.toHaveBeenCalled();
+    expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
+    app.dispose();
+  });
+
+  it('reads everything again when the first connection outlasts the hold', async () => {
+    const app = connectedApp();
+    app.lifecycle.liveUpdates.hold(1, () => undefined);
+    await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS);
+    await app.live();
+    await settle();
+    expect(app.followed).toHaveBeenCalledExactlyOnceWith(null);
+    expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
+    app.dispose();
+  });
+
+  it('reads no channel job again whose held read went out as the first connection went live', async () => {
+    vi.useFakeTimers();
+    const toPromise = vi.fn().mockResolvedValue({});
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+      })),
+      query: vi.fn((..._args: unknown[]) => ({ toPromise })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    const channel = gql`
+      query Channel($id: String!) {
+        channel(id: $id) {
+          id
+        }
+      }
+    `;
+    const reader = (
+      channelId: string,
+      followsLiveUpdates?: boolean
+    ): ChannelNotificationReader => ({
+      enabled: true,
+      fetching: false,
+      filtered: true,
+      channelId,
+      notificationIds: [],
+      followsLiveUpdates,
+    });
+    const refresh = channelNotificationRefresh(client as never);
+    const unregister = [
+      // The open channel's read waits; a menu observer of the same channel
+      // reuses its result from the cache.
+      refresh.register(
+        { document: channel, variables: { id: 'a' } },
+        reader('a', true)
+      ),
+      refresh.register(
+        { document: channel, variables: { id: 'a' } },
+        reader('a')
+      ),
+      refresh.register(
+        { document: channel, variables: { id: 'b' } },
+        reader('b')
+      ),
+    ];
+    lifecycle.liveUpdates.hold(
+      createRequest(channel, { id: 'a' }).key,
+      () => undefined
+    );
+
+    lifecycle.connected(() => true);
+    await vi.advanceTimersByTimeAsync(0);
+    lifecycle.pong(true);
+    await settle();
+    expect(client.query.mock.calls.map(([, variables]) => variables)).toEqual([
+      { id: 'b' },
+    ]);
+    for (const stop of unregister) stop();
+    lifecycle.dispose();
+    disposeChannelNotificationRefresh(client as never);
+  });
+
+  it('leaves a connection that closed before going live to the gate', async () => {
+    const app = connectedApp();
+    app.lifecycle.connected(() => true);
+    await vi.advanceTimersByTimeAsync(0);
+    app.lifecycle.closed();
+    app.lifecycle.connected(() => true);
+    await settle();
+    expect(app.followed).not.toHaveBeenCalled();
+    expect(app.other).not.toHaveBeenCalled();
+
+    app.lifecycle.pong(true);
+    await settle();
+    expect(app.followed).not.toHaveBeenCalled();
+    expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
+    app.dispose();
+  });
+
+  it('reads everything again once when the hold gave up and the connection closed before going live', async () => {
+    const app = connectedApp();
+    app.lifecycle.liveUpdates.hold(1, () => undefined);
+    await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS);
+    app.lifecycle.connected(() => true);
+    await vi.advanceTimersByTimeAsync(0);
+    app.lifecycle.closed();
+    app.lifecycle.connected(() => true);
+    await settle();
+    app.lifecycle.pong(true);
+    await settle();
+    expect(app.followed).toHaveBeenCalledExactlyOnceWith(null);
+    expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
+    app.dispose();
+  });
+
+  it('reads everything again on every later connection', async () => {
+    const app = connectedApp();
+    await app.live();
+    await settle();
+    app.other.mockClear();
+
+    app.lifecycle.closed();
+    app.lifecycle.connected(() => true);
+    await settle();
+    expect(app.followed).toHaveBeenCalledExactlyOnceWith(null);
+    expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
+    app.dispose();
   });
 });

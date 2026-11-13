@@ -14,6 +14,7 @@ import {
   HomeUnreadPresenceDocument,
   type HomeUnreadPresenceQuery,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import {
   getGraphqlSoupClient,
   hasGraphqlCacheHost,
@@ -49,6 +50,7 @@ export function useHomeUnreadQuery(
     client: getGraphqlSoupClient(),
     enabled: enabled(),
     requestPolicy: 'cache-and-network',
+    context: FOLLOWS_LIVE_UPDATES,
     select: selectItems,
   }));
   const items = () => (!query.isPending ? (query.data ?? []) : []);
@@ -65,6 +67,7 @@ export function useHomeUnreadQuery(
       enabled: enabled(),
       fetching: query.isFetching,
       filtered: true,
+      followsLiveUpdates: true,
       scope: 'all-entities',
       notificationIds: items().flatMap((item) => [
         ...item.unreadNotifications.map((notification) => notification.id),
@@ -88,6 +91,7 @@ export function useHomeUnreadQuery(
   onCleanup(
     registerActivityRevalidator({
       client: getGraphqlSoupClient,
+      followsLiveUpdates: true,
       refresh: async () => {
         if (enabled()) await refresh();
       },

@@ -1,5 +1,6 @@
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import { AgentSessionMentionsDocument } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import {
@@ -30,6 +31,7 @@ function startBatch(client: Client, ids: string[]) {
       () => ({
         client,
         requestPolicy: 'cache-and-network',
+        context: FOLLOWS_LIVE_UPDATES,
         keepPreviousData: false,
         onResult: authorization.onResult,
       })
@@ -53,6 +55,7 @@ function startBatch(client: Client, ids: string[]) {
     onCleanup(
       registerActivityRevalidator({
         client: () => client,
+        followsLiveUpdates: true,
         refresh: (entities) => {
           if (entities === null || ids.some((id) => entities.has(id)))
             return refresh();

@@ -693,8 +693,9 @@ previous-viewer cache hits; older requests never clear newer denial decisions.
 A project view mounts one full project read (`createProjectSource`): breadcrumbs
 and labels use the identity read, and embedded lists take the view's source.
 Project reads refresh only through the activity registry (pushes, websocket
-connects, the app's own project writes; `registerProjectRevalidation`); never
-add a timer or focus refetch to them.
+reconnects, the first connection going live for a read that did not wait for
+it, the app's own project writes; `registerProjectRevalidation`); never add a
+timer or focus refetch to them.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
@@ -896,11 +897,32 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   behind ordered writes and never replay alerts when the cache resumes. Link
   cache queue/apply spans to receipt and mark listener failures without stopping
   the remaining callbacks.
-- The Soup GraphQL websocket pings when the app returns to the foreground or
-  comes back online, and terminates a socket that does not answer within five
-  seconds (close 4499, retried). A phone can wake to a socket that reads open but
+- The Soup GraphQL websocket pings each new connection, and again when the app
+  returns to the foreground or comes back online, and terminates a socket that
+  does not answer within five seconds (close 4499, retried). A phone can wake to a socket that reads open but
   is dead; the reconnect is what tells followers such as agent sessions
   (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
+- The first Soup websocket connection is not a reconnect, so it refetches
+  nothing that waited for it. A read its subscriptions keep current (its view
+  registers an activity revalidator or a channel notification reader) passes
+  `context: FOLLOWS_LIVE_UPDATES` and registers with `followsLiveUpdates: true`;
+  always set both or neither. `liveUpdatesGateExchanges` holds such reads until
+  a pong after the subscribe frames (at most `LIVE_UPDATES_HOLD_MS`), so nothing
+  published in between is lost, but only behind a cached result: a read the
+  normalized cache reports as a miss (`onCacheMiss`), and every one on the
+  uncached client or on a cache whose scope this page created
+  (`cacheScopeStartsEmpty`; its misses would come only once it opens), goes at
+  once and is read again once live, after the client has its answer
+  (`graphql_soup.live_updates.reread`). A client takes both exchanges: `holds`
+  after the normalized cache and `rereads` first, since the cache publishes an
+  answer only once written and urql drops a read of a query whose answer it
+  has not received. A `cache-first` read sets neither and is read again when
+  the subscriptions go live, unless a held read of the same operation key went
+  out then; every read is read again if the hold gave up.
+  The gate sends every held operation, because the normalized cache counts
+  each one it forwards until its result arrives. A held operation
+  records a `graphql_soup.live_updates.wait` span unless its one-shot trace
+  context was already used.
 - The page that owns the cache engine keeps the engine's compiled WebAssembly
   and hands it to each new engine worker (`worker/compiled-engine.ts`), keyed by
   the asset it was compiled from: the browser compiles the engine's functions

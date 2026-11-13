@@ -19,6 +19,9 @@ const SCOPE_STORAGE_KEY = 'graphql-cache:scope';
 const SCOPE_STORAGE_LOCK = 'graphql-cache:scope-storage';
 const quarantineScopeFor = (scope: string): string => `quarantine:${scope}`;
 
+/** The scope this page created, which names a database with nothing in it. */
+let createdScope: string | undefined;
+
 type ScopeStorageAction = () => string | undefined;
 
 /** Serializes scope compare/set whenever Web Locks are supported. */
@@ -80,6 +83,7 @@ export async function rotateCacheScope(): Promise<string | undefined> {
     try {
       const scope = crypto.randomUUID();
       localStorage.setItem(SCOPE_STORAGE_KEY, scope);
+      createdScope = scope;
       return scope;
     } catch {
       try {
@@ -101,6 +105,7 @@ export function getOrCreateCacheScope(): string {
   }
   if (!scope) {
     scope = crypto.randomUUID();
+    createdScope = scope;
     try {
       localStorage.setItem(SCOPE_STORAGE_KEY, scope);
     } catch {
@@ -108,4 +113,14 @@ export function getOrCreateCacheScope(): string {
     }
   }
   return scope;
+}
+
+/**
+ * Whether this page created `scope`, so its cache starts with nothing in it:
+ * the first visit in this browser profile, one after its site data was
+ * cleared, or a rotation on this page. Known at once, unlike a miss, which
+ * waits for the cache to open.
+ */
+export function cacheScopeStartsEmpty(scope: string): boolean {
+  return scope === createdScope;
 }

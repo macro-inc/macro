@@ -35,19 +35,23 @@ export async function refreshProjectQueries(
 
 /**
  * Reads a mounted project again whenever the activity registry revalidates:
- * an activity push, the Soup websocket connecting or reconnecting, or one of
- * the app's own project writes (`refreshProjectQueries`). Nothing reads it on
- * a timer or on focus, so a share, unshare or membership change reaches an
+ * an activity push, the Soup websocket reconnecting, its first connection
+ * going live when the read did not wait for it (`followsLiveUpdates`), or one
+ * of the app's own project writes (`refreshProjectQueries`). Nothing reads it
+ * on a timer or on focus, so a share, unshare or membership change reaches an
  * open project only with one of those or a reopen.
  */
 export function registerProjectRevalidation(
   client: () => Client,
   enabled: () => boolean,
-  refetch: () => Promise<unknown>
+  refetch: () => Promise<unknown>,
+  { followsLiveUpdates }: { followsLiveUpdates?: boolean } = {}
 ) {
   let disposed = false;
   const refresh = createTrailingRefetch(() => !disposed && enabled(), refetch);
-  onCleanup(registerActivityRevalidator({ client, refresh }));
+  onCleanup(
+    registerActivityRevalidator({ client, refresh, followsLiveUpdates })
+  );
   onCleanup(() => {
     disposed = true;
   });

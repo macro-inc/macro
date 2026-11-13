@@ -5,6 +5,7 @@ import {
   type MyActivityQuery,
   type MyActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
@@ -50,6 +51,7 @@ export function createMyActivityQuery(
       lastPage.user.activity.nextCursor ?? undefined,
     enabled: options.enabled(),
     requestPolicy: 'cache-and-network',
+    context: FOLLOWS_LIVE_UPDATES,
     keepPreviousData: true,
     select: ({ pages }) =>
       pages
@@ -59,6 +61,7 @@ export function createMyActivityQuery(
   onCleanup(
     registerActivityRevalidator({
       client,
+      followsLiveUpdates: true,
       refresh: () => {
         if (options.enabled())
           return result.refetch({ requestPolicy: 'network-only' });

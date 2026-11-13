@@ -294,6 +294,7 @@ const mocks = vi.hoisted(() => {
   let graphqlEnabled = true;
   let tauri = false;
   let signedIn = true;
+  let scopeStartsEmpty = false;
   let releaseApi: (() => void) | undefined;
   let markApiStarted: (() => void) | undefined;
   const apiStarted = () =>
@@ -360,6 +361,18 @@ const mocks = vi.hoisted(() => {
     set signedIn(value: boolean) {
       signedIn = value;
     },
+    get scopeStartsEmpty() {
+      return scopeStartsEmpty;
+    },
+    set scopeStartsEmpty(value: boolean) {
+      scopeStartsEmpty = value;
+    },
+    liveUpdatesGateExchanges: vi.fn(
+      (_gate: unknown, _options?: { cached?: boolean }) => ({
+        rereads: { kind: 'live-updates-rereads' },
+        holds: { kind: 'live-updates' },
+      })
+    ),
     host,
     apiCall,
     apiStarted,
@@ -469,6 +482,7 @@ vi.mock('@graphql-cache/lifecycle', () => ({
   registerCacheHost: mocks.registerCacheHost,
 }));
 vi.mock('@graphql-cache/scope', () => ({
+  cacheScopeStartsEmpty: () => mocks.scopeStartsEmpty,
   getOrCreateCacheScope: () => 'anonymous-scope',
 }));
 vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
@@ -501,6 +515,9 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./graphql-live-updates', () => ({
+  liveUpdatesGateExchanges: mocks.liveUpdatesGateExchanges,
+}));
 vi.mock('./graphql-notification-receipt', () => ({
   notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
 }));
@@ -510,12 +527,9 @@ vi.mock('./graphql-soup-websocket', () => ({
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
   createGraphqlSoupWebSocketUrlResolver: () => () => 'ws://dss.test',
-  createGraphqlSoupWebSocketLiveness: () => ({
-    connected: vi.fn(),
-    pong: vi.fn(),
-    closed: vi.fn(),
-  }),
+  createGraphqlSoupWebSocketEvents: () => ({}),
   createGraphqlSoupSubscriptionsLifecycle: () => ({
+    liveUpdates: {},
     replace: mocks.replaceSubscriptions,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
@@ -539,6 +553,15 @@ vi.mock('@urql/core', () => ({
       expect(receiptIndex).toBeGreaterThanOrEqual(0);
       expect(receiptIndex).toBeLessThan(subscriptionIndex);
       if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+      // Held reads still show cached results, and nothing reaches the
+      // network before the gate.
+      const gateIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'live-updates'
+      );
+      expect(gateIndex).toBeGreaterThan(cacheIndex);
+      expect(gateIndex).toBeLessThan(receiptIndex);
+      // Rereads see answers as the client gets them.
+      expect(options.exchanges[0]).toEqual({ kind: 'live-updates-rereads' });
     }
     const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
@@ -813,6 +836,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.graphqlEnabled = true;
     mocks.tauri = false;
     mocks.signedIn = true;
+    mocks.scopeStartsEmpty = false;
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
     mocks.telemetryError.mockReset();
@@ -823,6 +847,21 @@ describe('GraphQL Soup browser cache session gate', () => {
     soup.setGraphqlSoupSessionActive(false);
     vi.unstubAllGlobals();
   });
+
+  it.each([
+    { startsEmpty: false, cached: true },
+    { startsEmpty: true, cached: false },
+  ])(
+    'holds reads for the cache unless this page created its scope (starts empty: $startsEmpty)',
+    async ({ startsEmpty, cached }) => {
+      mocks.scopeStartsEmpty = startsEmpty;
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      expect(
+        mocks.liveUpdatesGateExchanges.mock.calls.map(([, options]) => options)
+      ).toEqual([{ cached }]);
+    }
+  );
 
   it.each([false, true])(
     'binds contact cleanup recovery to its original backend and scope (native=%s)',

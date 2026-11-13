@@ -4,6 +4,7 @@ import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalize
 import type { CacheHost } from '@graphql-cache/host/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
+import type { ClientOptions } from 'graphql-ws';
 import type { Result } from 'neverthrow';
 import {
   channelNotificationRefresh,
@@ -20,6 +21,10 @@ import {
 } from './graphql/generated/graphql';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
+import {
+  createLiveUpdatesGate,
+  type LiveUpdatesGate,
+} from './graphql-live-updates';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
@@ -140,9 +145,14 @@ function isLivenessSocket(value: unknown): value is LivenessSocket {
  * reconnects it: subscriptions hear nothing, and nothing that refetches on a
  * reconnect runs. Terminating it lets graphql-ws reconnect, and the reconnect
  * tells every follower to refetch what it missed.
+ *
+ * `check('connected')` pings a new connection too: its pong tells
+ * {@link createLiveUpdatesGate} that the subscriptions are live.
  */
 export function createGraphqlSoupWebSocketLiveness(terminate: () => void): {
   connected(socket: unknown): void;
+  /** Pings the socket unless a ping is waiting; false without an open socket. */
+  check(reason: 'connected' | 'opportunity'): boolean;
   pong(received: boolean): void;
   closed(): void;
 } {
@@ -159,9 +169,11 @@ export function createGraphqlSoupWebSocketLiveness(terminate: () => void): {
     waiting.span.end();
     waiting = undefined;
   };
-  const check = () => {
-    if (!socket || socket.readyState !== WebSocket.OPEN || waiting) return;
+  const check = (reason: 'connected' | 'opportunity') => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    if (waiting) return true;
     const span = Telemetry.span('graphql_soup.websocket.liveness_check');
+    span.setAttr('websocket.reason', reason);
     socket.send(JSON.stringify({ type: 'ping' }));
     waiting = {
       span,
@@ -170,13 +182,15 @@ export function createGraphqlSoupWebSocketLiveness(terminate: () => void): {
         terminate();
       }, GRAPHQL_SOUP_WEBSOCKET_PONG_TIMEOUT_MS),
     };
+    return true;
   };
 
   return {
     connected(next) {
       socket = isLivenessSocket(next) ? next : undefined;
-      stopListening ??= onReconnectOpportunity(check);
+      stopListening ??= onReconnectOpportunity(() => check('opportunity'));
     },
+    check,
     pong(received) {
       if (received) settle('answered');
     },
@@ -187,6 +201,46 @@ export function createGraphqlSoupWebSocketLiveness(terminate: () => void): {
       stopListening = undefined;
     },
   };
+}
+
+type GraphqlSoupSubscriptionsLifecycle = ReturnType<
+  typeof createGraphqlSoupSubscriptionsLifecycle
+>;
+
+/**
+ * The Soup websocket's graphql-ws event handlers: its liveness checks, the
+ * subscriptions lifecycle (which pings each new connection through them), its
+ * connection state, and every reconnect after the first connection.
+ */
+export function createGraphqlSoupWebSocketEvents(options: {
+  terminate: () => void;
+  lifecycle: Pick<
+    GraphqlSoupSubscriptionsLifecycle,
+    'connected' | 'pong' | 'closed'
+  >;
+  onState?: (state: 'connecting' | 'connected' | 'disconnected') => void;
+  onReconnected?: () => void;
+}) {
+  const { lifecycle, onState, onReconnected } = options;
+  const liveness = createGraphqlSoupWebSocketLiveness(options.terminate);
+  return {
+    connecting: () => onState?.('connecting'),
+    closed: () => {
+      liveness.closed();
+      lifecycle.closed();
+      onState?.('disconnected');
+    },
+    pong: (received: boolean) => {
+      liveness.pong(received);
+      lifecycle.pong(received);
+    },
+    connected: (socket: unknown) => {
+      liveness.connected(socket);
+      onState?.('connected');
+      if (lifecycle.connected(() => liveness.check('connected')))
+        onReconnected?.();
+    },
+  } satisfies ClientOptions['on'];
 }
 
 /** Converts a DSS HTTP origin into its Soup GraphQL websocket endpoint. */
@@ -287,7 +341,16 @@ const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
   },
 ] as const;
 
-/** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
+/**
+ * Owns the realtime subscriptions served by the Soup GraphQL websocket.
+ *
+ * A reconnect (every connection after the first) tells every follower to read
+ * again what it may have missed while the socket was down. The first one has
+ * nothing to make up for: reads marked `FOLLOWS_LIVE_UPDATES` waited for its
+ * subscriptions to go live, or went out early and are read again then
+ * ({@link createLiveUpdatesGate}), so only readers that did neither read again,
+ * unless the wait gave up first.
+ */
 export function createGraphqlSoupSubscriptionsLifecycle(
   options: { suspendOnPagehide?: boolean } = {}
 ): {
@@ -295,7 +358,15 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     client?: Pick<Client, 'subscription' | 'query'>,
     host?: CacheHost
   ): void;
-  connected(): void;
+  /** Holds reads that follow live updates until the first connection is live. */
+  readonly liveUpdates: LiveUpdatesGate;
+  /**
+   * The server acknowledged a connection; `ping` checks it is live (see
+   * {@link LiveUpdatesGate.connected}). Returns whether it was a reconnect.
+   */
+  connected(ping: () => boolean): boolean;
+  pong(received: boolean): void;
+  closed(): void;
   dispose(): void;
 } {
   let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
@@ -305,8 +376,21 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
   let generation = 0;
+  let connections = 0;
   let signaledFailure = false;
   let stopWatchingForReattach: (() => void) | undefined;
+
+  const recover = () => {
+    activity?.reconnect();
+    channels?.reconnect();
+  };
+  const liveUpdates = createLiveUpdatesGate({
+    onLive: (stale, sent) => {
+      if (stale) return recover();
+      activity?.live();
+      channels?.live(sent);
+    },
+  });
 
   // graphql-ws retries transient failures itself and gives up only on ones a
   // timer cannot fix (a rejected session, a protocol error). Reattach the set
@@ -419,12 +503,21 @@ export function createGraphqlSoupSubscriptionsLifecycle(
         return () => subscription.unsubscribe();
       });
     },
-    connected: () => {
+    liveUpdates,
+    connected(ping: () => boolean) {
       signaledFailure = false;
-      activity?.reconnect();
-      channels?.reconnect();
+      connections += 1;
+      liveUpdates.connected(ping);
+      const reconnected = connections > 1;
+      // Until the subscriptions first go live, the gate reads again what
+      // they missed when they do.
+      if (reconnected && liveUpdates.wentLive()) recover();
+      return reconnected;
     },
+    pong: (received: boolean) => liveUpdates.pong(received),
+    closed: () => liveUpdates.closed(),
     dispose() {
+      liveUpdates.dispose();
       if (options.suspendOnPagehide) {
         removeEventListener('pagehide', onPagehide);
         removeEventListener('pageshow', onPageshow);

@@ -59,6 +59,7 @@ export function createChannelListUpdatesHandler(
       coordinator.onPatch(patch, normalized);
     },
     reconnect: () => coordinator.reconnect(),
+    live: (sent: ReadonlySet<number>) => coordinator.live(sent),
     dispose() {
       disposed = true;
       unsubscribeGeneration?.();
