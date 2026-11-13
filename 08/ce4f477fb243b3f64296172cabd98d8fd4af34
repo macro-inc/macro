@@ -1,0 +1,19 @@
+crates/macro_db_client/migrations/20261113041230_dashboard_entities.up.sql
+  s_c6fe7b7c1d36f7::t_cda29609c78b14 3-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "08ce4f477fb243b3f64296172cabd98d8fd4af34",
+  "prompts": {},
+  "sessions": {
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
