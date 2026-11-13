@@ -21,6 +21,8 @@ fn the_catalog_shown_is_the_sessions_surfaces() {
     assert!(brief.starts_with("You suggest automations"));
     assert!(brief.lines().next().unwrap().contains("calls"));
     assert!(brief.contains("Code steps can't be used"));
+    assert!(brief.contains("<writing-routines>\nThe guide.\n</writing-routines>"));
+    assert!(brief.contains(FILTER_ITEMS));
 }
 
 #[test]

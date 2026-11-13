@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 use super::decode::line;
 use super::ports::InboxMessage;
+use crate::domain::drafts::FILTER_ITEMS;
 
 #[cfg(test)]
 mod test;
@@ -85,6 +86,7 @@ Now is {now}; the user's time zone is {timezone}. Cron schedules take `timezone:
 <writing-routines>
 {guide}
 </writing-routines>
+{FILTER_ITEMS}
 
 {steps}
 
