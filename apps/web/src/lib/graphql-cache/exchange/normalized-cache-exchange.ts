@@ -169,7 +169,7 @@ declare module '@urql/core' {
   }
 }
 
-/** Rereads of mounted queries overtake ordinary reads unless nothing shows them. */
+/** A mounted query is reread ahead of ordinary reads, unless no view shows it. */
 function rereadPriority(operation: Operation): CacheReadPriority | undefined {
   return operation.context.backgroundReader ? undefined : 'user-visible';
 }
@@ -1651,16 +1651,23 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
-          // A contextless same-key revalidation shares the mounted reader's scope.
+          // A contextless same-key revalidation shares the mounted reader's
+          // scope and its reread rank.
+          const mounted = activeOps.get(op.key)?.context;
           const types =
             op.context.externalCacheWriteTypes ??
-            activeOps.get(op.key)?.context.externalCacheWriteTypes;
+            mounted?.externalCacheWriteTypes;
+          const backgroundReader =
+            op.context.backgroundReader ?? mounted?.backgroundReader;
           const operation =
-            types === undefined
+            types === undefined && backgroundReader === undefined
               ? op
               : makeOperation('query', op, {
                   ...op.context,
-                  externalCacheWriteTypes: types,
+                  ...(types === undefined
+                    ? {}
+                    : { externalCacheWriteTypes: types }),
+                  ...(backgroundReader ? { backgroundReader } : {}),
                 });
           if (!isHydrateOnly(operation))
             activeOps.set(operation.key, operation);
