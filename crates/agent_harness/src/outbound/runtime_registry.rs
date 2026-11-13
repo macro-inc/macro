@@ -360,7 +360,7 @@ where
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
+    ) -> anyhow::Result<crate::domain::model::ListedSessions> {
         self.bindings
             .sessions_on_harness(harness, acp_sessions)
             .await
