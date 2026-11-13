@@ -188,6 +188,19 @@ where
         self.watch_for_close(harness, listed, connected_write);
     }
 
+    /// Drop `harness`'s connection, if this process holds it: its socket
+    /// closes, so the runtime dials again and starts over with whatever its
+    /// harness is configured for now. Its close is reported to presence as
+    /// any other. Returns whether a connection was dropped.
+    pub fn disconnect(&self, harness: HarnessId) -> bool {
+        let Some((_, listed)) = self.connections.remove(&harness) else {
+            return false;
+        };
+        listed.connection.evict();
+        tracing::info!(%harness, connection = %listed.id, "dropped this harness's runtime connection on request");
+        true
+    }
+
     /// Tell presence which connections this process still holds.
     pub async fn renew_presence(&self) {
         let Some(presence) = &self.presence else {
