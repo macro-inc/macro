@@ -1,0 +1,19 @@
+tooling/xtask/crates/xtask_local/src/local/localstack.rs
+  s_6074238f41262d::t_be14c63735e2bb 299-300,310-316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "75bf5ed3ccba4e75fe9477eabef98482753ea02e",
+  "prompts": {},
+  "sessions": {
+    "s_6074238f41262d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "065ecd00-1bb3-4dcb-b08b-07f3a94973dd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
