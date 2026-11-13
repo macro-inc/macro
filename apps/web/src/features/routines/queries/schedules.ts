@@ -172,7 +172,8 @@ export function useChildrenQuery(
 
 /**
  * Read a routine's children now, as a delete would remove them: fresh, and
- * without a retry that would hold up the confirmation.
+ * failing at once, offline too, rather than retrying while the confirmation
+ * is open.
  */
 export function fetchChildren(scheduleId: string) {
   return ResultAsync.fromPromise(
@@ -180,6 +181,7 @@ export function fetchChildren(scheduleId: string) {
       ...childrenQueryOptions(scheduleId, true),
       staleTime: 0,
       retry: false,
+      networkMode: 'always',
     }),
     (error) => error
   );
