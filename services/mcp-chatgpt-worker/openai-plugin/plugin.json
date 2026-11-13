@@ -1,0 +1,105 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "macro",
+  "version": "1.0.0",
+  "description": "Work with your Macro workspace: search, documents, channels, email, tasks, projects, calendars and databases.",
+  "author": {
+    "name": "Macro",
+    "url": "https://macro.com"
+  },
+  "homepage": "https://macro.com",
+  "repository": "https://github.com/macro-inc/macro",
+  "keywords": [
+    "workspace",
+    "email",
+    "documents",
+    "tasks",
+    "productivity"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Macro",
+        "shortDescription": "Search and edit your workspace",
+        "longDescription": "Macro is a unified workspace for email, chat, tasks, documents, calendars, CRM and agents. This app lets you work with your Macro workspace from ChatGPT: search across all your content, read and edit documents, post in channels, triage and send email, manage tasks, projects and calendar events, and query databases. Every action runs as you, so Macro's sharing and permission rules apply.",
+        "developerName": "Macro",
+        "category": "Productivity",
+        "capabilities": [
+          "Search workspace content",
+          "Read and edit documents",
+          "Post in channels",
+          "Read, draft and send email",
+          "Manage tasks and projects",
+          "Read and update calendars",
+          "Query databases"
+        ],
+        "websiteURL": "https://macro.com",
+        "supportURL": "https://macro.com/docs/support",
+        "privacyPolicyURL": "https://macro.com/privacy",
+        "termsOfServiceURL": "https://macro.com/terms",
+        "defaultPrompt": [
+          "Find everything in Macro about the Q3 launch plan.",
+          "Summarize the emails in my Macro inbox from today.",
+          "What's on my calendar in Macro this Friday?"
+        ],
+        "composerIcon": "./assets/logo.png",
+        "logo": "./assets/logo.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Search the user's Macro content by keyword across documents, messages and email.",
+              "prompt": "Find everything in Macro about the Q3 launch plan.",
+              "tools_triggered": "search_read",
+              "expected_behavior": "Lists matching documents, messages and emails with titles and links into Macro."
+            },
+            {
+              "description": "Create a new markdown document in the user's workspace.",
+              "prompt": "Create a Macro document called \"Weekly sync notes\" with an agenda for tomorrow's team meeting.",
+              "tools_triggered": "documents_write",
+              "expected_behavior": "Creates the document with an agenda and returns a link to open it in Macro."
+            },
+            {
+              "description": "Read and summarize the user's inbox.",
+              "prompt": "Summarize the emails in my Macro inbox from today.",
+              "tools_triggered": "email_read",
+              "expected_behavior": "Summarizes today's inbox threads with senders and subjects."
+            },
+            {
+              "description": "Read the user's calendar for a day.",
+              "prompt": "What's on my calendar in Macro this Friday?",
+              "tools_triggered": "calendar_read",
+              "expected_behavior": "Lists Friday's events with times and attendees."
+            },
+            {
+              "description": "Post a message to a Macro channel the user belongs to.",
+              "prompt": "Post \"Deploy is done\" in the engineering channel in Macro.",
+              "tools_triggered": "channels_write",
+              "expected_behavior": "Posts the message in the engineering channel and confirms with a link to it."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Do not trigger for general knowledge questions.",
+              "prompt": "Explain how photosynthesis works."
+            },
+            {
+              "description": "Do not trigger for creative writing that does not involve the user's workspace.",
+              "prompt": "Write a short poem about Monday mornings."
+            },
+            {
+              "description": "Do not trigger for travel booking, which the app does not support.",
+              "prompt": "Book me a flight to Denver next Tuesday."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "Macro does not sell products or process payments through this plugin."
+      },
+      "publication": {
+        "release_notes": "Resubmission against the new MCP server: every public Macro SDK operation as entity tools (read, create and change, send, delete), signed in with Macro OAuth."
+      }
+    }
+  }
+}
