@@ -962,8 +962,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   // Reading `.data` on a cold TanStack query suspends the nearest <Suspense>.
   // Read loading first so REST fallback leaves the view shell rendered.
+  // A disabled query's data read suspends too, so Search skips it while it
+  // waits for input.
   const itemsQueryData = () =>
-    itemsQuery.isLoading ? undefined : itemsQuery.data;
+    itemsQuery.isLoading || searchAwaitingInput() ? undefined : itemsQuery.data;
   const itemsQueryHasData = () =>
     itemsQueryData() !== undefined && !itemsQuery.isPlaceholderData;
   const itemsQueryError = () =>
@@ -1257,6 +1259,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const builtRows = createMemo((): SoupRow[] => {
+    if (searchAwaitingInput()) return [];
     const field = groupByField();
     const groups = itemsSource().data()?.groups;
 
