@@ -742,9 +742,14 @@ test('a caret returning after an authoritative selection change is admitted', ()
       ...caret,
       dirty: false,
     });
+    // Source onSelectionChange admits every event; an unchanged caret commits nothing.
     const admitted = fixture.counters.admissions;
+    const applied = vi.spyOn(fixture.view, 'apply');
+    const writes = vi.spyOn(Selection.prototype, 'setBaseAndExtent');
     document.dispatchEvent(new Event('selectionchange'));
-    expect(fixture.counters.admissions).toBe(admitted);
+    expect(fixture.counters.admissions).toBe(admitted + 1);
+    expect(applied).not.toHaveBeenCalled();
+    expect(writes).not.toHaveBeenCalled();
   } finally {
     fixture.close();
   }

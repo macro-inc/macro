@@ -839,21 +839,13 @@ export function registerEvents(view: EditorView): {
           }
         : {}),
     };
-    if (
-      saved ||
-      context.domRangeSameNode ||
-      (selection.kind === 'range' && selection.dirty) ||
-      (!sameSelection(selection, view.selection().selection) &&
-        !isLastSubmittedSelection(selection))
-    ) {
-      view.submitDomSelection(
-        () =>
-          // Source onSelectionChange always applies its selection format rule.
-          view.port.selectionFromView(selection, context),
-        selection
-      );
-      rememberSelection();
-    }
+    // Source onSelectionChange applies its format rule on every event,
+    // including one at the unchanged caret.
+    view.submitDomSelection(
+      () => view.port.selectionFromView(selection, context),
+      selection
+    );
+    rememberSelection();
   };
   listeners.push(registerSelectionChange(root, selectionChange));
   for (const name of ['copy', 'cut'] as const)
