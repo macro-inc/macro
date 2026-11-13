@@ -14,7 +14,13 @@ Apply MacroDB migrations `20260918164303_calendar_scheduling.sql` and
 updated calendar service with its existing `CALENDAR_SYNC_ENABLED` setting enabled.
 The migration uses PostgreSQL multiranges (PostgreSQL 14+) and `btree_gist` for
 atomic host conflict exclusion. Each host needs a connected, writable primary
-calendar with calendar sync ready. Busy time comes from every connected calendar
+calendar whose grant works, and every calendar that counts toward their busy time
+must be current (`macro_services/sync_health.rs`, over
+`CalendarSyncHealthReader`): a calendar failing transiently still offers time
+around its stored events for 45 minutes after its last successful sync, while a
+permanent or reauthorization failure, a calendar or inbox still on its first
+sync, or a failure past that window refuses availability. A calendar with Busy
+off never blocks booking, whatever its sync state. Busy time comes from every connected calendar
 the host has not turned off (the Busy switch in Settings → Calendar, stored in
 `calendar_availability_preferences` and read in process, never through the
 calendar service's HTTP listing), plus meetings the host is in on any calendar

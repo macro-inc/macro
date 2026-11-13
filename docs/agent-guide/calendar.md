@@ -285,7 +285,15 @@ the zone clears the date and times and discards outstanding availability results
 Calendar provider failures show an error; they never report a
 confirmed booking. Current integrations check hosts' connected calendars that
 count as Busy in Settings → Calendar (every calendar unless turned off) and
-write invitations/Google Meet through the existing calendar service.
+write invitations/Google Meet through the existing calendar service. A calendar
+whose sync is failing blocks booking only while it counts as Busy: a transient
+failure still offers slots around its stored events for 45 minutes after its last
+successful sync, and past that, or on a permanent or reconnect failure, the page
+shows `Availability could not be loaded` while the host sees the calendar's sync
+error in Settings → Calendar and the calendar view. The logs `refusing booking
+availability` and `offering booking availability from a calendar whose sync is
+failing`, under the `scheduling.busy_time` span, carry `calendar_id`,
+`email_link_id` and `reason`.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated

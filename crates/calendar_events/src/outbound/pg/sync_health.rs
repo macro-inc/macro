@@ -47,11 +47,21 @@ impl CalendarSyncHealthReader for PgCalendarRepository {
     )]
     async fn calendar_sync_health(&self, requester_id: &str) -> Result<CalendarSyncHealth, Report> {
         // The same accounts and calendars `list_visible_calendars` reads,
-        // keeping accounts that list no calendar yet.
+        // keeping accounts that list no calendar yet. Each side of the union
+        // reads its own index: an `OR` across the two would scan every inbox.
         let rows = sqlx::query!(
             r#"
+            WITH links AS MATERIALIZED (
+                SELECT link.id
+                FROM email_links link
+                WHERE link.macro_id = $1
+                UNION
+                SELECT delegation.link_id
+                FROM macro_user_links delegation
+                WHERE delegation.primary_macro_id = $1
+            )
             SELECT
-                link.id AS "email_link_id!",
+                links.id AS "email_link_id!",
                 account.provider AS "provider!",
                 account.sync_status AS "account_status!",
                 account.last_synced_at IS NOT NULL AS "account_synced!",
@@ -60,21 +70,12 @@ impl CalendarSyncHealthReader for PgCalendarRepository {
                 calendar.synced_at AS "synced_at?",
                 calendar.last_sync_error IS NOT NULL AS "calendar_failed?",
                 calendar.last_sync_error_kind AS "calendar_failure_kind?"
-            FROM email_links link
-            JOIN calendar_accounts account ON account.email_link_id = link.id
+            FROM links
+            JOIN calendar_accounts account ON account.email_link_id = links.id
             LEFT JOIN calendars calendar
                 ON calendar.account_id = account.id
                AND NOT calendar.is_deleted
             WHERE account.sync_status <> 'disabled'
-              AND (
-                    link.macro_id = $1
-                    OR EXISTS (
-                        SELECT 1
-                        FROM macro_user_links delegation
-                        WHERE delegation.link_id = link.id
-                          AND delegation.primary_macro_id = $1
-                    )
-              )
             "#,
             requester_id,
         )
