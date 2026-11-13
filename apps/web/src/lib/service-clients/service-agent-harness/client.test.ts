@@ -1,10 +1,10 @@
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { ThrownResultError } from '@core/util/result';
+import { providerCredentialRejectedMessage } from '@queries/agents/probe-errors';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   agentHarnessServiceClient,
   PROVIDER_CREDENTIAL_REJECTED,
-  providerCredentialRejectedMessage,
 } from './client';
 
 vi.mock('@core/constant/servers', () => ({

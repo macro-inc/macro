@@ -2,7 +2,7 @@ import {
   type AgentModelTarget,
   useAgentModelsQuery,
 } from '@queries/agents/models';
-import { providerCredentialRejectedMessage } from '@service-agent-harness/client';
+import { providerCredentialRejectedMessage } from '@queries/agents/probe-errors';
 import { ModelHarnessDto } from '@service-agent-harness/generated/schemas/modelHarnessDto';
 import type { Accessor } from 'solid-js';
 import type { RosterAgent } from '../core/roster';

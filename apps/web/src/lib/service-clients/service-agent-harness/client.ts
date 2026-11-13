@@ -1,6 +1,5 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import { ThrownResultError } from '@core/util/result';
 import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import {
   type AI_USAGE_LIMIT_ERROR,
@@ -92,16 +91,6 @@ const providerProbeError: ErrorResponseHandler<
   }
   return statusError(response.status);
 };
-
-/** The provider's reconnect instruction, when a probe failed on the caller's credential. */
-export function providerCredentialRejectedMessage(
-  error: unknown
-): string | undefined {
-  if (!(error instanceof ThrownResultError)) return;
-  return error.errors.find(
-    (entry) => entry.code === PROVIDER_CREDENTIAL_REJECTED
-  )?.message;
-}
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {

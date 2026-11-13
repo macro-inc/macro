@@ -7,7 +7,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
-import { providerCredentialRejectedMessage } from '@service-agent-harness/client';
+import { providerCredentialRejectedMessage } from '@queries/agents/probe-errors';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import {
