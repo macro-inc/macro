@@ -22,13 +22,12 @@ mod legacy_upgrade {
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
-    use std::time::Duration;
 
     use model::document::FileType;
 
     use crate::config::LokPath;
-    use crate::process::convert::run_lok_conversion;
-    use crate::utils::{conversion_timeout, get_lok_filter_from_file_types};
+    use crate::process::convert::convert_file;
+    use crate::utils::get_lok_filter_from_file_types;
 
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -63,26 +62,46 @@ mod legacy_upgrade {
         convert_bytes(&std::fs::read(fixture(name)).unwrap(), from, to)
     }
 
-    fn convert_bytes(input_bytes: &[u8], from: FileType, to: FileType) -> Vec<u8> {
+    /// Converts in a fresh jobs root and checks the job left nothing in it.
+    fn try_convert_bytes(
+        input_bytes: &[u8],
+        from: FileType,
+        to: FileType,
+    ) -> anyhow::Result<Vec<u8>> {
         let _lok = LOK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let lok_path = LokPath::new().expect("set LOK_PATH to LibreOffice's program directory");
-        let dir = tempfile::tempdir().unwrap();
-        let input = dir.path().join(format!("IN.{}", from.as_str()));
-        let output = dir.path().join(format!("OUT.{}", to.as_str()));
-        std::fs::write(&input, input_bytes).unwrap();
+        let jobs_root = tempfile::tempdir().unwrap();
 
         let filter = get_lok_filter_from_file_types(&from, &to).unwrap();
-        run_lok_conversion(
+        let result = convert_file(
+            jobs_root.path(),
             "legacy-upgrade-test",
             lok_path.as_ref(),
-            input.to_str().unwrap(),
-            output.to_str().unwrap(),
-            to.as_str(),
+            input_bytes,
+            &from,
+            &to,
             &filter,
-            conversion_timeout(&from, &to),
-        )
-        .unwrap();
-        std::fs::read(output).unwrap()
+        );
+
+        let left: Vec<_> = std::fs::read_dir(jobs_root.path()).unwrap().collect();
+        assert!(left.is_empty(), "job left {left:?} behind");
+        result
+    }
+
+    fn convert_bytes(input_bytes: &[u8], from: FileType, to: FileType) -> Vec<u8> {
+        try_convert_bytes(input_bytes, from, to).unwrap()
+    }
+
+    /// LibreOffice's scratch folders in the process temp directory.
+    fn libreoffice_scratch_files() -> Vec<String> {
+        let mut names: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("lu") && name.ends_with(".tmp"))
+            .collect();
+        names.sort();
+        names
     }
 
     fn zip_part(bytes: &[u8], name: &str) -> String {
@@ -240,21 +259,7 @@ mod legacy_upgrade {
     #[test]
     #[ignore = "needs LibreOfficeKit; see module docs"]
     fn unreadable_input_fails_instead_of_hanging() {
-        let _lok = LOK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let lok_path = LokPath::new().expect("set LOK_PATH to LibreOffice's program directory");
-        let dir = tempfile::tempdir().unwrap();
-        let input = dir.path().join("IN.ppt");
-        std::fs::write(&input, b"not a powerpoint file").unwrap();
-
-        let result = run_lok_conversion(
-            "legacy-upgrade-garbage",
-            lok_path.as_ref(),
-            input.to_str().unwrap(),
-            dir.path().join("OUT.pptx").to_str().unwrap(),
-            "pptx",
-            "",
-            Duration::from_secs(60),
-        );
+        let result = try_convert_bytes(b"not a powerpoint file", FileType::Ppt, FileType::Pptx);
 
         assert!(result.is_err());
     }
@@ -264,22 +269,29 @@ mod legacy_upgrade {
     fn conversions_leave_no_libreoffice_scratch_files_outside_the_job_folder() {
         // The worker only removes the job folder, and a child killed at its
         // timeout never runs LibreOffice's own scratch cleanup.
-        let scratch = || {
-            let mut names: Vec<_> = std::fs::read_dir(std::env::temp_dir())
-                .unwrap()
-                .filter_map(|entry| entry.ok())
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .filter(|name| name.starts_with("lu") && name.ends_with(".tmp"))
-                .collect();
-            names.sort();
-            names
-        };
-        let before = scratch();
+        let before = libreoffice_scratch_files();
 
         let docx = upgrade("memo.doc", FileType::Doc, FileType::Docx);
         convert_bytes(&docx, FileType::Docx, FileType::Pdf);
 
-        assert_eq!(scratch(), before);
+        assert_eq!(libreoffice_scratch_files(), before);
+    }
+
+    #[test]
+    #[ignore = "needs LibreOfficeKit; see module docs"]
+    fn repeated_successful_and_failed_conversions_leave_nothing_behind() {
+        let docx = upgrade("memo.doc", FileType::Doc, FileType::Docx);
+        let before = libreoffice_scratch_files();
+
+        for _ in 0..5 {
+            let pdf = convert_bytes(&docx, FileType::Docx, FileType::Pdf);
+            assert!(pdf.starts_with(b"%PDF-"));
+            assert!(
+                try_convert_bytes(b"not a powerpoint file", FileType::Ppt, FileType::Pptx).is_err()
+            );
+        }
+
+        assert_eq!(libreoffice_scratch_files(), before);
     }
 
     #[test]
@@ -394,46 +406,116 @@ mod conversion_table {
 }
 
 mod job_cleanup {
-    //! Tests `remove_job_folder` directly: CI builds with `--all-features`,
-    //! where `disable_cleanup` turns `cleanup_folder` into a no-op.
-
     use std::path::Path;
 
-    use crate::utils::remove_job_folder;
+    use model::document::FileType;
 
-    /// Removes a job folder prepared by `setup` and checks the outcome.
-    fn check(setup: fn(&Path), expect_ok: bool) {
+    use crate::job_folder::{JobFolder, remove_folder, reset_jobs_root};
+    use crate::process::convert::convert_file;
+
+    fn entries(root: &Path) -> Vec<String> {
+        std::fs::read_dir(root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn dropping_a_job_folder_removes_it_and_its_files() {
+        let root = tempfile::tempdir().unwrap();
+
+        let folder = JobFolder::create(root.path(), "job").unwrap();
+        std::fs::write(folder.path().join("IN.docx"), b"input").unwrap();
+        std::fs::create_dir(folder.path().join("lu1234.tmp")).unwrap();
+        std::fs::write(folder.path().join("lu1234.tmp/scratch"), b"scratch").unwrap();
+        drop(folder);
+
+        assert!(entries(root.path()).is_empty());
+    }
+
+    #[test]
+    fn a_job_that_panics_still_removes_its_folder() {
+        let root = tempfile::tempdir().unwrap();
+
+        let result = std::panic::catch_unwind(|| {
+            let folder = JobFolder::create(root.path(), "job").unwrap();
+            std::fs::write(folder.path().join("IN.docx"), b"input").unwrap();
+            panic!("conversion panicked");
+        });
+
+        assert!(result.is_err());
+        assert!(entries(root.path()).is_empty());
+    }
+
+    #[test]
+    fn a_failed_conversion_removes_its_folder() {
+        let root = tempfile::tempdir().unwrap();
+
+        // The child cannot load LibreOffice from here, so it exits non-zero.
+        let result = convert_file(
+            root.path(),
+            "job",
+            "/nonexistent/libreoffice/program",
+            b"input",
+            &FileType::Docx,
+            &FileType::Pdf,
+            "writer_pdf_Export",
+        );
+
+        assert!(result.is_err());
+        assert!(entries(root.path()).is_empty());
+    }
+
+    #[test]
+    fn a_redelivered_job_does_not_take_over_a_running_attempts_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let running = JobFolder::create(root.path(), "job").unwrap();
+        std::fs::write(running.path().join("IN.docx"), b"input").unwrap();
+
+        assert!(JobFolder::create(root.path(), "job").is_err());
+        assert!(running.path().join("IN.docx").exists());
+    }
+
+    #[test]
+    fn job_ids_cannot_escape_the_jobs_root() {
+        let root = tempfile::tempdir().unwrap();
+        let jobs_root = root.path().join("jobs");
+
+        for job_id in ["", ".", "..", "../outside", "a/b", "/tmp/job"] {
+            assert!(
+                JobFolder::create(&jobs_root, job_id).is_err(),
+                "{job_id:?} was accepted"
+            );
+        }
+        assert_eq!(entries(root.path()), Vec::<String>::new());
+    }
+
+    #[test]
+    fn resetting_the_jobs_root_removes_leftover_folders() {
+        let root = tempfile::tempdir().unwrap();
+        let jobs_root = root.path().join("jobs");
+        std::fs::create_dir_all(jobs_root.join("crashed-job/lu1234.tmp")).unwrap();
+        std::fs::write(jobs_root.join("crashed-job/IN.docx"), b"input").unwrap();
+
+        reset_jobs_root(&jobs_root).unwrap();
+
+        assert!(entries(&jobs_root).is_empty());
+    }
+
+    #[test]
+    fn removing_a_missing_folder_is_not_an_error() {
+        let root = tempfile::tempdir().unwrap();
+
+        assert!(remove_folder(&root.path().join("job")).is_ok());
+    }
+
+    #[test]
+    fn other_removal_failures_still_surface() {
         let root = tempfile::tempdir().unwrap();
         let job = root.path().join("job");
-        setup(&job);
+        std::fs::write(&job, b"not a folder").unwrap();
 
-        let result = remove_job_folder(job.to_str().unwrap());
-
-        assert_eq!(result.is_ok(), expect_ok, "{result:?}");
-        if expect_ok {
-            assert!(!job.exists());
-        }
-    }
-
-    #[test]
-    fn removes_the_job_folder() {
-        check(
-            |job| {
-                std::fs::create_dir(job).unwrap();
-                std::fs::write(job.join("IN.docx"), b"input").unwrap();
-            },
-            true,
-        );
-    }
-
-    #[test]
-    fn a_job_that_failed_before_creating_its_folder_cleans_up() {
-        check(|_| {}, true);
-    }
-
-    #[test]
-    fn other_failures_still_surface() {
-        check(|job| std::fs::write(job, b"not a folder").unwrap(), false);
+        assert!(remove_folder(&job).is_err());
     }
 }
 
@@ -532,7 +614,7 @@ mod process_message_span {
         let (result, span) = run(&message(job_id, "uploads/notes.txt", "uploads/notes.pdf")).await;
 
         assert!(result.is_err());
-        assert!(!std::path::Path::new(job_id).exists());
+        assert!(!crate::job_folder::JOBS_ROOT.join(job_id).exists());
         let Status::Error { description } = &span.status else {
             panic!("expected an errored span, got {:?}", span.status);
         };

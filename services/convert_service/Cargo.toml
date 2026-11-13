@@ -10,7 +10,6 @@ name = "convert_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [features]
-disable_cleanup = []
 disable_worker = []
 local_queue = []
 

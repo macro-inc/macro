@@ -4,27 +4,6 @@ use std::time::Duration;
 use anyhow::Context;
 use model::document::FileType;
 
-/// Cleanup the folder of the job
-pub fn cleanup_folder(job_id: &str) -> anyhow::Result<()> {
-    if cfg!(feature = "disable_cleanup") {
-        tracing::info!("cleanup disabled");
-        return Ok(());
-    }
-    tracing::trace!(job_id=%job_id, "cleaning up job");
-    remove_job_folder(job_id)
-}
-
-/// Removes a job folder. A job that failed before creating its folder has
-/// nothing to remove.
-pub(crate) fn remove_job_folder(path: &str) -> anyhow::Result<()> {
-    match std::fs::remove_dir_all(path) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            Err(e).context("unable to remove directory")
-        }
-        _ => Ok(()),
-    }
-}
-
 /// LibreOfficeKit filter options for a supported conversion.
 ///
 /// LOK picks the export filter from the target format (`save_as`'s format
