@@ -383,11 +383,7 @@ async fn calendars_carry_the_iana_zone_of_the_mailbox() {
 
 #[tokio::test]
 async fn a_mailbox_time_zone_macro_cannot_map_leaves_its_calendars_without_one() {
-    for named in [
-        "tzone://Microsoft/Custom",
-        "Atlantis Standard Time",
-        "",
-    ] {
+    for named in ["tzone://Microsoft/Custom", "Atlantis Standard Time", ""] {
         let discovery = discover(Some(named)).await;
         assert_eq!(discovery.calendars.len(), 1, "{named:?}");
         assert_eq!(
