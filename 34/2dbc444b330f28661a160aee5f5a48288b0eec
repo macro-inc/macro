@@ -1,0 +1,27 @@
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/pr_privacy_check.sh
+  s_0b592ddedab601::t_9d5dba1a9c780a 40-44,46
+.agents/skills/git/SKILL.md
+  s_0b592ddedab601::t_01b1fe20482f88 65-69,81
+.github/workflows/pr-privacy-check.yml
+  s_0b592ddedab601::t_fb6cf7351b9dfb 68-72,74
+CLAUDE.md
+  s_0b592ddedab601::t_d1814787814537 109-111
+docs/agent-guide/channels.md
+  s_0b592ddedab601::t_859ca82a6bc062 765-772,774-775
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "342dbc444b330f28661a160aee5f5a48288b0eec",
+  "prompts": {},
+  "sessions": {
+    "s_0b592ddedab601": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fbdc6575-0049-4bbd-8041-706c9e8602a1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
