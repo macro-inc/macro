@@ -1,0 +1,19 @@
+apps/web/src/features/block-canvas/core/transitions/camera-plan.ts
+  s_39eee246ac6b4a::t_bf18faf5c99e0d 1-8,89-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5b9add999dbc6708d04ed535f96ec349242ae426",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
