@@ -1,0 +1,521 @@
+.agents/rules/web/mobile.md
+  s_8703f73ae8e37d::t_4180401fa3ff96 129-132
+.agents/skills/migration-review/SKILL.md
+  s_8703f73ae8e37d::t_3d3eb0efeac55d 34-50
+.gitattributes
+  s_8703f73ae8e37d::t_cd1ee9791771dd 14-16
+.github/workspace-dep-closures.json
+  s_8703f73ae8e37d::t_080688763a0afd 7,1362,2898,3809,4817,5697,6128,6167,6963,7357,7491,7529,7533-7535,7543,7547,7552-7554,7562,7567,7626,7814,7855,7909,8296,9814,10606,10635,11824,11875,11914,11949,12226,12371,12374-12376,12382,13124,13177,13219,14539,14717,14753,14757-14759,14767,15722,15773,16146,16631,16679,17110,17173,17218
+.sqlx/query-24fd6d677711704d8863e6547e94fdcae63c2e486f349766bfd59369a1dee716.json
+  s_8703f73ae8e37d::t_ab812d5a021df2 1-28
+.sqlx/query-55a1a97ca6974cc9b81da28780aa12c055c0f9a9f7be5b5a427a95a639ee6088.json
+  s_8703f73ae8e37d::t_db83bba1dcf913 1-26
+.sqlx/query-d364b39659c47a1f1cde5629d2682a47839fbb2ffd31ba736654f08c4dfa2037.json
+  s_8703f73ae8e37d::t_93b03e33e5d287 1-28
+.sqlx/query-d8de5ab9f935e84be5635cdf0453e1bf7515f6fa6df22ecdbcffad7ebadc1442.json
+  s_8703f73ae8e37d::t_2d8845678937e7 1-58
+Cargo.lock
+  s_8703f73ae8e37d::t_a5ee56d198dc90 423,677,4096,4477,5578,7456,7988,8006,11387,13909,13920,18361,18371,20048,20077
+Cargo.toml
+  s_8703f73ae8e37d::t_c11e1460fdc7b7 577-578
+apps/web/src/components/app/mobile/SwipeDownDismissKeyboard.test.tsx
+  s_8703f73ae8e37d::t_b4ddf30fba9ec2 1-110
+apps/web/src/components/app/mobile/SwipeDownDismissKeyboard.tsx
+  s_8703f73ae8e37d::t_b37830e451553f 17-27,57-58,62-65,73-89
+apps/web/src/components/icon/system/regular/arrow-bend-double-up-left.svg
+  s_8703f73ae8e37d::t_0200d8d9411dbb 1-3
+apps/web/src/features/agents-view/components/ChatComposer.tsx
+  s_8703f73ae8e37d::t_a23e05583f9134 264
+apps/web/src/features/block-agent/component/AgentMessage.test.tsx
+  s_8703f73ae8e37d::t_5fc302b1ed2b35 716-754
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_8703f73ae8e37d::t_599f51bd27bbec 207-219,222,227,234
+apps/web/src/features/block-agent/ui/AgentInput.tsx
+  s_8703f73ae8e37d::t_443ace7e1ef255 365
+apps/web/src/features/block-email/EmailBlockAdapter.tsx
+  s_8703f73ae8e37d::t_9c008473c36c2c 112
+apps/web/src/features/channel/Input/Layout.tsx
+  s_8703f73ae8e37d::t_7bb5710aee7722 46
+apps/web/src/features/command/rank-command-search-items.test.ts
+  s_8703f73ae8e37d::t_be8a0d61306708 219-274
+apps/web/src/features/command/rank-command-search-items.ts
+  s_8703f73ae8e37d::t_1eafd0f055008f 3,31-44,113,159-178
+apps/web/src/features/email-compose/core/email-sender.ts
+  s_8703f73ae8e37d::t_d46c45b63e32a3 63-88
+apps/web/src/features/email-compose/core/recipient-conversion.test.ts
+  s_8703f73ae8e37d::t_b2ea23c9fb3465 1-49
+apps/web/src/features/email-compose/core/recipient-conversion.ts
+  s_8703f73ae8e37d::t_99acc038080afa 70-88
+apps/web/src/features/email-compose/primitives/email-form-state.ts
+  s_8703f73ae8e37d::t_3c0251efac9354 12,167-169
+apps/web/src/features/email-compose/views/reply-input.tsx
+  s_8703f73ae8e37d::t_a134c5d8ad23b8 542-543,655
+apps/web/src/features/email-message/components/message-actions.tsx
+  s_8703f73ae8e37d::t_7ffa6d4b37b222 2,4,41-46,51-65,71,73-76
+apps/web/src/features/email-thread/primitives/reply-actions.test.ts
+  s_8703f73ae8e37d::t_d72d68d3e9f8c1 2,5-8,91-132
+apps/web/src/features/email-thread/primitives/reply-actions.ts
+  s_8703f73ae8e37d::t_6160f53a85d65d 1-6,13-30
+apps/web/src/features/email-thread/primitives/thread-navigation.test.ts
+  s_8703f73ae8e37d::t_f22f28843daeaf 18,22-25,29,33
+apps/web/src/features/email-thread/primitives/thread-navigation.ts
+  s_8703f73ae8e37d::t_72d97e7400a314 543,631
+apps/web/src/features/email-thread/views/bottom-reply-buttons.tsx
+  s_8703f73ae8e37d::t_8839c1a8b17917 3,8,11,19,23-26,88-107,143,150-153,157-159,161-169,172-173,185,191,210-214
+apps/web/src/features/email-thread/views/message-container.tsx
+  s_8703f73ae8e37d::t_3681daa80a45e3 4,11-14,33-37,97-109,160
+apps/web/src/features/email-view/components/EmailDetailView.tsx
+  s_8703f73ae8e37d::t_fc0e860a83914b 211
+apps/web/src/features/next-soup/queries/search-request.ts
+  s_8703f73ae8e37d::t_d5cf12f239b8ef 201,215
+apps/web/src/lib/core/component/AI/component/input/ChatInput.tsx
+  s_8703f73ae8e37d::t_5eb81208dc154a 449
+apps/web/src/lib/core/component/ForwardMessageComposer.tsx
+  s_8703f73ae8e37d::t_916e97bff1c15d 170
+apps/web/src/lib/core/signal/create-label-collapse.test.ts
+  s_8703f73ae8e37d::t_5f126c23913e6b 1-30
+apps/web/src/lib/core/signal/create-label-collapse.ts
+  s_8703f73ae8e37d::t_9fa3b59cf91e18 1-85
+apps/web/src/lib/i18n/locales/en.ts
+  s_8703f73ae8e37d::t_c5a82bd739f95f 17,62
+apps/web/src/lib/i18n/locales/en/email-thread.ts
+  s_8703f73ae8e37d::t_b332511ec4fc56 1-11
+apps/web/src/lib/service-clients/service-search/generated/models/index.ts
+  s_8703f73ae8e37d::t_afca0e03b6c751 363
+apps/web/src/lib/service-clients/service-search/generated/models/termMatching.ts
+  s_8703f73ae8e37d::t_adb9fae9183642 1-17
+apps/web/src/lib/service-clients/service-search/generated/models/unifiedSearchRequest.ts
+  s_8703f73ae8e37d::t_b24bf2da85f060 11,34-37
+apps/web/src/lib/service-clients/service-search/openapi.json
+  s_8703f73ae8e37d::t_baae36f13df0b4 4772-4776,4807-4810
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_8703f73ae8e37d::t_d66112c0afec3b 355
+crates/activity/src/outbound/pg_activity_repo/test.rs
+  s_8703f73ae8e37d::t_f0b3c00f0b8c97 694-695,698,718-735,738,742,745,812,842,852,859,869
+crates/agent_correlation/AGENTS.md
+  s_8703f73ae8e37d::t_559858b1dc221b 12-14,22-30,33-39,41-43,46-53,56-60
+crates/agent_correlation/src/context.rs
+  s_8703f73ae8e37d::t_7fe6dc33a7cceb 3-5,20-22,31-32,51-53,58-101,150-151,153-160
+crates/agent_correlation/src/context/test.rs
+  s_8703f73ae8e37d::t_31f03fb764a365 25-76
+crates/agent_correlation/src/inbound.rs
+  s_8703f73ae8e37d::t_1b70dc91bf2bd0 4,6,63,100-119,147-151,177-202,205-206,222-225,231-233,240-241,247-248,254-256,259-260,269-293
+crates/agent_correlation/src/inbound/test.rs
+  s_8703f73ae8e37d::t_46a9a6260fa62e 39-47,59-60,131,275-528
+crates/agent_correlation/src/scope.rs
+  s_8703f73ae8e37d::t_c2091c58efd6c3 23-29,72-108,176-180,253-259,261-264,268-313,316-334
+crates/agent_correlation/src/scope/test.rs
+  s_8703f73ae8e37d::t_e670877d794a8c 70-71,82-85,92-133,149-199
+crates/agent_egress/AGENTS.md
+  s_8703f73ae8e37d::t_0ffb4fe74e27be 75-77
+crates/agent_egress/Cargo.toml
+  s_8703f73ae8e37d::t_9c93b4bdce0eac 9-10
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_8703f73ae8e37d::t_1517e5b79d7991 275-276,285,291-292,314,331,378,388-397,404
+crates/agent_harness/src/outbound/prompt_mentions.rs
+  s_8703f73ae8e37d::t_f6112bdc9fab85 127-131,133
+crates/ai_tools/src/search/search_service/content.rs
+  s_8703f73ae8e37d::t_6845a3ded4b9b4 165-166
+crates/ai_tools/src/search/search_service/name.rs
+  s_8703f73ae8e37d::t_628a1a17a0c679 165
+crates/call/AGENTS.md
+  s_8703f73ae8e37d::t_f46cc7f8957276 89-92
+crates/call/Cargo.toml
+  s_8703f73ae8e37d::t_dd1d9251123932 11,43
+crates/call/src/inbound/axum_router.rs
+  s_8703f73ae8e37d::t_b3ddd6c1d500f0 471-473,865-870
+crates/call/src/inbound/axum_router/test.rs
+  s_8703f73ae8e37d::t_f877dae5cb5dbc 515-746
+crates/chat/AGENTS.md
+  s_8703f73ae8e37d::t_be20b18cb0f45e 55-59
+crates/chat/Cargo.toml
+  s_8703f73ae8e37d::t_d1e63380afddb9 15,37
+crates/chat/src/inbound/error_response.rs
+  s_8703f73ae8e37d::t_6f7b89d16c329e 20-23
+crates/chat/src/inbound/http/router.rs
+  s_8703f73ae8e37d::t_7329f7706a68a8 12-14,25,375-381
+crates/chat/src/inbound/test.rs
+  s_8703f73ae8e37d::t_16a3db49b4ca6b 44-45,118,120-123,665-668,670,831-875
+crates/chat/src/outbound/postgres.rs
+  s_8703f73ae8e37d::t_74df2945ccb048 147-154,338-347
+crates/chat/src/outbound/postgres/test.rs
+  s_8703f73ae8e37d::t_446ab188d44f69 1439-1530
+crates/code_mode_assets/AGENTS.md
+  s_8703f73ae8e37d::t_1466e7a5c529c6 7-8
+crates/code_mode_assets/src/lib.rs
+  s_8703f73ae8e37d::t_e7253694c39333 19-22
+crates/crm/AGENTS.md
+  s_8703f73ae8e37d::t_1abf67547483bb 187-189
+crates/crm/Cargo.toml
+  s_8703f73ae8e37d::t_b1f6d683e2f8f6 19,65,117
+crates/crm/src/domain/pipeline_workflows/models.rs
+  s_8703f73ae8e37d::t_ef40c0e593b2a8 270-273
+crates/crm/src/inbound/pipeline_workflows.rs
+  s_8703f73ae8e37d::t_2bfd75ef625490 451-454,598
+crates/crm/src/inbound/toolset/pipelines.rs
+  s_8703f73ae8e37d::t_985c0774cee6a6 467
+crates/crm/tests/pipeline_workflows/http.rs
+  s_8703f73ae8e37d::t_2240d8b1b03437 392-411
+crates/databases/AGENTS.md
+  s_8703f73ae8e37d::t_a87fbc56a0ddbe 77-78
+crates/databases/src/outbound/pg_databases_repo/folders.rs
+  s_8703f73ae8e37d::t_9abaa475a90ce9 3-5,41-50
+crates/documents/AGENTS.md
+  s_8703f73ae8e37d::t_e47d279861f1db 154-163
+crates/documents/src/domain/create.rs
+  s_8703f73ae8e37d::t_030bd050e7eb2b 195-196,201
+crates/documents/src/domain/create/test.rs
+  s_8703f73ae8e37d::t_321cbcfff84e07 577-608
+crates/documents/src/domain/entity_mutation.rs
+  s_8703f73ae8e37d::t_4362997ba1b037 38-40
+crates/documents/src/domain/models.rs
+  s_8703f73ae8e37d::t_8b8db8529b95af 40-43,541-542,617-618
+crates/documents/src/domain/service.rs
+  s_8703f73ae8e37d::t_a50973c9b65f67 1905-1907,1913-1921,1928-1936
+crates/documents/src/inbound/axum_router.rs
+  s_8703f73ae8e37d::t_07018333a7b79f 191
+crates/documents/src/inbound/axum_router/create_task.rs
+  s_8703f73ae8e37d::t_0b2ed3730ff36d 58-60
+crates/documents/src/inbound/axum_router/edit_document.rs
+  s_8703f73ae8e37d::t_82e3ed22422853 70-73
+crates/documents/src/inbound/axum_router/tests.rs
+  s_8703f73ae8e37d::t_eb6bef6a5f1e12 155-156,461,463-467,2310-2338
+crates/documents/src/outbound/pg_document_repo.rs
+  s_8703f73ae8e37d::t_834a46c3c1f953 696-710,719-727
+crates/documents/src/outbound/pg_document_repo/create.rs
+  s_8703f73ae8e37d::t_99011e7d983341 485-494
+crates/documents/src/outbound/pg_document_repo/edit.rs
+  s_8703f73ae8e37d::t_1ce0d68c8e9832 19-32
+crates/documents/src/outbound/pg_document_repo/tests.rs
+  s_8703f73ae8e37d::t_7b31f065dfacca 3738-3936
+crates/email/AGENTS.md
+  s_8703f73ae8e37d::t_1f650a351bb435 94-96,128-131
+crates/email/Cargo.toml
+  s_8703f73ae8e37d::t_5eea45e1a32d08 47,57
+crates/email/src/domain/calendar_invitation_parser/test.rs
+  s_8703f73ae8e37d::t_7f40d06a05c557 201-231
+crates/email/src/domain/calendar_invitation_parser/windows_zones.rs
+  s_8703f73ae8e37d::t_4041a155c6bac0 11,27,73
+crates/email/src/outbound/email_pg_repo/test/thread.rs
+  s_8703f73ae8e37d::t_55159fe3f66a99 818-869
+crates/email/src/outbound/email_pg_repo/thread.rs
+  s_8703f73ae8e37d::t_25a55e2fcd1230 451,461,463-474
+crates/email_api_client/AGENTS.md
+  s_8703f73ae8e37d::t_5ebabd79879f68 146-148
+crates/email_api_client/src/outbound/outlook/calendar/test.rs
+  s_8703f73ae8e37d::t_c42ad7b53ef05f 2,386,449-557
+crates/email_api_client/src/outbound/outlook/calendar/zones.rs
+  s_8703f73ae8e37d::t_0cb71af9826cfc 3,26,28,34
+crates/entity_access_db_utils/AGENTS.md
+  s_8703f73ae8e37d::t_2cef9efc8566a4 22-29,40-41,45,60-71
+crates/entity_access_db_utils/Cargo.toml
+  s_8703f73ae8e37d::t_9ca785d4e3f491 9
+crates/entity_access_db_utils/src/channel_share.rs
+  s_8703f73ae8e37d::t_f7f48e56fc42dc 3-4,21-27
+crates/entity_access_db_utils/src/direct_share.rs
+  s_8703f73ae8e37d::t_c2a8c2e571eef2 102-107
+crates/entity_access_db_utils/src/lib.rs
+  s_8703f73ae8e37d::t_4e8c8d5dad46f6 11,24,26,30-32,42-48,98-106,131,139,155,166,182,199,293-294,297-303,316,326-328,333,337-345,364,493-502
+crates/entity_access_db_utils/src/project_grants.rs
+  s_8703f73ae8e37d::t_410e6280cc4e8f 10,12-13,56-233,236-240
+crates/entity_access_db_utils/src/scoped_grants.rs
+  s_8703f73ae8e37d::t_787151b7f32678 1-132
+crates/entity_access_db_utils/src/scoped_grants/test.rs
+  s_8703f73ae8e37d::t_72e933aa173879 1-667
+crates/entity_access_db_utils/src/team_share.rs
+  s_8703f73ae8e37d::t_3b9401c8b86862 7,89-95,113,120,130
+crates/entity_access_db_utils/src/test.rs
+  s_8703f73ae8e37d::t_aefe56876644ed 48,1132-1137,1164-1169,1181-1186,1194-1199
+crates/entity_access_management/AGENTS.md
+  s_8703f73ae8e37d::t_39abfaf460ea92 22-24
+crates/entity_access_management/Cargo.toml
+  s_8703f73ae8e37d::t_0ec0051041b1e6 33
+crates/entity_access_management/src/outbound/pg_repo.rs
+  s_8703f73ae8e37d::t_69f21b05cc3b09 106-116
+crates/entity_access_management/src/outbound/pg_repo/test.rs
+  s_8703f73ae8e37d::t_59a3ee64625218 935-1050
+crates/external_chat/src/inbound/router.rs
+  s_8703f73ae8e37d::t_e5245867c7e18d 118
+crates/feature_flags/AGENTS.md
+  s_8703f73ae8e37d::t_c34066d599d0ee 28-30
+crates/forms/AGENTS.md
+  s_8703f73ae8e37d::t_071be9455eba9f 63-65
+crates/forms/src/outbound/pg_forms_repo/folders.rs
+  s_8703f73ae8e37d::t_b12d19f931c46d 3-5,41-50
+crates/graphql_initiative/src/lib.rs
+  s_8703f73ae8e37d::t_a47a6e8e3eec49 32
+crates/initiative/AGENTS.md
+  s_8703f73ae8e37d::t_1b120db08b160f 56-64
+crates/initiative/Cargo.toml
+  s_8703f73ae8e37d::t_2da19fd55e7249 11,32,69
+crates/initiative/src/domain/models.rs
+  s_8703f73ae8e37d::t_ef1923db15aaa1 222-225
+crates/initiative/src/inbound/axum_router.rs
+  s_8703f73ae8e37d::t_66b6665f5c4008 218
+crates/initiative/src/inbound/axum_router/test.rs
+  s_8703f73ae8e37d::t_76e15af352a58c 674-710
+crates/initiative/src/inbound/axum_router/update.rs
+  s_8703f73ae8e37d::t_5fc5000c73fa75 45-49
+crates/initiative/src/inbound/toolset.rs
+  s_8703f73ae8e37d::t_1ac12b1d39ad46 90-92
+crates/initiative/src/outbound/pg_initiative_repo/test.rs
+  s_8703f73ae8e37d::t_d20f8ebddadc40 576-651
+crates/initiative/src/outbound/pg_initiative_repo/test/access.rs
+  s_8703f73ae8e37d::t_99d1b4b8200dc7 62-100
+crates/initiative/src/outbound/pg_initiative_repo/test/history.rs
+  s_8703f73ae8e37d::t_202c37505a6628 78
+crates/local_e2e_test_support/src/jwt.rs
+  s_8703f73ae8e37d::t_0952023ca6cfc6 102
+crates/macro_auth/AGENTS.md
+  s_8703f73ae8e37d::t_83453a42c063fa 52-54
+crates/macro_auth/src/macro_api_token.rs
+  s_8703f73ae8e37d::t_d4a26fa5d66226 38-42,69-71,88
+crates/macro_auth/src/middleware/decode_jwt.rs
+  s_8703f73ae8e37d::t_95dca811fca399 451
+crates/macro_auth/src/middleware/decode_jwt/agent_test.rs
+  s_8703f73ae8e37d::t_f845dbf21fbff3 19,93,124,146-191
+crates/macro_auth/src/middleware/decode_jwt/fusionauth_access_token_test.rs
+  s_8703f73ae8e37d::t_c630d907d38afe 106
+crates/macro_authorization/AGENTS.md
+  s_8703f73ae8e37d::t_f1328f1b312cb3 53-54,68-71
+crates/macro_authorization/src/domain/models.rs
+  s_8703f73ae8e37d::t_9fc28228959394 46-49
+crates/macro_authorization/src/inbound/axum/policy.rs
+  s_8703f73ae8e37d::t_5668cf335bd32d 36-39,290-293
+crates/macro_authorization/src/inbound/axum/test.rs
+  s_8703f73ae8e37d::t_7d053357f5c2d3 44-45,98-103,1433-1448
+crates/macro_authorization/src/lib.rs
+  s_8703f73ae8e37d::t_299fdbd0454db0 26
+crates/macro_authorization/src/outbound/macro_auth.rs
+  s_8703f73ae8e37d::t_274bc91da8423c 50-52
+crates/macro_authorization/src/outbound/macro_auth/test.rs
+  s_8703f73ae8e37d::t_9dbec6ac23dd88 148,174,197,209-227
+crates/macro_db_client/migrations/20261109212700_unify_suggestion_generation.sql
+  s_8703f73ae8e37d::t_7230d0e32c9c4f 21
+crates/models_permissions/AGENTS.md
+  s_8703f73ae8e37d::t_194af4e58d25f5 14-15,26-27
+crates/models_permissions/Cargo.toml
+  s_8703f73ae8e37d::t_2caa24430213c8 8,22-24
+crates/models_permissions/src/share_permission.rs
+  s_8703f73ae8e37d::t_35180b632e0b89 58-59,61-65
+crates/models_permissions/src/share_permission/test.rs
+  s_8703f73ae8e37d::t_c4b6b296c8b029 326-358
+crates/models_search/src/lib.rs
+  s_8703f73ae8e37d::t_f602dbed06e131 57-71
+crates/models_search/src/unified.rs
+  s_8703f73ae8e37d::t_85fcf909f1745c 12,118-124
+crates/opensearch_client/AGENTS.md
+  s_8703f73ae8e37d::t_6e839bcf777383 69-81
+crates/opensearch_client/src/search/call_records.rs
+  s_8703f73ae8e37d::t_d964eca92de143 36-46,253,444-446
+crates/opensearch_client/src/search/call_records/test.rs
+  s_8703f73ae8e37d::t_614721e8a0d4f9 1-29
+crates/opensearch_client/src/search/chats.rs
+  s_8703f73ae8e37d::t_ecabde049b1226 36-40,167
+crates/opensearch_client/src/search/chats/test.rs
+  s_8703f73ae8e37d::t_21be1e10503090 45-49
+crates/opensearch_client/src/search/documents.rs
+  s_8703f73ae8e37d::t_f78cb28c4dced6 1,30-52,60-62,78-91,134,146,186-190,192-193,255-256,258,269,277-284,286-290,292-293,296-313,316-317,319,324-388,491-493,495-496,505-514,563,581,633-634,644-645,649-652,656
+crates/opensearch_client/src/search/documents/test.rs
+  s_8703f73ae8e37d::t_90f6450d080314 505-778
+crates/opensearch_client/src/search/unified.rs
+  s_8703f73ae8e37d::t_d6c6c2349842fd 23,97,243
+crates/projects/AGENTS.md
+  s_8703f73ae8e37d::t_a5587cd085a5fb 74-78
+crates/projects/src/domain/entity_mutation.rs
+  s_8703f73ae8e37d::t_deb3ebcd06f7f9 32-34
+crates/projects/src/domain/models.rs
+  s_8703f73ae8e37d::t_e2b72a112e3d64 182-185
+crates/projects/src/inbound/axum_router.rs
+  s_8703f73ae8e37d::t_d26262ff009e53 101
+crates/projects/src/inbound/axum_router/edit_project.rs
+  s_8703f73ae8e37d::t_f060cf49dcfcb0 48-52,55
+crates/projects/src/inbound/axum_router/tests.rs
+  s_8703f73ae8e37d::t_9ca808880686c3 907-943
+crates/projects/src/outbound/pg_project_repo/create.rs
+  s_8703f73ae8e37d::t_2ef9c23a4735b4 71-79
+crates/projects/src/outbound/pg_project_repo/edit.rs
+  s_8703f73ae8e37d::t_e7cf82adea897a 49-60
+crates/projects/src/outbound/pg_project_repo/tests.rs
+  s_8703f73ae8e37d::t_68155aa61b6beb 1207-1273
+crates/properties/src/outbound/permission_service.rs
+  s_8703f73ae8e37d::t_f79ec36490336f 212
+crates/scheduled_action/src/domain/event_trigger/test.rs
+  s_8703f73ae8e37d::t_027e8749174961 422-445
+crates/search_service/AGENTS.md
+  s_8703f73ae8e37d::t_2b1758d74a0f22 65-76
+crates/search_service/Cargo.toml
+  s_8703f73ae8e37d::t_53858ab4138234 17,28
+crates/search_service/src/api/context.rs
+  s_8703f73ae8e37d::t_0fdacaf1ac6363 43-44
+crates/search_service/src/api/search/caller.rs
+  s_8703f73ae8e37d::t_9d04cfa1c186bf 12
+crates/search_service/src/api/search/simple/simple_unified.rs
+  s_8703f73ae8e37d::t_733e0a036e85b9 20-22,138-140,221,329,402-411,413-470,479-480,495
+crates/search_service/src/api/search/simple/simple_unified/test.rs
+  s_8703f73ae8e37d::t_04bea9785aa327 620,695
+crates/search_service/src/api/search/terms.rs
+  s_8703f73ae8e37d::t_e0f33ca7050564 7-8,10-14,76-100
+crates/search_service/src/api/search/terms/test.rs
+  s_8703f73ae8e37d::t_764a1ad2cb0616 1-2,115-190
+crates/search_service/src/api/swagger.rs
+  s_8703f73ae8e37d::t_bbbabf3f7dcf20 37,55
+crates/search_service/src/domain.rs
+  s_8703f73ae8e37d::t_4863a36edda69a 2
+crates/search_service/src/domain/term_matching.rs
+  s_8703f73ae8e37d::t_8fdfa836463718 1-11
+crates/search_service/src/lib.rs
+  s_8703f73ae8e37d::t_cb71297cf23c2a 11-12
+crates/search_service/src/outbound.rs
+  s_8703f73ae8e37d::t_a2c6789095c2ab 2
+crates/search_service/src/outbound/term_matching.rs
+  s_8703f73ae8e37d::t_008bac327f8cfd 1-153
+crates/search_service/src/outbound/term_matching/test.rs
+  s_8703f73ae8e37d::t_ecb3e9c16e6f4b 1-158
+crates/share_permission_db_utils/AGENTS.md
+  s_8703f73ae8e37d::t_429ec646ab31eb 14-15
+crates/share_permission_db_utils/src/lib.rs
+  s_8703f73ae8e37d::t_70570e62926a6b 296-297,306-308
+crates/skills/src/outbound/search_service_searcher.rs
+  s_8703f73ae8e37d::t_eaf0d2f66fe463 61
+docs/agent-guide/channels.md
+  s_8703f73ae8e37d::t_a4dc55fe8c68ae 468-471
+docs/agent-guide/email.md
+  s_8703f73ae8e37d::t_b9ac3317055769 780-790,818-821
+docs/development/rust.md
+  s_8703f73ae8e37d::t_497ea1c068ddf1 62-71
+docs/guides/add-http-endpoint.md
+  s_8703f73ae8e37d::t_4af65b2002edd4 51
+infra/packages/shared/src/gateway_priorities.ts
+  s_8703f73ae8e37d::t_27491e31da975c 59
+nix/cloud-storage.nix
+  s_8703f73ae8e37d::t_1610557d8783b1 171-172,1162-1163
+packages/code-mode-sdk/README.md
+  s_8703f73ae8e37d::t_a01edd606100bc 58-59
+packages/code-mode-sdk/scripts/generate.ts
+  s_8703f73ae8e37d::t_2a1229a2042d03 176-181
+packages/sdk/generated/search/index.ts
+  s_8703f73ae8e37d::t_8d77b6473487fb 4
+packages/sdk/generated/search/types.gen.ts
+  s_8703f73ae8e37d::t_4b1a8d2ab11abc 2501-2505,2538-2543
+packages/sdk/specs/search.json
+  s_8703f73ae8e37d::t_e6c0b8dd31478d 4772-4776,4807-4810
+services/agent_harness_service/AGENTS.md
+  s_8703f73ae8e37d::t_4ac73aeeec629d 167-174,190-192
+services/agent_harness_service/Cargo.toml
+  s_8703f73ae8e37d::t_93ea0bbff344de 225-226
+services/agent_harness_service/src/code_mode.rs
+  s_8703f73ae8e37d::t_6fb8aea1f50a12 6,145-148,194-198,203-205,252-307,309-312,315
+services/agent_harness_service/src/code_mode/test.rs
+  s_8703f73ae8e37d::t_6f71e7dceb6f86 158-171,224,226,311-354,388-394,400-412,414,425-649
+services/agent_harness_service/src/cognition/api/stream/chat_message.rs
+  s_8703f73ae8e37d::t_38094efc57226c 6-8,207-215
+services/agent_harness_service/src/cognition/api/stream/chat_message/test.rs
+  s_8703f73ae8e37d::t_14a28edd9f0fdd 132-183
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_8703f73ae8e37d::t_f3344bb20a477a 2-4,124,131-133
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_8703f73ae8e37d::t_24938754ba3cee 23-30
+services/authentication_service/AGENTS.md
+  s_8703f73ae8e37d::t_3434fe9de173d6 173-174
+services/authentication_service/src/api/jwt/macro_api_token.rs
+  s_8703f73ae8e37d::t_36c69c82c9b2fe 97-99
+services/document_storage_service/AGENTS.md
+  s_8703f73ae8e37d::t_05022a97204ddd 124-128
+services/document_storage_service/src/api/context.rs
+  s_8703f73ae8e37d::t_b5f31d458fb40f 984,1136
+services/document_storage_service/src/api/saved_views/definitions.rs
+  s_8703f73ae8e37d::t_b865c6b2f3f7da 174-181,185-190,195-196,313-315,352-354
+services/document_storage_service/src/api/saved_views/definitions/test.rs
+  s_8703f73ae8e37d::t_78ab0678f7135d 329-410
+services/document_storage_service/src/api/threads/edit_thread.rs
+  s_8703f73ae8e37d::t_b747362af12513 71-83
+services/document_storage_service/src/server.rs
+  s_8703f73ae8e37d::t_8a87edbec6f598 955-959,2502
+services/mcp_auth_proxy/AGENTS.md
+  s_8703f73ae8e37d::t_b5a9e11a2415e5 128
+services/mcp_auth_proxy/src/inbound/middleware.rs
+  s_8703f73ae8e37d::t_0d70526a0a5eae 166-180
+services/mcp_auth_proxy/src/inbound/middleware/test.rs
+  s_8703f73ae8e37d::t_d9d63f4caab562 44-127
+services/static_file_service/AGENTS.md
+  s_8703f73ae8e37d::t_7296abd5b1d8e4 12,42-45
+services/static_file_service/Cargo.toml
+  s_8703f73ae8e37d::t_359a83cda6e969 25-26,62-65
+services/static_file_service/src/api.rs
+  s_8703f73ae8e37d::t_3ca672205b9ddc 49,74-97,113-117,119,121-123
+services/static_file_service/src/api/test.rs
+  s_8703f73ae8e37d::t_85f9fd3685be73 1-120
+vendor/chrono-tz/Cargo.lock
+  s_8703f73ae8e37d::t_a30f3b35da809e 1-266
+vendor/chrono-tz/Cargo.toml
+  s_8703f73ae8e37d::t_03b93a5421cc0c 1-131
+vendor/chrono-tz/LICENSE
+  s_8703f73ae8e37d::t_77c1c27f857fb2 1-228
+vendor/chrono-tz/README-MACRO.md
+  s_8703f73ae8e37d::t_c433d57fd685a7 1-30
+vendor/chrono-tz/README.md
+  s_8703f73ae8e37d::t_8ae1658111cee9 1-190
+vendor/chrono-tz/build.rs
+  s_8703f73ae8e37d::t_c69f37f6982037 1-16
+vendor/chrono-tz/src/binary_search.rs
+  s_8703f73ae8e37d::t_ec47354ce165ac 1-37
+vendor/chrono-tz/src/lib.rs
+  s_8703f73ae8e37d::t_002d87be658970 1-653
+vendor/chrono-tz/src/prebuilt/directory.rs
+  s_8703f73ae8e37d::t_12389c9c3141be 1-701
+vendor/chrono-tz/src/prebuilt/mod.rs
+  s_8703f73ae8e37d::t_9f597d1c39fb21 1-12
+vendor/chrono-tz/src/prebuilt/timezones.rs
+  s_8703f73ae8e37d::t_542336ab9251da 1-74855
+vendor/chrono-tz/src/serde.rs
+  s_8703f73ae8e37d::t_dbe74ca0e2b01b 1-63
+vendor/chrono-tz/src/timezone_impl.rs
+  s_8703f73ae8e37d::t_f9cc6dedadc0ff 1-478
+vendor/chrono-tz/tests/codegen.rs
+  s_8703f73ae8e37d::t_6653186ea024c3 1-18
+vendor/chrono-tz/tests/numberphile.rs
+  s_8703f73ae8e37d::t_ec2ffb739834c7 1-166
+vendor/chrono-tz/tests/tzfile.rs
+  s_8703f73ae8e37d::t_07cd87ea6f8475 1-38
+vendor/chrono-tz/tz/LICENSE
+  s_8703f73ae8e37d::t_1e71c3b2c2f7db 1-5
+vendor/chrono-tz/tz/NEWS
+  s_8703f73ae8e37d::t_a970698d288519 1
+vendor/chrono-tz/tz/africa
+  s_8703f73ae8e37d::t_a8f6e9a1fdae95 1-258
+vendor/chrono-tz/tz/antarctica
+  s_8703f73ae8e37d::t_48990dc0c61393 1-40
+vendor/chrono-tz/tz/asia
+  s_8703f73ae8e37d::t_9a6b8e01a0d82d 1-818
+vendor/chrono-tz/tz/australasia
+  s_8703f73ae8e37d::t_cbfeba120b02db 1-330
+vendor/chrono-tz/tz/backward
+  s_8703f73ae8e37d::t_c063aa87f0d697 1-269
+vendor/chrono-tz/tz/etcetera
+  s_8703f73ae8e37d::t_5dba20bafaf87a 1-29
+vendor/chrono-tz/tz/europe
+  s_8703f73ae8e37d::t_915a46005866d6 1-1020
+vendor/chrono-tz/tz/northamerica
+  s_8703f73ae8e37d::t_924be68e4d979f 1-897
+vendor/chrono-tz/tz/southamerica
+  s_8703f73ae8e37d::t_5f44fd27ad8134 1-554
+vendor/chrono-tz/update-tzdata.sh
+  s_8703f73ae8e37d::t_fb1801a52fef49 1-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ff3ed7a9c1731425f4974d4e9d08da00a2fe978a",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
