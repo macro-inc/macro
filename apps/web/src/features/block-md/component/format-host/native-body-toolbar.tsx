@@ -73,7 +73,7 @@ export function NativeBodyToolbar(props: {
     <Show
       when={prompt()}
       fallback={
-        <Toolbar ref={measure} aria-label="Document selection">
+        <Toolbar ref={measure}>
           <For each={actions()}>
             {(slot) =>
               slot.button?.({ open: () => open(slot.id), close: props.hide })
@@ -92,7 +92,6 @@ export function NativeBodyToolbar(props: {
       {(opened) => (
         <Toolbar
           class="gap-2"
-          aria-label="Document selection"
           style={{ width: width() ? `${width()}px` : undefined }}
         >
           {opened()(exits)}

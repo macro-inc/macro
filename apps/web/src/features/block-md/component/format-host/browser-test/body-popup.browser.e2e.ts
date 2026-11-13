@@ -42,7 +42,7 @@ test('body popup uses real FormatTools order and all six More actions on the act
     if (!text) throw new Error('Missing actual native text');
     root.ownerDocument.getSelection()?.setBaseAndExtent(text, 0, text, 18);
   });
-  const toolbar = page.getByRole('toolbar', { name: 'Document selection' });
+  const toolbar = page.getByRole('toolbar');
   await expect(toolbar).toBeVisible();
   const group = toolbar.locator('div.flex.h-full.items-center.gap-1');
   const inventory = await group.getByRole('button').evaluateAll((buttons) =>
@@ -150,7 +150,7 @@ for (const lock of [
       if (!text) throw new Error('Missing native text');
       root.ownerDocument.getSelection()?.setBaseAndExtent(text, 0, text, 18);
     });
-    const toolbar = page.getByRole('toolbar', { name: 'Document selection' });
+    const toolbar = page.getByRole('toolbar');
     await expect(toolbar).toBeVisible();
     await page.getByRole('button', { name: lock, exact: true }).click();
     await expect(toolbar).toHaveCount(0);
@@ -177,7 +177,7 @@ test('body popup AI edit slot comes first and swaps to its prompt at the toolbar
     if (!text) throw new Error('Missing actual native text');
     root.ownerDocument.getSelection()?.setBaseAndExtent(text, 0, text, 18);
   });
-  const toolbar = page.getByRole('toolbar', { name: 'Document selection' });
+  const toolbar = page.getByRole('toolbar');
   await expect(toolbar).toBeVisible();
   await info.attach('body-popup-ai-toolbar', {
     body: await page.screenshot(),
