@@ -83,6 +83,14 @@ fn subscribes_to_all_ingestion_topics() {
             "macro.properties",
             "macro.calls",
             "macro.github_pull_requests",
+            "macro.email",
+            "macro.calendar",
+            "macro.activity",
+            "macro.notifications",
+            "macro.mentions",
+            "macro.teams",
+            "macro.bots",
+            "macro.github_webhooks",
         ]
     );
 }

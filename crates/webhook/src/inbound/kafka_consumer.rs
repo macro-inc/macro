@@ -157,6 +157,30 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::GithubPullRequestMacroEvent(event) => {
                         service.ingest_public_event(event.event().clone()).await
                     }
+                    DeclaredMacroEvent::EmailMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::CalendarMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::ActivityMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::JsonNotificationMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::MentionMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::TeamMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::BotMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::GithubWebhookMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
                 };
 
                 match &result {

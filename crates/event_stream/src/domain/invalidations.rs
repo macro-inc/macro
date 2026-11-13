@@ -77,7 +77,13 @@ pub fn invalidations(event: &LogMacroEvent) -> Vec<Invalidation> {
         | LogMacroEvent::InitiativeMacroEvent(_)
         | LogMacroEvent::PropertyMacroEvent(_)
         | LogMacroEvent::CallMacroEvent(_)
-        | LogMacroEvent::GithubPullRequestMacroEvent(_) => Vec::new(),
+        | LogMacroEvent::GithubPullRequestMacroEvent(_)
+        | LogMacroEvent::EmailMacroEvent(_)
+        | LogMacroEvent::CalendarMacroEvent(_)
+        | LogMacroEvent::ActivityMacroEvent(_)
+        | LogMacroEvent::JsonNotificationMacroEvent(_)
+        | LogMacroEvent::MentionMacroEvent(_)
+        | LogMacroEvent::GithubWebhookMacroEvent(_) => Vec::new(),
     }
 }
 
@@ -108,6 +114,12 @@ pub fn log_record(event: &LogMacroEvent) -> Result<Option<LogRecord>, NormalizeE
         LogMacroEvent::PropertyMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::CallMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::GithubPullRequestMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::EmailMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::CalendarMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::ActivityMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::JsonNotificationMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::MentionMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::GithubWebhookMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::TeamMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::BotMacroEvent(event) => normalize(event.event())?,
     };

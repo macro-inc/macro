@@ -3,6 +3,7 @@ use crate::domain::models::Invalidation;
 use crate::domain::test_support::{FakeLog, user};
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelParticipantRemovedMetadata};
 use channels::domain::models::ChannelType;
+use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadSpamChangedMetadata};
 use event_exposure::{Audience, EntityType};
 use std::sync::atomic::{AtomicBool, Ordering};
 use teams::domain::events::{TeamMacroEvent, TeamMemberRemovedMetadata};
@@ -12,6 +13,7 @@ use uuid::Uuid;
 #[derive(Default)]
 struct Switches {
     killed: AtomicBool,
+    email: AtomicBool,
 }
 
 impl WriterSwitches for Switches {
@@ -20,7 +22,7 @@ impl WriterSwitches for Switches {
     }
 
     async fn email_enabled(&self) -> bool {
-        false
+        self.email.load(Ordering::SeqCst)
     }
 }
 
@@ -68,7 +70,7 @@ async fn a_public_event_is_appended_with_its_audience_and_the_access_it_changes(
 }
 
 #[tokio::test]
-async fn an_internal_event_that_changes_access_is_appended_as_an_invalidation_only() {
+async fn a_public_event_that_changes_access_is_appended_once_with_its_invalidation() {
     let log = FakeLog::default();
     let writer = LogWriter::new(Arc::new(log.clone()), Switches::default());
     let removed =
@@ -82,7 +84,9 @@ async fn an_internal_event_that_changes_access_is_appended_as_an_invalidation_on
     writer.write("macro.teams", &removed).await.unwrap();
 
     let entries = log.entries.lock().unwrap();
-    assert_eq!(entries[0].1.event, None);
+    assert_eq!(entries.len(), 1);
+    let public = entries[0].1.event.as_ref().expect("public");
+    assert_eq!(public.event.event_name, "team.member_removed");
     assert_eq!(
         entries[0].1.invalidations,
         vec![Invalidation::Team {
@@ -90,6 +94,42 @@ async fn an_internal_event_that_changes_access_is_appended_as_an_invalidation_on
             user_id: Some(user("member@example.com")),
         }]
     );
+}
+
+fn email_event() -> LogMacroEvent {
+    LogMacroEvent::EmailMacroEvent(EmailMacroEvent::thread_spam_changed(
+        ThreadSpamChangedMetadata {
+            link_id: Uuid::from_u128(0x11),
+            owner: user("owner@example.com"),
+            actor: None,
+            thread_id: Uuid::from_u128(0x7d),
+            spam: true,
+            origin: EmailEventOrigin::ProviderSync,
+        },
+    ))
+}
+
+#[tokio::test]
+async fn email_is_appended_only_with_its_switch_on() {
+    let log = FakeLog::default();
+    let switches = Switches::default();
+    let writer = LogWriter::new(Arc::new(log.clone()), switches);
+
+    let outcome = writer.write("macro.email", &email_event()).await.unwrap();
+
+    assert_eq!(outcome, WriteOutcome::Skipped("email_disabled"));
+    assert!(log.entries.lock().unwrap().is_empty());
+
+    let switches = Switches::default();
+    switches.email.store(true, Ordering::SeqCst);
+    let writer = LogWriter::new(Arc::new(log.clone()), switches);
+
+    let outcome = writer.write("macro.email", &email_event()).await.unwrap();
+
+    assert!(matches!(outcome, WriteOutcome::Appended(_)));
+    let entries = log.entries.lock().unwrap();
+    let public = entries[0].1.event.as_ref().expect("public");
+    assert_eq!(public.event.event_name, "email.thread_spam_changed");
 }
 
 #[tokio::test]

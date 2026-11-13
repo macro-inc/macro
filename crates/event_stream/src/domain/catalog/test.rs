@@ -168,7 +168,9 @@ fn audience_classes(audience: &event_exposure::Audience, classes: &mut Vec<Audie
     }
 }
 
-/// Sample broker events per union family, one or more per event type.
+/// Sample broker events per union family, one or more per event type, each
+/// in its topic's wire shape: `{event_type, metadata}`, or `{name: metadata}`
+/// for an externally tagged topic (calendar).
 const SAMPLES: &str = include_str!("exposure_samples.json");
 
 /// Event types of each union family that are internal on every input, so
@@ -187,18 +189,18 @@ const ALWAYS_INTERNAL: &[(&str, &[&str])] = &[
     ("Chat", &["chat.permanently_deleted"]),
     ("Database", &["database.purged"]),
     ("Form", &["form.purged"]),
-    (
-        "Property",
-        &[
-            "property.created",
-            "property.deleted",
-            "property_option.created",
-            "property_option.updated",
-            "property_option.deleted",
-            "entity_property.deleted",
-        ],
-    ),
+    ("Property", &["entity_property.deleted"]),
 ];
+
+/// A sample's event type: its `event_type` tag, or its only key.
+fn sample_event_type(sample: &serde_json::Value) -> &str {
+    if let Some(event_type) = sample["event_type"].as_str() {
+        return event_type;
+    }
+    let object = sample.as_object().expect("sample is an object");
+    assert_eq!(object.len(), 1, "untagged sample {sample}");
+    object.keys().next().expect("one key")
+}
 
 /// The registry agrees with every producer's `exposure()`: each public name
 /// a sample declares is registered under its family with the same stage,
@@ -226,7 +228,7 @@ fn the_registry_matches_every_producers_exposure() {
         let mut observed: Vec<(&str, Vec<AudienceClass>)> = Vec::new();
 
         for sample in &samples[*family] {
-            let event_type = sample["event_type"].as_str().expect("sample event_type");
+            let event_type = sample_event_type(sample);
             sampled.insert(event_type.to_owned());
             let declared = visit_union_family(family, Expose(sample.clone()))
                 .expect("union family")

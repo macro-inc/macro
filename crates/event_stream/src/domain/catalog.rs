@@ -9,21 +9,31 @@
 #[cfg(test)]
 mod test;
 
+use activity::domain::events::{ActivityPublicEvent, ActivityTopicEvent};
 use agent_session::domain::events::AgentSessionLifecycleEvent;
+use bots::domain::events::{BotPublicEvent, BotTopicEvent};
+use calendar_events::domain::events::{CalendarPublicEvent, CalendarTopicEvent};
 use call::domain::events::{CallRecordPublicEvent, CallTopicEvent};
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
+use channels::domain::mention_events::{MentionPublicEvent, MentionTopicEvent};
 use chat::domain::events::{ChatPublicEvent, ChatTopicEvent};
 use databases::domain::events::{DatabasePublicEvent, DatabaseTopicEvent};
 use documents::domain::events::{DocumentPublicEvent, DocumentTopicEvent};
+use email::domain::events::{EmailPublicEvent, EmailTopicEvent};
 use event_exposure::Stage;
 use forms::domain::events::{FormPublicEvent, FormTopicEvent};
+use github::broker::{GithubWebhookPublicEvent, GithubWebhookTopicEvent};
 use github_pull_requests::broker::{GithubPullRequestPublicEvent, GithubPullRequestTopicEvent};
 use initiative::domain::events::{InitiativePublicEvent, InitiativeTopicEvent};
 use messages::outbound::broker::MessageTopicEvent;
+use notification::domain::models::websocket_notification_event::{
+    NotificationPublicEvent, NotificationTopicEvent,
+};
 use projects::domain::events::{ProjectPublicEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyPublicEvent, PropertyTopicEvent};
 use serde::Serialize;
+use teams::domain::events::{TeamPublicEvent, TeamTopicEvent};
 use user_events::UserTopicEvent;
 
 /// The class of rule that decides who receives an event.
@@ -265,10 +275,16 @@ public_event_registry! {
             "initiative.appearance_changed": ["initiative"], [Entity], Preview;
             "initiative.purged": ["initiative"], [Snapshot], Preview;
         }
-        /// Entity property value events from the `macro.properties` topic.
+        /// Entity property values, property definitions and options from the
+        /// `macro.properties` topic.
         Property(PropertyTopicEvent => PropertyPublicEvent) {
             "entity_property.updated": ["call", "channel", "chat", "crm_company", "crm_contact", "database_row", "document", "initiative", "project", "email_thread"], [Entity], Preview;
             "entity_properties.cleared": ["call", "channel", "chat", "crm_company", "crm_contact", "database_row", "document", "initiative", "project", "email_thread"], [Entity], Preview;
+            "property.created": ["property"], [Recipient, Team, Entity], Preview;
+            "property.deleted": ["property"], [Recipient, Team, Entity], Preview;
+            "property_option.created": ["property"], [Recipient, Team, Entity], Preview;
+            "property_option.updated": ["property"], [Recipient, Team, Entity], Preview;
+            "property_option.deleted": ["property"], [Recipient, Team, Entity], Preview;
         }
         /// Call record events from the `macro.calls` topic.
         CallRecord(CallTopicEvent => CallRecordPublicEvent) {
@@ -279,6 +295,67 @@ public_event_registry! {
         /// Pull request events from the `macro.github_pull_requests` topic.
         GithubPullRequest(GithubPullRequestTopicEvent => GithubPullRequestPublicEvent) {
             "github_pull_request.updated": ["github_pull_request"], [Entity], Preview;
+        }
+        /// The owner's mailbox events from the `macro.email` topic.
+        Email(EmailTopicEvent => EmailPublicEvent) {
+            "email.link_connected": ["email_link"], [Recipient], Preview;
+            "email.link_disconnected": ["email_link"], [Recipient], Preview;
+            "email.link_reauth_required": ["email_link"], [Recipient], Preview;
+            "email.message_received": ["email_thread"], [Recipient], Preview;
+            "email.message_sent": ["email_thread"], [Recipient], Preview;
+            "email.message_deleted": ["email_thread"], [Recipient], Preview;
+            "email.message_send_queued": ["email_thread"], [Recipient], Preview;
+            "email.message_send_cancelled": ["email_thread"], [Recipient], Preview;
+            "email.thread_archived": ["email_thread"], [Recipient], Preview;
+            "email.thread_trashed": ["email_thread"], [Recipient], Preview;
+            "email.thread_read": ["email_thread"], [Recipient], Preview;
+            "email.thread_starred": ["email_thread"], [Recipient], Preview;
+            "email.thread_spam_changed": ["email_thread"], [Recipient], Preview;
+            "email.thread_project_changed": ["email_thread"], [Recipient], Preview;
+            "email.thread_labels_updated": ["email_thread"], [Recipient], Preview;
+        }
+        /// The owner's calendar changes from the `macro.calendar` topic.
+        Calendar(CalendarTopicEvent => CalendarPublicEvent) {
+            "calendar_event.created": ["calendar_event"], [Recipient], Preview;
+            "calendar_event.updated": ["calendar_event"], [Recipient], Preview;
+            "calendar_event.deleted": ["calendar_event"], [Recipient], Preview;
+        }
+        /// A user's activity feed from the `macro.activity` topic.
+        Activity(ActivityTopicEvent => ActivityPublicEvent) {
+            "activity.recorded": ["user"], [Recipient], Preview;
+        }
+        /// A user's notifications from the `macro.notifications` topic.
+        Notification(NotificationTopicEvent<'static, serde_json::Value> => NotificationPublicEvent) {
+            "notification.created": ["notification"], [Recipient], Preview;
+            "notification.updated": ["notification"], [Recipient], Preview;
+        }
+        /// Entity mentions in documents from the `macro.mentions` topic.
+        Mention(MentionTopicEvent => MentionPublicEvent) {
+            "mention.created": ["document"], [Entity], Preview;
+            "mention.deleted": ["document"], [Entity], Preview;
+        }
+        /// Team events from the `macro.teams` topic.
+        Team(TeamTopicEvent => TeamPublicEvent) {
+            "team.created": ["team"], [Team], Preview;
+            "team.updated": ["team"], [Team], Preview;
+            "team.deleted": ["team"], [Snapshot], Preview;
+            "team.invite_created": ["team"], [TeamAdmins], Preview;
+            "team.invite_rejected": ["team"], [TeamAdmins], Preview;
+            "team.invite_revoked": ["team"], [TeamAdmins], Preview;
+            "team.member_joined": ["team"], [Team], Preview;
+            "team.member_removed": ["team"], [Team, Snapshot], Preview;
+            "team.member_role_changed": ["team"], [Team], Preview;
+            "team.auto_join_domain_toggled": ["team"], [TeamAdmins], Preview;
+        }
+        /// Bot lifecycle from the `macro.bots` topic, for the owning user or team.
+        Bot(BotTopicEvent => BotPublicEvent) {
+            "bot.created": ["bot"], [Recipient, Team], Preview;
+            "bot.updated": ["bot"], [Recipient, Team], Preview;
+            "bot.deleted": ["bot"], [Recipient, Team], Preview;
+        }
+        /// GitHub App deliveries from the `macro.github_webhooks` topic.
+        GithubWebhook(GithubWebhookTopicEvent => GithubWebhookPublicEvent) {
+            "github_webhook.received": ["github_installation"], [GithubInstallation], Preview;
         }
     }
     outside_union {

@@ -16,16 +16,23 @@ outbound = [
 ]
 schema = [
   "dep:utoipa",
+  "activity/schema",
   "agent_session/schema",
+  "bots/schema",
+  "calendar_events/schema",
   "call/inbound",
   "channels/schema",
   "documents/schema",
+  "email/schema",
   "forms/inbound",
+  "github/schema",
   "github_pull_requests/schema",
   "initiative/inbound",
   "messages/schema",
+  "notification/schema",
   "projects/axum",
   "properties/inbound",
+  "teams/schema",
   "user_events/schema",
 ]
 
@@ -44,14 +51,17 @@ inbound = [
 ]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 agent_session = { path = "../agent_session", default-features = false }
 agent_trigger = { path = "../agent_trigger" }
 bots = { path = "../bots", default-features = false }
+calendar_events = { path = "../calendar_events", default-features = false }
 call = { path = "../call", default-features = false }
 channels = { path = "../channels", default-features = false }
 chat = { path = "../chat", default-features = false }
 databases = { path = "../databases", default-features = false }
 forms = { path = "../forms", default-features = false }
+github = { path = "../github", default-features = false }
 github_pull_requests = { path = "../github_pull_requests", default-features = false }
 initiative = { path = "../initiative", default-features = false }
 projects = { path = "../projects", default-features = false }
@@ -59,6 +69,7 @@ properties = { path = "../properties", default-features = false }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false }
+email = { path = "../email", default-features = false }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ], optional = true }
@@ -73,6 +84,7 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 messages = { path = "../messages", features = ["broker"] }
+notification = { path = "../notification", default-features = false }
 model-error-response = { path = "../model-error-response", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 opentelemetry = { workspace = true, features = ["metrics", "trace"] }
