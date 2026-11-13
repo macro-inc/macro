@@ -908,52 +908,205 @@ async fn the_cpu_limit_stops_a_busy_program() {
     service.shutdown().await;
 }
 
+/// A server answering every request with `body`, counting them.
+async fn counting_server(body: &'static str) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let served = Arc::clone(&count);
+    tokio::spawn(async move {
+        while let Ok((mut stream, _)) = listener.accept().await {
+            read_request(&mut stream).await;
+            served.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            respond(&mut stream, body).await;
+        }
+    });
+    (host, count)
+}
+
+/// A cognition server that accepts requests and never answers them.
+async fn hanging_server() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move {
+        let mut open = Vec::new();
+        while let Ok((stream, _)) = listener.accept().await {
+            open.push(stream);
+        }
+    });
+    host
+}
+
+fn session_run(host: &str, hanging: Option<&str>) -> RunEnvironment {
+    let mut hosts = BTreeMap::from([("email".into(), host.to_owned())]);
+    if let Some(hanging) = hanging {
+        hosts.insert("cognition".into(), hanging.to_owned());
+    }
+    RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts,
+            ..SdkEndpoints::default()
+        },
+        ..RunEnvironment::default()
+    }
+}
+
+async fn run_in_session(
+    service: &ExecutionService,
+    source: &str,
+    host: &str,
+    hanging: Option<&str>,
+    timeout_ms: u64,
+) -> Outcome {
+    collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms,
+                },
+                session_run(host, hanging),
+            )
+            .unwrap(),
+    )
+    .await
+    .1
+}
+
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
-async fn a_looping_program_is_stopped_and_fails_naming_the_operation() {
+async fn a_catch_and_retry_loop_stops_at_its_budget_naming_the_operation() {
     let (_root, service) = setup(Limits {
         max_calls_per_operation: 3,
         ..Limits::default()
     })
     .await;
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let host = format!("http://{}", listener.local_addr().unwrap());
-    let server = tokio::spawn(async move {
-        for _ in 0..3 {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let request = read_request(&mut stream).await;
-            assert!(
-                request.starts_with("GET ") && request.contains("/threads/thread-1"),
-                "{request}"
-            );
-            respond(&mut stream, r#"{"thread":{}}"#).await;
-        }
-        // The calls past the budget never reach the API.
-        assert!(
-            tokio::time::timeout(Duration::from_millis(500), listener.accept())
-                .await
-                .is_err()
-        );
-    });
-    // Catching each failure must not hide the loop: the run still fails.
+    let (host, served) = counting_server(r#"{"thread":{}}"#).await;
+    // Retrying forever and swallowing every error must not run to the deadline.
     let source = r#"
-export async function main({ macro }: { macro: any }) {
-  let refused = 0;
-  for (let i = 0; i < 10; i++) {
+export async function main({ macro }) {
+  for (;;) {
     try {
       await macro._client.email.getThread({ path: { thread_id: "thread-1" } });
-    } catch {
-      refused++;
-    }
+    } catch {}
   }
-  return { refused };
+}
+"#;
+    let started = std::time::Instant::now();
+    let outcome = run_in_session(&service, source, &host, None, 10_000).await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "ran to the deadline"
+    );
+    assert!(
+        error.message.starts_with(
+            "Stopped: this program called email.getThread more than 3 times, so it is probably looping. The first 3 calls ran."
+        ),
+        "{}",
+        error.message
+    );
+    assert_eq!(served.load(std::sync::atomic::Ordering::SeqCst), 3);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn the_call_budget_is_per_operation() {
+    let (_root, service) = setup(Limits {
+        max_calls_per_operation: 3,
+        ..Limits::default()
+    })
+    .await;
+    let (host, served) = counting_server(r#"{"thread":{}}"#).await;
+    let source = r#"
+export async function main({ macro }) {
+  for (let i = 0; i < 3; i++) {
+    await macro._client.email.getThread({ path: { thread_id: "thread-1" } });
+    await macro._client.email.getThreadCalendarInvitations({ path: { thread_id: "thread-1" } });
+  }
+  return { data: "done" };
+}
+"#;
+    let outcome = run_in_session(&service, source, &host, None, 10_000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["data"], "done");
+    assert_eq!(served.load(std::sync::atomic::Ordering::SeqCst), 6);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_loop_unfinished_at_the_deadline_is_named_before_it() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, _) = counting_server(r#"{"thread":{}}"#).await;
+    // Under the budget, then stuck waiting: only the deadline would end it.
+    let source = r#"
+export async function main({ macro }) {
+  for (let i = 0; i < 60; i++) {
+    await macro._client.email.getThread({ path: { thread_id: "thread-1" } });
+  }
+  await macro.ai.decide({ input: "x", questions: { yes: "Yes?" } });
+}
+"#;
+    let hanging = hanging_server().await;
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 4_000).await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert!(
+        error.message.starts_with(
+            "Stopped near the deadline: this program called email.getThread 60 times and did not finish"
+        ),
+        "{}",
+        error.message
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_program_stuck_without_repeated_calls_still_times_out() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, _) = counting_server(r#"{"thread":{}}"#).await;
+    let source = r#"
+export async function main({ macro }) {
+  await macro._client.email.getThread({ path: { thread_id: "thread-1" } });
+  await macro.ai.decide({ input: "x", questions: { yes: "Yes?" } });
+}
+"#;
+    let hanging = hanging_server().await;
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 2_000).await;
+    assert!(matches!(outcome, Outcome::TimedOut), "{outcome:?}");
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn skipped_dry_run_writes_count_toward_the_budget() {
+    let (_root, service) = setup(Limits {
+        max_calls_per_operation: 3,
+        ..Limits::default()
+    })
+    .await;
+    let source = r#"
+export async function main({ macro }: { macro: any }) {
+  for (let i = 0; i < 5; i++) {
+    await macro._client.email.archiveThread({ path: { id: "thread-1" }, body: { archived: true } });
+  }
+  return { archived: true };
 }
 "#;
     let environment = unattended(
         "fixture-run-token",
-        &[("email", host.clone())],
+        &[("email", "http://127.0.0.1:9".into())],
         serde_json::json!({}),
-        false,
+        true,
     );
     let (progress, outcome) = run_unattended(&service, source, environment).await;
     let Outcome::Failed { error } = outcome else {
@@ -962,17 +1115,16 @@ export async function main({ macro }: { macro: any }) {
     assert!(
         error
             .message
-            .starts_with("Stopped: this program called email.getThread more than 3 times"),
+            .starts_with("Stopped: this program called email.archiveThread more than 3 times"),
         "{}",
         error.message
     );
     assert_eq!(
         progress
             .iter()
-            .filter(|event| event["status"] == "refused")
+            .filter(|event| event["status"] == "skipped")
             .count(),
-        7
+        3
     );
-    server.await.unwrap();
     service.shutdown().await;
 }

@@ -87,9 +87,9 @@ pub struct Limits {
     pub max_result_bytes: usize,
     /// Maximum regular events, plus a separate equal budget for advisory progress.
     pub max_events: usize,
-    /// Calls of any one SDK operation a program may make; later calls of it
-    /// are refused with an error naming it. A program reading the same thing
-    /// in an unbounded loop would otherwise hammer one API until the deadline
+    /// Calls of any one SDK operation a program may make; the next one stops
+    /// the run with an error naming it. A program reading the same thing in
+    /// an unbounded loop would otherwise hammer one API until the deadline
     /// and end with nothing to tell the agent why.
     pub max_calls_per_operation: u32,
     /// CPU time a process may use across its threads before the kernel stops
