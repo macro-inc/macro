@@ -887,8 +887,8 @@ To buy one as a team admin:
    restore. Showing the row loads the offers, so the dialog opens with the
    sizes already there.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
-   step header, **Buy computer → Configure agent → Bring your AI → Ready**
-   (**Buy → Agent → Your AI → Ready** on phones, so it stays on one line;
+   step header, **Buy computer → Configure agent → Bring your AI → Create agent**
+   (**Buy → Agent → Your AI → Create** on phones, so it stays on one line;
    done steps carry a check, the current one is in ink), that stays open from
    Buy to Try it. The Buy computer step has the size radios (**Standard**,
    **Large**, **XL**) with price per interval, a sold-out size disabled and
@@ -924,8 +924,10 @@ To buy one as a team admin:
 While the computer provisions, a **Setup progress** list under the step bar
 follows the same phases the row shows (Updating billing…, Creating the
 computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
-on every step, the sign-in struck through "Not needed" once Macro's Claude is
-chosen): done stages carry a check, the current one a spinner and how long it
+on every step, the sign-in marked with a dash as "Sign in to Claude · skipped",
+"Not needed", once Macro's Claude is chosen): done stages carry a check and
+read as done (Billing updated, Computer created, Started up, Connected to
+Macro, Signed in to Claude), the current one a spinner and how long it
 has taken (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
 else from when the step was first seen here, the billing wait from the
 purchase), and a stuck one says why (waiting for capacity, or
@@ -933,7 +935,8 @@ purchase), and a stuck one says why (waiting for capacity, or
 `POST .../retry`; a server `failureReason`, once the API sends one, is shown
 before that copy). No control in the flow is disabled without a line beside it
 saying why (**Continue**: name the agent / choose which Claude; **Buy**: sizes
-loading; **Complete sign-in**: paste the code; **Try it**: setup finishing). The row in Machines shows the same live line, `Setting up ·
+loading; **Complete sign-in**: paste the code; **Try it** and **Create an
+agent on this computer**: setup finishing). The row in Machines shows the same live line, `Setting up ·
 Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
 carries on; the row's **Finish setup** reopens the same dialog where it left
 off. **Let's set up an agent on it** names the agent Macro
@@ -950,9 +953,14 @@ Claude, then setup-complete.
   0:42") instead of a greyed button, lists the sign-in as a later stage that
   unlocks by itself, and offers only **Close** and **Use Macro credits
   instead**. Once connected, **Open claude.ai** appears and the tab title
-  becomes "● Sign in to Claude — Macro". Closed meanwhile, a toast "<computer> is ready — sign in to
-  Claude" reopens the modal on that step. The code is pasted in the same modal.
-- **Macro's Claude** skips **Bring your AI**, shown struck through.
+  becomes "● Sign in to Claude — Macro". Closed meanwhile, the setup notice
+  (below) reopens the modal on that step. The code is pasted in the same modal.
+- **Macro's Claude** skips **Bring your AI**, shown muted with a dash as
+  "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
+  through.
+- A **failed** or stuck setup stops the **Bring your AI** step: it says setup
+  stopped before the computer came up and to use **Retry setup** above, with
+  no spinner, no elapsed time and no **Use Macro credits instead**.
 
 Macro creates that agent once, on the computer's first connection, with the
 handle `@<first-name>-s-agent` (`-2`, `-3`… when taken), on Claude Code's
@@ -962,12 +970,38 @@ can create one under **Agents**. Agents created later on a computer also
 default to bypassing permission prompts. Releasing a computer, or its disk
 being destroyed, deletes every agent on it.
 
-**Ready** follows by itself once the computer is connected and Claude is set;
-the computer status is refreshed first. **Try it** opens a new Agents
-conversation in Code with that agent selected (`openAgentsPage` with
-`composerAgentId`). Closing at any step keeps its place; the row's **Finish
-setup** reopens it. Bought from **Where it runs**, the editor selects the new
-computer when the modal closes.
+**Create agent**, the last step ("<agent> is ready"), follows by itself once
+the computer is connected and Claude is set; the computer status is refreshed
+first. It offers **Done**, **Create an agent on this computer** and **Try it**:
+
+- **Try it** opens a new Agents conversation in Code with the configured agent
+  selected (`openAgentsPage` with `composerAgentId`; the Agents view hands the
+  composer an agent request keyed by the page request, so every Try it
+  selects it again). The agent is created server-side when the computer first
+  comes up, so the setup steps refetch a cached agents list that lacks it; the
+  composer's roster reads the same list and selects the agent once it is there.
+- **Create an agent on this computer** opens **Settings → Agents** on the
+  **New agent** form with this computer chosen under **Where it runs**
+  (`requestCreateAgent(harnessId)` in `agentSettingsState.ts`). Bought from an
+  agent's **Where it runs**, it reads **Use for this agent** and only closes:
+  the editor selects the new computer when the modal closes.
+
+Closing at any step keeps its place; the row's **Finish setup** reopens it.
+
+**Setup notices.** Buying is asynchronous: the dialog closes at any step and
+nothing is cancelled. When the computer first connects, its buyer gets a
+`computer_setup` notification ("Your computer is ready: connect your AI and
+finish setup", in-app notice, browser and phone push); when first setup fails,
+one titled "<computer> could not be set up" with the failure reason. In the
+app it shows as a one-minute notice whose **Finish setup** / **Retry setup**
+reopens the setup dialog for that computer on **Bring your AI** (a failed
+computer shows **Retry setup** in its progress list there), on desktop and in
+the phone settings sheet. Clicking the notification or tapping the push does
+the same, also on a cold start; the link is
+`/settings/runtimes?computerSetup=<computer id>`
+(`computers/primitives/setup-request.ts`). The dialog's own "ready" notice,
+shown when it was closed while waiting for the sign-in link, is the same
+notice, so the two never stack.
 
 **Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
 **Open claude.ai** is a plain new-tab link (the desktop app hands it to the
