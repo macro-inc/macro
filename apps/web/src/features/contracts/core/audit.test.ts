@@ -3,12 +3,13 @@ import {
   acmeDraft,
   SARAH,
   sha256,
+  signAs,
   TYPED_SIGNATURE,
   testContext,
 } from '../tests/packets';
 import { firstBrokenEvent, sealEvents } from './audit';
 import { buildCertificate } from './certificate';
-import { sendPacket, signPacket } from './lifecycle';
+import { replaceDocument, sendPacket } from './lifecycle';
 import { findRecipient } from './packet';
 
 async function signedBySarah() {
@@ -19,7 +20,7 @@ async function signedBySarah() {
     sha256
   );
   const token = findRecipient(sent, SARAH)?.access?.token ?? '';
-  const signed = signPacket(
+  const signed = signAs(
     sent,
     token,
     { ...TYPED_SIGNATURE, values: { 'sarah-title': 'VP, Operations' } },
@@ -74,7 +75,8 @@ describe('buildCertificate', () => {
     ]);
     expect(certificate.hashes[1]).toMatchObject({
       signerName: 'Sarah Chen',
-      final: true,
+      // One of two signers has signed, so no digest is final yet.
+      final: false,
     });
     expect(certificate.signers[0]).toMatchObject({
       name: 'Sarah Chen',
@@ -83,5 +85,30 @@ describe('buildCertificate', () => {
       tokenId: 'tok_1',
     });
     expect(certificate.copyRecipients).toEqual(['Dana Whitfield']);
+  });
+
+  it('drops the digests of signatures a replaced document voided', async () => {
+    const { signed } = await signedBySarah();
+    const context = testContext('2026-11-11T09:00:00.000Z');
+    const revised = await sealEvents(
+      replaceDocument(
+        signed,
+        'order-form',
+        {
+          id: 'order-form-v2',
+          name: 'Order Form',
+          pageCount: 2,
+          source: 'upload',
+          sha256: 'c'.repeat(64),
+        },
+        context
+      )._unsafeUnwrap(),
+      sha256
+    );
+
+    const { hashes } = buildCertificate(revised);
+    // Only the state the signers are now asked to sign is listed.
+    expect(hashes.map((hash) => hash.step)).toEqual(['before_signing']);
+    expect(hashes[0].hash).toBe(revised.events.at(-1)?.stateHash);
   });
 });

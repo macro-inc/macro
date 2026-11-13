@@ -1,6 +1,8 @@
+import { addHours } from 'date-fns';
 import { err, ok, type Result } from 'neverthrow';
 import {
   blocksSending,
+  fieldsBelong,
   isAutoFilled,
   placementProblems,
   remainingFields,
@@ -36,6 +38,11 @@ export type PacketError =
   | { kind: 'cannot_send' }
   | { kind: 'no_database' }
   | { kind: 'not_your_turn' }
+  | { kind: 'disclosure_required' }
+  | { kind: 'signature_field_lost' }
+  | { kind: 'signature_missing' }
+  | { kind: 'signature_too_large' }
+  | { kind: 'fields_misplaced' }
   | { kind: 'fields_incomplete'; fieldIds: string[] }
   | { kind: 'unknown_recipient' };
 
@@ -51,10 +58,11 @@ export type DraftInput = {
   reminderDays?: number | null;
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOURS_PER_DAY = 24;
 
+/** Windows and cadences count whole 24-hour days, whatever the time zone. */
 function addDays(iso: string, days: number): string {
-  return new Date(Date.parse(iso) + days * DAY_MS).toISOString();
+  return addHours(new Date(iso), days * HOURS_PER_DAY).toISOString();
 }
 
 function event(
@@ -156,6 +164,7 @@ export function setFields(
   if (packetStatus(packet, context.now) !== 'draft') {
     return err({ kind: 'not_draft' });
   }
+  if (!fieldsBelong(packet, fields)) return err({ kind: 'fields_misplaced' });
   return ok({ ...packet, fields });
 }
 
@@ -247,8 +256,9 @@ export type SigningInput = Adoption & {
 };
 
 /**
- * Apply a signer's signature. Their required fields must be complete; the
- * date, name, and email fields are filled for them. Signing invites the next
+ * Apply a signer's signature. They must have accepted the disclosure and
+ * completed their required fields; the date, name, and email fields are
+ * filled for them. Signing invites the next
  * signer of a sequential packet and completes the packet after the last one.
  */
 export function signPacket(
@@ -259,6 +269,16 @@ export function signPacket(
 ): Result<Packet, PacketError> {
   const found = activeRecipient(packet, token, context.now);
   if (found.isErr()) return err(found.error);
+  // Consent to sign electronically is its own recorded step, never implied.
+  if (!found.value.disclosureAcceptedAt) {
+    return err({ kind: 'disclosure_required' });
+  }
+  if (isBlank(input.signature) || isBlank(input.initials)) {
+    return err({ kind: 'signature_missing' });
+  }
+  if (isTooLarge(input.signature) || isTooLarge(input.initials)) {
+    return err({ kind: 'signature_too_large' });
+  }
 
   const { access: _access, ...withoutAccess } = found.value;
   const signer: Recipient = {
@@ -266,7 +286,6 @@ export function signPacket(
     signature: input.signature,
     initials: input.initials,
     signedAt: context.now,
-    disclosureAcceptedAt: found.value.disclosureAcceptedAt ?? context.now,
   };
 
   const filled: Packet = {
@@ -312,8 +331,31 @@ function fillField(
   if (field.kind === 'email') return { ...field, value: signer.email };
   if (isAutoFilled(field.kind)) return field;
 
+  // Only what the field's kind takes is kept: text for a text field, a
+  // tick for a checkbox. Marks render from the adopted signature.
   const entered = input.values[field.id];
-  return entered === undefined ? field : { ...field, value: entered };
+  if (field.kind === 'text' && typeof entered === 'string') {
+    return { ...field, value: entered };
+  }
+  if (field.kind === 'checkbox' && typeof entered === 'boolean') {
+    return { ...field, value: entered };
+  }
+  return field;
+}
+
+function isBlank(mark: AdoptedSignature): boolean {
+  if (mark.kind === 'typed') return mark.text.trim() === '';
+  return mark.dataUrl === '';
+}
+
+/**
+ * The longest drawn or uploaded mark a packet keeps, in data-URL characters:
+ * about 300 KB of image. A packet stores each signer's mark in full.
+ */
+export const MAX_MARK_LENGTH = 400_000;
+
+function isTooLarge(mark: AdoptedSignature): boolean {
+  return mark.kind !== 'typed' && mark.dataUrl.length > MAX_MARK_LENGTH;
 }
 
 /** The signer refused. Their link and everyone else's stop working. */
@@ -429,7 +471,8 @@ export function nextReminderAt(
  * signatures no longer apply to the new text, so every signing link is
  * voided, signatures and entered values are cleared, and the first signers
  * are invited again. The document's fields stay where they were placed,
- * except those on pages the revision no longer has.
+ * except those on pages the revision no longer has; a revision that would
+ * leave a signer with no signature field at all is refused.
  */
 export function replaceDocument(
   packet: Packet,
@@ -460,6 +503,11 @@ export function replaceDocument(
       }),
     ],
   };
+  // A shorter revision can drop the page a signer's only signature sat on.
+  // Sending it would ask them to sign a packet with nowhere to sign.
+  if (placementProblems(revised).some(blocksSending)) {
+    return err({ kind: 'signature_field_lost' });
+  }
   return ok(invite(revised, context));
 }
 
@@ -479,13 +527,15 @@ export function markSignedOffline(
   by: string,
   context: LifecycleContext
 ): Result<Packet, PacketError> {
+  // Only a packet that was sent and is not already closed for good.
   const status = packetStatus(packet, context.now);
-  if (status === 'signed' || status === 'voided') {
+  if (status === 'draft' || status === 'signed' || status === 'voided') {
     return err({ kind: 'not_in_flight' });
   }
   return ok({
     ...revokeAccess(packet),
     statusOverride: { status: 'signed', tag: 'offline', by, at: context.now },
+    completedAt: context.now,
     events: [
       ...packet.events,
       event(context, 'audit.status_overridden', by, {

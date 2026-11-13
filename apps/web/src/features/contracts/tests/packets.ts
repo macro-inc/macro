@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { Digest } from '../core/audit';
 import {
+  acceptDisclosure,
   createDraft,
   type DraftInput,
   type LifecycleContext,
+  type SigningInput,
   setFields,
+  signPacket,
 } from '../core/lifecycle';
 import type { Packet, PacketField } from '../core/packet';
 
@@ -155,3 +158,15 @@ export const TYPED_SIGNATURE = {
   signature: { kind: 'typed', text: 'Sarah Chen', style: 'script-1' },
   initials: { kind: 'typed', text: 'SC', style: 'script-1' },
 } as const;
+
+/** Accept the disclosure and sign, as the signing page does on Finish. */
+export function signAs(
+  packet: Packet,
+  token: string,
+  input: SigningInput,
+  context: LifecycleContext
+) {
+  return acceptDisclosure(packet, token, context).andThen((accepted) =>
+    signPacket(accepted, token, input, context)
+  );
+}

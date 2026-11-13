@@ -39,6 +39,21 @@ export function clampBox(box: FieldBox): FieldBox {
   };
 }
 
+/**
+ * A box being resized from its bottom-right corner: its origin stays put and
+ * its size stops at the page edge, instead of the box sliding to make room.
+ */
+export function resizeBox(box: FieldBox): FieldBox {
+  const xPct = clamp(box.xPct, 0, 1 - MIN_FIELD_SIZE_PCT);
+  const yPct = clamp(box.yPct, 0, 1 - MIN_FIELD_SIZE_PCT);
+  return {
+    xPct,
+    yPct,
+    widthPct: clamp(box.widthPct, MIN_FIELD_SIZE_PCT, 1 - xPct),
+    heightPct: clamp(box.heightPct, MIN_FIELD_SIZE_PCT, 1 - yPct),
+  };
+}
+
 /** A box of the kind's default size centered on a drop point. */
 export function boxAtPoint(
   kind: FieldKind,
@@ -160,4 +175,26 @@ export function placementProblems(
 export function blocksSending(problem: PlacementProblem): boolean {
   if (problem.kind !== 'no_signature_field') return true;
   return problem.documentId === undefined;
+}
+
+/**
+ * Whether every field sits on a page of one of the packet's documents and
+ * belongs to one of its signers. Placement saved for another packet fails.
+ */
+export function fieldsBelong(
+  packet: Pick<Packet, 'documents' | 'recipients'>,
+  fields: readonly PacketField[]
+): boolean {
+  const pageCounts = new Map(
+    packet.documents.map((document) => [document.id, document.pageCount])
+  );
+  const signerIds = new Set(signers(packet).map((signer) => signer.id));
+
+  return fields.every((field) => {
+    const pageCount = pageCounts.get(field.documentId);
+    if (pageCount === undefined || !signerIds.has(field.recipientId)) {
+      return false;
+    }
+    return field.page >= 0 && field.page < pageCount;
+  });
 }

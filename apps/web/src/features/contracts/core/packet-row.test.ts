@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   acmeDraft,
   SARAH,
+  signAs,
   TYPED_SIGNATURE,
   testContext,
 } from '../tests/packets';
-import { sendPacket, signPacket } from './lifecycle';
+import { sendPacket } from './lifecycle';
 import { findRecipient } from './packet';
 import {
   allRows,
@@ -23,7 +24,7 @@ function packets() {
     { ...acmeDraft(context.at('2026-11-09T21:03:00.000Z')), id: 'sent' },
     context.at(SENT_AT)
   )._unsafeUnwrap();
-  const awaitingSender = signPacket(
+  const awaitingSender = signAs(
     { ...sent, id: 'awaiting-sender' },
     findRecipient(sent, SARAH)?.access?.token ?? '',
     { ...TYPED_SIGNATURE, values: { 'sarah-title': 'VP, Operations' } },

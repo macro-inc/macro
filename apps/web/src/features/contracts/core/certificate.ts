@@ -50,26 +50,34 @@ export type Certificate = {
 
 /**
  * The state digests the certificate lists: the packet as sent, then after
- * each signature. The last signature's digest is the final one.
+ * each signature. The last signature's digest is final only once every
+ * signer has signed.
  */
 function certificateHashes(packet: Packet): CertificateHash[] {
+  // Replacing a document voids every earlier signature, so only the events
+  // after the latest replacement describe what was finally signed.
+  const replaced = packet.events.findLastIndex(
+    (event) => event.type === 'audit.documents_replaced'
+  );
+  const current = packet.events.slice(replaced + 1);
   const hashes: CertificateHash[] = [];
 
-  const sent = packet.events.find((event) => event.type === 'contract.sent');
+  const sent = current.find((event) => event.type === 'contract.sent');
   if (sent?.stateHash) {
     hashes.push({ step: 'before_signing', hash: sent.stateHash });
   }
 
-  const signatures = packet.events.filter(
+  const signatures = current.filter(
     (event) => event.type === 'contract.signed_by_recipient' && event.stateHash
   );
+  const everyoneSigned = signers(packet).every((signer) => signer.signedAt);
   for (const [index, signature] of signatures.entries()) {
     if (!signature.stateHash) continue;
     hashes.push({
       step: 'after_signer',
       hash: signature.stateHash,
       signerName: signature.actor,
-      final: index === signatures.length - 1,
+      final: everyoneSigned && index === signatures.length - 1,
     });
   }
   return hashes;

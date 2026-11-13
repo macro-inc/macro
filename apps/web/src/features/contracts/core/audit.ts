@@ -7,16 +7,18 @@ export type Digest = (text: string) => Promise<string>;
 const GENESIS = '0'.repeat(64);
 
 /**
- * The signable state of a packet as stable text: each document's bytes hash
- * and every field's owner, position, and value, in a fixed order. Two packets
- * with the same text have the same documents and the same answers.
+ * The signable state of a packet as stable text: each document's bytes hash,
+ * every field's owner, position, and value, and the mark each signer signed
+ * with, in a fixed order. Two packets with the same text have the same
+ * documents, the same placement, the same answers, and the same signatures.
  */
 function packetStateText(
   packet: Pick<Packet, 'id' | 'documents' | 'fields' | 'recipients'>
 ): string {
-  const signedAt = new Map(
-    packet.recipients.map((recipient) => [recipient.id, recipient.signedAt])
-  );
+  const documents = packet.documents.map((document) => [
+    document.id,
+    document.sha256,
+  ]);
   const fields = [...packet.fields]
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((field) => [
@@ -25,14 +27,19 @@ function packetStateText(
       field.page,
       field.recipientId,
       field.kind,
+      field.required,
+      [field.box.xPct, field.box.yPct, field.box.widthPct, field.box.heightPct],
       field.value ?? null,
-      signedAt.get(field.recipientId) ?? null,
     ]);
-  const documents = packet.documents.map((document) => [
-    document.id,
-    document.sha256,
-  ]);
-  return JSON.stringify({ packet: packet.id, documents, fields });
+  const signatures = packet.recipients
+    .filter((recipient) => recipient.signedAt)
+    .map((recipient) => [
+      recipient.id,
+      recipient.signedAt,
+      recipient.signature ?? null,
+      recipient.initials ?? null,
+    ]);
+  return JSON.stringify({ packet: packet.id, documents, fields, signatures });
 }
 
 function eventText(event: PacketEvent, previousHash: string): string {
@@ -81,7 +88,10 @@ export async function sealEvents(
 
 /**
  * The index of the first event whose hash does not follow from the chain,
- * or `undefined` when the whole log verifies.
+ * or `undefined` when every entry present verifies. A chain shows that no
+ * entry was edited, inserted, or removed from the middle. It cannot show that
+ * entries were cut from the end: that needs the last hash kept somewhere the
+ * log's holder cannot change, which the signing engine will provide.
  */
 export async function firstBrokenEvent(
   events: PacketEvent[],

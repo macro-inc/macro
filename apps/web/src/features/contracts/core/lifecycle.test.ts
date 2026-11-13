@@ -5,6 +5,7 @@ import {
   AVERY,
   acmeDraft,
   SARAH,
+  signAs,
   TYPED_SIGNATURE,
   testContext,
 } from '../tests/packets';
@@ -12,6 +13,7 @@ import {
   createDraft,
   declinePacket,
   expireIfDue,
+  MAX_MARK_LENGTH,
   markSignedOffline,
   nextReminderAt,
   recordView,
@@ -27,7 +29,7 @@ import { packetStatus } from './status';
 
 const SENT_AT = '2026-11-09T21:05:40.000Z';
 const SARAH_SIGNS_AT = '2026-11-10T19:26:47.000Z';
-const JACOB_SIGNS_AT = '2026-11-12T22:40:05.000Z';
+const AVERY_SIGNS_AT = '2026-11-12T22:40:05.000Z';
 
 function sent(overrides: Parameters<typeof acmeDraft>[1] = {}) {
   const context = testContext();
@@ -64,6 +66,34 @@ describe('createDraft', () => {
     expect(packet.expirationDays).toBe(30);
     expect(packet.reminderDays).toBe(3);
     expect(eventTypes(packet)).toEqual(['contract.created']);
+  });
+});
+
+describe('setFields', () => {
+  it('refuses a field on a page the document does not have', () => {
+    const context = testContext();
+    const draft = createDraft(ACME_DRAFT, context)._unsafeUnwrap();
+    const [signature] = ACME_FIELDS;
+
+    const result = setFields(draft, [{ ...signature, page: 14 }], context);
+    expect(result._unsafeUnwrapErr()).toEqual({ kind: 'fields_misplaced' });
+  });
+
+  it('refuses a field for a document or signer of another packet', () => {
+    const context = testContext();
+    const draft = createDraft(ACME_DRAFT, context)._unsafeUnwrap();
+    const [signature] = ACME_FIELDS;
+
+    for (const stray of [
+      { ...signature, documentId: 'another-packet' },
+      { ...signature, recipientId: 'another-signer' },
+      // A copy recipient receives the result; they never fill a field.
+      { ...signature, recipientId: 'dana' },
+    ]) {
+      expect(setFields(draft, [stray], context)._unsafeUnwrapErr()).toEqual({
+        kind: 'fields_misplaced',
+      });
+    }
   });
 });
 
@@ -104,12 +134,12 @@ describe('sendPacket', () => {
   });
 });
 
-describe('signPacket', () => {
+describe('signing', () => {
   const values = { 'sarah-title': 'VP, Operations' };
 
   it('fills the signer fields, then invites the next signer', () => {
     const { context, packet } = sent();
-    const signed = signPacket(
+    const signed = signAs(
       packet,
       token(packet, SARAH),
       { ...TYPED_SIGNATURE, values },
@@ -130,21 +160,21 @@ describe('signPacket', () => {
 
   it('completes the packet after the last signature', () => {
     const { context, packet } = sent();
-    const afterSarah = signPacket(
+    const afterSarah = signAs(
       packet,
       token(packet, SARAH),
       { ...TYPED_SIGNATURE, values },
       context.at(SARAH_SIGNS_AT)
     )._unsafeUnwrap();
-    const done = signPacket(
+    const done = signAs(
       afterSarah,
       token(afterSarah, AVERY),
       { ...TYPED_SIGNATURE, values: {} },
-      context.at(JACOB_SIGNS_AT)
+      context.at(AVERY_SIGNS_AT)
     )._unsafeUnwrap();
 
-    expect(packetStatus(done, JACOB_SIGNS_AT)).toBe('signed');
-    expect(done.completedAt).toBe(JACOB_SIGNS_AT);
+    expect(packetStatus(done, AVERY_SIGNS_AT)).toBe('signed');
+    expect(done.completedAt).toBe(AVERY_SIGNS_AT);
     expect(eventTypes(done).slice(-2)).toEqual([
       'contract.signed_by_recipient',
       'contract.completed',
@@ -153,7 +183,7 @@ describe('signPacket', () => {
 
   it('rejects a signature that leaves a required field empty', () => {
     const { context, packet } = sent();
-    const result = signPacket(
+    const result = signAs(
       packet,
       token(packet, SARAH),
       { ...TYPED_SIGNATURE, values: {} },
@@ -165,9 +195,86 @@ describe('signPacket', () => {
     });
   });
 
-  it('rejects a signer whose turn has not come', () => {
+  it('refuses a blank typed signature', () => {
+    const { context, packet } = sent();
+    const result = signAs(
+      packet,
+      token(packet, SARAH),
+      {
+        signature: { kind: 'typed', text: '   ', style: 'script-1' },
+        initials: TYPED_SIGNATURE.initials,
+        values: { 'sarah-title': 'VP, Operations' },
+      },
+      context.at(SARAH_SIGNS_AT)
+    );
+    expect(result._unsafeUnwrapErr()).toEqual({ kind: 'signature_missing' });
+  });
+
+  it('refuses a drawn mark larger than a packet keeps', () => {
+    const { context, packet } = sent();
+    const result = signAs(
+      packet,
+      token(packet, SARAH),
+      {
+        signature: { kind: 'image', dataUrl: 'x'.repeat(MAX_MARK_LENGTH + 1) },
+        initials: TYPED_SIGNATURE.initials,
+        values: { 'sarah-title': 'VP, Operations' },
+      },
+      context.at(SARAH_SIGNS_AT)
+    );
+    expect(result._unsafeUnwrapErr()).toEqual({ kind: 'signature_too_large' });
+  });
+
+  it('keeps only the kind of value a field takes', () => {
+    const { context, packet } = sent();
+    const signed = signAs(
+      packet,
+      token(packet, SARAH),
+      {
+        ...TYPED_SIGNATURE,
+        values: {
+          'sarah-title': 'VP, Operations',
+          // A signature field renders the adopted mark, never typed text.
+          'sarah-signature': 'forged text',
+          // Another signer's field is not this signer's to fill.
+          'avery-signature': 'not mine',
+        },
+      },
+      context.at(SARAH_SIGNS_AT)
+    )._unsafeUnwrap();
+
+    const value = (id: string) =>
+      signed.fields.find((field) => field.id === id)?.value;
+    expect(value('sarah-title')).toBe('VP, Operations');
+    expect(value('sarah-signature')).toBeUndefined();
+    expect(value('avery-signature')).toBeUndefined();
+  });
+
+  it('treats a tick sent to a text field as no answer', () => {
+    const { context, packet } = sent();
+    const result = signAs(
+      packet,
+      token(packet, SARAH),
+      { ...TYPED_SIGNATURE, values: { 'sarah-title': true } },
+      context.at(SARAH_SIGNS_AT)
+    );
+    expect(result.isErr()).toBe(true);
+  });
+
+  it('refuses a signature before the disclosure is accepted', () => {
     const { context, packet } = sent();
     const result = signPacket(
+      packet,
+      token(packet, SARAH),
+      { ...TYPED_SIGNATURE, values },
+      context.at(SARAH_SIGNS_AT)
+    );
+    expect(result._unsafeUnwrapErr()).toEqual({ kind: 'disclosure_required' });
+  });
+
+  it('rejects a signer whose turn has not come', () => {
+    const { context, packet } = sent();
+    const result = signAs(
       packet,
       'token-for-avery',
       { ...TYPED_SIGNATURE, values: {} },
@@ -179,7 +286,7 @@ describe('signPacket', () => {
   it('rejects a link after the window closes', () => {
     const { context, packet } = sent();
     const late = context.at('2026-12-10T00:00:00.000Z');
-    const result = signPacket(
+    const result = signAs(
       packet,
       token(packet, SARAH),
       { ...TYPED_SIGNATURE, values },
@@ -277,15 +384,26 @@ describe('closing a packet', () => {
 
     expect(packetStatus(overridden, SARAH_SIGNS_AT)).toBe('signed');
     expect(overridden.statusOverride?.tag).toBe('offline');
+    expect(overridden.completedAt).toBe(SARAH_SIGNS_AT);
     expect(findRecipient(overridden, SARAH)?.access).toBeUndefined();
     expect(eventTypes(overridden).at(-1)).toBe('audit.status_overridden');
+  });
+});
+
+describe('markSignedOffline', () => {
+  it('refuses a packet that was never sent', () => {
+    const context = testContext();
+    const draft = acmeDraft(context);
+    expect(
+      markSignedOffline(draft, 'Avery Lee', context)._unsafeUnwrapErr()
+    ).toEqual({ kind: 'not_in_flight' });
   });
 });
 
 describe('replaceDocument', () => {
   it('voids earlier links and signatures and invites the first signer again', () => {
     const { context, packet } = sent();
-    const afterSarah = signPacket(
+    const afterSarah = signAs(
       packet,
       token(packet, SARAH),
       { ...TYPED_SIGNATURE, values: { 'sarah-title': 'VP, Operations' } },
@@ -339,6 +457,34 @@ describe('replaceDocument', () => {
       'avery-order-signature',
     ]);
   });
+
+  it('refuses a revision that leaves a signer with nowhere to sign', () => {
+    const context = testContext();
+    const draft = createDraft(
+      { ...ACME_DRAFT, documents: [ACME_DRAFT.documents[1]] },
+      context
+    )._unsafeUnwrap();
+    const onlyMsa = setFields(
+      draft,
+      ACME_FIELDS.filter((field) => field.documentId === 'msa'),
+      context
+    )._unsafeUnwrap();
+    const packet = sendPacket(onlyMsa, context.at(SENT_AT))._unsafeUnwrap();
+
+    const result = replaceDocument(
+      packet,
+      'msa',
+      {
+        id: 'msa-v2',
+        name: 'Master Services Agreement',
+        pageCount: 10,
+        source: 'upload',
+        sha256: 'c'.repeat(64),
+      },
+      context.at('2026-11-11T10:00:00.000Z')
+    );
+    expect(result._unsafeUnwrapErr()).toEqual({ kind: 'signature_field_lost' });
+  });
 });
 
 describe('reminders', () => {
@@ -358,7 +504,7 @@ describe('reminders', () => {
     const { context, packet } = sent();
     expect(nextReminderAt(packet)).toBe('2026-11-12T21:05:40.000Z');
 
-    const afterSarah = signPacket(
+    const afterSarah = signAs(
       packet,
       token(packet, SARAH),
       { ...TYPED_SIGNATURE, values: { 'sarah-title': 'VP, Operations' } },

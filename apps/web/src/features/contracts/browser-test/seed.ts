@@ -2,6 +2,7 @@ import { contentHash } from '@core/util/hash';
 import { sealEvents } from '../core/audit';
 import { STARTER_DATABASES } from '../core/database';
 import {
+  acceptDisclosure,
   createDraft,
   type DraftInput,
   declinePacket,
@@ -21,9 +22,12 @@ import type {
   PacketField,
 } from '../core/packet';
 import { createIndexedDbDocumentBlobs } from '../queries/document-blobs';
-import { LOCAL_CONTRACTS_STORAGE_KEY } from '../queries/local-contracts';
+
 import type { ContractsSnapshot } from '../queries/packet-schema';
-import { FIXTURE_DOCUMENT_STORE } from './fixture-contracts';
+import {
+  FIXTURE_DOCUMENT_STORE,
+  FIXTURE_STORAGE_KEY,
+} from './fixture-contracts';
 import dpaUrl from './fixtures/data-processing-addendum.pdf?url';
 import msaUrl from './fixtures/master-services-agreement.pdf?url';
 import orderFormUrl from './fixtures/order-form.pdf?url';
@@ -127,7 +131,7 @@ const TYPED = (name: string, initials: string) =>
  * profile; a second call leaves existing data alone.
  */
 export async function seedDemoPackets() {
-  if (localStorage.getItem(LOCAL_CONTRACTS_STORAGE_KEY)) return;
+  if (localStorage.getItem(FIXTURE_STORAGE_KEY)) return;
 
   const orderForm = await loadDocument(
     orderFormUrl,
@@ -243,7 +247,9 @@ export async function seedDemoPackets() {
   ) =>
     unwrap(
       signPacket(
-        packet,
+        unwrap(
+          acceptDisclosure(packet, token(packet, recipientId), context.at(at))
+        ),
         token(packet, recipientId),
         {
           ...TYPED(name, initials),
@@ -459,5 +465,5 @@ export async function seedDemoPackets() {
     ].map((packet) => sealEvents(packet, digestText))
   );
   const snapshot: ContractsSnapshot = { databases, packets };
-  localStorage.setItem(LOCAL_CONTRACTS_STORAGE_KEY, JSON.stringify(snapshot));
+  localStorage.setItem(FIXTURE_STORAGE_KEY, JSON.stringify(snapshot));
 }

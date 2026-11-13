@@ -5,6 +5,7 @@ import {
   boxAtPoint,
   clampBox,
   placementProblems,
+  resizeBox,
 } from './fields';
 
 describe('boxAtPoint', () => {
@@ -26,6 +27,21 @@ describe('clampBox', () => {
     const box = clampBox({ xPct: 0.2, yPct: 0.2, widthPct: 0, heightPct: -1 });
     expect(box.widthPct).toBeGreaterThan(0);
     expect(box.heightPct).toBeGreaterThan(0);
+  });
+});
+
+describe('resizeBox', () => {
+  it('stops at the page edge instead of sliding the field', () => {
+    const box = resizeBox({
+      xPct: 0.8,
+      yPct: 0.9,
+      widthPct: 0.5,
+      heightPct: 0.4,
+    });
+    expect(box.xPct).toBe(0.8);
+    expect(box.yPct).toBe(0.9);
+    expect(box.widthPct).toBeCloseTo(0.2);
+    expect(box.heightPct).toBeCloseTo(0.1);
   });
 });
 
