@@ -354,13 +354,16 @@ impl Draft {
         Ok((item, dropped))
     }
 
-    /// The first valid URL becomes the item URL; the rest become fields,
+    /// The first valid URL the source didn't hide becomes the item URL; the rest become fields,
     /// concealed when the source hid them or they carry credentials.
     fn place_urls(&mut self) -> Option<String> {
         let candidates = std::mem::take(&mut self.urls);
         let url_index = candidates
             .iter()
-            .position(|candidate| vault::is_login_url(candidate.value.expose_secret()));
+            // A hidden value stays a concealed field, never the visible item URL.
+            .position(|candidate| {
+                !candidate.concealed && vault::is_login_url(candidate.value.expose_secret())
+            });
 
         let mut website_number = if url_index.is_some() { 2 } else { 1 };
         let mut url = None;

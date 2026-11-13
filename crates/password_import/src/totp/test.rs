@@ -104,3 +104,13 @@ fn invalid_base32_is_refused() {
         Some("A".repeat(1024).as_str())
     );
 }
+
+#[test]
+fn base32_lengths_that_cannot_encode_whole_bytes_are_not_seeds() {
+    for raw in ["A", "ABC", "ABCDEF", "ABCDEFGHA"] {
+        assert!(default_seed(raw).is_none(), "{raw}");
+    }
+    for raw in ["AB", "ABCD", "ABCDE", "ABCDEFG", "ABCDEFGH"] {
+        assert!(default_seed(raw).is_some(), "{raw}");
+    }
+}

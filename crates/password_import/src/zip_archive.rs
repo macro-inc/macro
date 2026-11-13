@@ -21,6 +21,13 @@ const END_RECORD_SEARCH_BYTES: usize = END_RECORD_FIXED_BYTES + u16::MAX as usiz
 const TOTAL_ENTRIES_OFFSET: usize = 10;
 /// The total-entries value that defers to a zip64 record.
 const ZIP64_ENTRY_COUNT: u16 = u16::MAX;
+const ZIP64_LOCATOR: &[u8] = b"PK\x06\x07";
+/// The zip64 locator's length, and where it holds the zip64 record's offset.
+const ZIP64_LOCATOR_BYTES: usize = 20;
+const ZIP64_LOCATOR_RECORD_OFFSET: usize = 8;
+const ZIP64_END_RECORD: &[u8] = b"PK\x06\x06";
+/// Offset of "total entries" within the zip64 end-of-central-directory record.
+const ZIP64_TOTAL_ENTRIES_OFFSET: usize = 32;
 
 type Archive<'a> = ZipArchive<Cursor<&'a [u8]>>;
 
@@ -30,11 +37,10 @@ pub(crate) fn open_checked<'a>(
     bytes: &'a [u8],
     limits: &Limits,
 ) -> Result<Archive<'a>, ImportError> {
-    // Reject a huge entry count before the zip reader allocates per entry.
-    // A zip64 count is checked once the reader has parsed it.
+    // Reject a huge entry count before the zip reader allocates per entry,
+    // zip64 counts included.
     if let Some(count) = declared_entry_count(bytes)
-        && count != ZIP64_ENTRY_COUNT
-        && usize::from(count) > limits.max_zip_entries
+        && usize::try_from(count).map_or(true, |count| count > limits.max_zip_entries)
     {
         return Err(ImportError::TooManyEntries);
     }
@@ -95,7 +101,9 @@ fn consistent() -> ZipReadOptions<'static> {
 }
 
 /// Total entries from the end-of-central-directory record, if one is found.
-fn declared_entry_count(bytes: &[u8]) -> Option<u16> {
+/// When it defers to zip64, the zip64 record's count; if that record can't be
+/// read, the deferring value itself, which is over any sane limit.
+fn declared_entry_count(bytes: &[u8]) -> Option<u64> {
     let tail_start = bytes.len().saturating_sub(END_RECORD_SEARCH_BYTES);
     let tail = bytes.get(tail_start..)?;
     let record_start = tail
@@ -103,8 +111,36 @@ fn declared_entry_count(bytes: &[u8]) -> Option<u16> {
         .rposition(|window| window == END_OF_CENTRAL_DIRECTORY)?;
 
     let count_start = record_start + TOTAL_ENTRIES_OFFSET;
-    let count = tail.get(count_start..count_start + 2)?;
-    Some(u16::from_le_bytes([*count.first()?, *count.get(1)?]))
+    let count = u16::from_le_bytes(read_array(tail, count_start)?);
+    if count != ZIP64_ENTRY_COUNT {
+        return Some(u64::from(count));
+    }
+    Some(zip64_entry_count(bytes, tail_start + record_start).unwrap_or(u64::from(count)))
+}
+
+/// Total entries from the zip64 end-of-central-directory record, found
+/// through the locator that directly precedes the classic record.
+fn zip64_entry_count(bytes: &[u8], end_record: usize) -> Option<u64> {
+    let locator = end_record.checked_sub(ZIP64_LOCATOR_BYTES)?;
+    if bytes.get(locator..locator + 4)? != ZIP64_LOCATOR {
+        return None;
+    }
+    let record = usize::try_from(u64::from_le_bytes(read_array(
+        bytes,
+        locator + ZIP64_LOCATOR_RECORD_OFFSET,
+    )?))
+    .ok()?;
+    if bytes.get(record..record.checked_add(4)?)? != ZIP64_END_RECORD {
+        return None;
+    }
+    Some(u64::from_le_bytes(read_array(
+        bytes,
+        record.checked_add(ZIP64_TOTAL_ENTRIES_OFFSET)?,
+    )?))
+}
+
+fn read_array<const N: usize>(bytes: &[u8], start: usize) -> Option<[u8; N]> {
+    bytes.get(start..start.checked_add(N)?)?.try_into().ok()
 }
 
 /// Names that could escape an extraction directory. Nothing is extracted,

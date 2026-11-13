@@ -96,3 +96,69 @@ fn a_1password_vault_without_a_uuid_falls_back_to_item_positions() {
 
     assert_eq!(keys, vec!["item:1"]);
 }
+
+#[test]
+fn a_concealed_hostname_stays_a_concealed_field_not_the_item_url() {
+    let export = pux(
+        r#"{"accounts":[{"attrs":{"uuid":"account1"},"vaults":[{"attrs":{"uuid":"vault1","name":"Vault"},"items":[
+            {"uuid":"item1","categoryUuid":"001","overview":{"title":"Example"},
+             "details":{"sections":[{"fields":[
+                {"title":"Host","id":"hostname","value":{"concealed":"https://private.example.com/path"}}]}]}}]}]}]}"#,
+    );
+
+    let export = parse(&export, SourceFormat::OnePasswordPux, &Limits::default()).expect("parses");
+    let item = export.items.first().expect("one item");
+
+    assert_eq!(item.url, None);
+    let fields: Vec<(&str, &str, bool)> = item
+        .fields
+        .iter()
+        .map(|field| {
+            (
+                field.label.as_str(),
+                field.value.expose_secret(),
+                field.concealed,
+            )
+        })
+        .collect();
+    assert_eq!(
+        fields,
+        vec![("Host", "https://private.example.com/path", true)]
+    );
+}
+
+#[test]
+fn empty_1password_dates_are_not_counted_as_dropped() {
+    let export = pux(
+        r#"{"accounts":[{"attrs":{"uuid":"account1"},"vaults":[{"attrs":{"uuid":"vault1","name":"Vault"},"items":[
+            {"uuid":"item1","categoryUuid":"002","overview":{"title":"Card"},
+             "details":{"sections":[{"fields":[
+                {"title":"Expires","id":"expiry","value":{"monthYear":null}},
+                {"title":"Issued","id":"issued","value":{"date":null}}]}]}}]}]}]}"#,
+    );
+
+    let export = parse(&export, SourceFormat::OnePasswordPux, &Limits::default()).expect("parses");
+
+    assert_eq!(export.items.len(), 1);
+    assert!(export.dropped.is_empty());
+    assert!(export.items[0].fields.is_empty());
+}
+
+#[test]
+fn a_bitwarden_login_with_null_uris_keeps_its_credentials() {
+    let json = r#"{"encrypted":false,"folders":[],"items":[
+        {"id":"item1","type":1,"name":"Example","login":{"uris":null,"username":"user-one","password":"secret-one"}}]}"#;
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert!(export.skipped.is_empty());
+    let item = export.items.first().expect("one item");
+    assert_eq!(item.username.expose_secret(), "user-one");
+    assert_eq!(item.password.expose_secret(), "secret-one");
+    assert_eq!(item.url, None);
+}

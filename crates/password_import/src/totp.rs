@@ -62,7 +62,10 @@ fn normalize_base32(raw: &str) -> Option<TotpSeed> {
     let unpadded_len = seed.trim_end_matches('=').len();
     seed.truncate(unpadded_len);
 
+    // RFC 4648: unpadded base32 is 0, 2, 4, 5 or 7 characters past a full
+    // 8-character block; other lengths can't encode whole bytes.
     let valid = !seed.is_empty()
+        && matches!(seed.len() % 8, 0 | 2 | 4 | 5 | 7)
         && seed.len() <= vault::MAX_TOTP_SEED_BYTES
         && seed
             .bytes()
