@@ -22,7 +22,11 @@ const SESSION_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
 // Match `SecretPurpose` in crates/slack_linked/src/outbound/kms.rs. The key
 // refuses any call that does not carry one, so it cannot be used as a
 // general-purpose encryption oracle even by its own roles.
-const SESSION_KMS_PURPOSES = ['slack-session', 'slack-login', 'slack-login-input'];
+const SESSION_KMS_PURPOSES = [
+  'slack-session',
+  'slack-login',
+  'slack-login-input',
+];
 // DSS seals pasted and desktop-captured sessions and can never open them.
 const DSS_KMS_ACTIONS = ['kms:GenerateDataKey'];
 const DSS_KMS_PURPOSE = 'slack-login-input';

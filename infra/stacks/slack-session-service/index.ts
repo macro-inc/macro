@@ -22,25 +22,22 @@ const dssStack = new pulumi.StackReference('cloud-storage-service-stack', {
   name: `macro-inc/cloud-storage-service/${stack}`,
 });
 
-const service = new SlackSessionService(
-  `slack-session-service-${stack}`,
-  {
-    vpc: get_coparse_api_vpc(),
-    ecsClusterArn: cloudStorageStack
-      .getOutput('cloudStorageClusterArn')
-      .apply((value) => value as string),
-    ecsClusterName: cloudStorageStack
-      .getOutput('cloudStorageClusterName')
-      .apply((value) => value as string),
-    dssRoleArn: dssStack
-      .getOutput('cloudStorageServiceRoleArn')
-      .apply((value) => value as string),
-    kmsDeletionWindowInDays: config.requireNumber(
-      'session_kms_deletion_window_days'
-    ),
-    tags,
-  }
-);
+const service = new SlackSessionService(`slack-session-service-${stack}`, {
+  vpc: get_coparse_api_vpc(),
+  ecsClusterArn: cloudStorageStack
+    .getOutput('cloudStorageClusterArn')
+    .apply((value) => value as string),
+  ecsClusterName: cloudStorageStack
+    .getOutput('cloudStorageClusterName')
+    .apply((value) => value as string),
+  dssRoleArn: dssStack
+    .getOutput('cloudStorageServiceRoleArn')
+    .apply((value) => value as string),
+  kmsDeletionWindowInDays: config.requireNumber(
+    'session_kms_deletion_window_days'
+  ),
+  tags,
+});
 
 export const sessionKmsKeyAlias = service.kmsKeyAlias;
 export const sessionKmsKeyArn = service.kmsKeyArn;
