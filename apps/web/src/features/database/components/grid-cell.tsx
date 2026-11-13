@@ -967,7 +967,8 @@ function InlineEditor(props: {
                 if (!props.mentionOpen) commit(false);
               }}
               onKeyDown={onKeyDown}
-              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none"
+              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] leading-5 text-ink outline-none"
+              classList={{ 'font-medium': props.column.dataType === 'STRING' }}
             />
           }
         >
@@ -977,8 +978,10 @@ function InlineEditor(props: {
               get value() {
                 return props.draft;
               },
+              // The value's own weight and line height, so its lines wrap
+              // where they did before the cell opened.
               class:
-                'min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none',
+                'min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] leading-5 font-medium text-ink outline-none',
               autoFocus: true,
               selectAll: props.selectAll,
               // Enter saves and moves down; Shift+Enter would move up, and the
