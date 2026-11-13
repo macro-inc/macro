@@ -168,7 +168,15 @@ function ManagedComputerRow(props: {
     return state.kind === 'account' && state.expired;
   };
 
+  const failed = () => props.computer.status === 'failed';
   const primary = (): ComputerPrimaryAction | undefined => {
+    // A failed setup only moves again once it is retried.
+    if (failed() && props.canManage)
+      return {
+        label: t('computers.retrySetup'),
+        disabled: retry.isPending,
+        onClick: () => run(retrySetup()),
+      };
     if (setupIncomplete()) {
       if (!props.canFinishSetup) return undefined;
       return {
@@ -320,7 +328,8 @@ function ManagedComputerRow(props: {
     const canPower =
       canTogglePower(computer) &&
       (computer.poweredOn || computer.billing !== 'ended');
-    if (props.canManage && computer.status === 'failed') {
+    // Retry setup is the row's action; the menu keeps the rest.
+    if (props.canManage && computer.status === 'failed' && !primary()) {
       items.push({
         label: t('computers.retry'),
         icon: 'retry',

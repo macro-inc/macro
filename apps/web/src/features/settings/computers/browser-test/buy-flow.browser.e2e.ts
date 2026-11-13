@@ -187,6 +187,11 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     });
 
     await page.goto('/');
+    // Get a Macro computer leads Machines, with its facts and price.
+    const entry = page.locator('[data-settings-target="get-macro-computer"]');
+    await expect(
+      entry.getByRole('heading', { name: 'Get a Macro computer' })
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Get a computer' }).click();
     await expect(dialog(page)).toBeVisible();
     await expect(
@@ -330,6 +335,13 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
       dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
     ).toBeVisible({ timeout: 10_000 });
     await expect(progress).toHaveCount(0);
+    // Bring your AI was visited, so credits complete it rather than skip it.
+    await expect(steps.getByRole('listitem').nth(2)).toContainText(
+      'Macro credits'
+    );
+    await expect(steps.getByRole('listitem').nth(2)).not.toContainText(
+      'skipped'
+    );
     await expect(steps.getByRole('listitem').last()).toHaveAttribute(
       'aria-current',
       'step'
@@ -416,9 +428,9 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
   await expect(stuck).toContainText(
     'The host ran out of disk. The computer could not be set up'
   );
-  await expect(
-    page.locator('[data-runtime-row="Maya\'s Agent Box"]')
-  ).toContainText('Failed');
+  const row = page.locator('[data-runtime-row="Maya\'s Agent Box"]');
+  await expect(row).toContainText('Setup failed: The host ran out of disk.');
+  await expect(row.getByRole('button', { name: 'Retry setup' })).toBeVisible();
   await shoot(page, 'setup-failed');
 
   await stuck.getByRole('button', { name: 'Retry setup' }).click();
@@ -555,4 +567,19 @@ test('a request that never answers times out instead of spinning forever', async
   await expect(
     dialog(page).getByRole('radio', { name: 'Large' })
   ).toBeVisible();
+});
+
+test('with no size on offer, the step shows only why', async ({ page }) => {
+  await openBuyFlow(page, (route) => json(route, 200, []));
+  await expect(dialog(page)).toContainText(
+    'No computer sizes are available right now.'
+  );
+  await expect(dialog(page)).toContainText(
+    "Macro's hosts have no room for a new computer. Try again later."
+  );
+  await expect(dialog(page).getByLabel('Name')).toHaveCount(0);
+  await expect(dialog(page).getByRole('button', { name: /^Buy/ })).toHaveCount(
+    0
+  );
+  await shoot(page, 'no-sizes');
 });

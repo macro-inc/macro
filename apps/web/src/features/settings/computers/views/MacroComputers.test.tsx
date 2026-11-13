@@ -319,7 +319,7 @@ it('offers Restore instead of Turn on for a released computer still kept, and co
   expect(screen.getByRole('menuitem', { name: 'Release now' })).toBeTruthy();
 });
 
-it('offers Retry on a failed computer, and only there', async () => {
+it('says why a computer failed and offers Retry setup on its row, and only there', async () => {
   const failed: ComputerStatus = {
     id: 'computer-1',
     name: 'Build machine',
@@ -337,12 +337,23 @@ it('offers Retry on a failed computer, and only there', async () => {
     purchasedBy: 'viewer',
     createdAt: '2026-01-01T00:00:00Z',
   };
+  // The fail-fast state's reason, as the API sends it.
+  Reflect.set(failed, 'failureReason', 'The host ran out of disk.');
   mocks.computers = [failed, { ...failed, id: 'computer-2', status: 'ready' }];
   mocks.retry.mockResolvedValueOnce({ ...failed, status: 'setting_up' });
 
   render(() => <Machines />);
 
-  const retry = screen.getAllByRole('menuitem', { name: 'Retry' });
+  expect(
+    screen.getByText(/Setup failed: The host ran out of disk\./)
+  ).toBeTruthy();
+  // Only the ready computer, whose guided setup is not done, offers it.
+  expect(screen.getAllByRole('button', { name: 'Finish setup' })).toHaveLength(
+    1
+  );
+  // The row's action, not a second Retry in its menu.
+  expect(screen.queryByRole('menuitem', { name: 'Retry' })).toBeNull();
+  const retry = screen.getAllByRole('button', { name: 'Retry setup' });
   expect(retry).toHaveLength(1);
   fireEvent.click(retry[0]);
   await waitFor(() => expect(mocks.retry).toHaveBeenCalledWith('computer-1'));
@@ -624,39 +635,24 @@ it("reopens a computer's setup at Bring your AI when a notification asks", async
   expect(computerSetupRequest()).toBeUndefined();
 });
 
-it('puts Get a Macro computer on top as a panel, then a row once the team has computers', () => {
+it('puts Get a Macro computer on top with its facts, or as one row when compact', () => {
   const first = render(() => <Machines />);
   expect(
     screen.getByText('Get a Macro computer', { selector: 'h2' })
   ).toBeTruthy();
   expect(
-    screen.getByText(
-      "A hosted computer where your team's agents run, always on."
-    )
+    screen.getByText("A hosted computer where your team's agents run.")
   ).toBeTruthy();
-  expect(screen.getByText('From $40.00/month')).toBeTruthy();
+  expect(
+    screen.getAllByRole('listitem').map((item) => item.textContent)
+  ).toEqual([
+    'Always on, never sleeps',
+    'Runs on your Claude plan or Macro credits',
+    'From $40.00/month',
+  ]);
   first.unmount();
 
-  mocks.computers = [
-    {
-      id: 'computer-1',
-      name: 'Build machine',
-      size: 'standard',
-      vcpus: 4,
-      memoryGib: 8,
-      diskGib: 100,
-      catalogEntry: 'standard@2026-11',
-      status: 'ready',
-      billing: 'active',
-      poweredOn: true,
-      agentCount: 0,
-      canUndoCancel: false,
-      canRestore: false,
-      purchasedBy: 'viewer',
-      createdAt: '2026-01-01T00:00:00Z',
-    },
-  ];
-  render(() => <Machines />);
+  render(() => <GetComputerEntry variant="compact" onGet={() => {}} />);
   expect(
     screen.queryByText('Get a Macro computer', { selector: 'h2' })
   ).toBeNull();
