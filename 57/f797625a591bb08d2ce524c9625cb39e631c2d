@@ -1,0 +1,21 @@
+crates/notification/src/domain/models/websocket_notification_event.rs
+  s_82939d9d17c700::t_941074fbedbe1f 167-171
+crates/notification/src/domain/models/websocket_notification_event/test.rs
+  s_82939d9d17c700::t_3aa5e49f152e9d 240-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "57f797625a591bb08d2ce524c9625cb39e631c2d",
+  "prompts": {},
+  "sessions": {
+    "s_82939d9d17c700": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bebbfa1f-b141-4a2c-ae6c-41735d9a70be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
