@@ -1,0 +1,19 @@
+apps/web/src/lib/core/component/AI/constant/model-label.ts
+  s_4414ba844f44af::t_eb1d7f5cb0e0bf 108-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "581d05da5dc23a6f9d6b99dce068238da5b3e471",
+  "prompts": {},
+  "sessions": {
+    "s_4414ba844f44af": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef32e457-bba5-48d1-80a3-205b4c555e62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
