@@ -90,6 +90,39 @@ describe('direction mirroring', () => {
   });
 });
 
+describe('zoom', () => {
+  const size = { width: 1000, height: 600 };
+  /** Opacity at `t`, interpolated linearly between keyframes. */
+  const opacityAt = (frames: readonly LayerKeyframe[], t: number) => {
+    const points = frames.map((frame, index) => ({
+      offset: frame.offset ?? index / Math.max(frames.length - 1, 1),
+      opacity: frame.opacity ?? 1,
+    }));
+    const after = points.findIndex((point) => point.offset >= t);
+    if (after <= 0) return points[Math.max(after, 0)].opacity;
+    const a = points[after - 1];
+    const b = points[after];
+    return (
+      a.opacity +
+      ((t - a.offset) / (b.offset - a.offset)) * (b.opacity - a.opacity)
+    );
+  };
+
+  it.each([false, true])(
+    'shows at most a quarter of the black stage (backward: %s)',
+    (backward) => {
+      const frames = classicKeyframes('zoom', 'left', backward, size);
+      for (let step = 0; step <= 100; step++) {
+        const t = step / 100;
+        const black =
+          (1 - opacityAt(frames.incoming, t)) *
+          (1 - opacityAt(frames.outgoing, t));
+        expect(black).toBeLessThanOrEqual(0.25 + 1e-9);
+      }
+    }
+  );
+});
+
 describe('camera paths', () => {
   const a = fitView({ x: 0, y: 0, width: 1600, height: 900 }, STAGE);
   const b = fitView({ x: 8000, y: 0, width: 1600, height: 900 }, STAGE);

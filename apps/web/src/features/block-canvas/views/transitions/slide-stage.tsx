@@ -188,8 +188,8 @@ export function SlideStage(props: {
     let playingAt: number | undefined;
     let stopFrames: (() => FrameStats) | undefined;
     /** When the animations ended, and the frames they painted; a canvas kind
-     * may hold its last frame after that. */
-    let animated: { at: number; stats: FrameStats } | undefined;
+     * may hold its last frame after that (`holds`). */
+    let animated: { at: number; stats: FrameStats; holds: boolean } | undefined;
     let animations: Animation[] = [];
     let restore = () => {};
     let done = false;
@@ -223,7 +223,7 @@ export function SlideStage(props: {
           'transition.played_ms',
           Math.round((animated?.at ?? now) - playingAt)
         );
-      if (animated)
+      if (animated?.holds)
         span.setAttr('transition.hold_ms', Math.round(now - animated.at));
       setLastFrames(stats);
       if (stats) {
@@ -268,7 +268,11 @@ export function SlideStage(props: {
         if (result.isErr()) return finish('cancelled');
         if (done) return;
 
-        animated = { at: performance.now(), stats: stop() };
+        animated = {
+          at: performance.now(),
+          stats: stop(),
+          holds: beforeComplete !== undefined,
+        };
         await beforeComplete?.();
         finish('completed');
       }

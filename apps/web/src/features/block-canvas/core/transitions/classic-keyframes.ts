@@ -171,7 +171,9 @@ function forwardKeyframes(
     }))
     .with('zoom', () => ({
       // The outgoing slide is gone by halfway, so only the incoming one is
-      // redrawn at each size for the rest of the run.
+      // redrawn at each size for the rest of the run. The incoming slide is
+      // opaque by then too, so at most a quarter of the black stage shows
+      // through (a quarter of the way in), in either direction.
       outgoing: [
         { opacity: 1, transform: 'scale(1)' },
         { opacity: 0, transform: 'scale(1.12)', offset: 0.5 },
@@ -179,6 +181,7 @@ function forwardKeyframes(
       ],
       incoming: [
         { opacity: 0, transform: 'scale(0.82)' },
+        { opacity: 1, transform: 'scale(0.91)', offset: 0.5 },
         { opacity: 1, transform: 'scale(1)' },
       ],
       incomingOnTop: true,
