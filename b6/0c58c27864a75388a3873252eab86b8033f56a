@@ -1,0 +1,44 @@
+apps/web/src/features/channel/Participants/ParticipantsList.tsx
+  s_a093176ce8ce6e::t_1b43e355473b7a 40-42
+  s_1656893481611a::t_8794d41a843a5a 18-19
+docs/agent-guide/agent-dashboards.md
+  s_a093176ce8ce6e::t_50b7453aec4b43 26,46-62,66-69
+apps/web/src/features/channel/Message/SenderName.tsx
+  s_a093176ce8ce6e::t_1b43e355473b7a 20-22
+  s_1656893481611a::t_ffbcd5408f4210 1-2,17-19,26-53
+apps/web/src/features/channel/Message/SenderName.test.tsx
+  s_a093176ce8ce6e::t_a06a96a3f6bca9 1-89
+apps/web/src/features/channel/Participants/ParticipantsList.test.tsx
+  s_a093176ce8ce6e::t_1bf613dff1b634 150-193
+docs/agent-guide/navigation.md
+  s_a093176ce8ce6e::t_50b7453aec4b43 265,1143-1149
+  s_1656893481611a::t_8c2ccac9b1f8b4 1150
+apps/web/src/features/channel/Participants/ChannelParticipantsTab.tsx
+  s_1656893481611a::t_0ebf5fa2ebbefb 1,45,140-146,219-220,245-246
+apps/web/src/features/channel/Participants/ParticipantsListItem.tsx
+  s_1656893481611a::t_ae69cf2a02d6a9 1,14-15,43-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b60c58c27864a75388a3873252eab86b8033f56a",
+  "prompts": {},
+  "sessions": {
+    "s_1656893481611a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b222a84f-15df-400c-9f06-1a0c64e2aa0e",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a093176ce8ce6e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d51409e-141f-4d29-921b-15fd47c496b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
