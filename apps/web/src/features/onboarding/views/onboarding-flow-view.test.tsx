@@ -1112,18 +1112,18 @@ describe('onboarding flow', () => {
     );
   });
 
-  it('starts AI suggesting routines once, as soon as an inbox is connected', async () => {
+  it('starts the first generation once, as soon as an inbox is connected', async () => {
     const { fake } = setup({
       resume: 'tools',
       world: { routineSuggestionsEnabled: true },
     });
     await heading('Connect your tools.');
-    expect(fake.calls()).not.toContain('generateRoutineSuggestions');
+    expect(fake.calls()).not.toContain('startSuggestionGeneration');
     fake.update((draft) => {
       draft.emailAccounts = [inbox('work@example.com')];
     });
     await waitFor(() =>
-      expect(fake.calls()).toContain('generateRoutineSuggestions')
+      expect(fake.calls()).toContain('startSuggestionGeneration')
     );
     fake.update((draft) => {
       draft.emailAccounts = [
@@ -1133,8 +1133,23 @@ describe('onboarding flow', () => {
     });
     await Promise.resolve();
     expect(
-      fake.calls().filter((call) => call === 'generateRoutineSuggestions')
+      fake.calls().filter((call) => call === 'startSuggestionGeneration')
     ).toHaveLength(1);
+  });
+
+  it('starts the first generation with only the person’s suggestions on, without a routines step', async () => {
+    const { fake } = setup({
+      resume: 'tools',
+      world: { suggestionsEnabled: true },
+    });
+    await heading('Connect your tools.');
+    expect(fake.calls()).not.toContain('startSuggestionGeneration');
+    fake.update((draft) => {
+      draft.emailAccounts = [inbox('work@example.com')];
+    });
+    await waitFor(() =>
+      expect(fake.calls()).toContain('startSuggestionGeneration')
+    );
   });
 
   it('never starts suggesting where suggestions are off', async () => {
@@ -1145,7 +1160,7 @@ describe('onboarding flow', () => {
       },
     });
     await heading('Connect your tools.');
-    expect(fake.calls()).not.toContain('generateRoutineSuggestions');
+    expect(fake.calls()).not.toContain('startSuggestionGeneration');
   });
 });
 

@@ -84,15 +84,16 @@ export function OnboardingFlowView(props: {
     finishing: finish.finishing,
   });
 
-  // AI starts suggesting routines for the last step as soon as an inbox is
-  // connected; the server runs it once per person, so once here is enough.
+  // The person's first generation starts as soon as an inbox is connected,
+  // whether or not the flow ends with the routines step; the server runs it
+  // once per person, so once here is enough.
   let generationStarted = false;
   createEffect(() => {
-    if (generationStarted || !context.routineSuggestionsEnabled()) return;
+    if (generationStarted || !context.suggestionGenerationEnabled()) return;
     const accounts = emailAccounts.accounts();
     if (accounts.t !== 'ready' || accounts.value.length === 0) return;
     generationStarted = true;
-    context.generateRoutineSuggestions();
+    context.startSuggestionGeneration();
   });
 
   // Leaving is the host's decision; the flow only reports why.
