@@ -1,4 +1,5 @@
 import type { Voice } from '@service-agent-harness/generated/schemas';
+import type { AgentVoice } from '@service-auth/team-agents';
 import type { Accessor } from 'solid-js';
 
 /** The voice catalog and its samples, as the voice picker reads them. */
@@ -35,4 +36,21 @@ export function recommendedVoice(
       voice.tags.some((tag) => words.has(tag.toLowerCase()))
     ) ?? options[0]
   );
+}
+
+/**
+ * The voice an agent speaks with until one is saved: the starter agent's
+ * `defaultVoice` (`packages/starter-agent/behavior/capabilities/calls/voices.ts`).
+ */
+export const defaultAgentVoice = 'aura-2-thalia-en';
+
+/**
+ * The voice to show as the agent's: the saved one, the default when none is
+ * saved (`null`), and nothing while it loads (`undefined`).
+ */
+export function currentVoice(
+  saved: AgentVoice | null | undefined
+): string | undefined {
+  if (saved === undefined) return undefined;
+  return saved?.model ?? defaultAgentVoice;
 }
