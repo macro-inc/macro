@@ -59,9 +59,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for SpanValues {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("user_team"))
 )]
-async fn document_check_is_traced_without_the_user_id(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn document_check_is_traced_without_the_user_id(pool: PgPool) -> anyhow::Result<()> {
     let viewer = user_id(TEAM_MEMBER);
     let repo = PgAccessRepository::new(pool);
     let document_id = Uuid::now_v7().to_string();
