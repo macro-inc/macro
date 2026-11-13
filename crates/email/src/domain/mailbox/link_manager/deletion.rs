@@ -9,6 +9,7 @@ pub use ports::*;
 
 use super::{LinkDeletion, purge::PurgePacing};
 use crate::domain::events::{EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata};
+use crate::domain::notification_events::EmailEventBroker as _;
 use anyhow::Context;
 use macro_event_broker::MacroEventBroker;
 use models_email::service::{link::Link, pubsub::DeletionReason};
@@ -117,7 +118,7 @@ where
 
         let _ = self
             .broker
-            .send_event(&EmailMacroEvent::link_disconnected(
+            .send_email_event(&EmailMacroEvent::link_disconnected(
                 LinkDisconnectedMetadata {
                     link_id: link.id,
                     owner: link.macro_id.clone(),

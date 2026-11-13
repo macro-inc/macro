@@ -124,18 +124,23 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
-- Treat `domain/events.rs` payloads as a public contract: the SDK types every
-  `EmailTopicEvent` variant through the webhook OpenAPI schema. The webhook's
-  `normalized_email_event` delivers selected `macro.email` events verbatim to
-  the owner's personal-workspace webhooks and user-scoped event stream. It skips
-  `ThreadBackfilled`, `ThreadsReindexRequested`, and `MessageReceived` when
-  `is_spam_or_trash` is true. Link events filter by `link_id`; other delivered
-  events filter by `thread_id`. Creating or patching webhook filters and opening
-  a stream with any `email.*` event requires a `UserOrInternal` credential;
-  bot and harness credentials receive 403 with the message
-  `email events require the inbox owner's own credential`. Decide delivery for
-  every new variant, and never add message bodies, snippets, or other message
-  content beyond header-level data to these payloads.
+- Treat `domain/events.rs` payloads as a public contract: delivered events are
+  re-published verbatim as `EmailNotificationEvent`
+  (`domain/notification_events.rs`) on `macro.email_notifications`, which the
+  webhook consumers read and the SDK types through the webhook OpenAPI schema.
+  Send every `EmailMacroEvent` through `EmailEventBroker` (`send_email_event`,
+  or `publish_email_event` to log and drop), never a bare `send_event`, or
+  webhooks and streams miss it. A new `EmailTopicEvent` variant needs a
+  decision in `EmailNotificationEvent::from_topic_event`; it keeps
+  `ThreadBackfilled`, `ThreadsReindexRequested`, and a `MessageReceived` with
+  `is_spam_or_trash` internal. Webhooks deliver them only to the owner's
+  personal-workspace webhooks and user-scoped event stream; link events filter
+  by `link_id`, other events by `thread_id`. Creating or patching webhook
+  filters and opening a stream with any `email.*` event requires a
+  `UserOrInternal` credential; bot and harness credentials receive 403 with the
+  message `email events require the inbox owner's own credential`. Never add
+  message bodies, snippets, or other message content beyond header-level data
+  to these payloads.
 - Keep the legacy read policies in `MessageReadService`: public reads union
   owned and delegated inboxes, internal summaries use only the newest owned
   inbox, and public/internal pagination have different invalid-bound behavior.

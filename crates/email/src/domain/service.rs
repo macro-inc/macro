@@ -17,6 +17,7 @@ mod test;
 /// Unified entity-mutation capability impls.
 mod entity_mutation;
 
+use crate::domain::notification_events::EmailEventBroker as _;
 use crate::domain::{
     events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{
@@ -145,16 +146,13 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
         }
     }
 
-    /// Publish an email event to the `macro.email` topic, logging and
-    /// dropping failures — event emission must never fail the operation.
+    /// Publish an email event to both email topics, logging and dropping
+    /// failures — event emission must never fail the operation.
     pub(crate) fn publish_email_event(&self, event: &EmailMacroEvent)
     where
         B: MacroEventBroker,
     {
-        let _ = self
-            .macro_event_broker
-            .send_event(event)
-            .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
+        self.macro_event_broker.publish_email_event(event);
     }
 }
 

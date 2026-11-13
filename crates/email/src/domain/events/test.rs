@@ -3,6 +3,7 @@ use macro_event_broker::Event;
 use serde_json::json;
 
 use super::*;
+use crate::domain::notification_events::EmailNotificationMacroEvent;
 
 fn user_id(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -449,12 +450,29 @@ fn event_type_strings_follow_dot_convention() {
     for (event, expected_type) in cases {
         let value = serde_json::to_value(event.event()).expect("serializable");
         assert_eq!(value["event_type"], *expected_type);
-        assert_eq!(event.event().event.name(), expected_type);
-        assert_eq!(event.event().event.link_id(), link_id);
         assert_eq!(event.key(), link_id.to_string());
+        let Some(public) = EmailNotificationMacroEvent::from_email_event(&event) else {
+            assert!(
+                matches!(
+                    expected_type,
+                    "email.thread_backfilled" | "email.threads_reindex_requested"
+                ),
+                "{expected_type} must be delivered publicly"
+            );
+            continue;
+        };
+        assert_eq!(public.key(), event.key());
+        assert_eq!(public.event().event_id, event.event().event_id);
+        assert_eq!(public.event().event.name(), expected_type);
+        assert_eq!(public.event().event.link_id(), link_id);
         assert_eq!(
-            event.event().event.owner().to_string(),
+            public.event().event.owner().to_string(),
             "macro|owner@example.com"
+        );
+        assert_eq!(
+            serde_json::to_value(public.event()).expect("serializable"),
+            value,
+            "{expected_type} keeps its wire shape on the public topic"
         );
     }
 }

@@ -1,6 +1,7 @@
 //! Adapters from durable email projections to existing Macro services.
 
 use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
+use email::domain::notification_events::EmailEventBroker as _;
 use email::domain::{
     events::EmailMacroEvent,
     invitation_extraction::InvitationExtractionRepository,
@@ -104,10 +105,9 @@ where
     async fn publish(&self, event: EmailMacroEvent) -> Result<(), MailboxError> {
         // Await the broker acknowledgement before deleting durable work.
         self.broker
-            .send_event(&event)
+            .send_email_event(&event)
             .map_err(failed)?
             .await
-            .map_err(failed)?
             .map_err(failed)
     }
     async fn refresh(

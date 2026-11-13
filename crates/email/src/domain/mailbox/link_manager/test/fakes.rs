@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::message_labels::gmail_ops::GmailOpsLinks;
 use macro_event_broker::{EventBrokerError, MacroEvent};
+use macro_event_topics::Topic as _;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use std::sync::{Arc, Mutex};
 
@@ -159,6 +160,11 @@ impl MacroEventBroker for Fake {
         &self,
         event: &T,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        // The public `macro.email_notifications` copy is covered by
+        // `notification_events`' tests; these record `macro.email` only.
+        if event.event().topic() == macro_event_topics::MacroEmailNotificationsTopic::TOPIC_STR {
+            return Ok(tokio::spawn(async { Ok(()) }));
+        }
         self.step(
             "event",
             Call::Event(serde_json::to_value(event.event()).unwrap()),

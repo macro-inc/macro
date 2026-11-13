@@ -29,6 +29,7 @@ pub use upsert_message::{process_and_insert_message, resync_around, upload_claim
 use super::connection::ConnectionSourceError;
 use crate::domain::events::EmailMacroEvent;
 use crate::domain::message_labels::gmail_ops::GmailOpsLinks;
+use crate::domain::notification_events::EmailEventBroker as _;
 use anyhow::anyhow;
 use delete_message::delete_message;
 use macro_event_broker::MacroEventBroker;
@@ -252,7 +253,5 @@ pub fn record_retryable_error(data: &InboxSyncPubsubMessage, e: &DetailedError) 
 }
 
 fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
-    let _ = broker
-        .send_event(event)
-        .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
+    broker.publish_email_event(event);
 }

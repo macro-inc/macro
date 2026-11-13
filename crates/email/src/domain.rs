@@ -28,6 +28,8 @@ pub mod message_labels;
 #[cfg(feature = "mailbox")]
 pub mod message_reads;
 pub mod models;
+/// Public email events for webhooks and event streams, and the broker that publishes both email topics.
+pub mod notification_events;
 #[cfg(feature = "ports")]
 pub mod read_receipts;
 /// A user's newest inbox messages, read straight from the providers.

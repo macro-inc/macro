@@ -93,8 +93,6 @@ pub enum SendCancelReason {
 }
 
 /// Why a set of threads was asked to be reindexed for search.
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "schema", schema(as = EmailThreadsReindexReason))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThreadsReindexReason {
@@ -448,8 +446,6 @@ pub struct ThreadLabelsUpdatedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadBackfilled`].
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "schema", schema(as = EmailThreadBackfilledMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadBackfilledMetadata {
     /// The link (inbox) containing the thread.
@@ -461,8 +457,6 @@ pub struct ThreadBackfilledMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadsReindexRequested`].
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "schema", schema(as = EmailThreadsReindexRequestedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadsReindexRequestedMetadata {
     /// The link (inbox) containing the threads.
@@ -475,8 +469,8 @@ pub struct ThreadsReindexRequestedMetadata {
     pub reason: ThreadsReindexReason,
 }
 
-/// Events that can be published to [`MacroEmailTopic`].
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+/// Events that can be published to [`MacroEmailTopic`]. The public subset is
+/// [`crate::domain::notification_events::EmailNotificationEvent`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum EmailTopicEvent {
@@ -567,80 +561,6 @@ pub enum EmailTopicEvent {
     /// names change. Producers must include at most 50 thread ids.
     #[serde(rename = "email.threads_reindex_requested")]
     ThreadsReindexRequested(ThreadsReindexRequestedMetadata),
-}
-
-impl EmailTopicEvent {
-    /// The event name carried by the wire `event_type` tag.
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::LinkConnected(..) => "email.link_connected",
-            Self::LinkDisconnected(..) => "email.link_disconnected",
-            Self::LinkReauthRequired(..) => "email.link_reauth_required",
-            Self::MessageReceived(..) => "email.message_received",
-            Self::MessageDraftSynced(..) => "email.message_draft_synced",
-            Self::MessageSent(..) => "email.message_sent",
-            Self::MessageDeleted(..) => "email.message_deleted",
-            Self::MessageSendQueued(..) => "email.message_send_queued",
-            Self::MessageSendCancelled(..) => "email.message_send_cancelled",
-            Self::ThreadArchived(..) => "email.thread_archived",
-            Self::ThreadTrashed(..) => "email.thread_trashed",
-            Self::ThreadRead(..) => "email.thread_read",
-            Self::ThreadStarred(..) => "email.thread_starred",
-            Self::ThreadSpamChanged(..) => "email.thread_spam_changed",
-            Self::ThreadProjectChanged(..) => "email.thread_project_changed",
-            Self::ThreadLabelsUpdated(..) => "email.thread_labels_updated",
-            Self::ThreadBackfilled(..) => "email.thread_backfilled",
-            Self::ThreadsReindexRequested(..) => "email.threads_reindex_requested",
-        }
-    }
-
-    /// The user whose private inbox owns this event.
-    pub fn owner(&self) -> &MacroUserIdStr<'static> {
-        match self {
-            Self::LinkConnected(metadata) => &metadata.owner,
-            Self::LinkDisconnected(metadata) => &metadata.owner,
-            Self::LinkReauthRequired(metadata) => &metadata.owner,
-            Self::MessageReceived(metadata) => &metadata.owner,
-            Self::MessageDraftSynced(metadata) => &metadata.owner,
-            Self::MessageSent(metadata) => &metadata.owner,
-            Self::MessageDeleted(metadata) => &metadata.owner,
-            Self::MessageSendQueued(metadata) => &metadata.owner,
-            Self::MessageSendCancelled(metadata) => &metadata.owner,
-            Self::ThreadArchived(metadata) => &metadata.owner,
-            Self::ThreadTrashed(metadata) => &metadata.owner,
-            Self::ThreadRead(metadata) => &metadata.owner,
-            Self::ThreadStarred(metadata) => &metadata.owner,
-            Self::ThreadSpamChanged(metadata) => &metadata.owner,
-            Self::ThreadProjectChanged(metadata) => &metadata.owner,
-            Self::ThreadLabelsUpdated(metadata) => &metadata.owner,
-            Self::ThreadBackfilled(metadata) => &metadata.owner,
-            Self::ThreadsReindexRequested(metadata) => &metadata.owner,
-        }
-    }
-
-    /// The connected inbox that published this event.
-    pub fn link_id(&self) -> Uuid {
-        match self {
-            Self::LinkConnected(metadata) => metadata.link_id,
-            Self::LinkDisconnected(metadata) => metadata.link_id,
-            Self::LinkReauthRequired(metadata) => metadata.link_id,
-            Self::MessageReceived(metadata) => metadata.link_id,
-            Self::MessageDraftSynced(metadata) => metadata.link_id,
-            Self::MessageSent(metadata) => metadata.link_id,
-            Self::MessageDeleted(metadata) => metadata.link_id,
-            Self::MessageSendQueued(metadata) => metadata.link_id,
-            Self::MessageSendCancelled(metadata) => metadata.link_id,
-            Self::ThreadArchived(metadata) => metadata.link_id,
-            Self::ThreadTrashed(metadata) => metadata.link_id,
-            Self::ThreadRead(metadata) => metadata.link_id,
-            Self::ThreadStarred(metadata) => metadata.link_id,
-            Self::ThreadSpamChanged(metadata) => metadata.link_id,
-            Self::ThreadProjectChanged(metadata) => metadata.link_id,
-            Self::ThreadLabelsUpdated(metadata) => metadata.link_id,
-            Self::ThreadBackfilled(metadata) => metadata.link_id,
-            Self::ThreadsReindexRequested(metadata) => metadata.link_id,
-        }
-    }
 }
 
 impl TopicEvent for EmailTopicEvent {
