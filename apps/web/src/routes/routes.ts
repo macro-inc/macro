@@ -1,6 +1,9 @@
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
-import { databaseDetailSearch } from '@app/features/block-database/database-route';
+import {
+  DATABASE_LINK_PARAMS,
+  databaseDetailSearch,
+} from '@app/features/block-database/database-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
 import {
   CALENDAR_ROUTE_ID,
@@ -409,6 +412,7 @@ export const driveSplitRoute = defineRoute({
     if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
     if (type === 'spreadsheet')
       return Object.values(SPREADSHEET_COMMENT_PARAMS);
+    if (type === 'database') return DATABASE_LINK_PARAMS;
     if (typeof routeParams(entry.location.route).callId === 'string')
       return [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId];
     return [];
@@ -1040,6 +1044,7 @@ export const legacyContentRoute = defineRoute({
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);
     if (type === 'channel') return Object.values(CHANNEL_URL_PARAMS);
     if (type === 'company' || type === 'contact') return [COMMENT_LINK_PARAM];
+    if (type === 'database') return DATABASE_LINK_PARAMS;
     return [];
   },
   claim: ({ type, id }) => {

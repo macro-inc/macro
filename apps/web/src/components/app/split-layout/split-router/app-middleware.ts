@@ -1,4 +1,7 @@
-import { databaseDetailSearch } from '@app/features/block-database/database-route';
+import {
+  DATABASE_LINK_PARAMS,
+  databaseDetailSearch,
+} from '@app/features/block-database/database-route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import {
   CALENDAR_ROUTE_ID,
@@ -278,10 +281,7 @@ function migrateLegacySearch({
           routeParams(to.location.route).documentType === 'database'),
       () => ({
         namespace: databaseDetailSearch.namespace,
-        fields: [
-          ['tableId', 'tableId'],
-          ['viewId', 'viewId'],
-        ] as const,
+        fields: DATABASE_LINK_PARAMS.map((key) => [key, key] as const),
       })
     )
     .with('call-detail', 'drive-call', 'calls-call', () => ({

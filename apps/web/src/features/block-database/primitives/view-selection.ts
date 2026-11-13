@@ -50,18 +50,22 @@ export function selectLocation(
 }
 
 /**
- * Open the table and view the route names, over the remembered selection,
- * whenever they change. The viewer's remembered selection restores once
- * their id is known, so the route is applied again then.
+ * Open the table and view the route names, once, over the remembered
+ * selection. It waits for the viewer's id, since their remembered selection
+ * restores then, and `consume` clears the route afterwards, so a later
+ * remount opens what the viewer chose since rather than the link again.
  */
 export function followRouteLocation(
   route: { tableId: Accessor<string>; viewId: Accessor<string> },
   userId: Accessor<string | undefined>,
-  select: Setter<DatabaseViewSelection>
+  select: Setter<DatabaseViewSelection>,
+  consume: () => void
 ) {
   createEffect(
-    on([route.tableId, route.viewId, userId], ([tableId, viewId]) => {
-      if (tableId) selectLocation(select, tableId, viewId || undefined);
+    on([route.tableId, route.viewId, userId], ([tableId, viewId, user]) => {
+      if (!tableId || !user) return;
+      selectLocation(select, tableId, viewId || undefined);
+      consume();
     })
   );
 }

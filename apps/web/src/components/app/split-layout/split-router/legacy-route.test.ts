@@ -114,6 +114,19 @@ describe('legacy link mentions', () => {
     });
   });
 
+  it('keeps the table and view of a database link opened in the app', () => {
+    const databaseId = '01a1d6aa-3b54-72fc-8a19-2f097c4ba71e';
+    expect(
+      resolveMention(
+        appUrl(`/database/${databaseId}?tableId=table-1&viewId=view-1`)
+      )
+    ).toEqual({
+      id: databaseId,
+      block: 'database',
+      params: { tableId: 'table-1', viewId: 'view-1' },
+    });
+  });
+
   it('opens a shared project link in Tasks', () => {
     const middleware = createAppSplitRouterMiddleware({
       isTouchDevice: () => false,

@@ -137,18 +137,22 @@ const Block: Component = () => {
     // Another table's grid takes the request when it mounts.
     openRequestedRecord();
   }
-  const [routeSearch] = createSearchParams(databaseDetailSearch);
+  const [routeSearch, setRouteSearch] =
+    createSearchParams(databaseDetailSearch);
   followRouteLocation(
     {
       tableId: () => routeSearch.tableId,
       viewId: () => routeSearch.viewId,
     },
     userId,
-    setSelection
+    setSelection,
+    () => setRouteSearch({}, { mode: 'replace', history: 'replace' })
   );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, string>) => {
-      if (params.tableId && params.viewId)
+      // A link opened in the app (`webUrl()` on a table or view) names a
+      // table and maybe a view; a related record names its row instead.
+      if (params.tableId && !params.rowId)
         selectLocation(setSelection, params.tableId, params.viewId);
       if (params.tableId && params.rowId)
         fireAndForget(
