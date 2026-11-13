@@ -23,6 +23,7 @@ import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { CallWaveform } from '../../../channel/Call/components/CallWaveform';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
+import { ChannelMentionCount } from './ChannelCountPill';
 import {
   type ChannelRailRow,
   rowKeyForChannel,
@@ -252,6 +253,8 @@ export type ConversationCardProps = ChannelRailItemProps & {
   showLatestMessage?: boolean;
   senderId?: string;
   mentionedCurrentUser: boolean;
+  /** Unread messages that mention the viewer, from `mentionCount`. */
+  mentions?: number;
 };
 
 function UserDisplayName(props: { id: MacroId }) {
@@ -348,6 +351,7 @@ export function ConversationCard(props: ConversationCardProps) {
                 </Tooltip>
               )}
             </Show>
+            <ChannelMentionCount count={props.mentions ?? 0} />
           </span>
           <Show when={props.showLatestMessage !== false}>
             <Show when={hasMessageMetadata()}>
