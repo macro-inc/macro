@@ -1,0 +1,19 @@
+packages/sdk/generated/agent-fold/index.ts
+  s_39eee246ac6b4a::t_862828455004fc 2880,2882,2891,2897,2903,2911,2918,2925,2948,2952,2963,2965,2974,2980,2986,2994,3001,3008,3031,3035
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a5013a9523e40963627eadb6caa22196782f3c34",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
