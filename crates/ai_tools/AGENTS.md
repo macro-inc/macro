@@ -88,7 +88,7 @@ edit capability but calls no nested model and emits no additional model charge; 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
 - After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
-- `DisplayResults` decodes its view with `dynamic_ui` and returns it; readers render the result, never the arguments. Its schema comes from `dynamic_ui::View`.
+- `DisplayResults` decodes its view with `dynamic_ui` and returns it; readers render the result, never the arguments. Its schema is `dynamic_ui::ViewWithoutDashboards`: chat never offers dashboard panes. `agent_dashboards_rollout` reads `enable-agent-dashboards` per user for hosts that do.
 
 ## Related
 

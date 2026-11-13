@@ -99,7 +99,7 @@ fn display_results_is_chat_only() {
 #[test]
 fn a_view_that_does_not_decode_fails_the_call_without_echoing_it() {
     let error = serde_json::from_value::<DisplayResults>(json!({
-        "view": { "widgets": [{ "type": "md", "markdown": "private text" }, { "type": "chart" }] }
+        "view": { "widgets": [{ "type": "md", "markdown": "private text" }, { "type": "piechart" }] }
     }))
     .expect_err("an unknown widget type");
     assert_eq!(

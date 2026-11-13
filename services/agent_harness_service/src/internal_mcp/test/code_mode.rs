@@ -102,6 +102,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
             reviews: Arc::new(std::sync::OnceLock::new()),
             gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
             app_url: "https://macro.com".into(),
+            dashboards: None,
         },
     );
     assert_eq!(
