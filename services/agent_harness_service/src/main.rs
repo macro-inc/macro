@@ -8,6 +8,7 @@
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
 mod agent_runtime_directory;
+mod agent_wakes;
 mod anthropic_gateway;
 mod api;
 mod bots_directory;
@@ -1817,6 +1818,14 @@ async fn run() -> anyhow::Result<()> {
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         non_user_owners,
     );
+    let agent_wakes = agent_wakes::router(
+        config.environment,
+        feature_flags.clone(),
+        pool.clone(),
+        macro_aws_config::s3_client().await,
+        config.agent_session_changes_bucket.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let routine_sessions = routine_sessions::router(
         (*bots_directory).clone(),
         (*harness).clone(),
@@ -2056,6 +2065,7 @@ async fn run() -> anyhow::Result<()> {
             .with_activity(agent_activity)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
+            .with_agent_wakes(agent_wakes)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
             .with_claude_access(computer_claude)

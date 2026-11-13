@@ -587,6 +587,7 @@ dependencies = [
  "agent_session",
  "agent_session_realtime",
  "agent_trigger",
+ "agent_wakes",
  "ai_billing",
  "ai_projections",
  "ai_tools",

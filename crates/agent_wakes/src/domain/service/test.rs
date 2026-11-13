@@ -7,10 +7,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::*;
 use crate::domain::models::AgentRelation;
 use crate::domain::record::{
-    OutcomeCheck, OutcomeSource, TraceIds, Trigger, TriggerKind, WakeEnd, WakeEndStatus,
-    WakeOutcome,
+    WakeEndStatus, WakeOutcome, WakeOutcomeCheck, WakeOutcomeSource, WakeTraceIds, WakeTrigger,
+    WakeTriggerKind,
 };
-use crate::domain::trace::TraceSource;
+use crate::domain::trace::WakeTraceSource;
 
 const AGENT: &str = "macro|agent@example.com";
 const ADMIN: &str = "macro|admin@example.com";
@@ -169,15 +169,15 @@ fn started(wake: &str) -> WakeRecord {
         phase: WakePhase::Start,
         system: "pr-factory".to_owned(),
         wake: wake.to_owned(),
-        trace: TraceIds {
+        trace: WakeTraceIds {
             trace_id: "0123456789abcdef0123456789abcdef".to_owned(),
             span_id: "0123456789abcdef".to_owned(),
             parent_span_id: None,
         },
         operation: None,
         parent: None,
-        trigger: Trigger {
-            kind: TriggerKind::Event,
+        trigger: WakeTrigger {
+            kind: WakeTriggerKind::Event,
             source: "ciFailures".to_owned(),
             name: None,
             ids: [("pr".to_owned(), "macro-inc/macro#1".to_owned())].into(),
@@ -186,29 +186,31 @@ fn started(wake: &str) -> WakeRecord {
         started_at: "2026-11-11T09:00:00.000Z".to_owned(),
         session: None,
         terminal: None,
-        end: None,
+        ended_at: None,
+        duration_ms: None,
+        status: None,
+        error: None,
+        outcome: None,
+        effects: None,
+        usage: None,
     }
 }
 
 fn ended(wake: &str) -> WakeRecord {
     WakeRecord {
         phase: WakePhase::End,
-        end: Some(WakeEnd {
-            ended_at: "2026-11-11T09:01:30.500Z".to_owned(),
-            duration_ms: 90_500.0,
-            status: WakeEndStatus::Failed,
-            error: None,
-            outcome: WakeOutcome {
-                name: "unclassified".to_owned(),
-                source: OutcomeSource::None,
-                check: OutcomeCheck::NotReported,
-                reported: None,
-                observed: None,
-                summary: None,
-            },
-            effects: vec![],
-            usage: None,
+        ended_at: Some("2026-11-11T09:01:30.500Z".to_owned()),
+        duration_ms: Some(90_500.0),
+        status: Some(WakeEndStatus::Failed),
+        outcome: Some(WakeOutcome {
+            name: "unclassified".to_owned(),
+            source: WakeOutcomeSource::None,
+            check: WakeOutcomeCheck::NotReported,
+            reported: None,
+            observed: None,
+            summary: None,
         }),
+        effects: Some(vec![]),
         ..started(wake)
     }
 }
@@ -216,7 +218,7 @@ fn ended(wake: &str) -> WakeRecord {
 fn trace() -> WakeTrace {
     WakeTrace {
         v: 1,
-        source: TraceSource::Claude,
+        source: WakeTraceSource::Claude,
         session_id: "s1".to_owned(),
         started_at: "2026-11-11T09:00:00.000Z".to_owned(),
         ended_at: "2026-11-11T09:01:30.000Z".to_owned(),
@@ -268,7 +270,9 @@ async fn a_person_who_is_not_an_agent_account_records_nothing() {
     let service = service(true);
     let person = user(MEMBER);
 
-    let result = service.record(&caller(MEMBER), &person, started("w1")).await;
+    let result = service
+        .record(&caller(MEMBER), &person, started("w1"))
+        .await;
     assert!(matches!(result, Err(WakeError::NotFound)));
 }
 
@@ -342,8 +346,18 @@ async fn records_that_are_not_whole_v1_records_are_refused() {
         ..started("w3")
     };
     let empty_id = started("");
+    let started_with_status = WakeRecord {
+        status: Some(WakeEndStatus::Ok),
+        ..started("w4")
+    };
 
-    for record in [unended, wrong_version, bad_instant, empty_id] {
+    for record in [
+        unended,
+        wrong_version,
+        bad_instant,
+        empty_id,
+        started_with_status,
+    ] {
         let result = service.record(&caller(AGENT), &agent, record).await;
         assert!(matches!(result, Err(WakeError::Invalid(_))), "{result:?}");
     }
@@ -401,9 +415,8 @@ fn record_json_round_trips_through_the_v1_shape() {
     });
 
     let record: WakeRecord = serde_json::from_value(json.clone()).unwrap();
-    let end = record.end.as_ref().unwrap();
-    assert_eq!(end.status, WakeEndStatus::Ok);
-    assert_eq!(end.usage.as_ref().unwrap().cost_usd, Some(0.25));
+    assert_eq!(record.status, Some(WakeEndStatus::Ok));
+    assert_eq!(record.usage.as_ref().unwrap().cost_usd, Some(0.25));
 
     let written = serde_json::to_value(&record).unwrap();
     assert_eq!(written["phase"], "end");
@@ -421,5 +434,5 @@ fn record_json_round_trips_through_the_v1_shape() {
         "startedAt": "2026-11-11T09:00:00.000Z"
     }))
     .unwrap();
-    assert_eq!(start.end, None);
+    assert_eq!(start.status, None);
 }

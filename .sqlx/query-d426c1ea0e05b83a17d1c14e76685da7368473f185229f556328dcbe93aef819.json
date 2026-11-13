@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        record AS \"record: Json<WakeRecord>\",\n                        received_at,\n                        trace_updated_at,\n                        started_at,\n                        wake_id\n                    FROM agent_wakes\n                    WHERE agent_user_id = $1\n                      AND status = $2\n                      AND (started_at, wake_id)\n                          < (COALESCE($3::timestamptz, 'infinity'), COALESCE($4::text, ''))\n                    ORDER BY started_at DESC, wake_id DESC\n                    LIMIT $5\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record: Json<WakeRecord>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "trace_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "wake_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d426c1ea0e05b83a17d1c14e76685da7368473f185229f556328dcbe93aef819"
+}

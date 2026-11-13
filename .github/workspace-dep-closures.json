@@ -823,6 +823,7 @@
       "crates/agent_session",
       "crates/agent_session_realtime",
       "crates/agent_trigger",
+      "crates/agent_wakes",
       "crates/ai_billing",
       "crates/ai_engine",
       "crates/ai_projections",
@@ -1699,6 +1700,24 @@
       "crates/user_quota",
       "crates/workspace-hack",
       "services/agent_trigger_service"
+    ],
+    "agent_wakes": [
+      "crates/agent_wakes",
+      "crates/bot_id",
+      "crates/bot_token",
+      "crates/cowlike",
+      "crates/feature_flags",
+      "crates/harness_id",
+      "crates/harness_token",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/remote_env_var",
+      "crates/workspace-hack"
     ],
     "ai_billing": [
       "crates/activity",

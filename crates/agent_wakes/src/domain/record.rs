@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
-pub enum TriggerKind {
+pub enum WakeTriggerKind {
     /// A schedule came due.
     Schedule,
     /// Someone wrote to the agent: chat, mail, a call.
@@ -27,9 +27,9 @@ pub enum TriggerKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct Trigger {
+pub struct WakeTrigger {
     /// What kind of thing woke it.
-    pub kind: TriggerKind,
+    pub kind: WakeTriggerKind,
     /// The event source that fired, as the behavior names it.
     pub source: String,
     /// What within the source, when it has a name.
@@ -46,7 +46,7 @@ pub struct Trigger {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct TraceIds {
+pub struct WakeTraceIds {
     /// 32 hex characters.
     pub trace_id: String,
     /// 16 hex characters.
@@ -105,7 +105,7 @@ pub enum WakeEndStatus {
 /// What went wrong.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct WakeError {
+pub struct WakeFailure {
     /// A low-cardinality name, e.g. `timeout`.
     #[serde(rename = "type")]
     pub kind: String,
@@ -117,7 +117,7 @@ pub struct WakeError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
-pub enum OutcomeSource {
+pub enum WakeOutcomeSource {
     /// The agent's report.
     Reported,
     /// The effects the system saw.
@@ -130,7 +130,7 @@ pub enum OutcomeSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
-pub enum OutcomeCheck {
+pub enum WakeOutcomeCheck {
     /// The effects confirm it.
     Confirmed,
     /// The outcome declares no evidence.
@@ -149,9 +149,9 @@ pub struct WakeOutcome {
     /// One of the system's declared outcomes, or `unclassified`.
     pub name: String,
     /// Where `name` came from.
-    pub source: OutcomeSource,
+    pub source: WakeOutcomeSource,
     /// How the report held up.
-    pub check: OutcomeCheck,
+    pub check: WakeOutcomeCheck,
     /// What the agent reported.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reported: Option<String>,
@@ -209,29 +209,6 @@ pub enum WakePhase {
     End,
 }
 
-/// What only an `end` record carries.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct WakeEnd {
-    /// ISO 8601 in UTC.
-    pub ended_at: String,
-    /// How long it ran.
-    pub duration_ms: f64,
-    /// How it ended.
-    pub status: WakeEndStatus,
-    /// What went wrong, when it did.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<WakeError>,
-    /// What came of it.
-    pub outcome: WakeOutcome,
-    /// What the system saw it do.
-    pub effects: Vec<WakeEffect>,
-    /// What it used.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub usage: Option<WakeUsage>,
-}
-
 /// One wake record, version 1, as a muppet system sends it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -246,7 +223,7 @@ pub struct WakeRecord {
     /// This wake's id, unique within the agent.
     pub wake: String,
     /// Where the wake sits in a trace.
-    pub trace: TraceIds,
+    pub trace: WakeTraceIds,
     /// `invoke_workflow` when no model was woken.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation: Option<String>,
@@ -254,7 +231,7 @@ pub struct WakeRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<WakeParent>,
     /// What woke it.
-    pub trigger: Trigger,
+    pub trigger: WakeTrigger,
     /// ISO 8601 in UTC, to the millisecond.
     pub started_at: String,
     /// The model session it ran as.
@@ -263,7 +240,26 @@ pub struct WakeRecord {
     /// The Herdr terminal it ran in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal: Option<String>,
-    /// Present exactly when `phase` is `end`.
-    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
-    pub end: Option<WakeEnd>,
+    /// When it ended, ISO 8601 in UTC. This and the fields below come with
+    /// the `end` record only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<String>,
+    /// How long it ran.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<f64>,
+    /// How it ended.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<WakeEndStatus>,
+    /// What went wrong, when it did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<WakeFailure>,
+    /// What came of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<WakeOutcome>,
+    /// What the system saw it do.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effects: Option<Vec<WakeEffect>>,
+    /// What it used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<WakeUsage>,
 }

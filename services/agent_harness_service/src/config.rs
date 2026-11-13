@@ -283,8 +283,9 @@ pub struct Config {
     pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
     /// Issuer stamped into minted Macro API tokens.
     pub macro_api_token_issuer: MacroApiTokenIssuer,
-    /// S3 bucket the Changes pane's patches are stored in, one object per
-    /// capture under `agent-sessions/{session}/changes/`. Required: a
+    /// S3 bucket of agent session content: the Changes pane's patches, one
+    /// object per capture under `agent-sessions/{session}/changes/`, and agent
+    /// accounts' wake traces, one per wake under `agent-wakes/`. Required: a
     /// harness that cannot store a patch cannot show a session's changes,
     /// and that is worth failing at boot rather than on the first capture.
     pub agent_session_changes_bucket: String,

@@ -7,8 +7,8 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::WakeStatus;
 use crate::domain::record::{
-    OutcomeCheck, OutcomeSource, TraceIds, Trigger, TriggerKind, WakeEnd, WakeEndStatus,
-    WakeOutcome,
+    WakeEndStatus, WakeOutcome, WakeOutcomeCheck, WakeOutcomeSource, WakeTraceIds, WakeTrigger,
+    WakeTriggerKind,
 };
 
 const AGENT: &str = "macro|agent@example.com";
@@ -90,23 +90,8 @@ fn at(minute: u32) -> DateTime<Utc> {
 }
 
 fn wake(id: &str, system: &str, phase: WakePhase, minute: u32) -> ValidWake {
-    let end = (phase == WakePhase::End).then(|| WakeEnd {
-        ended_at: "2026-11-11T10:00:00.000Z".to_owned(),
-        duration_ms: 1000.0,
-        status: WakeEndStatus::Failed,
-        error: None,
-        outcome: WakeOutcome {
-            name: "unclassified".to_owned(),
-            source: OutcomeSource::None,
-            check: OutcomeCheck::NotReported,
-            reported: None,
-            observed: None,
-            summary: None,
-        },
-        effects: vec![],
-        usage: None,
-    });
-    let status = if end.is_some() {
+    let ended = phase == WakePhase::End;
+    let status = if ended {
         WakeStatus::Failed
     } else {
         WakeStatus::Running
@@ -117,15 +102,15 @@ fn wake(id: &str, system: &str, phase: WakePhase, minute: u32) -> ValidWake {
             phase,
             system: system.to_owned(),
             wake: id.to_owned(),
-            trace: TraceIds {
+            trace: WakeTraceIds {
                 trace_id: "0123456789abcdef0123456789abcdef".to_owned(),
                 span_id: "0123456789abcdef".to_owned(),
                 parent_span_id: None,
             },
             operation: None,
             parent: None,
-            trigger: Trigger {
-                kind: TriggerKind::Schedule,
+            trigger: WakeTrigger {
+                kind: WakeTriggerKind::Schedule,
                 source: "schedules".to_owned(),
                 name: Some("nightly".to_owned()),
                 ids: Default::default(),
@@ -134,7 +119,20 @@ fn wake(id: &str, system: &str, phase: WakePhase, minute: u32) -> ValidWake {
             started_at: at(minute).to_rfc3339(),
             session: None,
             terminal: None,
-            end,
+            ended_at: ended.then(|| "2026-11-11T10:00:00.000Z".to_owned()),
+            duration_ms: ended.then_some(1000.0),
+            status: ended.then_some(WakeEndStatus::Failed),
+            error: None,
+            outcome: ended.then(|| WakeOutcome {
+                name: "unclassified".to_owned(),
+                source: WakeOutcomeSource::None,
+                check: WakeOutcomeCheck::NotReported,
+                reported: None,
+                observed: None,
+                summary: None,
+            }),
+            effects: ended.then(Vec::new),
+            usage: None,
         },
         phase,
         status,
@@ -156,7 +154,10 @@ async fn relation_finds_agent_accounts_and_their_team_admins(pool: PgPool) {
     ] {
         let relation = repo.relation(&user(caller), &user(AGENT)).await.unwrap();
         assert!(relation.is_agent_account, "{caller}");
-        assert_eq!(relation.caller_administers_agent_team, administers, "{caller}");
+        assert_eq!(
+            relation.caller_administers_agent_team, administers,
+            "{caller}"
+        );
     }
 
     let person = repo.relation(&user(ADMIN), &user(MEMBER)).await.unwrap();
@@ -179,13 +180,28 @@ async fn upsert_keeps_the_latest_phase_per_wake(pool: PgPool) {
     let session = wake("w1", "pr-factory", WakePhase::Session, 0);
     let end = wake("w1", "pr-factory", WakePhase::End, 0);
 
-    assert_eq!(repo.upsert(&agent, &start).await.unwrap(), UpsertOutcome::Stored);
-    assert_eq!(repo.upsert(&agent, &session).await.unwrap(), UpsertOutcome::Stored);
+    assert_eq!(
+        repo.upsert(&agent, &start).await.unwrap(),
+        UpsertOutcome::Stored
+    );
+    assert_eq!(
+        repo.upsert(&agent, &session).await.unwrap(),
+        UpsertOutcome::Stored
+    );
     // The same phase again replaces it: a session record may be re-sent as
     // more is known.
-    assert_eq!(repo.upsert(&agent, &session).await.unwrap(), UpsertOutcome::Stored);
-    assert_eq!(repo.upsert(&agent, &end).await.unwrap(), UpsertOutcome::Stored);
-    assert_eq!(repo.upsert(&agent, &start).await.unwrap(), UpsertOutcome::Stale);
+    assert_eq!(
+        repo.upsert(&agent, &session).await.unwrap(),
+        UpsertOutcome::Stored
+    );
+    assert_eq!(
+        repo.upsert(&agent, &end).await.unwrap(),
+        UpsertOutcome::Stored
+    );
+    assert_eq!(
+        repo.upsert(&agent, &start).await.unwrap(),
+        UpsertOutcome::Stale
+    );
 
     let stored = repo.get(&agent, "w1").await.unwrap().unwrap();
     assert_eq!(stored.record, end.record);

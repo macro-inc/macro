@@ -311,17 +311,29 @@ fn validate(record: WakeRecord) -> Result<ValidWake, WakeError> {
         .map_err(|_| WakeError::Invalid("startedAt is not an ISO 8601 instant".to_owned()))?
         .to_utc();
 
-    // `end` records carry the ending fields and no other phase does; the
-    // record type flattens them, so check the pairing here.
-    let status = match (record.phase, &record.end) {
-        (WakePhase::End, Some(end)) => WakeStatus::from(end.status),
-        (WakePhase::Start | WakePhase::Session, None) => WakeStatus::Running,
-        (WakePhase::End, None) => {
+    // An `end` record carries how the wake ended and no other phase does.
+    let ending = (
+        &record.ended_at,
+        record.duration_ms,
+        record.status,
+        &record.outcome,
+        &record.effects,
+    );
+    let status = match (record.phase, ending) {
+        (WakePhase::End, (Some(_), Some(_), Some(status), Some(_), Some(_))) => {
+            WakeStatus::from(status)
+        }
+        (WakePhase::End, _) => {
             return Err(WakeError::Invalid(
                 "an end record needs endedAt, durationMs, status, outcome and effects".to_owned(),
             ));
         }
-        (WakePhase::Start | WakePhase::Session, Some(_)) => {
+        (WakePhase::Start | WakePhase::Session, (None, None, None, None, None))
+            if record.error.is_none() && record.usage.is_none() =>
+        {
+            WakeStatus::Running
+        }
+        (WakePhase::Start | WakePhase::Session, _) => {
             return Err(WakeError::Invalid(
                 "only an end record carries how the wake ended".to_owned(),
             ));

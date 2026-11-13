@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
-pub enum TraceSource {
+pub enum WakeTraceSource {
     /// A Claude Code transcript.
     Claude,
     /// A Codex rollout.
@@ -20,7 +20,7 @@ pub enum TraceSource {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct TraceTokens {
+pub struct WakeTraceTokens {
     /// Input tokens.
     pub input: f64,
     /// Output tokens.
@@ -35,7 +35,7 @@ pub struct TraceTokens {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum TraceSpan {
+pub enum WakeTraceSpan {
     /// The prompt, or anything said to the session after it.
     User {
         /// When it was said.
@@ -59,7 +59,7 @@ pub enum TraceSpan {
         /// What it thought.
         thinking: String,
         /// What it used.
-        tokens: TraceTokens,
+        tokens: WakeTraceTokens,
     },
     /// One tool call.
     Tool {
@@ -93,7 +93,7 @@ pub struct WakeTrace {
     /// The format version; always 1.
     pub v: u8,
     /// Which program wrote the transcript.
-    pub source: TraceSource,
+    pub source: WakeTraceSource,
     /// The model session's id.
     pub session_id: String,
     /// The transcript's first instant.
@@ -112,5 +112,5 @@ pub struct WakeTrace {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_usd: Option<f64>,
     /// The timeline.
-    pub spans: Vec<TraceSpan>,
+    pub spans: Vec<WakeTraceSpan>,
 }

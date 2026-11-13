@@ -37,3 +37,13 @@ impl FeatureFlags for LocalDashboardsFlags {
         )]))
     }
 }
+
+/// The flag off for everyone: a deployed service with no flag evaluator.
+#[derive(Clone, Copy)]
+pub struct NoDashboards;
+
+impl DashboardsRollout for NoDashboards {
+    async fn enabled_for(&self, _: &MacroUserIdStr<'static>) -> bool {
+        false
+    }
+}

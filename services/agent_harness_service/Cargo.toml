@@ -37,6 +37,7 @@ activity = { path = "../../crates/activity", default-features = false, features 
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
+agent_wakes = { path = "../../crates/agent_wakes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
