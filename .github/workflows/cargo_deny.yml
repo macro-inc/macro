@@ -27,10 +27,12 @@ jobs:
         tar -xzf "$RUNNER_TEMP/$name.tar.gz" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
       shell: bash
-    - name: cargo deny check bans licenses sources
+    - id: bans
+      name: cargo deny check bans licenses sources
       run: cargo-deny --all-features --manifest-path Cargo.toml check bans licenses sources
       shell: bash
     - name: cargo deny check advisories, for packages this PR adds
+      if: '!cancelled() && steps.bans.outcome != ''skipped'''
       run: |
         node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
         // Runs `cargo deny check advisories` on a PR and fails only on advisories

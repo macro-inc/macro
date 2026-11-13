@@ -38,7 +38,7 @@ jobs:
       run: |
         set -euo pipefail
         run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-        message="🚨 The daily cargo deny advisories run failed on $GITHUB_REF_NAME. A RustSec advisory against a package in Cargo.lock fails it: update the crate, or ignore the advisory in deny.toml with a reason. $run_url"
+        message="🚨 The daily cargo deny advisories run failed on $GITHUB_REF_NAME. If the log shows a RustSec advisory against a package in Cargo.lock, update the crate, or ignore the advisory in deny.toml with a reason. $run_url"
         jq -n --arg content "$message" '{content: $content}' |
           curl --fail-with-body --silent --show-error --retry 3 \
             --header 'Content-Type: application/json' \
