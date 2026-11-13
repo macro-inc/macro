@@ -540,6 +540,7 @@ jobs:
             - '.github/workflows/email_e2e.yml'
           email_e2e_browser:
             - 'services/email_service/**'
+            - 'services/email_scheduled_handler/**'
             - 'crates/email/**'
             - 'crates/email_*/**'
             - 'crates/graphql_email/**'
