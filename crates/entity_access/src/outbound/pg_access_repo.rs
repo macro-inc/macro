@@ -343,13 +343,12 @@ impl AccessRepository for PgAccessRepository {
         let database_uuid = database_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid database ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(
-            queries::database_access::get_database_access(&self.pool, &database_uuid, &source_ids)
-                .await?,
+        Ok(queries::database_access::get_database_access(
+            &self.pool,
+            &database_uuid,
+            Viewer::from_user(user_id),
         )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -357,10 +356,7 @@ impl AccessRepository for PgAccessRepository {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(queries::database_access::list_database_access(&self.pool, &source_ids).await?)
+        Ok(queries::database_access::list_database_access(&self.pool, user_id).await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -438,13 +434,10 @@ impl AccessRepository for PgAccessRepository {
         let row_uuid = row_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid database row ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
         Ok(queries::database_row_access::get_database_row_access(
             &self.pool,
             &row_uuid,
-            &source_ids,
+            Viewer::from_user(user_id),
         )
         .await?)
     }
@@ -458,17 +451,12 @@ impl AccessRepository for PgAccessRepository {
         if row_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
         }
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(
-            queries::database_row_access::get_database_rows_access(
-                &self.pool,
-                row_ids,
-                &source_ids,
-            )
-            .await?,
+        Ok(queries::database_row_access::get_database_rows_access(
+            &self.pool,
+            row_ids,
+            Viewer::User(user_id.as_ref()),
         )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -595,18 +583,14 @@ impl AccessRepository for PgAccessRepository {
                 queries::pipeline_access::get_pipeline_access(&self.pool, entity_uuid, viewer).await
             }
             EntityType::Database => {
-                queries::database_access::get_database_access(
-                    &self.pool,
-                    &entity_uuid,
-                    &source_ids,
-                )
+                queries::database_access::get_database_access(&self.pool, &entity_uuid, viewer)
                 .await
             }
             EntityType::DatabaseRow => {
                 queries::database_row_access::get_database_row_access(
                     &self.pool,
                     &entity_uuid,
-                    &source_ids,
+                    viewer,
                 )
                 .await
             }
