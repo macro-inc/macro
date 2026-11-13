@@ -557,12 +557,20 @@ vi.mock(
   })
 );
 vi.mock(
+  '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom',
+  () => ({ installNativeCodeChrome: () => () => {} })
+);
+vi.mock(
   '@core/component/LexicalMarkdown/plugins/code/native-accessory',
   async (importOriginal) => ({
     ...(await importOriginal<
       typeof import('@core/component/LexicalMarkdown/plugins/code/native-accessory')
     >()),
-    createNativeCodeAccessories: () => ({ dispose() {} }),
+    createNativeCodeAccessories: () => ({
+      store: {},
+      refreshEditable() {},
+      dispose() {},
+    }),
   })
 );
 vi.mock(
