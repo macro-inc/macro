@@ -1,0 +1,59 @@
+crates/entity_access/src/outbound/pg_access_repo.rs
+  s_a73788223ca988::t_6bdcbaac7d6e59 907-911,913,938
+  s_a73788223ca988::t_a2cb4ec0ded51e 862,900-906,912,914-937,939-940,951,959
+  s_a73788223ca988::t_497478ca90b957 958,960
+  s_a73788223ca988::t_7488124d0f950a 863-876,952-957
+.sqlx/query-39b3f452bed1a48e9ddea9d40e332d8b2c2557f19dbe4a8d9d97d4f07f8460d5.json
+  s_a73788223ca988::t_ac3a7e17a4a851 1-24
+crates/databases_sql/src/view_only.rs
+  s_a73788223ca988::t_7488124d0f950a 177,181,183
+  s_a73788223ca988::t_6bf31da02fd616 166-176,178-180,182,184-186
+crates/entity_access/src/outbound/pg_access_repo/queries/entity_accessor.rs
+  s_a73788223ca988::t_7488124d0f950a 8-14
+  s_a73788223ca988::t_9d0953490a618c 1-7,15-114
+crates/entity_access/src/domain/ports.rs
+  s_a73788223ca988::t_33c2ab7e34415c 338-343,346-371,381-382,643,657,665-675,677-682,828-841,843-845,847-848
+  s_a73788223ca988::t_7488124d0f950a 323-330,344-345,378-380,383,632-633,640-642,644-656,658-664,676,842,846
+  s_a73788223ca988::t_ba98f729b174ce 631
+  s_a73788223ca988::t_8f46f70856ef07 384
+.sqlx/query-5afdfecc7e30bf1cf43ab0f6324bf0e8c5a505da6c5506902bb552ecfa7ad07b.json
+  s_a73788223ca988::t_86554dca74df1d 1-23
+crates/entity_access/src/outbound/pg_access_repo/queries/channel_users.rs
+  s_a73788223ca988::t_e2ced745e2f21c 10-11,24-31
+  s_a73788223ca988::t_e3a29f19457e0c 32-33
+crates/entity_access/src/domain/service.rs
+  s_a73788223ca988::t_a669c449002824 168-263,885-910,912,921-959,968,971,978,981,987,1031-1045
+  s_a73788223ca988::t_638b2a40dda4f3 1046
+crates/entity_access/src/outbound/pg_access_repo/queries/entity_accessor/test.rs
+  s_a73788223ca988::t_467370ded2f5d5 1-2,5,40,48,363,381-386,403,405-406,409,411-418,424-425,427,429-433,439-440
+  s_a73788223ca988::t_6b21e2260807ad 3-4,6-16,20-21,26,31-39,41-47,49-72,76,90-95,101,177-198,200,202-232,234,236-264,266-282,284,286-302,304-316,318,320-334,336,338-357,359,361-362,364-369,371-372,374,376-380,387-401,407-408,410,426,428,441
+  s_a73788223ca988::t_4926a17d7d2b7c 147,201,235
+  s_a73788223ca988::t_aea001855a2092 17-19,22-25,27-30,73-75,77-89,96-100,102-146,148-176,199,233,265,283,285,317,319,335,337,358,360,373,375,402,404
+  s_a73788223ca988::t_6bdcbaac7d6e59 303,370,419-423,434-438
+crates/entity_access/AGENTS.md
+  s_a73788223ca988::t_9c79ce0b6686ce 70-76
+.sqlx/query-4fb99599b5767fc623ac8aaeea9ce8961fd7adacaf257bbd0ed049bdb206975e.json
+  s_a73788223ca988::t_5b15a732d39fb3 1-24
+crates/entity_access/src/domain/service/test.rs
+  s_a73788223ca988::t_7488124d0f950a 685-737
+crates/entity_access/src/outbound/pg_access_repo/queries.rs
+  s_a73788223ca988::t_f91914c33c08ac 210-212
+  s_a73788223ca988::t_a2cb4ec0ded51e 38
+  s_a73788223ca988::t_e2ced745e2f21c 187-188,202-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fef097241c5feac43ceaf6ba713c83b0809dd00f",
+  "prompts": {},
+  "sessions": {
+    "s_a73788223ca988": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0498b19-2cf7-4b7c-a957-92baef251ba9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
