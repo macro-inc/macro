@@ -4086,7 +4086,7 @@
       },
       "put": {
         "tags": ["agent-wakes"],
-        "summary": "Replace the trace of one of the caller's own recorded wakes: its model\nsession's turns and tool calls, redacted by the agent. Only the agent\naccount itself may. At most 10 MiB; kept 30 days after its last upload.",
+        "summary": "Replace the trace of one of the caller's own recorded wakes: its model\nsession's turns and tool calls, redacted by the agent. Only the agent\naccount itself may. At most 10 MiB; kept 30 days after its last upload. A\nlive trace sent after the wake's `end` record is dropped, so the final trace\nstands.",
         "operationId": "put_agent_wake_trace",
         "parameters": [
           {

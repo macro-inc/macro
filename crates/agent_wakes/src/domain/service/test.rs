@@ -395,6 +395,51 @@ async fn a_trace_needs_a_recorded_wake_and_admins_read_it() {
     assert!(matches!(by_admin, Err(WakeError::Forbidden)));
 }
 
+#[tokio::test]
+async fn a_live_trace_after_the_end_leaves_the_final_trace() {
+    let service = service(true);
+    let agent = user(AGENT);
+    let live = WakeTrace {
+        live: true,
+        ..trace()
+    };
+
+    service
+        .record(&caller(AGENT), &agent, started("w1"))
+        .await
+        .unwrap();
+    service
+        .put_trace(&caller(AGENT), &agent, "w1", live.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        service.get_trace(&caller(AGENT), &agent, "w1").await.unwrap(),
+        live
+    );
+
+    service
+        .record(&caller(AGENT), &agent, ended("w1"))
+        .await
+        .unwrap();
+    service
+        .put_trace(&caller(AGENT), &agent, "w1", trace())
+        .await
+        .unwrap();
+    service
+        .put_trace(&caller(AGENT), &agent, "w1", live)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        service.get_trace(&caller(AGENT), &agent, "w1").await.unwrap(),
+        trace()
+    );
+    assert_eq!(
+        *service.repository.traced.lock().unwrap(),
+        vec!["w1", "w1"]
+    );
+}
+
 #[test]
 fn record_json_round_trips_through_the_v1_shape() {
     let json = serde_json::json!({

@@ -377,7 +377,9 @@ pub async fn get_agent_wake<Wakes: AgentWakes, Auth: MacroAuthorizationService>(
 )]
 /// Replace the trace of one of the caller's own recorded wakes: its model
 /// session's turns and tool calls, redacted by the agent. Only the agent
-/// account itself may. At most 10 MiB; kept 30 days after its last upload.
+/// account itself may. At most 10 MiB; kept 30 days after its last upload. A
+/// live trace sent after the wake's `end` record is dropped, so the final trace
+/// stands.
 #[tracing::instrument(skip_all, err(Debug))]
 pub async fn put_agent_wake_trace<Wakes: AgentWakes, Auth: MacroAuthorizationService>(
     State(state): State<AgentWakesRouterState<Wakes, Auth>>,

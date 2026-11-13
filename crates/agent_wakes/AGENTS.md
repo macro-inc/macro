@@ -9,8 +9,9 @@ and the owners and admins of its teams.
 
 ## Start here
 
-- `src/domain/service.rs`: who may write and read, record validation, and the
-  rule that a trace belongs to a recorded wake.
+- `src/domain/service.rs`: who may write and read, record validation, the
+  rule that a trace belongs to a recorded wake, and that a live trace sent
+  after the `end` record is dropped.
 - `src/domain/record.rs`, `src/domain/trace.rs`: the wire formats. Their source
   is muppet (`agent-teammates/muppet/packages/lib/utilities/telemetry/record.ts`
   and `utilities/traces/trace.ts`); keep them in step.

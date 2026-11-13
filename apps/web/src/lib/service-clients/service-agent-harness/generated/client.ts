@@ -4662,7 +4662,9 @@ export const getAgentWakeTrace = async (
 /**
  * @summary Replace the trace of one of the caller's own recorded wakes: its model
 session's turns and tool calls, redacted by the agent. Only the agent
-account itself may. At most 10 MiB; kept 30 days after its last upload.
+account itself may. At most 10 MiB; kept 30 days after its last upload. A
+live trace sent after the wake's `end` record is dropped, so the final trace
+stands.
  */
 export type putAgentWakeTraceResponse204 = {
   data: void;

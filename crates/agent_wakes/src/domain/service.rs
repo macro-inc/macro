@@ -51,7 +51,9 @@ pub trait AgentWakes: Send + Sync + 'static {
         wake_id: &str,
     ) -> impl Future<Output = Result<StoredWake, WakeError>> + Send;
 
-    /// Replace the trace of one of the caller's own recorded wakes.
+    /// Replace the trace of one of the caller's own recorded wakes. A live
+    /// trace for a wake that has ended changes nothing, so a slow live upload
+    /// can't overwrite the final one.
     fn put_trace(
         &self,
         caller: &Caller,
@@ -231,7 +233,7 @@ where
         name = "agent_wakes.put_trace",
         skip_all,
         err,
-        fields(wake.id = %wake_id, spans = trace.spans.len(), live = trace.live)
+        fields(wake.id = %wake_id, spans = trace.spans.len(), live = trace.live, stale = tracing::field::Empty)
     )]
     async fn put_trace(
         &self,
@@ -250,14 +252,19 @@ where
 
         // A trace belongs to a recorded wake: refuse one for a wake that
         // isn't, before storing anything.
-        if self
+        let wake = self
             .repository
             .get(agent, wake_id)
             .await
             .map_err(WakeError::Storage)?
-            .is_none()
-        {
-            return Err(WakeError::NotFound);
+            .ok_or(WakeError::NotFound)?;
+
+        // Once the wake has ended, its final trace stands: a live upload that
+        // arrives late is dropped, like a record of an earlier phase.
+        let stale = trace.live && wake.record.phase == WakePhase::End;
+        tracing::Span::current().record("stale", stale);
+        if stale {
+            return Ok(());
         }
 
         self.traces
