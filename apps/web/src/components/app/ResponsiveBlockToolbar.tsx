@@ -67,7 +67,8 @@ interface BlockToolbarProps {
 /**
  * Legacy header arrangement for blocks whose header one component builds for
  * both desktop and touch. A block that has a desktop and a mobile view uses
- * `BlockToolbar` in one and `MobileHeader` in the other instead.
+ * `BlockToolbar` in one and `MobileHeader` (`MobileBlockHeader` for a file
+ * block) in the other instead.
  */
 export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
   const isShareTool = (tool: BlockTool) => getToolLabel(tool) === 'Share';

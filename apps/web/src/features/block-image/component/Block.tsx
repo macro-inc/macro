@@ -2,11 +2,13 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { setCopiedItem } from '@core/state/clipboard';
 import { onCleanup, onMount, Show } from 'solid-js';
+import { ImageHeader } from '../views/image-header';
+import { MobileImageHeader } from '../views/mobile/image-header';
 import { ImageContent } from './ImageContent';
-import { TopBar } from './TopBar';
 
 export default function BlockImage() {
   useBlockEntityCommands();
@@ -33,7 +35,9 @@ export default function BlockImage() {
         <SidePanel.Layout defaultOpen={false} floating>
           <FileSidePanelSections />
           <div class="flex size-full min-w-0 flex-col overflow-hidden">
-            <TopBar />
+            <Show when={isTouchDevice()} fallback={<ImageHeader />}>
+              <MobileImageHeader />
+            </Show>
             <Show
               when={blockFileSignal()}
               fallback={

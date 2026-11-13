@@ -68,6 +68,8 @@ function Title(props: {
   iconType?: EntityIconSelector;
   /** Replaces the entity icon when it renders something, e.g. the session's model. */
   icon?: JSX.Element;
+  /** Shown between the icon and the label, such as the file type. */
+  badges?: JSX.Element;
   colorIcon?: boolean;
   class?: string;
 }) {
@@ -107,6 +109,7 @@ function Title(props: {
         >
           <div class="flex shrink-0 items-center justify-center">{icon()}</div>
         </Show>
+        {props.badges}
         <span class="inline-flex min-w-0 items-center gap-1">
           <span class="inline-block truncate text-sm font-semibold">
             {props.label}

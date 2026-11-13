@@ -3,23 +3,10 @@ import {
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -34,10 +21,14 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { URL_PARAMS } from '../constants';
-import type { CanvasDocumentChrome } from './CanvasDocument';
+import type { CanvasDocumentChrome } from '../../component/CanvasDocument';
+import { URL_PARAMS } from '../../constants';
 
-export function TopBar(props: { state: CanvasDocumentChrome }) {
+/**
+ * The canvas block's title menu operations and named header actions. Share
+ * waits for the canvas file to load.
+ */
+export function useCanvasHeaderTools(state: CanvasDocumentChrome) {
   const analytics = useAnalytics();
 
   const documentId = useBlockId();
@@ -57,7 +48,7 @@ export function TopBar(props: { state: CanvasDocumentChrome }) {
   const copyEntityLink = useCopyLink();
 
   const downloadDocument = createCallback(async () => {
-    const file = props.state.savedFile() ?? canvasFile();
+    const file = state.savedFile() ?? canvasFile();
     if (!file) return;
 
     fireAndForget(downloadFile(file, downloadName()), 'canvas-top-bar');
@@ -65,7 +56,7 @@ export function TopBar(props: { state: CanvasDocumentChrome }) {
   });
 
   const copyLink = () => {
-    const location = props.state.location();
+    const location = state.location();
     const params = {
       [URL_PARAMS.x]: location.x.toString(),
       [URL_PARAMS.y]: location.y.toString(),
@@ -93,50 +84,26 @@ export function TopBar(props: { state: CanvasDocumentChrome }) {
     { op: 'delete' },
   ];
 
-  const tools: BlockTool[] = [
-    {
-      label: 'Ask Macro',
-      icon: ChatWithAgentIcon,
-      action: () =>
-        openChatWithAgent({
-          type: 'document',
-          id: documentId,
-          name: fileName(),
-          fileType: 'canvas',
-        }),
-    },
-    {
-      group: 'sharing',
-      label: 'Share',
-      icon: IconShared,
-      action: openShare,
-      condition: () => !!canvasFile(),
-      buttonComponent: () => (
-        <ShareTrigger onClick={openShare} copyLink={copyLink} />
-      ),
-      focusTarget: getShareDrawerRecipientInput,
-    },
-  ];
+  const askMacro: BlockTool = {
+    label: 'Ask Macro',
+    icon: ChatWithAgentIcon,
+    action: () =>
+      openChatWithAgent({
+        type: 'document',
+        id: documentId,
+        name: fileName(),
+        fileType: 'canvas',
+      }),
+  };
 
-  return (
-    <div>
-      <SplitHeaderLeft>
-        <BlockItemSplitLabel />
-      </SplitHeaderLeft>
-      <SplitHeaderRight>
-        {/* Hidden on mobile/tablet: no floating-island treatment for live avatars yet. */}
-        <div class="-order-1 touch:hidden">
-          <BlockLiveIndicators />
-        </div>
-      </SplitHeaderRight>
-      <ResponsivePermissionsBadge />
-      <ResponsiveBlockToolbar
-        tools={tools}
-        ops={ops}
-        id={documentId}
-        itemType="document"
-        name={fileName()}
-      />
-    </div>
-  );
+  const share: BlockTool = {
+    group: 'sharing',
+    label: 'Share',
+    icon: IconShared,
+    action: openShare,
+    condition: () => !!canvasFile(),
+    focusTarget: getShareDrawerRecipientInput,
+  };
+
+  return { ops, openShare, copyLink, actions: { askMacro, share } };
 }

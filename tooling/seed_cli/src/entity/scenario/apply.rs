@@ -653,13 +653,11 @@ async fn seed_documents(
         if let Some(markdown) = markdown {
             initialize_markdown_content(ctx, key, &document_id, &markdown).await?;
         } else if let Some(file) = document.file.as_deref() {
-            let file_type = file_type.expect("file implies file type");
+            // The key the document services read: `s3_key`'s
+            // `build_cloud_storage_bucket_document_key`, with no extension.
             let s3_key = format!(
-                "{}/{}/{}.{}",
-                created.owner,
-                created.document_id,
-                created.document_version_id,
-                file_type.as_str()
+                "{}/{}/{}",
+                created.owner, created.document_id, created.document_version_id
             );
             let path = files_dir.join(file);
             ctx.s3
