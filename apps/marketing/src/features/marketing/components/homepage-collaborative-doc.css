@@ -172,3 +172,16 @@
   mix-blend-mode: soft-light;
   opacity: .12;
 }
+
+/* Match the homepage chat mentions and email composer without the extra wash. */
+.macro-homepage .homepage-collaborative-doc .mds {
+  --mds-mention-color: var(--marketing-mention);
+  --mds-mention-background: color-mix(in srgb, var(--marketing-mention) 12%, transparent);
+  --mds-mention-weight: 370;
+}
+.macro-homepage .homepage-collaborative-doc::before,
+.macro-homepage .homepage-collaborative-doc::after { display: none; }
+.macro-homepage .homepage-collaborative-doc .mds-card::before {
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}

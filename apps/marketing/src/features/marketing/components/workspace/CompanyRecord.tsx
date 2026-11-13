@@ -946,7 +946,7 @@ export function CompanyRecord(props: {
               <div>
                 <div class="flex items-center gap-3">
                   <BuildingOffice class="size-8 shrink-0" aria-hidden="true" />
-                  <h1 class="min-w-0 flex-1 text-2xl font-semibold">
+                  <h1 class="min-w-0 flex-1 text-2xl font-medium">
                     <input
                       class="sample-inline-input"
                       aria-label="Company name"

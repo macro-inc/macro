@@ -240,6 +240,13 @@ scroll anchoring; see `keepScrollAnchorOnResize`):
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
 
+Directional split focus (`Shift+H/J/K/L`, `Shift+Arrow`) has a backend-free
+browser regression over the real split manager, `SplitLayout`, and hotkey
+engine, with stand-in panes: moving through two stacked splits beside three,
+returning to the split you came from, a list keeping `Shift+Up/Down` for its
+selection, and a grid marked `data-owns-arrow-keys` keeping `Shift+Arrow`:
+`bunx playwright test --config src/components/app/split-layout/focus-browser-test/playwright.config.ts`.
+
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
 own instance and keeps its own state, and reopening within a tab reuses it. The
@@ -383,6 +390,12 @@ and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
+
+A record's Pipelines card (the real card over `GridCell`, with a 21-field
+contact row) has a backend-free desktop/phone regression: one label column with
+every value on one edge, prose under its label on a narrow card, an email cut
+to one line with an ellipsis, the empty-fields row, and editing in place:
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts pipeline-card.browser.e2e.ts`.
 
 Collapsible document sections (the real heading-folds plugin and its gutter
 controls) have a backend-free desktop/tablet/phone regression: placement in
@@ -677,6 +690,11 @@ Keep cold row metadata reads non-suspending so virtual scrolling never detaches
 its list; permission revalidation remains independent of row mounts. Project
 reads retain client-scoped denial state across remounts and immediately reauthorize
 previous-viewer cache hits; older requests never clear newer denial decisions.
+A project view mounts one full project read (`createProjectSource`): breadcrumbs
+and labels use the identity read, and embedded lists take the view's source.
+Project reads refresh only through the activity registry (pushes, websocket
+connects, the app's own project writes; `registerProjectRevalidation`); never
+add a timer or focus refetch to them.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
@@ -962,7 +980,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Render project collection titles with `ViewSidebar.Title caret={false}`; keep
   individual project names and touch pickers unchanged. Put sidebar search in
   `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
-- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
+- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
   `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`.
@@ -1020,6 +1038,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
+- Bind channel Join, recovery, and retry to one call ID; only explicit Start or Call again may use get-or-create. Preserve that intent and ID through channel navigation.
 - Keep active phone calls viewport-filling with visible header islands and idle
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.
@@ -1592,8 +1611,7 @@ away leaves focus where the user put it. The backend-free regression is
 
 Use only the current team roster and available agents for new Assignee selections.
 Keep initially selected outsiders visible and removable, and allow them to be
-re-added during the same editing session without contact discovery. Once the
-editor closes without them, they cannot be added again unless they join the team.
+re-added while the record stays mounted, without contact discovery.
 Reuse the existing selected-first ordering at opening and keep row positions
 stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
 Preserve each picker’s existing placeholder, sizing, and row styling.
