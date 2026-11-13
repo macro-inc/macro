@@ -23,10 +23,13 @@ const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
 const UNAVAILABLE: &str = include_str!("deno/unavailable.mjs");
 /// Node built-ins a program may import: none opens a connection or a process,
-/// or loads another built-in.
+/// or loads another built-in. `process` and `module` must stay out: their named
+/// exports (`getBuiltinModule`, `createRequire`) load any built-in, past both
+/// this map and the bootstrap's removals.
 const NODE_ALLOWED: &[&str] = &[
     "assert",
     "assert/strict",
+    "async_hooks",
     "buffer",
     "console",
     "crypto",
@@ -34,6 +37,7 @@ const NODE_ALLOWED: &[&str] = &[
     "path",
     "path/posix",
     "path/win32",
+    "perf_hooks",
     "punycode",
     "querystring",
     "stream",
@@ -41,13 +45,15 @@ const NODE_ALLOWED: &[&str] = &[
     "stream/promises",
     "stream/web",
     "string_decoder",
+    "sys",
     "url",
     "util",
     "util/types",
     "zlib",
 ];
 /// Every Node built-in the pinned Deno resolves: its `builtinModules` (see the
-/// test), plus internals newer releases resolve without listing them.
+/// test), plus `_http_client` and `_http_incoming`, which it doesn't have but a
+/// newer Deno resolves without listing.
 const NODE_BUILTINS: &[&str] = &[
     "_http_agent",
     "_http_client",
@@ -124,10 +130,11 @@ const NODE_BUILTINS: &[&str] = &[
 /// Every program's requests go through the bootstrap's `fetch`, which marks
 /// them as the program's (`x-macro-code-execution`) so an API can tell them
 /// from the person's own. Any other Node built-in could open its own
-/// connection with the run's token unmarked, so it resolves to
-/// unavailable.mjs, which throws. Timer modules, and an attended program's
-/// worker modules, resolve to timers.mjs, which refuses to sleep; see
-/// bootstrap.mjs.
+/// connection with the run's token unmarked, so every built-in not in
+/// [`NODE_ALLOWED`] resolves to unavailable.mjs, which throws. Timer modules,
+/// and an attended program's worker modules, resolve to timers.mjs, which
+/// refuses to sleep; see bootstrap.mjs. A bare allowed name (`crypto`) resolves
+/// as its `node:` form.
 fn import_map(unattended: bool) -> String {
     let mut imports = serde_json::Map::new();
     imports.insert("@macro-inc/sdk".into(), "./sdk.mjs".into());
@@ -136,7 +143,10 @@ fn import_map(unattended: bool) -> String {
     }
     for &name in NODE_BUILTINS {
         let target = match name {
-            _ if NODE_ALLOWED.contains(&name) => continue,
+            _ if NODE_ALLOWED.contains(&name) => {
+                imports.insert(name.into(), format!("node:{name}").into());
+                continue;
+            }
             "timers" | "timers/promises" => "./timers.mjs",
             "worker_threads" if !unattended => "./timers.mjs",
             _ => "./unavailable.mjs",

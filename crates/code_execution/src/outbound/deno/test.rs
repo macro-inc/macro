@@ -423,7 +423,15 @@ export async function main() {
   };
   const results = {};
   for (const [name, attempt] of Object.entries(attempts)) {
-    try { await attempt(); results[name] = "sent"; } catch { results[name] = "blocked"; }
+    try {
+      await attempt();
+      results[name] = "sent";
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      results[name] = message.includes("Make requests with fetch") ? "unavailable"
+        : message.includes("do not sleep") ? "refused as a sleep"
+        : error instanceof TypeError ? "removed" : message;
+    }
   }
   const response = await fetch(`${host.origin}/marked`, {headers});
   return {results, status: response.status};
@@ -453,23 +461,24 @@ async fn expect_only_the_marked_fetch(listener: TcpListener) {
     );
 }
 
-fn every_raw_request_blocked() -> serde_json::Value {
+/// What each attempt in [`RAW_REQUESTS`] meets; `worker` differs by mode.
+fn every_raw_request_blocked(worker: &str) -> serde_json::Value {
     serde_json::json!({
         "results": {
-            "Deno.connect": "blocked",
-            "Deno internals": "blocked",
-            "WebSocket": "blocked",
-            "Worker": "blocked",
-            "node:net": "blocked",
-            "net": "blocked",
-            "node:http": "blocked",
-            "node:_http_client": "blocked",
-            "node:_tls_wrap": "blocked",
-            "node:child_process": "blocked",
-            "node:module": "blocked",
-            "node:process": "blocked",
-            "process.getBuiltinModule": "blocked",
-            "process.binding": "blocked",
+            "Deno.connect": "removed",
+            "Deno internals": "removed",
+            "WebSocket": "removed",
+            "Worker": worker,
+            "node:net": "unavailable",
+            "net": "unavailable",
+            "node:http": "unavailable",
+            "node:_http_client": "unavailable",
+            "node:_tls_wrap": "unavailable",
+            "node:child_process": "unavailable",
+            "node:module": "unavailable",
+            "node:process": "unavailable",
+            "process.getBuiltinModule": "removed",
+            "process.binding": "removed",
         },
         "status": 200,
     })
@@ -505,7 +514,7 @@ async fn a_program_has_no_way_to_the_network_but_fetch() {
     let Outcome::Succeeded { value } = outcome else {
         panic!("{outcome:?}");
     };
-    assert_eq!(value, every_raw_request_blocked());
+    assert_eq!(value, every_raw_request_blocked("refused as a sleep"));
     server.await.unwrap();
     service.shutdown().await;
 }
@@ -528,7 +537,7 @@ async fn an_unattended_program_has_no_way_to_the_network_but_fetch() {
     let Outcome::Succeeded { value } = outcome else {
         panic!("{outcome:?}");
     };
-    assert_eq!(value, every_raw_request_blocked());
+    assert_eq!(value, every_raw_request_blocked("removed"));
     server.await.unwrap();
     service.shutdown().await;
 }
@@ -558,11 +567,17 @@ async fn every_node_builtin_but_the_allowed_ones_is_unavailable() {
     let source = format!(
         r#"
 export async function main() {{
-  const loaded = [];
+  const results = {{}};
   for (const name of {names}) {{
-    try {{ await import("node:" + name); loaded.push(name); }} catch {{}}
+    try {{
+      await import("node:" + name);
+      results[name] = "loaded";
+    }} catch (error) {{
+      results[name] = error.message.includes("Make requests with fetch") ? "unavailable"
+        : error.message.includes("do not sleep") ? "refused as a sleep" : error.message;
+    }}
   }}
-  return loaded;
+  return results;
 }}
 "#,
         names = serde_json::json!(NODE_BUILTINS)
@@ -571,7 +586,33 @@ export async function main() {{
     let Outcome::Succeeded { value } = outcome else {
         panic!("{outcome:?}");
     };
-    assert_eq!(value, serde_json::json!(NODE_ALLOWED));
+    let expected: serde_json::Map<String, serde_json::Value> = NODE_BUILTINS
+        .iter()
+        .map(|&name| {
+            let result = match name {
+                _ if NODE_ALLOWED.contains(&name) => "loaded",
+                "timers" | "timers/promises" | "worker_threads" => "refused as a sleep",
+                _ => "unavailable",
+            };
+            (name.to_owned(), result.into())
+        })
+        .collect();
+    assert_eq!(value, serde_json::Value::Object(expected));
+    // A static import fails to link before the module can throw; the error
+    // still says why.
+    let (_, outcome) = run(
+        &service,
+        r#"import { connect } from "node:net"; export async function main() { return connect; }"#,
+        10_000,
+    )
+    .await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        error.message,
+        "Error: node:net is unavailable in ExecuteCode. Make requests with fetch or the macro SDK."
+    );
     service.shutdown().await;
 }
 

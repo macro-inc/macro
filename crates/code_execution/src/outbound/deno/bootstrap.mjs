@@ -73,6 +73,10 @@ for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) glob
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
+// A static import of a blocked built-in fails to link before unavailable.mjs
+// can throw; the catch below explains it the same way.
+const unavailable = new Set(entries(parse(Deno.readTextFileSync(new URL("./imports.json", import.meta.url))).imports)
+  .filter(([, target]) => target === "./unavailable.mjs").map(([specifier]) => specifier));
 try {
   const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
   // A dry run answers each write with an empty result, so it shows what the
@@ -133,11 +137,14 @@ try {
     Object.defineProperty(Deno, name, {value: undefined});
   }
   delete Deno[Deno.internal];
-  for (const name of ["WebSocket", "WebSocketStream", "EventSource"]) globalThis[name] = undefined;
-  // An unattended program gets no Worker at all; elsewhere it throws as a sleep.
+  for (const name of ["WebSocket", "EventSource"]) globalThis[name] = undefined;
+  // An unattended program gets no Worker at all; an attended one keeps the
+  // Worker above, which throws like a timer.
   if (unattended) globalThis.Worker = undefined;
+  // `node:process` exports its own getBuiltinModule, so the import map blocks
+  // that module too.
   if (globalThis.process) {
-    for (const name of ["getBuiltinModule", "binding", "_linkedBinding"]) globalThis.process[name] = undefined;
+    for (const name of ["getBuiltinModule", "binding"]) globalThis.process[name] = undefined;
   }
   const { main } = await import(program);
   let value;
@@ -165,6 +172,10 @@ try {
   }
   exit(0);
 } catch (error) {
-  emit({type: "error", message: String(error)});
+  const link = /^SyntaxError: The requested module '([^']+)' does not provide an export named/.exec(String(error));
+  const message = link && unavailable.has(link[1])
+    ? `Error: ${link[1]} is unavailable in ExecuteCode. Make requests with fetch or the macro SDK.`
+    : String(error);
+  emit({type: "error", message});
   exit(0);
 }

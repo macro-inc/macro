@@ -1,3 +1,4 @@
-// The import map points every Node built-in that could reach the network,
-// start a process or load another built-in here; see deno.rs.
+// The import map points every Node built-in outside deno.rs's NODE_ALLOWED
+// here. A static import of one fails to link before this runs; the bootstrap
+// gives that error the same message.
 throw new Error("This Node module is unavailable in ExecuteCode. Make requests with fetch or the macro SDK.");
