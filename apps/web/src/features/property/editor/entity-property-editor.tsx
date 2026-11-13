@@ -21,6 +21,7 @@ import {
   Switch,
 } from 'solid-js';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
+import { useMaybePropertiesContext } from '../context/PropertiesContext';
 import {
   type CombinedEntity,
   getEntityName,
@@ -66,6 +67,7 @@ export function EntityPropertyEditor(props: {
   setPlaceholder: Setter<string>;
   selectedEntityCount: number;
 }) {
+  const propertiesContext = useMaybePropertiesContext();
   const definitionId = () => {
     const property = props.property;
     if (!property) return '';
@@ -150,12 +152,23 @@ export function EntityPropertyEditor(props: {
   const localSelectedIds = createMemo(() =>
     localSelectedRefs().map((ref) => ref.entity_id)
   );
-  const people = usePinnedContactUsers(localSelectedIds, isAssignees);
+  createEffect(() => {
+    if (!isAssignees()) return;
+    propertiesContext?.retainAssignees(localSelectedIds());
+  });
+  const people = usePinnedContactUsers(
+    propertiesContext?.retainedAssigneeIds ?? (() => []),
+    isAssignees
+  );
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...agents(), ...team.users()];
     if (!isAssignees()) return pool;
-    return scopedUserOptions(pool, people(), localSelectedIds());
+    return scopedUserOptions(
+      pool,
+      people(),
+      propertiesContext?.retainedAssigneeIds() ?? []
+    );
   });
   const { entities } = useEntitiesForProperty(
     () => props.property,

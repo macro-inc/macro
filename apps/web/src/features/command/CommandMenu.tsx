@@ -65,6 +65,7 @@ import {
 } from 'solid-js';
 import type { InputLayoutParts } from '../universal-input/context/capabilities';
 import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
+import { actOnCurrentSelection } from './act-on-current-selection';
 import { commandSearchResultKey } from './contact-items';
 import { defaultCommandResultIndex } from './core/default-result-index';
 import { shouldUseUniversalInput } from './core/universal-input-mode';
@@ -734,13 +735,8 @@ function CommandSearchMenu(
   // The list trails the typed text by the query debounce. Enter brings it up
   // to date first, then acts at once: a deferred action would be lost if the
   // person kept typing.
-  const actOnSelected = (openInNewSplit: boolean) => {
-    flushQuery();
-    const item = selectedItem();
-    if (!item) return false;
-    handleItemAction(item, openInNewSplit);
-    return true;
-  };
+  const actOnSelected = (act: (item: CommandMenuItem) => void) =>
+    actOnCurrentSelection({ flushQuery, selectedItem, act });
 
   const confirmHotkey = registerHotkey({
     hotkey: 'enter',
@@ -748,7 +744,7 @@ function CommandSearchMenu(
     description: () => t('commandMenu.selectItem'),
     keyDownHandler: (event) => {
       if (event?.isComposing || event?.shiftKey) return false;
-      return actOnSelected(false);
+      return actOnSelected((item) => handleItemAction(item, false));
     },
     runWithInputFocused: true,
   });
@@ -761,7 +757,7 @@ function CommandSearchMenu(
     description: () => t('commandMenu.openInNewSplit'),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
-      return actOnSelected(true);
+      return actOnSelected((item) => handleItemAction(item, true));
     },
     runWithInputFocused: true,
   });
@@ -773,12 +769,9 @@ function CommandSearchMenu(
     condition: () => canOpenInNewTab() && selectedOpensInSplit(),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
-      if (query() === CommandState.query() && !selectedItem()) return false;
-      runWhenCurrent(() => {
-        const item = selectedItem();
-        if (item) openInNewTab(() => handleItemAction(item, false));
-      });
-      return true;
+      return actOnSelected((item) =>
+        openInNewTab(() => handleItemAction(item, false))
+      );
     },
     runWithInputFocused: true,
   });
@@ -1006,6 +999,7 @@ function CommandSearchMenu(
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           pagination={pagination}
           loading={isLoadingEntities()}
+          searching={defaultCommandItems?.isSearchingEntities() ?? false}
         />
       </CommandMenuShell.Body>
 

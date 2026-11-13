@@ -157,9 +157,9 @@ jobs:
         # The android-update label means "release this and merge it when it is live",
         # so refuse to start unless the PR is in a mergeable state: not a draft, the
         # Android native code actually changed with a version code bump, and every
-        # other check on the head commit passing (pending ones are waited on). Our own
-        # checks are excluded: the native check is expected to be red until the
-        # release is live.
+        # other check on the head commit passing (pending ones are waited on). The
+        # native checks and both platforms' release checks are excluded; that last
+        # step is release_wait_for_checks.sh.
         pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid,baseRefOid)
         if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
           echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding android-update." >&2
@@ -201,38 +201,57 @@ jobs:
         fi
         echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
         echo "Releasing Android version code ${version_code}."
-
-        # (`gh pr checks` names are job names, not workflow names, plus the contexts
-        # of commit statuses, such as the android-play/* ones Android Play Publish
-        # and Android Release Watch set. PR CI prefixes the jobs it calls with
-        # `Web App / `. The CI gate status aggregates every check, and stays pending
-        # on a head no one has run PR CI on.)
-        ours='^((Web App / )?(Android Native Check|Web App Status Check|iOS Native Check)|Android Play Release|Re-run the native check|Android Release Drift|android-play/|CI gate$)'
+        # The last precondition of a store release: every other check on the head
+        # commit passes. Pending ones are waited on, since the label often lands
+        # right after a push; a failing one stops the release before the long build.
+        # Both platforms run this one copy. RELEASE_LABEL names the label in messages.
+        #
+        # Checks a release does not wait on, as `gh pr checks` names them: job names,
+        # not workflow names, plus the contexts of commit statuses such as the
+        # android-play/* ones. PR CI prefixes the jobs it calls with `Web App / `.
+        #
+        # - The native checks are red until the release is live. Web App Status Check
+        #   and the CI gate aggregate them, so they are red with them. Web App Status
+        #   Check's other inputs (Typecheck, Test, Build, ...) are separate checks and
+        #   still count.
+        # - Both platforms' release and drift checks. The other store's release is
+        #   not this one's gate: an upload that failed there, or is still in flight,
+        #   must not hold this release back. Whoever adds the label decides whether a
+        #   failure there matters here.
+        release_gate_checks='^((Web App / )?(Android Native Check|iOS Native Check|Web App Status Check)|Re-run the native check|Android Play Release|Android Release Drift|android-play/|iOS App Store Release|iOS Release Drift|CI gate$)'
         deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
         while true; do
           all_checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket,description)
-          # The checks only exist once someone has run PR CI on this head; its CI gate
+          # The checks only exist once someone has run PR CI on this head. Its CI gate
           # fails with the native check, so only the gate's description is read here.
-          gate=$(jq -r '[.[] | select(.name == "CI gate") | .description][0] // ""' <<<"$all_checks")
+          # Two entries carry that name, the PR CI job and the commit status; only the
+          # status has a description, and it stays pending on a head no one has run
+          # PR CI on.
+          gate=$(jq -r '
+            [.[] | select(.name == "CI gate") | .description] as $gates |
+            ([$gates[] | select(startswith("Running on") or startswith("Passed on"))][0] //
+             [$gates[] | select(startswith("Failed:"))][0] //
+             [$gates[] | select(. != "")][0] // "")
+          ' <<<"$all_checks")
           case "$gate" in
             "" | "Not run on this commit."*)
-              echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add android-update once it passes." >&2
+              echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add ${RELEASE_LABEL} once it passes." >&2
               exit 1
               ;;
             "Running on"* | "Passed on"* | "Failed:"*) ;;
             *)
-              echo "CI could not run on ${head_sha:0:10}: ${gate}. Re-add android-update once it passes." >&2
+              echo "CI could not run on ${head_sha:0:10}: ${gate}. Re-add ${RELEASE_LABEL} once it passes." >&2
               exit 1
               ;;
           esac
-          checks=$(jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]' <<<"$all_checks")
+          checks=$(jq -c --arg ignored "$release_gate_checks" '[.[] | select(.name | test($ignored) | not)]' <<<"$all_checks")
           if [[ "$gate" == "Running on"* ]]; then
             checks=$(jq -c '. + [{name: "CI gate", bucket: "pending"}]' <<<"$checks")
           fi
           failing=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")
           pending=$(jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' <<<"$checks")
           if [[ -n "$failing" ]]; then
-            echo "PR #${PR_NUMBER} has failing checks: ${failing}. Get the PR green, then re-add android-update." >&2
+            echo "PR #${PR_NUMBER} has failing checks: ${failing}. Get the PR green, then re-add ${RELEASE_LABEL}." >&2
             exit 1
           fi
           if [[ -z "$pending" ]]; then
@@ -240,7 +259,7 @@ jobs:
             exit 0
           fi
           if (( $(date +%s) > deadline )); then
-            echo "Checks still pending after ${WAIT_MINUTES} minutes: ${pending}. Re-add android-update once they pass." >&2
+            echo "Checks still pending after ${WAIT_MINUTES} minutes: ${pending}. Re-add ${RELEASE_LABEL} once they pass." >&2
             exit 1
           fi
           echo "Waiting for: ${pending}"
@@ -251,6 +270,7 @@ jobs:
         LOGGED_STEP: Require the PR to be ready to merge
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         WAIT_MINUTES: '30'
+        RELEASE_LABEL: android-update
       working-directory: apps/web
     - name: Install Android SDK components
       run: |
@@ -284,6 +304,12 @@ jobs:
     - name: Build production App Bundle
       run: |
         set -euo pipefail
+        # Without the key the app silently skips PostHog, so every feature flag
+        # reads false. An unset or empty secret must fail the build instead.
+        if [[ -z "${VITE_POSTHOG_API_KEY:-}" ]]; then
+          echo "VITE_POSTHOG_API_KEY is empty: the POSTHOG_API_KEY secret is unavailable to this run." >&2
+          exit 1
+        fi
         # The Nix environment is already loaded. Do not reload it in nested
         # bash processes and re-enable its local-development sccache wrapper.
         # This ephemeral runner has no compiler cache/server to reuse.
@@ -291,7 +317,7 @@ jobs:
         export RUSTC_WRAPPER=""
         cargo tauri --version
         # Tauri has shipped both switch-only and value-taking APK/AAB flags.
-        # Nix and local installations can differ; build only the AAB with either CLI.
+        # Nix and local installations can differ; build only one format with either CLI.
         android_help=$(cargo tauri android build --help)
         artifact_args=(--aab)
         if [[ "$android_help" == *'--apk <APK>'* ]]; then

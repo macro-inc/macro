@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, onMount } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type {
   RoutineCreatorSource,
   RoutineDetailSource,
@@ -24,12 +25,15 @@ import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
   invalidateSchedules,
+  useChildrenQuery,
   useCodeUpgradesQuery,
   useCreateScheduleMutation,
+  useDetachScheduleMutation,
   useRunScheduleNowMutation,
   useScheduleHistoryQuery,
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
+  useSubRoutinesQuery,
   useUpdateScheduleMutation,
 } from './schedules';
 
@@ -38,6 +42,7 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   return {
     id: schedule.id,
     name: schedule.name,
+    appearance: readEntityAppearance(schedule.appearance),
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     enabled: schedule.enabled,
@@ -56,12 +61,21 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
     lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,
+    parent: schedule.sub_routine
+      ? {
+          id: schedule.sub_routine.parent_id,
+          createdByRunId: schedule.sub_routine.created_by_run_id,
+          pausedByParent: schedule.sub_routine.paused_by_parent ?? false,
+        }
+      : undefined,
   };
 }
 
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
   onDuplicated(id: string): void;
+  /** The sub-routine became the owner's own routine. */
+  onKept(): void;
 };
 
 export function createRoutineDetailSource(
@@ -111,6 +125,27 @@ export function createRoutineDetailSource(
       ? pendingCodeReview(upgrades.data ?? [], taskSdk(current.task))
       : undefined;
   });
+  // What this routine's runs created; a sub-routine creates none of its own.
+  const created = useChildrenQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId() && !raw()?.sub_routine)
+  );
+  const children = createMemo(() =>
+    (created.isSuccess ? (created.data ?? []) : [])
+      .filter((item) => item.id)
+      .map(toRoutine)
+  );
+  const parentId = () => raw()?.sub_routine?.parent_id;
+  const parent = createMemo(() => {
+    const found =
+      list.isSuccess || list.isError
+        ? list.data?.find((item) => item.id === parentId())
+        : undefined;
+    return found?.id ? { id: found.id, name: found.name } : undefined;
+  });
+  const keep = useDetachScheduleMutation({
+    onSuccess: () => callbacks.onKept(),
+    onError: (error) => callbacks.onError('Failed to keep the routine', error),
+  });
   const [approving, setApproving] = createSignal(false);
   const save = async (draft: ScheduleDraft) => {
     const previous = raw();
@@ -149,6 +184,12 @@ export function createRoutineDetailSource(
     historyLoading: () => history.isPending,
     historyError: () => history.isError,
     refreshHistory: () => history.refetch(),
+    subRoutines: children,
+    parent,
+    keepAsOwn: () => {
+      if (!keep.isPending) keep.mutate({ scheduleId: id() });
+    },
+    keepAsOwnPending: () => keep.isPending,
     codeReview,
     // Saving checks the proposal against the current SDK again.
     async approveCodeUpdate() {
@@ -191,8 +232,14 @@ export function createRoutineListSource(
   onError: (error: unknown) => void
 ): RoutineListSource {
   const query = useSchedulesQuery(() => true);
+  const children = useSubRoutinesQuery(() => true);
   const toggle = useSetScheduleEnabledMutation({ onError });
   return {
+    subRoutines: createMemo(() =>
+      (children.isSuccess || children.isError ? (children.data ?? []) : [])
+        .filter((item) => item.id)
+        .map(toRoutine)
+    ),
     routines: createMemo(() =>
       (query.isSuccess || query.isError ? (query.data ?? []) : [])
         .filter((item) => item.id)

@@ -777,18 +777,12 @@ export function EmailList(props: EmailListProps) {
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
                   {/* New inboxes start empty, which is when the tutorial
-                      matters most. The row then takes the touch top inset. */}
-                  <Show
-                    when={state.tab === 'important'}
-                    fallback={<EmailEmptyState />}
-                  >
-                    <div class="touch:pt-(--mobile-content-inset-top)">
-                      <TutorialRow tutorial="mail" />
-                    </div>
-                    <div class="contents touch:[--mobile-content-inset-top:0px]">
-                      <EmailEmptyState />
-                    </div>
+                      matters most. Touch devices show no tutorial, so there
+                      the empty state keeps its own top inset. */}
+                  <Show when={state.tab === 'important'}>
+                    <TutorialRow tutorial="mail" />
                   </Show>
+                  <EmailEmptyState />
                 </div>
               </Match>
 
@@ -1089,7 +1083,6 @@ export function EmailList(props: EmailListProps) {
           >
             <Show when={isExcludedEmailFolder(state.tab)}>
               <Button
-                size="sm"
                 disabled={restoreFolder.isPending}
                 onClick={() =>
                   fireAndForget(

@@ -9,6 +9,7 @@ mod toolset;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
@@ -572,6 +573,82 @@ async fn update_member_diff_grants_and_revokes_initiative_access(
     Ok(())
 }
 
+/// A session that may not share neither creates an initiative with members
+/// nor adds or removes one, and writes nothing when refused.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_scoped_session_gives_no_member_access(pool: PgPool) -> anyhow::Result<()> {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    insert_user(&pool, OWNER).await?;
+    insert_user(&pool, MEMBER).await?;
+    insert_user(&pool, STRANGER).await?;
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(OWNER, "Members", &[MEMBER]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+
+    let added = scope_attribution(
+        no_send,
+        repo.update(UpdateInitiativeRepoArgs {
+            name: Some("Renamed".to_string()),
+            member_ids_added: vec![user(STRANGER)],
+            ..update_args(created.id)
+        }),
+    )
+    .await;
+    assert!(added.is_err());
+    assert_eq!(initiative_access(&pool, created.id, STRANGER).await?, None);
+    assert_eq!(
+        repo.get_basic(created.id).await?.expect("initiative").name,
+        "Members"
+    );
+
+    let with_members = create_args(OWNER, "Scoped", &[MEMBER]);
+    let refused_id = with_members.id;
+    let created_with_members = scope_attribution(
+        no_send,
+        repo.create(with_members, share_off(), TeamShareCreation::Unshared),
+    )
+    .await;
+    assert!(created_with_members.is_err());
+    assert!(repo.get_basic(refused_id).await?.is_none());
+
+    scope_attribution(
+        no_send,
+        repo.create(
+            create_args(OWNER, "Alone", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        ),
+    )
+    .await?;
+    let member_access = initiative_access(&pool, created.id, MEMBER).await?;
+    let removed = scope_attribution(
+        no_send,
+        repo.update(UpdateInitiativeRepoArgs {
+            member_ids_removed: vec![user(MEMBER)],
+            ..update_args(created.id)
+        }),
+    )
+    .await;
+    assert!(removed.is_err());
+    assert!(member_access.is_some());
+    assert_eq!(
+        initiative_access(&pool, created.id, MEMBER).await?,
+        member_access
+    );
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn update_share_patch_sets_link_columns_and_channel_grants(
     pool: PgPool,
@@ -817,5 +894,145 @@ async fn delete_leaves_no_initiative_rows(pool: PgPool) -> anyhow::Result<()> {
         repo.delete(created.id).await,
         Err(InitiativeError::NotFound)
     ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_survives_identity_reads_without_touching_timestamps(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER).await?;
+    let repo = repo(pool);
+    let created = repo
+        .create(
+            create_args(OWNER, "Appearance", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: None,
+        event_id: Uuid::now_v7(),
+        occurred_at: chrono::Utc::now(),
+    };
+    assert_eq!(
+        repo.set_appearance(created.id, &update).await?,
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(repo.set_appearance(created.id, &update).await?, None);
+    let updated = repo.get_detail(created.id).await?.unwrap();
+    assert_eq!(updated.appearance, Some(appearance.clone()));
+    assert_eq!(updated.updated_at, created.updated_at);
+    assert_eq!(
+        repo.get_basic(created.id).await?.unwrap().appearance,
+        Some(appearance.clone())
+    );
+    assert_eq!(
+        repo.list_accessible(&user(OWNER)).await?.initiatives[0].appearance,
+        Some(appearance)
+    );
+    repo.set_appearance(
+        created.id,
+        &activity::AppearanceUpdate {
+            appearance: model_entity::EntityAppearance::default(),
+            ..update
+        },
+    )
+    .await?;
+    assert!(
+        repo.get_detail(created.id)
+            .await?
+            .unwrap()
+            .appearance
+            .unwrap()
+            .is_default()
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_history_failure_rolls_back_and_retry_is_idempotent(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use activity::domain::ports::EntityActivityReads;
+    insert_user(&pool, OWNER).await?;
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(OWNER, "Appearance rollback", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let appearance = model_entity::EntityAppearance {
+        icon: None,
+        color: Some(model_entity::AppearanceColor::Blue),
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: Some(activity::Attribution::new(
+            activity::Actor::new_from_user(user(OWNER)),
+            None,
+        )),
+        event_id: Uuid::now_v7(),
+        occurred_at: chrono::Utc::now(),
+    };
+    sqlx::query!("ALTER TABLE activity_events ADD CONSTRAINT refuse_appearance_test CHECK (action <> 'appearance_changed')")
+        .execute(&pool).await?;
+    assert!(repo.set_appearance(created.id, &update).await.is_err());
+    assert!(
+        repo.get_detail(created.id)
+            .await?
+            .unwrap()
+            .appearance
+            .unwrap_or_default()
+            .is_default()
+    );
+    let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone());
+    assert!(
+        history
+            .entity_feed(
+                EntityType::Initiative,
+                &created.id.to_string(),
+                None,
+                std::num::NonZeroU32::new(10).unwrap()
+            )
+            .await?
+            .records
+            .is_empty()
+    );
+    sqlx::query!("ALTER TABLE activity_events DROP CONSTRAINT IF EXISTS refuse_appearance_test")
+        .execute(&pool)
+        .await?;
+    assert_eq!(
+        repo.set_appearance(created.id, &update).await?,
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(repo.set_appearance(created.id, &update).await?, None);
+    let page = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool)
+        .entity_feed(
+            EntityType::Initiative,
+            &created.id.to_string(),
+            None,
+            std::num::NonZeroU32::new(10).unwrap(),
+        )
+        .await?;
+    assert_eq!(page.records.len(), 1);
+    assert_eq!(
+        page.records[0].id,
+        activity::activity_id(update.event_id, 0)
+    );
+    assert_eq!(
+        page.records[0].occurred_at.timestamp_micros(),
+        update.occurred_at.timestamp_micros()
+    );
+    assert_eq!(page.records[0].subject_id, OWNER);
     Ok(())
 }

@@ -4,6 +4,7 @@
 mod test;
 
 pub mod activity;
+pub mod appearance;
 pub mod create;
 pub mod delete;
 pub mod description;
@@ -127,6 +128,10 @@ where
                 .delete(delete_initiative_handler::<S, Eas, Auth>),
         )
         .route(
+            "/{initiative_id}/appearance",
+            routing::put(appearance::set_initiative_appearance::<S, Eas, Auth>),
+        )
+        .route(
             "/{initiative_id}/description",
             routing::get(get_initiative_description_handler::<S, Eas, Auth>),
         )
@@ -210,6 +215,7 @@ impl IntoResponse for InitiativeError {
         let status_code = match &self {
             InitiativeError::NotFound => StatusCode::NOT_FOUND,
             InitiativeError::Unauthorized => StatusCode::UNAUTHORIZED,
+            InitiativeError::Forbidden(_) => StatusCode::FORBIDDEN,
             InitiativeError::BadRequest(_) => StatusCode::BAD_REQUEST,
             InitiativeError::Conflict(_) => StatusCode::CONFLICT,
             InitiativeError::NameTooLong { .. } => StatusCode::UNPROCESSABLE_ENTITY,

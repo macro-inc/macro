@@ -275,6 +275,21 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(by_record[0]["pipeline"]["id"], json!(id));
     assert_eq!(by_record[0]["entries"][0]["record"]["id"], json!(globex));
 
+    let (status, details) = call(&app, "GET", "/crm/pipelines/details", None).await;
+    assert_eq!(status, StatusCode::OK, "{details}");
+    assert_eq!(details.as_array().unwrap().len(), 1);
+    assert_eq!(details[0]["id"], json!(id));
+    assert_eq!(details[0]["name"], "Sales");
+    assert_eq!(details[0]["fields"][0]["type"], "company");
+    let stage = details[0]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["name"] == "Stage")
+        .unwrap();
+    assert_eq!(stage["options"], json!(["Prospect", "Demo", "Won"]));
+    assert!(details[0]["version"].as_i64().unwrap() > version);
+
     let (status, searched) =
         call(&app, "GET", "/crm/pipelines/entry-search?search=glob", None).await;
     assert_eq!(status, StatusCode::OK, "{searched}");
@@ -374,6 +389,26 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(priority["type"], "select");
     assert_eq!(priority["options"], json!(["High", "Low"]));
 
+    // A session that may not share edits the pipeline but not its sharing.
+    let no_send = agent_correlation::context::Attribution {
+        scope: Some(agent_correlation::scope::SessionScope::NoSend),
+        ..Default::default()
+    };
+    let edit = format!("/crm/pipelines/{id}/edit");
+    let (status, refused) = agent_correlation::context::scope_attribution(
+        no_send,
+        call(&app, "POST", &edit, Some(json!({"sharing": "team"}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{refused}");
+    let (status, renamed) = agent_correlation::context::scope_attribution(
+        no_send,
+        call(&app, "POST", &edit, Some(json!({"name": "Enterprise"}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{renamed}");
+    assert_eq!(renamed["sharing"], "private");
+
     let (status, generic) = call(
         &app,
         "POST",
@@ -395,6 +430,58 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(
         rows["added"][0]["fields"]["Name"],
         json!({"type": "text", "value": "Site"})
+    );
+
+    let (status, hiring) = call(
+        &app,
+        "POST",
+        "/crm/pipelines/create",
+        Some(json!({
+            "name": "Hiring",
+            "recordType": "contact",
+            "stages": ["Sourced", "Interview", "Hired"],
+            "fields": [{"name": "Role", "type": "select", "options": ["Engineer", "Designer"]}],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{hiring}");
+    assert_eq!(hiring["name"], "Hiring");
+    assert_eq!(hiring["recordType"], "contact");
+    assert_eq!(hiring["sharing"], "private");
+    let fields = hiring["fields"].as_array().unwrap();
+    let names: Vec<&str> = fields
+        .iter()
+        .map(|field| field["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Contact", "Stage", "Owner", "Revenue", "Role"]);
+    let stage = fields
+        .iter()
+        .find(|field| field["name"] == "Stage")
+        .unwrap();
+    assert_eq!(stage["options"], json!(["Sourced", "Interview", "Hired"]));
+    let role = fields.iter().find(|field| field["name"] == "Role").unwrap();
+    assert_eq!(role["type"], "select");
+    assert_eq!(role["options"], json!(["Engineer", "Designer"]));
+
+    // A field the pipeline cannot take fails after the pipeline exists, and
+    // the error says so, so a caller does not retry into a duplicate.
+    let (status, partial) = call(
+        &app,
+        "POST",
+        "/crm/pipelines/create",
+        Some(json!({
+            "name": "Partners",
+            "recordType": "company",
+            "fields": [{"name": "Notes", "type": "text", "options": ["a"]}],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{partial}");
+    assert!(
+        partial
+            .to_string()
+            .contains("Created pipeline \\\"Partners\\\""),
+        "{partial}"
     );
 
     // The pipeline routes still answer beside the workflow routes.

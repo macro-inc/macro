@@ -33,6 +33,9 @@ pub type PropertyDefinitionId = Uuid;
 /// A database: a named collection of tables, owned and shared as one entity.
 #[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
 pub struct Database {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Identifier.
     #[schema(value_type = Uuid)]
     pub id: DatabaseId,
@@ -478,6 +481,9 @@ pub enum Write {
         table_id: TableId,
         /// One entry per new row.
         rows: Vec<Vec<(PropertyDefinitionId, PropertyValue)>>,
+        /// The ids the client minted for the new rows, one per row; empty
+        /// to mint them here, and when `restored` gives them.
+        ids: Vec<RowId>,
         /// The ids and positions the rows come back under, one per row,
         /// when the insert puts back rows a removal took; empty to mint
         /// new ones after the table's last row.
@@ -1114,6 +1120,9 @@ pub enum DatabaseError {
     /// The caller lacks the permission the operation requires.
     #[error("unauthorized")]
     Unauthorized,
+    /// Icon or color metadata failed validation.
+    #[error("{0}")]
+    InvalidAppearance(String),
     /// A schema operation was refused.
     #[error("invalid schema operation: {0}")]
     InvalidSchemaOperation(SchemaError),

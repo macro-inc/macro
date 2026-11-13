@@ -299,7 +299,9 @@ where
 
     /// Asks the in-process manager, which compares the session's live state
     /// with what a cold attach would rebuild. The route is looked up only
-    /// when this process holds the session's conversation.
+    /// when this process holds the session's conversation. A session whose
+    /// row is gone has no log to come back from, so dropping what is held
+    /// for it loses nothing.
     async fn idle_release_is_lossless(&self, session: AgentSessionId) -> Result<bool> {
         let Some(inmem) = &self.inmem else {
             return Ok(true);
@@ -307,9 +309,11 @@ where
         if !inmem.manager.holds(session) {
             return Ok(true);
         }
-        match self.route(session).await? {
-            Route::InMem(facts) => Ok(inmem.manager.rebuilds_identically(&facts).await?),
-            Route::Sandbox => Ok(true),
+        match self.route(session).await {
+            Ok(Route::InMem(facts)) => Ok(inmem.manager.rebuilds_identically(&facts).await?),
+            Ok(Route::Sandbox) => Ok(true),
+            Err(HarnessError::Session(AgentSessionError::NotFound(_))) => Ok(true),
+            Err(error) => Err(error),
         }
     }
 }

@@ -2,6 +2,7 @@ import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -10,6 +11,7 @@ import { defaultModelForPlan } from '@core/component/AI/constant';
 import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableEntityAppearance,
   enableRoutineConditions,
   enableRoutineSharing,
 } from '@core/constant/featureFlags';
@@ -18,6 +20,10 @@ import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { getOwner, onMount, Show } from 'solid-js';
+import {
+  EntityAppearanceTrigger,
+  useChangeEntityIcon,
+} from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
@@ -64,6 +70,7 @@ export function RoutineDetail(props: {
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const decisions = useFeatureFlag(enableRoutineConditions);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
@@ -78,13 +85,21 @@ export function RoutineDetail(props: {
       toast.success('Duplicated');
       open(id);
     },
+    onKept: () => toast.success(t('subRoutines.kept')),
   });
+  const changeIcon = useChangeEntityIcon();
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;
+    // Its sub-routines are deleted with it: say how many.
+    const created = source.subRoutines().length;
     openBulkEditModal({
       view: 'delete',
       entities: [entity],
+      note:
+        created > 0
+          ? t('subRoutines.deleteNote', { count: created })
+          : undefined,
       onFinish: () => {
         toast.success('Deleted');
         back();
@@ -146,6 +161,24 @@ export function RoutineDetail(props: {
       <RoutineDetailView
         source={source}
         userId={userId}
+        identityIcon={
+          <Show when={source.entity()}>
+            {(entity) => (
+              <EntityAppearanceTrigger
+                entity={entity()}
+                editable={ownedByViewer()}
+              />
+            )}
+          </Show>
+        }
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? () => {
+                const entity = source.entity();
+                if (entity && ownedByViewer()) changeIcon(entity);
+              }
+            : undefined
+        }
         defaultModel={defaultModelForPlan(hasPaidAccess())}
         decisionsEnabled={decisions().enabled}
         initialTab={props.initialTab}
@@ -174,6 +207,7 @@ export function RoutineDetail(props: {
         onShare={sharing().enabled ? share : undefined}
         onCompose={compose}
         onOpenTemplate={sharing().enabled ? open : undefined}
+        onOpenRoutine={open}
         slots={{
           PromptEditor: RoutinePromptEditor,
           ExecutionPicker: RoutineExecutionPicker,

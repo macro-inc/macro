@@ -26,6 +26,9 @@ path = "src/scheduling_openapi.rs"
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+clap = { workspace = true }
+computer_id = { workspace = true }
+genai_telemetry = { path = "../../crates/genai_telemetry" }
 universal_input = { path = "../../crates/universal_input" }
 # The global allocator (`src/main.rs`).
 mimalloc = { workspace = true }
@@ -36,6 +39,7 @@ agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_egress = { path = "../../crates/agent_egress" }
+agent_git = { path = "../../crates/agent_git" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
@@ -69,7 +73,9 @@ bots = { path = "../../crates/bots", features = ["outbound", "ports"] }
 call = { path = "../../crates/call", default-features = false, features = ["outbound", "ports"] }
 channels = { path = "../../crates/channels", features = ["attachment", "outbound", "ports"] }
 chat = { path = "../../crates/chat", features = ["ai_tools", "attachment", "outbound"] }
+base64 = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 code_execution = { path = "../../crates/code_execution" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
@@ -86,7 +92,7 @@ databases_sql = { path = "../../crates/databases_sql", features = ["ai_tools"] }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
+email = { path = "../../crates/email", features = ["attachment", "gmail_senders", "outbound", "sqs"] }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
@@ -99,9 +105,15 @@ fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
+gmail_client = { path = "../../crates/gmail_client" }
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
-harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
+harnessd_protocol = { workspace = true }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["inbound", "outbound", "ports"] }
+user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
+agent_credentials = { path = "../../crates/agent_credentials" }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }
+incus_client = { path = "../../crates/incus_client" }
 http = { workspace = true }
 http-body-util = { workspace = true }
 image_generation = { path = "../../crates/image_generation", features = ["axum"] }
@@ -111,6 +123,7 @@ import_linear = { path = "../../crates/import_linear" }
 import_jira = { path = "../../crates/import_jira" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
+jsonwebtoken = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
@@ -162,6 +175,9 @@ roles_and_permissions = { path = "../../crates/roles_and_permissions", default-f
 rootcause = { workspace = true }
 routine_program = { path = "../../crates/routine_program" }
 scheduled_action = { path = "../../crates/scheduled_action" }
+suggestions = { path = "../../crates/suggestions" }
+suggestion_generation = { path = "../../crates/suggestion_generation" }
+trigger_context = { path = "../../crates/trigger_context" }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
@@ -173,6 +189,7 @@ soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = ["ai_projection", "chat", "document_text_extractor", "email", "gmail", "search"] }
 sqs_worker = { path = "../../crates/sqs_worker" }
+sse-core = { workspace = true }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 stream = { path = "../../crates/stream" }
@@ -180,10 +197,13 @@ strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
+team_agents = { path = "../../crates/team_agents", features = ["inbound"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio-stream = { workspace = true }
 tokio-retry = { workspace = true }
+tokio-tungstenite = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["limit", "timeout"] }
@@ -202,6 +222,8 @@ agent_session = { path = "../../crates/agent_session", features = ["test-utils"]
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 async-trait = { workspace = true }
 bot_id = { path = "../../crates/bot_id", features = ["test-utils"] }
+# The hosts the SDK can reach, which the code-mode scope test checks.
+code_mode_assets = { path = "../../crates/code_mode_assets" }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

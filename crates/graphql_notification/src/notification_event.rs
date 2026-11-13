@@ -24,18 +24,19 @@ pub use channel_access_request::GraphqlChannelAccessRequestedMetadata;
 
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
-    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
-    AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
-    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
-    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
-    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
-    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
-    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RoutineRunFinishedMetadata, RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent,
-    TaskAssignedMetadata,
+    AgentProvider, AgentSessionMentionedMetadata, AgentSessionNotificationRef,
+    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AgentSignInExpiryMetadata,
+    AgentSignInExpiryStage, AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
+    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
+    ComputerSetupMetadata, ComputerSetupOutcome, DocumentMentionMetadata, GithubPrCheckRun,
+    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
+    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
+    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
+    InboxReauthRequiredMetadata, InviteToTeamMetadata, MentionedInDocumentCommentMetadata,
+    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
+    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -775,6 +776,121 @@ impl GraphqlRoutineRunFinishedMetadata {
     }
 }
 
+/// The coding agent a Macro computer signs in to an account for.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlAgentProvider {
+    /// An Anthropic Claude account, for Claude Code.
+    Claude,
+}
+
+impl From<AgentProvider> for GraphqlAgentProvider {
+    fn from(value: AgentProvider) -> Self {
+        match value {
+            AgentProvider::Claude => Self::Claude,
+        }
+    }
+}
+
+/// How close a Macro computer's agent sign-in is to no longer working.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlAgentSignInExpiryStage {
+    /// It expires within three days.
+    ExpiresSoon,
+    /// It expires within a day.
+    ExpiresToday,
+    /// It expired, or the agent rejected it.
+    Expired,
+}
+
+impl From<AgentSignInExpiryStage> for GraphqlAgentSignInExpiryStage {
+    fn from(value: AgentSignInExpiryStage) -> Self {
+        match value {
+            AgentSignInExpiryStage::ExpiresSoon => Self::ExpiresSoon,
+            AgentSignInExpiryStage::ExpiresToday => Self::ExpiresToday,
+            AgentSignInExpiryStage::Expired => Self::Expired,
+        }
+    }
+}
+
+/// GraphQL wrapper for agent sign-in expiry metadata.
+pub struct GraphqlAgentSignInExpiryMetadata(AgentSignInExpiryMetadata);
+
+/// Metadata for a Macro computer's agent sign-in running out.
+#[Object]
+impl GraphqlAgentSignInExpiryMetadata {
+    /// The agent whose sign-in is running out.
+    async fn agent(&self) -> GraphqlAgentProvider {
+        self.0.agent.into()
+    }
+
+    /// The computer's harness id.
+    async fn harness_id(&self) -> ID {
+        ID(self.0.harness_id.to_string())
+    }
+
+    /// The computer's name when the notice was sent.
+    async fn computer_name(&self) -> &str {
+        &self.0.computer_name
+    }
+
+    /// How close the sign-in is to no longer working.
+    async fn stage(&self) -> GraphqlAgentSignInExpiryStage {
+        self.0.stage.into()
+    }
+
+    /// When the sign-in expires or expired; absent when the agent rejected it.
+    async fn expires_at(&self) -> Option<String> {
+        self.0.expires_at.map(|timestamp| timestamp.to_rfc3339())
+    }
+}
+
+/// How a Macro computer's first setup ended.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlComputerSetupOutcome {
+    /// The computer is ready.
+    Ready,
+    /// Setup gave up before the computer was ready.
+    Failed,
+}
+
+/// GraphQL wrapper for computer setup metadata.
+pub struct GraphqlComputerSetupMetadata(ComputerSetupMetadata);
+
+/// Metadata for a Macro computer finishing, or failing, first-time setup.
+#[Object]
+impl GraphqlComputerSetupMetadata {
+    /// The computer that was set up.
+    async fn computer_id(&self) -> ID {
+        ID(self.0.computer_id.to_string())
+    }
+
+    /// The computer's harness, once macrod has connected.
+    async fn harness_id(&self) -> Option<ID> {
+        self.0.harness_id.map(|id| ID(id.to_string()))
+    }
+
+    /// The computer's name when the notice was sent.
+    async fn computer_name(&self) -> &str {
+        &self.0.computer_name
+    }
+
+    /// Whether setup finished or failed.
+    async fn outcome(&self) -> GraphqlComputerSetupOutcome {
+        match self.0.outcome {
+            ComputerSetupOutcome::Ready => GraphqlComputerSetupOutcome::Ready,
+            ComputerSetupOutcome::Failed { .. } => GraphqlComputerSetupOutcome::Failed,
+        }
+    }
+
+    /// Why setup failed; absent when it finished.
+    async fn failure_reason(&self) -> Option<&str> {
+        match &self.0.outcome {
+            ComputerSetupOutcome::Ready => None,
+            ComputerSetupOutcome::Failed { failure_reason } => Some(failure_reason),
+        }
+    }
+}
+
 /// GraphQL wrapper for removed runtime access metadata.
 pub struct GraphqlRuntimeAccessRemovedMetadata(RuntimeAccessRemovedMetadata);
 
@@ -1378,6 +1494,10 @@ pub enum GraphqlNotifEvent {
     ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata),
     /// Finished routine run metadata.
     RoutineRunFinished(GraphqlRoutineRunFinishedMetadata),
+    /// Agent sign-in expiry metadata.
+    AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata),
+    /// Computer setup metadata.
+    ComputerSetup(GraphqlComputerSetupMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1441,6 +1561,12 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::NewEmail(metadata) => Self::NewEmail(GraphqlNewEmailMetadata(metadata)),
             NotifEvent::RoutineRunFinished(metadata) => {
                 Self::RoutineRunFinished(GraphqlRoutineRunFinishedMetadata(metadata))
+            }
+            NotifEvent::AgentSignInExpiry(metadata) => {
+                Self::AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata(metadata))
+            }
+            NotifEvent::ComputerSetup(metadata) => {
+                Self::ComputerSetup(GraphqlComputerSetupMetadata(metadata))
             }
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))

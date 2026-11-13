@@ -117,6 +117,7 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
+import { InboxRowAvatar } from './inbox-row-avatar';
 import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -722,14 +723,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       <SwipeToDone id={card.row().id}>
         <NotificationRow
           id={card.row().id}
-          icon={
-            <InboxSenderAvatar
-              notification={card.row().content.notifications[0]}
-              kind={inboxCardKind(card.row())}
-              entity={card.row().content.entity}
-              badged
-            />
-          }
+          icon={<InboxRowAvatar row={card.row()} />}
           who={display().who}
           what={display().what}
           body={display().body}
@@ -1068,7 +1062,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                           onClear={clear}
                         />
                         <Button
-                          size="icon-md"
+                          size="icon-xs"
                           variant="ghost"
                           aria-label={t('notificationsInbox.settings')}
                           tooltip={t('notificationsInbox.settings')}

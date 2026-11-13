@@ -10,7 +10,7 @@ import {
 import siteStyles from '../../../app/main/index.css?inline';
 import { DeferredDemo, DemoPlaceholder } from './DeferredDemo';
 import { DemoInteractionBoundary } from './DemoInteractionBoundary';
-import { DemoMention } from './DemoMention';
+import { emailDraftMessages } from './email/emailDraftMessages';
 import { HomepageAgentLogos } from './HomepageAgentLogos';
 import { HomepageBlog } from './HomepageBlog';
 import { HomepageClosing } from './HomepageClosing';
@@ -184,45 +184,7 @@ export function HomepageSections() {
           ]}
           title="Email and chat"
           description="Share live email threads in channels. Ask agents to draft from your emails, documents, and calls."
-          messages={[
-            {
-              person: 'eric',
-              text: (
-                <>
-                  Can you send{' '}
-                  <DemoMention
-                    item={{ id: 'austin', label: 'Austin', kind: 'person' }}
-                  />{' '}
-                  the demo follow-up?
-                </>
-              ),
-            },
-            {
-              person: 'jacob',
-              text: (
-                <>
-                  <DemoMention
-                    item={{ id: 'macro', label: 'Macro', kind: 'person' }}
-                  />{' '}
-                  draft a followup from{' '}
-                  <HomepageMention
-                    kind="call"
-                    label="Demo call transcript"
-                    description="Transcript of the September 14 demo with Austin · Team rollout, sales materials, and follow-up next steps."
-                    href="#email"
-                  />
-                  . Link the{' '}
-                  <HomepageMention
-                    kind="pdf"
-                    label="sales PDF"
-                    description="Sales overview from the demo."
-                    href="#email"
-                  />{' '}
-                  and rollout plan.
-                </>
-              ),
-            },
-          ]}
+          messages={emailDraftMessages('#email', '#email')}
           render={() => (
             <DeferredDemo
               preload={loadEmailCompose}

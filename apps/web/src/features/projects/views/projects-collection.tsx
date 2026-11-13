@@ -95,6 +95,7 @@ export function ProjectsCollection(props: {
   canOpenInNewSplit: Accessor<boolean>;
   onCopyLink(id: string): void;
   onCopyId(id: string): void;
+  onChangeIcon?(project: ProjectRowData['project']): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
 }) {
@@ -314,6 +315,9 @@ export function ProjectsCollection(props: {
           openInNewTab(() => props.onOpen(row.project.id, { newSplit: false }))
         }
         onRename={(row) => setRenaming(row)}
+        onChangeIcon={
+          props.onChangeIcon && ((row) => props.onChangeIcon?.(row.project))
+        }
         onSetOption={(rows, property, optionId) =>
           fireAndForget(setOption(rows, property, optionId), 'projects')
         }
@@ -447,6 +451,7 @@ export function ProjectsCollection(props: {
     <Show when={!isTouchDevice()}>
       <ViewLayoutDropdown
         grouped
+        size="icon-md"
         label="Project layout"
         layouts={props.ganttEnabled ? ['list', 'gantt'] : ['list']}
         value={isGantt() ? 'gantt' : 'list'}
@@ -459,6 +464,7 @@ export function ProjectsCollection(props: {
   const sortControl = () => (
     <ListSortDropdown
       grouped
+      size="icon-md"
       label="Sort projects"
       value={collection.sort()}
       options={[
@@ -473,6 +479,7 @@ export function ProjectsCollection(props: {
   const groupControl = () => (
     <ListGroupDropdown
       grouped
+      size="icon-md"
       label="Group projects"
       value={collection.groupBy()}
       options={[
@@ -488,6 +495,7 @@ export function ProjectsCollection(props: {
     <div class="relative shrink-0">
       <ListFilterDropdown
         grouped
+        size="icon-md"
         label="Filter projects"
         groups={filters()}
         open={openMenu() === 'filters'}
@@ -520,7 +528,7 @@ export function ProjectsCollection(props: {
         aria-label="Filter due date"
         tooltip="Filter due date"
         variant="ghost"
-        size="icon-sm"
+        size="icon-md"
       >
         <CalendarIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
@@ -572,11 +580,11 @@ export function ProjectsCollection(props: {
               </ViewSidebar.Title>
             }
           >
-            <HeaderActionGroup label="Project filters">
+            <HeaderActionGroup label="Project filters" size="md">
               {filterControl()}
               {dueDateControl()}
             </HeaderActionGroup>
-            <HeaderActionGroup label="Project view options">
+            <HeaderActionGroup label="Project view options" size="md">
               {layoutControl()}
               {sortControl()}
               {groupControl()}
@@ -891,9 +899,7 @@ export function ProjectsCollection(props: {
                       optionId={statusOptionId(entity()) ?? ''}
                       class="size-3.5 shrink-0"
                     />
-                    <span class="min-w-0 truncate">
-                      {entity().project.name}
-                    </span>
+                    <Gantt.BarTitle>{entity().project.name}</Gantt.BarTitle>
                   </Gantt.Bar>
                 </Gantt.Row>
               </ProjectMenu>

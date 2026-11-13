@@ -8,11 +8,12 @@ import {
 } from '../context/answer-display';
 import { unknownNames } from '../core/answer-cell';
 
-/** Mentions as placeholders, rows and markdown as plain text. */
+/** Mentions as placeholders, rows, links and markdown as plain text. */
 export const plainAnswerRenderers: AnswerRenderers = {
   mention: (_, entityType) => (
     <DatabaseMentionPlaceholder entityType={entityType} />
   ),
+  link: (url) => url,
   row: (row) => row.label,
   text: (markdown) => markdownToPlainText(markdown),
 };

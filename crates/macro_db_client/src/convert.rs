@@ -27,6 +27,7 @@ pub async fn get_docx_files(
         r#"
         SELECT
             d.id as document_id,
+                d.appearance,
             d.owner as owner,
             d.name as document_name,
             db.id as "document_version_id!",
@@ -79,6 +80,11 @@ pub async fn get_docx_files(
     )
     .try_map(|row| {
         Ok(DocumentMetadata {
+            appearance: row
+                .appearance
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             document_id: row.document_id,
             document_version_id: row.document_version_id,
             owner: Owner::from_principal_str(&row.owner)

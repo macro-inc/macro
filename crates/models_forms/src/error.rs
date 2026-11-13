@@ -70,6 +70,8 @@ pub enum FormErrorCode {
     InvalidName,
     /// A sharing change was refused.
     InvalidSharing,
+    /// Icon or color metadata failed validation.
+    InvalidAppearance,
     /// The form's owner keeps its tallies from respondents.
     TallyHidden,
     /// A logo or cover image is not an image the caller uploaded.

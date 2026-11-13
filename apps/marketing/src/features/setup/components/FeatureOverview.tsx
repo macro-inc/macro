@@ -217,6 +217,10 @@ export function FeatureConstellation(
               style={{
                 left: `${feature.x}%`,
                 top: `${feature.y}%`,
+                // The same coordinates as numbers, for layouts that grow the
+                // light layer and have to place halos against its old box.
+                '--halo-x': feature.x,
+                '--halo-y': feature.y,
                 '--halo-color': props.accent ?? feature.color,
               }}
             />

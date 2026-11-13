@@ -10,6 +10,7 @@ import { errAsync, okAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import {
+  DatabaseLinkValue,
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../../block-database/database-mentions';
@@ -143,6 +144,12 @@ function Fixture() {
         [id(6)]: { type: 'String', value: 'Follow up' },
       },
     },
+    {
+      rowId: id(11),
+      cells: {
+        [id(6)]: { type: 'String', value: 'Line one\nLine two\nLine three' },
+      },
+    },
   ];
   const api = createPipelineApi(
     {
@@ -259,6 +266,7 @@ function Fixture() {
               }
               renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
               renderTextValue={(value) => <DatabaseTextValue value={value} />}
+              renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
               renderMentionValue={() => <span>Acme</span>}
             />
           </DatabaseProvider>

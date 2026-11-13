@@ -198,7 +198,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "description": "Filter by session owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },
@@ -1223,7 +1223,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "description": "Filter by chat owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -1588,7 +1588,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "description": "Filter by document owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -2868,7 +2868,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "description": "Filter by project owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -4769,6 +4769,11 @@
           }
         }
       },
+      "TermMatching": {
+        "type": "string",
+        "description": "How a query of several terms matches document content.",
+        "enum": ["all", "dynamic"]
+      },
       "UnifiedSearchRequest": {
         "type": "object",
         "required": ["query", "match_type"],
@@ -4799,6 +4804,10 @@
           "search_on": {
             "$ref": "#/components/schemas/SearchOn",
             "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+          },
+          "term_matching": {
+            "$ref": "#/components/schemas/TermMatching",
+            "description": "How a query of several terms matches document content. Defaults to\n`all`, the strict AND that AI tools and the SDK rely on; the web\napp's Search view asks for `dynamic`."
           }
         }
       },

@@ -1170,6 +1170,74 @@ export type ClassifyInputResponse = {
 };
 
 /**
+ * A computer's active Claude sign-in. Claude's long-lived credential names
+ * no account, so there is no email or plan to show.
+ */
+export type ClaudeAccountStatus = {
+    /**
+     * When the credential stops working, as the computer last reported it.
+     */
+    expiresAt?: string | null;
+    /**
+     * When it was signed in.
+     */
+    signedInAt: string;
+    /**
+     * Who signed it in through Macro; absent once that user is deleted or
+     * when it was signed in on the computer itself.
+     */
+    signedInBy?: string | null;
+};
+
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
+/**
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+ * uses its own.
+ */
+export type ClaudeModeResponse = {
+    account?: null | ClaudeAccountStatus;
+    /**
+     * How Claude Code is paid for.
+     */
+    mode: ClaudeMode;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` body.
+ */
+export type ClaudeSignInComplete = {
+    /**
+     * The code Claude showed after the user signed in.
+     */
+    code: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in` answer.
+ */
+export type ClaudeSignInStarted = {
+    /**
+     * Where the user signs in to Claude, in their own browser.
+     */
+    url: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
+ */
+export type ClaudeSignedIn = {
+    /**
+     * Always `true`.
+     */
+    signedIn: boolean;
+};
+
+/**
  * Information used to choose a coding persona for a task.
  */
 export type CodingAgent = {
@@ -1494,9 +1562,11 @@ export type CreateAgentSessionRequest = {
      */
     owner?: string | null;
     /**
-     * First prompt to deliver once the session is running. Managed sessions
-     * only - an external runtime sends its own first prompt through the
-     * control endpoint. Omitted, the session opens idle.
+     * First prompt to deliver once the session is running. The managed shape
+     * only: a persona its operator runs gets it through the session's control
+     * path once its runtime opens the session, while a runtime opening its
+     * own (the `workspace` shape) sends its first prompt through the control
+     * endpoint. Omitted, the session opens idle.
      */
     prompt?: string | null;
     promptActionId?: null | AgentActionId;
@@ -1505,6 +1575,14 @@ export type CreateAgentSessionRequest = {
      * Requires `prompt`.
      */
     promptAttachments?: Array<PromptAttachment>;
+    /**
+     * The app tab the person typed `prompt` in, as `clientId` on a control
+     * request, so what the first turn opens in the app reaches that tab
+     * only. Requires `prompt`. Only a person's own request may send it; a
+     * runtime's is refused, and a program using a person's credential has
+     * it dropped.
+     */
+    promptClientId?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -1807,6 +1885,17 @@ export type EmailSuggestions = {
  * The type of an entity in Macro
  */
 export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+
+/**
+ * A plain old json error response for use with axum.
+ * yup, thats it.
+ */
+export type ErrorResponse = {
+    /**
+     * Message to explain failure
+     */
+    message: string;
+};
 
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -2120,6 +2209,11 @@ export type LoadAgentModelsRequest = {
  * Successful model-discovery response.
  */
 export type LoadAgentModelsResponse = {
+    /**
+     * When a paired runtime that is off or unreachable last reported this
+     * catalog; null when it was probed live.
+     */
+    cachedAt?: string | null;
     /**
      * Current provider model, if model selection is available.
      */
@@ -3093,6 +3187,32 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * One voice of the provider's catalog.
+ */
+export type Voice = {
+    /**
+     * The provider's accent label.
+     */
+    accent: string;
+    /**
+     * Languages the voice speaks.
+     */
+    languages: Array<string>;
+    /**
+     * The model to save as the agent's voice.
+     */
+    model: string;
+    /**
+     * The provider's name for the voice.
+     */
+    name: string;
+    /**
+     * The provider's gender and character tags.
+     */
+    tags: Array<string>;
 };
 
 /**
@@ -4876,6 +4996,113 @@ export type ListCodingAgentsResponses = {
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
 
+export type GetClaudeModeData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-mode';
+};
+
+export type GetClaudeModeErrors = {
+    403: unknown;
+    404: unknown;
+    503: unknown;
+};
+
+export type GetClaudeModeResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type GetClaudeModeResponse = GetClaudeModeResponses[keyof GetClaudeModeResponses];
+
+export type StartClaudeSignInData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in';
+};
+
+export type StartClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type StartClaudeSignInResponses = {
+    200: ClaudeSignInStarted;
+};
+
+export type StartClaudeSignInResponse = StartClaudeSignInResponses[keyof StartClaudeSignInResponses];
+
+export type CompleteClaudeSignInData = {
+    body: ClaudeSignInComplete;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in/complete';
+};
+
+export type CompleteClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type CompleteClaudeSignInResponses = {
+    200: ClaudeSignedIn;
+};
+
+export type CompleteClaudeSignInResponse = CompleteClaudeSignInResponses[keyof CompleteClaudeSignInResponses];
+
+export type ClaudeSignOutData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-out';
+};
+
+export type ClaudeSignOutErrors = {
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type ClaudeSignOutResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type ClaudeSignOutResponse = ClaudeSignOutResponses[keyof ClaudeSignOutResponses];
+
 export type ClassifyData = {
     body: ClassifyInputRequest;
     path?: never;
@@ -4939,3 +5166,54 @@ export type ExtractResponses = {
 };
 
 export type ExtractResponse = ExtractResponses[keyof ExtractResponses];
+
+export type GetAgentVoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/voices';
+};
+
+export type GetAgentVoicesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoicesError = GetAgentVoicesErrors[keyof GetAgentVoicesErrors];
+
+export type GetAgentVoicesResponses = {
+    200: Array<Voice>;
+};
+
+export type GetAgentVoicesResponse = GetAgentVoicesResponses[keyof GetAgentVoicesResponses];
+
+export type GetAgentVoiceSampleData = {
+    body?: never;
+    path: {
+        /**
+         * An Aura-2 model, such as aura-2-thalia-en
+         */
+        model: string;
+    };
+    query?: never;
+    url: '/voices/{model}/sample';
+};
+
+export type GetAgentVoiceSampleErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoiceSampleError = GetAgentVoiceSampleErrors[keyof GetAgentVoiceSampleErrors];
+
+export type GetAgentVoiceSampleResponses = {
+    /**
+     * WAV audio
+     */
+    200: Array<number>;
+};
+
+export type GetAgentVoiceSampleResponse = GetAgentVoiceSampleResponses[keyof GetAgentVoiceSampleResponses];

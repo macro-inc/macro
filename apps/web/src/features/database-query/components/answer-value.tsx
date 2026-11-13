@@ -1,7 +1,8 @@
-import { For, Match, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import { OptionPill } from '../../database/components/select-pill';
 import type { AnswerRenderers } from '../context/answer-display';
 import {
+  namedRows,
   type ReferenceNames,
   type ResultCell,
   resultCellText,
@@ -20,6 +21,9 @@ export function ResultValue(props: {
       </Match>
       <Match when={props.cell.kind === 'markdown' && props.cell}>
         {(cell) => <>{props.display.text(cell().markdown)}</>}
+      </Match>
+      <Match when={props.cell.kind === 'link' && props.cell}>
+        {(cell) => <>{props.display.link(cell().url)}</>}
       </Match>
       <Match when={props.cell.kind === 'boolean' && props.cell}>
         {(cell) => (
@@ -56,6 +60,16 @@ export function ResultValue(props: {
           })
         }
       </Match>
+      <Match when={props.cell.kind === 'rows' && props.cell}>
+        {(cell) => (
+          <RelatedRows
+            ids={cell().ids}
+            table={cell().table}
+            names={props.names}
+            display={props.display}
+          />
+        )}
+      </Match>
       <Match when={props.cell.kind === 'mentions' && props.cell}>
         {(cell) => (
           <span class="inline-flex min-w-0 max-w-full flex-wrap gap-x-2 gap-y-1 align-middle">
@@ -66,5 +80,34 @@ export function ResultValue(props: {
         )}
       </Match>
     </Switch>
+  );
+}
+
+/** A relation's named rows as links that open them; a count when none is named. */
+function RelatedRows(props: {
+  ids: string[];
+  table: string | null;
+  names: ReferenceNames;
+  display: AnswerRenderers;
+}) {
+  const named = () => namedRows(props.ids, props.table, props.names);
+  return (
+    <Show
+      when={named().rows.length > 0}
+      fallback={resultCellText(
+        { kind: 'rows', ids: props.ids, table: props.table },
+        props.names
+      )}
+    >
+      <For each={named().rows}>
+        {(row, index) => (
+          <>
+            {index() > 0 && ', '}
+            {props.display.row({ ...row, table: props.table })}
+          </>
+        )}
+      </For>
+      {named().more > 0 && ` +${named().more}`}
+    </Show>
   );
 }

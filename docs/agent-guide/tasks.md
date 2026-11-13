@@ -56,6 +56,10 @@ through its breadcrumb retains the selected project view.
 Cached project rows remain available through offline/background refresh failures.
 Cache misses, server/permission errors, and failed continuation requests retain
 failure and retry controls.
+Project list rows, project breadcrumbs, task project chips, and project pickers
+show the saved icon and color. With the normalized cache active, Apply updates
+these surfaces before the save completes, without changing project recency or
+refetching their pages; resetting appearance restores the default project icon.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
@@ -160,7 +164,7 @@ timestamps. At 600px, Updated fades and collapses over
 160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
-Updated remains sortable. Created by is the final column, with a 16px avatar above
+Updated remains sortable except during a main Tasks or project text search. Created by is the final column, with a 16px avatar above
 840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
 keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. The creator header and avatar
@@ -280,6 +284,13 @@ Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
 follows stored option order; Priority puts urgent tasks first. Missing values
 stay last. Property-sort ties use newest update, then descending task ID.
 Text search retains its existing ordering and flat list results; clear search to sort.
+While searching, the desktop header hides Sort (leaving Group in its island), the
+keyboard shortcut sheet and command menu drop **Sort tasks** (S does nothing), and
+the mobile drawer omits its Sort section. The list's column headers stop sorting:
+Due date shows a plain label, and Updated keeps a static descending arrow whatever
+the stored sort is. Clearing search brings back the stored sort and every control
+unchanged. CRM task lists search by rerunning their own query, so their column
+headers keep sorting during a search.
 Boards group the loaded search results as before, without complete counts or grouped-search requests.
 
 **Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
@@ -394,7 +405,8 @@ Deadline tints and the Today marker refresh at local midnight and when a tab
 becomes visible or focused again.
 The tint only appears when the actual end is inside the calendar range.
 Bar text stays inside the visible portion of its bar as you scroll, zoom, or
-open the item drawer, and truncates in narrow segments.
+open the item drawer. A bar too short for its name shows the name beside it,
+to its right, in muted text, until zooming in makes room.
 The full-width date header stays visible during vertical scrolling; the pointer's
 date label stays in that header, and the vertical scrollbar begins below it.
 Timeline-edge fades stay within the date header, beneath its floating buttons.
@@ -542,7 +554,8 @@ start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
 A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**,
-**Status**, **Priority**, or the active due-date sort label. The drop does not choose a pointer insertion slot:
+**Status**, **Priority**, or the active due-date sort label; during a text search it
+shows **Move here**. The drop does not choose a pointer insertion slot:
 its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
@@ -710,12 +723,12 @@ Sort offers Priority, Recently updated, Least recently updated, Newest, and Olde
 Priority orders the loaded rows most urgent first and keeps recency within a
 priority. Date sorts group rows under the same headings as email (Today,
 Yesterday, Last 7 days, Earlier this month, Last month, Older) by the sorted
-date; Priority sorts and searches list rows flat. When visible PRs
-have GitHub labels, a Labels section below Favorites lists them like email's
-Tags section (a colored dot and the name); choosing a label shows only PRs with
-it, and choosing it again clears it. Above it, an **Agents** section lists the
-tools the loaded PRs were started from (Claude, Codex, Cursor, and so on, with
-their marks); choosing one shows only PRs started from it, using the same
+date; Priority sorts and searches list rows flat. When visible PRs have GitHub
+labels, a **Labels** section below Favorites lists them with a colored dot and
+the name. These are GitHub labels, not Macro tags. Choosing a label shows only
+PRs with it, and choosing it again clears it. Above it, an **Agents** section
+lists the tools the loaded PRs were started from (Claude, Codex, Cursor, and so
+on, with their marks); choosing one shows only PRs started from it, using the same
 **Started from** filter as the filter menu. PR rows use the shared entity layout with selection checkboxes,
 author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
@@ -1025,6 +1038,12 @@ bottom action drawer, without `Open in new split` and with each Status and
 Priority choice as its own row. Use disposable projects: these actions change
 hosted data.
 
+Project rows in shared lists (Home's Projects filter, Search) use the shared
+row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
+`Rename` and `Delete` on projects you own. These rows carry no access level,
+so an editor who doesn't own the project gets neither; several owned projects
+offer only `Delete`. The dialogs are the Projects list's own.
+
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
 with a project name, a Markdown description (`Add description...`), and the
@@ -1157,7 +1176,8 @@ disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task`; both actions use bordered buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
-confirm `Add N tasks`. Escape or Cancel dismisses without assigning tasks. Tasks
+confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
+the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
@@ -1191,7 +1211,8 @@ its target again.
 ## Bulk delete
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
-then confirm **Delete**. With GraphQL Soup enabled, selected rows disappear while
+then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms
+and Escape cancels. With GraphQL Soup enabled, selected rows disappear while
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
 reports how many items were deleted and keeps only failed items in the dialog for
@@ -1242,11 +1263,11 @@ GitHub instead.
 Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
 when opening the picker. Rows stay in place while selecting or deselecting.
-Existing selected outsiders remain visible and removable,
-including references absent from contacts. The picker has no contact discovery;
-a removed outsider cannot be added again unless they join the team.
+Initially selected outsiders remain visible and removable, including references
+absent from contacts. They stay searchable for re-adding while the record stays
+mounted, even after the picker closes. Unrelated non-team contacts stay excluded.
 
-The same scope applies to task/project creation and editing, bulk Set assignee,
+The same roster scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
 keep their semantics; Created by and custom people fields keep their contact lists.
 Check that a teammate absent from contacts appears and can be selected, that
@@ -1329,8 +1350,8 @@ message.
 
 ### Nested sidebar tags
 
-In the Email and Calls sidebar Tags sections, tag names containing `/` render with
-one child level (for example, `Work/Urgent`).
+The shared sidebar tag tree renders tag names containing `/` with one child
+level (for example, `Work/Urgent`).
 Deeper paths remain in the child label: `Work/Customers/Acme` appears as
 `Customers/Acme` under `Work`, alongside any actual `Customers` tag.
 Use the caret to expand or collapse a branch. A folder-only parent expands without
