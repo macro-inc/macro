@@ -55,23 +55,23 @@ export function nativeSurface(
       )
     : undefined;
   const config = SessionConfigMsg.encode({
-      doc: 'group-b-view-fixture',
-      session: '00000000-0000-0000-0000-000000000001',
-      user: 'fixture-user',
-      peers: [7n, 8n, 9n],
-      access,
-      transport: Transport.None,
-      durable: false,
-      chatter: false,
-      headless: false,
-      viewEngine: 1,
-      viewOs: 0,
-      token: '',
-      traceparent: '',
-      coalesce: 25,
-      snapshotInterval: 0,
-      observed: [],
-    });
+    doc: 'group-b-view-fixture',
+    session: '00000000-0000-0000-0000-000000000001',
+    user: 'fixture-user',
+    peers: [7n, 8n, 9n],
+    access,
+    transport: Transport.None,
+    durable: false,
+    chatter: false,
+    headless: false,
+    viewEngine: 1,
+    viewOs: 0,
+    token: '',
+    traceparent: '',
+    coalesce: 25,
+    snapshotInterval: 0,
+    observed: [],
+  });
   const session = create
     ? create(config)
     : nativeModule.EditorSession.createMacroWithNamespace(

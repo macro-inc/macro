@@ -1,6 +1,5 @@
 /** @vitest-environment jsdom */
 
-import { CommandCode } from '@macro-inc/collaboration/session/abi.generated';
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import {
   initializeNativeSurfaceTests,

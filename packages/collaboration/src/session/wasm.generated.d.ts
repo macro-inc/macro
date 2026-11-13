@@ -587,10 +587,10 @@ export interface InitOutput {
     readonly __wbg_inputcommitreceipt_free: (a: number, b: number) => void;
     readonly __wbg_syncrouter_free: (a: number, b: number) => void;
     readonly __wbg_viewcommandfailure_free: (a: number, b: number) => void;
-    readonly debugCodeTokenProviders: () => number;
     readonly codetokenfailure_causes: (a: number) => [number, number];
     readonly codetokenfailure_effectOrdinals: (a: number) => [number, number];
     readonly codetokenfailure_entry: (a: number) => bigint;
+    readonly debugCodeTokenProviders: () => number;
     readonly docsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -700,17 +700,17 @@ export interface InitOutput {
     readonly viewcommandfailure_current: (a: number) => number;
     readonly viewcommandfailure_effectOrdinals: (a: number) => [number, number];
     readonly viewcommandfailure_invocation: (a: number) => bigint;
-    readonly viewcommandfailure_scope: (a: number) => bigint;
     readonly editorsession_unregisterViewEscape: (a: number, b: bigint) => [number, number];
     readonly viewCommandScopeUnregisterEscape: (a: bigint, b: bigint) => [number, number];
+    readonly viewcommandfailure_scope: (a: number) => bigint;
     readonly editorsession_wakeAt: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

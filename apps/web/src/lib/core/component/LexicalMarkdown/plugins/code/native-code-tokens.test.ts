@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   $createCodeNode,
   $isCodeHighlightNode,
@@ -15,8 +18,6 @@ import {
   $isTabNode,
   type LexicalNode,
 } from 'lexical';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { expect, test } from 'vitest';
 import {
   createNativeCodeTokenProvider,
