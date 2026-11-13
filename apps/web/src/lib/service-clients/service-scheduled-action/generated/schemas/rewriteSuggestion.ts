@@ -9,6 +9,7 @@ import type { RewriteSuggestionAbout } from './rewriteSuggestionAbout';
 import type { RewriteSuggestionCategories } from './rewriteSuggestionCategories';
 import type { RewriteSuggestionImportance } from './rewriteSuggestionImportance';
 import type { RewriteSuggestionPrompt } from './rewriteSuggestionPrompt';
+import type { RewriteSuggestionSends } from './rewriteSuggestionSends';
 import type { RewriteSuggestionSummary } from './rewriteSuggestionSummary';
 import type { RewriteSuggestionTitle } from './rewriteSuggestionTitle';
 
@@ -29,6 +30,9 @@ export interface RewriteSuggestion {
   prompt?: RewriteSuggestionPrompt;
   /** Why, for the change log. */
   reason: string;
+  /** Only on background prompt suggestions: what the run posts or sends, and
+where. */
+  sends?: RewriteSuggestionSends;
   /** A new summary. */
   summary?: RewriteSuggestionSummary;
   /** A new title. */

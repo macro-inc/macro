@@ -2,6 +2,7 @@ import type {
   Category,
   EntityAction,
   RunMode,
+  RunProgress,
   Suggestion as SuggestionRecord,
   SuggestionState,
   SuggestionWriteOutcome as SuggestionWriteRecord,
@@ -9,6 +10,7 @@ import type {
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { AgentSession } from '../agent-sessions/agent-session';
 import type { MacroEntityType } from '../entity';
 
 /** An item a suggestion is about: any handle with an entity type, such as an `EmailThread`, and optionally a part of it, such as one message in a channel. */
@@ -37,6 +39,8 @@ export interface SuggestionChanges {
   about?: SuggestionItem[];
   /** Only on prompt suggestions. */
   prompt?: string;
+  /** Only on background prompt suggestions: what the run posts or sends, and where. */
+  sends?: string;
   /** Why, for the change log. */
   reason: string;
 }
@@ -145,6 +149,37 @@ export class Suggestion {
   /** A prompt suggestion's run mode. */
   get runMode(): RunMode | undefined {
     return this.record.kind === 'prompt' ? this.record.runMode : undefined;
+  }
+
+  /**
+   * What a background prompt suggestion's run posts or sends, and where, as its
+   * card shows it before Run; running the suggestion approves exactly that.
+   * Undefined when the run posts and sends nothing.
+   */
+  get sends(): string | undefined {
+    return this.record.kind === 'prompt'
+      ? (this.record.sends ?? undefined)
+      : undefined;
+  }
+
+  /**
+   * A background prompt suggestion's latest run: its hidden agent `session`
+   * (open it to see the result), when it started, and its `progress`
+   * (`running`, `finished`, `failed`, or `unknown` when the session
+   * couldn't be read; `needs_approval` and `needs_input` only if it ever
+   * waits, which a run is told never to).
+   */
+  get run():
+    | { session: AgentSession; startedAt: string; progress: RunProgress }
+    | undefined {
+    const run = this.record.run;
+    return run
+      ? {
+          session: AgentSession.byId(this.client, run.sessionId),
+          startedAt: run.startedAt,
+          progress: run.progress,
+        }
+      : undefined;
   }
 
   /** An entity suggestion's action. */

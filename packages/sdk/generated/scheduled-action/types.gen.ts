@@ -5,6 +5,17 @@ export type ClientOptions = {
 };
 
 /**
+ * Acting on a suggestion, as the caller's copy of it shows it.
+ */
+export type AcceptSuggestionRequest = {
+    /**
+     * The suggestion's `updatedAt` as the caller read it. A background suggestion runs
+     * only if it is unchanged since; otherwise the answer is 409.
+     */
+    updatedAt: string;
+};
+
+/**
  * Client configuration, the create body. Ownership and execution state are
  * server-owned.
  */
@@ -833,6 +844,10 @@ export type NewSuggestion = {
     reason?: string | null;
     runMode?: null | RunMode;
     /**
+     * A background prompt suggestion that posts or sends: what, and where.
+     */
+    sends?: string | null;
+    /**
      * Why, in a line or two.
      */
     summary: string;
@@ -961,6 +976,11 @@ export type RewriteSuggestion = {
      * Why, for the change log.
      */
     reason: string;
+    /**
+     * Only on background prompt suggestions: what the run posts or sends, and
+     * where.
+     */
+    sends?: string | null;
     /**
      * A new summary.
      */
@@ -1293,6 +1313,11 @@ export type RunInfo = {
  * How a prompt suggestion runs.
  */
 export type RunMode = 'composer' | 'background';
+
+/**
+ * How a run is going, as its session says.
+ */
+export type RunProgress = 'running' | 'needs_approval' | 'needs_input' | 'finished' | 'failed' | 'unknown';
 
 /**
  * What started a run, for its page.
@@ -1629,6 +1654,7 @@ export type Suggestion = SuggestionKind & {
      * What acting on it produced.
      */
     produced: Array<Target>;
+    run?: null | SuggestionRun;
     /**
      * Where it is for the person.
      */
@@ -1653,6 +1679,20 @@ export type Suggestion = SuggestionKind & {
      * When it last changed.
      */
     updatedAt: string;
+};
+
+/**
+ * The suggestion changed since the caller read it.
+ */
+export type SuggestionChanged = {
+    /**
+     * What happened.
+     */
+    message: string;
+    /**
+     * The suggestion as it is now, to show before acting on it again.
+     */
+    suggestion: Suggestion;
 };
 
 /**
@@ -1688,6 +1728,13 @@ export type SuggestionKind = {
      * How it runs.
      */
     runMode: RunMode;
+    /**
+     * For a background run that posts or sends something: what, and
+     * where, in plain words. The card shows it before Run, and running
+     * it approves exactly that. None when the run posts and sends
+     * nothing.
+     */
+    sends?: string | null;
 } | {
     /**
      * What to do about the items.
@@ -1712,6 +1759,26 @@ export type SuggestionReview = {
      */
     keptLeft: number;
     suggestions: Array<ReviewedSuggestion>;
+};
+
+/**
+ * A run of a background prompt suggestion: a hidden agent session of the
+ * person's, with the full toolset, that never stops to ask.
+ */
+export type SuggestionRun = {
+    /**
+     * How it is going, read from the session.
+     */
+    progress: RunProgress;
+    /**
+     * The agent session: open it to see the result or answer what it
+     * waits for.
+     */
+    sessionId: string;
+    /**
+     * When it started.
+     */
+    startedAt: string;
 };
 
 /**
@@ -2842,7 +2909,7 @@ export type RewriteSuggestionResponses = {
 export type RewriteSuggestionResponse = RewriteSuggestionResponses[keyof RewriteSuggestionResponses];
 
 export type AcceptSuggestionData = {
-    body?: never;
+    body: AcceptSuggestionRequest;
     path: {
         /**
          * ID of the suggestion
@@ -2854,11 +2921,16 @@ export type AcceptSuggestionData = {
 };
 
 export type AcceptSuggestionErrors = {
+    400: string;
     401: string;
     /**
      * No open or done suggestion with this id for the caller, or suggestions are off
      */
     404: string;
+    /**
+     * The suggestion changed since the caller read it: the body has it as it is now
+     */
+    409: SuggestionChanged;
     500: string;
 };
 
@@ -2866,7 +2938,7 @@ export type AcceptSuggestionError = AcceptSuggestionErrors[keyof AcceptSuggestio
 
 export type AcceptSuggestionResponses = {
     /**
-     * Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing
+     * Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing
      */
     204: void;
 };

@@ -7,6 +7,7 @@
  */
 
 import type { Category } from './category';
+import type { SuggestionAllOfRun } from './suggestionAllOfRun';
 import type { SuggestionAllOfStateReason } from './suggestionAllOfStateReason';
 import type { SuggestionState } from './suggestionState';
 import type { Target } from './target';
@@ -30,6 +31,7 @@ this suggestion instead of adding one. */
   importance: number;
   /** What acting on it produced. */
   produced: Target[];
+  run?: SuggestionAllOfRun;
   /** Where it is for the person. */
   state: SuggestionState;
   /** When its state last changed, such as when it was dismissed. */

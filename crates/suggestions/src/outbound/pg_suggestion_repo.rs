@@ -11,8 +11,8 @@ use model_entity::EntityType;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
-    Category, Change, EntityAction, NewKind, OpenTarget, ResolveReason, Suggestion,
-    SuggestionContent, SuggestionKind, SuggestionState, Target, TargetRole,
+    Category, Change, EntityAction, NewKind, OpenTarget, ResolveReason, RunSettled, StoredRun,
+    Suggestion, SuggestionContent, SuggestionKind, SuggestionState, Target, TargetRole,
 };
 use crate::domain::ports::{Limits, SuggestionRepo, Written};
 
@@ -58,6 +58,7 @@ struct SuggestionRow {
     state_changed_at: DateTime<Utc>,
     prompt: Option<String>,
     run_mode: Option<String>,
+    sends: Option<String>,
     action: Option<String>,
     routine_suggestion_id: Option<Uuid>,
 }
@@ -91,7 +92,7 @@ impl PgSuggestionRepo {
                     r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
-                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM suggestion i
@@ -116,7 +117,7 @@ impl PgSuggestionRepo {
                               i.state AS "state!", i.state_reason,
                               i.created_at AS "created_at!", i.updated_at AS "updated_at!",
                               i.state_changed_at AS "state_changed_at!",
-                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM (
@@ -143,7 +144,7 @@ impl PgSuggestionRepo {
                     r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
-                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM suggestion i
@@ -163,7 +164,7 @@ impl PgSuggestionRepo {
                     r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
-                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM suggestion i
@@ -232,6 +233,7 @@ impl PgSuggestionRepo {
                     ("prompt", Some(prompt), Some(run_mode), None, None) => SuggestionKind::Prompt {
                         prompt,
                         run_mode: parse(&run_mode)?,
+                        sends: row.sends,
                     },
                     ("entity", None, None, Some(action), None) => SuggestionKind::Entity {
                         action: parse(&action)?,
@@ -268,6 +270,7 @@ impl PgSuggestionRepo {
                     created_at: row.created_at,
                     updated_at: row.updated_at,
                     state_changed_at: row.state_changed_at,
+                    run: None,
                     kind,
                 })
             })();
@@ -279,6 +282,42 @@ impl PgSuggestionRepo {
         });
         Ok(suggestions.collect())
     }
+}
+
+/// An `suggestion_run` row as the run queries select it.
+struct RunRow {
+    session_id: Uuid,
+    suggestion_id: Uuid,
+    user_id: String,
+    agent_id: String,
+    action_id: Uuid,
+    started_at: DateTime<Utc>,
+    outcome: Option<String>,
+}
+
+fn run(row: RunRow) -> Result<StoredRun, PgSuggestionRepoError> {
+    Ok(StoredRun {
+        session: row.session_id,
+        suggestion: row.suggestion_id,
+        user: MacroUserIdStr::try_from(row.user_id)
+            .map_err(|_| PgSuggestionRepoError::Decode("a run's user".to_owned()))?,
+        agent: row
+            .agent_id
+            .parse()
+            .map_err(|_| PgSuggestionRepoError::Decode("a run's agent".to_owned()))?,
+        action: row.action_id,
+        started_at: row.started_at,
+        settled: match row.outcome.as_deref() {
+            None => None,
+            Some("finished") => Some(RunSettled::Finished),
+            Some("failed") => Some(RunSettled::Failed),
+            Some(other) => {
+                return Err(PgSuggestionRepoError::Decode(format!(
+                    "run outcome `{other}`"
+                )));
+            }
+        },
+    })
 }
 
 fn parse<T: std::str::FromStr>(value: &str) -> Result<T, PgSuggestionRepoError> {
@@ -444,6 +483,160 @@ impl SuggestionRepo for PgSuggestionRepo {
         Ok(u32::try_from(count).unwrap_or(u32::MAX))
     }
 
+    async fn start_run(
+        &self,
+        run: &StoredRun,
+        shown_updated_at: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        suggestions_db_utils::lock_user(&mut tx, run.user.as_ref()).await?;
+        // Proposed with no run going (a restored suggestion's old run may still
+        // be), or accepted with no run going and its last one failed; and
+        // still what the person saw.
+        let accepted = sqlx::query!(
+            r#"UPDATE suggestion SET state = 'accepted', updated_at = $3,
+                   state_changed_at = CASE WHEN state = 'accepted' THEN state_changed_at ELSE $3 END
+               WHERE id = $1 AND user_id = $2 AND updated_at = $4
+                 AND EXISTS (SELECT 1 FROM suggestion_prompt p WHERE p.suggestion_id = suggestion.id AND p.run_mode = 'background')
+                 AND ((state = 'proposed' AND NOT EXISTS (
+                          SELECT 1 FROM suggestion_run r WHERE r.suggestion_id = suggestion.id AND r.settled_at IS NULL))
+                      OR (state = 'accepted' AND NOT EXISTS (
+                          SELECT 1 FROM suggestion_run r WHERE r.suggestion_id = suggestion.id
+                            AND (r.outcome IS DISTINCT FROM 'failed'))))"#,
+            run.suggestion,
+            run.user.as_ref(),
+            run.started_at,
+            shown_updated_at,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1;
+        if !accepted {
+            return Ok(false);
+        }
+        sqlx::query!(
+            r#"INSERT INTO suggestion_run (session_id, suggestion_id, user_id, agent_id, action_id, started_at)
+               VALUES ($1, $2, $3, $4, $5, $6)"#,
+            run.session,
+            run.suggestion,
+            run.user.as_ref(),
+            run.agent.to_string(),
+            run.action,
+            run.started_at,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    async fn latest_runs(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        suggestions: &[Uuid],
+    ) -> Result<Vec<StoredRun>, Self::Err> {
+        if suggestions.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query_as!(
+            RunRow,
+            r#"SELECT DISTINCT ON (suggestion_id) session_id, suggestion_id, user_id, agent_id, action_id,
+                      started_at, outcome
+               FROM suggestion_run WHERE user_id = $1 AND suggestion_id = ANY($2)
+               ORDER BY suggestion_id, started_at DESC"#,
+            user.as_ref(),
+            suggestions,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(run).collect()
+    }
+
+    async fn unsettled_runs(&self, limit: u16) -> Result<Vec<StoredRun>, Self::Err> {
+        let rows = sqlx::query_as!(
+            RunRow,
+            r#"SELECT session_id, suggestion_id, user_id, agent_id, action_id, started_at, outcome
+               FROM suggestion_run WHERE settled_at IS NULL
+               ORDER BY checked_at NULLS FIRST, started_at LIMIT $1"#,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(run).collect()
+    }
+
+    async fn checked_run(&self, session: Uuid, at: DateTime<Utc>) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"UPDATE suggestion_run SET checked_at = $2 WHERE session_id = $1 AND settled_at IS NULL"#,
+            session,
+            at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn settle_run(
+        &self,
+        session: Uuid,
+        settled: RunSettled,
+        produced: &[Target],
+        at: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        let outcome = match settled {
+            RunSettled::Finished => "finished",
+            RunSettled::Failed => "failed",
+        };
+        let suggestion = sqlx::query_scalar!(
+            r#"UPDATE suggestion_run SET settled_at = $2, outcome = $3
+               WHERE session_id = $1 AND settled_at IS NULL
+               RETURNING suggestion_id"#,
+            session,
+            at,
+            outcome,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(suggestion) = suggestion else {
+            return Ok(false);
+        };
+        if settled == RunSettled::Finished {
+            let existing = sqlx::query_scalar!(
+                r#"SELECT count(*) AS "count!" FROM suggestion_target WHERE suggestion_id = $1 AND role = 'produced'"#,
+                suggestion,
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+            for (offset, target) in produced.iter().enumerate() {
+                sqlx::query!(
+                    r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id, part_id)
+                       VALUES ($1, 'produced', $2, $3, $4, $5)"#,
+                    suggestion,
+                    i16::try_from(existing + i64::try_from(offset).unwrap_or(i64::MAX)).unwrap_or(i16::MAX),
+                    target.entity_type.as_ref(),
+                    target.entity_id,
+                    target.part_id,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+            // A run of a suggestion retired or dismissed meanwhile still records
+            // what it made; only an accepted suggestion becomes done.
+            sqlx::query!(
+                r#"UPDATE suggestion SET state = 'done', updated_at = $2, state_changed_at = $2
+                   WHERE id = $1 AND state = 'accepted'"#,
+                suggestion,
+                at,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(true)
+    }
+
     async fn create(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -488,10 +681,11 @@ impl SuggestionRepo for PgSuggestionRepo {
         match kind {
             NewKind::Prompt { run_mode } => {
                 sqlx::query!(
-                    "INSERT INTO suggestion_prompt (suggestion_id, prompt, run_mode) VALUES ($1, $2, $3)",
+                    "INSERT INTO suggestion_prompt (suggestion_id, prompt, run_mode, sends) VALUES ($1, $2, $3, $4)",
                     id,
                     content.prompt.as_deref().unwrap_or_default(),
                     run_mode.as_ref(),
+                    content.sends.as_deref(),
                 )
                 .execute(&mut *tx)
                 .await?;
@@ -556,9 +750,10 @@ impl SuggestionRepo for PgSuggestionRepo {
         }
         if let Some(prompt) = &content.prompt {
             sqlx::query!(
-                "UPDATE suggestion_prompt SET prompt = $2 WHERE suggestion_id = $1",
+                "UPDATE suggestion_prompt SET prompt = $2, sends = $3 WHERE suggestion_id = $1",
                 id,
                 prompt,
+                content.sends.as_deref(),
             )
             .execute(&mut *tx)
             .await?;
@@ -606,6 +801,34 @@ impl SuggestionRepo for PgSuggestionRepo {
             log(&mut tx, user, id, change).await?;
         }
         tx.commit().await?;
+        Ok(moved)
+    }
+
+    async fn set_state_as_shown(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        from: &[SuggestionState],
+        to: SuggestionState,
+        shown_updated_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let from: Vec<String> = from.iter().map(|state| state.as_ref().to_owned()).collect();
+        let moved = sqlx::query!(
+            r#"UPDATE suggestion
+               SET state = $4, state_reason = NULL, updated_at = $5, state_changed_at = $5
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3) AND updated_at = $6"#,
+            user.as_ref(),
+            id,
+            &from,
+            to.as_ref(),
+            now,
+            shown_updated_at,
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            == 1;
         Ok(moved)
     }
 
@@ -687,5 +910,22 @@ impl SuggestionRepo for PgSuggestionRepo {
         .await?
         .rows_affected();
         Ok(moved == 1)
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::domain::ports::RunScopes for PgSuggestionRepo {
+    async fn sends_nothing(&self, session: Uuid) -> Result<bool, rootcause::Report> {
+        let sends = sqlx::query_scalar!(
+            r#"SELECT p.sends FROM suggestion_run r JOIN suggestion_prompt p ON p.suggestion_id = r.suggestion_id
+               WHERE r.session_id = $1"#,
+            session,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
+        Ok(
+            matches!(sends, Some(sends) if sends.as_deref().is_none_or(|sends| sends.trim().is_empty())),
+        )
     }
 }

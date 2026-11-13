@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion SET state = 'done', updated_at = $2, state_changed_at = $2\n                   WHERE id = $1 AND state = 'accepted'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b65db4fbac76094dd724f3747f9e336ef44206dc67d37e34df611467823d2caf"
+}
