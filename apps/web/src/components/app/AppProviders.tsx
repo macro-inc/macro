@@ -9,6 +9,7 @@ import {
 } from '@app/features/notification-sounds/use-notification-sounds';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { SearchProvider } from '@app/features/soup/search/context';
+import { usePosthog } from '@app/lib/analytics/posthog';
 import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
 import { useCalendarCache } from '@app/lib/queries/calendar/graphql/use-calendar-cache';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
@@ -104,9 +105,11 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 
   const blockOrchestrator = createBlockOrchestrator();
   const userInfo = useUserInfo();
+  const posthog = usePosthog();
   usePendingNotificationNavigationEffect(
     notificationSource,
-    () => userInfo()?.userId
+    () => userInfo()?.userId,
+    posthog.flagsLoaded
   );
 
   return (
