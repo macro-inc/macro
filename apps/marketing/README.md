@@ -64,8 +64,8 @@ replacing them with separate feature cards or a sales letter. The shared
 website sidebar handles navigation; do not add a separate homepage index.
 Demonstrations load near the viewport through `DeferredDemo`. Reduced motion
 shows finished, readable content, and examples never send live messages.
-The resources rail follows the closing CTA and security section as a compact grid
-below 1440px; remove the extra section-bottom spacer in that layout.
+Hide the homepage Downloads and Links resources rail below 1440px instead of
+moving it below the closing security section; retain the desktop rail and compact bottom spacing.
 
 Model-picker search fields use a borderless input with a subtle rounded focus ring around the complete search row, including the icon. Keep this styling local to the frozen marketing picker.
 
