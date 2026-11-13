@@ -23,13 +23,25 @@ export function useClaudeModeQuery(harnessId: () => string | undefined) {
   return useQuery(() => claudeModeQueryOptions(harnessId() ?? ''));
 }
 
+/** Where a Claude sign-in was opened, so traces can tell the flows apart. */
+export type ClaudeSignInEntry =
+  | 'computer_setup'
+  | 'computer_row'
+  | 'team_agent_invite'
+  | 'team_agent_row';
+
 export function useClaudeSignInMutation() {
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: (vars: { harnessId: string; signal: AbortSignal }) =>
+    mutationFn: (vars: {
+      harnessId: string;
+      entry: ClaudeSignInEntry;
+      signal: AbortSignal;
+    }) =>
       Telemetry.span('computer.claude.sign_in', async (span) => {
         const { harnessId, signal } = vars;
         span.setAttr('harness.id', harnessId);
+        span.setAttr('claude.sign_in.entry', vars.entry);
         return await throwOnErr(() =>
           computerClaudeClient.startSignIn(harnessId, signal)
         );
@@ -42,11 +54,13 @@ export function useClaudeCompleteMutation() {
     gcTime: 0,
     mutationFn: (vars: {
       harnessId: string;
+      entry: ClaudeSignInEntry;
       code: string;
       signal: AbortSignal;
     }) =>
       Telemetry.span('computer.claude.complete', async (span) => {
         span.setAttr('harness.id', vars.harnessId);
+        span.setAttr('claude.sign_in.entry', vars.entry);
         const result = await throwOnErr(() =>
           computerClaudeClient.completeSignIn(
             vars.harnessId,

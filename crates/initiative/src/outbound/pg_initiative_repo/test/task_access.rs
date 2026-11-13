@@ -77,7 +77,7 @@ async fn project_with_tasks(
         let id = Uuid::now_v7();
         insert_document(pool, &id.to_string(), owner, true).await?;
         entity_access_db_utils::upsert_user_entity_access_bulk(
-            pool,
+            &mut *pool.acquire().await?,
             &[user(owner)],
             &id,
             entity_access_db_utils::EntityType::Document,

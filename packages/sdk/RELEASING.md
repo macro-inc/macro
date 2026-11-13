@@ -23,7 +23,8 @@ The script refuses a version npm already has, and touches only the `version`
 field. Commit it with the rest of your change — reviewers should see the API
 change and the version it ships in one diff.
 
-Then run the same validation the release workflow runs:
+Then run the same validation the release workflow runs. The SDK is a member of
+the root Bun workspace, so `bun install` here resolves from the root `bun.lock`:
 
 ```sh
 bun install --frozen-lockfile

@@ -22,6 +22,7 @@ const TEAM_BETA_OWNER: &str = "macro|multi@team.com";
 mod agent_session_parent;
 mod channel_call_chat;
 mod documents_access;
+mod telemetry;
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()

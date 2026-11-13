@@ -48,7 +48,7 @@ those in place, but new routers live in the crate.
   (`UserOnly`, `UserOrInternal`, `InternalOnly`, `UserOrBot`, ...).
   Use `AccountHolderOrInternal` for a route that mints a credential outliving its
   request, changes who can sign in, or deletes the account: it refuses an account
-  manager's credential.
+  manager's credential and a scoped code-mode run's.
 - **Authorization: every route keyed by an entity id needs that entity's access
   extractor** from `crates/entity_access/src/inbound/axum_extractors/`
   (`DocumentAccessExtractor`, `ForeignEntityAccessLevelExtractor`,

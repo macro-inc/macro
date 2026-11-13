@@ -15,7 +15,7 @@ use sqlx::PgPool;
 use std::{collections::HashMap, str::FromStr};
 
 /// Get the highest access level a user has for a document.
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, source_ids, user_id))]
 pub async fn get_document_access(
     pool: &PgPool,
     document_id: &uuid::Uuid,
@@ -250,7 +250,7 @@ pub async fn get_documents_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, source_ids, user_id))]
 pub async fn explain_document_access(
     pool: &PgPool,
     document_id: &uuid::Uuid,
@@ -403,7 +403,7 @@ async fn explain_document_email_attachments(
 /// Historical document ids are not UUIDs and cannot occur in `entity_access`
 /// rows. Their ownership, link grants, channel grants, and project grants still
 /// live in the ordinary document and share tables.
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, source_ids, user_id))]
 pub async fn get_legacy_document_access(
     pool: &PgPool,
     document_id: &str,

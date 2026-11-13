@@ -29,6 +29,7 @@ fn graphql_error(error: InitiativeError) -> async_graphql::Error {
     let (message, code) = match error {
         InitiativeError::NotFound => ("initiative not found".to_string(), "NOT_FOUND"),
         InitiativeError::Unauthorized => ("unauthorized".to_string(), "FORBIDDEN"),
+        InitiativeError::Forbidden(message) => (message, "FORBIDDEN"),
         InitiativeError::BadRequest(message) => (message, "BAD_USER_INPUT"),
         InitiativeError::Conflict(message) => (message, "CONFLICT"),
         InitiativeError::NameTooLong { max } => (

@@ -448,6 +448,10 @@ pub async fn edit<
     Path(id): Path<Uuid>,
     Json(request): Json<EditPipelineRequest>,
 ) -> Result<Json<PipelineFields>, WorkflowError> {
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(request.sharing.is_some())
+        .map_err(|refused| WorkflowError::Forbidden(refused.to_string()))?;
     let edit = PipelineEdit {
         name: request.name,
         sharing: request.sharing,
@@ -591,6 +595,7 @@ impl IntoResponse for WorkflowError {
     fn into_response(self) -> Response {
         match self {
             Self::Invalid(text) => message(StatusCode::BAD_REQUEST, text),
+            Self::Forbidden(text) => message(StatusCode::FORBIDDEN, text),
             Self::NoTeam => message(
                 StatusCode::FORBIDDEN,
                 "the user is not in a team, so they have no CRM".into(),

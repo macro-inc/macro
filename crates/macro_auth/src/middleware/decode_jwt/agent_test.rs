@@ -16,6 +16,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         agent_id: Some(agent),
         agent_via: Some("Claude Code".into()),
         routine_id: None,
+        agent_scope: None,
     })
     .unwrap();
     let args = JwtValidationArgs {
@@ -89,6 +90,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: Some(routine),
+        agent_scope: None,
     })
     .unwrap();
     let args = JwtValidationArgs {
@@ -119,6 +121,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: None,
+        agent_scope: None,
     })
     .unwrap();
     let [header, _, signature]: [&str; 3] =
@@ -139,4 +142,50 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
     )
     .unwrap();
     assert!(handler(&args, &forged_token).is_err());
+}
+
+#[test]
+fn a_signed_scope_survives_decoding_and_cannot_be_dropped() {
+    let mint = |agent_scope: Option<&str>| {
+        encode_macro_api_token(EncodeMacroApiTokenArgs {
+            fusionauth_id: "fusion-owner".into(),
+            macro_user_id: "macro|owner@example.com".into(),
+            organization_id: None,
+            issuer: "scope-test".into(),
+            private_key: tests::PRIVATE_KEY.into(),
+            expiry_seconds: 60,
+            agent_id: Some(uuid::Uuid::from_u128(0xa3a3)),
+            agent_via: None,
+            agent_correlation_id: Some(uuid::Uuid::from_u128(0xc0c0)),
+            agent_session_id: None,
+            routine_id: None,
+            agent_scope: agent_scope.map(str::to_owned),
+        })
+        .unwrap()
+    };
+    let args = JwtValidationArgs {
+        audience: Audience::new_testing(""),
+        issuer: Issuer::new_testing(""),
+        jwt_secret: LocalOrRemoteSecret::Local(JwtSecretKey::new_testing("")),
+        macro_api_token_issuer: MacroApiTokenIssuer::new_testing("scope-test"),
+        macro_api_token_public_key: LocalOrRemoteSecret::Local(
+            MacroApiTokenPublicKey::new_testing(tests::PUBLIC_KEY),
+        ),
+    };
+    let scoped = mint(Some("generation"));
+    let JwtToken::MacroApiToken(claims) = handler(&args, &scoped).unwrap() else {
+        panic!("expected Macro API token");
+    };
+    assert_eq!(claims.agent_scope.as_deref(), Some("generation"));
+
+    let JwtToken::MacroApiToken(unscoped) = handler(&args, &mint(None)).unwrap() else {
+        panic!("expected Macro API token");
+    };
+    assert_eq!(unscoped.agent_scope, None);
+
+    // The scoped token's signature does not cover a payload without the scope.
+    let [header, _, signature]: [&str; 3] =
+        scoped.split('.').collect::<Vec<_>>().try_into().unwrap();
+    let unscoped_payload = mint(None).split('.').nth(1).unwrap().to_owned();
+    assert!(handler(&args, &format!("{header}.{unscoped_payload}.{signature}")).is_err());
 }

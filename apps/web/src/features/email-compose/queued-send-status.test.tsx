@@ -41,6 +41,8 @@ vi.mock('@queries/email/send-queue', () => ({
   settledSendAttempt: (intent: EmailSendIntent) =>
     intent.response?.sendEmailMessage?.attempt,
   emailSendLocked: () => true,
+  readEmailSendIntents: async () => [],
+  watchEmailSends: () => () => {},
 }));
 vi.mock('@ui', () => ({
   Button: (props: ComponentProps<'button'>) => <button {...props} />,
