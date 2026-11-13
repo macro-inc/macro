@@ -8,7 +8,15 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { createSignal, type ParentProps } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { MobileDockRow } from './MobileDockRow';
 import { isMobileNavViewId } from './mobile-nav-views';
 
@@ -104,6 +112,13 @@ vi.mock('./mobile-dock-views', () => ({
     return () => views;
   },
 }));
+
+// The dock loads Customize dock lazily. Its first import, cold under a loaded
+// CI runner, can outlast findBy's one-second wait; load it once up front so
+// the tests time the drawer, not the module transform.
+beforeAll(async () => {
+  await import('./CustomizeDock');
+});
 
 let drawerStyles: HTMLStyleElement;
 beforeEach(() => {
