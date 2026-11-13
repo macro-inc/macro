@@ -39,6 +39,8 @@ editor.
 
 Click the document title breadcrumb after moving focus from the body to the title. Body focus should return with the existing body caret or range intact, including a backward range; verify the next typed character uses that position. Do not recreate the body selection by clicking it before checking the breadcrumb.
 
+Select body text and choose **Heading 2** or **Numbered List** from the selection toolbar’s block-type dropdown. When the menu closes, check that focus returns to the body with the range preserved and the next typed character edits the converted block. Do not click the body again before checking focus.
+
 Switch the body read-only and try paste, cut, drop and composition input: the
 model must stay unchanged while selecting and copying remain available. Unlock
 the same view and verify editing resumes. A rich paste waiting for its HTML

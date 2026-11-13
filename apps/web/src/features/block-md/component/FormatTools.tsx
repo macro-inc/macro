@@ -413,8 +413,20 @@ export function FormatTools(props: FormatToolsProps) {
   const cleanups: Array<() => void> = [];
   const refocusEditor = () => {
     const formatting = host();
-    if (formatting) formatting.focus();
-    else lastFocusedEditor()?.focus();
+    if (formatting) {
+      const root = formatting.root();
+      // Kobalte restores its trigger after this close callback returns.
+      queueMicrotask(() => {
+        if (
+          root &&
+          formatting.root() === root &&
+          formatting.interactable() &&
+          host() === formatting
+        ) {
+          formatting.focus();
+        }
+      });
+    } else lastFocusedEditor()?.focus();
   };
 
   function handleLink(e?: MouseEvent | KeyboardEvent) {

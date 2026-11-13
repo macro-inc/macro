@@ -20,7 +20,7 @@ matched artifact. Verify package and actually served compiled-map integrity.
 Run TypeScript, focused tests and scoped `just check`; retain native refusals and
 missing capabilities explicitly. Do not change the table semantic ledger.
 
-Install the actual Source restoreFocusPlugin in app-equivalent fixtures before qualifying focus-dependent dropdown controls; direct-button controls alone do not prove More-menu restoration.
+Install the actual Source restoreFocusPlugin in app-equivalent fixtures before qualifying focus-dependent dropdown controls; direct-button controls alone do not prove More-menu restoration. Defer native dropdown-close refocus until Kobalte finishes restoring its trigger, then recheck the captured host/root and current interaction policy before focusing its current published range.
 
 Capture all native formatting query results inside the construction-time latestPublished observer and expose only those data snapshots to reactive UI. Retire presentation without native receivers; terminal key handles stay with the actual view owner until its existing close fence. Ordinary component cleanup still unregisters its actual listeners while admission permits.
 
