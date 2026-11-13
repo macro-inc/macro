@@ -80,6 +80,25 @@ pub enum ComputerError {
     Internal(rootcause::Report),
 }
 
+impl ComputerError {
+    /// True when storage could not be reached at all
+    /// ([`crate::domain::ports::StorageUnavailable`]): the work is retried on
+    /// the next pass, not counted as a failed attempt or logged as an error.
+    pub fn is_storage_unavailable(&self) -> bool {
+        let Self::Internal(report) = self else {
+            return false;
+        };
+        report.iter_reports().any(|node| {
+            node.downcast_current_context::<crate::domain::ports::StorageUnavailable>()
+                .is_some()
+                || std::iter::successors(node.current_context_error_source(), |error| {
+                    error.source()
+                })
+                .any(|error| error.is::<crate::domain::ports::StorageUnavailable>())
+        })
+    }
+}
+
 impl From<rootcause::Report> for ComputerError {
     fn from(report: rootcause::Report) -> Self {
         Self::Internal(report)

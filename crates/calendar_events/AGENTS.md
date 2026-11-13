@@ -440,6 +440,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `event_type`. Filtering on the payload's `eventType` alone makes Postgres
   unpack every source on every primary calendar in the tenant (about 1.8 s per
   call in production before October 2026).
+- `claim_outlook_calendar` runs its maintenance on every poll, so each statement
+  must cost index probes when nothing needs it. Work of unclaimable accounts and
+  deleted calendars stays due, so find candidates per claimable account through
+  `calendar_outlook_work_account_due`, never by walking the global due order.
+  Find replaced generations and expired windows as ranges of
+  `calendar_outlook_work_account_generation`. An `ON CONFLICT DO UPDATE ... WHERE`
+  locks every conflicting row even when the `WHERE` is false: pre-filter rows
+  it would not change, or concurrent claims serialize on those locks.
 
 ## Related
 

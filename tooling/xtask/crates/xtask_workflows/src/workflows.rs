@@ -65,6 +65,7 @@ mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
 mod release_label_check;
+mod release_production;
 mod release_sdk;
 mod reusable_deploy_service;
 mod reusable_preview_service;
@@ -314,6 +315,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_web_app",
         file_name: "deploy_web_app.yml",
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
+    },
+    WorkflowFile {
+        slug: "release_production",
+        file_name: "release-production.yml",
+        render_yaml: || {
+            render_patched(
+                release_production::release_production,
+                release_production::patch,
+            )
+        },
     },
     WorkflowFile {
         slug: "deploy_website",

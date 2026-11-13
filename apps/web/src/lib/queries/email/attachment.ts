@@ -135,7 +135,7 @@ export const useUploadDraftAttachmentsMutation = (
             const uploaded = await uploadToPresignedUrl({
               presignedUrl: result.upload_url,
               sha: source.sha,
-              buffer: source.buffer,
+              buffer: source.file,
               type: result.content_type,
             });
             if (uploaded.isErr()) {
