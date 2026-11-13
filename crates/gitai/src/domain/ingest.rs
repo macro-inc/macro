@@ -34,6 +34,9 @@ pub const UNKNOWN_TOOL: &str = "unknown";
 /// Longest session id accepted as a storage key.
 const MAX_SESSION_ID_LEN: usize = 128;
 
+/// Longest model name kept.
+const MAX_MODEL_LEN: usize = 128;
+
 /// Hex characters of the content hash that names a transcript chunk.
 const CHUNK_ID_LEN: usize = 32;
 
@@ -451,6 +454,13 @@ fn tool_of(event: &MetricEvent) -> String {
         .unwrap_or_else(|| UNKNOWN_TOOL.to_owned())
 }
 
+/// The model, at most [`MAX_MODEL_LEN`] characters: it is part of the token
+/// bucket's sort key, which DynamoDB limits to 1 KB.
+fn model_of(event: &MetricEvent) -> String {
+    let model = event.attr_str(attr::MODEL).unwrap_or(UNKNOWN_TOOL);
+    model.chars().take(MAX_MODEL_LEN).collect()
+}
+
 fn add_to_transcript(
     transcripts: &mut BTreeMap<String, SessionChunk>,
     session_id: String,
@@ -601,10 +611,7 @@ fn token_bucket(event: &MetricEvent, repository: &str, envelope: &Envelope) -> O
         session_id,
         external_session_id: event.attr_str(attr::EXTERNAL_SESSION_ID).map(str::to_owned),
         tool: tool_of(event),
-        model: event
-            .attr_str(attr::MODEL)
-            .unwrap_or(UNKNOWN_TOOL)
-            .to_owned(),
+        model: model_of(event),
         speed: count(token_usage::SPEED),
         bucket_ts,
         emitted_seq: count(token_usage::EMITTED_SEQ),

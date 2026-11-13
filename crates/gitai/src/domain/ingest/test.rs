@@ -230,6 +230,26 @@ fn token_usage_becomes_a_bucket_revision() {
 }
 
 #[test]
+fn an_oversized_model_name_is_cut_to_fit_the_sort_key() {
+    let plan = plan_batch(
+        batch(vec![json!({
+            "t": 1_794_543_100,
+            "e": 9,
+            "a": {
+                "1": "https://github.com/macro-inc/macro",
+                "20": "claude",
+                "21": "m".repeat(5_000),
+                "24": "s_1b1b33649b60ca",
+            },
+            "v": {"0": 1_794_543_000, "1": 5, "10": 1},
+        })]),
+        envelope(),
+    );
+
+    assert_eq!(plan.token_buckets[0].model, "m".repeat(128));
+}
+
+#[test]
 fn every_event_kind_is_filtered_by_repository() {
     let events = (1..=10)
         .flat_map(|id| {
