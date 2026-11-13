@@ -386,8 +386,10 @@ function PromptBody(
   // to tell a real edit from an untouched round trip. After the editor is
   // set from outside (a restore, a server snapshot) it is unknown until the
   // editor reports the applied text through `onChange`: that report comes
-  // during `setMarkdown` outside a Lexical update and later inside one (an
-  // Escape command), so it is cleared before the set, never after.
+  // during `setMarkdown` outside a Lexical update, later inside one (an
+  // Escape command) or inside a Solid effect, and not at all when the
+  // written-out text is unchanged. So it is cleared before the set, never
+  // after, and a caller that can read the applied text reads it back.
   let baseline: string | undefined;
 
   const save = () => {
@@ -487,11 +489,14 @@ function PromptBody(
   // changes, which are about to become the server's text anyway. Only the
   // prompt is tracked: reading the editor's text must not subscribe this
   // effect to it, or it would re-run inside the editor's own update, where
-  // the set is deferred and the read below would be stale.
+  // the set is deferred and the read below would be stale. The item itself
+  // is rebuilt from every list change, so only a changed prompt counts, or
+  // a just-saved edit would revert until the server echoes it.
   createEffect(
     on(
       () => props.item.prompt,
-      (prompt) => {
+      (prompt, previous) => {
+        if (prompt === previous) return;
         const server = stripAgentContext(prompt ?? '');
         if (server === synced) return;
         const root = editor.lexical.getRootElement();
@@ -500,8 +505,9 @@ function PromptBody(
         if (focused || dirty) return;
         baseline = undefined;
         editor.controls.setMarkdown(server);
-        // Inside a Solid effect the change is reported after the set, so
-        // the applied text is read here.
+        // The set has applied (this effect never runs inside a Lexical
+        // update), and a snapshot the editor writes out unchanged reports
+        // no change at all, so read the applied text back here.
         if (baseline === undefined) baseline = editor.controls.getMarkdown();
         props.onDraftChange(server);
         synced = server;

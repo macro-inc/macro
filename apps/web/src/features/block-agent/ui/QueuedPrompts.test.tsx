@@ -9,8 +9,8 @@ const editor = vi.hoisted(() => ({
   escape: undefined as ((event: KeyboardEvent) => boolean) | undefined,
   markdown: 'Queued request',
   focus: vi.fn(),
-  // Like the real editor outside a Lexical update: the set applies at once
-  // and reports the change before returning.
+  // Like the real editor outside a Lexical update and outside a Solid
+  // effect: the set applies at once and reports the change before returning.
   setMarkdown: vi.fn((markdown: string) => {
     editor.markdown = markdown;
     editor.change?.(markdown);
@@ -335,6 +335,32 @@ describe('queued prompt keys', () => {
       'first',
       'Queued request, revised again'
     );
+  });
+
+  it('keeps a just-saved edit when the list changes before the server echoes it', () => {
+    const [items, setItems] = createSignal([
+      { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+    ]);
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts items={items()} onEdit={onEdit} onRemove={vi.fn()} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    editor.markdown = 'Updated request';
+    editor.change?.(editor.markdown);
+    expect(editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(
+      true
+    );
+    expect(onEdit).toHaveBeenCalledExactlyOnceWith('first', 'Updated request');
+    // A new list snapshot with the same, not yet echoed, prompt.
+    setItems([
+      { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+      { actionId: 'second', kind: 'prompt', prompt: 'Another request' },
+    ]);
+    expect(editor.setMarkdown).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Updated request' })
+    ).toBeTruthy();
   });
 
   it('still sends an edit typed after an in-row restore', () => {
