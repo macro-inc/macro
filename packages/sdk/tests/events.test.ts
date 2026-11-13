@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { Macro } from '../src/macro';
+import { EventStreamRevokedError, Macro } from '../src/macro';
 import { MacroError } from '../src/utils';
 
 const originalFetch = globalThis.fetch;
@@ -147,6 +147,69 @@ describe('MacroEvents', () => {
     expect(requests[1]?.headers.get('last-event-id')).toBe('e1');
     // After the reset it reconnects live, without a cursor.
     expect(requests[2]?.headers.get('last-event-id')).toBeNull();
+  });
+
+  test('listen() reconnects with a refreshed token after the credential is revoked', async () => {
+    const requests: Request[] = [];
+    const bodies = [
+      `id: 1-0\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e1' })}\n\n` +
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+      `id: 2-0\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e2' })}\n\n`,
+    ];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return new Response(bodies.shift() ?? '', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }) as typeof fetch;
+
+    let issued = 0;
+    const macro = new Macro({
+      auth: { type: 'user', token: () => `token-${++issued}` },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const errors: unknown[] = [];
+    const twice = Promise.withResolvers<void>();
+    let seen = 0;
+    macro.events.on('document.created', () => {
+      seen += 1;
+      if (seen === 2) twice.resolve();
+    });
+    const stop = await macro.events.listen({
+      onError: (error) => errors.push(error),
+    });
+    await twice.promise;
+    stop();
+
+    expect(errors).toEqual([]);
+    expect(requests[0]?.headers.get('authorization')).toBe('Bearer token-1');
+    expect(requests[1]?.headers.get('authorization')).toBe('Bearer token-2');
+    expect(requests[1]?.headers.get('last-event-id')).toBe('1-0');
+  });
+
+  test('listen() stops and reports a revoked fixed credential', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const reported = Promise.withResolvers<unknown>();
+    await macro.events.listen({ onError: reported.resolve });
+
+    expect(await reported.promise).toBeInstanceOf(EventStreamRevokedError);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requests).toHaveLength(1);
   });
 
   test('listen() throws when there are no filters or handlers', async () => {

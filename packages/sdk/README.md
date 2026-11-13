@@ -883,6 +883,10 @@ for await (const event of stream) {
 - The loop ends without an error when `signal` aborts, you `break`, you call
   `stream.close()`, or the server revokes the credential
   (`stream.closeReason === 'revoked'`; reconnect with a fresh credential).
+  `listen()` instead reconnects by itself when the credential is a token
+  function (`auth: { type: 'user', token: () => getFreshToken() }`), which it
+  resolves again on every reconnect; with a fixed token it stops and reports
+  `EventStreamRevokedError` to `listen({ onError })` (logged otherwise).
 - `macro.events.catalog()` lists the events your credential can receive, with
   their entity types, who receives them and their stage.
 

@@ -23,7 +23,7 @@ import { hydrateNotificationEvent } from './hydrate/notification';
 import { hydrateProjectEvent } from './hydrate/project';
 import { hydratePropertyEvent } from './hydrate/property';
 import { hydrateUserEvent } from './hydrate/user';
-import { EventStream } from './subscribe';
+import { EventStream, EventStreamRevokedError } from './subscribe';
 import type {
   DeliveryHeaders,
   EventHandler,
@@ -55,6 +55,13 @@ export interface ListenOptions {
   scope?: WebhookScope;
   /** Abort the stream. */
   signal?: AbortSignal;
+  /**
+   * Called once if the listener stops on its own: the server refused the
+   * stream (bad filters, no access), a handler threw, or the credential was
+   * revoked and cannot refresh ({@link EventStreamRevokedError}). Without it
+   * the SDK logs the error with `console.error`.
+   */
+  onError?: (error: unknown) => void;
 }
 
 /** Options for {@link MacroEvents.subscribe}. */
@@ -292,6 +299,11 @@ export class MacroEvents {
    * the beta delivery is best-effort: events published while disconnected
    * are missed. If the cursor expires it continues live from now.
    *
+   * The server re-checks the credential every minute and closes the stream
+   * when it no longer validates. With a token function (`token: () => ...`)
+   * the listener reconnects with a freshly resolved token; with a fixed token
+   * it stops and reports {@link EventStreamRevokedError} to `onError`.
+   *
    * Filters default to the event names currently registered with {@link on}.
    * The stream uses those filters for its lifetime; later `.on` / unsubscribe
    * calls do not change what the server sends.
@@ -316,19 +328,29 @@ export class MacroEvents {
         scope: opts.scope ?? 'user',
         signal: opts.signal,
         resetToLive: true,
+        // A token function is resolved again on every reconnect, so a
+        // revoked (expired) stream resumes with the refreshed token.
+        reconnectOnRevoked: typeof this.client.authConfig.token === 'function',
       },
       (event) => event,
     );
+    const report =
+      opts.onError ??
+      ((error: unknown) => {
+        console.error('macro sdk: event listener stopped', error);
+      });
     const _consumed = (async () => {
       try {
         for await (const event of stream) {
           await this.dispatch(event);
         }
+        if (stream.closeReason === 'revoked') {
+          report(new EventStreamRevokedError());
+        }
       } catch (error) {
-        // A refused stream (bad filters, no access) or a throwing handler
-        // after listen() has returned must not become an unhandled
-        // rejection; the caller already has `stop`.
-        console.warn('macro sdk: event listener stopped', error);
+        // Never an unhandled rejection: listen() has already returned, and
+        // the caller has `stop`.
+        report(error);
       }
     })();
 

@@ -40,6 +40,20 @@ export class EventStreamResetError extends MacroError {
   }
 }
 
+/**
+ * The server revoked a listener's credential (it expired, was revoked, or its
+ * bot was deleted) and the credential cannot refresh. Reported to
+ * `listen({ onError })`; reconnect with a fresh credential.
+ */
+export class EventStreamRevokedError extends MacroError {
+  constructor() {
+    super(
+      'event stream credential revoked: pass a token function that refreshes, or listen again with a fresh credential',
+    );
+    this.name = 'EventStreamRevokedError';
+  }
+}
+
 /** Why a stream ended without an error. */
 export type EventStreamCloseReason =
   /** The caller aborted, broke out of the loop or called `close()`. */
@@ -73,6 +87,11 @@ export interface StreamRequest {
   signal?: AbortSignal;
   /** Reconnect without a cursor instead of throwing on `reset`. */
   resetToLive?: boolean;
+  /**
+   * Reconnect after `revoked` instead of ending, for a credential that can
+   * refresh: every reconnect resolves the token source again.
+   */
+  reconnectOnRevoked?: boolean;
   /** Delay before reconnect attempt `n` (1-based). Tests shorten it. */
   backoff?: (attempt: number) => number;
 }
@@ -260,8 +279,15 @@ export class EventStream<T> implements AsyncIterable<T> {
     signal: AbortSignal,
   ): Promise<boolean> {
     if (end.kind === 'revoked') {
-      this.closed = 'revoked';
-      return false;
+      if (!this.request.reconnectOnRevoked) {
+        this.closed = 'revoked';
+        return false;
+      }
+      // Backed off, so a token source that keeps returning the expired
+      // token does not reconnect in a tight loop.
+      retry.attempt += 1;
+      await sleep(this.backoff(retry.attempt), signal);
+      return true;
     }
     if (end.kind === 'fatal') throw end.error;
     if (end.kind === 'reset') {

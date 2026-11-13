@@ -133,6 +133,7 @@ export {
   type EventStream,
   type EventStreamCloseReason,
   EventStreamResetError,
+  EventStreamRevokedError,
 } from './events/subscribe';
 export type {
   EventMap,
