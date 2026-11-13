@@ -9,8 +9,12 @@ description = "Test support: runs the real email_service and pubsub_workers bina
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
+calendar_events = { path = "../calendar_events", features = ["inbound", "postgres"] }
+chrono = { workspace = true }
 hex = { workspace = true }
 gmail_emulator = { path = "../gmail_emulator" }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_authorization = { path = "../macro_authorization" }
 macro_aws_config = { path = "../macro_aws_config", features = ["sqs"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 outlook_emulator = { path = "../outlook_emulator" }

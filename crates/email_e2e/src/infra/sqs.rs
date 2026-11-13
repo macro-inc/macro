@@ -95,6 +95,16 @@ const QUEUES: &[QueueSpec] = &[
     },
 ];
 
+/// The queue `calendar_service` takes its backfill jobs from, with the
+/// attributes of `infra/stacks/calendar-service`. Only a stack that runs
+/// calendar has it.
+const CALENDAR_BACKFILL: QueueSpec = QueueSpec {
+    override_env: "OVERRIDE_CALENDAR_SERVICE_BACKFILL_QUEUE",
+    name: "calendar-backfill",
+    visibility_timeout_seconds: 60,
+    max_receive_count: 20,
+};
+
 /// One of the scenario's queues.
 #[derive(Clone, Debug)]
 pub(crate) struct Queue {
@@ -123,6 +133,13 @@ impl Queues {
         }
 
         Ok(Self { client, queues })
+    }
+
+    /// Adds the calendar backfill queue, named like the others.
+    pub(crate) async fn add_calendar_backfill(&mut self, prefix: &str) -> Result<(), Report> {
+        let queue = create_queue(&self.client, prefix, &CALENDAR_BACKFILL).await?;
+        self.queues.push(queue);
+        Ok(())
     }
 
     /// Every queue of the scenario.

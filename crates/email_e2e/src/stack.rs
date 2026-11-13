@@ -2,6 +2,8 @@
 //! database, Redis database and queues, and the real `email_service` and
 //! `pubsub_workers` binaries running against them.
 
+mod calendar_environment;
+mod calendar_reads;
 mod environment;
 
 use std::collections::BTreeMap;
@@ -16,6 +18,8 @@ use sqlx::PgPool;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
+pub use self::calendar_reads::CalendarSignal;
+use self::calendar_reads::CalendarReads;
 use crate::aws::{Aws, StoredObject};
 use crate::infra::postgres::Database;
 use crate::infra::redis::RedisDatabase;
@@ -30,6 +34,11 @@ use crate::wait::eventually;
 const API: &str = "email_service";
 /// The binary that runs the queue workers and the Outlook mailbox loops.
 const WORKERS: &str = "pubsub_workers";
+/// The calendar service's binary.
+const CALENDAR: &str = "calendar_service";
+/// The stand-in for the app service, which calendar scheduling names in
+/// meeting links.
+const APP: &str = "app";
 /// How long the API gets to answer its health check.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 /// How often the API is started again on another port when the one picked
@@ -44,6 +53,18 @@ pub struct StackOptions {
     /// Environment variables for both services, set after the stack's own,
     /// so they can replace them.
     pub env: Vec<(String, String)>,
+    /// Also runs `calendar_service` and the calendar read routes, so inboxes
+    /// can be linked with their calendars ([`User::link_gmail_with_calendar`],
+    /// [`User::link_outlook_with_calendar`]). `env` reaches that service too.
+    pub calendar: bool,
+}
+
+/// What a stack with calendar runs on top of the email services.
+struct CalendarPart {
+    service: ServiceProcess,
+    /// The service as the gateway exposes it, under `/calendar`.
+    url: String,
+    reads: CalendarReads,
 }
 
 /// A running stack. Start one per scenario and end the scenario with
@@ -59,6 +80,7 @@ pub struct Stack {
     tls: Option<TlsFront>,
     api: ServiceProcess,
     workers: Option<ServiceProcess>,
+    calendar: Option<CalendarPart>,
     worker_env: BTreeMap<String, String>,
     api_url: String,
     internal_api_key: String,
@@ -95,7 +117,11 @@ impl Stack {
 
         let database = Database::create(&servers.postgres).await?;
         let redis = RedisDatabase::lease(&servers.redis).await?;
-        let queues = Queues::create(&servers.sqs, &format!("e2e-{id}")).await?;
+        let queue_prefix = format!("e2e-{id}");
+        let mut queues = Queues::create(&servers.sqs, &queue_prefix).await?;
+        if options.calendar {
+            queues.add_calendar_backfill(&queue_prefix).await?;
+        }
         let aws = Aws::start(&servers.sqs).await?;
         let macro_services = MacroServices::start(
             &gmail.base_url(),
@@ -143,6 +169,15 @@ impl Stack {
         };
         gmail.set_push(Some(PushConfig::new(format!("{api_url}/gmail/webhook"))));
         let workers = ServiceProcess::spawn(WORKERS, &env, &log_dir)?;
+        let calendar = if options.calendar {
+            let app_url = macro_services.url(APP);
+            Some(
+                start_calendar(&http, &env, &app_url, &options.env, database.pool(), &log_dir)
+                    .await?,
+            )
+        } else {
+            None
+        };
 
         Ok(Self {
             gmail,
@@ -155,6 +190,7 @@ impl Stack {
             tls: Some(tls),
             api,
             workers: Some(workers),
+            calendar,
             worker_env: env,
             api_url,
             internal_api_key: environment::INTERNAL_API_KEY.to_owned(),
@@ -247,6 +283,32 @@ impl Stack {
             .unwrap_or_default()
     }
 
+    /// Everything `calendar_service` has logged; empty without calendar.
+    pub fn calendar_log(&self) -> String {
+        self.calendar
+            .as_ref()
+            .map(|calendar| calendar.service.log())
+            .unwrap_or_default()
+    }
+
+    /// What the calendar read routes told the notification service and the
+    /// connection gateway, oldest first. What `calendar_service` itself told
+    /// the gateway is in [`Stack::service_requests`].
+    pub fn calendar_signals(&self) -> Vec<CalendarSignal> {
+        self.calendar
+            .as_ref()
+            .map(|calendar| calendar.reads.signals())
+            .unwrap_or_default()
+    }
+
+    /// Where `calendar_service` and the calendar read routes answer, when the
+    /// stack runs calendar.
+    pub(crate) fn calendar_urls(&self) -> Option<(String, String)> {
+        self.calendar
+            .as_ref()
+            .map(|calendar| (calendar.url.clone(), calendar.reads.url()))
+    }
+
     /// Stops `pubsub_workers`: nothing syncs, sends or retries until
     /// [`Stack::start_workers`]. The API keeps answering.
     pub async fn stop_workers(&mut self) {
@@ -290,12 +352,19 @@ impl Stack {
         if let Some(workers) = &mut self.workers {
             workers.ensure_running()?;
         }
+        if let Some(calendar) = &mut self.calendar {
+            calendar.service.ensure_running()?;
+        }
         Ok(())
     }
 
     fn check_services(&mut self) -> Result<(), Report> {
         self.ensure_running()?;
-        for (name, log) in [(API, self.api_log()), (WORKERS, self.workers_log())] {
+        for (name, log) in [
+            (API, self.api_log()),
+            (WORKERS, self.workers_log()),
+            (CALENDAR, self.calendar_log()),
+        ] {
             if let Some(line) = log.lines().find(|line| line.contains(PANIC_MARKER)) {
                 bail!(
                     "{name} panicked during the scenario: {line}\nfull log: {}",
@@ -328,6 +397,10 @@ impl Stack {
         if let Some(mut workers) = self.workers.take() {
             workers.stop().await;
         }
+        if let Some(mut calendar) = self.calendar.take() {
+            calendar.service.stop().await;
+            calendar.reads.stop().await;
+        }
         if let Some(tls) = self.tls.take() {
             tls.stop().await;
         }
@@ -357,7 +430,8 @@ impl Stack {
             self.log_dir.display()
         );
         let workers = self.workers.as_ref();
-        for process in std::iter::once(&self.api).chain(workers) {
+        let calendar = self.calendar.as_ref().map(|calendar| &calendar.service);
+        for process in std::iter::once(&self.api).chain(workers).chain(calendar) {
             report.push_str(&format!(
                 "--- the end of {} ---\n{}\n",
                 process.log_path().display(),
@@ -397,7 +471,44 @@ impl Drop for Stack {
     }
 }
 
-/// Waits until the API answers its health check, failing at once when the
+/// Starts `calendar_service` and the calendar read routes next to the email
+/// services.
+async fn start_calendar(
+    http: &reqwest::Client,
+    email_env: &BTreeMap<String, String>,
+    app_url: &str,
+    overrides: &[(String, String)],
+    db: &PgPool,
+    log_dir: &std::path::Path,
+) -> Result<CalendarPart, Report> {
+    let mut attempt = 0;
+    let (service, port, env) = loop {
+        attempt += 1;
+        let port = free_port().await?;
+        let env = calendar_environment::calendar_env(email_env, port, app_url, overrides);
+        let mut service = ServiceProcess::spawn(CALENDAR, &env, log_dir)?;
+        match wait_for_health(http, &format!("http://127.0.0.1:{port}"), &mut service).await {
+            Ok(()) => break (service, port, env),
+            Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
+                tracing::warn!(error = ?error, port, "the calendar service's port was taken; trying another");
+                service.stop().await;
+            }
+            Err(error) => return Err(error),
+        }
+    };
+
+    let team_sharing = env
+        .get(calendar_environment::TEAM_SHARING)
+        .is_some_and(|value| value == "true");
+    let reads = CalendarReads::start(db.clone(), environment::INTERNAL_API_KEY, team_sharing).await?;
+    Ok(CalendarPart {
+        service,
+        url: calendar_environment::gateway_url(port),
+        reads,
+    })
+}
+
+/// Waits until a service answers its health check, failing at once when the
 /// process exits.
 async fn wait_for_health(
     http: &reqwest::Client,
@@ -406,7 +517,7 @@ async fn wait_for_health(
 ) -> Result<(), Report> {
     let health = format!("{api_url}/health");
     eventually(
-        "email_service to answer /health",
+        "the service to answer /health",
         STARTUP_TIMEOUT,
         async || {
             api.ensure_running()?;
