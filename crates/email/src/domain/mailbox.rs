@@ -678,10 +678,10 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// How a failed reconciliation is retried. `attempts` counts this claim.
 /// Throttling and credential failures belong to the mailbox, not the message,
 /// so they keep their own delays and never move it closer to abandonment.
-/// A transient provider failure (Graph 5xx, a timeout) says nothing about the
-/// message either: during an outage every message gets one. It backs off like
-/// any failure but is never abandoned, and stops counting once the backoff is
-/// at its longest.
+/// A transient provider failure (Graph 5xx or 408, a request Graph never
+/// answered) says nothing about the message either: during an outage every
+/// message gets one. It backs off like any failure but is never abandoned, and
+/// stops counting once the backoff is at its longest.
 fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
     match error {
         MailboxError::Provider(

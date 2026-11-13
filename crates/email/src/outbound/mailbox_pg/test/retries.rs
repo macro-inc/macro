@@ -283,11 +283,48 @@ async fn a_provider_outage_backs_a_message_off_but_never_abandons_it(db: PgPool)
         .map(|seconds| seconds.to_string())
         .collect();
     assert_eq!(delays, expected);
-    assert_eq!(row(&db, link, "waiting").await.attempts, 6);
     assert!(telemetry.events("mailbox message abandoned").is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_provider_outage_leaves_the_message_waiting_thirty_minutes(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "waiting", 49).await;
+    let service = sync(
+        &repo,
+        Provider::answering(vec![Err(EmailApiError::Transient {
+            message: "Microsoft Graph transport failed".into(),
+        })]),
+    );
+
+    assert!(service.reconcile_once().await.is_err());
+
+    let waiting = row(&db, link, "waiting").await;
+    assert_eq!((waiting.abandoned, waiting.attempts), (false, 49));
     assert!(
-        repo.claim_message(Uuid::now_v7()).await.unwrap().is_some(),
-        "the message is still claimed once its backoff ends"
+        (1799..=1800).contains(&waiting.delay_seconds),
+        "it waits the longest backoff, got {}",
+        waiting.delay_seconds
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_message_that_keeps_failing_for_a_reason_of_its_own_stops_after_a_day(db: PgPool) {
+    let telemetry = Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "conflicted", 49).await;
+    let service = sync(
+        &repo,
+        Provider::answering(vec![Err(EmailApiError::Conflict)]),
+    );
+
+    assert!(service.reconcile_once().await.is_err());
+
+    assert!(row(&db, link, "conflicted").await.abandoned);
+    assert_eq!(
+        outcomes(&telemetry),
+        [("abandoned".into(), "other".into(), None)]
     );
 }
 
