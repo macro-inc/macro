@@ -293,8 +293,10 @@ pub enum Audience {
         workspace_id: String,
     },
     /// People the producer captured because their grants are gone by the
-    /// time the event is consumed, such as removed participants. Matched like
-    /// [`Self::Recipient`].
+    /// time the event is consumed, such as removed participants. Webhooks
+    /// match each user's personal workspace; streams match each user's
+    /// personal stream. Not a personal class: a bot acting for a captured
+    /// user receives it too, unlike [`Self::Recipient`].
     Snapshot {
         /// The captured audience.
         user_ids: Vec<MacroUserIdStr<'static>>,

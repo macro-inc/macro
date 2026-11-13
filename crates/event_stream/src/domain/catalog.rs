@@ -225,7 +225,7 @@ public_event_registry! {
             "agent_session.mentioned": ["agent_session"], [Entity], Stable;
             "agent_session.stopped": ["agent_session"], [Entity], Stable;
             "agent_session.renamed": ["agent_session"], [Entity], Stable;
-            "agent_session.deleted": ["agent_session"], [Owner, Entity], Stable;
+            "agent_session.deleted": ["agent_session"], [Owner, Workspace, Entity], Stable;
         }
         /// User profile events from the `macro.users` topic.
         User(UserTopicEvent => UserTopicEvent) {

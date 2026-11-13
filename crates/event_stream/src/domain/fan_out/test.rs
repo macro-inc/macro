@@ -1006,3 +1006,72 @@ mod requested_sessions {
         assert!(!receives(REQUESTER, WebhookScope::Team, audience).await);
     }
 }
+
+/// `agent_session.deleted` keeps its pre-exposure stream audience: the
+/// owner's personal stream, whichever credential acts for them, including a
+/// bot the owner does not own.
+#[tokio::test(start_paused = true)]
+async fn a_deleted_session_reaches_any_credential_acting_for_its_owner() {
+    let harness = Harness::default();
+    let owner = user("owner@example.com");
+    let audience = Audience::Any(vec![
+        Audience::Owner {
+            user_id: owner.clone(),
+        },
+        Audience::Workspace {
+            workspace_id: owner.as_ref().to_owned(),
+        },
+    ]);
+    let mut borrowed = harness
+        .open(
+            bot(&owner, false),
+            WebhookScope::User,
+            filter(&["agent_session.deleted"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("agent_session.deleted", "agent_session", DOC),
+            audience,
+        ))
+        .await;
+
+    assert_eq!(
+        borrowed.next_event_name().await.as_deref(),
+        Some("agent_session.deleted")
+    );
+}
+
+/// A snapshot (people whose grants are gone) is not a personal class: a bot
+/// acting for a removed member still receives the removal.
+#[tokio::test(start_paused = true)]
+async fn a_snapshot_reaches_a_bot_acting_for_a_captured_user() {
+    let harness = Harness::default();
+    let removed = user("removed@example.com");
+    let mut borrowed = harness
+        .open(
+            bot(&removed, false),
+            WebhookScope::User,
+            filter(&["team.member_removed"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("team.member_removed", "team", &TEAM.to_string()),
+            Audience::Snapshot {
+                user_ids: vec![removed.clone()],
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        borrowed.next_event_name().await.as_deref(),
+        Some("team.member_removed")
+    );
+}

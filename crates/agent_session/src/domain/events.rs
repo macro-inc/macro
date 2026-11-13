@@ -453,9 +453,18 @@ impl TopicEvent for AgentSessionLifecycleEvent {
             // ownership, and the channel or document it was opened from still
             // knows its audience: deliver to the union of the two.
             Self::Deleted(deleted) => {
-                let owner = Audience::Owner {
-                    user_id: deleted.identity.owner_id.clone(),
-                };
+                // As before exposure: webhooks resolve the owner like an
+                // accessor (Owner: personal and team workspaces), streams
+                // match the owner's personal stream for any credential acting
+                // for them (Workspace, not a personal class).
+                let owner = Audience::Any(vec![
+                    Audience::Owner {
+                        user_id: deleted.identity.owner_id.clone(),
+                    },
+                    Audience::Workspace {
+                        workspace_id: deleted.identity.owner_id.to_string(),
+                    },
+                ]);
                 match &deleted.identity.origin {
                     Some(origin) => Audience::Any(vec![
                         owner,
