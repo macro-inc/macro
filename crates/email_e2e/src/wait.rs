@@ -29,7 +29,11 @@ pub async fn eventually<T>(
 ) -> Result<T, Report> {
     let started = Instant::now();
     loop {
-        if let Some(value) = condition().await? {
+        // A check that never answers must not outlast the wait.
+        let remaining = timeout.saturating_sub(started.elapsed());
+        if let Ok(checked) = tokio::time::timeout(remaining, condition()).await
+            && let Some(value) = checked?
+        {
             return Ok(value);
         }
         if started.elapsed() >= timeout {

@@ -55,8 +55,24 @@ async fn draft_is_saved_edited_and_discarded(provider: Provider) -> Result<(), R
         Ok(drafts.is_empty().then_some(()))
     })
     .await?;
-    assert!(recipient.previews("inbox").await?.is_empty());
-    assert!(recipient.provider_messages()?.is_empty());
+    // A send that started anyway would arrive before this later one does.
+    inbox
+        .send(&json!({
+            "subject": "After the discard",
+            "to": [{ "email": grace.email() }],
+            "body_text": "Only this one.",
+        }))
+        .await?;
+    recipient
+        .wait_for_preview("inbox", "After the discard")
+        .await?;
+    assert_eq!(recipient.previews("inbox").await?.len(), 1);
+    assert!(
+        recipient
+            .provider_messages()?
+            .iter()
+            .all(|message| message.subject != "Trip notes")
+    );
 
     stack.finish().await
 }
