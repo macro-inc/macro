@@ -64,3 +64,37 @@ fn a_scope_is_stored_by_name() {
     );
     assert_eq!(SessionScope::parse("unknown"), None);
 }
+
+/// A run that sends nothing changes the person's own items but never sends,
+/// posts, shares, invites or sets up a routine.
+#[test]
+fn a_run_that_sends_nothing_reaches_nobody() {
+    let scope = SessionScope::NoSend;
+    for (method, path) in [
+        ("GET", "/email/threads/abc"),
+        ("POST", "/documents"),
+        ("PATCH", "/documents/01a1"),
+        ("POST", "/email/drafts"),
+        ("POST", "/dss/search"),
+        ("PATCH", "/email/threads/01a1/archived"),
+    ] {
+        assert!(scope.allows(method, path), "{method} {path}");
+    }
+    for (method, path) in [
+        ("POST", "/email/messages"),
+        ("POST", "/cognition/email/send-confirmed"),
+        ("PUT", "/email/drafts/scheduled/01a1"),
+        ("POST", "/dss/messages/channel/01a1"),
+        ("POST", "/channels/01a1/shares"),
+        ("POST", "/events"),
+        ("POST", "/scheduled-actions"),
+        (
+            "POST",
+            "/agent-sessions/a/code-executions/b/connected-apps/slack/send/calls",
+        ),
+        ("POST", "/team/invite"),
+    ] {
+        assert!(!scope.allows(method, path), "{method} {path}");
+    }
+    assert_eq!(SessionScope::parse(scope.as_str()), Some(scope));
+}

@@ -5,13 +5,13 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { SuggestionKindOneOfSixKind } from './suggestionKindOneOfSixKind';
+import type { SuggestionKindOneOfSevenKind } from './suggestionKindOneOfSevenKind';
 
 /**
  * A routine suggestion, shown among suggestions.
  */
-export type SuggestionKindOneOfSix = {
-  kind: SuggestionKindOneOfSixKind;
+export type SuggestionKindOneOfSeven = {
+  kind: SuggestionKindOneOfSevenKind;
   /** The suggestion it shows. */
   routineSuggestionId: string;
 };

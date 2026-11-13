@@ -39,9 +39,131 @@ pub struct Suggestion {
     pub updated_at: DateTime<Utc>,
     /// When its state last changed, such as when it was dismissed.
     pub state_changed_at: DateTime<Utc>,
+    /// A background prompt suggestion's latest run.
+    pub run: Option<SuggestionRun>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
     pub kind: SuggestionKind,
+}
+
+/// A run of a background prompt suggestion: a hidden agent session of the
+/// person's, with the full toolset, that never stops to ask.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionRun {
+    /// The agent session: open it to see the result or answer what it
+    /// waits for.
+    #[schema(value_type = String, format = Uuid)]
+    pub session_id: Uuid,
+    /// When it started.
+    pub started_at: DateTime<Utc>,
+    /// How it is going, read from the session.
+    pub progress: RunProgress,
+}
+
+/// How a run is going, as its session says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema, strum::AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunProgress {
+    /// Working.
+    Running,
+    /// Waiting for the person to approve a tool call.
+    NeedsApproval,
+    /// Waiting for the person to answer a question.
+    NeedsInput,
+    /// Done; its result is in the session and the suggestion's `produced`.
+    Finished,
+    /// It stopped without finishing; accepting the suggestion again retries.
+    Failed,
+    /// The session couldn't be read just now.
+    Unknown,
+}
+
+impl RunProgress {
+    /// Finished or failed: nothing more will happen.
+    pub fn is_over(self) -> bool {
+        matches!(self, Self::Finished | Self::Failed)
+    }
+}
+
+/// Where a run's session is, as the scheduler reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionState {
+    /// Opened, its prompt not taken yet.
+    AwaitingPrompt,
+    /// Working.
+    Running,
+    /// Its runtime went away mid-run (a restart, say) without finishing.
+    Disconnected,
+    /// Waiting for the person to approve a tool call.
+    NeedsApproval,
+    /// Waiting for the person to answer a question.
+    NeedsInput,
+    /// Done.
+    Finished,
+    /// Stopped without finishing.
+    Failed,
+}
+
+impl SessionState {
+    /// How the run shows on its suggestion.
+    pub fn progress(self) -> RunProgress {
+        match self {
+            Self::AwaitingPrompt | Self::Running | Self::Disconnected => RunProgress::Running,
+            Self::NeedsApproval => RunProgress::NeedsApproval,
+            Self::NeedsInput => RunProgress::NeedsInput,
+            Self::Finished => RunProgress::Finished,
+            Self::Failed => RunProgress::Failed,
+        }
+    }
+}
+
+/// Why a run's session couldn't be read.
+#[derive(Debug)]
+pub enum SessionReadError {
+    /// It doesn't exist: it never opened, or was deleted.
+    Missing,
+    /// It couldn't be read just now; it may well be running.
+    Unreadable(rootcause::Report),
+}
+
+/// Why a run's session didn't start.
+#[derive(Debug)]
+pub enum RunStartError {
+    /// Nothing is running: the run may be settled failed and tried again.
+    NotStarted(rootcause::Report),
+    /// The prompt may have been taken: the run stays for its session to
+    /// settle it, and is never started again meanwhile.
+    Uncertain(rootcause::Report),
+}
+
+/// A run as stored, before its progress is read.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredRun {
+    /// The agent session.
+    pub session: Uuid,
+    /// The suggestion it runs.
+    pub suggestion: Uuid,
+    /// Whose.
+    pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// The agent it runs as.
+    pub agent: Uuid,
+    /// Its first prompt's action.
+    pub action: Uuid,
+    /// When it started.
+    pub started_at: DateTime<Utc>,
+    /// Whether it was settled, and how.
+    pub settled: Option<RunSettled>,
+}
+
+/// How a finished run was settled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunSettled {
+    /// It finished: the suggestion is done.
+    Finished,
+    /// It failed: the suggestion may be accepted again.
+    Failed,
 }
 
 /// What kind of suggestion it is, with that kind's data. A kind never changes.
@@ -56,6 +178,11 @@ pub enum SuggestionKind {
         prompt: String,
         /// How it runs.
         run_mode: RunMode,
+        /// For a background run that posts or sends something: what, and
+        /// where, in plain words. The card shows it before Run, and running
+        /// it approves exactly that. None when the run posts and sends
+        /// nothing.
+        sends: Option<String>,
     },
     /// A note about specific items, with what to do about them.
     #[serde(rename_all = "camelCase")]
@@ -298,6 +425,9 @@ pub struct NewSuggestion {
     /// A prompt suggestion's run mode.
     #[serde(default)]
     pub run_mode: Option<RunMode>,
+    /// A background prompt suggestion that posts or sends: what, and where.
+    #[serde(default)]
+    pub sends: Option<String>,
     /// An entity suggestion's action.
     #[serde(default)]
     pub action: Option<EntityAction>,
@@ -329,6 +459,10 @@ pub struct RewriteSuggestion {
     /// Only on prompt suggestions.
     #[serde(default)]
     pub prompt: Option<String>,
+    /// Only on background prompt suggestions: what the run posts or sends, and
+    /// where.
+    #[serde(default)]
+    pub sends: Option<String>,
     /// Why, for the change log.
     pub reason: String,
 }
@@ -391,6 +525,8 @@ pub struct SuggestionContent {
     pub about: Vec<Target>,
     /// A prompt suggestion's prompt.
     pub prompt: Option<String>,
+    /// A background prompt suggestion's [`SuggestionKind::Prompt::sends`].
+    pub sends: Option<String>,
 }
 
 impl SuggestionContent {
@@ -405,6 +541,10 @@ impl SuggestionContent {
             about: suggestion.about.clone(),
             prompt: match &suggestion.kind {
                 SuggestionKind::Prompt { prompt, .. } => Some(prompt.clone()),
+                SuggestionKind::Entity { .. } | SuggestionKind::Routine { .. } => None,
+            },
+            sends: match &suggestion.kind {
+                SuggestionKind::Prompt { sends, .. } => sends.clone(),
                 SuggestionKind::Entity { .. } | SuggestionKind::Routine { .. } => None,
             },
         }
@@ -466,6 +606,18 @@ pub struct GenerationSession {
     /// The trace its generation runs in. A session's tool calls reach the
     /// API without its trace context, so they record this to be joined.
     pub trace_id: Option<String>,
+}
+
+/// The person acting on a suggestion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Accept {
+    /// When the suggestion was last changed as the caller's copy shows it: a
+    /// background suggestion runs only if it is still what they saw.
+    pub shown_updated_at: DateTime<Utc>,
+    /// Whether the person themself acts, in the app: only they start a
+    /// background suggestion's run. Anyone else (an agent of theirs) at most marks
+    /// it accepted, for them to run.
+    pub by_person: bool,
 }
 
 /// What a change-log entry records.
@@ -537,6 +689,9 @@ pub enum SuggestionError {
     /// Only an open suggestions session of the person's may call this.
     #[error("only a suggestions generation session may do this")]
     NotGenerating,
+    /// The suggestion changed since the caller read it: here it is as it is now.
+    #[error("the suggestion changed since it was read; read it again")]
+    Changed(Box<Suggestion>),
     /// Anything else.
     #[error("internal suggestions error: {0:?}")]
     Internal(rootcause::Report),

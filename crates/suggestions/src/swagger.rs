@@ -28,6 +28,8 @@ use utoipa::OpenApi;
         crate::domain::model::SuggestionsReview,
         crate::domain::model::NewSuggestion,
         crate::domain::model::RewriteSuggestion,
+        crate::inbound::router::AcceptSuggestionRequest,
+        crate::inbound::router::SuggestionChanged,
         crate::domain::model::RetireSuggestionRequest,
         crate::domain::model::SuggestionWriteOutcome,
     )),

@@ -54,7 +54,7 @@ scheduler's spec.
 ## Scope
 
 - Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
-  `suggestion_routine`, `suggestion_target`, and its `suggestion_change` rows.
+  `suggestion_routine`, `suggestion_target`, `suggestion_run`, and its `suggestion_change` rows.
 - Also: the vocabulary every generation's tools share (`GenerationTrigger`,
   `SessionKind`, `GenerationSession`) and the `GenerationSessions` and
   `SuggestionAudience` ports, which `crates/suggestion_generation` implements;
@@ -77,6 +77,35 @@ scheduler's spec.
   suggestion retires it; saving a routine from the suggestion makes it done
   with the routine as `produced`. Suggestions sessions never add, rewrite or retire
   routine suggestions.
+
+- Background runs: the person accepting a `prompt` suggestion with `runMode`
+  `background` in the app (their own session, not a program: `Accept`'s
+  `by_person`) starts an `suggestion_run` (`RunSessions`, wired in the harness): a
+  hidden session of the person's, billed as their agent usage. Anyone acting
+  for them (an agent) only takes the suggestion on (`accepted`, no run) for them to
+  run. Accept carries the `updatedAt` the card showed; a run starts only if
+  the suggestion is unchanged since (409 otherwise). Clicking Run is the approval:
+  the run is told never to stop to ask or wait (`run_prompt`), and posts or
+  sends only what the suggestion's `sends` says (shown on the card, approved by
+  running it), or nothing. A run whose suggestion has no `sends` gets a `no_send`
+  scope where the harness mints its credential (`RunScopes`): every service
+  refuses its sends and posts. Its progress (`running`,
+  `finished`, `failed`) is read from the session on every feed read, never
+  stored; the suggestion's `run.sessionId` is where the UI shows the result. `settle_runs` (every 30 s
+  in the harness) makes a finished run's suggestion done with the session and what
+  it created as `produced`; a failed run leaves the suggestion accepted, and
+  accepting it again retries. Retiring or dismissing a suggestion never stops its
+  run. Accepting any other suggestion makes it done (`done` in the feed);
+  accepting a done suggestion again changes nothing.
+- A run is never started twice: a prompt whose answer was lost
+  (`RunStartError::Uncertain`) leaves the run for its session to settle; only
+  a definite refusal (the prompted session deleted) settles it failed at once.
+  `settle_runs` checks runs in turn (`checked_at`) and gives a run up only on
+  what is known: past a 10 minute start window, a session confirmed missing
+  (`SessionReadError::Missing`, from the stored sessions), or one still waiting
+  for its prompt, cut off by a restart (`Disconnected`), or waiting for an
+  approval or an answer nobody will give, once it is deleted. A session that
+  can't be read is never given up.
 
 ## Gotchas
 

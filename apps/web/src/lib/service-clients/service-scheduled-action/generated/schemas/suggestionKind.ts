@@ -6,13 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SuggestionKindOneOf } from './suggestionKindOneOf';
-import type { SuggestionKindOneOfSix } from './suggestionKindOneOfSix';
-import type { SuggestionKindOneOfThree } from './suggestionKindOneOfThree';
+import type { SuggestionKindOneOfFour } from './suggestionKindOneOfFour';
+import type { SuggestionKindOneOfSeven } from './suggestionKindOneOfSeven';
 
 /**
  * What kind of suggestion it is, with that kind's data. A kind never changes.
  */
 export type SuggestionKind =
   | SuggestionKindOneOf
-  | SuggestionKindOneOfThree
-  | SuggestionKindOneOfSix;
+  | SuggestionKindOneOfFour
+  | SuggestionKindOneOfSeven;

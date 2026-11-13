@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use feature_flags::FeatureFlags;
 use futures::{StreamExt as _, TryStreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -18,14 +18,15 @@ use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    Change, ChangeAction, GenerationSession, GenerationTrigger, KindName, NewSuggestion,
-    RetireSuggestionRequest, RewriteSuggestion, RunMode, SessionKind, Suggestion,
-    SuggestionContent, SuggestionError, SuggestionFeed, SuggestionKind, SuggestionState,
+    Accept, Change, ChangeAction, GenerationSession, GenerationTrigger, KindName, NewSuggestion,
+    RetireSuggestionRequest, RewriteSuggestion, RunMode, RunProgress, RunSettled, RunStartError,
+    SessionKind, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionContent,
+    SuggestionError, SuggestionFeed, SuggestionKind, SuggestionRun, SuggestionState,
     SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 use super::ports::{
-    GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, SuggestionAccess,
-    SuggestionApi, SuggestionAudience, SuggestionRepo, Written,
+    GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, RunSessions,
+    SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionRepo, Written,
 };
 use super::prompt;
 
@@ -63,12 +64,27 @@ pub struct SuggestionService<Repo, Access, Flags> {
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
     routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
+    runs: Option<Runs>,
     flags: Option<Flags>,
     /// The SDK reference a suggestions session's brief carries.
     sdk_reference: String,
     /// The model a suggestions session has check each new suggestion against its items.
     checker_model: String,
 }
+
+/// The sessions background prompt suggestions run in, and the agent they run as.
+struct Runs {
+    sessions: Arc<dyn RunSessions>,
+    agent: Uuid,
+}
+
+/// Runs one settle pass checks at most.
+const SETTLE_BATCH: u16 = 50;
+
+/// How long a run's session has to open and take its prompt. Past it, a
+/// session that is missing or still waiting for its prompt never started,
+/// and one whose in-process runtime went away (a restart) won't resume.
+const START_WINDOW: chrono::Duration = chrono::Duration::minutes(10);
 
 impl<Repo, Access, Flags> SuggestionService<Repo, Access, Flags>
 where
@@ -93,6 +109,7 @@ where
             generation_sessions,
             audience,
             routine_suggestions,
+            runs: None,
             flags,
             sdk_reference: String::new(),
             checker_model: String::new(),
@@ -112,6 +129,186 @@ where
     pub fn with_checker_model(mut self, model: String) -> Self {
         self.checker_model = model;
         self
+    }
+
+    /// Run background prompt suggestions in `sessions`, as agent `agent`. Without
+    /// it, accepting one fails.
+    pub fn with_runs(mut self, sessions: Arc<dyn RunSessions>, agent: Uuid) -> Self {
+        self.runs = Some(Runs { sessions, agent });
+        self
+    }
+
+    /// Attach each suggestion's latest run, with how it is going read from its
+    /// session.
+    async fn attach_runs(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        suggestions: &mut [Suggestion],
+    ) -> Result<(), SuggestionError> {
+        // Only background prompt suggestions run.
+        let ids: Vec<Uuid> = suggestions
+            .iter()
+            .filter(|suggestion| {
+                matches!(
+                    suggestion.kind,
+                    SuggestionKind::Prompt {
+                        run_mode: RunMode::Background,
+                        ..
+                    }
+                )
+            })
+            .map(|suggestion| suggestion.id)
+            .collect();
+        let runs = self
+            .repo
+            .latest_runs(user, &ids)
+            .await
+            .map_err(SuggestionError::internal)?;
+        for suggestion in suggestions.iter_mut() {
+            let Some(run) = runs.iter().find(|run| run.suggestion == suggestion.id) else {
+                continue;
+            };
+            let progress = match (&run.settled, &self.runs) {
+                (Some(RunSettled::Finished), _) => RunProgress::Finished,
+                (Some(RunSettled::Failed), _) => RunProgress::Failed,
+                (None, Some(runs)) => runs
+                    .sessions
+                    .state(run)
+                    .await
+                    .inspect_err(|error| tracing::warn!(?error, "could not read a run's session"))
+                    .map_or(RunProgress::Unknown, SessionState::progress),
+                (None, None) => RunProgress::Unknown,
+            };
+            suggestion.run = Some(SuggestionRun {
+                session_id: run.session,
+                started_at: run.started_at,
+                progress,
+            });
+        }
+        Ok(())
+    }
+
+    /// Move `suggestion` from one of `from` to `to` if it is still as `accept`
+    /// says the caller saw it; when it changed, the suggestion as it is now.
+    async fn move_as_shown(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        suggestion: &Suggestion,
+        from: &[SuggestionState],
+        to: SuggestionState,
+        accept: Accept,
+    ) -> Result<(), SuggestionError> {
+        if suggestion.updated_at != accept.shown_updated_at {
+            return Err(SuggestionError::Changed(Box::new(suggestion.clone())));
+        }
+        let moved = self
+            .repo
+            .set_state_as_shown(
+                user,
+                suggestion.id,
+                from,
+                to,
+                accept.shown_updated_at,
+                Utc::now(),
+            )
+            .await
+            .map_err(SuggestionError::internal)?;
+        if moved {
+            return Ok(());
+        }
+        let now = self
+            .repo
+            .suggestion(user, suggestion.id)
+            .await
+            .map_err(SuggestionError::internal)?;
+        Err(match now {
+            Some(now) if now.updated_at != accept.shown_updated_at => {
+                SuggestionError::Changed(Box::new(now))
+            }
+            _ => SuggestionError::NotFound,
+        })
+    }
+
+    /// Start a run of background prompt suggestion `suggestion`.
+    #[tracing::instrument(name = "suggestions.run.start", skip_all, fields(
+        suggestion.id = %suggestion.id,
+        agent.session.id = tracing::field::Empty,
+        suggestion.run.outcome = tracing::field::Empty,
+    ), err)]
+    async fn start_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        suggestion: &Suggestion,
+        prompt: &str,
+        shown_updated_at: DateTime<Utc>,
+    ) -> Result<(), SuggestionError> {
+        let span = tracing::Span::current();
+        let Some(runs) = &self.runs else {
+            return Err(SuggestionError::Internal(rootcause::report!(
+                "background runs are not configured"
+            )));
+        };
+        let run = StoredRun {
+            session: Uuid::now_v7(),
+            suggestion: suggestion.id,
+            user: user.clone(),
+            agent: runs.agent,
+            action: Uuid::now_v7(),
+            started_at: Utc::now(),
+            settled: None,
+        };
+        span.record("agent.session.id", run.session.to_string());
+        // What runs is what the person saw: a card read before the suggestion
+        // was rewritten is read again first.
+        if suggestion.updated_at != shown_updated_at {
+            span.record("suggestion.run.outcome", "changed");
+            return Err(SuggestionError::Changed(Box::new(suggestion.clone())));
+        }
+        // The row first, so two accepts at once start one session.
+        if !self
+            .repo
+            .start_run(&run, shown_updated_at)
+            .await
+            .map_err(SuggestionError::internal)?
+        {
+            span.record("suggestion.run.outcome", "not_runnable");
+            let now = self
+                .repo
+                .suggestion(user, suggestion.id)
+                .await
+                .map_err(SuggestionError::internal)?;
+            return Err(match now {
+                Some(now) if now.updated_at != shown_updated_at => {
+                    SuggestionError::Changed(Box::new(now))
+                }
+                _ => SuggestionError::NotFound,
+            });
+        }
+        match runs.sessions.start(&run, prompt).await {
+            Ok(()) => {}
+            Err(RunStartError::NotStarted(error)) => {
+                // Nothing runs: the suggestion may be accepted again to retry.
+                let _ = self
+                    .repo
+                    .settle_run(run.session, RunSettled::Failed, &[], Utc::now())
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(?error, "could not settle a run that failed to start")
+                    });
+                span.record("suggestion.run.outcome", "failed_to_start");
+                return Err(SuggestionError::Internal(error));
+            }
+            Err(RunStartError::Uncertain(error)) => {
+                // The prompt may be running: the run stays unsettled, so no
+                // second session starts, and its session settles it.
+                tracing::warn!(?error, "a run's prompt may not have arrived");
+                span.record("suggestion.run.outcome", "uncertain");
+                return Ok(());
+            }
+        }
+        span.record("suggestion.run.outcome", "started");
+        tracing::info!(event = "suggestions.run_started");
+        Ok(())
     }
 
     #[tracing::instrument(name = "suggestions.flag", err, skip_all)]
@@ -317,6 +514,9 @@ where
             .try_collect()
             .await?;
         let hidden = before - viewable.len();
+        // One read of runs for the open and the done suggestions.
+        let mut viewable = viewable;
+        self.attach_runs(user, &mut viewable).await?;
         let (mut suggestions, mut done): (Vec<Suggestion>, Vec<Suggestion>) = viewable
             .into_iter()
             .partition(|suggestion| suggestion.state.is_open());
@@ -355,6 +555,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
+        accept: Accept,
     ) -> Result<(), SuggestionError> {
         self.require_flag(user).await?;
         let suggestion = self
@@ -363,39 +564,151 @@ where
             .await
             .map_err(SuggestionError::internal)?
             .ok_or(SuggestionError::NotFound)?;
-        // A background prompt is taken on and runs; anything else the person
-        // acts on themself (opens the item, the composer, the routine) is
-        // done when they do. Accepting a done suggestion again changes nothing.
-        let background = matches!(
-            suggestion.kind,
-            SuggestionKind::Prompt {
-                run_mode: RunMode::Background,
-                ..
+        if let SuggestionKind::Prompt {
+            prompt,
+            run_mode: RunMode::Background,
+            sends,
+        } = &suggestion.kind
+        {
+            // Only the person, in the app, starts a run: anyone acting for
+            // them at most takes the suggestion on, for them to run.
+            if !accept.by_person {
+                if suggestion.state == SuggestionState::Accepted {
+                    return Ok(());
+                }
+                self.move_as_shown(
+                    user,
+                    &suggestion,
+                    &[SuggestionState::Proposed],
+                    SuggestionState::Accepted,
+                    accept,
+                )
+                .await?;
+                tracing::info!(event = "suggestions.accepted", run = false);
+                return Ok(());
             }
-        );
-        let to = if background {
-            SuggestionState::Accepted
-        } else {
-            SuggestionState::Done
-        };
-        if suggestion.state == to {
+            return self
+                .start_run(
+                    user,
+                    &suggestion,
+                    &run_prompt(prompt, sends.as_deref()),
+                    accept.shown_updated_at,
+                )
+                .await;
+        }
+        // Anything else the person acts on themself (opens the item, the
+        // composer, the routine) is done when they do; accepting a done suggestion
+        // again changes nothing.
+        if suggestion.state == SuggestionState::Done {
             return Ok(());
         }
-        let from: &[SuggestionState] = if background {
-            &[SuggestionState::Proposed]
-        } else {
-            &[SuggestionState::Proposed, SuggestionState::Accepted]
+        // What the person opens is what they saw: a card read before the
+        // suggestion was rewritten is read again first.
+        self.move_as_shown(
+            user,
+            &suggestion,
+            &[SuggestionState::Proposed, SuggestionState::Accepted],
+            SuggestionState::Done,
+            accept,
+        )
+        .await?;
+        tracing::info!(event = "suggestions.accepted", done = true);
+        Ok(())
+    }
+
+    #[tracing::instrument(name = "suggestions.runs.settle", skip_all, fields(
+        suggestions.runs.checked = tracing::field::Empty,
+        suggestions.runs.settled = tracing::field::Empty,
+    ), err)]
+    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
+        let Some(runs) = &self.runs else {
+            return Ok(0);
         };
-        let moved = self
+        let unsettled = self
             .repo
-            .set_state(user, id, from, to, None, Utc::now())
+            .unsettled_runs(SETTLE_BATCH)
             .await
             .map_err(SuggestionError::internal)?;
-        if !moved {
-            return Err(SuggestionError::NotFound);
+        let mut settled = 0;
+        for run in &unsettled {
+            let now = Utc::now();
+            if let Err(error) = self.repo.checked_run(run.session, now).await {
+                tracing::warn!(?error, "could not record a run's check");
+            }
+            let started_long_ago = now - run.started_at >= START_WINDOW;
+            let (outcome, produced) = match runs.sessions.state(run).await {
+                // It may be running: a run is given up only on what is known.
+                Err(SessionReadError::Unreadable(error)) => {
+                    tracing::warn!(?error, "could not read a run's session");
+                    continue;
+                }
+                // Its session never opened, or is gone: nothing runs. Within
+                // the start window it may still be opening.
+                Err(SessionReadError::Missing) => {
+                    if !started_long_ago {
+                        continue;
+                    }
+                    tracing::warn!(event = "suggestions.run_session_missing");
+                    (RunSettled::Failed, Vec::new())
+                }
+                // Its runtime went away mid-run (a restart): once its session
+                // is gone it can't resume, and the suggestion may be tried again.
+                // Its prompt never arrived: likewise. Nobody watches a run,
+                // so one waiting for an approval or an answer never gets one.
+                Ok(
+                    SessionState::AwaitingPrompt
+                    | SessionState::Disconnected
+                    | SessionState::NeedsApproval
+                    | SessionState::NeedsInput,
+                ) => {
+                    if !started_long_ago {
+                        continue;
+                    }
+                    if let Err(error) = runs.sessions.discard(run).await {
+                        tracing::warn!(?error, "could not delete a run's unprompted session");
+                        continue;
+                    }
+                    (RunSettled::Failed, Vec::new())
+                }
+                Ok(SessionState::Finished) => {
+                    // The session is the result; the items it made come with it.
+                    let mut produced = vec![Target {
+                        entity_type: model_entity::EntityType::AgentSession,
+                        entity_id: run.session.to_string(),
+                        part_id: None,
+                    }];
+                    match runs.sessions.produced(run).await {
+                        Ok(items) => produced.extend(items),
+                        Err(error) => {
+                            tracing::warn!(?error, "could not read what a run made");
+                            continue;
+                        }
+                    }
+                    (RunSettled::Finished, produced)
+                }
+                Ok(SessionState::Failed) => (RunSettled::Failed, Vec::new()),
+                Ok(SessionState::Running) => continue,
+            };
+            let moved = self
+                .repo
+                .settle_run(run.session, outcome, &produced, now)
+                .await
+                .map_err(SuggestionError::internal)?;
+            settled += usize::from(moved);
+            tracing::info!(
+                event = "suggestions.run_settled",
+                outcome = if outcome == RunSettled::Finished {
+                    "finished"
+                } else {
+                    "failed"
+                },
+                produced = produced.len(),
+            );
         }
-        tracing::info!(event = "suggestions.accepted", done = !background);
-        Ok(())
+        let span = tracing::Span::current();
+        span.record("suggestions.runs.checked", unsettled.len());
+        span.record("suggestions.runs.settled", settled);
+        Ok(settled)
     }
 
     #[tracing::instrument(name = "suggestions.dismiss", skip_all, fields(suggestion.id = %id), err)]
@@ -475,6 +788,8 @@ where
                     .map_err(SuggestionError::internal)
             },
         )?;
+        let mut suggestions = suggestions;
+        self.attach_runs(&session.user, &mut suggestions).await?;
         let (mut open, mut closed): (Vec<Suggestion>, Vec<Suggestion>) = suggestions
             .into_iter()
             .partition(|suggestion| suggestion.state.is_open());
@@ -547,6 +862,14 @@ where
             Some(None) => return Ok(rejected(&span, problems)),
             None => None,
         };
+        let sends = match &request.sends {
+            Some(_) if request.run_mode != Some(RunMode::Background) => {
+                problems.push("`sends` is only for background prompt suggestions".to_owned());
+                None
+            }
+            Some(sends) => check::text(sends, "`sends`", check::MAX_SENDS_CHARS, &mut problems),
+            None => None,
+        };
         self.inaccessible(&user, &about, &mut problems).await?;
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
@@ -559,6 +882,7 @@ where
             categories: check::categories(request.categories),
             about,
             prompt,
+            sends,
         };
         let now = Utc::now();
         let existing = self
@@ -714,6 +1038,16 @@ where
         if request.prompt.is_some() && existing.kind.name() != KindName::Prompt {
             problems.push("`prompt` is only for prompt suggestions".to_owned());
         }
+        let background = matches!(
+            existing.kind,
+            SuggestionKind::Prompt {
+                run_mode: RunMode::Background,
+                ..
+            }
+        );
+        if request.sends.is_some() && !background {
+            problems.push("`sends` is only for background prompt suggestions".to_owned());
+        }
         let reason = check::text(
             &request.reason,
             "`reason`",
@@ -752,6 +1086,9 @@ where
         }
         if let Some(prompt) = request.prompt {
             content.prompt = check::prompt(&prompt, &mut problems);
+        }
+        if let Some(sends) = request.sends.filter(|_| background) {
+            content.sends = check::text(&sends, "`sends`", check::MAX_SENDS_CHARS, &mut problems);
         }
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
@@ -873,4 +1210,25 @@ fn rejected(span: &tracing::Span, problems: Vec<String>) -> SuggestionWriteOutco
     span.record("suggestion.outcome", "rejected");
     span.record("suggestion.problems", problems.len());
     SuggestionWriteOutcome::rejected(problems)
+}
+
+/// What a background run is told: the suggestion's prompt, then that nobody is
+/// watching, so it never stops to ask; clicking Run approved exactly what
+/// the card said it posts or sends, and nothing else.
+fn run_prompt(prompt: &str, sends: Option<&str>) -> String {
+    let approval = match sends {
+        Some(sends) => format!(
+            "The card told them this run will: {sends}. Starting it approved exactly that: do \
+             it, and for an email call `macro.email.sendConfirmed` with `userConfirmation` set \
+             to that sentence. Post, send or share nothing else."
+        ),
+        None => "Post, send or share nothing: leave whatever would reach other people as a \
+                 draft for them to review."
+            .to_owned(),
+    };
+    format!(
+        "{prompt}\n\nThe user started this run from a suggestion card and isn't watching: never stop \
+         to ask a question or wait for an approval; decide from what you can read, and say in \
+         your last message what you assumed. {approval}"
+    )
 }
