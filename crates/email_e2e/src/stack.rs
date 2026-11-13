@@ -2,6 +2,7 @@
 //! database, Redis database and queues, and the real `email_service` and
 //! `pubsub_workers` binaries running against them.
 
+mod document_storage_environment;
 mod environment;
 
 use std::collections::BTreeMap;
@@ -31,6 +32,12 @@ use crate::wait::eventually;
 const API: &str = "email_service";
 /// The binary that runs the queue workers and the Outlook mailbox loops.
 const WORKERS: &str = "pubsub_workers";
+/// The service behind the GraphQL API.
+const DOCUMENT_STORAGE: &str = "document_storage_service";
+/// The setting that names the Kafka brokers.
+const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
+/// Where that service answers GraphQL.
+const GRAPHQL_PATH: &str = "/items/soup/graphql";
 /// The Lambda binary of the scheduled-send sweep.
 const SCHEDULED_HANDLER: &str = "email_scheduled_handler";
 /// How long the API gets to answer its health check.
@@ -40,8 +47,8 @@ const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 const PORT_ATTEMPTS: u8 = 3;
 /// What a Rust process writes when a thread panics.
 const PANIC_MARKER: &str = "panicked at";
-/// What `email_service` logs once it has bound its port.
-const SERVING_MARKER: &str = "service is up and running";
+/// What a service logs once it has bound its port.
+const SERVING_MARKER: &str = "is up and running";
 
 /// How a stack differs from the default one.
 #[derive(Clone, Debug, Default)]
@@ -49,6 +56,10 @@ pub struct StackOptions {
     /// Environment variables for both services, set after the stack's own,
     /// so they can replace them.
     pub env: Vec<(String, String)>,
+    /// Also start `document_storage_service`, which serves the GraphQL API
+    /// the web app sends mail through ([`User::graphql`]). Off by default:
+    /// it is a second large process per scenario.
+    pub document_storage: bool,
 }
 
 /// A running stack. Start one per scenario and end the scenario with
@@ -64,6 +75,8 @@ pub struct Stack {
     tls: Option<TlsFront>,
     api: ServiceProcess,
     workers: Option<ServiceProcess>,
+    document_storage: Option<ServiceProcess>,
+    graphql_url: Option<String>,
     worker_env: BTreeMap<String, String>,
     api_url: String,
     internal_api_key: String,
@@ -139,7 +152,7 @@ impl Stack {
         } = booted;
         gmail.set_push(Some(PushConfig::new(format!("{api_url}/gmail/webhook"))));
 
-        Ok(Self {
+        let mut stack = Self {
             gmail,
             outlook,
             database: Some(database),
@@ -150,13 +163,81 @@ impl Stack {
             tls: Some(tls),
             api,
             workers: Some(workers),
+            document_storage: None,
+            graphql_url: None,
             worker_env: env,
             api_url,
             internal_api_key: environment::INTERNAL_API_KEY.to_owned(),
             http,
             log_dir,
             finished: false,
-        })
+        };
+        // The stack exists now, so a failure from here on is cleaned up by
+        // its drop.
+        if options.document_storage {
+            stack.start_document_storage(&options).await?;
+        }
+        Ok(stack)
+    }
+
+    /// Starts `document_storage_service` on the scenario's database, Redis
+    /// database, queues and providers.
+    async fn start_document_storage(&mut self, options: &StackOptions) -> Result<(), Report> {
+        crate::process::ensure_built(&[DOCUMENT_STORAGE])?;
+        let Some(queues) = &mut self.queues else {
+            bail!("the stack was torn down");
+        };
+        queues.add_document_storage_queues().await?;
+        if let Some(brokers) = self.worker_env.get(KAFKA_BROKERS) {
+            crate::infra::kafka::ensure_topics(brokers).await?;
+        }
+        for queue in queues.all() {
+            self.worker_env
+                .insert(queue.override_env.to_owned(), queue.url.clone());
+        }
+
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let port = free_port().await?;
+            let mut env = document_storage_environment::document_storage_env(
+                &document_storage_environment::DocumentStorage {
+                    port,
+                    database_url: self.database().url(),
+                    search_url: self.service_url(document_storage_environment::SEARCH),
+                    email_env: &self.worker_env,
+                },
+            );
+            env.extend(options.env.iter().cloned());
+
+            let mut service = ServiceProcess::spawn(DOCUMENT_STORAGE, &env, &self.log_dir)?;
+            let url = format!("http://127.0.0.1:{port}");
+            match wait_for_health(&self.http, &url, &mut service).await {
+                Ok(()) => {
+                    self.graphql_url = Some(format!("{url}{GRAPHQL_PATH}"));
+                    self.document_storage = Some(service);
+                    return Ok(());
+                }
+                Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
+                    tracing::warn!(error = ?error, port, "the port was taken; trying another");
+                    service.stop().await;
+                }
+                Err(error) => {
+                    let report = error.attach(format!(
+                        "the end of {}:\n{}",
+                        service.log_path().display(),
+                        service.log_tail()
+                    ));
+                    service.stop().await;
+                    return Err(report);
+                }
+            }
+        }
+    }
+
+    /// Where the GraphQL API answers, when the stack serves it.
+    pub(crate) fn graphql_url(&self) -> Option<String> {
+        self.graphql_url.clone()
     }
 
     /// Starts everything that talks to the scenario's database, Redis
@@ -492,12 +573,24 @@ impl Stack {
         if let Some(workers) = &mut self.workers {
             workers.ensure_running()?;
         }
+        if let Some(document_storage) = &mut self.document_storage {
+            document_storage.ensure_running()?;
+        }
         Ok(())
     }
 
     fn check_services(&mut self) -> Result<(), Report> {
         self.ensure_running()?;
-        for (name, log) in [(API, self.api_log()), (WORKERS, self.workers_log())] {
+        let document_storage = self
+            .document_storage
+            .as_ref()
+            .map(ServiceProcess::log)
+            .unwrap_or_default();
+        for (name, log) in [
+            (API, self.api_log()),
+            (WORKERS, self.workers_log()),
+            (DOCUMENT_STORAGE, document_storage),
+        ] {
             if let Some(line) = log.lines().find(|line| line.contains(PANIC_MARKER)) {
                 bail!(
                     "{name} panicked during the scenario: {line}\nfull log: {}",
@@ -527,6 +620,9 @@ impl Stack {
     /// lease.
     async fn tear_down(&mut self) {
         self.api.stop().await;
+        if let Some(mut document_storage) = self.document_storage.take() {
+            document_storage.stop().await;
+        }
         if let Some(mut workers) = self.workers.take() {
             workers.stop().await;
         }
@@ -558,8 +654,8 @@ impl Stack {
             "\n--- email_e2e: the scenario failed; service logs are in {} ---\n",
             self.log_dir.display()
         );
-        let workers = self.workers.as_ref();
-        for process in std::iter::once(&self.api).chain(workers) {
+        let others = self.workers.iter().chain(&self.document_storage);
+        for process in std::iter::once(&self.api).chain(others) {
             report.push_str(&format!(
                 "--- the end of {} ---\n{}\n",
                 process.log_path().display(),
@@ -647,7 +743,7 @@ async fn wait_for_health(
 ) -> Result<(), Report> {
     let health = format!("{api_url}/health");
     eventually(
-        "email_service to answer /health",
+        "the service to answer /health",
         STARTUP_TIMEOUT,
         async || {
             api.ensure_running()?;

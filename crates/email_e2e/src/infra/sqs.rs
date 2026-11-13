@@ -95,6 +95,44 @@ const QUEUES: &[QueueSpec] = &[
     },
 ];
 
+/// The queues `document_storage_service` reads or writes besides the email
+/// ones, made only for a stack that starts it.
+const DOCUMENT_STORAGE_QUEUES: &[QueueSpec] = &[
+    QueueSpec {
+        override_env: "OVERRIDE_SEARCH_EVENT_QUEUE",
+        name: "search-event",
+        visibility_timeout_seconds: 30,
+        max_receive_count: 5,
+    },
+    QueueSpec {
+        override_env: "OVERRIDE_DOCUMENT_DELETE_QUEUE",
+        name: "document-delete",
+        visibility_timeout_seconds: 30,
+        max_receive_count: 5,
+    },
+    QueueSpec {
+        override_env: "OVERRIDE_REMINDER_DISPATCH_QUEUE",
+        name: "reminder-dispatch",
+        visibility_timeout_seconds: 30,
+        max_receive_count: 5,
+    },
+    QueueSpec {
+        override_env: "OVERRIDE_CALENDAR_REMINDER_DISPATCH_QUEUE",
+        name: "calendar-reminder-dispatch",
+        visibility_timeout_seconds: 30,
+        max_receive_count: 5,
+    },
+    QueueSpec {
+        override_env: "OVERRIDE_WEBHOOK_EVENT_QUEUE",
+        name: "webhook-event.fifo",
+        visibility_timeout_seconds: 30,
+        max_receive_count: 5,
+    },
+];
+
+/// What the name of a first-in-first-out queue ends with.
+const FIFO_SUFFIX: &str = ".fifo";
+
 /// One of the scenario's queues.
 #[derive(Clone, Debug)]
 pub(crate) struct Queue {
@@ -107,6 +145,7 @@ pub(crate) struct Queue {
 /// The scenario's queues and the client that made them.
 pub(crate) struct Queues {
     client: aws_sdk_sqs::Client,
+    prefix: String,
     queues: Vec<Queue>,
 }
 
@@ -119,6 +158,7 @@ impl Queues {
 
         let mut created = Self {
             client,
+            prefix: prefix.to_owned(),
             queues: Vec::with_capacity(QUEUES.len()),
         };
         for spec in QUEUES {
@@ -148,6 +188,16 @@ impl Queues {
         }
 
         Ok(created)
+    }
+
+    /// Creates the queues `document_storage_service` needs on top.
+    pub(crate) async fn add_document_storage_queues(&mut self) -> Result<(), Report> {
+        for spec in DOCUMENT_STORAGE_QUEUES {
+            // Pushed as soon as it exists, so the stack's teardown deletes it.
+            let queue = create_queue(&self.client, &self.prefix, spec).await?;
+            self.queues.push(queue);
+        }
+        Ok(())
     }
 
     /// Every queue of the scenario.
@@ -251,10 +301,17 @@ async fn create_queue(
     prefix: &str,
     spec: &QueueSpec,
 ) -> Result<Queue, Report> {
-    let dead_letter_name = format!("{prefix}-{}-dlq", spec.name);
-    let dead_letter_url = client
-        .create_queue()
-        .queue_name(&dead_letter_name)
+    let (base_name, suffix) = match spec.name.strip_suffix(FIFO_SUFFIX) {
+        Some(base_name) => (base_name, FIFO_SUFFIX),
+        None => (spec.name, ""),
+    };
+    let fifo = !suffix.is_empty();
+    let dead_letter_name = format!("{prefix}-{base_name}-dlq{suffix}");
+    let mut dead_letter = client.create_queue().queue_name(&dead_letter_name);
+    if fifo {
+        dead_letter = dead_letter.attributes(QueueAttributeName::FifoQueue, "true");
+    }
+    let dead_letter_url = dead_letter
         .send()
         .await
         .context("could not create a dead-letter queue at EMAIL_E2E_SQS_URL")?
@@ -276,10 +333,12 @@ async fn create_queue(
         "maxReceiveCount": spec.max_receive_count,
     })
     .to_string();
-    let name = format!("{prefix}-{}", spec.name);
-    let url = client
-        .create_queue()
-        .queue_name(&name)
+    let name = format!("{prefix}-{base_name}{suffix}");
+    let mut queue = client.create_queue().queue_name(&name);
+    if fifo {
+        queue = queue.attributes(QueueAttributeName::FifoQueue, "true");
+    }
+    let url = queue
         .attributes(
             QueueAttributeName::VisibilityTimeout,
             spec.visibility_timeout_seconds.to_string(),

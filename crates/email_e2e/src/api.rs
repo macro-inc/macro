@@ -36,12 +36,49 @@ impl ApiResponse {
 pub(crate) struct ApiClient {
     pub(crate) http: reqwest::Client,
     pub(crate) api_url: String,
+    /// Where the GraphQL API answers, in a stack that serves it.
+    pub(crate) graphql_url: Option<String>,
     pub(crate) internal_api_key: String,
     pub(crate) macro_user_id: String,
     pub(crate) fusion_user_id: Uuid,
 }
 
 impl ApiClient {
+    /// Runs one GraphQL operation as the user and answers its `data`. A
+    /// GraphQL error fails the call, with what the server said.
+    pub(crate) async fn graphql(&self, query: &str, variables: &Value) -> Result<Value, Report> {
+        let Some(url) = &self.graphql_url else {
+            bail!(
+                "this stack does not serve GraphQL: start it with \
+                 `StackOptions {{ document_storage: true, ..Default::default() }}`"
+            );
+        };
+        let response = self
+            .http
+            .post(url)
+            .header("x-internal-auth-key", &self.internal_api_key)
+            .header("x-internal-macro-user-id", &self.macro_user_id)
+            .header(
+                "x-internal-fusionauth-user-id",
+                self.fusion_user_id.to_string(),
+            )
+            .json(&serde_json::json!({ "query": query, "variables": variables }))
+            .send()
+            .await
+            .context("the GraphQL API did not answer")?;
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .context("the GraphQL API answered an unreadable body")?;
+        let mut answer: Value = serde_json::from_str(&text)
+            .context(format!("the GraphQL API answered {status}: {text}"))?;
+        if let Some(errors) = answer.get("errors").filter(|errors| !errors.is_null()) {
+            bail!("the GraphQL API answered errors: {errors}");
+        }
+        Ok(answer["data"].take())
+    }
+
     /// Makes one request as the user, on the inbox `link` when given.
     ///
     /// The services accept a user through the internal headers the Macro

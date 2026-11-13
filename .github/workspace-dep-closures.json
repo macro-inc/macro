@@ -6585,6 +6585,7 @@
       "crates/macro_entrypoint",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_event_topics",
       "crates/outlook_emulator",
       "crates/workspace-hack"
     ],

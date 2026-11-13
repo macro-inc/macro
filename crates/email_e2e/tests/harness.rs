@@ -1,7 +1,7 @@
 //! The harness's own levers, checked against the real services.
 
 use email_e2e::redis::AsyncCommands;
-use email_e2e::{DEFAULT_TIMEOUT, Report, Stack, eventually};
+use email_e2e::{DEFAULT_TIMEOUT, Report, Stack, StackOptions, eventually};
 
 /// A stand-in told to fail answers the error once, records the request, and
 /// answers normally afterwards.
@@ -57,5 +57,24 @@ async fn scheduled_sweep_runs() -> Result<(), Report> {
     let stack = Stack::start().await?;
     stack.run_scheduled_sweep().await?;
     assert!(stack.take_queue_messages("scheduled").await?.is_empty());
+    stack.finish().await
+}
+
+/// A stack asked for it serves the GraphQL API on the scenario's data: a
+/// user reads their own id through it.
+#[tokio::test(flavor = "multi_thread")]
+async fn graphql_answers_as_the_user() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+
+    let data = ada
+        .graphql("query { user { id } }", &serde_json::json!({}))
+        .await?;
+    assert!(data["user"]["id"].is_string(), "{data}");
+
     stack.finish().await
 }
