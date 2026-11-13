@@ -291,6 +291,7 @@ export * from './suggestionAllOfStateReason';
 export * from './suggestionChanged';
 export * from './suggestionFeed';
 export * from './suggestionFrom';
+export * from './suggestionGenerationStatus';
 export * from './suggestionKind';
 export * from './suggestionKindOneOf';
 export * from './suggestionKindOneOfFour';

@@ -770,7 +770,7 @@ export type GenerationOverview = {
      * When the latest one that ended ended.
      */
     lastFinishedAt?: string | null;
-    lastOutcome?: null | GenerationStatus;
+    lastOutcome?: null | SuggestionGenerationStatus;
     /**
      * When the person may next ask for fresh suggestions, while they may
      * not; absent when they may (or must wait only for the running one).
@@ -1798,6 +1798,11 @@ export type SuggestionFeed = {
  * Who suggests a routine.
  */
 export type SuggestionFrom = 'for_you' | 'macro';
+
+/**
+ * Where a generation is.
+ */
+export type SuggestionGenerationStatus = 'generating' | 'ready' | 'partial' | 'failed' | 'cancelled' | 'interrupted';
 
 /**
  * What kind of suggestion it is, with that kind's data. A kind never changes.

@@ -4264,7 +4264,7 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/GenerationStatus",
+                "$ref": "#/components/schemas/SuggestionGenerationStatus",
                 "description": "How the latest one that ended ended."
               }
             ]
@@ -5957,6 +5957,18 @@
         "type": "string",
         "description": "Who suggests a routine.",
         "enum": ["for_you", "macro"]
+      },
+      "SuggestionGenerationStatus": {
+        "type": "string",
+        "description": "Where a generation is.",
+        "enum": [
+          "generating",
+          "ready",
+          "partial",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ]
       },
       "SuggestionKind": {
         "oneOf": [
