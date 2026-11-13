@@ -1,0 +1,28 @@
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentMention.tsx
+  s_40002bd3b63a7c::t_79cb94bb70498e 641-652
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/RoutineMention.test.tsx
+  s_40002bd3b63a7c::t_79cb94bb70498e 1-2,4-8,81-109
+  s_40002bd3b63a7c::t_74fce2c36ec3e7 110
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/routine-mention.tsx
+  s_40002bd3b63a7c::t_79cb94bb70498e 39
+apps/web/src/features/channel/Input/browser-test/draft.tsx
+  s_40002bd3b63a7c::t_79cb94bb70498e 4,141
+apps/web/src/features/channel/Input/browser-test/routine-paste.browser.e2e.ts
+  s_40002bd3b63a7c::t_79cb94bb70498e 1-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "275ca866987c85ae29250b7b72620fa73b80d707",
+  "prompts": {},
+  "sessions": {
+    "s_40002bd3b63a7c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de40e00c-9b42-4ec1-ac0a-a928cb29cc53",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
