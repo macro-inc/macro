@@ -293,8 +293,10 @@ right now." The state comes from the team's agents and `/harnesses`, the same
 sources as the Members row; members can't see the computer's runtime, so a
 running computer whose macrod dropped shows them no banner.
 
-Owners and admins remove an agent with its trash button and a confirmation;
-that releases its computer and deletes its account. On phones the dialog and
+Owners and admins remove an agent with its trash button and a destructive
+confirmation, **Remove <name>?** ("Its computer and files are deleted. This
+can't be undone."), with **Cancel** and **Remove**; removing releases its
+computer and deletes its account. On phones the dialog and
 confirmation are sheets and rows stay touch rows. Backend-free check (invite,
 Members row, notifications, Bring your AI and the DM banner):
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`

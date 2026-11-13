@@ -83,9 +83,8 @@ export default {
   dmOffline: "{{name}} isn't running: its computer is offline.",
   dmNotRunning: "{{name}} isn't running right now.",
   remove: 'Remove agent',
-  removeTitle: 'Remove agent',
-  removeBody:
-    'Remove {{name}} from the team? Its computer is released and its account is deleted.',
+  removeTitle: 'Remove {{name}}?',
+  removeBody: "Its computer and files are deleted. This can't be undone.",
   removeConfirm: 'Remove',
   removeFailed: "Couldn't remove {{name}}. Try again.",
   bringAiTitle: 'Bring your AI to {{name}}',

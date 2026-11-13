@@ -733,14 +733,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
       <ConfirmDialog
         open={!!agentToRemove()}
         onOpenChange={(open) => !open && setAgentToRemove(null)}
-        title={t('teamAgents.removeTitle')}
+        title={t('teamAgents.removeTitle', {
+          name: agentToRemove()?.name ?? '',
+        })}
         tone="danger"
         confirmLabel={t('teamAgents.removeConfirm')}
         pending={removeAgentMutation.isPending}
         onConfirm={handleRemoveAgent}
-        body={t('teamAgents.removeBody', {
-          name: agentToRemove()?.name ?? '',
-        })}
+        body={t('teamAgents.removeBody')}
       />
       <ConfirmDialog
         open={!!showCancelInviteModal()}

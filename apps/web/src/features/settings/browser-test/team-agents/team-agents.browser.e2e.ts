@@ -512,9 +512,20 @@ test('inviting an agent closes the dialog at once and its row shows the setup st
   });
   await expect(agentRow.locator('[data-agent-setup-step]')).toHaveCount(0);
 
+  // Removing deletes its computer and files, so it asks first; Cancel keeps it.
   await agentRow.getByRole('button', { name: 'Remove agent' }).click();
   const confirm = page.getByRole('dialog');
-  await expect(confirm).toContainText('Remove Ada from the team?');
+  await expect(confirm).toContainText('Remove Ada?');
+  await expect(confirm).toContainText(
+    "Its computer and files are deleted. This can't be undone."
+  );
+  await screenshot(page, testInfo, 'remove-agent-confirm');
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(confirm).toBeHidden();
+  await expect(agentRow).toHaveCount(1);
+  expect(backend.removed).toEqual([]);
+
+  await agentRow.getByRole('button', { name: 'Remove agent' }).click();
   await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(agentRow).toHaveCount(0);
   expect(backend.removed).toEqual([ADA]);
