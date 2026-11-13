@@ -1,6 +1,7 @@
 {
   "maxInputBytes": 52428800,
   "maxItems": 20000,
+  "maxListItems": 500,
   "maxTeamFolders": 500,
   "maxFolderDepth": 8,
   "maxImportBatchItems": 25,

@@ -9,7 +9,7 @@ file never leaves the device.
 ## Start here
 
 - `src/draft.rs`: vault limits applied per item; every parser ends here.
-- `src/vault.rs`: the vault's limits as public constants, for `crates/passwords` to share.
+- `src/vault.rs`: the vault's limits (item, folders, list, import batch and match) and login URL rule, as public constants and functions `crates/passwords` validates with.
 - `src/zip_archive.rs`: the only zip reading; bounds and entry-name rules.
 - Each parser's `//!` doc lists the source format it reads.
 
@@ -23,7 +23,8 @@ file never leaves the device.
 ## Boundaries
 
 - Depends on: nothing Macro-specific. Pure: no I/O, async, logging or tracing.
-- Used by: `password_import_wasm`, the browser adapter (opts into `reveal-secrets`).
+- Used by: `password_import_wasm`, the browser adapter (opts into `reveal-secrets`),
+  and `crates/passwords` for `vault` (no features: it never serializes secrets).
 
 ## Checks
 
@@ -42,7 +43,8 @@ file never leaves the device.
 - `Serialize` exists only under the `reveal-secrets` feature and reveals
   secrets; only `password_import_wasm` enables it.
 - Over-limit values skip the item (`TooLarge`); never truncate. The limits are
-  `vault::*`; the vault's own write checks in `crates/passwords` must match them.
+  `vault::*`, which `crates/passwords` validates with; `password_import_wasm`
+  checks the web copy (`apps/web/src/lib/core/password-import/limits.json`).
 - Hostile input stays bounded by counts, not just bytes: JSON lists are
   counted before they're kept (`bounded.rs`), per-item lists stop at 256
   entries, CSV records at 256 cells, URLs per item at 51, folders at 32 levels. Keep new lists behind

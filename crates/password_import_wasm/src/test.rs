@@ -116,6 +116,7 @@ fn web_limits_file_matches_the_vault_limits() {
     let expected = serde_json::json!({
         "maxInputBytes": limits.max_input_bytes,
         "maxItems": limits.max_items,
+        "maxListItems": vault::MAX_LIST_ITEMS,
         "maxTeamFolders": vault::MAX_TEAM_FOLDERS,
         "maxFolderDepth": vault::MAX_FOLDER_DEPTH,
         "maxImportBatchItems": vault::MAX_IMPORT_BATCH_ITEMS,

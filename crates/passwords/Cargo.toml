@@ -27,12 +27,12 @@ tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 utoipa = { workspace = true }
-url = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v7"] }
 zeroize = { workspace = true, features = ["derive"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+url = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }

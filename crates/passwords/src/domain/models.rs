@@ -390,15 +390,8 @@ pub struct LoginUrl(String);
 impl TryFrom<String> for LoginUrl {
     type Error = Error;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.len() > vault::MAX_URL_BYTES {
-            return Err(Error::Invalid);
-        }
-        let parsed = url::Url::parse(&value).map_err(|_| Error::Invalid)?;
-        if !matches!(parsed.scheme(), "http" | "https")
-            || parsed.host_str().is_none()
-            || !parsed.username().is_empty()
-            || parsed.password().is_some()
-        {
+        // The import preview applies the same rule, so its counts hold here.
+        if !vault::is_login_url(&value) {
             return Err(Error::Invalid);
         }
         Ok(Self(value))

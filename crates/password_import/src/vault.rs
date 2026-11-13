@@ -21,6 +21,8 @@ pub const MAX_TOTP_SEED_BYTES: usize = 1024;
 /// allows more in total than one write request carries.
 pub const MAX_ITEM_JSON_BYTES: usize = 1024 * 1024;
 
+/// Most items one vault list (or search) answer returns.
+pub const MAX_LIST_ITEMS: usize = 500;
 /// Most folders one team may have.
 pub const MAX_TEAM_FOLDERS: usize = 500;
 /// Deepest folder nesting, counting a top-level folder as depth one.

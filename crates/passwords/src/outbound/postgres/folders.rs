@@ -2,10 +2,11 @@
 use super::*;
 
 const MAX_FOLDERS: usize = password_import::vault::MAX_TEAM_FOLDERS;
-/// The recursive queries below spell this depth (8) and one past the folder cap
-/// (501) as literals; keep them in step with the vault limits.
+/// The queries below spell this depth (8) and one past the folder cap (501) as
+/// literals, which sqlx needs; these asserts keep them in step with the vault.
 const MAX_DEPTH: i32 = 8;
 const _: () = assert!(MAX_DEPTH as usize == password_import::vault::MAX_FOLDER_DEPTH);
+const _: () = assert!(MAX_FOLDERS + 1 == 501);
 
 /// `New` is a plain insert, so a reused id fails; only `Ensure` tolerates an
 /// existing row (it already looked under the tree lock).
