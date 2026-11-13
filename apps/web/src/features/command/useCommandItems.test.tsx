@@ -76,12 +76,23 @@ vi.mock('@core/hotkey/state', () => ({
   hotkeyScopeTree: new Map(),
 }));
 
+vi.mock('./rank-command-search-items', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('./rank-command-search-items')>();
+  return {
+    ...actual,
+    rankCommandSearchItems: vi.fn(actual.rankCommandSearchItems),
+  };
+});
+
+import { rankCommandSearchItems } from './rank-command-search-items';
 import type { CategoryFilter } from './types';
 import { useCommandItems } from './useCommandItems';
 
 afterEach(() => {
   cleanup();
   fixtures.requests = [];
+  vi.mocked(rankCommandSearchItems).mockClear();
 });
 
 const createCommands: CommandWithInfo[] = [
@@ -138,4 +149,24 @@ it('adds projects to All only for typed queries', () => {
   expect(fixtures.requests.at(-1)).not.toContain('initiative');
   setQuery('launch');
   expect(fixtures.requests.at(-1)).toContain('initiative');
+});
+
+it('ranks a short All query once when no command matches it', () => {
+  fixtures.projectFlag = () => true;
+  fixtures.commands = createCommands;
+  let source!: ReturnType<typeof useCommandItems>;
+  render(() => {
+    source = useCommandItems(
+      () => 'lau',
+      () => 'all',
+      { searchActive: () => true }
+    );
+    return null;
+  });
+
+  expect(source.items().map((item) => item.id)).toEqual([
+    'search:all:lau',
+    'launch',
+  ]);
+  expect(rankCommandSearchItems).toHaveBeenCalledTimes(1);
 });

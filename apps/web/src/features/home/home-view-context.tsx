@@ -90,6 +90,11 @@ export type HomeViewContext = {
   /** The list supplies `focusList` for as long as it is mounted. */
   registerListFocus: (focus: () => boolean) => void;
   closePreview: () => void;
+  /** Open a session the composer just started; the list highlights its row once listed. */
+  openStartedSession: (id: string) => void;
+  /** The started session whose row the list has yet to highlight. */
+  startedSessionToHighlight: Accessor<string | undefined>;
+  clearStartedSessionToHighlight: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
 };
@@ -186,7 +191,10 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   };
   const navigateTarget = (target: PreviewBlockTarget, replace = false) =>
     navigateDetail(homePreviewTargetNavigation(target), replace);
+  const [startedSessionToHighlight, setStartedSessionToHighlight] =
+    createSignal<string>();
   const closePreview = () => {
+    setStartedSessionToHighlight(undefined);
     fireAndForget(
       navigate(
         { route: homeSplitRoute, params: {} },
@@ -204,6 +212,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     entity: PreviewSelection,
     options?: { activate?: boolean }
   ) => {
+    setStartedSessionToHighlight(undefined);
     if (entity.type === 'calendar_event') {
       setComposerFocusRequest(undefined);
       return openCalendarEvent(entity, options);
@@ -287,6 +296,13 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     focusList: () => listFocus()?.() ?? false,
     registerListFocus,
     closePreview,
+    openStartedSession: (id: string) => {
+      openPreview({ type: 'agent_session', id });
+      setStartedSessionToHighlight(id);
+    },
+    startedSessionToHighlight,
+    clearStartedSessionToHighlight: () =>
+      setStartedSessionToHighlight(undefined),
     setTab,
     setFacets,
   };

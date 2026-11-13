@@ -275,6 +275,21 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(by_record[0]["pipeline"]["id"], json!(id));
     assert_eq!(by_record[0]["entries"][0]["record"]["id"], json!(globex));
 
+    let (status, details) = call(&app, "GET", "/crm/pipelines/details", None).await;
+    assert_eq!(status, StatusCode::OK, "{details}");
+    assert_eq!(details.as_array().unwrap().len(), 1);
+    assert_eq!(details[0]["id"], json!(id));
+    assert_eq!(details[0]["name"], "Sales");
+    assert_eq!(details[0]["fields"][0]["type"], "company");
+    let stage = details[0]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["name"] == "Stage")
+        .unwrap();
+    assert_eq!(stage["options"], json!(["Prospect", "Demo", "Won"]));
+    assert!(details[0]["version"].as_i64().unwrap() > version);
+
     let (status, searched) =
         call(&app, "GET", "/crm/pipelines/entry-search?search=glob", None).await;
     assert_eq!(status, StatusCode::OK, "{searched}");
