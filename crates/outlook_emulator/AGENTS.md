@@ -190,6 +190,15 @@ local stack, without Microsoft accounts.
   understand answers 400, and an unknown path answers 400 with no route in
   the request log. Add support instead of loosening that: a silent default
   would hide a query our code starts sending.
+- A `POST` or `PATCH` with neither `Content-Length` nor `Transfer-Encoding`
+  answers 411 with an HTML page before any route runs, as Graph's front end
+  does: a bodyless `send` or `createReply` must still name a length of 0.
+- An attachment's `size` is larger than its file, as in Graph, where it
+  counts the attachment's other properties too. Never compare it for equality
+  with the uploaded length.
+- A subject keeps its first 255 characters, Exchange's limit; the rest is
+  dropped without an error. Whether Graph refuses instead is not checked
+  against it.
 - Links (`@odata.nextLink`, `@odata.deltaLink`, upload URLs) are on the
   emulator's own origin, because the client refuses to send its bearer token
   to a host other than its Graph root. Delta links use the OData key form

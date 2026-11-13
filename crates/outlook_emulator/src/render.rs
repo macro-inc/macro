@@ -141,6 +141,11 @@ pub(crate) fn folder(folder: &Folder, mailbox: &Mailbox, query: &Query) -> Value
     resource
 }
 
+/// What Graph adds to a file's byte length when it reports an attachment's
+/// `size`: the size is MAPI's `PidTagAttachSize`, which also counts the
+/// attachment's other properties, so it is always larger than the file.
+const ATTACHMENT_PROPERTY_BYTES: usize = 1_024;
+
 pub(crate) fn attachment(attachment: &Attachment, query: &Query) -> Result<Value, GraphError> {
     let resource = json!({
         "@odata.type": "#microsoft.graph.fileAttachment",
@@ -149,7 +154,7 @@ pub(crate) fn attachment(attachment: &Attachment, query: &Query) -> Result<Value
         "lastModifiedDateTime": time(attachment.modified),
         "name": attachment.name,
         "contentType": attachment.content_type,
-        "size": attachment.bytes.len(),
+        "size": attachment.bytes.len() + ATTACHMENT_PROPERTY_BYTES,
         "isInline": attachment.inline,
         "contentId": attachment.content_id,
         "contentLocation": null,
