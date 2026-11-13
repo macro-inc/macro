@@ -53,6 +53,20 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         done_since: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<Suggestion>, Self::Err>> + Send;
 
+    /// When the person last opened their feed, if ever.
+    fn feed_viewed_at(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
+    /// The person opened their feed at `at`; an earlier time than the one
+    /// stored changes nothing.
+    fn feed_viewed(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// The person's open suggestions, and the `closed` most recently closed.
     fn for_review(
         &self,
@@ -259,15 +273,21 @@ pub trait RequestSessions: Send + Sync + 'static {
     async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>, rootcause::Report>;
 }
 
-/// The open hidden sessions of generations. Object-safe, so one adapter
-/// serves every crate whose tools a generation session calls.
+/// The hidden sessions of generations. Object-safe, so one adapter serves
+/// every crate whose tools a generation session calls.
 #[async_trait::async_trait]
 pub trait GenerationSessions: Send + Sync + 'static {
-    /// Session `session`, if it is a generation's and still open.
+    /// Session `session`, if it is a generation's and still open: only then
+    /// may it call its kind's tools.
     async fn open_session(
         &self,
         session: Uuid,
     ) -> Result<Option<GenerationSession>, rootcause::Report>;
+
+    /// Whether `session` is a generation's and not deleted: open, ended and
+    /// being cleaned up, or abandoned (deleting it failed). Code it still
+    /// runs keeps a generation session's scope, and the feed refuses it.
+    async fn undeleted(&self, session: Uuid) -> Result<bool, rootcause::Report>;
 }
 
 /// Who gets a nightly generation. Object-safe, for the same reason.
@@ -320,8 +340,9 @@ pub trait RunSessions: Send + Sync + 'static {
 /// manage it with.
 pub trait SuggestionApi: Send + Sync + 'static {
     /// The person's open suggestions they can still open every item of, best
-    /// first. With their `timezone`, it also counts them in for nightly
-    /// generations. `caller` is the person or their own agent; a
+    /// first, each marked new when proposed since they last opened the feed
+    /// ([`Self::viewed`]). With their `timezone`, it also counts them in for
+    /// nightly generations. `caller` is the person or their own agent; a
     /// generation session is refused.
     fn feed(
         &self,
@@ -329,6 +350,14 @@ pub trait SuggestionApi: Send + Sync + 'static {
         caller: SuggestionCaller,
         timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<SuggestionFeed, SuggestionError>> + Send;
+
+    /// The person opened their feed now: suggestions proposed until now are
+    /// no longer new. `caller` is refused as for [`Self::feed`].
+    fn viewed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+    ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 
     /// The person, or someone acting for them, acts on a suggestion. A
     /// background prompt suggestion starts a run (one whose last run failed runs
@@ -354,9 +383,10 @@ pub trait SuggestionApi: Send + Sync + 'static {
     /// for a person in `timezone`.
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String;
 
-    /// How many changes suggestions session `session` of generation `generation`
-    /// made.
-    fn kept(
+    /// How many feed changes suggestions session `session` of generation
+    /// `generation` made: suggestions it added, brought back, rewrote, retired
+    /// or gave a draft. What the session did, not what is open now.
+    fn feed_changes(
         &self,
         generation: Uuid,
         session: Uuid,

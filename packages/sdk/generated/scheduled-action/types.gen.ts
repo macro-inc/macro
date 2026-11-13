@@ -792,6 +792,31 @@ export type FoundNames = {
 };
 
 /**
+ * The person's generations now, for the web app to show and poll.
+ */
+export type GenerationOverview = {
+    /**
+     * When the latest one that ended ended.
+     */
+    lastFinishedAt?: string | null;
+    lastOutcome?: null | SuggestionGenerationStatus;
+    /**
+     * When the person may next ask for fresh suggestions, while they may
+     * not; absent when they may (or must wait only for the running one).
+     */
+    regenerateAvailableAt?: string | null;
+    /**
+     * When the running one started.
+     */
+    startedAt?: string | null;
+    /**
+     * Whether one is running.
+     */
+    state: GenerationState;
+    trigger?: null | GenerationTrigger;
+};
+
+/**
  * What starting a generation did.
  */
 export type GenerationStarted = {
@@ -802,9 +827,21 @@ export type GenerationStarted = {
 };
 
 /**
+ * Whether one of the person's generations is running.
+ */
+export type GenerationState = 'idle' | 'running';
+
+/**
  * Where a person's suggestions are in being generated.
  */
 export type GenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
+
+/**
+ * What starts a generation: a person finishing onboarding, their night, or
+ * the person asking for fresh suggestions. Shared by everything a
+ * generation's sessions write.
+ */
+export type GenerationTrigger = 'onboarding' | 'nightly' | 'manual';
 
 /**
  * Which GitHub deliveries match.
@@ -971,6 +1008,31 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * Fresh suggestions weren't started: the person asked within the hour.
+ */
+export type RegenerationCooldown = {
+    /**
+     * When they may ask again.
+     */
+    availableAt: string;
+};
+
+/**
+ * Why fresh suggestions weren't started.
+ */
+export type RegenerationRefusal = 'running';
+
+/**
+ * Fresh suggestions weren't started: a generation is running.
+ */
+export type RegenerationRunning = {
+    /**
+     * Why.
+     */
+    reason: RegenerationRefusal;
 };
 
 /**
@@ -1717,6 +1779,11 @@ export type Suggestion = SuggestionKind & {
      */
     importance: number;
     /**
+     * Proposed since the person last opened their feed. Only the feed sets
+     * it; false everywhere else.
+     */
+    isNew: boolean;
+    /**
      * What acting on it produced.
      */
     produced: Array<Target>;
@@ -1780,6 +1847,11 @@ export type SuggestionFeed = {
  * Who suggests a routine.
  */
 export type SuggestionFrom = 'for_you' | 'macro';
+
+/**
+ * Where a generation is.
+ */
+export type SuggestionGenerationStatus = 'generating' | 'ready' | 'partial' | 'failed' | 'cancelled' | 'interrupted';
 
 /**
  * What kind of suggestion it is, with that kind's data. A kind never changes.
@@ -2882,6 +2954,73 @@ export type StartSuggestionGenerationResponses = {
 
 export type StartSuggestionGenerationResponse = StartSuggestionGenerationResponses[keyof StartSuggestionGenerationResponses];
 
+export type GetSuggestionGenerationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/generation';
+};
+
+export type GetSuggestionGenerationErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type GetSuggestionGenerationError = GetSuggestionGenerationErrors[keyof GetSuggestionGenerationErrors];
+
+export type GetSuggestionGenerationResponses = {
+    /**
+     * The caller's generations now: whether one is running (poll while it is), how the last one ended, and when they may next ask for fresh suggestions
+     */
+    200: GenerationOverview;
+};
+
+export type GetSuggestionGenerationResponse = GetSuggestionGenerationResponses[keyof GetSuggestionGenerationResponses];
+
+export type RegenerateSuggestionsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/regenerate';
+};
+
+export type RegenerateSuggestionsErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    /**
+     * One of the caller's generations is running
+     */
+    409: RegenerationRunning;
+    /**
+     * The caller asked within the hour; `Retry-After` says in how many seconds they may ask again
+     */
+    429: RegenerationCooldown;
+    500: string;
+};
+
+export type RegenerateSuggestionsError = RegenerateSuggestionsErrors[keyof RegenerateSuggestionsErrors];
+
+export type RegenerateSuggestionsResponses = {
+    /**
+     * Fresh suggestions started in the background: the caller's whole workspace researched again and their feed brought up to date, with routine suggestions when the week's are due. Poll `GET /suggestions/generation` until it is idle
+     */
+    202: GenerationStarted;
+};
+
+export type RegenerateSuggestionsResponse = RegenerateSuggestionsResponses[keyof RegenerateSuggestionsResponses];
+
 export type ReviewSuggestionsData = {
     body?: never;
     path?: never;
@@ -2940,6 +3079,37 @@ export type RecordSuggestionsSeenResponses = {
 };
 
 export type RecordSuggestionsSeenResponse = RecordSuggestionsSeenResponses[keyof RecordSuggestionsSeenResponses];
+
+export type RecordSuggestionsViewedData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/viewed';
+};
+
+export type RecordSuggestionsViewedErrors = {
+    401: string;
+    /**
+     * A generation session may not record a visit
+     */
+    403: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type RecordSuggestionsViewedError = RecordSuggestionsViewedErrors[keyof RecordSuggestionsViewedErrors];
+
+export type RecordSuggestionsViewedResponses = {
+    /**
+     * Recorded: suggestions proposed until now are no longer new in the feed
+     */
+    204: void;
+};
+
+export type RecordSuggestionsViewedResponse = RecordSuggestionsViewedResponses[keyof RecordSuggestionsViewedResponses];
 
 export type RewriteSuggestionData = {
     body: RewriteSuggestion;

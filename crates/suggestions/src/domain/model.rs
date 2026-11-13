@@ -39,11 +39,24 @@ pub struct Suggestion {
     pub updated_at: DateTime<Utc>,
     /// When its state last changed, such as when it was dismissed.
     pub state_changed_at: DateTime<Utc>,
+    /// Proposed since the person last opened their feed. Only the feed sets
+    /// it; false everywhere else.
+    pub is_new: bool,
     /// A background prompt suggestion's latest run.
     pub run: Option<SuggestionRun>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
     pub kind: SuggestionKind,
+}
+
+impl Suggestion {
+    /// Whether it became proposed after `viewed`, when the person last opened
+    /// their feed; with no visit, every proposed one is. Accepted and closed
+    /// suggestions never are.
+    pub fn proposed_since(&self, viewed: Option<DateTime<Utc>>) -> bool {
+        self.state == SuggestionState::Proposed
+            && viewed.is_none_or(|viewed| self.state_changed_at > viewed)
+    }
 }
 
 /// A run of a background prompt suggestion: a hidden agent session of the
@@ -581,17 +594,32 @@ pub enum NewKind {
     },
 }
 
-/// What starts a generation: a person finishing onboarding, or their night.
-/// Shared by everything a generation's sessions write.
+/// What starts a generation: a person finishing onboarding, their night, or
+/// the person asking for fresh suggestions. Shared by everything a
+/// generation's sessions write.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr, strum::IntoStaticStr,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::EnumString,
+    strum::AsRefStr,
+    strum::IntoStaticStr,
+    strum::EnumIter,
+    serde::Serialize,
+    utoipa::ToSchema,
 )]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum GenerationTrigger {
     /// The person just signed up; their workspace is nearly empty.
     Onboarding,
     /// The nightly run in the person's night: full research, then manage.
     Nightly,
+    /// The person asked for fresh suggestions: the nightly run's research,
+    /// while they wait.
+    Manual,
 }
 
 /// What a generation session may call: suggestions or routine suggestions.
