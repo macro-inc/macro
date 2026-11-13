@@ -15,23 +15,27 @@ WITH viewed AS MATERIALIZED (
     SELECT per_link.*
     FROM unnest($1::uuid[]) AS links(link_id)
     CROSS JOIN LATERAL (
-        WITH recent_views AS MATERIALIZED (
-            SELECT uh.thread_id, uh.updated_at
-            FROM email_user_history uh
-            WHERE
-                uh.link_id = links.link_id
-              AND uh.updated_at <= COALESCE($3::timestamptz, 'infinity')
-              AND (uh.updated_at, uh.thread_id) < (
-                  COALESCE($3::timestamptz, 'infinity'),
-                  COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')
-              )
-            ORDER BY uh.updated_at DESC
-            FETCH FIRST (GREATEST(4 * $2::bigint, 200)) ROWS WITH TIES
-        ),
-        -- OFFSET 0 keeps the inbox check one index probe per view.
-        from_recent_views AS MATERIALIZED (
+        -- The newest views, in view order, stopping once the page is full. The
+        -- view-time bound is a subquery so the planner cannot see that it is
+        -- 'infinity' on a first page: seeing that, it prices the link at the
+        -- table's average handful of views and may read the link's whole
+        -- history through the primary key and sort it. OFFSET 0 keeps the
+        -- inbox check one index probe per view.
+        WITH from_recent_views AS MATERIALIZED (
             SELECT t.*, recent_views.updated_at AS effective_ts
-            FROM recent_views
+            FROM (
+                SELECT uh.thread_id, uh.updated_at
+                FROM email_user_history uh
+                WHERE
+                    uh.link_id = links.link_id
+                  AND uh.updated_at <= (SELECT COALESCE($3::timestamptz, 'infinity'))
+                  AND (uh.updated_at, uh.thread_id) < (
+                      COALESCE($3::timestamptz, 'infinity'),
+                      COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')
+                  )
+                ORDER BY uh.updated_at DESC
+                FETCH FIRST (GREATEST(4 * $2::bigint, 200)) ROWS WITH TIES
+            ) AS recent_views
             CROSS JOIN LATERAL (
                 SELECT
                     t.id,
@@ -53,10 +57,23 @@ WITH viewed AS MATERIALIZED (
             ORDER BY recent_views.updated_at DESC
             FETCH FIRST ($2) ROWS WITH TIES
         ),
+        -- The newest views answer for the link when they fill the page or when
+        -- they are all of its views from the cursor on. The count leaves out
+        -- the cursor's id, so it can only err towards reading the inbox.
         recent_views_suffice AS (
             SELECT
                 (SELECT count(*) FROM from_recent_views) >= $2
-                OR (SELECT count(*) FROM recent_views) < GREATEST(4 * $2::bigint, 200) AS suffice
+                OR (
+                    SELECT count(*)
+                    FROM (
+                        SELECT 1
+                        FROM email_user_history uh
+                        WHERE
+                            uh.link_id = links.link_id
+                          AND uh.updated_at <= (SELECT COALESCE($3::timestamptz, 'infinity'))
+                        LIMIT GREATEST(4 * $2::bigint, 200)
+                    ) AS views_within_cap
+                ) < GREATEST(4 * $2::bigint, 200) AS suffice
         )
         SELECT from_recent_views.*
         FROM from_recent_views
