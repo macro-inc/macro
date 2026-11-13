@@ -23,7 +23,7 @@ with `decode_view` and keeps each version.
 
 | Route | Path | Shows |
 | --- | --- | --- |
-| `agent-dashboard` | `/app/agent-accounts/:userId` | The account's picture, name and Agent tag, a Dashboard tab, and its home dashboard (`GET /dashboards/home/{userId}`) |
+| `agent-dashboard` | `/app/agent-accounts/:userId` | The agent's profile: its picture, name and Agent tag, the Dashboard tab (first, and the default), and its home dashboard (`GET /dashboards/home/{userId}`) |
 | `dashboard` | `/app/dashboard/:dashboardId` | Any dashboard by id (`GET /dashboards/{id}`) |
 
 `:userId` is the account's Macro id (`macro|agent@example.com`, URL-encoded).
@@ -43,14 +43,30 @@ and one column: the renderer stacks rows below its container breakpoint.
 
 ## Entry points
 
-- A direct message with an agent account has a **Dashboard** action in its
-  header. It opens the agent page in a new pane (in front, on phones).
-- The Agents view lists agent personas (bots), not agent accounts, so it has
-  no dashboard entry yet.
+An agent teammate's profile opens wherever you click the agent, with the flag
+on. Each opens it in a new pane (in front, on phones):
+
+- its picture anywhere it shows (channel messages, Settings → Team), which for
+  a person still opens the DM;
+- its name beside its channel messages, which for a person stays plain text;
+- an `@mention` of it, which for a person only shows the user card on hover;
+- its row in a channel's member list, which for a person opens the DM;
+- **Open profile**, the first action of its hover card (and of the touch sheet
+  where one still opens);
+- the **Dashboard** action in the header of a direct message with it.
+
+People, and every surface with the flag off, keep their usual behavior.
+`useAgentProfile` (`features/agent-dashboards/agent-profile.ts`) decides
+(`profileOf`) and opens; `UserCardTrigger` takes a `profileSurface` to route a
+click on an agent. The Agents view lists agent personas (bots), not agent
+accounts, so it has no entry yet.
 
 ## Traces
 
-The page load is the routed `view.agent-dashboard` (or `view.dashboard`) flow,
+A click that opens a profile starts the `agent_profile.open` interaction
+(`agent_profile.surface`: `avatar`, `sender-name`, `mention`, `member-list`,
+`user-card` or `dm-header`), which the routed view joins. The page load is the
+routed `view.agent-dashboard` (or `view.dashboard`) flow,
 with a `dashboard.load` phase for the dashboard request and one
 `dashboard.pane` child flow per top-level pane (`dashboard.pane.index`,
 `dashboard.pane.type`, and `dashboard.pane.id` when set; never content).
