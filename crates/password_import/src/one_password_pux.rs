@@ -572,6 +572,11 @@ fn decode(value_type: ValueType, raw: &RawValue) -> SectionValue {
             },
             Err(_) => SectionValue::Unsupported,
         },
+        // An empty field: nothing to carry over, and nothing dropped.
+        ValueType::Date | ValueType::MonthYear if raw.get() == "null" => SectionValue::Text {
+            value: Secret::new(String::new()),
+            concealed: false,
+        },
         // Unix seconds, shown as a calendar date.
         ValueType::Date => match serde_json::from_str::<i64>(raw.get())
             .ok()

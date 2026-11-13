@@ -125,7 +125,8 @@ struct Field {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Login {
-    #[serde(default)]
+    // Older mobile exports write `"uris": null` for a login without one.
+    #[serde(default, deserialize_with = "null_as_empty")]
     uris: Bounded<Uri>,
     username: Option<Secret>,
     password: Option<Secret>,
@@ -417,4 +418,13 @@ fn add_ssh_key(draft: &mut Draft, key: SshKey) {
         key.public_key,
         key.key_fingerprint,
     );
+}
+
+/// An explicit `null` reads as the empty value, as an absent field does.
+fn null_as_empty<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }

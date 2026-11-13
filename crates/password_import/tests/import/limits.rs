@@ -234,3 +234,37 @@ fn one_password_7_csv_is_refused_as_an_unsupported_version() {
         );
     }
 }
+
+/// A zip64 archive declaring 500,000 entries is refused from its declared
+/// count, before the zip reader allocates anything per entry.
+#[test]
+fn zip64_entry_count_is_refused_before_reading_the_archive() {
+    let mut bytes = b"PK\x03\x04".to_vec();
+    bytes.resize(64, 0);
+    // zip64 end-of-central-directory record: signature, size, versions, disk
+    // numbers, entries on this disk, total entries, directory size and offset.
+    let record = bytes.len() as u64;
+    bytes.extend_from_slice(b"PK\x06\x06");
+    bytes.extend_from_slice(&44u64.to_le_bytes());
+    bytes.extend_from_slice(&[45, 0, 45, 0]);
+    bytes.extend_from_slice(&[0; 8]);
+    bytes.extend_from_slice(&500_000u64.to_le_bytes());
+    bytes.extend_from_slice(&500_000u64.to_le_bytes());
+    bytes.extend_from_slice(&[0; 16]);
+    // zip64 locator: signature, disk, record offset, total disks.
+    bytes.extend_from_slice(b"PK\x06\x07");
+    bytes.extend_from_slice(&[0; 4]);
+    bytes.extend_from_slice(&record.to_le_bytes());
+    bytes.extend_from_slice(&1u32.to_le_bytes());
+    // Classic end record deferring every count to zip64.
+    bytes.extend_from_slice(b"PK\x05\x06");
+    bytes.extend_from_slice(&[0; 4]);
+    bytes.extend_from_slice(&[0xff; 4]);
+    bytes.extend_from_slice(&[0xff; 8]);
+    bytes.extend_from_slice(&[0; 2]);
+
+    assert_eq!(
+        parse(&bytes, SourceFormat::OnePasswordPux, &Limits::default()).err(),
+        Some(ImportError::TooManyEntries)
+    );
+}
