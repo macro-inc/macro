@@ -1,0 +1,28 @@
+apps/web/src/features/agent-dashboards/queries/dashboard-client.ts
+  s_699e95788b47ad::t_bf685fa0bfbca5 4-5,13-16,18-19,33-45
+  s_e003e6a508b15c::t_915fe1bae80109 64,68-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3e926a58e84ca52376433176afe744243e675b57",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e003e6a508b15c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a82c37e1-00f7-4ac9-9bb5-e0f8d2293a0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
