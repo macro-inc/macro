@@ -83,6 +83,14 @@ impl MessageRepository for Repo {
             .cloned()
             .collect())
     }
+    async fn thread_replies(
+        &self,
+        _: &MessageParent,
+        _: Uuid,
+        _: &ThreadRepliesQuery,
+    ) -> Result<ReplyWindow, MessageError> {
+        unimplemented!()
+    }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(true)
     }
@@ -1406,6 +1414,14 @@ impl MessageRepository for StrictRepo {
         root: Uuid,
     ) -> Result<Vec<Message>, MessageError> {
         self.inner.replies(parent, root).await
+    }
+    async fn thread_replies(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+        query: &ThreadRepliesQuery,
+    ) -> Result<ReplyWindow, MessageError> {
+        self.inner.thread_replies(parent, root, query).await
     }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(self.parent_exists)

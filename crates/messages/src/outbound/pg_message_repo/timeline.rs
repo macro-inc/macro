@@ -215,7 +215,7 @@ impl PgMessageRepository {
                     OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9))
                     OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                         AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9)))
-                AND ($3::timestamptz IS NULL OR (m.created_at, m.id) < ($3, $4::uuid))
+                AND (m.created_at, m.id) < (COALESCE($3::timestamptz, 'infinity'), COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'))
             ORDER BY m.created_at DESC, m.id DESC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
@@ -240,7 +240,7 @@ impl PgMessageRepository {
                     OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9))
                     OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                         AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9)))
-                AND ($3::timestamptz IS NULL OR (m.created_at, m.id) > ($3, $4::uuid))
+                AND (m.created_at, m.id) > (COALESCE($3::timestamptz, '-infinity'), COALESCE($4::uuid, '00000000-0000-0000-0000-000000000000'))
             ORDER BY m.created_at ASC, m.id ASC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)

@@ -10,6 +10,7 @@ use uuid::Uuid;
 pub mod changes;
 #[cfg(test)]
 mod test;
+mod thread_replies;
 mod timeline;
 
 /// Call-scoped guest conversation use cases.

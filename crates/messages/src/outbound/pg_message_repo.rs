@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 mod change_log;
 mod historical;
+mod thread_replies;
 mod timeline;
 mod write_gate;
 
@@ -43,6 +44,8 @@ struct StoredMessage {
     updated_at: DateTime<Utc>,
     edited_at: Option<chrono::NaiveDateTime>,
     deleted_at: Option<chrono::NaiveDateTime>,
+    /// Source order of imported history, which a thread's replies sort by first.
+    import_order: Option<i64>,
 }
 
 fn database_error(error: sqlx::Error) -> MessageError {
@@ -646,6 +649,15 @@ impl MessageRepository for PgMessageRepository {
         .await
         .map_err(database_error)?;
         self.hydrate(rows).await
+    }
+
+    async fn thread_replies(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+        query: &ThreadRepliesQuery,
+    ) -> Result<ReplyWindow, MessageError> {
+        self.read_thread_replies(parent, root, query).await
     }
 
     async fn document_file_type(&self, document_id: &str) -> Result<Option<String>, MessageError> {

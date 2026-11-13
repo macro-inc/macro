@@ -87,6 +87,78 @@ pub struct MessageTimelineQuery {
     pub limit: Option<u16>,
 }
 
+/// Position of a reply in its thread's display order, `import_order NULLS
+/// LAST, created_at, id`: imported history first, in its source order, then
+/// the replies posted in Macro.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ReplyCursor {
+    /// Source order of an imported reply; absent for a reply posted in Macro.
+    pub import_order: Option<i64>,
+    /// Reply creation time.
+    pub created_at: DateTime<Utc>,
+    /// Reply UUID, breaking ties on the fields above.
+    pub id: Uuid,
+}
+
+/// Replies in a page when the caller names no limit.
+const DEFAULT_REPLY_PAGE: u16 = 50;
+/// Most replies in one page.
+const MAX_REPLY_PAGE: u16 = 100;
+
+/// Which window of a thread's live replies to read.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ThreadRepliesQuery {
+    /// Read the replies strictly on one side of this position.
+    pub cursor: Option<ReplyCursor>,
+    /// Which side of the cursor to read. Without a cursor, `Older` reads the
+    /// end of the thread and `Newer` its start.
+    #[serde(default)]
+    pub direction: MessageDirection,
+    /// Center the window on this live reply of the thread; invalid with `cursor`.
+    pub around: Option<Uuid>,
+    /// Page size, default 50, clamped by the application to 1..=100.
+    pub limit: Option<u16>,
+}
+
+impl ThreadRepliesQuery {
+    /// The most replies one page of this query holds.
+    pub fn page_size(&self) -> u16 {
+        self.limit
+            .unwrap_or(DEFAULT_REPLY_PAGE)
+            .clamp(1, MAX_REPLY_PAGE)
+    }
+}
+
+/// A window of a discussion's live replies with its root.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ThreadRepliesPage {
+    /// Shared thread lifecycle and anchor state.
+    pub state: ThreadState,
+    /// Root message, which may be a tombstone.
+    pub root: Message,
+    /// Live replies in display order, each as [`MessageThread::replies`]
+    /// holds it.
+    pub replies: Vec<Message>,
+    /// Continue to earlier replies; present only when some exist.
+    pub older_cursor: Option<ReplyCursor>,
+    /// Continue to later replies; present only when some exist.
+    pub newer_cursor: Option<ReplyCursor>,
+}
+
+/// The replies a repository read for one [`ThreadRepliesQuery`].
+#[derive(Debug, Clone, Default)]
+pub struct ReplyWindow {
+    /// Live replies in display order.
+    pub replies: Vec<Message>,
+    /// The first reply's position, when earlier replies exist.
+    pub older_cursor: Option<ReplyCursor>,
+    /// The last reply's position, when later replies exist.
+    pub newer_cursor: Option<ReplyCursor>,
+}
+
 pub use super::models::{MessageListItem, MessageThreadPreview};
 
 /// Bidirectional, bounded timeline page, ordered newest root first.
@@ -498,6 +570,17 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         root_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
+    /// One window of a root's live replies within its parent, in the order
+    /// [`Self::replies`] returns them, with a cursor on each side that has
+    /// more. An empty window has no cursors. `NotFound` when `query.around`
+    /// is not a live reply of the root; the caller rejects `around` with a
+    /// cursor.
+    fn thread_replies(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        query: &ThreadRepliesQuery,
+    ) -> impl Future<Output = Result<ReplyWindow, MessageError>> + Send;
     /// Live messages before a prompt, in chronological order. Discussion context
     /// stays within the prompt's thread; channel context includes the timeline.
     fn preceding(

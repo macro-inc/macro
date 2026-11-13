@@ -1,7 +1,9 @@
-//! GraphQL inbound mutation adapter for channel activity.
+//! GraphQL inbound adapters for channels: the activity mutation and the
+//! message reads.
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+pub mod messages;
 #[cfg(test)]
 mod test;
 

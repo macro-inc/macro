@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET LOCAL enable_sort = on",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "32b651fbc034532523668eca20e41c74ac7cdb752112fa5430d39b726e0bbef0"
+}
