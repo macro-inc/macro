@@ -55,6 +55,11 @@ export function useHarnessesQuery() {
   return useQuery(() => harnessesQueryOptions);
 }
 
+/** The same list, for code outside components; fresh data is reused. */
+export function fetchHarnesses(): Promise<Harness[]> {
+  return queryClient.fetchQuery(harnessesQueryOptions);
+}
+
 const harnessDirectoryQueryOptions = queryOptions({
   queryKey: harnessKeys.directory.queryKey,
   queryFn: async (): Promise<Harness[]> =>

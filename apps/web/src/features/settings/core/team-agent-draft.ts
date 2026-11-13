@@ -63,6 +63,20 @@ export function teamAgentDraftProblems(
   return problems;
 }
 
+/** What keeps the draft from being sent, worst first. */
+export type InviteBlocker = 'fields' | 'too_long' | 'size';
+
+/** The first thing to fix before the draft can be sent, if any. */
+export function inviteBlocker(
+  problems: TeamAgentDraftProblems
+): InviteBlocker | undefined {
+  const fields = [problems.name, problems.jobDescription, problems.personality];
+  if (fields.includes('required')) return 'fields';
+  if (fields.includes('too_long')) return 'too_long';
+  if (problems.size) return 'size';
+  return undefined;
+}
+
 /** The request for a draft with no problems, or `undefined`. */
 export function teamAgentRequest(
   draft: TeamAgentDraft

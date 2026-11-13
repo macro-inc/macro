@@ -30,6 +30,7 @@ use hosted_runtimes::outbound::pg::PgComputerRepo;
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -66,7 +67,7 @@ pub type Operator = ComputerOperator<
     ConfiguredFleet,
     HostedHarnesses,
     SystemClock,
-    setup_notice::IngressSetupNotices<SetupNotifications>,
+    setup_notice::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
 >;
 
 /// Build the operator from explicit config, or `None` when this deployment
@@ -159,7 +160,7 @@ pub(crate) async fn operator(
             service: harnesses,
             default_agents,
         },
-        setup_notice::IngressSetupNotices::new(notifications),
+        setup_notice::IngressSetupNotices::new(notifications, PgTeamAgentsRepo::new(pool.clone())),
         SystemClock,
         Arc::new(ServiceDeployment),
     )

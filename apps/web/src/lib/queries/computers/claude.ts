@@ -27,8 +27,9 @@ export function useClaudeModeQuery(harnessId: () => string | undefined) {
 export type ClaudeSignInEntry =
   | 'computer_setup'
   | 'computer_row'
-  | 'team_agent_invite'
-  | 'team_agent_row';
+  | 'team_agent_row'
+  /** A team agent's ready notification. */
+  | 'notification';
 
 export function useClaudeSignInMutation() {
   return useMutation(() => ({
