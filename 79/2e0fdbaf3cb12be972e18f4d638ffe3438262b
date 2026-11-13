@@ -1,0 +1,32 @@
+Cargo.toml
+  s_800cdee5095ae4::t_d56e4a77f484fe 67
+crates/event_exposure/AGENTS.md
+  s_800cdee5095ae4::t_9cf2d9893ccbc7 1-50
+crates/event_exposure/src/test.rs
+  s_800cdee5095ae4::t_4deab2f6f65a87 1-31
+crates/event_exposure/Cargo.toml
+  s_800cdee5095ae4::t_8976eb3e8baf7e 1-14
+crates/event_exposure/src/lib.rs
+  s_800cdee5095ae4::t_d42e33d3dea173 1-69,181-182,187-188,193-194,196-290
+  s_800cdee5095ae4::t_eaf1246c0d299e 70-180,183-186,189-192,195
+Cargo.lock
+  s_800cdee5095ae4::t_c9668a6fa4a3e4 8113-8124,12784
+crates/event_exposure/CLAUDE.md
+  s_800cdee5095ae4::t_d72ebdc2b88993 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "792e0fdbaf3cb12be972e18f4d638ffe3438262b",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
