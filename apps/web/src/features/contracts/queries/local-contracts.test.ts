@@ -164,6 +164,34 @@ describe('createLocalContracts', () => {
     expect(browser.items.size).toBe(0);
   });
 
+  it('drops a write that was in flight when its store closed', async () => {
+    const browser = fakeBrowser();
+    let signOut = () => {};
+    const contracts = createRoot((dispose) => {
+      signOut = dispose;
+      return browser.open().context(VIEWER);
+    });
+
+    // The write has read storage and is sealing its events when the
+    // account signs out; it must not be stored afterwards.
+    const resume = browser.pauseWrites();
+    const creating = contracts.createDraft(ACME_DRAFT);
+    const importing = contracts.importDocument(
+      pdf('%PDF-1.7 body', 'Order Form.pdf')
+    );
+    signOut();
+    resume();
+
+    expect((await creating)._unsafeUnwrapErr()).toEqual({
+      kind: 'storage_failed',
+    });
+    expect((await importing)._unsafeUnwrapErr()).toEqual({
+      kind: 'storage_failed',
+    });
+    expect(browser.items.size).toBe(0);
+    expect(browser.documents.size).toBe(0);
+  });
+
   it('keeps a packet in place when it changes', async () => {
     const contracts = open(fakeBrowser()).context(VIEWER);
     const first = (

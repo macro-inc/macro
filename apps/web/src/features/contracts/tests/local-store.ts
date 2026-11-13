@@ -24,6 +24,8 @@ export function fakeBrowser(options: { locks: boolean } = { locks: true }) {
   let ids = 0;
   let now = '2026-11-09T21:02:11.000Z';
   let full = false;
+  // Digests wait on this, so a test can hold a write between read and store.
+  let digests: Promise<void> = Promise.resolve();
 
   const storage: Storage = {
     get length() {
@@ -63,6 +65,14 @@ export function fakeBrowser(options: { locks: boolean } = { locks: true }) {
     setNow(next: string) {
       now = next;
     },
+    /** Hold every write at its digest until the returned function is called. */
+    pauseWrites(): () => void {
+      let resume = () => {};
+      digests = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      return resume;
+    },
     /** Make the browser refuse writes, as it does when storage is full. */
     setFull(next: boolean) {
       full = next;
@@ -89,8 +99,14 @@ export function fakeBrowser(options: { locks: boolean } = { locks: true }) {
           },
         },
         openPdf: async () => pdf,
-        digestText: sha256,
-        digestBytes: async () => 'f'.repeat(64),
+        digestText: async (text) => {
+          await digests;
+          return sha256(text);
+        },
+        digestBytes: async () => {
+          await digests;
+          return 'f'.repeat(64);
+        },
         clock: () => now,
         newId: () => `id-${++ids}`,
         newToken: () => `token-${++ids}`.padEnd(16, '0'),

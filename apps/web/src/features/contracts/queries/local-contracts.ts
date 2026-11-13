@@ -245,6 +245,9 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     if (changed.isErr()) return err(changed.error);
     if (changed.value.next === current) return ok(changed.value.value);
 
+    // The store can close while the change is being prepared, as it does
+    // when the account signs out. Nothing is stored for a session that ended.
+    if (closed) return err(storageFailed());
     // Where there are no Web Locks, another tab can have stored something
     // while this change was being prepared. Its write is never replaced.
     if (rawStored(deps.storage, deps.storageKey) !== before) return undefined;
@@ -400,12 +403,16 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
   ): ResultAsync<PacketDocument, DocumentError> {
     const id = deps.newId();
     return ResultAsync.fromPromise(deps.digestBytes(bytes), unreadable)
-      .andThen((sha256) =>
-        ResultAsync.fromPromise(
+      .andThen((sha256) => {
+        // Bytes are not kept for a store that closed while they were read.
+        if (closed) {
+          return errAsync<string, DocumentError>({ kind: 'storage_failed' });
+        }
+        return ResultAsync.fromPromise(
           deps.blobs.put(id, bytes),
           (): DocumentError => ({ kind: 'storage_failed' })
-        ).map(() => sha256)
-      )
+        ).map(() => sha256);
+      })
       .map((sha256): PacketDocument => {
         pdfs.set(id, Promise.resolve(pdf));
         return {
