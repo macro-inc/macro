@@ -2291,6 +2291,219 @@
         }
       }
     },
+    "/call/guest-chat/{call_id}/messages": {
+      "post": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Post a guest message to the shared call thread.",
+        "operationId": "guest_call_chat_post_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestChatPost"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/messages/{message_id}": {
+      "delete": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Delete a message owned by this guest.",
+        "operationId": "guest_call_chat_delete_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Edit a message owned by this guest.",
+        "operationId": "guest_call_chat_patch_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestChatPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/messages/{message_id}/reactions": {
+      "post": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Add or remove this guest's reaction.",
+        "operationId": "guest_call_chat_react_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/thread": {
+      "get": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Read the shared call thread with identities redacted.",
+        "operationId": "guest_call_chat_read_thread",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestChatThread"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/call/join/{token}": {
       "get": {
         "tags": ["call::inbound::axum_router::meetings"],
@@ -9143,6 +9356,95 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::set_contact_company"],
+        "summary": "Remove a contact's company link. A contact with an address on one of its\ncompany's domains cannot be unlinked. Idempotent.",
+        "operationId": "unlink_crm_contact_company",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/crm/contacts/{contact_id}/email": {
@@ -9167,6 +9469,206 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/emails": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::contact_emails"],
+        "summary": "Add an address to a contact. It must not belong to another contact in the\nteam, and becomes the primary only when the contact has none. Idempotent.",
+        "operationId": "add_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::contact_emails"],
+        "summary": "Remove an address from a contact. Nothing else is deleted: the contact\nstops showing that address's email history. Removing the primary promotes\nthe oldest address left. The last address on a domain of the contact's\ncompany cannot be removed while the contact is linked to it. Idempotent.",
+        "operationId": "remove_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
               }
             }
           },
@@ -9472,6 +9974,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccessiblePipeline"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/create": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Create a pipeline with its stages, replacing the team's defaults, and its\nfields, in one call.",
+        "operationId": "create_crm_pipeline_with_fields",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePipelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/details": {
+      "get": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "The caller's live pipelines, each with its fields in column order (a\nselect field lists its options, so Stage lists the stages) and its table\nversion: what `ListPipelines` gives the agent, in one call.",
+        "operationId": "list_crm_pipeline_details",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipelineFields"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -11119,6 +11692,87 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/appearance": {
+      "put": {
+        "tags": ["databases"],
+        "summary": "Replace a database's icon and color without changing its content timestamp.",
+        "operationId": "set_database_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -14383,6 +15037,55 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/appearance": {
+      "put": {
+        "tags": ["document"],
+        "summary": "Replace a document's presentation overrides without editing its content.",
+        "operationId": "set_document_appearance",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -19028,6 +19731,87 @@
         }
       }
     },
+    "/forms/{id}/appearance": {
+      "put": {
+        "tags": ["forms"],
+        "summary": "Replace a form's icon and color without changing its content timestamp.",
+        "operationId": "set_form_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/forms/{id}/collaboration": {
       "post": {
         "tags": ["forms"],
@@ -21708,6 +22492,55 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/appearance": {
+      "put": {
+        "tags": ["initiative"],
+        "summary": "Replace a project's appearance without changing content timestamps.",
+        "operationId": "set_initiative_appearance",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -24865,6 +25698,103 @@
                             },
                             "requestId": {
                               "type": "string"
+                            }
+                          }
+                        }
+                      ],
+                      "description": "Data to be returned"
+                    },
+                    "error": {
+                      "type": "boolean",
+                      "description": "Indicates if an error occurred"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/upload_extract/{request_id}": {
+      "get": {
+        "tags": ["project"],
+        "summary": "Where the caller's folder upload stands, so the uploader can follow it to\nthe end even when a websocket update is missed.",
+        "operationId": "get_upload_extract_status_handler",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "The upload request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error", "data"],
+                  "properties": {
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "description": "Where a folder upload stands, for the uploader to follow it to the end.",
+                          "required": ["status"],
+                          "properties": {
+                            "progress": {
+                              "oneOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "$ref": "#/components/schemas/UploadFolderProgress",
+                                  "description": "Files stored so far, once the extractor has counted them."
+                                }
+                              ]
+                            },
+                            "projectId": {
+                              "type": ["string", "null"],
+                              "description": "The uploaded folder, once it exists."
+                            },
+                            "status": {
+                              "$ref": "#/components/schemas/UploadFolderStatus"
                             }
                           }
                         }
@@ -29784,6 +30714,59 @@
           "THREAD",
           "USER"
         ]
+      },
+      "AppearanceColor": {
+        "type": "string",
+        "description": "Named tint keys from the shared tag color palette.",
+        "enum": [
+          "gray",
+          "red",
+          "tomato",
+          "orange",
+          "amber",
+          "yellow",
+          "green",
+          "teal",
+          "blue",
+          "indigo",
+          "purple",
+          "pink"
+        ]
+      },
+      "AppearanceIcon": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A stable name from Macro's original, distinct icon catalog.",
+            "required": ["name", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["macro"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Catalog name without the SVG extension."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A single native emoji, including skin-tone and joined sequences.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["emoji"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Unicode emoji text, not markup or a URL."
+              }
+            }
+          }
+        ],
+        "description": "The source of an entity's custom icon."
       },
       "AppliedOps": {
         "type": "object",
@@ -34828,6 +35811,17 @@
         "description": "How a group's conditions combine.",
         "enum": ["and", "or"]
       },
+      "ContactEmailRequest": {
+        "type": "object",
+        "description": "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to add or remove. An identical retry is accepted."
+          }
+        }
+      },
       "ConversationId": {
         "type": "string",
         "description": "Source Slack conversation ID (C, G or D prefix); unique only within a source."
@@ -35098,6 +36092,16 @@
           "emoji": {
             "type": "string",
             "description": "Emoji being reacted with."
+          },
+          "names": {
+            "type": "object",
+            "description": "Display names for reactors whose account identity is not visible to this viewer.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "users": {
             "type": "array",
@@ -35904,6 +36908,47 @@
         },
         "additionalProperties": false
       },
+      "CreatePipelineRequest": {
+        "type": "object",
+        "description": "A new pipeline with its stages and fields.",
+        "required": ["name"],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewFieldRequest"
+            },
+            "description": "Fields to add after the standard ones, or after a generic pipeline's Name."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "recordType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/PipelineSharing",
+            "description": "Defaults to private."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its stages, first to last, replacing the team's default stages. A\ngeneric pipeline starts without a Stage field, so these add one."
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateProjectRequest": {
         "type": "object",
         "required": ["name"],
@@ -36569,6 +37614,17 @@
           "updatedAt"
         ],
         "properties": {
+          "companyDomain": {
+            "type": "boolean",
+            "description": "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+          },
+          "companyDomainEmails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+          },
           "companyId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -36581,7 +37637,14 @@
           },
           "email": {
             "type": ["string", "null"],
-            "description": "The contact's email address; absent for contacts added by name\nalone."
+            "description": "The contact's primary email address; absent for contacts added by\nname alone."
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`."
           },
           "firstInteraction": {
             "type": "string",
@@ -36608,7 +37671,7 @@
           },
           "personalEmail": {
             "type": "boolean",
-            "description": "Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only."
+            "description": "Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only."
           },
           "updatedAt": {
             "type": "string",
@@ -36804,6 +37867,17 @@
           "project_id"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -37789,6 +38863,17 @@
           "documentName"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned presentation overrides; absent values use type defaults."
+              }
+            ]
+          },
           "branchedFromId": {
             "type": ["string", "null"],
             "description": "The id of the document this document branched from"
@@ -38016,6 +39101,17 @@
         "type": "object",
         "required": ["document_id", "document_name", "owner"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "document_id": {
             "type": "string",
             "description": "The document id"
@@ -38138,6 +39234,17 @@
           "documentName"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned presentation overrides."
+              }
+            ]
+          },
           "branchedFromId": {
             "type": ["string", "null"],
             "description": "The id of the document this document branched from"
@@ -38487,6 +39594,13 @@
                 "description": "The authenticated user who performed the update; `None` for\nunauthenticated or internal callers."
               }
             ]
+          },
+          "appearance_change": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/EntityAppearance"
+            },
+            "description": "Previous and new presentation overrides, in that order; no content edit occurred."
           },
           "document_id": {
             "type": "string",
@@ -41994,6 +43108,35 @@
           }
         }
       },
+      "EntityAppearance": {
+        "type": "object",
+        "description": "An entity's optional icon and tint overrides; absent values retain type defaults.",
+        "properties": {
+          "color": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceColor",
+                "description": "A shared tag-palette key. Native emoji retain their own colors."
+              }
+            ]
+          },
+          "icon": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceIcon",
+                "description": "A custom Macro glyph or a native emoji."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "EntityFilters": {
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
@@ -45022,6 +46165,17 @@
             "type": "boolean",
             "description": "Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded."
           },
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
@@ -45205,6 +46359,7 @@
           "invalidLayout",
           "invalidName",
           "invalidSharing",
+          "invalidAppearance",
           "tallyHidden",
           "invalidBranding",
           "conflict",
@@ -47094,6 +48249,18 @@
           }
         }
       },
+      "GuestChatPatch": {
+        "type": "object",
+        "description": "Text-only update to a guest-authored message.",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Replacement message body."
+          }
+        },
+        "additionalProperties": false
+      },
       "GuestChatPost": {
         "type": "object",
         "description": "Guests may send text only; attribution and parent are server-owned.",
@@ -47110,6 +48277,28 @@
           }
         },
         "additionalProperties": false
+      },
+      "GuestChatThread": {
+        "type": "object",
+        "description": "A call thread and the verified viewer's sender identity.",
+        "required": ["viewer_id"],
+        "properties": {
+          "thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageThread",
+                "description": "None until the first message is posted."
+              }
+            ]
+          },
+          "viewer_id": {
+            "type": "string",
+            "description": "Guest sender ID used for own-message controls."
+          }
+        }
       },
       "GuestId": {
         "type": "string",
@@ -47978,6 +49167,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -48186,6 +49386,17 @@
         "description": "List-row view of an initiative.",
         "required": ["id", "name", "updatedAt"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
             "description": "Opaque identifier."
@@ -55649,18 +56860,18 @@
           "companyId": {
             "type": "string",
             "format": "uuid",
-            "description": "Destination company in the same team. Unlinking is not supported."
+            "description": "Destination company in the same team."
           }
         }
       },
       "SetContactEmailRequest": {
         "type": "object",
-        "description": "Add a missing contact email. Existing addresses are read-only.",
+        "description": "Choose a contact's primary email.",
         "required": ["email"],
         "properties": {
           "email": {
             "type": "string",
-            "description": "The address to add. An identical retry is accepted."
+            "description": "The address to make primary. It is added when the contact does not\nhold it yet. An identical retry is accepted."
           }
         }
       },
@@ -57603,6 +58814,17 @@
               "updatedAt"
             ],
             "properties": {
+              "appearance": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityAppearance",
+                    "description": "Entity-owned icon and color overrides."
+                  }
+                ]
+              },
               "branchedFromId": {
                 "type": ["string", "null"],
                 "format": "uuid",
@@ -57931,6 +59153,17 @@
             "type": "object",
             "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
             "properties": {
+              "appearance": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityAppearance",
+                    "description": "Entity-owned icon and color overrides."
+                  }
+                ]
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time",
@@ -62606,6 +63839,31 @@
           }
         }
       },
+      "UploadFolderProgress": {
+        "type": "object",
+        "description": "Files of an extracted folder moved into storage so far.",
+        "required": ["filesTotal", "filesStored", "filesFailed"],
+        "properties": {
+          "filesFailed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files that could not be stored.",
+            "minimum": 0
+          },
+          "filesStored": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files stored successfully.",
+            "minimum": 0
+          },
+          "filesTotal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files the folder holds.",
+            "minimum": 0
+          }
+        }
+      },
       "UploadFolderRequest": {
         "type": "object",
         "required": ["content", "rootFolderName", "uploadRequestId"],
@@ -62637,6 +63895,19 @@
             "description": "The upload request id"
           }
         }
+      },
+      "UploadFolderStatus": {
+        "type": "string",
+        "description": "The upload status of the folder",
+        "enum": [
+          "pending",
+          "uploaded",
+          "processing",
+          "partially_completed",
+          "completed",
+          "failed",
+          "unknown"
+        ]
       },
       "UploadGrant": {
         "type": "object",

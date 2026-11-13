@@ -533,6 +533,23 @@ pub struct Host {
     pub sold_capacity_units: u32,
 }
 
+/// What a host's reservations and computers hold against its capacity, with
+/// the same holdings `ComputerRepo::reserve` counts: every reservation and
+/// every computer until release, running or stopped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostAllocation {
+    /// The host and its capacity.
+    pub host: Host,
+    /// Units held against [`Host::sold_capacity_units`].
+    pub sold_units: u32,
+    /// Virtual CPUs sold on the host.
+    pub vcpus: u32,
+    /// Memory in GiB sold on the host.
+    pub memory_gib: u32,
+    /// Root disk in GiB sold on the host.
+    pub disk_gib: u32,
+}
+
 /// What a host reports when it registers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostRegistration {

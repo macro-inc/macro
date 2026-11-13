@@ -772,9 +772,11 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
             "local-cloudfront-signer-private-key".into(),
         );
-        // authentication_service's third-party OAuth/Stripe config. The FusionAuth
-        // kickstart only creates the Google/GitHub IdPs when real creds are
-        // present (see kickstart.rs), so these stubs just satisfy the loader.
+        // authentication_service's third-party OAuth/Stripe config. The Google
+        // pair is the client the stack's Gmail emulator is given (see
+        // google_emulator.rs); the FusionAuth kickstart only creates the
+        // GitHub IdP when real creds are present (see kickstart.rs), so its
+        // stubs just satisfy the loader.
         env.insert("GOOGLE_CLIENT_ID".into(), "local-google-client".into());
         env.insert(
             "GOOGLE_CLIENT_SECRET_KEY".into(),

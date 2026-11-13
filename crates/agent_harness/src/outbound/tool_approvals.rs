@@ -79,6 +79,7 @@ where
                 &identity,
                 approval.id.as_uuid(),
                 approval.requested_by.as_ref(),
+                &approval.server_slug,
                 &approval.server_name,
                 &approval.tool_name,
             ))

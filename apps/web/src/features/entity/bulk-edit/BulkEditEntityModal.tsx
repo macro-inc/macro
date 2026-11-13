@@ -3,6 +3,7 @@ import {
   type BulkShareHandle,
 } from '@app/features/sharing/share-delivery/bulk-share';
 import { ShareDialog } from '@core/component/TopBar/ShareDialog';
+import { isMobile } from '@core/mobile/isMobile';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import { ActionDialogShell, Dialog } from '@ui';
@@ -38,11 +39,29 @@ const BulkEditEntityModalContent = (props: {
     if (!open) (share?.dismiss ?? props.onCancel)();
   };
 
+  // The item chips come before the footer, and a chip's preview card opens on
+  // focus, so Kobalte's default autofocus would open a preview and Enter would
+  // open that item. Focus the dialog itself, then the Delete button so Enter
+  // confirms; Escape still cancels. Phone sheets stay on the dialog, so a
+  // screen reader starts there. Focus Delete after the opening keystroke
+  // finishes, as Kobalte does: a menu item chosen with Enter opens this dialog
+  // mid-keydown, and focusing Delete then would let that same keypress click it.
+  let content: HTMLDivElement | undefined;
+  let deleteButton: HTMLButtonElement | undefined;
+  const focusDialogOnDelete = (event: Event) => {
+    if (props.view !== 'delete') return;
+    event.preventDefault();
+    content?.focus();
+    if (!isMobile()) setTimeout(() => deleteButton?.focus(), 0);
+  };
+
   return (
     <Show
       when={props.view === 'share'}
       fallback={
         <Dialog
+          contentRef={(element) => (content = element)}
+          onOpenAutoFocus={focusDialogOnDelete}
           open={props.isOpen()}
           position={props.view === 'moveToProject' ? 'top' : 'center'}
           class={props.view === 'moveToProject' ? 'w-140' : 'w-110'}
@@ -62,6 +81,9 @@ const BulkEditEntityModalContent = (props: {
                 </Show>
                 <Show when={props.view === 'delete'}>
                   <BulkDeleteView
+                    deleteButtonRef={(el) => {
+                      deleteButton = el;
+                    }}
                     note={props.note}
                     onPartialDelete={props.onPartialDelete}
                     entities={props.entities}

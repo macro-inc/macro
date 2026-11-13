@@ -1251,6 +1251,7 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // localStackBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
         deploy-service-binaries-email-service = emailServiceDeployBinaries;
@@ -1282,7 +1283,6 @@
               # setup-nix-dev-shell, so these attributes reach its build steps.
               # The shellHook switches local shells to incremental builds.
               CARGO_INCREMENTAL = "0";
-              SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
               # configure state behind; CMake then drops its command-line cache
@@ -1290,6 +1290,11 @@
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
               shellHook = ''
+                # Default the sccache size in the hook, not as an attribute: an
+                # attribute replaces the caller's value, while a machine with a
+                # dedicated cache disk (SCCACHE_DIR) sets its own size. CI gets
+                # the default too, since print-dev-env output evaluates this hook.
+                export SCCACHE_CACHE_SIZE="''${SCCACHE_CACHE_SIZE:-30G}"
                 # Local rebuilds after an edit are mostly workspace crates, which
                 # incremental compilation reuses and sccache misses across
                 # worktrees anyway. Third-party crates still go through sccache.

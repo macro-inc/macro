@@ -61,7 +61,7 @@
 .feature-demo-art .mail-sharing-splits > .mail-sharing-email { height: 450px; overflow: hidden; }
 .feature-demo-art .mail-sharing-splits > .mail-sharing-chat {
   width: min(680px, 100%);
-  height: 340px;
+  height: 400px;
   margin: 0 auto;
   background: transparent;
   border: 0;

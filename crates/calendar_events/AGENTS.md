@@ -16,6 +16,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `ViewerCapabilities` every read surface exposes as `viewerCan`.
 - `src/domain/team_availability.rs` + `src/domain/team.rs`: team sharing/availability.
 - `src/outbound/google.rs`, `src/outbound/pg.rs`: Google Calendar and Postgres adapters.
+  The Google one takes its base from `GoogleCalendarApiUrl`
+  (`OVERRIDE_GOOGLE_CALENDAR_API_URL`).
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
 - `src/inbound/dispatch_worker.rs` + `src/outbound/sqs_dispatch_queue.rs`: reminder
@@ -50,6 +52,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Checks
 
 - `cargo test -p calendar_events` (`SQLX_OFFLINE` unset).
+- `cargo test -p gmail_emulator calendar` runs the Google adapter against
+  the emulator's Calendar API; extend it when the adapter calls Google in a
+  new way.
 
 ## Gotchas
 
@@ -220,6 +225,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   delegate, a muted category never sends it, and the notifier only queues.
   `document_storage_service` hosts the ask, so it has its own
   `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
+- `update_event_with_macro_call` (`src/domain/meeting_links.rs`) switches an
+  existing event to a Macro call in one provider write, so attendees get one
+  update: it reads the stored content through `CalendarEventDetailsReader`,
+  mints the call, appends the join line and removes the provider conference.
+  Only the calendar service composes it (`macroCall` on `PATCH /events/{id}`);
+  the agent tool forwards through `CalendarMacroCallService`. A retry finds the
+  link already written and mints nothing. Outlook cannot drop a Teams meeting
+  from an event, so that call is refused and the fresh meeting cancelled. The
+  web editor still attaches a call in two writes (`use-event-editor.ts`).
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
@@ -319,9 +333,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `owner` to anyone with manage rights, on a colleague's primary calendar too;
   Outlook stores only `canEdit`; `is_primary` is false on a person's own other
   calendars. `VisibleCalendar::contributes_to_availability` is the nearest
-  signal: the user's setting, by default the primaries of inboxes they own.
-  With meetings they attend, it is their own schedule for agents as for
-  `TeamSourceOccurrence::is_personally_busy`. `viewer_can.organize` stays a
+  signal: the user's Busy switch in Settings → Calendar, on for every calendar
+  until they turn it off, since booking links always counted every calendar
+  and one setting must mean the same everywhere. Every SQL reader of
+  `calendar_availability_preferences` defaults it with
+  `COALESCE(preference.contributes_to_availability, true)`; change them
+  together. With meetings they are in, it is their own schedule for agents,
+  for `TeamSourceOccurrence::is_personally_busy` and for booking links'
+  busy time (`calendar_scheduling`'s `MacroCalendars::busy`); the last two
+  decide "in the meeting" with `labels::attends_meeting`, which counts a
+  guest row, or an organizer row on a writable copy with other guests.
+  `viewer_can.organize` stays a
   capability, since writing a calendar lets the user act as its organizer, so
   `EventRole::of` and the SDK's `eventRole` count it only on such a
   calendar, and `ReadCalendarEvent` reports anything else as

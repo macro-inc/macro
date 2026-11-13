@@ -901,8 +901,9 @@ release; whoever manages the runtime gets the Claude items.
 To buy one as a team admin:
 
 1. Open `/app/settings/runtimes` (mobile: Settings sheet → Machines). The last
-   row of **Macro computers** reads **Get a Macro computer** ("Claude Code, a
-   browser and Docker, ready to go · from <price>/month"). In **Settings →
+   row of **Macro computers** reads **Get a Macro computer** ("A full computer,
+   with your Claude sub, and a Macro agent, ready to go · from <price>/month"),
+   with **Get a computer** on its right. In **Settings →
    Agents**, a team without a computer also sees **Run coding agents on a Macro
    computer** in the agents list, and **Where it runs** ends with **New Macro
    computer**. Computers are for paying teams: on a trialing subscription the

@@ -45,9 +45,9 @@ pub enum ComputerError {
     /// The caller is outside the computer rollout.
     #[error("Macro computers are not enabled for this user")]
     RolloutDisabled,
-    /// No host has enough sale capacity.
-    #[error("this size is sold out")]
-    SoldOut,
+    /// No host has enough sale capacity for this size.
+    #[error("No capacity for {} right now", .0.label())]
+    SoldOut(ComputerSize),
     /// The catalog does not offer this size.
     #[error("size is not offered")]
     SizeNotOffered,

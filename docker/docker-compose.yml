@@ -501,8 +501,8 @@ services:
       # This worker exports OTLP/JSON over HTTP, so it needs the
       # HTTP intake (:4318) — NOT the gRPC :4317 endpoint the
       # shared env (env_layer) injects for the .with_tonic() Rust services.
-      # Pinning it here overrides the shared env_file value for this service.
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      # xtask sets this only for runs with tracing; direct Compose defaults off.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT:-}
     networks:
       services:
         aliases:
