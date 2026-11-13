@@ -117,7 +117,7 @@ fn typescript() -> Job {
 /// Typecheck's checks, each `(name, directory, command)`. They read the same
 /// installed tree and write nothing, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. The SDK is built first, for the agent runtime.
-const TYPECHECKS: [(&str, &str, &str); 13] = [
+const TYPECHECKS: [(&str, &str, &str); 14] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -136,6 +136,11 @@ const TYPECHECKS: [(&str, &str, &str); 13] = [
         "Check Collaboration Package Types",
         "packages/collaboration",
         "bun run type-check",
+    ),
+    (
+        "Check Observability Package",
+        "packages/observability",
+        "bun run type-check && bun run test",
     ),
     (
         "Check Lexical Service Types",
