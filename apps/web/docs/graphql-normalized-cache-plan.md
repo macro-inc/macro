@@ -285,6 +285,12 @@ list rereads and past generation checks and operation teardowns. It registers
 nothing and writes nothing, so those fences do not order it; it never passes
 `init` or `clear`. It can run before a write queued ahead of it, returning rows
 that are only older; that write's cache change then refreshes the list.
+The record reads that load the rows a typed search named (`read-records-by-keys`
+with `priority: 'typed-search'`, set by Quick Access through `searchRowHost`)
+rank with it: they run ahead of list rereads and past the same fences, since the
+search is not answered for the user until its rows list. The list keeps those
+rows, so unlike the search they never run before a write sent ahead of them.
+The desktop host ignores the field.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request
 started on arrival usually finishes before the next is seen: the queue would

@@ -23,6 +23,7 @@ import type {
 } from '../protocol';
 import {
   isTypedSearch,
+  isTypedSearchRowRead,
   parseCacheRevision,
   parseStorageGeneration,
 } from '../protocol';
@@ -184,7 +185,8 @@ function revisionAdvancementCategory(
 function requestPriority(request: CacheRequest): number {
   if (request.kind === 'hydrate' || request.kind === 'people-update')
     return BACKGROUND_HYDRATION_PRIORITY;
-  if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
+  if (isTypedSearch(request) || isTypedSearchRowRead(request))
+    return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
       ? USER_VISIBLE_READ_PRIORITY
@@ -490,17 +492,21 @@ export class CacheWorkerCore {
       stopsTypedSearch(queued.request)
     );
     if (searchEnd === -1) searchEnd = this.queue.length;
+    // The rows that search named cross the same fences, but they are kept by
+    // the list, so they never run before a write sent ahead of them.
+    let writeAhead = this.queue
+      .slice(0, segmentEnd)
+      .some((queued) => queued.priority === CACHE_WRITE_PRIORITY);
     for (let i = segmentEnd; i < searchEnd; i += 1) {
       const candidate = this.queue[i];
       const selected = this.queue[index];
-      if (
-        candidate &&
-        selected &&
-        isTypedSearch(candidate.request) &&
-        candidate.priority > selected.priority
-      ) {
-        index = i;
-      }
+      if (!candidate || !selected) continue;
+
+      const crossesFences =
+        isTypedSearch(candidate.request) ||
+        (!writeAhead && isTypedSearchRowRead(candidate.request));
+      if (crossesFences && candidate.priority > selected.priority) index = i;
+      writeAhead ||= candidate.priority === CACHE_WRITE_PRIORITY;
     }
 
     const [queued] = this.queue.splice(index, 1);

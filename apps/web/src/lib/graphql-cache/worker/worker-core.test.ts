@@ -1068,6 +1068,95 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('runs the rows of a typed search ahead of queued reads and their fences, but never before a write sent first', async () => {
+    const order: string[] = [];
+    const blocker = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const written = { changed: [], affectedOps: [], reset: false };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          if (opId === 'blocker') {
+            started.resolve();
+            await blocker.promise;
+          }
+          return { kind: 'miss' };
+        },
+        currentStorageGeneration: async () => {
+          order.push('generation');
+          return '00000000-0000-4000-8000-000000000001';
+        },
+        teardownOperation: async () => {
+          order.push('teardown');
+        },
+        writeQuery: async () => {
+          order.push('write');
+          return { ...written, revision: INITIAL_CACHE_REVISION };
+        },
+        readRecordsByKeys: async (
+          _document: string,
+          _fragment: string,
+          keys: string[]
+        ) => {
+          order.push(`rows:${keys[0]}`);
+          return { revision: INITIAL_CACHE_REVISION, records: [] };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const rows = (id: number, key: string, typed: boolean) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read-records-by-keys',
+        document: 'fragment Item on GraphqlSoupDocument { id }',
+        fragmentName: 'Item',
+        keys: [`GraphqlSoupDocument:${key}`],
+        ...(typed ? { priority: 'typed-search' as const } : {}),
+      });
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await started.promise;
+    const queued = [
+      core.handleRequest(port, {
+        id: 3,
+        kind: 'read',
+        opId: 'visible',
+        query: 'query Visible { visible }',
+        priority: 'user-visible',
+      }),
+      core.handleRequest(port, { id: 4, kind: 'current-storage-generation' }),
+      rows(5, 'plain', false),
+      rows(6, 'typed', true),
+      core.handleRequest(port, { id: 7, kind: 'teardown', opId: 'visible' }),
+      core.handleRequest(port, {
+        id: 8,
+        kind: 'write',
+        query: 'query Current { document { id } }',
+        data: { document: { id: 'doc-1' } },
+      }),
+      rows(9, 'typed-after-write', true),
+    ];
+    blocker.resolve();
+    await Promise.all([running, ...queued]);
+    expect(order).toEqual([
+      'read:blocker',
+      'rows:GraphqlSoupDocument:typed',
+      'read:visible',
+      'generation',
+      'rows:GraphqlSoupDocument:plain',
+      'teardown',
+      'write',
+      'rows:GraphqlSoupDocument:typed-after-write',
+    ]);
+  });
+
   it('collects the requests already sent before starting one, so a typed search is not run in arrival order', async () => {
     const order: string[] = [];
     const resumes: (() => void)[] = [];
