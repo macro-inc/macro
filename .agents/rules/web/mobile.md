@@ -126,6 +126,10 @@ read their code, and follow that pattern rather than inventing a new one.
   `mousedown` on its root (`keepEditorFocus` in `TouchSelectionToolbar`) or
   use `usePreserveFocusOnButtonTaps`; mark sibling regions
   `data-keep-keyboard`. Dismiss with `useTouchOutsideToDismissKeyboard`.
+- In the iOS app a swipe down into the keyboard dismisses it
+  (`SwipeDownDismissKeyboard`). Mark a composer's own text scroll box
+  `data-composer-scroll` (a `textarea` counts already): a drag that starts in
+  it scrolls the draft, and dismisses only after the text reaches its top.
 - Size against the keyboard with `var(--dvh,1dvh)` and
   `var(--virtual-keyboard-height,0px)`, fallback included (Android leaves it
   unset); in JS read `virtualKeyboardVisible()`. Sheets with inputs call

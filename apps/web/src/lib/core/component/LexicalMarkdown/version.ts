@@ -39,5 +39,6 @@
  * Version 9.2 - Nov 2026. ImageNode may be a child of ListItemNode; Markdown stores it as an indented line under its item.
  * Version 9.3 - Nov 2026. AgentActivityNode rows carry an optional `card`: a view the agent presented.
  * Version 10.0 - Nov 2026. Added AccountManagerRequestNode: a DM card for one account manager request, holding only its grant id.
+ * Version 11.0 - Nov 2026. Added DetailsNode and DetailsSummaryNode: GitHub `<details>` sections, registered only by the read-only renderer.
  */
-export const MARKDOWN_VERSION_COUNTER = 10.0;
+export const MARKDOWN_VERSION_COUNTER = 11.0;

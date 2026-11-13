@@ -56,7 +56,7 @@ reject unavailable purchases in the domain before reserving capacity. Map
 `BillingError::NotAvailable` to 503 on the team computer routes;
 keep missing subscription and unsupported billing intervals distinct.
 
-Require image, host reserve and oversell factor for either enabled fleet;
+Require both images, host reserve and oversell factor for either enabled fleet;
 require Docker memory for Docker, and explicit profile, storage pool,
 request/connect/operation/state-change limits and shutdown grace for Incus.
 See [the required variable list](../development/running-locally.md#macro-computers).
@@ -154,10 +154,14 @@ attempt, so a busy database never fails a computer or abandons a removal.
 - **Capacity**: free sold units are sold capacity minus the units of live
   computers (phase not `destroying`) and every reservation, expired or not
   (an expired one may still settle as charged), reserved under
-  the host lock. `GET /team/computers/offers` reports `soldOut` per size; a
-  purchase no host can fit returns `ComputerError::SoldOut(size)` (409, "No
-  capacity for <size> right now") before billing. `ComputerRepo::allocation`
-  reads the same holdings per host; see Observability for its gauges.
+  the host lock. A size is only reserved on a host whose awake capacity
+  fits it, so a sold computer can always be powered on somewhere.
+  `GET /team/computers/offers`, computed from `ComputerRepo::allocation`,
+  omits sizes no host can run awake (waiting would never make them
+  available) and reports `soldOut` for the rest; a purchase no host can fit
+  returns `ComputerError::SoldOut(size)` (409, "No capacity for <size> right
+  now") before billing. `allocation` reads the same holdings per host; see
+  Observability for its gauges.
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { billing, purchase_key, team_id, created_by, size, name, extra_items })`
   → `Purchase::{Ready(id), Confirming(id)}`. The client's `purchase_key` (one
   per Buy dialog, reused on retry) makes `ComputerRepo::reserve` return what
@@ -262,6 +266,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   exposed as `ComputerStatus.defaultAgentId` (it can name a since-deleted agent).
   It never runs again, so a deleted or rebound agent stays gone; a failure is
   recorded on the `computer.default_agent` span and enrollment carries on.
+  A computer bought for an agent teammate (`ComputerAgents::agent_of`) gets no
+  coding agent: it is the teammate's.
 - **Agents go with the computer**: `Harnesses::revoke(&Computer)` (the
   `RevokeHarness` effect of release and retention expiry) deletes the harness,
   then every agent bound to it, inside the one effect. The harness delete locks
@@ -299,7 +305,7 @@ attempt, so a busy database never fails a computer or abandons a removal.
   still deletes its data volume) and revokes its harness, without removing
   billing again. Missing stop/destroy are idempotent successes.
 - **Reprovision**: `InstanceLost` recreates the guest from the fleet's
-  configured image with a fresh pairing for the same harness, on the data
+  configured image for it (the agent image for an agent computer) with a fresh pairing for the same harness, on the data
   disk the lost guest left (homes, Claude login and Docker data survive).
   The new enrollment generation makes `macrod enroll` run again: it claims
   the new pairing and replaces only the enrollment marker and credential.
@@ -315,7 +321,13 @@ attempt, so a busy database never fails a computer or abandons a removal.
   behind a destroyed computer.
 - **Images**: images are versioned aliases (`macro-box/<version>` on Incus,
   `macro-box:<tag>` on Docker); `COMPUTERS_IMAGE` names the one new computers
-  get. `hosted_runtime.image` records the image each computer was created
+  get, `COMPUTERS_AGENT_IMAGE` the agent-mode build of the same guest
+  (`macro-box-agent/<version>`, `macro-box-agent:<tag>`) for agent teammates'
+  computers. Both are required; there is no fallback to the regular image.
+  Fleets hold them as `image::GuestImages` and pick with
+  `GuestImages::for_enrollment`: the agent image when the enrollment carries
+  an agent, so a recreated agent computer stays on it. An existing guest
+  keeps the image it records. `hosted_runtime.image` records the image each computer was created
   from (`Fleet::create` returns it, stamped as `user.macro.image` /
   `macro.image` on the guest). Updating running computers to a new image is
   not built yet; it will be a fleet-wide rollout, not a per-computer API.
@@ -358,8 +370,28 @@ attempt, so a busy database never fails a computer or abandons a removal.
   `computer.claude_sign_in.check` (`checked`, `notified`, `failed`); never put
   user ids or emails on it. The ports (`ClaudeSignIns`, `ClaudeSignInNotices`)
   are implemented in agent_harness_service.
+- **Setup notices**: `transition` emits `Effect::NotifySetup` when first setup
+  ends: `Ready` on the first macrod connection (before `setup.connected_at`
+  latches), `Failed` when a not-yet-connected computer gives up, once per
+  attempt. The fleet worker sends it to the buyer (`created_by`) through the
+  `SetupNotices` port as a `computer_setup` notification; a send that keeps
+  failing is dropped after its retries and never fails the computer.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
+
+### Agent teammate computers
+
+`ComputerService::purchase_for_agent` is `purchase_for_team` with the computer
+linked to an agent account (`hosted_runtime.agent_user_id`, one computer per
+agent); `ComputerAgents` reads the link. hosted_runtimes knows nothing else about
+the agent: at enrollment the operator asks its `AgentEnrollmentSource`
+(`domain/agent.rs`) for `Enrollment.agent`, which team_agents issues. A failed
+issuance fails the enrollment, so an agent computer never boots without its
+agent; `NoAgentEnrollment` (the default) enrolls every computer without one.
+team_agents reads an agent computer's roster state with
+`ComputerService::status_for_roster` (answered on a detached fleet too) and
+releases it with `request_release` when the agent is removed: normal release
+effects, no fleet access or name confirmation, team ownership still checked.
 
 ## Typed boundaries
 

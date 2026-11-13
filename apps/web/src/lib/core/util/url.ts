@@ -1,5 +1,5 @@
 import shortuuid from 'short-uuid';
-import { isTauri } from './platform';
+import { getNativeMobilePlatform } from './platform';
 import { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -48,12 +48,19 @@ export function openExternalUrl(url: string) {
     if (interceptor(url)) return;
   }
 
-  if (isTauri()) {
-    // A same-window navigation reaches the native navigation plugin, which
-    // cancels the webview navigation and opens the URL in the system browser.
+  if (getNativeMobilePlatform()) {
+    // Mobile webviews have no new-window hook, so a same-window navigation
+    // reaches the native navigation plugin, which cancels it and opens the URL
+    // in the system browser.
     window.open(url, '_self')?.focus();
     return;
   }
+
+  // On desktop, a new-window request reaches the navigation plugin's
+  // new-window hook, which opens the system browser. Never navigate the app's
+  // own page there: that runs its beforeunload handlers (ending a call, or
+  // raising a leave-page prompt that blocks the window) before the native
+  // side cancels the navigation.
 
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }

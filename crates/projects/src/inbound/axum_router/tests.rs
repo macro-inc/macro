@@ -904,6 +904,43 @@ async fn edit_rejects_deleted_project() {
     );
 }
 
+/// A scoped session renames a project but never changes who it's shared with.
+#[tokio::test]
+async fn a_scoped_session_edits_a_project_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = FakeProjectService::with_project(USER_ID, false);
+    let mutations = service.mutations.clone();
+    let router = router(service, None);
+    let edit = |body: Value| authenticated_json_request("PATCH", &format!("/{PROJECT_ID}"), body);
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let share = json!({ "sharePermission": { "teamShareAccessLevel": "view" } });
+    let response = scope_attribution(no_send, router.clone().oneshot(edit(share.clone())))
+        .await
+        .expect("router should respond");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let response = scope_attribution(
+        no_send,
+        router.clone().oneshot(edit(json!({ "name": "Edited" }))),
+    )
+    .await
+    .expect("router should respond");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = router
+        .oneshot(edit(share))
+        .await
+        .expect("router should respond");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        *mutations.lock().expect("mutation lock poisoned"),
+        ["edit", "edit"]
+    );
+}
+
 #[tokio::test]
 async fn edit_body_parent_denial_prevents_handler() {
     let response = router(FakeProjectService::with_project(USER_ID, false), None)
@@ -1257,6 +1294,24 @@ async fn permanent_delete_finishes_after_the_request_is_dropped() {
     release.notify_one();
 
     assert_eq!(finished_rx.await, Ok(()));
+}
+
+/// Events a folder operation publishes carry the agent attribution of the
+/// request that started it, so the spawned task must keep it.
+#[tokio::test]
+async fn run_on_own_task_keeps_the_agent_attribution() {
+    let agent_correlation_id = Uuid::from_u128(0xa6e7);
+
+    let seen = agent_correlation::context::scope(
+        Some(agent_correlation_id),
+        super::delete_project::run_on_own_task(async {
+            Ok::<_, ProjectError>(agent_correlation::context::current())
+        }),
+    )
+    .await
+    .expect("work should succeed");
+
+    assert_eq!(seen, Some(agent_correlation_id));
 }
 
 #[tokio::test]

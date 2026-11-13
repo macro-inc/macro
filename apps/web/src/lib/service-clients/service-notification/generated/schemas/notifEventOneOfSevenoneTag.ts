@@ -10,5 +10,5 @@ export type NotifEventOneOfSevenoneTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSevenoneTag = {
-  runtime_access_removed: 'runtime_access_removed',
+  computer_setup: 'computer_setup',
 } as const;

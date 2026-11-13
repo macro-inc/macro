@@ -39,6 +39,7 @@ agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_egress = { path = "../../crates/agent_egress" }
+agent_git = { path = "../../crates/agent_git" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
@@ -72,6 +73,7 @@ bots = { path = "../../crates/bots", features = ["outbound", "ports"] }
 call = { path = "../../crates/call", default-features = false, features = ["outbound", "ports"] }
 channels = { path = "../../crates/channels", features = ["attachment", "outbound", "ports"] }
 chat = { path = "../../crates/chat", features = ["ai_tools", "attachment", "outbound"] }
+base64 = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 code_execution = { path = "../../crates/code_execution" }
@@ -108,6 +110,8 @@ granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnessd_protocol = { workspace = true }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["inbound", "outbound", "ports"] }
+user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
+agent_credentials = { path = "../../crates/agent_credentials" }
 hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }
 incus_client = { path = "../../crates/incus_client" }
 http = { workspace = true }
@@ -119,6 +123,7 @@ import_linear = { path = "../../crates/import_linear" }
 import_jira = { path = "../../crates/import_jira" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
+jsonwebtoken = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
@@ -192,11 +197,13 @@ strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
+team_agents = { path = "../../crates/team_agents", features = ["inbound"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
 tokio-stream = { workspace = true }
 tokio-retry = { workspace = true }
+tokio-tungstenite = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["limit", "timeout"] }
@@ -215,6 +222,8 @@ agent_session = { path = "../../crates/agent_session", features = ["test-utils"]
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 async-trait = { workspace = true }
 bot_id = { path = "../../crates/bot_id", features = ["test-utils"] }
+# The hosts the SDK can reach, which the code-mode scope test checks.
+code_mode_assets = { path = "../../crates/code_mode_assets" }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

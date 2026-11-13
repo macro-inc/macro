@@ -31,9 +31,14 @@ mod test;
 
 /// Tag `nix build .#macro-box-docker` loads as.
 pub const DOCKER_IMAGE: &str = "macro-box:latest";
+/// Tag `nix build .#macro-box-agent-docker` loads as: the agent-mode guest
+/// agent teammates' computers run.
+pub const DOCKER_AGENT_IMAGE: &str = "macro-box-agent:latest";
 /// Names the versioned image alias new Incus computers are created from,
 /// e.g. `macro-box/2026-11-10` (see `nix/macro-box/AGENTS.md`).
 pub const INCUS_IMAGE_VARIABLE: &str = "COMPUTERS_INCUS_IMAGE";
+/// Names the agent-mode alias beside it, e.g. `macro-box-agent/2026-11-10`.
+pub const INCUS_AGENT_IMAGE_VARIABLE: &str = "COMPUTERS_INCUS_AGENT_IMAGE";
 pub const DOCKER_HOST_NAME: &str = "local-docker";
 pub const INCUS_HOST_NAME: &str = "runtime-dev-1";
 /// SHA-256 of the DER certificate `runtime-dev-1`'s Incus API serves.
@@ -75,6 +80,9 @@ const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
         Some(Port::ConnGateway),
     ),
     ("OVERRIDE_MCP_SERVICE_URL", Some(Port::AgentHarness)),
+    // Agent teammates clone and push their workspace repo here; the harness
+    // builds clone URLs from this same override.
+    ("OVERRIDE_AGENT_GIT_SERVICE_URL", Some(Port::AgentHarness)),
     ("OVERRIDE_APP_SERVICE_URL", None),
 ];
 
@@ -177,7 +185,17 @@ impl Computers {
                 let image = macro_env_var::maybe_read_env(INCUS_IMAGE_VARIABLE).with_context(|| {
                     format!("set {INCUS_IMAGE_VARIABLE} to the macro-box/<version> alias on runtime-dev-1")
                 })?;
-                self.incus_env(env, &IncusCredentials::load(&network)?, &network, &image)?
+                let agent_image = macro_env_var::maybe_read_env(INCUS_AGENT_IMAGE_VARIABLE)
+                    .with_context(|| {
+                        format!("set {INCUS_AGENT_IMAGE_VARIABLE} to the macro-box-agent/<version> alias on runtime-dev-1")
+                    })?;
+                self.incus_env(
+                    env,
+                    &IncusCredentials::load(&network)?,
+                    &network,
+                    &image,
+                    &agent_image,
+                )?
             }
         };
         env.retain(|key, _| !key.starts_with("COMPUTERS_"));
@@ -205,6 +223,7 @@ impl Computers {
             ),
             ("COMPUTERS_HOST_NAME".into(), DOCKER_HOST_NAME.into()),
             ("COMPUTERS_IMAGE".into(), DOCKER_IMAGE.into()),
+            ("COMPUTERS_AGENT_IMAGE".into(), DOCKER_AGENT_IMAGE.into()),
             ("COMPUTERS_HOST_RESERVE_GB".into(), "7".into()),
             ("COMPUTERS_OVERSELL_FACTOR".into(), "3".into()),
             ("COMPUTERS_DOCKER_MEMORY_GB".into(), "32".into()),
@@ -227,6 +246,7 @@ impl Computers {
         credentials: &IncusCredentials,
         network: &IncusNetwork,
         image: &str,
+        agent_image: &str,
     ) -> Result<BTreeMap<String, String>> {
         let overrides = MACROD_SERVICES
             .iter()
@@ -241,6 +261,7 @@ impl Computers {
                         let path = match *name {
                             "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL" => "/cognition",
                             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL" => "/scheduled-action",
+                            "OVERRIDE_AGENT_GIT_SERVICE_URL" => "/agent-git",
                             _ => "",
                         };
                         format!(
@@ -266,6 +287,7 @@ impl Computers {
             ),
             ("COMPUTERS_HOST_NAME".into(), INCUS_HOST_NAME.into()),
             ("COMPUTERS_IMAGE".into(), image.into()),
+            ("COMPUTERS_AGENT_IMAGE".into(), agent_image.into()),
             ("COMPUTERS_HOST_RESERVE_GB".into(), "7".into()),
             ("COMPUTERS_OVERSELL_FACTOR".into(), "3".into()),
             ("COMPUTERS_INCUS_PROFILE".into(), "macro-box".into()),
@@ -306,17 +328,25 @@ impl Computers {
         }
         if no_build {
             stage.note(&format!(
-                "computer image: skipping build (--no-build); using {DOCKER_IMAGE}"
+                "computer images: skipping build (--no-build); using {DOCKER_IMAGE} and {DOCKER_AGENT_IMAGE}"
             ));
             return Ok(());
         }
         if stage.is_dry_run() {
-            stage.note(&format!(
-                "computer image: would `nix build .#macro-box-docker` and load {DOCKER_IMAGE}"
-            ));
+            for build in [REGULAR_BUILD, AGENT_BUILD] {
+                stage.note(&format!(
+                    "computer image: would `nix build .#{}` and load {}",
+                    build.attribute, build.tag
+                ));
+            }
             return Ok(());
         }
-        stage.run_step("Building the Macro computer image", load_image)
+        stage.run_step("Building the Macro computer image", || {
+            load_image(&REGULAR_BUILD)
+        })?;
+        stage.run_step("Building the agent teammate computer image", || {
+            load_image(&AGENT_BUILD)
+        })
     }
 
     /// What the developer must know once the stack is up.
@@ -554,26 +584,42 @@ impl LoadedImage {
     }
 }
 
-fn loaded_image_marker() -> PathBuf {
-    repo_root().join("infra/local/generated/.macro-box-image")
+/// A guest image the Docker fleet runs: the flake output that builds it, the
+/// tag it loads as, and the marker recording what was loaded.
+struct GuestBuild {
+    attribute: &'static str,
+    tag: &'static str,
+    marker: &'static str,
 }
 
-fn load_image() -> Result<()> {
+const REGULAR_BUILD: GuestBuild = GuestBuild {
+    attribute: "macro-box-docker",
+    tag: DOCKER_IMAGE,
+    marker: ".macro-box-image",
+};
+
+const AGENT_BUILD: GuestBuild = GuestBuild {
+    attribute: "macro-box-agent-docker",
+    tag: DOCKER_AGENT_IMAGE,
+    marker: ".macro-box-agent-image",
+};
+
+fn loaded_image_marker(build: &GuestBuild) -> PathBuf {
+    repo_root().join("infra/local/generated").join(build.marker)
+}
+
+fn load_image(build: &GuestBuild) -> Result<()> {
+    let attribute = format!(".#{}", build.attribute);
     let output = Command::new("nix")
-        .args([
-            "build",
-            "--no-link",
-            "--print-out-paths",
-            ".#macro-box-docker",
-        ])
+        .args(["build", "--no-link", "--print-out-paths", &attribute])
         .current_dir(repo_root())
         .output()
-        .context("running nix build .#macro-box-docker")?;
+        .with_context(|| format!("running nix build {attribute}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let tail: Vec<&str> = stderr.lines().rev().take(20).collect();
         bail!(
-            "nix build .#macro-box-docker failed (pass --no-computers to skip computers):\n{}",
+            "nix build {attribute} failed (pass --no-computers to skip computers):\n{}",
             tail.into_iter().rev().collect::<Vec<_>>().join("\n")
         );
     }
@@ -585,11 +631,11 @@ fn load_image() -> Result<()> {
         .context("nix build printed no output path")?
         .to_owned();
 
-    let marker = loaded_image_marker();
+    let marker = loaded_image_marker(build);
     let recorded = std::fs::read_to_string(&marker)
         .ok()
         .and_then(|raw| LoadedImage::parse(&raw));
-    if let (Some(recorded), Some(current)) = (&recorded, image_id()?)
+    if let (Some(recorded), Some(current)) = (&recorded, image_id(build.tag)?)
         && recorded.store_path == store_path
         && recorded.image_id == current
     {
@@ -606,8 +652,8 @@ fn load_image() -> Result<()> {
             String::from_utf8_lossy(&load.stderr).trim()
         );
     }
-    let image_id = image_id()?
-        .with_context(|| format!("docker load {store_path} did not produce {DOCKER_IMAGE}"))?;
+    let image_id = image_id(build.tag)?
+        .with_context(|| format!("docker load {store_path} did not produce {}", build.tag))?;
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
@@ -623,10 +669,10 @@ fn load_image() -> Result<()> {
     .with_context(|| format!("writing {}", marker.display()))
 }
 
-/// The daemon's id for [`DOCKER_IMAGE`], `None` when it has none.
-fn image_id() -> Result<Option<String>> {
+/// The daemon's id for `tag`, `None` when it has none.
+fn image_id(tag: &str) -> Result<Option<String>> {
     let output = Command::new("docker")
-        .args(["image", "inspect", "--format", "{{.Id}}", DOCKER_IMAGE])
+        .args(["image", "inspect", "--format", "{{.Id}}", tag])
         .output()
         .context("running docker image inspect")?;
     Ok(output
