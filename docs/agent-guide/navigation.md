@@ -253,6 +253,8 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
+| `/app/contracts` | Contracts workspace: packet databases, packet drawer, new packet flow (flag `enable-contracts`; under More by default) |
+| `/app/sign/<token>` | A recipient's signing page; no login, outside the app shell |
 | `/app/external` | External: link a personal WhatsApp account and adopt independently shared WhatsApp groups (requires the `enable-whatsapp-linked` flag; see [External](external.md)) |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/database/<uuid>` | A database with table and board views (requires the Databases flag). Links and opens outside Drive stay at this URL; opened from Drive, it shows inline at `/app/drive/database/<uuid>` |

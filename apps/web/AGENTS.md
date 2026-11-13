@@ -585,6 +585,12 @@ controls. CI runs it when
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
 
+Contracts (the real workspace and signing views over the browser-local store)
+has a backend-free regression: a packet from upload to certificate across two
+tabs, every status in a seeded database, and signing on a phone:
+`bunx playwright test --config src/features/contracts/browser-test/playwright.config.ts`.
+See `src/features/contracts/AGENTS.md`.
+
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
