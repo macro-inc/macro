@@ -280,7 +280,7 @@ test-email-fixtures-browser *ARGS:
     src/features/calendar/browser-test/playwright.config.ts
     src/features/calendar-view/browser-test/playwright.config.ts
     src/features/settings/browser-test/signatures/playwright.config.ts
-    src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts unavailable-mention.browser
+    src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts unavailable-mention.browser -g tapping.the.deleted.event.chip
     ../../packages/email-renderer/playwright.config.ts rendering.pw
     SUITES
 

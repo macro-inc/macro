@@ -449,6 +449,10 @@ async fn seed_mailbox(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "test support: the query is the test's own, known only when it runs"
+)]
 async fn sql(
     State(stacks): State<Stacks>,
     Path(id): Path<String>,

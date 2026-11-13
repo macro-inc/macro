@@ -166,7 +166,8 @@ export async function answerCalendar(
     server.patches.push({ path, eventId, body });
     const item = server.events.find((entry) => entry.event.id === eventId);
     if (!item) return route.fulfill({ status: 404, json: {} });
-    for (const field of ['title', 'time', 'recurrenceLines'] as const)
+    if (typeof body.title === 'string') item.event.title = body.title;
+    for (const field of ['time', 'recurrenceLines'] as const)
       if (body[field] !== undefined) item.event[field] = body[field];
     if (body.time !== undefined) item.occurrence.time = body.time;
     return route.fulfill({ json: item.event });
