@@ -29,7 +29,7 @@ async fn many_documents_share_one_grant_lookup_and_keep_their_spelling() {
             users,
         }]
     );
-    assert_eq!(repo.grant_audience_lookups.lock().await.len(), 1);
+    assert_eq!(repo.grant_audience_lookups.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -78,5 +78,5 @@ async fn kinds_with_their_own_audience_and_single_entities_resolve_one_at_a_time
             users,
         }]
     );
-    assert!(repo.grant_audience_lookups.lock().await.is_empty());
+    assert_eq!(repo.grant_audience_lookups.load(Ordering::SeqCst), 0);
 }

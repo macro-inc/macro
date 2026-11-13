@@ -5,9 +5,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 
+/// Each lookup's entity type and ids, in call order.
+type LookupCalls = Arc<Mutex<Vec<(EntityType, Vec<String>)>>>;
+
 #[derive(Clone)]
 struct RecordingLookup {
-    calls: Arc<Mutex<Vec<(EntityType, Vec<String>)>>>,
+    calls: LookupCalls,
     users: Vec<MacroUserIdStr<'static>>,
 }
 

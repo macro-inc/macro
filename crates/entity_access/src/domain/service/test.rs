@@ -78,7 +78,7 @@ struct MockRepo {
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
     call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
-    grant_audience_lookups: Arc<Mutex<Vec<(Vec<Uuid>, EntityType)>>>,
+    grant_audience_lookups: Arc<AtomicUsize>,
 }
 
 impl MockRepo {
@@ -140,7 +140,7 @@ impl MockRepo {
             call_channel: Arc::new(Mutex::new(None)),
             call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
-            grant_audience_lookups: Arc::new(Mutex::new(Vec::new())),
+            grant_audience_lookups: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -675,10 +675,7 @@ impl AccessRepository for MockRepo {
         entity_ids: &[Uuid],
         entity_type: EntityType,
     ) -> Result<Vec<EntityAudience>, AccessError> {
-        self.grant_audience_lookups
-            .lock()
-            .await
-            .push((entity_ids.to_vec(), entity_type));
+        self.grant_audience_lookups.fetch_add(1, Ordering::SeqCst);
         let Some(first) = entity_ids.first() else {
             return Ok(Vec::new());
         };
