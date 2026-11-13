@@ -8,6 +8,7 @@ import { createComponent, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   discardDraftJob,
+  reportDraftJob,
   routineDraftJobsQueryOptions,
   startDraftJob,
   useDraftJobs,
@@ -159,6 +160,17 @@ describe('startDraftJob', () => {
     await expect(startDraftJob(REQUEST, context)).resolves.toBe(
       'Too many routines are drafting. Wait for one to finish, or cancel one.'
     );
+  });
+
+  it('lists a finished draft its caller hands on, in place of it under way', async () => {
+    queryClient.setQueryData(KEY, [drafting('older'), drafting('ran')]);
+    await reportDraftJob(failed('ran'));
+    await reportDraftJob(failed('refused'));
+    expect(listed()).toEqual([
+      failed('refused'),
+      failed('ran'),
+      drafting('older'),
+    ]);
   });
 });
 

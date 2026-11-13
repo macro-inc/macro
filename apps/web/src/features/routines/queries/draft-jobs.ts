@@ -94,8 +94,8 @@ export function useDraftJobs(enabled: Accessor<boolean>) {
 }
 
 /**
- * Put a job just started at the top of the list. A read already under way
- * may have missed it and would write over it, so that one is read again.
+ * Put a job at the top of the list. A read already under way may have
+ * missed it and would write over it, so that one is read again.
  */
 async function listDraftJob(job: DraftJob) {
   const queryKey = scheduledActionKeys.draftJobs.queryKey;
@@ -165,10 +165,19 @@ export async function startDraftJob(
     span.setAttr('routine.draft.id', job.id);
     span.setAttr('routine.draft.outcome', job.state);
     // One that finished already (refused at once, or a resend of a start
-    // that ran) goes to the caller only, so nothing else reports it.
+    // that ran) goes to the caller only, so nothing else reports it; a
+    // caller that can't show it any more hands it on (`reportDraftJob`).
     if (job.state === 'drafting') await listDraftJob(job);
     return job;
   });
+}
+
+/**
+ * Hand a finished draft the caller can no longer show to the app's pill and
+ * toasts, by listing it.
+ */
+export async function reportDraftJob(job: DraftJob): Promise<void> {
+  await listDraftJob(job);
 }
 
 /**
