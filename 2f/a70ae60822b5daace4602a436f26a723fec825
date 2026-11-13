@@ -1,0 +1,29 @@
+crates/gitai/AGENTS.md
+  s_c6fe7b7c1d36f7::t_0dd58734a0fd8c 103
+crates/gitai/src/outbound/dynamodb.rs
+  s_6c441025453223::t_c9c6d2413a3676 6,38-40,125-128,147-148,155,157-159,163-164,259,263-276,356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2fa70ae60822b5daace4602a436f26a723fec825",
+  "prompts": {},
+  "sessions": {
+    "s_6c441025453223": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6e3cf052-1aab-4a10-a528-0b9992b29113",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
