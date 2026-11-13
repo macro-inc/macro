@@ -21,6 +21,7 @@ mod routine_analytics;
 mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
+use scheduled_action::domain::agent_routines::AgentRoutineServiceImpl;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::drafts::jobs::DraftJobs;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
@@ -41,6 +42,9 @@ use scheduled_action::domain::suggestions::{
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
+use scheduled_action::inbound::agent_routine_router::{
+    AgentRoutineRouterState, agent_routine_router,
+};
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
 use scheduled_action::inbound::draft_job_router::{
     RoutineDraftJobRouterState, routine_draft_job_router,
@@ -59,6 +63,7 @@ use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdate
 use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::pg_agent_routines::PgAgentRoutines;
 use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
@@ -519,6 +524,16 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: suggestions,
         authorization_state: authorization_state.clone(),
     };
+    // Agent dashboards' routines pane: the agent's own routines, read by it
+    // and by owners and admins of its team.
+    let agent_routine_state = AgentRoutineRouterState {
+        service: Arc::new(AgentRoutineServiceImpl::new(
+            Arc::new(PgAgentRoutines::new(db.clone())),
+            Arc::clone(&repo),
+            routine_flags.clone(),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
@@ -543,6 +558,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     };
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
+        .merge(agent_routine_router::<_, _, ()>(agent_routine_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
         .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));

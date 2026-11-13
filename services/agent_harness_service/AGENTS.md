@@ -191,6 +191,10 @@ Pulumi stacks; they do not host extra agent processes.
   Pipedream apps; their hidden sessions run on the free tier's model, gated
   on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
   sessions a stopped process left open every minute.
+  The agent dashboard's routines summary
+  (`GET /scheduled-actions/agents/{agent_id}`, `AgentRoutineServiceImpl`)
+  reuses the scheduling PostHog flags (`enable-agent-dashboards` for the
+  caller) and the routine repository's last runs.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
@@ -301,7 +305,8 @@ feature flags and the MCP and integration analytics; when the key is unset,
 analytics are off and routine template publishing, reads, and activation are
 disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
 owner unsharing and already activated routines remain available. Without
-the key nobody is offered the agent-dashboard widgets.
+the key nobody is offered the agent-dashboard widgets, and the agent routines
+summary is off (404) too.
 `AUTHENTICATION_SERVICE_SECRET_KEY` is required in harness, cognition, and
 scheduling configs regardless of billing flags. It is a Secrets Manager name
 in deployed configs and a direct key locally. Resolve it for the harness, cognition, and

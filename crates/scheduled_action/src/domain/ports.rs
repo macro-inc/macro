@@ -1,3 +1,4 @@
+use super::agent_routines::{AgentRoutine, AgentRoutines};
 use super::appearance::ChangeAppearance;
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
@@ -618,6 +619,37 @@ impl RequestSessions for NoRequestSessions {
     async fn session_of(&self, _correlation: Uuid) -> Result<Option<Uuid>> {
         Ok(None)
     }
+}
+
+/// Reads behind an agent's routines summary.
+pub trait AgentRoutineStore: Send + Sync + 'static {
+    /// Whether `agent` is an agent account and `viewer` is an owner or admin
+    /// of a team it belongs to.
+    fn oversees(
+        &self,
+        viewer: &MacroUserIdStr<'_>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// `owner`'s first `limit` top-level routines by `(created_at, id)`,
+    /// without their last runs. Sub-routines are never read.
+    fn top_level_routines(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: u8,
+    ) -> impl Future<Output = Result<Vec<AgentRoutine>>> + Send;
+}
+
+/// The routines an agent account owns, for the agent and its overseers.
+pub trait AgentRoutineService: Send + Sync + 'static {
+    /// `agent`'s top-level routines, summarized without their content, when
+    /// `viewer` is the agent or an owner or admin of one of its teams and has
+    /// agent dashboards. Anyone else gets `ActionPolicyError::NotFound`.
+    fn agent_routines(
+        &self,
+        viewer: &MacroUserIdStr<'_>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<AgentRoutines>> + Send;
 }
 
 /// Templates shared from routines, keyed by their source routine's ID.

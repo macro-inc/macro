@@ -1,3 +1,4 @@
+pub mod agent_routines;
 pub mod appearance;
 pub mod catalog;
 pub mod code_check;
