@@ -288,7 +288,8 @@ export function AgentActivitySection(props: {
   );
 }
 
-function AgentActivityItemRow(props: {
+/** One entity the session touched, with what it did there. */
+export function AgentActivityItemRow(props: {
   item: AgentActivityItem;
   /** Re-renders relative times as the clock moves. */
   now: number;

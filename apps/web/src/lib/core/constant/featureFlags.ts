@@ -172,6 +172,17 @@ export const macroConnect = defineFlag({
   env: 'ENABLE_MACRO_CONNECT',
 });
 
+/**
+ * Agent dashboards: the grid and tabs layouts and the data panes (stat, chart,
+ * table, saved view) in dynamic-UI views. Same key as the backend flag, which
+ * decides whether models are told about them.
+ */
+export const enableAgentDashboards = defineFlag({
+  key: 'enable-agent-dashboards',
+  env: 'ENABLE_AGENT_DASHBOARDS',
+  default: onInDev,
+});
+
 /** HTML artifact nodes on Canvas, including running their scripts in a sandbox. */
 export const enableCanvasArtifacts = defineFlag({
   key: 'enable-canvas-artifacts',
