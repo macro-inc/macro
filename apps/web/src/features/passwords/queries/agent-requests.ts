@@ -1,8 +1,11 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import { statusError } from '@core/util/safeFetch';
+import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
 import type { PasswordAgentAccessRequestPage } from '@service-storage/generated/schemas/passwordAgentAccessRequestPage';
 import type { PasswordAgentAccessRequestState } from '@service-storage/generated/schemas/passwordAgentAccessRequestState';
+import { PasswordAgentErrorCode } from '@service-storage/generated/schemas/passwordAgentErrorCode';
 import type { PasswordAgentItemAccess } from '@service-storage/generated/schemas/passwordAgentItemAccess';
 import type { PasswordAgentResolveRequest } from '@service-storage/generated/schemas/passwordAgentResolveRequest';
 import type { PasswordAgentRevokeBody } from '@service-storage/generated/schemas/passwordAgentRevokeBody';
@@ -10,7 +13,7 @@ import { queryOptions } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
 import { passwordKeys } from './keys';
-import type { PasswordSourceScope } from './source';
+import { BUSY_RETRIES, busyDelay, type PasswordSourceScope } from './source';
 
 /**
  * `unavailable`: the agent vault is off for this team or the item is gone, so
@@ -74,26 +77,60 @@ export function createAgentRequestSource(
     method: 'GET' | 'POST',
     body?: object
   ): AgentRequestResult<T> {
-    if (!isCurrent()) return err('failed');
-    const response = await fetchWithToken<T>(`${root}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Macro-Passwords': '1',
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: scope.signal,
-      retry: { maxTries: 1 },
-    });
-    if (!isCurrent()) return err('failed');
-    return response.mapErr((errors) =>
-      match(errors[0]?.code)
-        .returnType<AgentRequestFailure>()
-        .with('NOT_FOUND', () => 'unavailable')
-        .with('CONFLICT', () => 'stale')
-        .with('FORBIDDEN', () => 'forbidden')
-        .otherwise(() => 'failed')
-    );
+    const payload = body ? JSON.stringify(body) : undefined;
+    for (let retries = 0; ; retries++) {
+      if (!isCurrent()) return err('failed');
+      const response = await fetchWithToken<T, PasswordAgentErrorCode>(
+        `${root}${path}`,
+        {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Macro-Passwords': '1',
+          },
+          body: payload,
+          signal: scope.signal,
+          retry: { maxTries: 1 },
+          // A 409 is either a changed revision or a busy vault; only the body says which.
+          errorResponseHandler: async (response) => {
+            const fallback = statusError(response.status);
+            if (response.status !== 409) return fallback;
+            const failure: unknown = await response
+              .json()
+              .catch(() => undefined);
+            if (!failure || typeof failure !== 'object' || !('code' in failure))
+              return fallback;
+            const code = Object.values(PasswordAgentErrorCode).find(
+              (code) => code === failure.code
+            );
+            return code ? { code, message: code } : fallback;
+          },
+        }
+      );
+      if (!isCurrent()) return err('failed');
+      if (
+        response.isErr() &&
+        retries < BUSY_RETRIES &&
+        response.error.some(
+          (error) => error.code === PasswordAgentErrorCode.vault_busy
+        )
+      ) {
+        await sleep(busyDelay(retries));
+        continue;
+      }
+      return response.mapErr((errors) =>
+        match(errors[0]?.code)
+          .returnType<AgentRequestFailure>()
+          .with('NOT_FOUND', () => 'unavailable')
+          .with(
+            PasswordAgentErrorCode.version_conflict,
+            'CONFLICT',
+            () => 'stale'
+          )
+          .with('FORBIDDEN', () => 'forbidden')
+          .otherwise(() => 'failed')
+      );
+    }
   }
   return {
     forItem(itemId) {
