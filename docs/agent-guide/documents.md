@@ -3133,8 +3133,11 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   Files-view title menu (three dots beside the breadcrumb) also lists `Copy as
   prompt` directly above `Download` for plain documents.
 - `Details` → Owner, Created, Last updated.
-- `Tags` → `Add tags` (dialog). Click a tag's label to toggle and save; Shift-click
-  keeps the picker open for multiple selections. Reopen it to remove a tag.
+- `Tags` → `Add tags` opens the picker. On desktop, a checkbox toggles a tag and
+  keeps the picker open; clicking its label toggles and saves all staged selections,
+  then closes. Shift-click and Shift+Enter also keep it open. Mobile retains Done.
+  During tag creation, Back and Escape return from sharing to color, then to the
+  name search, preserving the name and chosen color.
   With GraphQL Soup enabled, applying the first tag refetches only that entity's
   properties; later edits update the existing assignment optimistically. Verify
   both the side panel and list-row chip, then reload to confirm persistence.

@@ -14,16 +14,29 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EntityTagSubmenu } from './EntityTagSubmenu';
 import type { DocTags } from './tag-picker-session';
 
-const mocks = vi.hoisted(() => ({ source: vi.fn(), save: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  source: vi.fn(),
+  save: vi.fn(),
+  add: vi.fn(),
+  ensure: vi.fn(),
+  apply: vi.fn(),
+}));
 vi.mock('./useDocTags', () => ({ useDocTags: mocks.source }));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ data: undefined }),
 }));
 vi.mock('@queries/properties/options', () => ({
-  useAddPropertyOptionMutation: () => ({ isPending: false }),
+  useAddPropertyOptionMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.add,
+  }),
 }));
 vi.mock('@queries/properties/tags', () => ({
-  useEnsureTagSetMutation: () => ({ isPending: false }),
+  invalidateTags: vi.fn(),
+  useEnsureTagSetMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.ensure,
+  }),
   useCreateTagMutation: () => ({ isPending: false }),
   useDeletePropertyOptionMutation: () => ({ isPending: false }),
   useUpdatePropertyOptionMutation: () => ({ isPending: false }),
@@ -51,6 +64,12 @@ const tagSets: TagSetResponse[] = [
         displayOrder: 0,
         value: { type: 'string', value: 'Urgent' },
       },
+      {
+        id: 'follow-up',
+        propertyDefinitionId: 'tags',
+        displayOrder: 1,
+        value: { type: 'string', value: 'Follow up' },
+      },
     ],
   },
 ];
@@ -61,12 +80,18 @@ const scrollIntoView = Object.getOwnPropertyDescriptor(
 let style: HTMLStyleElement;
 beforeEach(() => {
   mocks.save.mockReset().mockResolvedValue(undefined);
+  mocks.add.mockReset().mockResolvedValue({ id: 'created-tag' });
+  mocks.ensure.mockReset().mockResolvedValue({
+    definition: { id: 'tags' },
+    options: tagSets[0].options,
+  });
+  mocks.apply.mockReset().mockResolvedValue(undefined);
   mocks.source.mockReset().mockReturnValue({
     tagSets: () => tagSets,
     appliedTags: () => [],
     optionById: () => new Map(),
     isApplied: () => false,
-    applyTag: vi.fn(),
+    applyTag: mocks.apply,
     removeTag: vi.fn(),
     replaceTag: vi.fn(),
     setTagSelection: mocks.save,
@@ -163,6 +188,69 @@ it('handles selection keys in the submenu and saves staged tags when its parent 
   await waitFor(() =>
     expect(mocks.save).toHaveBeenCalledWith(new Set(['urgent']))
   );
+});
+
+it('keeps checkbox selections open and saves them together with a row pick', async () => {
+  const { complete } = setup();
+  const search = await openTags();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Urgent' }));
+  expect(screen.getByRole('checkbox', { name: 'Urgent' })).toHaveProperty(
+    'checked',
+    true
+  );
+  expect(screen.getByPlaceholderText('Change or add tags')).toBe(search);
+  expect(mocks.save).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Urgent' }));
+  expect(screen.getByRole('checkbox', { name: 'Urgent' })).toHaveProperty(
+    'checked',
+    false
+  );
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Urgent' }));
+  fireEvent.click(
+    screen.getByText('Follow up', { exact: true, selector: 'span' })
+  );
+
+  await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+  expect(mocks.save).toHaveBeenCalledOnce();
+  expect(mocks.save).toHaveBeenCalledWith(new Set(['urgent', 'follow-up']));
+  expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull();
+});
+
+it('goes back through creation steps without losing the name or chosen color', async () => {
+  setup();
+  const search = await openTags();
+  fireEvent.input(search, { target: { value: 'New tag' } });
+  fireEvent.click(screen.getByText('Create new tag "New tag"'));
+  fireEvent.click(screen.getByText('Green', { exact: true }));
+  const back = screen.getByRole('button', { name: 'Back' });
+  back.focus();
+  fireEvent.keyDown(back, { key: 'Enter' });
+  expect(screen.getByText('Personal', { exact: true })).toBeTruthy();
+  expect(mocks.add).not.toHaveBeenCalled();
+  fireEvent.click(back);
+  expect(screen.getByText('Green', { exact: true })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+  const name = screen.getByPlaceholderText('Change or add tags');
+  expect(name).toHaveProperty('value', 'New tag');
+  fireEvent.input(name, { target: { value: 'Renamed tag' } });
+  fireEvent.click(screen.getByText('Create new tag "Renamed tag"'));
+  fireEvent.keyDown(screen.getByText('Create tag "Renamed tag"'), {
+    key: 'Enter',
+  });
+  fireEvent.click(screen.getByText('Personal', { exact: true }));
+
+  await waitFor(() =>
+    expect(mocks.apply).toHaveBeenCalledWith('user', 'created-tag')
+  );
+  expect(mocks.add).toHaveBeenCalledWith({
+    propertyDefinitionId: 'tags',
+    body: {
+      type: 'select_string',
+      option: { value: 'Renamed tag', display_order: 2, color: '#46A758' },
+    },
+  });
 });
 
 it('keeps tag editing alive after the parent menu unmounts', async () => {

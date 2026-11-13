@@ -1601,6 +1601,13 @@ Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 
+### Tag picker selection and creation
+
+Keep tag checkbox toggles open for multiselect; desktop row picks save the staged
+selection and close, while touch sheets retain their explicit Done action.
+Return from sharing to color to name with Back or Escape, preserving the draft
+and chosen color; native Back-button activation must not advance the flow.
+
 ### Sidebar tag dragging
 
 The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.

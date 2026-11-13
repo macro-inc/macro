@@ -1,12 +1,13 @@
+import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
+import BackIcon from '@icon/system/regular/arrow-left.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Popover } from '@kobalte/core/popover';
-import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
   DropdownSearchInput,
   DropdownSelectableRow,
@@ -14,7 +15,7 @@ import {
 import { useSearchInputFocus } from '@property/utils';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
-import { Button, cn, Layer } from '@ui';
+import { Button, Checkbox, cn, Layer } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -479,6 +480,7 @@ export function TagPickerList(props: {
     checked: session.isSelected(item.option.id),
     selected: session.dropdown.selectedIndex() === session.itemIndex(item),
     onSelect: (event: MouseEvent) => session.pick(item, event),
+    onToggle: () => session.toggleSelected(item.option.id),
     onEdit: () => fireAndForget(session.beginEdit(item), 'tag-picker'),
     onOpenTag: () => fireAndForget(session.openTaggedItems(item), 'tag-picker'),
     onMouseEnter: () => {
@@ -491,7 +493,10 @@ export function TagPickerList(props: {
   // up; iOS devices still send mousedown after a cancelled pointerdown.
   const keepSearchFocus = (event: Event) => event.preventDefault();
   let searchInput: HTMLInputElement | undefined;
-  useSearchInputFocus(() => searchInput);
+  useSearchInputFocus(
+    () => searchInput,
+    () => !session.createStep()
+  );
 
   return (
     <Show
@@ -623,6 +628,7 @@ export function TagPickerList(props: {
           scopeOptions={session.scopeOptions()}
           selectedScopeIndex={session.selectedScopeIndex()}
           pending={session.creating()}
+          onBack={session.backFromCreate}
           onColorMouseEnter={session.setSelectedColorIndex}
           onColorSelect={(index) => {
             session.setSelectedColorIndex(index);
@@ -645,6 +651,7 @@ function TagPickerRow(props: {
   checked: boolean;
   selected: boolean;
   onSelect: (event: MouseEvent) => void;
+  onToggle: () => void;
   onEdit: () => void;
   onOpenTag: () => void;
   onMouseEnter: () => void;
@@ -700,7 +707,15 @@ function TagPickerRow(props: {
           </div>
         }
       >
-        <OptionCheckBox checked={props.checked} multiselect />
+        <Checkbox
+          size="sm"
+          checked={props.checked}
+          onChange={props.onToggle}
+          onClick={(event: MouseEvent) => event.stopPropagation()}
+        >
+          <Checkbox.Control />
+          <Checkbox.Label class="sr-only">{label()}</Checkbox.Label>
+        </Checkbox>
         <TagDot color={props.item.option.color ?? undefined} />
         <span class="min-w-0 flex-1 truncate">{label()}</span>
         <Show when={props.item.scope === 'team'}>
@@ -748,6 +763,7 @@ function CreateTagFlow(props: {
   scopeOptions: { scope: TagScope; label: string }[];
   selectedScopeIndex: number;
   pending: boolean;
+  onBack: () => void;
   onColorMouseEnter: (index: number) => void;
   onColorSelect: (index: number) => void;
   onScopeMouseEnter: (index: number) => void;
@@ -755,8 +771,20 @@ function CreateTagFlow(props: {
 }) {
   return (
     <div class="p-1.5">
-      <div class="px-2 pb-1 pt-1 text-xs text-ink-extra-muted">
-        Create tag "{props.label}"
+      <div class="flex items-center gap-2 px-2 pb-1 pt-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('common.back')}
+          tooltip={t('common.back')}
+          disabled={props.pending}
+          onClick={props.onBack}
+        >
+          <BackIcon class="size-4" />
+        </Button>
+        <span class="min-w-0 truncate text-xs text-ink-extra-muted">
+          Create tag "{props.label}"
+        </span>
       </div>
       <Show
         when={props.step === 'color'}

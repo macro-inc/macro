@@ -183,7 +183,7 @@ export function createTagPickerSession(props: {
     await savePromise;
   };
 
-  /** Toggle a tag; a picker that closes on pick saves unless Shift is held. */
+  /** Row picks save and close on desktop; checkbox toggles stay in the session. */
   const pick = (item: TagOptionItem, event?: { shiftKey?: boolean }) => {
     toggleSelected(item.option.id);
     if (!props.confirmsWithDone && !event?.shiftKey) {
@@ -269,10 +269,14 @@ export function createTagPickerSession(props: {
   const beginCreate = () => {
     const label = createLabel();
     if (!showCreateRow() || !label) return;
+    // Returning to edit the name must retain the chosen color and sharing option.
     setCreateDraftLabel(label);
-    setSelectedColorIndex(0);
-    setSelectedScopeIndex(0);
     setCreateStep('color');
+  };
+
+  const backFromCreate = () => {
+    if (addOption.isPending || ensureTagSet.isPending) return;
+    setCreateStep((step) => (step === 'scope' ? 'color' : null));
   };
 
   const editableTagForItem = (item: TagOptionItem): EditableTag => ({
@@ -334,15 +338,18 @@ export function createTagPickerSession(props: {
   const handleCreateKeyDown = (event: KeyboardEvent) => {
     const step = createStep();
     if (!step) return;
+    // Native buttons own activation; Enter on Back must not advance the flow.
+    if (
+      event.target instanceof Element &&
+      event.target.closest('button') &&
+      event.key !== 'Escape'
+    )
+      return;
 
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      if (step === 'scope') {
-        setCreateStep('color');
-        return;
-      }
-      setCreateStep(null);
+      backFromCreate();
       return;
     }
 
@@ -445,6 +452,7 @@ export function createTagPickerSession(props: {
       dropdown.setSearchQuery(value);
     },
     isSelected,
+    toggleSelected,
     pick,
     clearAll,
     persistSelection,
@@ -471,6 +479,7 @@ export function createTagPickerSession(props: {
     setSelectedScopeIndex,
     creating: () => addOption.isPending || ensureTagSet.isPending,
     beginCreate,
+    backFromCreate,
     beginEdit,
     openTaggedItems,
     createTag,
