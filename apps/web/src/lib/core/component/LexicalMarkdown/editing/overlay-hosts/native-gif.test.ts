@@ -10,6 +10,7 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import {
   createBuiltinRegistry,
+  createInputCommitObservation,
   mountLocalSessionView,
   registerMacroDecoratorViews,
   registerMacroElementViews,
@@ -18,7 +19,6 @@ import { NOOP_SPAN, Telemetry } from '@macro-inc/observability';
 import { createRoot } from 'solid-js';
 import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import type { Gif } from '../../plugins/gif';
-import { createInputCommitObservation } from '@macro-inc/lexical-wasm-view';
 import {
   dispatchApplicationCommand,
   dispatchApplicationCommandSettledIfSessionEdit,
