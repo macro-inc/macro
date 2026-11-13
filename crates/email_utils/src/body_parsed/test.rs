@@ -113,3 +113,11 @@ fn test_linkless_strips_brackets() {
     assert!(!text.contains('['));
     assert!(!text.contains(']'));
 }
+
+#[test]
+fn undecorated_text_has_no_emphasis_marks() {
+    assert_eq!(
+        html_to_undecorated_text("<p>Thanks, <b>see</b> <em>you</em> <a href=\"https://example.com\">Monday</a></p>"),
+        Some("Thanks, see you Monday".to_string())
+    );
+}
