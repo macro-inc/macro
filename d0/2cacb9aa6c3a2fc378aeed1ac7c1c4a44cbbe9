@@ -1,0 +1,23 @@
+nix/macro-box/macro-box.nix
+  s_c1146e8a8b951b::t_8d6c6e82208b01 135-140
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_c1146e8a8b951b::t_8d6c6e82208b01 1412-1416
+nix/cloud-storage.nix
+  s_c1146e8a8b951b::t_6a807e0ebb2f73 66-67,72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d02cacb9aa6c3a2fc378aeed1ac7c1c4a44cbbe9",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
