@@ -88,6 +88,7 @@ Decode legacy EditorPaste tag 4 with default-false PasteIntent and additive tag 
 - `cargo test -p document_session_wasm -j2`
 - `cargo check -p document_session_wasm --target wasm32-unknown-unknown -j2`
 - `cargo clippy -p document_session_wasm --all-targets -j2 -- -D warnings`
+- When changing `Machine` fields or constructors, run `cargo clippy -p document_session_wasm --all-features --all-targets -j2 -- -D warnings` to cover both ordinary and compatibility initialization.
 - `just -f apps/web/justfile build-document-session-wasm`
 - `bun packages/collaboration/scripts/generate-session-schema.ts --check`
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
