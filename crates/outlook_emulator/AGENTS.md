@@ -2,12 +2,13 @@
 
 ## What it is
 
-Test support for the Email feature: a stateful fake of the Microsoft Graph
-mail API and the Microsoft identity platform our email and sign-in code call.
-The real `email_api_client` Outlook adapter, `email_service` and its workers,
-FusionAuth's `microsoft` identity provider and the authentication service's
-Outlook link run against it, in a `cargo test`, as a standalone process or as
-part of a local stack, without Microsoft accounts.
+Test support for the Email and Calendar features: a stateful fake of the
+Microsoft Graph mail and calendar APIs and the Microsoft identity platform our
+email, calendar and sign-in code call. The real `email_api_client` Outlook
+adapter, `email_service` and its workers, `calendar_service`, FusionAuth's
+`microsoft` identity provider and the authentication service's Outlook link
+run against it, in a `cargo test`, as a standalone process or as part of a
+local stack, without Microsoft accounts.
 
 ## How it works
 
@@ -31,6 +32,27 @@ part of a local stack, without Microsoft accounts.
   `reauthorizationRequired`, `subscriptionRemoved` or `missed`.
 - Sending moves the draft to Sent Items under the same id and delivers a copy
   to every recipient that is a mailbox here.
+- Every mailbox also holds calendars: a default one named `Calendar` and
+  any its seed lists, in the mailbox's `mailboxSettings.timeZone`. An event
+  is stored as the JSON a client writes. A series is one stored event: its
+  occurrences are computed from its recurrence in the series' own zone, an
+  occurrence someone changed is an exception holding only what differs (the
+  rest still follows the series), and a deleted one is a cancelled date. An
+  occurrence's id is made from the series' id and its date, and stays when
+  it becomes an exception.
+- `GET /me/calendarView/delta` lists the default calendar's view of a
+  window: single events and series masters in full, each series followed by
+  its occurrences in the window (an unchanged one with only `seriesMasterId`,
+  `type`, `start` and `end`). A later round reports what changed since its
+  delta token, a changed series with all its occurrences again, and
+  `@removed` for a deleted event, a deleted occurrence, or an event that
+  left the window. The other calendars have no delta, as in Graph v1.0:
+  `GET /me/calendars/{id}/calendarView` lists occurrences and single events.
+- A meeting's guests who are mailboxes here each hold their own copy on
+  their default calendar. The organizer's writes reach the copies, a guest's
+  `accept` or `tentativelyAccept` reaches the organizer's attendee list,
+  `decline` also removes the guest's copy, and deleting the meeting marks
+  the copies cancelled (`Canceled: …`).
 - Every mailbox is also a Microsoft user. `/{tenant}/oauth2/v2.0/authorize`
   is a page that lists them in place of Microsoft's account picker and
   consent screen; picking one redirects back with an authorization code,
@@ -62,6 +84,12 @@ part of a local stack, without Microsoft accounts.
   the route table and the request log; `src/graph/` holds the handlers.
 - `src/odata.rs`: the `$select`, `$top`, `$skip`, `$orderby`, `$filter` and
   `$expand` forms it understands. `src/render.rs`: Graph's JSON.
+- `src/calendar.rs`: calendars, stored events, series and their
+  occurrences; `calendar/time.rs` (event times, recurrence patterns),
+  `calendar/write.rs` (create, patch, answer), `calendar/delta.rs`
+  (`calendarView/delta` rounds), `calendar/guests.rs` (a meeting's copies),
+  `calendar/render.rs` (Graph's JSON). `src/graph/calendar.rs`: the routes.
+  `src/control/calendar.rs`: the calendar control routes and methods.
 - `src/notify.rs`: subscription validation and notification delivery.
 - `src/oauth.rs`: Microsoft's token endpoint and the authentication-service
   stand-in. `src/control.rs`: `/_emulator/`.
@@ -73,10 +101,19 @@ part of a local stack, without Microsoft accounts.
 ## Scope
 
 - Owns: the Graph mail endpoints the email code calls, plus `$batch` and the
-  send-at-once reply and forward actions, which it does not call yet; and what
-  the sign-in and Outlook link code use of the Microsoft identity platform.
-- Not here: Graph calendar; Gmail; SQS, Postgres and
-  the other Macro services a local `email_service` needs.
+  send-at-once reply and forward actions, which it does not call yet; the
+  Graph calendar endpoints `email_api_client`'s `outlook/calendar.rs` calls
+  (`mailboxSettings`, `calendars`, `calendarView` and its delta, `events`,
+  `instances`, create, patch, delete, `accept`, `tentativelyAccept`,
+  `decline`); and what the sign-in and Outlook link code use of the Microsoft
+  identity platform.
+- Not here: Gmail; SQS, Postgres and the other Macro services a local
+  `email_service` or `calendar_service` needs.
+- Not emulated, because our code does not depend on it: invitation and
+  response mail for a meeting (`sendResponse`, `comment`), calendar change
+  notifications (the calendar sync polls; it creates no subscription),
+  calendars shared between users, free/busy, attachments on events, and
+  `Prefer: outlook.timezone` (times are answered in UTC, Graph's default).
 
 ## Recipes
 
@@ -91,6 +128,11 @@ part of a local stack, without Microsoft accounts.
   `POST /_emulator/mailboxes/{email}/links/{id}` (or `link_id` in the seed).
   Set `OUTLOOK_CONNECTIONS_ENABLED`, `OUTLOOK_SYNC_ENABLED` and
   `OUTLOOK_WRITES_ENABLED`.
+- Point a local `calendar_service` at it: the same two overrides, with
+  `CALENDAR_SYNC_ENABLED`, `OUTLOOK_SYNC_ENABLED` and
+  `OUTLOOK_WRITES_ENABLED`. Its Outlook sync picks up every `email_links`
+  row whose `email_link_microsoft_scopes` hold `Calendars.ReadWrite`, and
+  polls each calendar every two minutes; it opens no subscription.
 - Point sign-in and Outlook linking at it:
   `OVERRIDE_MICROSOFT_LOGIN_URL=<base>/` for the authentication service's
   calls and, as the browser reaches it,
@@ -115,6 +157,19 @@ part of a local stack, without Microsoft accounts.
   `messages.get` and an `error` such as `rate_limit`. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`;
   what it sent subscribers: `GET /_emulator/notifications`.
+- Calendars: seed them under a mailbox (`time_zone`, `calendars`, each with
+  `events` in the JSON a client posts to Graph; see `NewEvent`). What a
+  calendar holds: `GET /_emulator/mailboxes/{email}/calendars` and
+  `…/calendars/{id, name or default}/events`. A change made in Outlook:
+  `POST …/calendars/{calendar}/events`, `PATCH`/`DELETE
+  …/events/{id}` (an occurrence's id changes or deletes that occurrence).
+  An outside guest's answer: `POST …/events/{id}/answers`. An expired sync
+  state: `POST …/delta/expire`, which also expires the calendar view's
+  token. The mailbox time zone: `PUT …/time-zone`.
+- An event our code cannot read: seed it with `raw`, properties answered
+  verbatim in place of the computed ones (a recurrence Graph's own writes
+  never make), or with `originalStartTimeZone` set to the name Graph answers
+  (`Pacific Standard Time`, `tzone://Microsoft/Utc`).
 - Add a Graph endpoint: a `Route` variant in `src/fault.rs` → an arm in the
   route table of `src/graph.rs` that calls `ctx.enter(route)` first → a
   handler in `src/graph/` → a test in `src/test/` that calls it with the real
@@ -139,6 +194,21 @@ part of a local stack, without Microsoft accounts.
   emulator's own origin, because the client refuses to send its bearer token
   to a host other than its Graph root. Delta links use the OData key form
   (`mailFolders('id')`), as Graph's do.
+- Event times are computed with IANA zones only: `start` and `end` name an
+  IANA zone or `UTC`, in a seed as in a request, which is what our adapter
+  sends. A Windows zone name there answers 400. Windows names are only
+  labels: the mailbox's `time_zone` and an event's `originalStartTimeZone`.
+- A seed does not make guest copies: seed each mailbox's copy of a meeting
+  with the same `iCalUId` and `organizer`, as `seed.example.yaml` does.
+  Later writes by the organizer find the copy by those.
+- Changing a series' times or pattern drops its exceptions and cancelled
+  dates, as Exchange does; changing only its range keeps them.
+- Three answers are the emulator's reading, not checked against Graph: a
+  listing leaves `originalStart` out unless selected (as our adapter found
+  for `instances`) while a single `GET` includes it; an exception answers
+  only its own extended properties, not the series'; and a delta round
+  reports a series' deleted occurrence as `@removed` under the occurrence's
+  id.
 - Waiting is event driven (`wait_for_notifications`); don't add sleep loops.
 - The authentication-service stand-in is not a Microsoft API. It exists so the
   service can run without FusionAuth, and answers like the real routes: 404
@@ -154,7 +224,8 @@ part of a local stack, without Microsoft accounts.
   redeemed once.
 - Microsoft's consent is all or nothing, so the page has no checkboxes:
   picking a user grants every scope asked for, added to what the mailbox's
-  grant already covers. A seeded mailbox starts with the mail scopes granted.
+  grant already covers. A seeded mailbox starts with the mail and calendar
+  scopes granted.
 - A mailbox has one grant. A consent after a revocation starts a new one with
   new refresh tokens; the revoked ones stay dead. That includes a plain
   sign-in, which Microsoft would keep apart from the mail grant.

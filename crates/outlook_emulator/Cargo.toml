@@ -3,13 +3,14 @@ edition = "2024"
 name = "outlook_emulator"
 publish = false
 version = "0.1.0"
-description = "Test support: a stateful fake of the Microsoft Graph mail API and the Microsoft identity platform Macro's email and sign-in code call (messages, folders, delta, drafts, attachments, subscriptions with change notifications, throttling; sign-in page, tokens, ID tokens and their keys), in process or as a standalone binary."
+description = "Test support: a stateful fake of the Microsoft Graph mail and calendar APIs and the Microsoft identity platform Macro's email, calendar and sign-in code call (messages, folders, delta, drafts, attachments, subscriptions with change notifications, throttling; calendars, events, series, calendarView delta; sign-in page, tokens, ID tokens and their keys), in process or as a standalone binary."
 
 [dependencies]
 askama = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 clap = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
@@ -34,6 +35,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+calendar_events = { path = "../calendar_events" }
 email_api_client = { path = "../email_api_client", features = ["outbound-outlook"] }
 fusionauth = { path = "../fusionauth" }
 macro_service_urls = { path = "../macro_service_urls" }

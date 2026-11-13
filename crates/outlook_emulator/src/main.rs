@@ -1,5 +1,5 @@
 //! The Outlook emulator as a standalone process, for pointing a locally
-//! running `email_service` at.
+//! running `email_service` or `calendar_service` at.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -9,14 +9,14 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use outlook_emulator::{Options, OutlookEmulator, Seed, SeedError, StartError};
 
-/// A stateful fake of the Microsoft Graph mail API and the Microsoft
-/// identity platform Macro's email and sign-in code call.
+/// A stateful fake of the Microsoft Graph mail and calendar APIs and the
+/// Microsoft identity platform Macro's email, calendar and sign-in code call.
 #[derive(Parser)]
 struct Args {
     /// The address to listen on.
     #[arg(long, default_value = "127.0.0.1:8481")]
     listen: SocketAddr,
-    /// A YAML or JSON seed file: mailboxes and their mail.
+    /// A YAML or JSON seed file: mailboxes, their mail and their calendars.
     #[arg(long)]
     seed: Option<PathBuf>,
     /// The origin links in responses are built on, when clients reach the

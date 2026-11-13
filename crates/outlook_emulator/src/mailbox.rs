@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::EmulatorError;
+use crate::calendar::{Calendars, Writer};
 use crate::error::GraphError;
 use crate::seed::{NewMessage, SeedMailbox};
 
@@ -265,11 +266,12 @@ pub(crate) struct Change {
 }
 
 /// The delegated permissions a seeded mailbox has already granted Macro:
-/// the ones a mail consent asks for.
-pub(crate) const SEEDED_SCOPES: [&str; 6] = [
+/// the ones a mail and calendar consent asks for.
+pub(crate) const SEEDED_SCOPES: [&str; 7] = [
     "User.Read",
     "Mail.ReadWrite",
     "Mail.Send",
+    "Calendars.ReadWrite",
     "MailboxSettings.ReadWrite",
     "Contacts.Read",
     "offline_access",
@@ -314,6 +316,7 @@ pub(crate) struct Mailbox {
     window: VecDeque<i64>,
     /// Changes not yet turned into notifications.
     pub(crate) changes: Vec<Change>,
+    pub(crate) calendar: Calendars,
 }
 
 impl Mailbox {
@@ -358,6 +361,13 @@ impl Mailbox {
                 .unwrap_or(GRAPH_REQUESTS_PER_TEN_MINUTES),
             window: VecDeque::new(),
             changes: Vec::new(),
+            calendar: Calendars::new(
+                Address {
+                    address: seed.email.to_lowercase(),
+                    name: seed.name.clone(),
+                },
+                seed.time_zone.clone().unwrap_or_else(|| "UTC".to_string()),
+            ),
         };
 
         let root = mailbox.new_id("folder");
@@ -403,6 +413,15 @@ impl Mailbox {
         }
         for message in &seed.messages {
             mailbox.add_message(message, now)?;
+        }
+        for calendar in &seed.calendars {
+            let id = mailbox.calendar.seed_calendar(calendar);
+            for event in &calendar.events {
+                mailbox
+                    .calendar
+                    .create(&id, &event.0, Writer::Emulator, now)
+                    .map_err(|error| EmulatorError::InvalidEvent(error.message))?;
+            }
         }
         // Seeding is not a change a subscriber could have watched.
         mailbox.changes.clear();

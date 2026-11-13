@@ -1,4 +1,5 @@
-//! The seed file: the mailboxes an emulator starts with, as YAML or JSON.
+//! The seed file: the mailboxes and calendars an emulator starts with, as
+//! YAML or JSON.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -98,6 +99,14 @@ pub struct SeedMailbox {
     /// Messages, oldest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<NewMessage>,
+    /// `mailboxSettings.timeZone`: a Windows name such as `Pacific Standard
+    /// Time`, an IANA name, or one Macro cannot map. Defaults to `UTC`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
+    /// Calendars. Every mailbox has a default calendar named `Calendar`;
+    /// an entry marked `default` describes it, and the others are added.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calendars: Vec<SeedCalendar>,
 }
 
 impl SeedMailbox {
@@ -121,6 +130,56 @@ pub struct SeedFolder {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
 }
+
+/// A calendar.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SeedCalendar {
+    /// The calendar's name.
+    pub name: String,
+    /// Whether this entry describes the mailbox's default calendar.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub default: bool,
+    /// Graph's `color`, such as `lightBlue`. Defaults to `auto`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// Graph's `hexColor`, such as `#0078d4`. Empty when absent, as for a
+    /// calendar whose colour is `auto`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hex_color: Option<String>,
+    /// Whether the owner can only read it (`canEdit` false), like a
+    /// holiday calendar.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub read_only: bool,
+    /// `allowedOnlineMeetingProviders`. Defaults to `teamsForBusiness`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub online_meeting_providers: Option<Vec<String>>,
+    /// Its events.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<NewEvent>,
+}
+
+/// An event to put on a calendar: seeded, or added later.
+///
+/// It is the JSON a client posts to Graph to create an event (`subject`,
+/// `start`, `end`, `isAllDay`, `recurrence`, `attendees`, `body`,
+/// `location`, `showAs`, `singleValueExtendedProperties`, …). `start` and
+/// `end` name an IANA zone or `UTC`. Besides those it may say what
+/// Exchange decides or what someone else did:
+///
+/// - `organizer` (someone else's meeting), `responseStatus`, `iCalUId`,
+///   `isCancelled`, `hasAttachments`, `onlineMeeting`, `onlineMeetingUrl`;
+/// - `originalStartTimeZone` and `originalEndTimeZone`: the zone names
+///   Graph answers, such as `Pacific Standard Time` or
+///   `tzone://Microsoft/Custom`;
+/// - `exceptions`: changed occurrences of a series, each the `date` the
+///   series puts it on and the properties that differ;
+/// - `cancelledOccurrences`: dates of deleted occurrences;
+/// - `raw`: properties answered verbatim in place of the computed ones,
+///   for an event a real mailbox holds that Graph's own writes never make.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct NewEvent(pub serde_json::Map<String, serde_json::Value>);
 
 /// A contact.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

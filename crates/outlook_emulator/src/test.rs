@@ -1,5 +1,6 @@
 //! The real `email_api_client` Outlook adapter against the emulator.
 
+mod calendar;
 mod control;
 mod drafts;
 mod faults;

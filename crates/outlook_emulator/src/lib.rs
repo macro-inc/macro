@@ -1,4 +1,5 @@
-//! A stateful fake of the Microsoft Graph mail API Macro's email code calls.
+//! A stateful fake of the Microsoft Graph mail and calendar APIs Macro's
+//! email and calendar code call.
 //!
 //! [`OutlookEmulator::start`] listens on a `127.0.0.1` port and serves, for
 //! any number of mailboxes:
@@ -7,13 +8,17 @@
 //!   folder delta queries (skip and delta tokens, 410 for an expired one),
 //!   drafts, replies and forwards, send, attachments and upload sessions,
 //!   master categories, inbox rules, contacts, `$batch`, and subscriptions;
+//!   mailbox settings, calendars, `calendarView` and its delta, events,
+//!   series with their instances, exceptions and deleted occurrences, and
+//!   creating, changing, deleting and answering events;
 //! - the Microsoft identity platform under [`OutlookEmulator::login_url`]:
 //!   a sign-in page that lists the mailboxes as users, authorization codes,
 //!   the token endpoint, ID tokens with their signing keys and OpenID
 //!   discovery document, userinfo, and the admin-consent page;
 //! - a control API under `/_emulator/`, mirrored by the methods of
-//!   [`OutlookEmulator`]: seed mailboxes, deliver mail, inject errors and
-//!   throttling, advance the clock, and read what was received and notified.
+//!   [`OutlookEmulator`]: seed mailboxes and calendars, deliver mail, change
+//!   events, inject errors and throttling, advance the clock, and read what
+//!   was received and notified.
 //!
 //! What a client writes it reads back, and every change shows up in the
 //! folder's next delta round. Creating a subscription validates its
@@ -28,6 +33,7 @@
 
 #![deny(missing_docs)]
 
+mod calendar;
 mod control;
 mod error;
 mod fault;
@@ -57,9 +63,12 @@ use tokio::sync::{OnceCell, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-pub use control::{MessageChange, MessageSummary, SubscriptionSummary};
+pub use control::{CalendarSummary, MessageChange, MessageSummary, SubscriptionSummary};
 pub use fault::{Fault, FaultError, Route};
-pub use seed::{NewAttachment, NewMessage, Seed, SeedContact, SeedError, SeedFolder, SeedMailbox};
+pub use seed::{
+    NewAttachment, NewEvent, NewMessage, Seed, SeedCalendar, SeedContact, SeedError, SeedFolder,
+    SeedMailbox,
+};
 
 use crate::signing_key::{SigningKey, SigningKeyError};
 use crate::state::{NotificationJob, State};
@@ -82,6 +91,15 @@ pub enum EmulatorError {
     /// No subscription has this id.
     #[error("no subscription {0}")]
     UnknownSubscription(String),
+    /// The mailbox has no calendar with this name or id.
+    #[error("no calendar {0}")]
+    UnknownCalendar(String),
+    /// The mailbox has no event with this id.
+    #[error("no event {0}")]
+    UnknownEvent(String),
+    /// An event could not be built or changed from what was given.
+    #[error("invalid event: {0}")]
+    InvalidEvent(String),
     /// A message could not be built from what was given.
     #[error("invalid message: {0}")]
     InvalidMessage(String),
