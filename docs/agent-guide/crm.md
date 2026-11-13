@@ -490,6 +490,28 @@ company's CRM fields. Use **Add column** or a column header's menu to customize
 columns. Pipeline Stage options initially copy the team's current deal stages. Open
 pipelines refresh other editors' changes periodically; a local edit refreshes
 immediately after saving.
+Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, or **Lost**, independent
+of Stage. Edit it from the table, a board card, a record's Pipelines card, or
+Add deal; select it in filters or board grouping like any other select. New
+entries start Open. Existing exact “Closed won” and “Closed lost” stage labels
+seed the outcome once, with the stages themselves retained.
+
+**Revenue currency** (and the corresponding field for a migrated Amount column)
+sets the denomination per entry. Existing amounts and new rows default to **USD**;
+no conversion is performed. Amounts display their currency code. Summary sums,
+averages and extrema keep currencies separate; agent `FindPipelineEntries`
+totals carry a currency code for the same reason. Outcome and currency options
+are fixed. Changing an amount's name preserves its currency association. Agent
+result cards show the currency beside each displayed amount, including the old
+and new currencies when updating a monetary value.
+A generic pipeline has neither field; it is a free-form table.
+
+Money editors accept locale-formatted amounts and canonical dot-decimal input;
+opening an editor retains the exact raw value. In a German browser, enter
+`2.345,6789` and verify `2345.6789` is retained when reopening the editor.
+Selecting Notes through Revenue currency and pressing Delete clears the optional
+values while retaining Outcome and currency.
+
 A pipeline page uses the database page's styling with one table and no table
 tabs. Its header shows the name, edited in place by editors, a **Pipeline
 actions** menu (**Rename** and **Import CSV** for editors, **Export CSV** for
@@ -503,7 +525,7 @@ above a full-width bordered box: **Company** (or the contact column) first, with
 a **Find or add a company…** (or contact) search, then every pipeline field with
 the table's own cell editors (unset ones read **Empty**). The body scrolls while
 the footer stays pinned with **Cancel** (Esc) and **Add deal**. Select
-fields can create a new option. Choosing **Add company “…”** creates the company
+fields other than Outcome and currency can create a new option. Choosing **Add company “…”** creates the company
 with the row: a searched domain fills the domain and the name. **Add contact “…”**
 works the same way. A new company may omit its domain. A new contact accepts a
 full email address and an explicit company choice, including a name-only company.
@@ -561,7 +583,10 @@ companies or contacts, then returns to Companies.
 CSV** reads the same shape, so an export imports into another team's pipeline.
 Rows match companies by domain and contacts by email, creating missing ones
 (personal domains such as gmail.com cannot be created); other headers fill the
-pipeline columns of the same name, adding missing select options. A record
+pipeline columns of the same name, adding missing custom select options. Monetary
+amounts and currency codes occupy separate CSV columns; omitted currencies
+default to USD, and unsupported currency or Outcome labels refuse the affected
+row. Outcome exports and imports as Open, Won or Lost. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,

@@ -75,6 +75,12 @@ export function createCrmPipelineEntries(
           renderCell={(entry, cell, display) => (
             <GridCell
               column={cell().column}
+              rowCells={Object.fromEntries(
+                entry().cells.map((item) => [
+                  item.column.id,
+                  shownValue(entry(), item),
+                ])
+              )}
               value={shownValue(entry(), cell())}
               wrap={display.fit !== 'line'}
               emptyLabel={display.emptyLabel}

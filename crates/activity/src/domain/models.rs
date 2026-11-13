@@ -205,6 +205,11 @@ pub struct CallStart {
 pub struct AccessRequest {
     /// The request; the owning domain serves its current outcome.
     pub request_id: Uuid,
+    /// The requester's profile name when they asked, so the timeline can show
+    /// it before current names load. Absent on older rows and for requesters
+    /// without a name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester_name: Option<String>,
 }
 
 /// Task referenced by a project membership event. No task name is stored.

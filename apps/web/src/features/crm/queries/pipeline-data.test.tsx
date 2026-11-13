@@ -7,7 +7,11 @@ import { Suspense } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createDatabaseApiSource } from '../../database/queries/api-source';
 import type { Pipeline } from '../core/pipeline';
-import { createPipelineApi, pipelineCell } from './pipeline-data';
+import {
+  createPipelineApi,
+  pipelineCell,
+  pipelineViewColumn,
+} from './pipeline-data';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -69,6 +73,17 @@ const table: TableDetail = {
   ],
 };
 const clients: QueryClient[] = [];
+
+it('accepts commercial metadata with its default-empty monetary roles omitted', () => {
+  const column = pipelineViewColumn(table.columns[0], {
+    ...pipeline,
+    commercialFields: {},
+  });
+  expect(column.primary).toBe(true);
+  expect(column.currencyColumnId).toBeUndefined();
+  expect(column.fixedOptions).toBe(false);
+});
+
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();

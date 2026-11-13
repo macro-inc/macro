@@ -7,7 +7,11 @@ import type { ComputerStatus } from '@service-auth/computers';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ActionDialogShell, Dialog } from '@ui';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { ComputerSetupSteps, StepHeader } from './computer-setup-dialog';
+import {
+  ComputerSetupSteps,
+  claudeStepMark,
+  StepHeader,
+} from './computer-setup-dialog';
 
 const mocks = vi.hoisted(() => ({
   agents: [] as { bot: { id: string; name: string } }[],
@@ -109,7 +113,7 @@ afterEach(() => {
 });
 
 it('names the four setup steps in order and marks the current one', () => {
-  render(() => <StepHeader step="agent" skipsClaude={false} />);
+  render(() => <StepHeader step="agent" claude="step" />);
 
   const steps = screen.getByRole('list', { name: 'Setup steps' });
   const items = steps.querySelectorAll('li');
@@ -125,7 +129,7 @@ it('names the four setup steps in order and marks the current one', () => {
 
 it('keeps the phone step bar to short labels', () => {
   mocks.mobile = true;
-  render(() => <StepHeader step="ready" skipsClaude={false} />);
+  render(() => <StepHeader step="ready" claude="step" />);
 
   const items = screen
     .getByRole('list', { name: 'Setup steps' })
@@ -139,7 +143,7 @@ it('keeps the phone step bar to short labels', () => {
 });
 
 it('marks Bring your AI skipped, not struck, when the agent runs on Macro credits', () => {
-  render(() => <StepHeader step="ready" skipsClaude />);
+  render(() => <StepHeader step="ready" claude="skipped" />);
 
   const items = screen
     .getByRole('list', { name: 'Setup steps' })
@@ -148,6 +152,21 @@ it('marks Bring your AI skipped, not struck, when the agent runs on Macro credit
   expect(items[2].className).toContain('text-ink-extra-muted');
   expect(items[2].className).not.toContain('line-through');
   expect(items[1].textContent).toBe('Configure agent');
+});
+
+it('marks Bring your AI done on Macro credits once its sign-in was opened', () => {
+  expect(claudeStepMark(undefined, false)).toBe('step');
+  expect(claudeStepMark('own_account', true)).toBe('step');
+  expect(claudeStepMark('macro_credits', false)).toBe('skipped');
+  expect(claudeStepMark('macro_credits', true)).toBe('credits');
+
+  render(() => <StepHeader step="ready" claude="credits" />);
+  const items = screen
+    .getByRole('list', { name: 'Setup steps' })
+    .querySelectorAll('li');
+  expect(items[2].textContent).toBe('Bring your AI · Macro credits');
+  expect(items[2].className).toContain('text-ink-muted');
+  expect(items[2].querySelector('svg')).toBeTruthy();
 });
 
 it('opens the composer in Code with the configured agent selected', () => {
@@ -206,4 +225,48 @@ it('keeps both actions disabled, with the reason, until setup finishes', () => {
   expect(
     screen.getByText('Try it and creating agents unlock once setup finishes.')
   ).toBeTruthy();
+});
+
+it('drops the shared sign-in note from Bring your AI once setup has failed', () => {
+  const setup = (computer: ComputerStatus) =>
+    render(() => (
+      <Dialog open onOpenChange={() => {}}>
+        <ActionDialogShell>
+          <ComputerSetupSteps
+            computer={computer}
+            connected={false}
+            firstName="Maya"
+            step="claude"
+            name={undefined}
+            choice="own_account"
+            onName={vi.fn()}
+            onChoice={vi.fn()}
+            onStep={vi.fn()}
+            onClose={vi.fn()}
+          />
+        </ActionDialogShell>
+      </Dialog>
+    ));
+  const settingUp: ComputerStatus = {
+    ...ready,
+    status: 'setting_up',
+    setup: { step: 'booting', position: 2, total: 4 },
+    setupCompletedAt: null,
+  };
+
+  const waiting = setup(settingUp);
+  expect(
+    screen.getByText(/Everyone using this computer can use this Claude sign-in/)
+  ).toBeTruthy();
+  waiting.unmount();
+
+  setup({ ...settingUp, status: 'failed' });
+  expect(
+    screen.queryByText(
+      /Everyone using this computer can use this Claude sign-in/
+    )
+  ).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Use Macro credits instead' })
+  ).toBeNull();
 });

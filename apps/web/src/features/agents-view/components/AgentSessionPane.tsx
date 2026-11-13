@@ -4,12 +4,12 @@ import { AgentConnections } from '@app/features/block-agent/component/AgentConne
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
+import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
+import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
 import {
   agentSessionFileOperations,
   agentSessionTitle,
-} from '@app/features/block-agent/component/AgentSplitHeader';
-import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
-import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
+} from '@app/features/block-agent/component/agent-session-header';
 import { useAutoArchiveFileOperations } from '@app/features/block-agent/component/auto-archive-file-operations';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';

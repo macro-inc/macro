@@ -5208,7 +5208,7 @@ export interface ToolNewEntry {
    */
   email?: string | null;
   /**
-   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
+   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a pipeline that tracks a record, Outcome is Open, Won or Lost independently of Stage, and each monetary field has a separate currency field (e.g. Revenue currency): set its three-letter option code with the amount. New entries default to Open and USD. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
    */
   set?: ToolFieldValue[];
 }
@@ -5268,6 +5268,12 @@ export interface ToolEntry {
    */
   fields: {
     [k: string]: unknown;
+  };
+  /**
+   * Currency codes keyed by monetary field name, including renamed fields.
+   */
+  currencies?: {
+    [k: string]: string;
   };
 }
 /**
@@ -8317,7 +8323,7 @@ export interface ProjectChannelShare {
   access: string;
 }
 /**
- * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: look up the existing pipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
+ * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Outcome, Owner, Revenue and Revenue currency fields; Outcome defaults to Open and currency to USD. Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: look up the existing pipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
  */
 export interface CreatePipeline {
   /**
@@ -8337,7 +8343,7 @@ export interface CreatePipeline {
    */
   stages?: string[];
   /**
-   * Fields to add after Company/Contact, Stage, Owner and Revenue, or after a generic pipeline's Name.
+   * Fields to add after the standard record, stage, outcome, owner and monetary fields, or after a generic pipeline's Name.
    */
   fields?: ToolNewField[];
 }
@@ -8424,6 +8430,10 @@ export interface ToolField {
    * Whether the user cannot write it.
    */
   readOnly: boolean;
+  /**
+   * For monetary amounts, the field that stores this entry's currency code.
+   */
+  currencyField?: string | null;
 }
 /**
  * Create a project — shown as a folder in the app UI. Documents, email threads, and other projects can be placed inside it.
@@ -10114,7 +10124,7 @@ export interface WordDocumentResponse {
   content: string;
 }
 /**
- * Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds.
+ * Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Monetary amounts and their currency codes occupy separate columns, and Outcome exports as Open, Won or Lost. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds.
  */
 export interface ExportPipelineCsv {
   /**
@@ -10148,7 +10158,7 @@ export interface ExportPipelineCsvResponse {
   summary: string;
 }
 /**
- * Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search` (in a generic pipeline, by any text field), or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields, plus, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue: use these for questions like "how many deals are in Negotiation" or "what is the pipeline worth". To find where a company or contact is across all pipelines ("what stage is Acme in?"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines.
+ * Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search` (in a generic pipeline, by any text field), or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields. Each entry also has a separate `currencies` map from monetary field name (including renamed fields) to currency code: present every amount with its denomination. Also returns, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue, grouped by currency for monetary fields (never converted or combined across currencies): use these for questions like "how many deals are in Negotiation" or "what is the pipeline worth". To find where a company or contact is across all pipelines ("what stage is Acme in?"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines.
  */
 export interface FindPipelineEntries {
   /**
@@ -10272,7 +10282,11 @@ export interface ToolTotal {
    */
   field: string;
   /**
-   * The sum.
+   * Currency code for a monetary field; different currencies have separate totals.
+   */
+  currency?: string | null;
+  /**
+   * The sum in that currency.
    */
   sum: number;
 }
@@ -11413,7 +11427,7 @@ export interface ImportNotionPageResponse {
   message: string;
 }
 /**
- * Import a CSV into a CRM pipeline as new deals (entries), such as a pipeline export or a sheet of deals. In a company pipeline each row needs a domain (Domain, Domains or Website column) and may name the company (Company); in a contact pipeline each row needs an Email and may name the contact (Contact). Missing companies and contacts are created. Other columns fill the pipeline fields with the same name (Stage, Owner as an email, Revenue, custom fields); stage labels the pipeline lacks are added. Records already in the pipeline are not added again, so retrying an interrupted import adds only what is missing; several rows for one new record become separate deals. Use it instead of adding deals one at a time. Give the CSV as text in csv, or as documentId for a CSV file in Macro, which is the way to pass an uploaded file. Returns counts and the rows that could not be added.
+ * Import a CSV into a CRM pipeline as new deals (entries), such as a pipeline export or a sheet of deals. In a company pipeline each row needs a domain (Domain, Domains or Website column) and may name the company (Company); in a contact pipeline each row needs an Email and may name the contact (Contact). Missing companies and contacts are created. Other columns fill the pipeline fields with the same name (Stage, Owner as an email, Outcome, Revenue, Revenue currency, custom fields); stage labels the pipeline lacks are added. Missing currencies default to USD; unknown currency or Outcome labels are refused instead of silently changed. Records already in the pipeline are not added again, so retrying an interrupted import adds only what is missing; several rows for one new record become separate deals. Use it instead of adding deals one at a time. Give the CSV as text in csv, or as documentId for a CSV file in Macro, which is the way to pass an uploaded file. Returns counts and the rows that could not be added.
  */
 export interface ImportPipelineCsv {
   /**
@@ -12670,7 +12684,7 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
- * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Owner and Revenue. A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
+ * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Outcome, Owner, Revenue and Revenue currency. Outcome is Open/Won/Lost independently of Stage; monetary amounts use their paired currency field (USD by default). A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
  */
 export type ListPipelines = {};
 /**
@@ -16224,7 +16238,7 @@ export interface ToolEntryUpdate {
    */
   recordId?: string | null;
   /**
-   * Fields to set, e.g. [{"field": "Stage", "value": "Negotiation"}, {"field": "Revenue", "value": "48000"}]. Leave value out to empty a field.
+   * Fields to set, e.g. [{"field": "Stage", "value": "Negotiation"}, {"field": "Revenue", "value": "48000"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won or Lost independently of Stage. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount.
    */
   set: ToolFieldValue[];
 }
@@ -16282,6 +16296,14 @@ export interface ToolFieldChange {
   after: {
     [k: string]: unknown;
   };
+  /**
+   * Currency of the previous amount, for monetary fields.
+   */
+  beforeCurrency?: string | null;
+  /**
+   * Currency of the saved amount, for monetary fields.
+   */
+  afterCurrency?: string | null;
 }
 /**
  * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send its `configuration` back with only your change (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Omit requiredApps to keep the routine's apps. Routines ReadRoutine marks `notEditableHere` can only be paused or resumed here. Does not change ownership or the description. A running routine can be paused but cannot be reconfigured until it finishes.

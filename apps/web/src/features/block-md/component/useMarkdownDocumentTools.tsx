@@ -1,22 +1,17 @@
 import {
-  ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { Permissions } from '@core/component/SharePermissions';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import {
   enableHistoryComponent,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import ArrowsInLineHorizontal from '@icon/system/regular/arrows-in-line-horizontal.svg';
 import ArrowsOutLineHorizontal from '@icon/system/regular/arrows-out-line-horizontal.svg';
@@ -31,10 +26,7 @@ import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useHistory } from '../history/HistoryContext';
 import { markdownWideMode, setMarkdownWideMode } from '../wide-mode';
-import {
-  DispatchAgentButton,
-  useDispatchAgentSplitFileActions,
-} from './DispatchAgentMenu';
+import { useDispatchAgentSplitFileActions } from './DispatchAgentMenu';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
   useCopyDocumentAsMarkdown,
@@ -120,43 +112,18 @@ export function useMarkdownDocumentTools() {
     { op: 'delete' },
   ];
 
-  const tools: BlockTool[] = [
-    {
-      label: 'Dispatch to Agent',
-      icon: TerminalWindowIcon,
-      action: () => {},
-      condition: () => isTask && !isMobile(),
-      buttonComponent: () => <DispatchAgentButton />,
-    },
-    {
-      label: 'Chat',
-      icon: ChatWithAgentIcon,
-      action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: (control) => (
-        <ChatWithAgentButton grouped={control.grouped} entity={chatEntity()} />
-      ),
-    },
-    {
-      group: 'sharing',
-      label: 'Share',
-      icon: IconLink,
-      action: openShare,
-      buttonComponent: () => <ShareTrigger onClick={openShare} />,
-      focusTarget: getShareDrawerRecipientInput,
-    },
-  ];
-
-  const menuTools: BlockTool[] = [
-    {
+  // Every document action by name. Each view lists the ones its menu offers.
+  const actions = {
+    history: {
       group: 'file',
       label: 'History',
       icon: ClockCounterClockwise,
-      condition: () => !isMobile() && isFeatureEnabled(enableHistoryComponent),
+      condition: () => isFeatureEnabled(enableHistoryComponent),
       action: () => history.enter(),
       focusTarget: () =>
         element()?.querySelector<HTMLElement>('[data-history-close]') ?? null,
     },
-    {
+    wideMode: {
       label: () =>
         markdownWideMode()
           ? t('entityActions.turnOffWideMode')
@@ -166,26 +133,32 @@ export function useMarkdownDocumentTools() {
           ? ArrowsInLineHorizontal
           : ArrowsOutLineHorizontal;
       },
-      // Phones already give the document the whole screen.
-      condition: () => !isMobile(),
       action: () => setMarkdownWideMode((wide) => !wide),
     },
-    {
+    askMacro: {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
     },
-    ...(isTask
-      ? ([
-          {
-            label: 'Code Actions',
-            icon: TerminalWindowIcon,
-            action: () => {},
-            children: dispatchAgentActions.all,
-          },
-        ] satisfies BlockTool[])
-      : []),
-  ];
+    codeActions: {
+      label: 'Code Actions',
+      icon: TerminalWindowIcon,
+      action: () => {},
+      condition: () => isTask,
+      children: dispatchAgentActions.all,
+    },
+    share: {
+      group: 'sharing',
+      label: 'Share',
+      icon: IconLink,
+      action: openShare,
+      focusTarget: getShareDrawerRecipientInput,
+    },
+  } satisfies Record<string, BlockTool>;
 
-  return { fileOperations, menuTools, tools };
+  return { fileOperations, actions, openShare };
 }
+
+export type MarkdownDocumentActions = ReturnType<
+  typeof useMarkdownDocumentTools
+>['actions'];
