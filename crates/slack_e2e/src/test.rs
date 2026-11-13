@@ -349,6 +349,25 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
             Some("rocket"),
             "Slack gets the name of Macro's emoji"
         );
+        if operation == Mutation::Reaction {
+            let owner = wait_for_rows(&pool, WAIT, || async {
+                sqlx::query_scalar!(
+                    "SELECT user_id FROM external_chat_reaction WHERE message_id = $1 AND emoji = $2",
+                    root_id,
+                    "\u{1f680}"
+                )
+                .fetch_optional(&pool)
+                .await
+                .unwrap()
+            })
+            .await
+            .flatten();
+            assert_eq!(
+                owner.as_deref(),
+                Some(ALICE),
+                "the reaction is the owner's own"
+            );
+        }
     }
     let mine = wait_for_rows(&pool, WAIT, || async {
         let pending = sqlx::query_scalar!(

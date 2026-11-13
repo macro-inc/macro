@@ -376,10 +376,10 @@ pub(super) async fn apply_in(
             let revision = ts_micros(event_ts);
             if *added {
                 sqlx::query!(
-                    r#"INSERT INTO external_chat_reaction (message_id, person_id, emoji, source_id, revision, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (message_id, person_id, emoji) DO UPDATE SET source_id = excluded.source_id,
-                        revision = excluded.revision, updated_at = excluded.updated_at
+                    r#"INSERT INTO external_chat_reaction (message_id, person_id, emoji, user_id, source_id, revision, updated_at)
+                    VALUES ($1, $2, $3, (SELECT user_id FROM external_chat_person WHERE id = $2), $4, $5, $6)
+                    ON CONFLICT (message_id, person_id, emoji) DO UPDATE SET user_id = excluded.user_id,
+                        source_id = excluded.source_id, revision = excluded.revision, updated_at = excluded.updated_at
                     WHERE excluded.revision >= external_chat_reaction.revision"#,
                     target,
                     reactor,
