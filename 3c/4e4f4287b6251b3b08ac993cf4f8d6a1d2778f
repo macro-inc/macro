@@ -1,0 +1,40 @@
+apps/web/src/features/block-canvas/views/transitions/play-transition.ts
+  s_39eee246ac6b4a::t_adbbdcd20503e5 1-128
+apps/web/src/features/block-canvas/views/artifact-presentation.tsx
+  s_39eee246ac6b4a::t_d1cebf6369e958 6,8-9,11-12,89-97
+apps/web/src/features/block-canvas/views/artifact-frame.tsx
+  s_39eee246ac6b4a::t_6e991796363fa2 33-34,159
+apps/web/src/features/block-canvas/views/canvas-read-only-view.tsx
+  s_39eee246ac6b4a::t_a1d8e0c8ea5eef 9,14,108
+apps/web/src/features/block-canvas/views/transitions/canvas-flight.tsx
+  s_39eee246ac6b4a::t_5c7680e499692e 1-37,42-113
+  s_39eee246ac6b4a::t_bf18faf5c99e0d 38-41
+apps/web/src/features/block-canvas/components/transition-thumbnail.tsx
+  s_39eee246ac6b4a::t_9483294e31207b 1-240
+apps/web/src/features/block-canvas/core/transitions/camera-plan.ts
+  s_39eee246ac6b4a::t_bf18faf5c99e0d 1-8,89-93
+apps/web/src/features/block-canvas/views/static-item-renderers.tsx
+  s_39eee246ac6b4a::t_a1d8e0c8ea5eef 15
+  s_39eee246ac6b4a::t_117d8d0e9fa39a 1-14,16-32
+apps/web/src/features/block-canvas/views/transitions/slide-stage.tsx
+  s_39eee246ac6b4a::t_00a60ca6a5184d 2,18,82,187,271,277,348-351,372-373,376
+  s_39eee246ac6b4a::t_faa411a8c6b610 1,3-17,19-81,83-186,188-270,272-276,278-347,352-371,374-375,377-378
+apps/web/src/features/block-canvas/core/transitions/slide-transition-model.ts
+  s_39eee246ac6b4a::t_bf18faf5c99e0d 115,117-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3c4e4f4287b6251b3b08ac993cf4f8d6a1d2778f",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
