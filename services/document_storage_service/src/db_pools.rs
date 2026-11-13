@@ -1,0 +1,216 @@
+//! Connection limits for the service's primary and read replica pools, and the
+//! metrics that show how full each pool is and how long it makes callers wait.
+
+use std::time::{Duration, Instant};
+
+use macro_env::Environment;
+use opentelemetry::{
+    KeyValue,
+    metrics::{Gauge, Histogram},
+};
+use sqlx::PgPool;
+use tokio_util::sync::CancellationToken;
+
+/// A rolling deployment starts a full replacement set before the old tasks
+/// stop, so twice the autoscaling maximum can hold connections at once.
+const ROLLING_DEPLOYMENT_OVERLAP: u32 = 2;
+
+const PROBE_INTERVAL: Duration = Duration::from_secs(1);
+
+const POOL_NAME: &str = "db.client.connection.pool.name";
+const CONNECTION_STATE: &str = "db.client.connection.state";
+const PROBE_OUTCOME: &str = "outcome";
+
+const WAIT_TIME_BOUNDARIES_SECONDS: [f64; 13] = [
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0,
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PoolLimits {
+    pub(crate) min_connections: u32,
+    pub(crate) max_connections: u32,
+    /// How long a caller waits for a connection before its query fails.
+    pub(crate) acquire_timeout: Duration,
+}
+
+/// Per task. Normally each task runs about one query at a time; a larger
+/// max only lets a slow database pile up more sessions.
+pub(crate) fn primary_limits(environment: Environment) -> PoolLimits {
+    let (min_connections, max_connections) = match environment {
+        Environment::Production => (10, 50),
+        Environment::Develop => (25, 100),
+        Environment::Local => (15, 50),
+    };
+
+    PoolLimits {
+        min_connections,
+        max_connections,
+        acquire_timeout: Duration::from_secs(30),
+    }
+}
+
+/// Per task, against the read replica. The replica is shared, so the cap is
+/// what keeps this service inside [`replica_session_budget`] however many
+/// tasks run: reads past the cap queue in the task instead of adding sessions
+/// to a replica that is already slow.
+///
+/// A queued read fails after ten seconds, before the web app gives up on a
+/// Soup request at twelve, and is never retried on the primary.
+pub(crate) fn readonly_limits(environment: Environment) -> PoolLimits {
+    let (min_connections, max_connections) = match environment {
+        // 7 tasks hold at most 175 sessions, 14 tasks in a rolling deployment 350.
+        Environment::Production => (5, 25),
+        // 3 tasks hold at most 60 sessions, 6 tasks in a rolling deployment 120.
+        Environment::Develop => (2, 20),
+        Environment::Local => return primary_limits(environment),
+    };
+
+    PoolLimits {
+        min_connections,
+        max_connections,
+        acquire_timeout: Duration::from_secs(10),
+    }
+}
+
+/// The most tasks autoscaling runs: `maxCapacity` in
+/// `infra/stacks/cloud-storage-service/cloud-storage-service.ts`.
+pub(crate) fn autoscaling_max_tasks(environment: Environment) -> u32 {
+    match environment {
+        Environment::Production => 7,
+        Environment::Develop => 3,
+        Environment::Local => 1,
+    }
+}
+
+/// The most read replica sessions this service may hold, across every task
+/// and through a rolling deployment. The arithmetic and the replica's other
+/// clients are in `docs/development/infrastructure.md`.
+pub(crate) fn replica_session_budget(environment: Environment) -> u32 {
+    match environment {
+        Environment::Production => 350,
+        Environment::Develop => 120,
+        Environment::Local => 50,
+    }
+}
+
+/// The most read replica sessions the service can hold in `environment`.
+pub(crate) fn replica_sessions_at_full_overlap(environment: Environment) -> u32 {
+    readonly_limits(environment).max_connections
+        * autoscaling_max_tasks(environment)
+        * ROLLING_DEPLOYMENT_OVERLAP
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProbeOutcome {
+    Acquired,
+    TimedOut,
+    Failed,
+}
+
+impl ProbeOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Acquired => "acquired",
+            Self::TimedOut => "timed_out",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+/// Wait for a connection the way a query does, then give it straight back.
+pub(crate) async fn time_acquire(pool: &PgPool) -> (Duration, ProbeOutcome) {
+    let started = Instant::now();
+
+    let outcome = match pool.acquire().await {
+        Ok(_connection) => ProbeOutcome::Acquired,
+        Err(sqlx::Error::PoolTimedOut) => ProbeOutcome::TimedOut,
+        Err(_) => ProbeOutcome::Failed,
+    };
+
+    (started.elapsed(), outcome)
+}
+
+struct PoolInstruments {
+    connections: Gauge<u64>,
+    max_connections: Gauge<u64>,
+    wait_time: Histogram<f64>,
+}
+
+impl PoolInstruments {
+    fn new() -> Self {
+        let meter = opentelemetry::global::meter("document_storage_service");
+
+        Self {
+            connections: meter
+                .u64_gauge("db.client.connection.count")
+                .with_description("Open connections in the pool, by state")
+                .build(),
+            max_connections: meter
+                .u64_gauge("db.client.connection.max")
+                .with_description("The pool's connection limit")
+                .build(),
+            wait_time: meter
+                .f64_histogram("db.client.connection.wait_time")
+                .with_description("Time a once-a-second probe waited for a pooled connection")
+                .with_unit("s")
+                .with_boundaries(WAIT_TIME_BOUNDARIES_SECONDS.to_vec())
+                .build(),
+        }
+    }
+}
+
+/// Report `pool`'s occupancy and connection wait once a second until `cancel`
+/// fires.
+///
+/// sqlx waits for a connection inside each query and exposes no per-query
+/// hook, so the wait is sampled: the probe queues behind the same callers a
+/// query would. A high wait while the pool is below its limit means the task
+/// or the database is slow, not that the pool is full.
+pub(crate) async fn report_usage(pool_name: &'static str, pool: PgPool, cancel: CancellationToken) {
+    let instruments = PoolInstruments::new();
+    let pool_attribute = KeyValue::new(POOL_NAME, pool_name);
+    let idle_attributes = [
+        pool_attribute.clone(),
+        KeyValue::new(CONNECTION_STATE, "idle"),
+    ];
+    let used_attributes = [
+        pool_attribute.clone(),
+        KeyValue::new(CONNECTION_STATE, "used"),
+    ];
+
+    let mut ticker = tokio::time::interval(PROBE_INTERVAL);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+    loop {
+        tokio::select! {
+            () = cancel.cancelled() => break,
+            _ = ticker.tick() => {}
+        }
+
+        let idle = u64::try_from(pool.num_idle()).unwrap_or(u64::MAX);
+        let open = u64::from(pool.size());
+        instruments.connections.record(idle, &idle_attributes);
+        instruments
+            .connections
+            .record(open.saturating_sub(idle), &used_attributes);
+        instruments.max_connections.record(
+            u64::from(pool.options().get_max_connections()),
+            std::slice::from_ref(&pool_attribute),
+        );
+
+        let (waited, outcome) = tokio::select! {
+            () = cancel.cancelled() => break,
+            sample = time_acquire(&pool) => sample,
+        };
+        instruments.wait_time.record(
+            waited.as_secs_f64(),
+            &[
+                pool_attribute.clone(),
+                KeyValue::new(PROBE_OUTCOME, outcome.as_str()),
+            ],
+        );
+    }
+}
+
+#[cfg(test)]
+mod test;

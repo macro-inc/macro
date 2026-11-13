@@ -193,11 +193,29 @@ build/deployment failure gates remain attempt-scoped.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.
-  Resize the replica before deploying the DSS pool change through the service
-  stack, and verify that old DSS tasks have drained before relying on the new
-  cap. Three dev tasks permit 60 replica connections after rollout, or 120
-  during a full overlap on later rollouts. The first rollout can permit 360:
-  three old tasks at 100 connections each plus three new tasks at 20 each.
+- The read replica has a session budget per client, and each client's pool cap
+  must hold it at the client's autoscaling maximum and through a rolling
+  deployment, when twice that many tasks run:
+
+  | Client | Per-task cap | Tasks (max, overlap) | Prod sessions (max, overlap) |
+  | --- | --- | --- | --- |
+  | Document storage readonly pool | 25 prod, 20 dev | 7 and 14 prod, 3 and 6 dev | 175, 350 |
+  | Search processing backfill reads | 10 | 10 and 20 prod | 100, 200 |
+  | Monitoring agent and ad hoc sessions | | | about 5 |
+
+  The production worst case is about 555 sessions, against `max_connections`
+  of 5,000. Sessions that all run at once are what a slow replica cannot
+  absorb, so the cap is set well below the connection limit: document storage's
+  worst case during a deployment equals the 350 it could hold at steady state
+  before the cap. Reads past a task's cap queue in the task for up to 10 s and
+  then fail; they do not move to the primary. Dev's worst case is 120 for
+  document storage. The limits, and a test that checks them against the task
+  maximum, are in `services/document_storage_service/src/db_pools.rs`: change
+  them together with `maxCapacity` in `infra/stacks/cloud-storage-service`.
+  A new replica client adds a row here.
+- A changed pool cap applies to new tasks only. During the deployment that
+  lowers it, old tasks keep their previous cap until they drain: verify they
+  have stopped before relying on the new total.
 - Services marked `bootstrap_pending` or `deploy_enabled: false` are skipped.
 - **Migrations deploy before services** and must work with the code already
   running ([database guide](database.md)).

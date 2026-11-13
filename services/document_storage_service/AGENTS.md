@@ -113,11 +113,24 @@ threads, pins, recents, notifications, folders, activity.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
-- Dev's readonly pool keeps 2–20 connections per task, independently of the
-  primary pool's 25–100. Once all tasks use this cap, three dev tasks allow 60
-  sessions, or 120 while a rolling deployment overlaps all three. Old tasks
-  retain their previous cap until they drain during the initial rollout.
-  Production and local pools retain their existing primary/readonly limits.
+- Pool limits live in `src/db_pools.rs`, per task. The readonly pool is sized
+  apart from the primary so the service stays inside a read replica session
+  budget at the autoscaling maximum and through a rolling deployment:
+  production 5–25 (7 tasks hold 175, 14 hold 350), dev 2–20 (3 hold 60, 6
+  hold 120). A test fails when a limit, the task maximum, or the budget stops
+  fitting; `maxCapacity` in `infra/stacks/cloud-storage-service` is mirrored
+  there. The budget and the replica's other clients are in the
+  [infrastructure guide](../../docs/development/infrastructure.md).
+- A read waits up to 10 s for a replica connection, then fails; it is never
+  retried on the primary. The primary pool waits 30 s. The only fallback is at
+  startup: a task that cannot reach the replica reads the primary for its
+  lifetime and reports no `readonly` pool metrics.
+- Each pool reports `db.client.connection.count` (state `idle`/`used`),
+  `db.client.connection.max` and `db.client.connection.wait_time`, tagged
+  `db.client.connection.pool.name` (`primary`/`readonly`). The wait is a
+  once-a-second probe, not a per-query timing: sqlx acquires inside each query.
+  A high wait with `used` below `max` means the task or the database is slow,
+  not that the pool is full.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
