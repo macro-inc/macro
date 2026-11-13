@@ -18,6 +18,9 @@
 pub mod domain;
 
 pub use agent_correlation::AgentVerb;
+/// Exposure vocabulary for [`TopicEvent::exposure`], re-exported so producers
+/// need no extra dependency.
+pub use event_exposure as exposure;
 #[doc(hidden)]
 pub use uuid::Uuid as EventUuid;
 

@@ -135,6 +135,19 @@ impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = crate::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        crate::exposure::Exposure<'_, Self::PublicPayload>,
+        crate::exposure::ExposureError,
+    > {
+        Ok(crate::exposure::Exposure::internal_by_design(
+            "broker test fixture",
+        ))
+    }
 }
 
 pub struct ExampleMacroEvent {
@@ -258,6 +271,19 @@ impl TopicEvent for UnserializableTopicEvent {
     type Topic = MacroExampleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = crate::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        crate::exposure::Exposure<'_, Self::PublicPayload>,
+        crate::exposure::ExposureError,
+    > {
+        Ok(crate::exposure::Exposure::internal_by_design(
+            "broker test fixture",
+        ))
+    }
 }
 
 struct UnserializableMacroEvent {
