@@ -37,6 +37,18 @@ describe('orderDriveEntities with the name sort', () => {
     ).toEqual(['alpha', 'newer-tie', 'older-tie', 'zeta']);
   });
 
+  it('breaks a name and update tie by descending ID', () => {
+    const entities = [
+      file('a', 'Notes', '2026-03-01T00:00:00Z'),
+      file('c', 'notes', '2026-03-01T00:00:00Z'),
+      file('b', 'Notes', '2026-03-01T00:00:00Z'),
+    ];
+
+    expect(
+      orderDriveEntities(entities, selection, []).map((entity) => entity.id)
+    ).toEqual(['c', 'b', 'a']);
+  });
+
   it('keeps the local-search featured prefix ahead of the alphabet', () => {
     const entities = [
       file('alpha', 'Alpha notes', '2026-03-01T00:00:00Z'),
