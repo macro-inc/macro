@@ -732,10 +732,10 @@ const CHIP_ICON_EM: Record<ChipKind | 'doc', number> = {
 };
 
 const CHIP_COLOR: Record<ChipKind | 'doc', string> = {
-  person: 'var(--a0)',
+  person: 'var(--mds-mention-color, var(--a0))',
   doc: HUE_DOC,
   task: HUE_TASK,
-  date: 'var(--a0)',
+  date: 'var(--mds-mention-color, var(--a0))',
   email: HUE_EMAIL,
   channel: HUE_CHANNEL,
 };
@@ -757,10 +757,10 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
           class="mds-chip-person"
           style={{
             'background-color':
-              'color-mix(in srgb, var(--a0) 20%, transparent)',
+              'var(--mds-mention-background, color-mix(in srgb, var(--a0) 20%, transparent))',
             'border-radius': '0.22em',
-            color: 'var(--a0)',
-            'font-weight': '500',
+            color: 'var(--mds-mention-color, var(--a0))',
+            'font-weight': 'var(--mds-mention-weight, 500)',
             padding: '0.1em 0.14em',
             'white-space': 'nowrap',
           }}
@@ -778,8 +778,9 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
           props.kind === 'date'
             ? {
                 'background-color':
-                  'color-mix(in srgb, var(--a0) 20%, transparent)',
+                  'var(--mds-mention-background, color-mix(in srgb, var(--a0) 20%, transparent))',
                 'border-radius': '0.22em',
+                'font-weight': 'var(--mds-mention-weight, inherit)',
                 padding: '0.1em 0.16em',
               }
             : undefined
@@ -800,7 +801,11 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
         />
         <Show
           when={props.kind !== 'date'}
-          fallback={<span style={{ color: 'var(--a0)' }}>{props.label}</span>}
+          fallback={
+            <span style={{ color: 'var(--mds-mention-color, var(--a0))' }}>
+              {props.label}
+            </span>
+          }
         >
           <span class="mds-u">{props.label}</span>
         </Show>
