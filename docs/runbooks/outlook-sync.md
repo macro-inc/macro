@@ -33,12 +33,16 @@ production.
 
 A message whose own reads keep failing stops retrying: after 3 refusals Graph
 won't change (`permanent`, such as an undecodable response, or `forbidden`, a
-403 on that one message) or 50 other failures (about a day of backoff). It is
+403 on that one message) or 50 failures of any other kind (about a day of
+backoff). It is
 then `abandoned`: the span records `@outlook.outcome:abandoned`, a
 `"mailbox message abandoned"` WARN names its `@defer_reason` and attempts, and
 the health snapshot counts it in `abandoned` instead of `queued`. The next
 Graph change to the message, a resync or a reconnect queues it again with
-fresh attempts. Throttling and token failures never count toward this. An
+fresh attempts. Throttling and token failures never count toward this, and a
+Graph 5xx or 408, or a request Graph never answered (connection error, timeout),
+stops counting once its backoff reaches 30 minutes: during a Microsoft outage
+queued messages keep retrying every 30 minutes and are never abandoned. An
 invitation whose MIME source Graph won't return is retried twice
 (`calendar_parts`), then imported without its calendar parts.
 
