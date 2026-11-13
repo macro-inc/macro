@@ -8111,6 +8111,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "event_exposure"
+version = "0.1.0"
+dependencies = [
+ "macro_user_id",
+ "model-entity",
+ "serde",
+ "thiserror 2.0.18",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "eventsource-stream"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12769,6 +12781,7 @@ name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
+ "event_exposure",
  "kafka_util",
  "macro_event_topics",
  "rdkafka",
