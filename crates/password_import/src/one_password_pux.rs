@@ -309,6 +309,7 @@ struct SshKeyValue {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SshKeyMetadata {
+    private_key: Option<Secret>,
     public_key: Option<Secret>,
     fingerprint: Option<Secret>,
     key_type: Option<Secret>,
@@ -674,12 +675,19 @@ fn add_section_field(
 }
 
 fn add_ssh_key(draft: &mut Draft, key: SshKeyValue, label: &str) {
-    let (public_key, fingerprint, key_type) = match key.metadata {
-        Some(metadata) => (metadata.public_key, metadata.fingerprint, metadata.key_type),
-        None => (None, None, None),
+    let Some(metadata) = key.metadata else {
+        return draft.add_ssh_key(key.private_key, label, None, None);
     };
-    draft.add_ssh_key(key.private_key, label, public_key, fingerprint);
-    if let Some(key_type) = key_type {
+    // The outer `privateKey` isn't in one format across items; the
+    // metadata copy is the one Bitwarden's importer reads.
+    let private_key = metadata.private_key.or(key.private_key);
+    draft.add_ssh_key(
+        private_key,
+        label,
+        metadata.public_key,
+        metadata.fingerprint,
+    );
+    if let Some(key_type) = metadata.key_type {
         draft.add_field("Key type", key_type, false);
     }
 }
