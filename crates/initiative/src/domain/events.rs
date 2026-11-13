@@ -1,5 +1,8 @@
 //! Initiative lifecycle facts carried by the shared event broker.
 
+#[cfg(test)]
+mod test;
+
 use std::{future::Future, pin::Pin};
 
 use activity::{Actor, Attribution};
@@ -63,12 +66,149 @@ pub enum InitiativeTopicEvent {
     Purged {
         /// Deleted initiative.
         initiative_id: InitiativeId,
+        /// Routing: users with explicit access (direct, channel and team
+        /// grants; no link viewers) just before the delete. Access rows are
+        /// gone by publish time, so this snapshot is the only way to reach
+        /// them. Not part of the public payload; events published before it
+        /// existed decode as empty.
+        #[serde(default)]
+        audience_user_ids: Vec<MacroUserIdStr<'static>>,
     },
+}
+
+/// Public payload of `initiative.created`, `initiative.updated` and
+/// `initiative.appearance_changed`: which initiative changed, who did it and
+/// when. Read the initiative for its new state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicInitiativeChange {
+    /// Initiative that changed.
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub initiative_id: InitiativeId,
+    /// Principal that made the change, when attributable.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// User the actor acted for, when any.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+    /// Time of the committed change.
+    pub occurred_at: DateTime<Utc>,
+}
+
+impl From<&InitiativeChange> for PublicInitiativeChange {
+    fn from(change: &InitiativeChange) -> Self {
+        Self {
+            initiative_id: change.initiative_id,
+            actor: change.attribution.as_ref().map(|by| by.actor.clone()),
+            on_behalf_of: change
+                .attribution
+                .as_ref()
+                .and_then(|by| by.on_behalf_of.clone()),
+            occurred_at: change.occurred_at,
+        }
+    }
+}
+
+/// Public payload of `initiative.purged`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicInitiativePurged {
+    /// The permanently deleted initiative.
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub initiative_id: InitiativeId,
+}
+
+/// The public projection of [`InitiativeTopicEvent`], delivered under the
+/// same event names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum InitiativePublicEvent {
+    /// An initiative was created.
+    #[serde(rename = "initiative.created")]
+    Created(PublicInitiativeChange),
+    /// An initiative's name, sharing or collaborators changed.
+    #[serde(rename = "initiative.updated")]
+    Updated(PublicInitiativeChange),
+    /// An initiative's icon or color changed.
+    #[serde(rename = "initiative.appearance_changed")]
+    AppearanceChanged(PublicInitiativeChange),
+    /// An initiative was permanently deleted.
+    #[serde(rename = "initiative.purged")]
+    Purged(PublicInitiativePurged),
 }
 
 impl TopicEvent for InitiativeTopicEvent {
     type Topic = MacroInitiativesTopic;
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = InitiativePublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let entity = |initiative_id: &InitiativeId| Audience::Entity {
+            entity_type: EntityType::Initiative,
+            entity_id: initiative_id.to_string(),
+        };
+        let (name, initiative_id, audience, payload) = match self {
+            Self::Created(change) => (
+                "initiative.created",
+                change.initiative_id,
+                entity(&change.initiative_id),
+                InitiativePublicEvent::Created(change.into()),
+            ),
+            Self::Updated(change) => (
+                "initiative.updated",
+                change.initiative_id,
+                entity(&change.initiative_id),
+                InitiativePublicEvent::Updated(change.into()),
+            ),
+            Self::AppearanceChanged { change, .. } => (
+                "initiative.appearance_changed",
+                change.initiative_id,
+                entity(&change.initiative_id),
+                InitiativePublicEvent::AppearanceChanged(change.into()),
+            ),
+            // The grants are gone by publish time: the accessors captured
+            // before the delete are the audience, and they are routing only.
+            Self::Purged {
+                initiative_id,
+                audience_user_ids,
+            } => {
+                if audience_user_ids.is_empty() {
+                    return Ok(Exposure::internal_by_design(
+                        "a purge published before audience capture has nobody left to reach",
+                    ));
+                }
+                (
+                    "initiative.purged",
+                    *initiative_id,
+                    Audience::Snapshot {
+                        user_ids: audience_user_ids.clone(),
+                    },
+                    InitiativePublicEvent::Purged(PublicInitiativePurged {
+                        initiative_id: *initiative_id,
+                    }),
+                )
+            }
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Initiative, initiative_id.to_string()),
+            audience,
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Broker envelope keyed by the initiative that initiated the operation.

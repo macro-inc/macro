@@ -27,7 +27,10 @@ inbound = [
   "dep:serde_json",
   "dep:utoipa",
   "ports",
+  "schema",
 ]
+# OpenAPI schemas for bot types and the public event projection.
+schema = ["dep:utoipa", "macro_user_id/schema"]
 outbound = ["dep:sqlx", "dep:macro_uuid", "dep:entity_registry", "dep:model_owner", "dep:rootcause", "ports"]
 ports = ["dep:entity_access", "entity_access/ports", "dep:rootcause", "dep:tokio", "messages/ports"]
 test-utils = ["dep:mockall", "ports"]

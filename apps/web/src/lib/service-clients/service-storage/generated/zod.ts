@@ -39520,6 +39520,78 @@ export const getEntityPermissionResponse = zod
   .describe('API response envelope for entity permissions.');
 
 /**
+ * @summary List the public events this credential can receive.
+ */
+export const eventCatalogResponse = zod
+  .object({
+    events: zod
+      .array(
+        zod
+          .object({
+            audience: zod
+              .array(
+                zod
+                  .enum([
+                    'entity',
+                    'entity_at_least',
+                    'recipient',
+                    'owner',
+                    'team',
+                    'team_admins',
+                    'teams_of',
+                    'contacts_of',
+                    'workspace',
+                    'snapshot',
+                    'person',
+                    'github_installation',
+                  ])
+                  .describe(
+                    'The class of rule that decides who receives an event.'
+                  )
+              )
+              .describe('The rule classes that can admit a subscriber.'),
+            entity_types: zod
+              .array(zod.string())
+              .describe('The public entity types its `entity_type` can be.'),
+            name: zod.string().describe('The public event name.'),
+            stage: zod
+              .string()
+              .describe(
+                'Rollout stage: `preview` events need the `public-event-stream` flag.'
+              ),
+          })
+          .describe('One registered public event.')
+      )
+      .describe(
+        'Every event this credential can receive, with its entity types, rule\nclasses and rollout stage.'
+      ),
+  })
+  .describe('The public events visible to a credential.');
+
+/**
+ * @summary Stream matching public events to the caller over Server-Sent Events.
+ */
+export const streamEventsQueryParams = zod.object({
+  scope: zod
+    .enum(['user', 'team'])
+    .describe(
+      'Personal or team workspace whose webhook lifecycle events are delivered.'
+    ),
+  filters: zod
+    .string()
+    .optional()
+    .describe(
+      'URL-encoded JSON array of filters, identical to the persisted webhook\n`filters` field.'
+    ),
+  cursor: zod
+    .string()
+    .optional()
+    .describe(
+      'Resume after this cursor (an SSE `id`). `Last-Event-ID` wins when both\nare sent. Requires the `public-event-stream` feature; ignored without\nit.'
+    ),
+});
+
+/**
  * @summary List external chats the caller can view, including without a provider account.
  */
 export const externalChatsResponseBackfillImportedMin = 0;
@@ -83828,9 +83900,10 @@ export const editProjectV2Response = zod.object({
 });
 
 /**
- * @summary Stream matching broker events to the caller over Server-Sent Events.
+ * @summary OpenAPI entry for [`stream_events`] under its original path, kept while
+clients still call it; the route itself is served by [`stream_events`].
  */
-export const streamEventsQueryParams = zod.object({
+export const streamEventsAliasQueryParams = zod.object({
   scope: zod
     .enum(['user', 'team'])
     .describe(
@@ -83840,7 +83913,13 @@ export const streamEventsQueryParams = zod.object({
     .string()
     .optional()
     .describe(
-      'URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.'
+      'URL-encoded JSON array of filters, identical to the persisted webhook\n`filters` field.'
+    ),
+  cursor: zod
+    .string()
+    .optional()
+    .describe(
+      'Resume after this cursor (an SSE `id`). `Last-Event-ID` wins when both\nare sent. Requires the `public-event-stream` feature; ignored without\nit.'
     ),
 });
 
@@ -83869,18 +83948,26 @@ export const listWebhooksResponse = zod
             filters: zod.array(
               zod
                 .object({
+                  entity_types: zod
+                    .array(zod.string())
+                    .nullish()
+                    .describe(
+                      'Entity types matched by this filter, such as `document` or `channel`.\nWhen absent, the filter matches every entity type.'
+                    ),
                   events: zod
                     .array(zod.string())
-                    .describe('Event names matched by this filter.'),
+                    .describe(
+                      'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
+                    ),
                   ids: zod
                     .array(zod.string())
                     .nullish()
                     .describe(
-                      'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+                      'Entity ids matched by this filter. When absent, the filter matches all\nentity ids.'
                     ),
                 })
                 .describe(
-                  'Event and optional entity-id constraints used to match webhook deliveries.'
+                  'Event and optional entity constraints that select deliveries. Every\npresent constraint must accept an event for the filter to.'
                 )
             ),
             headers: zod.record(zod.string(), zod.string()),
@@ -83925,18 +84012,26 @@ export const createWebhookBody = zod
     filters: zod.array(
       zod
         .object({
+          entity_types: zod
+            .array(zod.string())
+            .nullish()
+            .describe(
+              'Entity types matched by this filter, such as `document` or `channel`.\nWhen absent, the filter matches every entity type.'
+            ),
           events: zod
             .array(zod.string())
-            .describe('Event names matched by this filter.'),
+            .describe(
+              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
+            ),
           ids: zod
             .array(zod.string())
             .nullish()
             .describe(
-              'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+              'Entity ids matched by this filter. When absent, the filter matches all\nentity ids.'
             ),
         })
         .describe(
-          'Event and optional entity-id constraints used to match webhook deliveries.'
+          'Event and optional entity constraints that select deliveries. Every\npresent constraint must accept an event for the filter to.'
         )
     ),
     headers: zod
@@ -83951,7 +84046,7 @@ export const createWebhookBody = zod
     scope: zod
       .enum(['user', 'team'])
       .describe(
-        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`\/`FromStr`\nspell the same names as serde, for query strings and config values.'
+        'Personal or team workspace whose webhook lifecycle events a stream\ndelivers. Clients serialize this, so both derives are used. `Display` and\n`FromStr` spell the same names as serde.'
       ),
   })
   .describe(
@@ -83979,18 +84074,26 @@ export const getWebhookResponse = zod
     filters: zod.array(
       zod
         .object({
+          entity_types: zod
+            .array(zod.string())
+            .nullish()
+            .describe(
+              'Entity types matched by this filter, such as `document` or `channel`.\nWhen absent, the filter matches every entity type.'
+            ),
           events: zod
             .array(zod.string())
-            .describe('Event names matched by this filter.'),
+            .describe(
+              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
+            ),
           ids: zod
             .array(zod.string())
             .nullish()
             .describe(
-              'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+              'Entity ids matched by this filter. When absent, the filter matches all\nentity ids.'
             ),
         })
         .describe(
-          'Event and optional entity-id constraints used to match webhook deliveries.'
+          'Event and optional entity constraints that select deliveries. Every\npresent constraint must accept an event for the filter to.'
         )
     ),
     headers: zod.record(zod.string(), zod.string()),
@@ -84042,18 +84145,26 @@ export const patchWebhookBody = zod
         zod.array(
           zod
             .object({
+              entity_types: zod
+                .array(zod.string())
+                .nullish()
+                .describe(
+                  'Entity types matched by this filter, such as `document` or `channel`.\nWhen absent, the filter matches every entity type.'
+                ),
               events: zod
                 .array(zod.string())
-                .describe('Event names matched by this filter.'),
+                .describe(
+                  'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
+                ),
               ids: zod
                 .array(zod.string())
                 .nullish()
                 .describe(
-                  'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+                  'Entity ids matched by this filter. When absent, the filter matches all\nentity ids.'
                 ),
             })
             .describe(
-              'Event and optional entity-id constraints used to match webhook deliveries.'
+              'Event and optional entity constraints that select deliveries. Every\npresent constraint must accept an event for the filter to.'
             )
         ),
       ])
@@ -84089,18 +84200,26 @@ export const patchWebhookResponse = zod
     filters: zod.array(
       zod
         .object({
+          entity_types: zod
+            .array(zod.string())
+            .nullish()
+            .describe(
+              'Entity types matched by this filter, such as `document` or `channel`.\nWhen absent, the filter matches every entity type.'
+            ),
           events: zod
             .array(zod.string())
-            .describe('Event names matched by this filter.'),
+            .describe(
+              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
+            ),
           ids: zod
             .array(zod.string())
             .nullish()
             .describe(
-              'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+              'Entity ids matched by this filter. When absent, the filter matches all\nentity ids.'
             ),
         })
         .describe(
-          'Event and optional entity-id constraints used to match webhook deliveries.'
+          'Event and optional entity constraints that select deliveries. Every\npresent constraint must accept an event for the filter to.'
         )
     ),
     headers: zod.record(zod.string(), zod.string()),

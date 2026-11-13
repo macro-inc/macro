@@ -1,5 +1,8 @@
 //! Kafka event models for the `macro.calendar` topic.
 
+#[cfg(test)]
+mod test;
+
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroCalendarTopic;
 use serde::{Deserialize, Serialize};
@@ -62,6 +65,74 @@ impl TopicEvent for CalendarTopicEvent {
     type Topic = MacroCalendarTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = CalendarPublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage, parse_user_id,
+        };
+        use std::borrow::Cow;
+
+        let metadata = self.metadata();
+        let change = CalendarEventChange {
+            event_id: metadata.event_id,
+        };
+        let (name, payload) = match self {
+            Self::Created(_) => (
+                "calendar_event.created",
+                CalendarPublicEvent::Created(change),
+            ),
+            Self::Updated(_) => (
+                "calendar_event.updated",
+                CalendarPublicEvent::Updated(change),
+            ),
+            Self::Deleted(_) => (
+                "calendar_event.deleted",
+                CalendarPublicEvent::Deleted(change),
+            ),
+        };
+        // A calendar is personal data: only its owner, never their teams.
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::CalendarEvent, metadata.event_id.to_string()),
+            audience: Audience::Recipient {
+                user_id: parse_user_id(&metadata.owner_id)?,
+            },
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
+}
+
+/// The public projection of a [`CalendarTopicEvent`], delivered only to the
+/// calendar's owner. Clients read the event back through the API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum CalendarPublicEvent {
+    /// A calendar event was created.
+    #[serde(rename = "calendar_event.created")]
+    Created(CalendarEventChange),
+    /// A calendar event was updated.
+    #[serde(rename = "calendar_event.updated")]
+    Updated(CalendarEventChange),
+    /// A calendar event was deleted.
+    #[serde(rename = "calendar_event.deleted")]
+    Deleted(CalendarEventChange),
+}
+
+/// Public body of every calendar event: which event changed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CalendarEventChange {
+    /// The calendar event.
+    pub event_id: Uuid,
 }
 
 /// Publishable event for [`MacroCalendarTopic`], keyed by the event entity id.

@@ -5,41 +5,36 @@
 //! separate from `WebhookService`, which is the CRUD surface for webhook
 //! creation and edits.
 
-#[cfg(feature = "stream")]
-pub(crate) mod stream;
 #[cfg(test)]
 mod test;
 
 use crate::domain::{
     events::WebhookTopicEvent,
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
-    ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
+    ports::{WebhookEventEnqueuer, WebhookInterest, WebhookRepo, WebhookWorkspaceResolver},
 };
-use agent_session::domain::events::{AgentSessionLifecycleEvent, AgentSessionLifecycleEventName};
+use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
-use chrono::Utc;
 use documents::domain::events::DocumentTopicEvent;
-use entity_access::domain::models::{AccessError, EntityType};
+use entity_access::domain::models::{AccessError, AccessLevel, EntityType};
 use entity_access::domain::ports::EntityAccessService;
+use event_stream::domain::filters::{self, FilterSubject, WildcardSupport};
+use event_stream::domain::normalize::NormalizeError;
+use event_stream::domain::ports::{
+    GithubClaims, InstallationOwners, PreviewFlag, TeamDirectory, TeamRole,
+};
 use futures::future::join_all;
-use macro_event_broker::Event;
+use macro_event_broker::exposure::{Audience, ExposureError, MinAccessLevel, MinTeamRole, Stage};
+use macro_event_broker::{Event, TopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::models::MessageParent;
 use messages::outbound::broker::MessageTopicEvent;
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
 use user_events::UserTopicEvent;
 use uuid::Uuid;
-
-const DOCUMENT_ENTITY_TYPE: &str = "document";
-const CHANNEL_ENTITY_TYPE: &str = "channel";
-const CALL_ENTITY_TYPE: &str = "call";
-const USER_ENTITY_TYPE: &str = "user";
-const WEBHOOK_ENTITY_TYPE: &str = "webhook";
-const AGENT_SESSION_ENTITY_TYPE: &str = "agent_session";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -55,12 +50,19 @@ pub enum WebhookEventIngestionError {
         /// Invalid entity identifier.
         entity_id: String,
     },
-    /// A private call notification has no explicit recipient.
-    #[error("private call notification has no recipient")]
+    /// A private event, such as a call invitation, has no explicit recipient.
+    #[error("private event has no recipient")]
     MissingCallRecipient,
     /// The broker envelope could not be represented by the queue contract.
     #[error("failed to serialize broker envelope: {0}")]
     Serialization(#[from] serde_json::Error),
+    /// The event is declared public under a name the event catalog does not
+    /// register.
+    #[error("public event `{0}` is not registered in the event catalog")]
+    Unregistered(&'static str),
+    /// The event's audience has a class webhook delivery cannot resolve yet.
+    #[error("unsupported webhook audience: {0}")]
+    UnsupportedAudience(&'static str),
     /// Failed to resolve personal and team webhook workspaces.
     #[error("failed to resolve webhook workspaces: {0}")]
     WorkspaceResolution(#[source] anyhow::Error),
@@ -70,6 +72,21 @@ pub enum WebhookEventIngestionError {
     /// Failed to enqueue at least one matched webhook event.
     #[error("failed to enqueue webhook event: {0}")]
     Enqueue(#[source] anyhow::Error),
+}
+
+impl From<ExposureError> for WebhookEventIngestionError {
+    fn from(error: ExposureError) -> Self {
+        match error {
+            ExposureError::InvalidEntityId {
+                entity_type,
+                entity_id,
+            } => Self::InvalidEntityId {
+                entity_type,
+                entity_id,
+            },
+            ExposureError::MissingRecipient => Self::MissingCallRecipient,
+        }
+    }
 }
 
 impl WebhookEventIngestionError {
@@ -143,76 +160,300 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
         &self,
         event: Event<UserTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one event of any other public topic. A family that turns
+    /// public adds its topic to `event_stream::topics::DeclaredMacroEvent`
+    /// and one arm calling this in `inbound::kafka_consumer`.
+    fn ingest_public_event<E: TopicEvent>(
+        &self,
+        event: Event<E>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
 /// Webhook event ingestion service implementation.
-#[derive(Clone)]
-pub struct WebhookEventIngestionServiceImpl<A, R, Q> {
+///
+/// `P` evaluates the `public-event-stream` flag for a webhook's owner:
+/// preview events, and filters matched only through a wildcard, reach a
+/// webhook only when its owner has the flag. Without one ([`NoPreview`]) no
+/// owner has it, which is how every webhook behaved before the flag.
+///
+/// `T` and `G` resolve team-admin and GitHub-installation audiences. Without
+/// them ([`Unconfigured`]) those audiences are refused as unsupported.
+pub struct WebhookEventIngestionServiceImpl<
+    A,
+    R,
+    Q,
+    P = NoPreview,
+    T = Unconfigured,
+    G = Unconfigured,
+    I = AlwaysInterested,
+> {
     entity_access_service: Arc<A>,
     repository: R,
     enqueuer: Q,
+    preview: Arc<P>,
+    teams: Option<Arc<T>>,
+    github: Option<Arc<G>>,
+    interest: Arc<I>,
+}
+
+impl<A, R: Clone, Q: Clone, P, T, G, I> Clone
+    for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
+{
+    fn clone(&self) -> Self {
+        Self {
+            entity_access_service: self.entity_access_service.clone(),
+            repository: self.repository.clone(),
+            enqueuer: self.enqueuer.clone(),
+            preview: self.preview.clone(),
+            teams: self.teams.clone(),
+            github: self.github.clone(),
+            interest: self.interest.clone(),
+        }
+    }
+}
+
+/// A [`WebhookInterest`] that assumes some webhook may want every event, so
+/// every audience is resolved.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AlwaysInterested;
+
+impl WebhookInterest for AlwaysInterested {
+    type Err = std::convert::Infallible;
+
+    async fn any_webhook_names(&self, _event_name: &str) -> Result<bool, Self::Err> {
+        Ok(true)
+    }
+}
+
+/// Audience directories that are not configured.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Unconfigured;
+
+impl TeamDirectory for Unconfigured {
+    async fn members(
+        &self,
+        _team_id: Uuid,
+    ) -> Result<Vec<(MacroUserIdStr<'static>, TeamRole)>, rootcause::Report> {
+        Err(rootcause::report!("team directory not configured"))
+    }
+
+    async fn teams_of(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<(Uuid, TeamRole)>, rootcause::Report> {
+        Err(rootcause::report!("team directory not configured"))
+    }
+}
+
+impl GithubClaims for Unconfigured {
+    async fn claimants(
+        &self,
+        _users: &[MacroUserIdStr<'static>],
+        _installation_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Err(rootcause::report!("GitHub claims not configured"))
+    }
+
+    async fn installation_owners(
+        &self,
+        _installation_id: &str,
+    ) -> Result<InstallationOwners, rootcause::Report> {
+        Err(rootcause::report!("GitHub claims not configured"))
+    }
+
+    async fn has_claim(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _installation_id: &str,
+    ) -> Result<bool, rootcause::Report> {
+        Err(rootcause::report!("GitHub claims not configured"))
+    }
+}
+
+/// A [`PreviewFlag`] no user has.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPreview;
+
+impl PreviewFlag for NoPreview {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'static>) -> bool {
+        false
+    }
 }
 
 impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
-    /// Create a webhook event ingestion service.
+    /// Create a webhook event ingestion service with no preview access and
+    /// no team or GitHub directories.
     pub fn new(entity_access_service: Arc<A>, repository: R, enqueuer: Q) -> Self {
         Self {
             entity_access_service,
             repository,
             enqueuer,
+            preview: Arc::new(NoPreview),
+            teams: None,
+            github: None,
+            interest: Arc::new(AlwaysInterested),
         }
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I> {
+    /// Evaluate the `public-event-stream` flag for webhook owners with
+    /// `preview`.
+    pub fn with_preview_flag<P2>(
+        self,
+        preview: Arc<P2>,
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P2, T, G, I> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            preview,
+            teams: self.teams,
+            github: self.github,
+            interest: self.interest,
+        }
+    }
+
+    /// Resolve team-admin audiences through `teams` and GitHub-installation
+    /// audiences through `github`.
+    pub fn with_audience_directories<T2, G2>(
+        self,
+        teams: Arc<T2>,
+        github: Arc<G2>,
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P, T2, G2, I> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            preview: self.preview,
+            teams: Some(teams),
+            github: Some(github),
+            interest: self.interest,
+        }
+    }
+
+    /// Skip events no webhook's filters name, asking `interest` before any
+    /// audience is resolved.
+    pub fn with_interest<I2>(
+        self,
+        interest: Arc<I2>,
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I2> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            preview: self.preview,
+            teams: self.teams,
+            github: self.github,
+            interest,
+        }
+    }
+}
+
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    P: PreviewFlag,
+    T: TeamDirectory,
+    G: GithubClaims,
+    I: WebhookInterest,
 {
-    /// Resolve the users that currently have access to an entity.
+    /// Resolve the users that currently have access to an entity, uncached.
     #[tracing::instrument(skip(self), err)]
     pub async fn users_with_access(
         &self,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
+        // Uncached: a grant or revocation just before the event must count,
+        // not a listing cached for up to 10 s.
         self.entity_access_service
-            .get_users_by_entity(entity_id, entity_type)
+            .get_users_by_entity_uncached(entity_id, entity_type)
             .await
             .map_err(WebhookEventIngestionError::EntityAccess)
     }
 
-    #[tracing::instrument(
-        skip_all,
-        fields(
-            event_id = %event.event_id,
-            event_name = %event.event_name,
-            entity_type = %event.entity_type,
-            entity_id = %event.entity_id,
-            accessor_count = tracing::field::Empty,
-            workspace_count = tracing::field::Empty,
-        ),
-        err
-    )]
-    async fn resolve_entity_access_and_enqueue(
+    /// Admin-only team events reach the personal workspaces of the team's
+    /// current admins and owners, never the team workspace: a team webhook's
+    /// creator need not be an admin.
+    #[tracing::instrument(skip(self), err)]
+    async fn team_admins(
         &self,
-        event: NormalizedWebhookEvent,
-        entity_type: EntityType,
-    ) -> Result<(), WebhookEventIngestionError> {
-        let accessors = self
-            .users_with_access(&event.entity_id, entity_type)
-            .await?;
-        tracing::Span::current().record("accessor_count", accessors.len());
+        team_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
+        let Some(teams) = &self.teams else {
+            return Err(WebhookEventIngestionError::UnsupportedAudience(
+                "team admins",
+            ));
+        };
+        let members = teams.members(team_id).await.map_err(directory_error)?;
+        Ok(members
+            .into_iter()
+            .filter(|(_, role)| *role >= TeamRole::Admin)
+            .map(|(user, _)| user)
+            .collect())
+    }
 
-        let workspace_ids = self
-            .repository
-            .resolve_workspace_ids(accessors)
+    /// A GitHub installation's events reach, as the live stream does, the
+    /// users who hold a claim on it (owners with a linked GitHub account, by
+    /// the routines' rule): their personal workspaces, plus the workspaces of
+    /// the teams that own it.
+    #[tracing::instrument(skip(self), err)]
+    async fn installation_workspaces(
+        &self,
+        installation_id: &str,
+    ) -> Result<(Vec<String>, Vec<String>), WebhookEventIngestionError> {
+        let (Some(teams), Some(github)) = (&self.teams, &self.github) else {
+            return Err(WebhookEventIngestionError::UnsupportedAudience(
+                "GitHub installation",
+            ));
+        };
+        let owners = github
+            .installation_owners(installation_id)
             .await
-            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
-        tracing::Span::current().record("workspace_count", workspace_ids.len());
+            .map_err(directory_error)?;
 
-        self.match_and_enqueue(event, workspace_ids).await
+        let mut candidates = owners.users.clone();
+        for team_id in &owners.teams {
+            let members = teams.members(*team_id).await.map_err(directory_error)?;
+            candidates.extend(members.into_iter().map(|(user, _)| user));
+        }
+        candidates.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+        candidates.dedup();
+
+        let claimants = github
+            .claimants(&candidates, installation_id)
+            .await
+            .map_err(directory_error)?;
+        Ok((
+            claimants.iter().map(ToString::to_string).collect(),
+            owners.teams.iter().map(ToString::to_string).collect(),
+        ))
+    }
+
+    /// The explicit accessors whose access level is at least `min_level`:
+    /// the accessor set (no link viewers), then each one's level.
+    #[tracing::instrument(skip(self), err)]
+    async fn accessors_at_least(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: MinAccessLevel,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
+        let floor = match min_level {
+            MinAccessLevel::Comment => AccessLevel::Comment,
+            MinAccessLevel::Edit => AccessLevel::Edit,
+            MinAccessLevel::Owner => AccessLevel::Owner,
+        };
+        // One set-based read over the grants, uncached, not a level lookup
+        // per accessor.
+        self.entity_access_service
+            .get_users_by_entity_at_least(entity_id, entity_type, floor)
+            .await
+            .map_err(WebhookEventIngestionError::EntityAccess)
     }
 
     #[tracing::instrument(
@@ -230,9 +471,11 @@ where
     async fn match_and_enqueue(
         &self,
         event: NormalizedWebhookEvent,
+        stage: Stage,
         workspace_ids: Vec<String>,
+        claim_gates: &[ClaimGate],
     ) -> Result<(), WebhookEventIngestionError> {
-        let webhooks = self
+        let candidates = self
             .repository
             .list_active_webhooks_matching_event(
                 workspace_ids,
@@ -241,8 +484,90 @@ where
             )
             .await
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
+        let webhooks = self.admitted_webhooks(candidates, &event, stage).await;
+        let webhooks = self.claim_gated(webhooks, claim_gates).await?;
         tracing::Span::current().record("match_count", webhooks.len());
         self.enqueue_all(webhooks, event).await
+    }
+
+    /// Drop webhooks in an installation's owning team workspaces whose
+    /// creator holds no claim on it (one batched claim query per gate).
+    async fn claim_gated(
+        &self,
+        webhooks: Vec<crate::domain::models::Webhook>,
+        claim_gates: &[ClaimGate],
+    ) -> Result<Vec<crate::domain::models::Webhook>, WebhookEventIngestionError> {
+        let Some(github) = &self.github else {
+            return Ok(webhooks);
+        };
+        let mut admitted = webhooks;
+        for gate in claim_gates {
+            let creators: Vec<MacroUserIdStr<'static>> = admitted
+                .iter()
+                .filter(|webhook| gate.team_workspaces.contains(&webhook.workspace_id))
+                .filter_map(|webhook| {
+                    MacroUserIdStr::try_from(webhook.created_by_user_id.clone()).ok()
+                })
+                .collect();
+            if creators.is_empty() {
+                continue;
+            }
+            let claimants = github
+                .claimants(&creators, &gate.installation_id)
+                .await
+                .map_err(directory_error)?;
+            admitted.retain(|webhook| {
+                !gate.team_workspaces.contains(&webhook.workspace_id)
+                    || claimants
+                        .iter()
+                        .any(|claimant| claimant.as_ref() == webhook.created_by_user_id)
+            });
+        }
+        Ok(admitted)
+    }
+
+    /// The webhooks whose filters accept the event once the owner's flag is
+    /// known: a preview event, or a filter that matches only through a
+    /// wildcard, needs the owner to have `public-event-stream`. Every other
+    /// match stands as before.
+    async fn admitted_webhooks(
+        &self,
+        candidates: Vec<crate::domain::models::Webhook>,
+        event: &NormalizedWebhookEvent,
+        stage: Stage,
+    ) -> Vec<crate::domain::models::Webhook> {
+        let subject = FilterSubject {
+            event_name: &event.event_name,
+            entity_type: &event.entity_type,
+            entity_id: &event.entity_id,
+        };
+        let mut admitted = Vec::with_capacity(candidates.len());
+        for webhook in candidates {
+            // The repository matched exact names and ids. Only wildcards,
+            // entity types and preview events need deciding here.
+            let decided_by_repository = stage == Stage::Stable
+                && webhook
+                    .filters
+                    .iter()
+                    .all(|filter| !filter.uses_wildcards() && filter.entity_types.is_none());
+            if decided_by_repository
+                || (stage == Stage::Stable
+                    && filters::any_accepts(&webhook.filters, subject, WildcardSupport::None))
+            {
+                admitted.push(webhook);
+                continue;
+            }
+            let owner_flagged = match MacroUserIdStr::try_from(webhook.created_by_user_id.clone()) {
+                Ok(owner) => self.preview.enabled_for(&owner).await,
+                Err(_) => false,
+            };
+            if owner_flagged
+                && filters::any_accepts(&webhook.filters, subject, WildcardSupport::Full)
+            {
+                admitted.push(webhook);
+            }
+        }
+        admitted
     }
 
     async fn enqueue_all(
@@ -272,420 +597,245 @@ where
     }
 }
 
-pub(crate) fn normalized_document_event(
-    event: &Event<DocumentTopicEvent>,
-) -> Result<Option<NormalizedWebhookEvent>, WebhookEventIngestionError> {
-    let (event_name, entity_id) = match &event.event {
-        DocumentTopicEvent::Created(metadata) => ("document.created", &metadata.document_id),
-        DocumentTopicEvent::Updated(metadata) if metadata.appearance_change.is_some() => {
-            return Ok(None);
-        }
-        DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
-        DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
-        DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),
-        DocumentTopicEvent::Interaction(metadata) => {
-            ("document.interaction", &metadata.document_id)
-        }
-        DocumentTopicEvent::ContentUploaded(_)
-        | DocumentTopicEvent::SyncContentUpdated(_)
-        | DocumentTopicEvent::Purged(_) => return Ok(None),
-    };
-
-    if Uuid::parse_str(entity_id).is_err() {
-        return Err(WebhookEventIngestionError::InvalidEntityId {
-            entity_type: DOCUMENT_ENTITY_TYPE,
-            entity_id: entity_id.clone(),
-        });
-    }
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok(Some(normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        DOCUMENT_ENTITY_TYPE,
-        entity_id,
-        broker_envelope,
-    )))
+/// Normalize one broker event for webhook delivery from its declared
+/// exposure, through the normalization live streams share.
+///
+/// `None` when the event is internal. Preview events are returned with their
+/// stage; matching admits them only for flagged webhook owners.
+#[cfg(test)]
+pub(crate) fn normalize<E: TopicEvent>(
+    event: &Event<E>,
+) -> Result<Option<(NormalizedWebhookEvent, Audience)>, WebhookEventIngestionError> {
+    Ok(normalize_staged(event)?.map(|(event, audience, _)| (event, audience)))
 }
 
-/// Normalize a call event and remove its private routing field before delivery.
-pub(crate) fn normalized_call_notification_event(
-    event: &Event<CallNotificationEvent>,
-) -> Result<(NormalizedWebhookEvent, Option<String>), WebhookEventIngestionError> {
-    let metadata = event.event.metadata();
-    let recipient = match &event.event {
-        CallNotificationEvent::Ringing(_)
-        | CallNotificationEvent::Answered(_)
-        | CallNotificationEvent::Declined(_)
-        | CallNotificationEvent::Invited(_) => Some(
-            metadata
-                .recipient_user_id
-                .clone()
-                .filter(|id| !id.is_empty())
-                .ok_or(WebhookEventIngestionError::MissingCallRecipient)?,
-        ),
-        _ => None,
-    };
-    let mut broker_envelope = serde_json::to_value(event)?;
-    if let Some(metadata) = broker_envelope
-        .get_mut("metadata")
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        metadata.remove("recipient_user_id");
-    }
-    let call_id = metadata.call_id.to_string();
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event.event.name(),
-            CALL_ENTITY_TYPE,
-            &call_id,
-            broker_envelope,
-        ),
-        recipient,
-    ))
-}
-
-pub(crate) fn normalized_channel_event(
-    event: &Event<ChannelTopicEvent>,
-) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
-    let (event_name, channel_id) = match &event.event {
-        ChannelTopicEvent::Created(metadata) => ("channel.created", metadata.channel_id),
-        ChannelTopicEvent::Updated(metadata) => ("channel.updated", metadata.channel_id),
-        ChannelTopicEvent::PictureChanged(metadata) => {
-            ("channel.picture_changed", metadata.channel_id)
-        }
-        ChannelTopicEvent::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
-        ChannelTopicEvent::ParticipantAdded(metadata) => {
-            ("channel.participant_added", metadata.channel_id)
-        }
-        ChannelTopicEvent::ParticipantRemoved(metadata) => {
-            ("channel.participant_removed", metadata.channel_id)
-        }
-        ChannelTopicEvent::AccessRequested(metadata) => {
-            ("channel.access_requested", metadata.channel_id)
+/// [`normalize`], with the event's rollout stage.
+fn normalize_staged<E: TopicEvent>(
+    event: &Event<E>,
+) -> Result<Option<(NormalizedWebhookEvent, Audience, Stage)>, WebhookEventIngestionError> {
+    let public = match event_stream::domain::normalize::normalize(event) {
+        Ok(Some(public)) => public,
+        Ok(None) => return Ok(None),
+        Err(NormalizeError::Exposure(error)) => return Err(error.into()),
+        Err(NormalizeError::Serialization(error)) => return Err(error.into()),
+        Err(NormalizeError::Unregistered(name)) => {
+            return Err(WebhookEventIngestionError::Unregistered(name));
         }
     };
-    let entity_id = channel_id.to_string();
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok(normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        CHANNEL_ENTITY_TYPE,
-        &entity_id,
-        broker_envelope,
-    ))
+    Ok(Some((public.event, public.audience, public.stage)))
 }
 
-/// The user a user fact is about.
-pub(crate) fn user_event_subject(event: &Event<UserTopicEvent>) -> MacroUserIdStr<'static> {
-    match &event.event {
-        UserTopicEvent::PictureChanged(metadata) => metadata.user_id.clone(),
+fn directory_error(report: rootcause::Report) -> WebhookEventIngestionError {
+    WebhookEventIngestionError::WorkspaceResolution(anyhow::anyhow!("{report:?}"))
+}
+
+/// Every audience nested in `audience`, depth first, with `Any` expanded.
+fn audience_members(audience: &Audience) -> Vec<&Audience> {
+    match audience {
+        Audience::Any(audiences) => audiences.iter().flat_map(audience_members).collect(),
+        Audience::Entity { .. }
+        | Audience::Recipient { .. }
+        | Audience::Owner { .. }
+        | Audience::Team { .. }
+        | Audience::TeamsOf { .. }
+        | Audience::ContactsOf { .. }
+        | Audience::GithubInstallation { .. }
+        | Audience::EntityAtLeast { .. }
+        | Audience::Workspace { .. }
+        | Audience::Person { .. }
+        | Audience::Snapshot { .. } => vec![audience],
     }
 }
 
-/// Normalize one user fact. The entity is the user whose profile changed, and
-/// they are also the only audience.
-pub(crate) fn normalized_user_event(
-    event: &Event<UserTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
-    let (event_name, user_id) = match &event.event {
-        UserTopicEvent::PictureChanged(metadata) => {
-            ("user.picture_changed", metadata.user_id.clone())
-        }
-    };
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event_name,
-            USER_ENTITY_TYPE,
-            user_id.as_ref(),
-            broker_envelope,
-        ),
-        user_id,
-    ))
-}
-
-/// Normalize one message fact.
+/// The webhook workspaces an audience reaches.
 ///
-/// The entity is the message's parent, so access and `ids` filtering are by
-/// the channel or document that owns the conversation, and the parent travels
-/// in the payload for consumers to route on.
-pub(crate) fn normalized_message_event(
-    event: &Event<MessageTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, EntityType), WebhookEventIngestionError> {
-    let (event_name, parent) = match &event.event {
-        MessageTopicEvent::Posted(metadata) => ("message.posted", &metadata.parent),
-        MessageTopicEvent::Patched(metadata) => ("message.patched", &metadata.parent),
-        MessageTopicEvent::Deleted(metadata) => ("message.deleted", &metadata.parent),
-        MessageTopicEvent::Mentioned(metadata) => ("message.mentioned", &metadata.parent),
-        MessageTopicEvent::AttachmentCreated(metadata) => {
-            ("message.attachment_created", &metadata.parent)
-        }
-        MessageTopicEvent::AttachmentRemoved(metadata) => {
-            ("message.attachment_removed", &metadata.parent)
-        }
-    };
-    let entity_id = parent.entity_id();
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event_name,
-            parent.entity_type(),
-            &entity_id,
-            broker_envelope,
-        ),
-        parent.access_entity_type(),
-    ))
+/// People reached through access (entity accessors, owners, a user whose
+/// contacts or teams are the audience) expand to their personal and team
+/// workspaces in one resolution. Addressed people and workspaces match
+/// exactly, with no team expansion. Webhooks cannot enumerate contacts, so
+/// `ContactsOf` reaches only the user's own workspaces.
+#[derive(Default)]
+struct WorkspaceAudience {
+    /// Whether any member needs workspace resolution, even with no people.
+    resolve: bool,
+    /// People to resolve into personal and team workspaces, in order.
+    people: Vec<MacroUserIdStr<'static>>,
+    /// Workspaces matched exactly.
+    exact: Vec<String>,
 }
 
-pub(crate) fn normalized_webhook_event(
-    event: &Event<WebhookTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
-    let (event_name, webhook_id, workspace_id) = match &event.event {
-        WebhookTopicEvent::Created(metadata) => (
-            "webhook.created",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-        WebhookTopicEvent::Updated(metadata) => (
-            "webhook.updated",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-        WebhookTopicEvent::Deleted(metadata) => (
-            "webhook.deleted",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-        WebhookTopicEvent::Validated(metadata) => (
-            "webhook.validated",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-    };
-
-    if webhook_id.is_empty() || !webhook_id.starts_with("wh_") {
-        return Err(WebhookEventIngestionError::InvalidEntityId {
-            entity_type: WEBHOOK_ENTITY_TYPE,
-            entity_id: webhook_id.clone(),
-        });
-    }
-
-    let broker_envelope = serde_json::to_value(event)?;
-    let normalized = normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        WEBHOOK_ENTITY_TYPE,
-        webhook_id,
-        broker_envelope,
-    );
-    Ok((normalized, workspace_id.clone()))
-}
-
-fn normalized_event(
-    event_id: Uuid,
-    schema_version: u8,
-    event_name: &str,
-    entity_type: &str,
-    entity_id: &str,
-    broker_envelope: serde_json::Value,
-) -> NormalizedWebhookEvent {
-    NormalizedWebhookEvent {
-        event_id: event_id.to_string(),
-        schema_version,
-        event_name: event_name.to_string(),
-        entity_type: entity_type.to_string(),
-        entity_id: entity_id.to_string(),
-        ordering_key: entity_id.to_string(),
-        occurred_at: Utc::now(),
-        broker_envelope,
-    }
-}
-
-/// Whose access decides who may see one trigger event.
-///
-/// Not the bot the event names: that is what a subscriber filters on, and a
-/// bot is not an entity anyone holds access to.
-pub(crate) enum TriggerAudience {
-    /// Whoever currently holds access to an entity.
-    Entity {
-        entity_id: String,
-        entity_type: EntityType,
-    },
-    /// Named people, when nothing was posted anywhere to hold access to.
-    People(Vec<MacroUserIdStr<'static>>),
-}
-
-impl TriggerAudience {
-    /// Whoever may currently read the conversation's parent.
-    fn parent(parent: &MessageParent) -> Self {
-        Self::Entity {
-            entity_id: parent.entity_id(),
-            entity_type: parent.access_entity_type(),
+impl WorkspaceAudience {
+    fn add_person(&mut self, person: &MacroUserIdStr<'static>) {
+        self.resolve = true;
+        if !self.people.contains(person) {
+            self.people.push(person.clone());
         }
     }
-
-    /// The one person who asked for a session from the composer: nothing was
-    /// posted, so nobody else's access is in question. Their runtime, or
-    /// their team's, is who serves it.
-    fn requester(owner: &str) -> Result<Self, WebhookEventIngestionError> {
-        let owner = MacroUserIdStr::try_from(owner.to_owned()).map_err(|_| {
-            WebhookEventIngestionError::InvalidEntityId {
-                entity_type: "user",
-                entity_id: owner.to_owned(),
-            }
-        })?;
-        Ok(Self::People(vec![owner]))
-    }
 }
 
-/// Normalize one agent-trigger event.
-///
-/// The entity - and the ordering key, mirroring the broker's partitioning -
-/// is the bot: a subscriber consumes a bot's whole trigger stream, in order.
-/// Returned alongside is whose access gates it, which differs by shape.
-///
-/// Every message trigger includes parent content, so delivery rechecks access to
-/// that parent, including follow-ups to a session with independently shared access.
-pub(crate) fn normalized_agent_trigger_event(
-    event: &Event<AgentTriggerTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
-    use agent_trigger::domain::broker_events::AgentTriggerEventName;
-
-    let (bot_id, audience) = match &event.event {
-        AgentTriggerTopicEvent::New(
-            agent_trigger::domain::broker_events::NewAgentSessionEvent::AssignedToTask(assigned),
-        ) => Some((assigned.bot_id, TriggerAudience::parent(&assigned.parent))),
-        AgentTriggerTopicEvent::New(new) => match (new.mention(), new.requested()) {
-            (Some(mention), _) => Some((
-                mention.bot_id,
-                TriggerAudience::parent(&mention.message.parent),
-            )),
-            (None, Some(requested)) => Some((
-                requested.bot_id,
-                TriggerAudience::requester(&requested.owner)?,
-            )),
-            (None, None) => None,
-        },
-        AgentTriggerTopicEvent::Existing(existing) => existing.session_message().map(|message| {
-            (
-                message.bot_id,
-                TriggerAudience::parent(&message.message.parent),
-            )
-        }),
-    }
-    // Both trigger enums are non-exhaustive on purpose; an unknown shape
-    // has no bot to route to. Permanent, so the consumer skips it.
-    .ok_or_else(|| WebhookEventIngestionError::InvalidEntityId {
-        entity_type: "bot",
-        entity_id: "unrecognized agent-trigger event shape".to_owned(),
-    })?;
-    let event_name: &'static str = AgentTriggerEventName::from(&event.event).into();
-    let broker_envelope = serde_json::to_value(event)?;
-    let bot_id = bot_id.to_string();
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event_name,
-            "bot",
-            &bot_id,
-            broker_envelope,
-        ),
-        audience,
-    ))
-}
-
-/// Normalize one agent-session lifecycle event.
-///
-/// Unlike a trigger, whose entity is the bot, a lifecycle stream is about one
-/// session: the entity and the ordering key are the session, mirroring the
-/// broker's partition key, and the session's own grants - its owner and the
-/// channel it came from - decide who may see it.
-pub(crate) fn normalized_agent_session_lifecycle_event(
-    event: &Event<AgentSessionLifecycleEvent>,
-) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
-    let event_name: &'static str = AgentSessionLifecycleEventName::from(&event.event).into();
-    let broker_envelope = serde_json::to_value(event)?;
-    let session_id = event.event.session_id().to_string();
-    Ok(normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        AGENT_SESSION_ENTITY_TYPE,
-        &session_id,
-        broker_envelope,
-    ))
-}
-
-/// Whose access gates one lifecycle event.
-///
-/// A live session carries its own grants. A deleted one does not: its access
-/// rows go with the row, so asking who may see the session answers nobody.
-/// The event itself still knows who the session belonged to, and that is the
-/// audience the last fact about it is delivered to.
-pub(crate) enum LifecycleAudience {
-    /// Everyone with access to the session.
-    Session,
-    /// The session is gone: its owner, plus the channel or document it was
-    /// opened from.
-    Departed {
-        owner: MacroUserIdStr<'static>,
-        origin_parent: Option<MessageParent>,
-    },
-}
-
-pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> LifecycleAudience {
-    match event {
-        AgentSessionLifecycleEvent::Deleted(deleted) => LifecycleAudience::Departed {
-            owner: deleted.identity.owner_id.clone(),
-            origin_parent: deleted
-                .identity
-                .origin
-                .as_ref()
-                .map(|origin| origin.parent.clone()),
-        },
-        AgentSessionLifecycleEvent::Opened(_)
-        | AgentSessionLifecycleEvent::TurnStarted(_)
-        | AgentSessionLifecycleEvent::TurnEnded(_)
-        | AgentSessionLifecycleEvent::CommandRejected(_)
-        | AgentSessionLifecycleEvent::Settled(_)
-        | AgentSessionLifecycleEvent::WaitingForInput(_)
-        | AgentSessionLifecycleEvent::InputReceived(_)
-        | AgentSessionLifecycleEvent::Mentioned(_)
-        | AgentSessionLifecycleEvent::Stopped(_)
-        | AgentSessionLifecycleEvent::Renamed(_) => LifecycleAudience::Session,
-    }
-}
-
-impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    P: PreviewFlag,
+    T: TeamDirectory,
+    G: GithubClaims,
+    I: WebhookInterest,
+{
+    /// Normalize one event and enqueue it for every matching webhook its
+    /// audience reaches.
+    async fn ingest<E: TopicEvent>(
+        &self,
+        event: &Event<E>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let Some((normalized, audience, stage)) = normalize_staged(event)? else {
+            return Ok(());
+        };
+        // Resolving an audience costs access lookups; an event no webhook
+        // names anywhere cannot match, whoever its audience is.
+        let wanted = self
+            .interest
+            .any_webhook_names(&normalized.event_name)
+            .await
+            .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
+        if !wanted {
+            return Ok(());
+        }
+        self.resolve_audience_and_enqueue(normalized, stage, &audience)
+            .await
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            event_id = %event.event_id,
+            event_name = %event.event_name,
+            entity_type = %event.entity_type,
+            entity_id = %event.entity_id,
+            accessor_count = tracing::field::Empty,
+            workspace_count = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn resolve_audience_and_enqueue(
+        &self,
+        event: NormalizedWebhookEvent,
+        stage: Stage,
+        audience: &Audience,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let mut workspaces = WorkspaceAudience::default();
+        let mut claim_gates = Vec::new();
+        for member in audience_members(audience) {
+            match member {
+                Audience::Entity {
+                    entity_type,
+                    entity_id,
+                } => {
+                    workspaces.resolve = true;
+                    for accessor in self.users_with_access(entity_id, *entity_type).await? {
+                        workspaces.add_person(&accessor);
+                    }
+                }
+                Audience::Owner { user_id }
+                | Audience::TeamsOf { user_id }
+                | Audience::ContactsOf { user_id } => workspaces.add_person(user_id),
+                Audience::Recipient { user_id } => workspaces.exact.push(user_id.to_string()),
+                // Live streams only: a webhook never matches through it.
+                Audience::Person { .. } => {}
+                Audience::Snapshot { user_ids } => workspaces
+                    .exact
+                    .extend(user_ids.iter().map(ToString::to_string)),
+                Audience::Workspace { workspace_id } => {
+                    workspaces.exact.push(workspace_id.clone());
+                }
+                Audience::Team {
+                    team_id,
+                    min_role: MinTeamRole::Member,
+                } => workspaces.exact.push(team_id.to_string()),
+                Audience::Team {
+                    team_id,
+                    min_role: MinTeamRole::Admin,
+                } => {
+                    workspaces.exact.extend(
+                        self.team_admins(*team_id)
+                            .await?
+                            .into_iter()
+                            .map(|admin| admin.to_string()),
+                    );
+                }
+                Audience::EntityAtLeast {
+                    entity_type,
+                    entity_id,
+                    min_level,
+                } => {
+                    workspaces.resolve = true;
+                    for accessor in self
+                        .accessors_at_least(entity_id, *entity_type, *min_level)
+                        .await?
+                    {
+                        workspaces.add_person(&accessor);
+                    }
+                }
+                Audience::GithubInstallation { installation_id } => {
+                    let (claimant_workspaces, owning_teams) =
+                        self.installation_workspaces(installation_id).await?;
+                    workspaces.exact.extend(claimant_workspaces);
+                    workspaces.exact.extend(owning_teams.iter().cloned());
+                    claim_gates.push(ClaimGate {
+                        installation_id: installation_id.clone(),
+                        team_workspaces: owning_teams,
+                    });
+                }
+                Audience::Any(_) => {
+                    return Err(WebhookEventIngestionError::UnsupportedAudience(
+                        "unflattened union",
+                    ));
+                }
+            }
+        }
+        tracing::Span::current().record("accessor_count", workspaces.people.len());
+
+        let mut workspace_ids = if workspaces.resolve {
+            self.repository
+                .resolve_workspace_ids(workspaces.people)
+                .await
+                .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?
+        } else {
+            Vec::new()
+        };
+        workspace_ids.extend(workspaces.exact);
+        tracing::Span::current().record("workspace_count", workspace_ids.len());
+
+        self.match_and_enqueue(event, stage, workspace_ids, &claim_gates)
+            .await
+    }
+}
+
+/// Webhooks in an installation's owning team workspaces reach the event only
+/// when their creator holds a claim on it, as on the stream.
+struct ClaimGate {
+    installation_id: String,
+    team_workspaces: Vec<String>,
+}
+
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionService
+    for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
+where
+    A: EntityAccessService,
+    R: WebhookRepo + WebhookWorkspaceResolver,
+    Q: WebhookEventEnqueuer,
+    P: PreviewFlag,
+    T: TeamDirectory,
+    G: GithubClaims,
+    I: WebhookInterest,
 {
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_document_event(
         &self,
         event: Event<DocumentTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let Some(event) = normalized_document_event(&event)? else {
-            return Ok(());
-        };
-        self.resolve_entity_access_and_enqueue(event, EntityType::Document)
-            .await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -693,9 +843,7 @@ where
         &self,
         event: Event<ChannelTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let event = normalized_channel_event(&event)?;
-        self.resolve_entity_access_and_enqueue(event, EntityType::Channel)
-            .await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -703,27 +851,7 @@ where
         &self,
         event: Event<CallNotificationEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (normalized, recipient) = normalized_call_notification_event(&event)?;
-        match recipient {
-            Some(recipient) => {
-                // The recipient is the grant for a private notification.
-                // In particular, an invitation precedes call entity access.
-                self.match_and_enqueue(normalized, vec![recipient]).await
-            }
-            None => {
-                let accessors = self
-                    .users_with_access(&normalized.entity_id, EntityType::Call)
-                    .await?;
-                let workspace_ids = self
-                    .repository
-                    .resolve_workspace_ids(accessors)
-                    .await
-                    .map_err(|error| {
-                        WebhookEventIngestionError::WorkspaceResolution(error.into())
-                    })?;
-                self.match_and_enqueue(normalized, workspace_ids).await
-            }
-        }
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -731,9 +859,7 @@ where
         &self,
         event: Event<MessageTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, entity_type) = normalized_message_event(&event)?;
-        self.resolve_entity_access_and_enqueue(event, entity_type)
-            .await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -741,8 +867,7 @@ where
         &self,
         event: Event<WebhookTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, workspace_id) = normalized_webhook_event(&event)?;
-        self.match_and_enqueue(event, vec![workspace_id]).await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -750,20 +875,7 @@ where
         &self,
         event: Event<AgentTriggerTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, audience) = normalized_agent_trigger_event(&event)?;
-        let accessors = match audience {
-            TriggerAudience::Entity {
-                entity_id,
-                entity_type,
-            } => self.users_with_access(&entity_id, entity_type).await?,
-            TriggerAudience::People(people) => people,
-        };
-        let workspace_ids = self
-            .repository
-            .resolve_workspace_ids(accessors)
-            .await
-            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
-        self.match_and_enqueue(event, workspace_ids).await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -771,33 +883,7 @@ where
         &self,
         event: Event<AgentSessionLifecycleEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let normalized = normalized_agent_session_lifecycle_event(&event)?;
-        match lifecycle_audience(&event.event) {
-            LifecycleAudience::Session => {
-                self.resolve_entity_access_and_enqueue(normalized, EntityType::AgentSession)
-                    .await
-            }
-            LifecycleAudience::Departed {
-                owner,
-                origin_parent,
-            } => {
-                let mut accessors = vec![owner];
-                if let Some(parent) = origin_parent {
-                    accessors.extend(
-                        self.users_with_access(&parent.entity_id(), parent.access_entity_type())
-                            .await?,
-                    );
-                }
-                let workspace_ids = self
-                    .repository
-                    .resolve_workspace_ids(accessors)
-                    .await
-                    .map_err(|error| {
-                        WebhookEventIngestionError::WorkspaceResolution(error.into())
-                    })?;
-                self.match_and_enqueue(normalized, workspace_ids).await
-            }
-        }
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(
@@ -810,14 +896,19 @@ where
         &self,
         event: Event<UserTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (normalized, user_id) = normalized_user_event(&event)?;
-        // Only the changed user's own workspaces see their profile change;
-        // contacts and entity access are deliberately not resolved.
-        let workspace_ids = self
-            .repository
-            .resolve_workspace_ids(vec![user_id])
-            .await
-            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
-        self.match_and_enqueue(normalized, workspace_ids).await
+        self.ingest(&event).await
+    }
+
+    #[tracing::instrument(
+        name = "webhook.ingest_public_event",
+        skip(self, event),
+        fields(event_id = %event.event_id),
+        err
+    )]
+    async fn ingest_public_event<E: TopicEvent>(
+        &self,
+        event: Event<E>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest(&event).await
     }
 }

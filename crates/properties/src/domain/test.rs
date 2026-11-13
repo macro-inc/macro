@@ -560,6 +560,7 @@ async fn property_option_event_add_string_publishes_full_returned_state_and_exac
         serde_json::json!({
             "option_id": option_id,
             "property_definition_id": property_definition_id,
+            "owner": { "scope": "user", "user_id": caller_user_id().to_string() },
             "actor_user_id": caller_user_id().to_string(),
             "value": { "type": "string", "value": "Persisted tag" },
             "color": "#ABCDEF",
@@ -706,6 +707,7 @@ async fn property_option_event_update_publishes_full_post_update_state_and_exact
         serde_json::json!({
             "option_id": option_id,
             "property_definition_id": property_definition_id,
+            "owner": { "scope": "user", "user_id": caller_user_id().to_string() },
             "actor_user_id": caller_user_id().to_string(),
             "value": { "type": "string", "value": "Persisted after" },
             "color": "#FEDCBA",
@@ -956,6 +958,7 @@ async fn property_option_event_delete_publishes_one_pre_delete_snapshot_with_exa
         serde_json::json!({
             "option_id": option_id,
             "property_definition_id": property_definition_id,
+            "owner": { "scope": "user", "user_id": caller_user_id().to_string() },
             "actor_user_id": caller_user_id().to_string(),
             "value": { "type": "number", "value": 21.5 },
         })
@@ -4412,6 +4415,11 @@ async fn promote_tag_publishes_the_moved_option_and_every_retagged_entity() {
         "the entity events carry the entities, not the label"
     );
     assert_eq!(events[2].envelope["metadata"]["entity_id"], "thread1");
+    assert_eq!(
+        events[0].envelope["metadata"]["owner"],
+        serde_json::json!({ "scope": "team", "team_id": team_id() }),
+        "the promoted label now belongs to the team"
+    );
 }
 
 #[tokio::test]
@@ -4605,6 +4613,11 @@ async fn merge_tag_publishes_the_retired_label_and_every_retagged_entity() {
         events[0].envelope["metadata"]["option_id"],
         option_id.to_string(),
         "the retired label is the personal one"
+    );
+    assert_eq!(
+        events[0].envelope["metadata"]["owner"],
+        serde_json::json!({ "scope": "user", "user_id": caller_user_id().to_string() }),
+        "the retired label belonged to the caller"
     );
 }
 

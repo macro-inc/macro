@@ -83,6 +83,15 @@ pub struct ChannelDeletedMetadata {
     pub channel_id: Uuid,
     /// Actor that deleted the channel.
     pub actor: ChannelSender<'static>,
+    /// Routing: the users who were active participants when the channel was
+    /// deleted. Participant rows cascade with the channel, so this snapshot is
+    /// the only way to reach them after the delete. Not part of the public
+    /// payload; events published before it existed decode as empty, and an
+    /// empty snapshot is not serialized, so the public body matches the one
+    /// delivered before the field existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub participant_user_ids: Vec<MacroUserIdStr<'static>>,
 }
 
 /// The channel-only shape of a posted message.
@@ -190,6 +199,69 @@ impl TopicEvent for ChannelTopicEvent {
     type Topic = MacroChannelsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let (name, channel_id) = match self {
+            Self::Created(metadata) => ("channel.created", metadata.channel_id),
+            Self::Updated(metadata) => ("channel.updated", metadata.channel_id),
+            Self::PictureChanged(metadata) => ("channel.picture_changed", metadata.channel_id),
+            Self::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
+            Self::ParticipantAdded(metadata) => ("channel.participant_added", metadata.channel_id),
+            Self::ParticipantRemoved(metadata) => {
+                ("channel.participant_removed", metadata.channel_id)
+            }
+            Self::AccessRequested(metadata) => ("channel.access_requested", metadata.channel_id),
+        };
+        let channel_id = channel_id.to_string();
+        let channel = Audience::Entity {
+            entity_type: EntityType::Channel,
+            entity_id: channel_id.clone(),
+        };
+        let (audience, payload) = match self {
+            // Participant rows cascade with the channel: the captured
+            // participants are the audience, and the snapshot is routing
+            // only, stripped from the delivered payload.
+            Self::Deleted(metadata) if !metadata.participant_user_ids.is_empty() => {
+                let mut payload = metadata.clone();
+                let participants = std::mem::take(&mut payload.participant_user_ids);
+                (
+                    Audience::Any(vec![
+                        channel,
+                        Audience::Snapshot {
+                            user_ids: participants,
+                        },
+                    ]),
+                    Cow::Owned(Self::Deleted(payload)),
+                )
+            }
+            Self::Deleted(_)
+            | Self::Created(_)
+            | Self::Updated(_)
+            | Self::PictureChanged(_)
+            | Self::ParticipantAdded(_)
+            | Self::ParticipantRemoved(_)
+            | Self::AccessRequested(_) => (channel, Cow::Borrowed(self)),
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Channel, channel_id),
+            audience,
+            stage: Stage::Stable,
+            payload,
+        }))
+    }
 }
 
 /// Publishable event for [`MacroChannelsTopic`], keyed by channel id.

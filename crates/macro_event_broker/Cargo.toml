@@ -22,6 +22,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_event_topics = { path = "../macro_event_topics" }
+event_exposure = { path = "../event_exposure" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "time"] }

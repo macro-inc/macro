@@ -95,6 +95,23 @@ impl TopicEvent for TeamsTopicForDms {
     type Topic = MacroTeamsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = macro_event_broker::exposure::Unexposed;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::Exposure;
+
+        Ok(match self {
+            Self::MemberJoined(_) | Self::Other(_) => Exposure::internal_by_design(
+                "consumer-side decoding of macro.teams; TeamTopicEvent declares the topic exposure",
+            ),
+        })
+    }
 }
 
 /// `macro.teams` record decoded for teammate-DM ensure.

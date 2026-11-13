@@ -1,0 +1,2312 @@
+{
+  "Email": [
+    {
+      "event_type": "email.link_connected",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "email_address": "owner@example.com",
+        "provider": "GMAIL",
+        "is_primary": true,
+        "connected_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "email.link_disconnected",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "email_address": "owner@example.com",
+        "reason": "access_revoked"
+      }
+    },
+    {
+      "event_type": "email.link_reauth_required",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "email_address": "owner@example.com",
+        "observed_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "email.message_received",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "message_id": "00000000-0000-0000-0000-000000000000",
+        "provider_message_id": "m",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "provider_thread_id": "t",
+        "is_new_thread": false,
+        "subject": null,
+        "from_email": null,
+        "from_name": null,
+        "to_emails": [],
+        "attachment_count": 0,
+        "is_spam_or_trash": false,
+        "received_at": null
+      }
+    },
+    {
+      "event_type": "email.message_draft_synced",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "message_id": "00000000-0000-0000-0000-000000000000",
+        "provider_message_id": "m",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "provider_thread_id": "t",
+        "is_spam_or_trash": false
+      }
+    },
+    {
+      "event_type": "email.message_sent",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "message_id": "00000000-0000-0000-0000-000000000000",
+        "provider_message_id": "m",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "provider_thread_id": "t",
+        "subject": null,
+        "to_emails": [],
+        "cc_emails": [],
+        "origin": "user_action",
+        "sent_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "email.message_deleted",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "message_id": "00000000-0000-0000-0000-000000000000",
+        "provider_message_id": "m",
+        "thread_id": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    {
+      "event_type": "email.message_send_queued",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "message_id": "00000000-0000-0000-0000-000000000000",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "scheduled_send_at": "2026-01-02T03:04:05Z",
+        "is_scheduled": false
+      }
+    },
+    {
+      "event_type": "email.message_send_cancelled",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "message_id": "00000000-0000-0000-0000-000000000000",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "reason": "undo"
+      }
+    },
+    {
+      "event_type": "email.thread_archived",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "archived": true,
+        "origin": "user_action"
+      }
+    },
+    {
+      "event_type": "email.thread_trashed",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "trashed": true,
+        "origin": "user_action"
+      }
+    },
+    {
+      "event_type": "email.thread_read",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "is_read": true,
+        "origin": "user_action"
+      }
+    },
+    {
+      "event_type": "email.thread_starred",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "starred": true,
+        "origin": "user_action"
+      }
+    },
+    {
+      "event_type": "email.thread_spam_changed",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "spam": true,
+        "origin": "user_action"
+      }
+    },
+    {
+      "event_type": "email.thread_project_changed",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "previous_project_id": null,
+        "project_id": "project-1"
+      }
+    },
+    {
+      "event_type": "email.thread_labels_updated",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "actor": "macro|actor@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "added": [
+          {
+            "label_id": "00000000-0000-0000-0000-000000000000",
+            "provider_label_id": "Label_1",
+            "name": "Receipts"
+          }
+        ],
+        "removed": [],
+        "origin": "provider_sync"
+      }
+    },
+    {
+      "event_type": "email.thread_backfilled",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "thread_id": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    {
+      "event_type": "email.threads_reindex_requested",
+      "metadata": {
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "thread_ids": [
+          "00000000-0000-0000-0000-000000000000"
+        ],
+        "reason": "contacts_changed"
+      }
+    }
+  ],
+  "Calendar": [
+    {
+      "calendar_event.created": {
+        "event_id": "00000000-0000-0000-0000-000000000000",
+        "owner_id": "macro|owner@example.com"
+      }
+    },
+    {
+      "calendar_event.updated": {
+        "event_id": "00000000-0000-0000-0000-000000000000",
+        "owner_id": "macro|owner@example.com"
+      }
+    },
+    {
+      "calendar_event.deleted": {
+        "event_id": "00000000-0000-0000-0000-000000000000",
+        "owner_id": "macro|owner@example.com"
+      }
+    }
+  ],
+  "Activity": [
+    {
+      "event_type": "activity.recorded",
+      "metadata": {
+        "recipient_id": "macro|reader@example.com",
+        "activities": [
+          {
+            "agent_correlation_id": "00000000-0000-0000-0000-000000000009",
+            "agent_verb": "edit",
+            "id": "00000000-0000-0000-0000-000000000007",
+            "actor_id": "macro|actor@example.com",
+            "subject_id": "macro|actor@example.com",
+            "entity_type": "document",
+            "entity_id": "doc-1",
+            "action": "renamed",
+            "action_payload": {
+              "from": "Secret plan",
+              "to": "Public plan"
+            },
+            "occurred_at": "2026-01-02T03:04:05Z"
+          }
+        ]
+      }
+    },
+    {
+      "event_type": "activity.session_recorded",
+      "metadata": {
+        "activities": [
+          {
+            "agent_correlation_id": "00000000-0000-0000-0000-000000000009",
+            "agent_verb": "edit",
+            "id": "00000000-0000-0000-0000-000000000007",
+            "actor_id": "macro|actor@example.com",
+            "subject_id": "macro|actor@example.com",
+            "entity_type": "document",
+            "entity_id": "doc-1",
+            "action": "renamed",
+            "action_payload": {
+              "from": "Secret plan",
+              "to": "Public plan"
+            },
+            "occurred_at": "2026-01-02T03:04:05Z"
+          }
+        ]
+      }
+    },
+    {
+      "event_type": "activity.invalidated"
+    }
+  ],
+  "Notification": [
+    {
+      "event_type": "notification.websocket_delivery_requested",
+      "metadata": {
+        "notifications": [
+          {
+            "owner_id": "macro|a@example.com",
+            "id": "00000000-0000-0000-0000-000000000001",
+            "notification_event_type": "channel_mention",
+            "entity_type": "channel",
+            "entity_id": "chan-1",
+            "sent": false,
+            "state": "unseen",
+            "created_at": "2026-01-02T03:04:05Z",
+            "viewed_at": null,
+            "updated_at": "2026-01-02T03:04:05Z",
+            "deleted_at": null,
+            "notification_metadata": {
+              "message": "secret message text"
+            },
+            "sender_id": "macro|sender@example.com"
+          },
+          {
+            "owner_id": "macro|b@example.com",
+            "id": "00000000-0000-0000-0000-000000000001",
+            "notification_event_type": "channel_mention",
+            "entity_type": "channel",
+            "entity_id": "chan-1",
+            "sent": false,
+            "state": "unseen",
+            "created_at": "2026-01-02T03:04:05Z",
+            "viewed_at": null,
+            "updated_at": "2026-01-02T03:04:05Z",
+            "deleted_at": null,
+            "notification_metadata": {
+              "message": "secret message text"
+            },
+            "sender_id": "macro|sender@example.com"
+          }
+        ]
+      }
+    },
+    {
+      "event_type": "notification.status_updated_for_users",
+      "metadata": {
+        "users": [
+          "macro|a@example.com"
+        ],
+        "update": {
+          "t": "Delete",
+          "c": {
+            "id": "00000000-0000-0000-0000-000000000003"
+          }
+        }
+      }
+    },
+    {
+      "event_type": "notification.statuses_updated_for_user",
+      "metadata": {
+        "user": "macro|a@example.com",
+        "updates": [
+          {
+            "t": "Patch",
+            "c": {
+              "owner_id": "macro|a@example.com",
+              "id": "00000000-0000-0000-0000-000000000004",
+              "notification_event_type": "channel_mention",
+              "entity_type": "channel",
+              "entity_id": "chan-1",
+              "sent": false,
+              "state": "seen",
+              "created_at": "2026-01-02T03:04:05Z",
+              "viewed_at": null,
+              "updated_at": "2026-01-02T03:04:05Z",
+              "deleted_at": null,
+              "notification_metadata": {
+                "message": "secret message text"
+              },
+              "sender_id": "macro|sender@example.com"
+            }
+          },
+          {
+            "t": "Delete",
+            "c": {
+              "id": "00000000-0000-0000-0000-000000000005"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "Mention": [
+    {
+      "event_type": "mention.created",
+      "metadata": {
+        "source": {
+          "id": "doc-1",
+          "kind": "document"
+        },
+        "mentioned": {
+          "id": "macro|reader@example.com",
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "event_type": "mention.deleted",
+      "metadata": {
+        "source": {
+          "id": "doc-1",
+          "kind": "document"
+        },
+        "mentioned": {
+          "id": "macro|reader@example.com",
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "event_type": "mention.message_sent",
+      "metadata": {
+        "source": {
+          "id": "doc-1",
+          "kind": "doc"
+        },
+        "mentioned": {
+          "id": "bot-1",
+          "kind": "bot"
+        }
+      }
+    }
+  ],
+  "Team": [
+    {
+      "event_type": "team.created",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "name": "Acme",
+        "slug": "acme",
+        "owner": "macro|owner@example.com",
+        "enterprise": true,
+        "paid": true,
+        "auto_join_domain": "example.com"
+      }
+    },
+    {
+      "event_type": "team.updated",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "actor_user_id": "macro|admin@example.com",
+        "name": "Acme Inc",
+        "slug": null
+      }
+    },
+    {
+      "event_type": "team.deleted",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "actor_user_id": "macro|owner@example.com",
+        "member_user_ids": [
+          "macro|owner@example.com",
+          "macro|member@example.com"
+        ],
+        "bot_ids": [
+          "6d5e2c1b-3a4f-4b8e-9c7d-1e2f3a4b5c6d"
+        ],
+        "owned_entities": [
+          {
+            "entity_type": "agent_session",
+            "id": "0199a7c4-52e1-7d3b-8f60-2c9d4e5f6a7b",
+            "owner": "bot|6d5e2c1b-3a4f-4b8e-9c7d-1e2f3a4b5c6d"
+          },
+          {
+            "entity_type": "project",
+            "id": "0199a7c4-52e1-7d3b-8f60-2c9d4e5f6a7c",
+            "owner": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90"
+          }
+        ]
+      }
+    },
+    {
+      "event_type": "team.invite_created",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "invite_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "email": "invitee@example.com",
+        "invited_by": "macro|admin@example.com",
+        "team_name": "Acme"
+      }
+    },
+    {
+      "event_type": "team.invite_rejected",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "invite_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "email": "invitee@example.com",
+        "actor_user_id": "macro|invitee@example.com"
+      }
+    },
+    {
+      "event_type": "team.invite_revoked",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "invite_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "email": "invitee@example.com",
+        "actor_user_id": "macro|admin@example.com"
+      }
+    },
+    {
+      "event_type": "team.member_joined",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "member_id": "macro|member@example.com",
+        "teammate_ids": [
+          "macro|admin@example.com",
+          "macro|owner@example.com"
+        ],
+        "role": "member",
+        "join_method": {
+          "type": "invite_accepted",
+          "invite_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+          "invited_by": "macro|admin@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "team.member_removed",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "member_id": "macro|member@example.com",
+        "removed_by": "macro|admin@example.com",
+        "role": "admin"
+      }
+    },
+    {
+      "event_type": "team.member_role_changed",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "actor_user_id": "macro|owner@example.com",
+        "member_id": "macro|member@example.com",
+        "role": "admin",
+        "previous_role": "member"
+      }
+    },
+    {
+      "event_type": "team.auto_join_domain_toggled",
+      "metadata": {
+        "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
+        "actor_user_id": "macro|admin@example.com",
+        "auto_join_domain": null
+      }
+    }
+  ],
+  "Bot": [
+    {
+      "event_type": "bot.created",
+      "metadata": {
+        "bot_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "kind": "owned",
+        "owner": {
+          "type": "team",
+          "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90"
+        },
+        "name": "Deploy Bot",
+        "handle": "deploy-bot",
+        "description": null,
+        "avatar_url": null,
+        "created_by_user_id": "macro|creator@example.com",
+        "channel_id": null,
+        "created_at": "2026-07-20T17:01:02Z"
+      }
+    },
+    {
+      "event_type": "bot.updated",
+      "metadata": {
+        "bot_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "owner": {
+          "type": "team",
+          "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "name": null,
+        "handle": "release-bot",
+        "description": "Ships releases",
+        "avatar_url": null,
+        "updated_at": "2026-07-20T17:03:11Z"
+      }
+    },
+    {
+      "event_type": "bot.deleted",
+      "metadata": {
+        "bot_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "owner": {
+          "type": "team",
+          "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90"
+        },
+        "actor_user_id": "macro|deleter@example.com"
+      }
+    },
+    {
+      "event_type": "bot.created",
+      "metadata": {
+        "bot_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "kind": "owned",
+        "owner": {
+          "type": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "name": "Deploy Bot",
+        "handle": "deploy-bot",
+        "description": null,
+        "avatar_url": null,
+        "created_by_user_id": "macro|creator@example.com",
+        "channel_id": null,
+        "created_at": "2026-07-20T17:01:02Z"
+      }
+    },
+    {
+      "event_type": "bot.updated",
+      "metadata": {
+        "bot_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "owner": {
+          "type": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "name": null,
+        "handle": "release-bot",
+        "description": "Ships releases",
+        "avatar_url": null,
+        "updated_at": "2026-07-20T17:03:11Z"
+      }
+    },
+    {
+      "event_type": "bot.deleted",
+      "metadata": {
+        "bot_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
+        "owner": {
+          "type": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "actor_user_id": "macro|deleter@example.com"
+      }
+    }
+  ],
+  "GithubWebhook": [
+    {
+      "event_type": "github_webhook.received",
+      "metadata": {
+        "delivery_id": "delivery-1",
+        "event": "workflow_run",
+        "action": "completed",
+        "installation_id": 42,
+        "repository": {
+          "id": 7,
+          "full_name": "octo-org/app"
+        },
+        "sender": {
+          "login": "octocat",
+          "bot": false
+        },
+        "payload": {
+          "workflow_run": {
+            "head_commit": {
+              "message": "secret"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "Document": [
+    {
+      "event_type": "document.created",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "document_name": "notes",
+        "file_type": null,
+        "project_id": null,
+        "sub_type": null,
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "document.updated",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "document_name": "renamed",
+        "previous_project_id": null,
+        "project_id": null,
+        "file_type": null,
+        "share_permission_updated": false
+      }
+    },
+    {
+      "event_type": "document.deleted",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "actor_user_id": "macro|owner@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "document.copied",
+      "metadata": {
+        "document_id": "22222222-2222-2222-2222-222222222222",
+        "source_document_id": "11111111-1111-1111-1111-111111111111",
+        "source_version_id": null,
+        "owner": "macro|owner@example.com",
+        "document_name": "notes (copy)",
+        "file_type": null,
+        "project_id": null,
+        "sub_type": null
+      }
+    },
+    {
+      "event_type": "document.interaction",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "reason": "edited"
+      }
+    },
+    {
+      "event_type": "document.updated",
+      "metadata": {
+        "appearance_change": [
+          {},
+          {}
+        ],
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "document_name": null,
+        "previous_project_id": null,
+        "project_id": null,
+        "file_type": null,
+        "share_permission_updated": false
+      }
+    },
+    {
+      "event_type": "document.content_uploaded",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "file_type": "pdf",
+        "document_version_id": "v1"
+      }
+    },
+    {
+      "event_type": "document.sync_content_updated",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "file_type": "md",
+        "document_version_id": null,
+        "actor": "macro|editor@example.com"
+      }
+    }
+  ],
+  "Channel": [
+    {
+      "event_type": "channel.created",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com",
+        "channel_type": "team",
+        "channel_name": "general",
+        "participant_user_ids": [
+          "macro|owner@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "channel.updated",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com",
+        "previous_name": "general",
+        "channel_name": "announcements"
+      }
+    },
+    {
+      "event_type": "channel.deleted",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com"
+      }
+    },
+    {
+      "event_type": "channel.participant_added",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "channel_type": "team",
+        "added_by": "macro|owner@example.com",
+        "added_user_ids": [
+          "macro|member@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "channel.participant_removed",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "channel_type": "team",
+        "removed_by": "macro|owner@example.com",
+        "removed_user_ids": [
+          "macro|member@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "channel.picture_changed",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com"
+      }
+    },
+    {
+      "event_type": "channel.access_requested",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "request_id": "11111111-1111-1111-1111-111111111111",
+        "requester_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "channel.deleted",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com"
+      }
+    },
+    {
+      "event_type": "channel.deleted",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com",
+        "participant_user_ids": [
+          "macro|owner@example.com",
+          "macro|editor@example.com"
+        ]
+      }
+    }
+  ],
+  "Call": [
+    {
+      "event_type": "call.started",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.ended",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.participant_joined",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.participant_left",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.recording_ready",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.summarized",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.ringing",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.answered",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.declined",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.invited",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    }
+  ],
+  "Message": [
+    {
+      "event_type": "message.posted",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "sender": "macro|member@example.com",
+        "triggered_by": null,
+        "content": "hello",
+        "mentions": [],
+        "attachments": [],
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.posted",
+      "metadata": {
+        "parent": {
+          "type": "document",
+          "id": "11111111-1111-1111-1111-111111111111"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "sender": "macro|member@example.com",
+        "triggered_by": null,
+        "content": "hello",
+        "mentions": [],
+        "attachments": [],
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.patched",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "content": "hello (edited)",
+        "edited_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.deleted",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "deleted_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.attachment_created",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "attachments": []
+      }
+    },
+    {
+      "event_type": "message.attachment_removed",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "attachments": []
+      }
+    },
+    {
+      "event_type": "message.mentioned",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "sender": "macro|member@example.com",
+        "content": "hello bot",
+        "mentioned": {
+          "entity_type": "bot",
+          "entity_id": "bot|66666666-6666-6666-6666-666666666666"
+        },
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    }
+  ],
+  "AgentSession": [
+    {
+      "event_type": "agent_session.opened",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "model": "claude",
+        "harness": "claude_code"
+      }
+    },
+    {
+      "event_type": "agent_session.turn_started",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "turn": 0,
+        "action_id": "01a1d41c-c724-70a4-94af-f2094e5e7b3b",
+        "actor": "macro|owner@example.com",
+        "announcement_message_id": "00000000-0000-0000-0000-000000000004"
+      }
+    },
+    {
+      "event_type": "agent_session.turn_ended",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "turn": 0,
+        "action_id": "01a1d41c-c725-7a6c-851d-77fbedce560a",
+        "actor": "macro|owner@example.com",
+        "announcement_message_id": "00000000-0000-0000-0000-000000000004",
+        "stop_reason": "end_turn",
+        "queued_remaining": 0
+      }
+    },
+    {
+      "event_type": "agent_session.command_rejected",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "action_id": "01a1d41c-c725-7aba-9dba-4015ff8e6cb2",
+        "actor": "macro|owner@example.com",
+        "announcement_message_id": "00000000-0000-0000-0000-000000000004",
+        "failure": {
+          "code": "ai_billing_unavailable",
+          "message": "AI usage validation is temporarily unavailable. Please try again.",
+          "retryable": true
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.settled",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "last_turn": {
+          "turn": 0,
+          "action_id": "01a1d41c-c725-7608-8abd-07bbebd0ded0",
+          "actor": "macro|owner@example.com",
+          "announcement_message_id": "00000000-0000-0000-0000-000000000004",
+          "stop_reason": "end_turn",
+          "excerpt": "Done."
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.waiting_for_input",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "turn": 1,
+        "action_id": "01a1d41c-c725-7f4a-aa60-fe973dd87179",
+        "announcement_message_id": null,
+        "question": "Which approach?"
+      }
+    },
+    {
+      "event_type": "agent_session.input_received",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "turn": 1,
+        "action_id": "01a1d41c-c725-719e-9d08-23f7b2c1e136"
+      }
+    },
+    {
+      "event_type": "agent_session.mentioned",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "action_id": "01a1d41c-c725-7a27-bfc6-57852e8b79f6",
+        "mentioned_by": "macro|owner@example.com",
+        "mentioned": [
+          "macro|reviewer@example.com"
+        ],
+        "origin_message_id": null
+      }
+    },
+    {
+      "event_type": "agent_session.stopped",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        },
+        "reason": "transport closed",
+        "turn_in_flight": null
+      }
+    },
+    {
+      "event_type": "agent_session.renamed",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.deleted",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.deleted",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@example.com",
+          "origin": null,
+          "audience": [
+            "macro|owner@example.com"
+          ],
+          "source": "user"
+        }
+      }
+    }
+  ],
+  "User": [
+    {
+      "event_type": "user.picture_changed",
+      "metadata": {
+        "user_id": "macro|owner@example.com",
+        "file_id": "f1",
+        "url": null
+      }
+    }
+  ],
+  "Project": [
+    {
+      "event_type": "project.created",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "name": "Plans",
+        "parent_project_id": null,
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "project.updated",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "name": "Renamed",
+        "previous_parent_id": null,
+        "parent_id": null,
+        "share_permission_updated": true
+      }
+    },
+    {
+      "event_type": "project.deleted",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "deleted_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ],
+        "deleted_document_ids": [],
+        "deleted_chat_ids": []
+      }
+    },
+    {
+      "event_type": "project.restored",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "restored_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ]
+      }
+    },
+    {
+      "event_type": "project.permanently_deleted",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "purged_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ],
+        "purged_document_ids": [],
+        "purged_chat_ids": []
+      }
+    },
+    {
+      "event_type": "project.permanently_deleted",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "33333333-3333-3333-3333-333333333333",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "purged_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ],
+        "purged_document_ids": [],
+        "purged_chat_ids": []
+      }
+    },
+    {
+      "event_type": "project.uploaded",
+      "metadata": {
+        "root_project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "name": "Upload",
+        "parent_project_id": null,
+        "project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ]
+      }
+    }
+  ],
+  "Chat": [
+    {
+      "event_type": "chat.created",
+      "metadata": {
+        "chat_id": "chat-1",
+        "owner": "macro|owner@example.com",
+        "name": "Chat",
+        "project_id": "22222222-2222-2222-2222-222222222222"
+      }
+    },
+    {
+      "event_type": "chat.updated",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "name": "New",
+        "previous_project_id": null,
+        "project_id": null,
+        "share_permission_updated": false
+      }
+    },
+    {
+      "event_type": "chat.deleted",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "chat.permanently_deleted",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "chat.restored",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "chat.copied",
+      "metadata": {
+        "chat_id": "chat-2",
+        "source_chat_id": "chat-1",
+        "owner": "macro|owner@example.com",
+        "name": "Copy"
+      }
+    },
+    {
+      "event_type": "chat.message_sent",
+      "metadata": {
+        "chat_id": "chat-1",
+        "message_id": "m1",
+        "role": "user",
+        "model": "m",
+        "actor_user_id": "macro|editor@example.com",
+        "attachment_count": 0
+      }
+    },
+    {
+      "event_type": "chat.message_deleted",
+      "metadata": {
+        "chat_id": "chat-1",
+        "message_id": "m1"
+      }
+    }
+  ],
+  "Database": [
+    {
+      "event_type": "database.created",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "owner": "macro|owner@example.com",
+        "name": "Leads",
+        "created_at": "2026-01-02T03:04:05Z",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "database.renamed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "name": "New"
+      }
+    },
+    {
+      "event_type": "database.trashed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001"
+      }
+    },
+    {
+      "event_type": "database.restored",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "database.purged",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001"
+      }
+    },
+    {
+      "event_type": "database.tables_changed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "tables": [
+          {
+            "table_id": "11111111-1111-1111-1111-111111111111",
+            "version": 7
+          }
+        ]
+      }
+    },
+    {
+      "event_type": "database.sharing_changed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "database.appearance_changed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "change": {
+          "from": null,
+          "to": {}
+        }
+      }
+    }
+  ],
+  "Form": [
+    {
+      "event_type": "form.created",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "owner": "macro|owner@example.com",
+        "name": "Survey",
+        "created_at": "2026-01-02T03:04:05Z",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "form.renamed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "name": "New"
+      }
+    },
+    {
+      "event_type": "form.trashed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002"
+      }
+    },
+    {
+      "event_type": "form.restored",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "form.purged",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002"
+      }
+    },
+    {
+      "event_type": "form.sharing_changed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "form.response_submitted",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "response_id": "11111111-1111-1111-1111-111111111111",
+        "submitted_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "form.appearance_changed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": null,
+        "change": {
+          "from": {},
+          "to": null
+        }
+      }
+    }
+  ],
+  "Initiative": [
+    {
+      "event_type": "initiative.created",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003",
+        "attribution": {
+          "actor": "macro|editor@example.com",
+          "on_behalf_of": null
+        },
+        "occurred_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "initiative.updated",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003",
+        "attribution": null,
+        "occurred_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "initiative.appearance_changed",
+      "metadata": {
+        "change": {
+          "initiative_id": "00000000-0000-0000-0000-000000000003",
+          "attribution": {
+            "actor": "macro|editor@example.com",
+            "on_behalf_of": null
+          },
+          "occurred_at": "2026-01-02T03:04:05Z"
+        },
+        "appearance": {
+          "from": null,
+          "to": {}
+        }
+      }
+    },
+    {
+      "event_type": "initiative.purged",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003",
+        "audience_user_ids": [
+          "macro|owner@example.com",
+          "macro|editor@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "initiative.purged",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003"
+      }
+    }
+  ],
+  "Property": [
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "DOCUMENT",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": {
+          "type": "String",
+          "value": "new"
+        },
+        "previous_value": null
+      }
+    },
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "CALL_RECORD",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": null,
+        "previous_value": {
+          "type": "Number",
+          "value": 1.0
+        }
+      }
+    },
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "DOCUMENT",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": {
+          "type": "SelectOption",
+          "value": [
+            "11111111-1111-1111-1111-111111111111"
+          ]
+        },
+        "previous_value": null
+      }
+    },
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "USER",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": {
+          "type": "Boolean",
+          "value": true
+        }
+      }
+    },
+    {
+      "event_type": "entity_properties.cleared",
+      "metadata": {
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "PROJECT",
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "entity_properties.cleared",
+      "metadata": {
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "CALENDAR_EVENT",
+        "actor_user_id": null
+      }
+    },
+    {
+      "event_type": "property.created",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "display_name": "Related task",
+        "data_type": "ENTITY",
+        "is_multi_select": false,
+        "specific_entity_type": "TASK",
+        "created_at": "2026-07-27T18:30:00Z"
+      }
+    },
+    {
+      "event_type": "property.deleted",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "team",
+          "team_id": "94badb72-b7f7-46e4-89fb-497527836152"
+        },
+        "display_name": "Priority",
+        "data_type": "SELECT_STRING"
+      }
+    },
+    {
+      "event_type": "property_option.created",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "team",
+          "team_id": "94badb72-b7f7-46e4-89fb-497527836152"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "High"
+        },
+        "color": "#FF0000",
+        "display_order": 10
+      }
+    },
+    {
+      "event_type": "property_option.updated",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "team",
+          "team_id": "94badb72-b7f7-46e4-89fb-497527836152"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "number",
+          "value": 42.5
+        },
+        "color": null,
+        "display_order": 20
+      }
+    },
+    {
+      "event_type": "property_option.deleted",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "Retired"
+        }
+      }
+    },
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "bb672788-40c1-47d1-a2e1-565d20fe40ef",
+        "entity_id": "document-bare-id",
+        "entity_type": "DOCUMENT",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "SelectOption",
+          "value": [
+            "8a123d67-074f-4666-b3aa-214f99e7eb85"
+          ]
+        },
+        "previous_value": null,
+        "updated_at": "2026-07-27T18:45:00Z"
+      }
+    },
+    {
+      "event_type": "entity_property.deleted",
+      "metadata": {
+        "entity_property_id": "bb672788-40c1-47d1-a2e1-565d20fe40ef",
+        "entity_id": "document-bare-id",
+        "entity_type": "DOCUMENT",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "entity_properties.cleared",
+      "metadata": {
+        "entity_id": "document-bare-id",
+        "entity_type": "DOCUMENT",
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "property.created",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "display_name": "Related task",
+        "data_type": "ENTITY",
+        "is_multi_select": false,
+        "specific_entity_type": "TASK",
+        "created_at": "2026-07-27T18:30:00Z"
+      }
+    },
+    {
+      "event_type": "property.created",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "team",
+          "team_id": "33333333-3333-3333-3333-333333333333"
+        },
+        "display_name": "Related task",
+        "data_type": "ENTITY",
+        "is_multi_select": false,
+        "specific_entity_type": "TASK",
+        "created_at": "2026-07-27T18:30:00Z"
+      }
+    },
+    {
+      "event_type": "property.created",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "database",
+          "database_id": "00000000-0000-0000-0000-000000000001"
+        },
+        "display_name": "Related task",
+        "data_type": "ENTITY",
+        "is_multi_select": false,
+        "specific_entity_type": "TASK",
+        "created_at": "2026-07-27T18:30:00Z"
+      }
+    },
+    {
+      "event_type": "property.created",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "system"
+        },
+        "display_name": "Related task",
+        "data_type": "ENTITY",
+        "is_multi_select": false,
+        "specific_entity_type": "TASK",
+        "created_at": "2026-07-27T18:30:00Z"
+      }
+    },
+    {
+      "event_type": "property.deleted",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "display_name": "Priority",
+        "data_type": "SELECT_STRING"
+      }
+    },
+    {
+      "event_type": "property.deleted",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "team",
+          "team_id": "33333333-3333-3333-3333-333333333333"
+        },
+        "display_name": "Priority",
+        "data_type": "SELECT_STRING"
+      }
+    },
+    {
+      "event_type": "property.deleted",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "database",
+          "database_id": "00000000-0000-0000-0000-000000000001"
+        },
+        "display_name": "Priority",
+        "data_type": "SELECT_STRING"
+      }
+    },
+    {
+      "event_type": "property.deleted",
+      "metadata": {
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "owner": {
+          "scope": "system"
+        },
+        "display_name": "Priority",
+        "data_type": "SELECT_STRING"
+      }
+    },
+    {
+      "event_type": "property_option.created",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "High"
+        },
+        "color": "#FF0000",
+        "display_order": 10
+      }
+    },
+    {
+      "event_type": "property_option.created",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "team",
+          "team_id": "33333333-3333-3333-3333-333333333333"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "High"
+        },
+        "color": "#FF0000",
+        "display_order": 10
+      }
+    },
+    {
+      "event_type": "property_option.created",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "database",
+          "database_id": "00000000-0000-0000-0000-000000000001"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "High"
+        },
+        "color": "#FF0000",
+        "display_order": 10
+      }
+    },
+    {
+      "event_type": "property_option.created",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "system"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "High"
+        },
+        "color": "#FF0000",
+        "display_order": 10
+      }
+    },
+    {
+      "event_type": "property_option.updated",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "user",
+          "user_id": "macro|owner@example.com"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "number",
+          "value": 42.5
+        },
+        "color": null,
+        "display_order": 20
+      }
+    },
+    {
+      "event_type": "property_option.updated",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "team",
+          "team_id": "33333333-3333-3333-3333-333333333333"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "number",
+          "value": 42.5
+        },
+        "color": null,
+        "display_order": 20
+      }
+    },
+    {
+      "event_type": "property_option.updated",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "database",
+          "database_id": "00000000-0000-0000-0000-000000000001"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "number",
+          "value": 42.5
+        },
+        "color": null,
+        "display_order": 20
+      }
+    },
+    {
+      "event_type": "property_option.updated",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "owner": {
+          "scope": "system"
+        },
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "number",
+          "value": 42.5
+        },
+        "color": null,
+        "display_order": 20
+      }
+    },
+    {
+      "event_type": "property_option.deleted",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "Retired"
+        },
+        "owner": {
+          "scope": "user",
+          "user_id": "macro|owner@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "property_option.deleted",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "Retired"
+        },
+        "owner": {
+          "scope": "team",
+          "team_id": "33333333-3333-3333-3333-333333333333"
+        }
+      }
+    },
+    {
+      "event_type": "property_option.deleted",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "Retired"
+        },
+        "owner": {
+          "scope": "database",
+          "database_id": "00000000-0000-0000-0000-000000000001"
+        }
+      }
+    },
+    {
+      "event_type": "property_option.deleted",
+      "metadata": {
+        "option_id": "8a123d67-074f-4666-b3aa-214f99e7eb85",
+        "property_definition_id": "6e95d5f0-2bb8-4c0a-ae01-197301fdb56e",
+        "actor_user_id": "macro|editor@example.com",
+        "value": {
+          "type": "string",
+          "value": "Retired"
+        },
+        "owner": {
+          "scope": "system"
+        }
+      }
+    }
+  ],
+  "CallRecord": [
+    {
+      "event_type": "call.record_updated",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": null,
+        "actor_user_id": "macro|editor@example.com",
+        "custom_name": "Standup",
+        "share_with_team": null
+      }
+    },
+    {
+      "event_type": "call.record_deleted",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.record_deleted",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": null,
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.record_imported",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "owner": "macro|owner@example.com"
+      }
+    }
+  ],
+  "GithubPullRequest": [
+    {
+      "event_type": "github_pull_request.updated",
+      "metadata": {
+        "github_key": "Macro-Inc/Macro/pull/1",
+        "foreign_entity_ids": [
+          "11111111-1111-1111-1111-111111111111",
+          "22222222-2222-2222-2222-222222222222"
+        ]
+      }
+    },
+    {
+      "event_type": "github_pull_request.updated",
+      "metadata": {
+        "github_key": "macro-inc/macro/pull/2",
+        "foreign_entity_ids": []
+      }
+    }
+  ]
+}

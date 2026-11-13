@@ -578,7 +578,7 @@ async fn delete_retires_the_surface_after_the_initiative() {
         .withf(|id| *id == initiative_id())
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_| Box::pin(async { Ok(()) }));
+        .return_once(|_| Box::pin(async { Ok(Vec::new()) }));
     surfaces
         .expect_delete()
         .withf(|id| *id == initiative_id())
@@ -597,7 +597,7 @@ async fn delete_reports_a_failed_surface_retirement_after_the_initiative_is_gone
     let mut repo = MockInitiativeRepo::new();
     let mut surfaces = MockInitiativeDescriptionSurfaces::new();
     repo.expect_delete()
-        .return_once(|_| Box::pin(async { Ok(()) }));
+        .return_once(|_| Box::pin(async { Ok(Vec::new()) }));
     surfaces.expect_delete().return_once(|_| {
         Box::pin(async { Err(InitiativeError::Internal(rootcause::report!("sync down"))) })
     });

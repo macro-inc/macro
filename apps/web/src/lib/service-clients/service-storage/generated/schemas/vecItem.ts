@@ -4,14 +4,23 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { VecItemEntityTypes } from './vecItemEntityTypes';
 import type { VecItemIds } from './vecItemIds';
 
 /**
- * Event and optional entity-id constraints used to match webhook deliveries.
+ * Event and optional entity constraints that select deliveries. Every
+present constraint must accept an event for the filter to.
  */
 export type VecItem = {
-  /** Event names matched by this filter. */
+  /** Entity types matched by this filter, such as `document` or `channel`.
+When absent, the filter matches every entity type. */
+  entity_types?: VecItemEntityTypes;
+  /** Event names matched by this filter: exact names, a family wildcard
+such as `document.*`, or `*` for every event. Live streams honour `*`
+for every caller; family wildcards, and any wildcard on a webhook,
+require the `public-event-stream` feature. */
   events: string[];
-  /** Entity ids matched by this filter. When absent, the filter matches all entity ids. */
+  /** Entity ids matched by this filter. When absent, the filter matches all
+entity ids. */
   ids?: VecItemIds;
 };

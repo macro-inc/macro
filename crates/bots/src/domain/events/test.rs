@@ -253,3 +253,120 @@ fn contains_field(value: &Value, field: &str) -> bool {
         _ => false,
     }
 }
+
+fn public(event: &BotTopicEvent) -> macro_event_broker::exposure::PublicEvent<'_, BotPublicEvent> {
+    use macro_event_broker::TopicEvent as _;
+    use macro_event_broker::exposure::Exposure;
+
+    match event.exposure().expect("valid exposure") {
+        Exposure::Public(public) => public,
+        Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+    }
+}
+
+#[test]
+fn team_bots_reach_their_team_and_user_bots_their_owner() {
+    use macro_event_broker::exposure::{Audience, EntityRef, MinTeamRole, PublicEntityType, Stage};
+
+    let team = Audience::Team {
+        team_id: Uuid::parse_str(TEAM_ID).unwrap(),
+        min_role: MinTeamRole::Member,
+    };
+    let owner = Audience::Recipient {
+        user_id: user_id("macro|owner@example.com"),
+    };
+    for (event, name, audience) in [
+        (
+            BotTopicEvent::Created(created_metadata()),
+            "bot.created",
+            team.clone(),
+        ),
+        (
+            BotTopicEvent::Updated(updated_metadata()),
+            "bot.updated",
+            owner,
+        ),
+        (
+            BotTopicEvent::Deleted(deleted_metadata()),
+            "bot.deleted",
+            team,
+        ),
+    ] {
+        let public = public(&event);
+        assert_eq!(public.name, name);
+        assert_eq!(public.stage, Stage::Preview);
+        assert_eq!(public.entity, EntityRef::new(PublicEntityType::Bot, BOT_ID));
+        assert_eq!(public.audience, audience, "{name}");
+    }
+}
+
+#[test]
+fn a_malformed_user_owner_is_rejected() {
+    use macro_event_broker::TopicEvent as _;
+
+    let mut metadata = deleted_metadata();
+    metadata.owner = BotOwner::User {
+        user_id: "not-a-user".to_string(),
+    };
+    assert!(BotTopicEvent::Deleted(metadata).exposure().is_err());
+}
+
+#[test]
+fn public_bodies_are_thin() {
+    assert_eq!(
+        serde_json::to_value(
+            public(&BotTopicEvent::Created(created_metadata()))
+                .payload
+                .as_ref()
+        )
+        .unwrap(),
+        json!({
+            "event_type": "bot.created",
+            "metadata": {
+                "bot_id": BOT_ID,
+                "kind": "owned",
+                "owner": { "type": "team", "team_id": TEAM_ID },
+                "name": "Deploy Bot",
+                "handle": "deploy-bot",
+                "actor": "macro|creator@example.com",
+                "created_at": "2026-07-20T17:01:02Z"
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(
+            public(&BotTopicEvent::Updated(updated_metadata()))
+                .payload
+                .as_ref()
+        )
+        .unwrap(),
+        json!({
+            "event_type": "bot.updated",
+            "metadata": {
+                "bot_id": BOT_ID,
+                "owner": { "type": "user", "user_id": "macro|owner@example.com" },
+                "actor": "macro|editor@example.com",
+                "changed": ["handle", "description"],
+                "name": null,
+                "handle": "release-bot",
+                "updated_at": "2026-07-20T17:03:11Z"
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(
+            public(&BotTopicEvent::Deleted(deleted_metadata()))
+                .payload
+                .as_ref()
+        )
+        .unwrap(),
+        json!({
+            "event_type": "bot.deleted",
+            "metadata": {
+                "bot_id": BOT_ID,
+                "owner": { "type": "team", "team_id": TEAM_ID },
+                "actor": "macro|deleter@example.com"
+            }
+        })
+    );
+}

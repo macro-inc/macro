@@ -130,6 +130,70 @@ impl TopicEvent for CallNotificationEvent {
     type Topic = MacroCallNotificationsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, ExposureError, PublicEvent, Stage,
+        };
+        use macro_user_id::user_id::MacroUserIdStr;
+        use std::borrow::Cow;
+
+        let metadata = self.metadata();
+        let call_id = metadata.call_id.to_string();
+        let audience = match self {
+            Self::Ringing(_) | Self::Answered(_) | Self::Declined(_) | Self::Invited(_) => {
+                let recipient = metadata
+                    .recipient_user_id
+                    .clone()
+                    .filter(|id| !id.is_empty())
+                    .ok_or(ExposureError::MissingRecipient)?;
+                let user_id = MacroUserIdStr::try_from(recipient.clone()).map_err(|_| {
+                    ExposureError::InvalidEntityId {
+                        entity_type: "user",
+                        entity_id: recipient,
+                    }
+                })?;
+                Audience::Recipient { user_id }
+            }
+            Self::Started(_)
+            | Self::Ended(_)
+            | Self::ParticipantJoined(_)
+            | Self::ParticipantLeft(_)
+            | Self::RecordingReady(_)
+            | Self::Summarized(_) => Audience::Entity {
+                entity_type: EntityType::Call,
+                entity_id: call_id.clone(),
+            },
+        };
+        // The recipient routes the event; it is never part of the payload.
+        let mut payload = self.clone();
+        match &mut payload {
+            Self::Started(metadata)
+            | Self::Ended(metadata)
+            | Self::ParticipantJoined(metadata)
+            | Self::ParticipantLeft(metadata)
+            | Self::RecordingReady(metadata)
+            | Self::Summarized(metadata)
+            | Self::Ringing(metadata)
+            | Self::Answered(metadata)
+            | Self::Declined(metadata)
+            | Self::Invited(metadata) => metadata.recipient_user_id = None,
+        }
+        Ok(Exposure::Public(PublicEvent {
+            name: self.name(),
+            entity: EntityRef::new(EntityType::Call, call_id),
+            audience,
+            stage: Stage::Stable,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Publishable notification keyed by call ID.

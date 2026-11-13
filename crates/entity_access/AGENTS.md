@@ -67,6 +67,13 @@ the entity-access domain service.
   for one user share one query through `single_flight`. A failure then arrives
   as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
   new callers' errors through it.
+- `get_entity_users` and `get_channel_users` are cached for 10 s per process
+  (compiled out under test). `get_users_by_entity_uncached` and `is_accessor`
+  read through to the database, for callers that act on membership changes.
+  `is_accessor` answers "is this user in `get_users_by_entity`'s set" with
+  bounded `EXISTS` lookups (`queries/entity_accessor.rs`), so each arm must
+  change with its `users_by_entity` arm. Link-share access never counts; use
+  `get_access_level` for that.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 
 ## Related

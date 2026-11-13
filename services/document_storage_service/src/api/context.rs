@@ -173,9 +173,7 @@ use system_properties::{
 use tokio_util::task::TaskTracker;
 use webhook::{
     domain::service::WebhookServiceImpl,
-    domain::stream::WebhookEventStreamServiceImpl,
     inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
-    inbound::stream_router::WebhookStreamRouterState,
     outbound::{
         http_validator::ReqwestWebhookValidationClient,
         pg_repository::PgRepository as PgWebhookRepo,
@@ -610,17 +608,10 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
-/// Chat service used by the unified entity mutation adapter.
+/// Chat service used by the unified entity mutation adapter and owner-checked
+/// permanent deletes. It publishes chat lifecycle events, which is how search,
+/// activity and event subscribers learn a chat changed or is gone.
 pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
-    (),
-    EntityAccessManagementService,
->;
-
-/// Chat service for owner-checked permanent deletes. Unlike
-/// [`DssChatMutationService`] it publishes chat events, which is how search
-/// and activity learn a chat is gone.
-pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
     chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
@@ -629,7 +620,7 @@ pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
 
 /// State of `DELETE /internal/owned/{entity_type}/{entity_id}`.
 pub(crate) type DssOwnedPurgeState =
-    super::internal::OwnedPurgeState<DssDocumentPurger, DssChatPurgeService, ProjectService>;
+    super::internal::OwnedPurgeState<DssDocumentPurger, DssChatMutationService, ProjectService>;
 
 /// Concrete unified entity mutation service wired into GraphQL.
 pub(crate) type DssEntityMutationService =
@@ -919,8 +910,14 @@ pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSin
 pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
 /// Type alias for the product webhook service.
-pub(crate) type DssWebhookService =
-    WebhookServiceImpl<PgWebhookRepo, ReqwestWebhookValidationClient, DssEventBroker>;
+pub(crate) type DssWebhookService = WebhookServiceImpl<
+    PgWebhookRepo,
+    ReqwestWebhookValidationClient,
+    DssEventBroker,
+    event_stream::outbound::preview_flag::FeatureFlagPreview<
+        feature_flags::outbound::posthog::PostHogFeatureFlags,
+    >,
+>;
 
 /// Type alias for the product webhook rate limiter.
 pub(crate) type DssWebhookRateLimiter =
@@ -930,18 +927,47 @@ pub(crate) type DssWebhookRateLimiter =
 pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
-/// Type alias for the service backing the webhook-event SSE endpoint.
-pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
-    EntityAccessService,
-    PgWebhookRepo,
+/// Type alias for the audience resolver shared by event stream fan-out and
+/// replay.
+pub(crate) type DssEventAudienceResolver = event_stream::domain::access::AudienceResolver<
+    event_stream::outbound::entity_access::EntityAccessDirectory<EntityAccessService>,
+    event_stream::outbound::pg_teams::PgTeamDirectory,
     crate::outbound::stream_contacts::ContactsStreamChecker<
         contacts::outbound::repository::DbContactsRepository,
     >,
+    crate::outbound::event_stream::InstallationClaims<
+        github::outbound::pg_installation_claims::PgGithubInstallationClaims,
+        github::outbound::pg_github_sync_repo::PgGithubSyncRepo,
+    >,
 >;
 
-/// Type alias for the webhook-event SSE router state.
-pub(crate) type DssSseStreamState =
-    WebhookStreamRouterState<DssSseStreamService, AuthorizationService>;
+/// Type alias for the service behind the public event stream endpoints.
+pub(crate) type DssEventStreamService = event_stream::domain::stream::StreamService<
+    event_stream::outbound::entity_access::EntityAccessDirectory<EntityAccessService>,
+    event_stream::outbound::pg_teams::PgTeamDirectory,
+    crate::outbound::stream_contacts::ContactsStreamChecker<
+        contacts::outbound::repository::DbContactsRepository,
+    >,
+    crate::outbound::event_stream::InstallationClaims<
+        github::outbound::pg_installation_claims::PgGithubInstallationClaims,
+        github::outbound::pg_github_sync_repo::PgGithubSyncRepo,
+    >,
+    event_stream::outbound::redis_log::RedisEventLog,
+    event_stream::outbound::preview_flag::FeatureFlagPreview<
+        feature_flags::outbound::posthog::PostHogFeatureFlags,
+    >,
+    event_stream::outbound::stream_limiter::LeaseStreamLimiter<
+        rate_limit::RedisConcurrencyLimitAdapter,
+    >,
+>;
+
+/// Type alias for the event stream router state (`/events/stream`, its
+/// `/webhook/events/stream` alias, `/events/catalog`).
+pub(crate) type DssSseStreamState = event_stream::inbound::stream_router::EventStreamRouterState<
+    DssEventStreamService,
+    crate::outbound::event_stream::RepoBotOwners<bots::outbound::pg_bots_repo::PgBotsRepo>,
+    AuthorizationService,
+>;
 
 /// Type alias for the dictation router state; shares the webhook Redis limiter.
 pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRouterState<

@@ -843,17 +843,87 @@ const stop = await macro.events.listen();
 // later: stop();
 ```
 
-`listen()` opens `GET /webhook/events/stream` with the same `WebhookFilters`
+`listen()` opens `GET /events/stream` (falling back to the original
+`GET /webhook/events/stream` on older servers) with the same `WebhookFilters`
 model as persisted webhooks. If you omit `filters`, it derives one filter from
 the event names already registered with `.on()`. Pass `scope: 'team'` for a
-team workspace (defaults to `'user'`). Delivery is best-effort: there is no
-replay if you disconnect.
+team workspace (defaults to `'user'`). It reconnects by itself; see
+[guarantees](#delivery-guarantees) for what a reconnect can miss.
+
+### Subscribe (beta)
+
+`macro.events.subscribe()` is the primitive `on()`/`listen()` are built on: an
+async iterator of hydrated events, with a `cursor` you save to resume after a
+restart.
+
+```ts
+const stream = macro.events.subscribe({
+  events: ['document.*', 'message.posted'], // names, family wildcards, or '*'
+  ids: [channel],                           // optional: only these items
+  entityTypes: ['document'],                // optional
+  cursor: await load(),                     // optional: resume
+  signal,                                   // optional: stop
+});
+for await (const event of stream) {
+  if (event.event_type === 'document.created') console.log(event.document.id);
+  await save(stream.cursor);
+}
+```
+
+- `event.event_type` narrows `event.metadata` and the hydrated handles. A
+  family the SDK has no hydrator for still arrives, with its raw `metadata`.
+- The stream reconnects with backoff, resuming from its cursor
+  (`Last-Event-ID`), and never yields the same `event_id` twice within one
+  stream (after a restart from a saved cursor, dedupe by `event_id` yourself). When the
+  server reports the stream fell behind (`lagged`) it reconnects at once from
+  the cursor.
+- A cursor older than the replay window (about an hour) throws
+  `EventStreamResetError`: resync through the list APIs, then subscribe again
+  without a cursor.
+- The loop ends without an error when `signal` aborts, you `break`, you call
+  `stream.close()`, or the server revokes the credential
+  (`stream.closeReason === 'revoked'`; reconnect with a fresh credential).
+  `listen()` instead reconnects by itself when the credential is a token
+  function (`auth: { type: 'user', token: () => getFreshToken() }`), which it
+  resolves again on every reconnect. It stops and reports
+  `EventStreamRevokedError` (with its `reason`) to `listen({ onError })`
+  (logged otherwise) with a fixed token, when its bot was deleted, or after 3
+  revoked closes in a row that each came within 2 minutes of connecting, with
+  no event between them (its refreshed tokens are rejected too).
+- `macro.events.catalog()` lists the events your credential can receive, with
+  their entity types, who receives them and their stage.
+
+`subscribe()` and `catalog()` are beta. Cursors and replay, family wildcards, the
+catalog and the `preview` families need the `public-event-stream` feature
+flag. Without it the stream is live only: no replay from the cursor, `'*'` matches every
+stable event but family wildcards match nothing,
+preview events are not delivered, and `catalog()` answers 404. A bot listens as
+the user it acts for.
+
+### Delivery guarantees
+
+- Order: events of one item arrive in order. There is no order across items
+  or families.
+- Streams: at least once inside the replay window when you resume with your
+  cursor; best effort beyond it (and always best effort without the flag).
+  Persisted webhooks: at least once.
+- Upstream, Macro publishes an event after the change commits, at most once:
+  a committed change can have no event. If you need certainty, reconcile with
+  the list APIs.
 
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
 
-Five families are delivered: `document.*`, `channel.*`, `message.*`, `user.*`,
-and `agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
+Stable families: `document.*`, `channel.*`, `call.*` notifications,
+`message.*`, `user.*` and `agent_session.*`. Preview families (behind the
+`public-event-stream` beta, thin payloads you hydrate through the handles):
+`project.*`, `chat.*`, `database.*`, `form.*`, `initiative.*`,
+`entity_property.*`/`entity_properties.*`, `property.*`/`property_option.*`,
+`call.record_*`, `github_pull_request.*`, `document.content_changed` and
+`document.appearance_changed`, and your own `email.*`, `calendar_event.*`,
+`activity.*`, `notification.*`, `mention.*`, `team.*`, `bot.*` and
+`github_webhook.*`. `macro.events.catalog()` is the authoritative list for
+your credential. Message events (`posted`, `patched`, `deleted`, `mentioned`,
 `attachment_created`, `attachment_removed`) cover channel messages and document
 comments alike: `metadata.parent` names the channel or document, and the
 hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
@@ -992,8 +1062,12 @@ entries as well as uncovered endpoints.
 
 Event names and payloads are **generated from the backend**: the Rust webhook
 crate exposes a `WebhookEvent` union in the storage OpenAPI spec, and
-`src/events/types.ts` derives `EventName` / `EventPayload` from it. SSE
-(`listen()`) and persisted webhooks (`webhook()`) dispatch the same union.
+`src/events/types.ts` derives `EventName` / `EventPayload` from it. A family
+joins the union through `public_event_registry!` in
+`crates/event_stream/src/domain/catalog.rs`. `subscribe()`, SSE (`listen()`)
+and persisted webhooks (`webhook()`) dispatch the same union; one hydrator per
+family in `src/events/hydrate/` attaches handles, and a family without one is
+delivered raw.
 
 ### AI generation and decisions
 

@@ -49,6 +49,8 @@ sqs = ["dep:models_email", "dep:sqs_client", "ports"]
 ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency/ports"]
 # The S3 adapter for staged draft attachments.
 s3 = ["dep:aws-sdk-s3", "ports"]
+# OpenAPI schemas for the public event projection.
+schema = ["dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
 agent_correlation = { path = "../agent_correlation" }

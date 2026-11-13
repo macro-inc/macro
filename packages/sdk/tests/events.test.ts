@@ -1,11 +1,12 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { Macro } from '../src/macro';
+import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
+import { EventStreamRevokedError, Macro } from '../src/macro';
 import { MacroError } from '../src/utils';
 
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  setSystemTime();
 });
 
 const created = {
@@ -75,7 +76,7 @@ describe('MacroEvents', () => {
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
     const url = new URL(request?.url ?? '');
     expect(url.origin + url.pathname).toBe(
-      'https://storage.example.test/webhook/events/stream',
+      'https://storage.example.test/events/stream',
     );
     expect(url.searchParams.get('scope')).toBe('user');
     expect(JSON.parse(url.searchParams.get('filters') ?? '[]')).toEqual([
@@ -110,6 +111,187 @@ describe('MacroEvents', () => {
     expect(JSON.parse(url.searchParams.get('filters') ?? '[]')).toEqual([
       { events: ['message.posted'], ids: ['chan_1'] },
     ]);
+  });
+
+  test('listen() reconnects against a server without cursors and continues live after a reset', async () => {
+    const requests: Request[] = [];
+    const bodies = [
+      // A server without the beta: SSE ids are event ids, then it closes.
+      `id: e1\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e1' })}\n\n`,
+      'event: reset\ndata: {"type":"reset"}\n\n',
+      `id: e2\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e2' })}\n\n`,
+    ];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return new Response(bodies.shift() ?? '', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const seen: string[] = [];
+    const twice = Promise.withResolvers<void>();
+    macro.events.on('document.created', (event) => {
+      seen.push(event.document.id);
+      if (seen.length === 2) twice.resolve();
+    });
+    const stop = await macro.events.listen();
+    await twice.promise;
+    stop();
+
+    expect(seen).toEqual(['doc_1', 'doc_1']);
+    expect(requests[1]?.headers.get('last-event-id')).toBe('e1');
+    // After the reset it reconnects live, without a cursor.
+    expect(requests[2]?.headers.get('last-event-id')).toBeNull();
+  });
+
+  test('listen() reconnects with a refreshed token after the credential is revoked', async () => {
+    const requests: Request[] = [];
+    const bodies = [
+      `id: 1-0\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e1' })}\n\n` +
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+      `id: 2-0\nevent: document.created\ndata: ${JSON.stringify({ ...created, event_id: 'e2' })}\n\n`,
+    ];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return new Response(bodies.shift() ?? '', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }) as typeof fetch;
+
+    let issued = 0;
+    const macro = new Macro({
+      auth: { type: 'user', token: () => `token-${++issued}` },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const errors: unknown[] = [];
+    const twice = Promise.withResolvers<void>();
+    let seen = 0;
+    macro.events.on('document.created', () => {
+      seen += 1;
+      if (seen === 2) twice.resolve();
+    });
+    const stop = await macro.events.listen({
+      onError: (error) => errors.push(error),
+    });
+    await twice.promise;
+    stop();
+
+    expect(errors).toEqual([]);
+    expect(requests[0]?.headers.get('authorization')).toBe('Bearer token-1');
+    expect(requests[1]?.headers.get('authorization')).toBe('Bearer token-2');
+    expect(requests[1]?.headers.get('last-event-id')).toBe('1-0');
+  });
+
+  test('listen() does not reconnect a deleted bot, even with a token function', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"bot_deleted"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      auth: { type: 'user', token: () => 'fresh-token' },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const reported = Promise.withResolvers<unknown>();
+    await macro.events.listen({ onError: reported.resolve });
+
+    const error = await reported.promise;
+    expect(error).toBeInstanceOf(EventStreamRevokedError);
+    expect((error as EventStreamRevokedError).reason).toBe('bot_deleted');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requests).toHaveLength(1);
+  });
+
+  test('listen() gives up after 3 short-lived revoked closes in a row with no event', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      auth: { type: 'user', token: () => 'soon-expiring-token' },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const reported = Promise.withResolvers<unknown>();
+    await macro.events.listen({ onError: reported.resolve });
+
+    const error = await reported.promise;
+    expect(error).toBeInstanceOf(EventStreamRevokedError);
+    expect((error as EventStreamRevokedError).reason).toBe('credential');
+    expect(requests).toHaveLength(3);
+  }, 10_000);
+
+  test('listen() keeps reconnecting a quiet stream whose token expires normally', async () => {
+    const requests: Request[] = [];
+    const fourth = Promise.withResolvers<void>();
+    let now = Date.now();
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      if (requests.length === 4) fourth.resolve();
+      // Each connection stays up for 3 minutes before the token expires.
+      now += 180_000;
+      setSystemTime(new Date(now));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      auth: { type: 'user', token: () => 'hourly-token' },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const errors: unknown[] = [];
+    const stop = await macro.events.listen({
+      onError: (error) => errors.push(error),
+    });
+    await fourth.promise;
+    stop();
+
+    expect(errors).toEqual([]);
+    expect(requests.length).toBeGreaterThanOrEqual(4);
+  }, 10_000);
+
+  test('listen() stops and reports a revoked fixed credential', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(
+        'event: revoked\ndata: {"type":"revoked","reason":"credential"}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+    const reported = Promise.withResolvers<unknown>();
+    await macro.events.listen({ onError: reported.resolve });
+
+    expect(await reported.promise).toBeInstanceOf(EventStreamRevokedError);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requests).toHaveLength(1);
   });
 
   test('listen() throws when there are no filters or handlers', async () => {

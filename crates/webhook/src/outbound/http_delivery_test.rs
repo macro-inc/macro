@@ -39,6 +39,7 @@ fn webhook(endpoint_url: &str, headers: WebhookHeaders) -> Webhook {
         filters: vec![WebhookFilter {
             events: vec!["document.created".to_string()],
             ids: None,
+            entity_types: None,
         }],
     }
 }

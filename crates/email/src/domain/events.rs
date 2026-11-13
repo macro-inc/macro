@@ -27,8 +27,11 @@
 //! must treat events as idempotent state notifications and read back through
 //! the API when exact current state matters.
 
+mod public;
 #[cfg(test)]
 mod test;
+
+pub use public::*;
 
 use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -40,6 +43,7 @@ use uuid::Uuid;
 /// Whether a change was initiated by a Macro user action or first observed
 /// syncing from the email provider. Lets automation ignore its own echoes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum EmailEventOrigin {
     /// The change was initiated by a user action in Macro.
@@ -61,6 +65,7 @@ pub struct LabelRef {
 
 /// Why an email link (connected inbox) was disconnected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LinkDisconnectReason {
     /// The link was never meaningfully used and was reaped.
@@ -77,6 +82,7 @@ pub enum LinkDisconnectReason {
 
 /// Why a queued send was cancelled before reaching the provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SendCancelReason {
     /// The user undid the send (or unscheduled a scheduled send).
@@ -527,6 +533,134 @@ impl TopicEvent for EmailTopicEvent {
     type Topic = MacroEmailTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = EmailPublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEntityType, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let thread =
+            |thread_id: &Uuid| EntityRef::new(EntityType::EmailThread, thread_id.to_string());
+        let link =
+            |link_id: &Uuid| EntityRef::new(PublicEntityType::EmailLink, link_id.to_string());
+        let (name, entity, owner, payload) = match self {
+            Self::LinkConnected(m) => (
+                "email.link_connected",
+                link(&m.link_id),
+                &m.owner,
+                EmailPublicEvent::LinkConnected(m.into()),
+            ),
+            Self::LinkDisconnected(m) => (
+                "email.link_disconnected",
+                link(&m.link_id),
+                &m.owner,
+                EmailPublicEvent::LinkDisconnected(m.into()),
+            ),
+            Self::LinkReauthRequired(m) => (
+                "email.link_reauth_required",
+                link(&m.link_id),
+                &m.owner,
+                EmailPublicEvent::LinkReauthRequired(m.into()),
+            ),
+            Self::MessageReceived(m) => (
+                "email.message_received",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::MessageReceived(m.into()),
+            ),
+            Self::MessageSent(m) => (
+                "email.message_sent",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::MessageSent(m.into()),
+            ),
+            Self::MessageDeleted(m) => (
+                "email.message_deleted",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::MessageDeleted(m.into()),
+            ),
+            Self::MessageSendQueued(m) => (
+                "email.message_send_queued",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::MessageSendQueued(m.into()),
+            ),
+            Self::MessageSendCancelled(m) => (
+                "email.message_send_cancelled",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::MessageSendCancelled(m.into()),
+            ),
+            Self::ThreadArchived(m) => (
+                "email.thread_archived",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::ThreadArchived(m.into()),
+            ),
+            Self::ThreadTrashed(m) => (
+                "email.thread_trashed",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::ThreadTrashed(m.into()),
+            ),
+            Self::ThreadRead(m) => (
+                "email.thread_read",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::ThreadRead(m.into()),
+            ),
+            Self::ThreadStarred(m) => (
+                "email.thread_starred",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::ThreadStarred(m.into()),
+            ),
+            Self::ThreadSpamChanged(m) => (
+                "email.thread_spam_changed",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::ThreadSpamChanged(m.into()),
+            ),
+            Self::ThreadProjectChanged(m) => (
+                "email.thread_project_changed",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::ThreadProjectChanged(m.into()),
+            ),
+            Self::ThreadLabelsUpdated(m) => (
+                "email.thread_labels_updated",
+                thread(&m.thread_id),
+                &m.owner,
+                EmailPublicEvent::ThreadLabelsUpdated(m.into()),
+            ),
+            Self::MessageDraftSynced(_)
+            | Self::ThreadBackfilled(_)
+            | Self::ThreadsReindexRequested(_) => {
+                return Ok(Exposure::internal_by_design(
+                    "email sync and indexing commands, not facts",
+                ));
+            }
+        };
+        // Mail is personal data: only the mailbox owner, never their teams.
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity,
+            audience: Audience::Recipient {
+                user_id: owner.clone(),
+            },
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroEmailTopic`], keyed by link (inbox) id.

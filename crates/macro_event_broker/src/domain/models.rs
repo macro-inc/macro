@@ -2,6 +2,7 @@
 
 use std::marker::PhantomData;
 
+use event_exposure::{Exposure, ExposureError};
 use macro_event_topics::Topic;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -19,6 +20,21 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
 
     /// Version of this concrete event variant's payload schema.
     const SCHEMA_VERSION: u8;
+
+    /// The public projection of this topic's events, serialized as the
+    /// delivered payload. It carries the `event_type` tag and `metadata`, and
+    /// derives `utoipa::ToSchema` (behind the producer's schema feature) so it
+    /// can join the public event union. Topics with nothing public use
+    /// [`Unexposed`](event_exposure::Unexposed).
+    type PublicPayload: Serialize + Clone;
+
+    /// Who may see this event outside Macro, and in what shape.
+    ///
+    /// Required, with no default: every variant must be classified, with an
+    /// exhaustive `match` and no wildcard arm (ast-grep
+    /// `rust-exposure-no-wildcard-arm`). Pure: it reads only the payload.
+    /// See `docs/guides/add-kafka-event.md`.
+    fn exposure(&self) -> Result<Exposure<'_, Self::PublicPayload>, ExposureError>;
 }
 
 /// Serializable event envelope published through the broker.

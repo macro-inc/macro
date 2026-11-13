@@ -100,7 +100,7 @@ pub struct ChatCopiedMetadata {
 ///
 /// Defined locally so the wire contract does not depend on another crate's
 /// serde attributes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ChatMessageRole {
     /// A user message.
@@ -180,10 +180,211 @@ pub enum ChatTopicEvent {
     MessageDeleted(ChatMessageDeletedMetadata),
 }
 
+/// What a [`ChatTopicEvent::Updated`] changed, without the new values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatChange {
+    /// The chat was renamed.
+    Name,
+    /// The chat moved into, out of, or between projects.
+    Project,
+    /// Who the chat is shared with changed.
+    Sharing,
+}
+
+/// Public payload of `chat.created`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct PublicChatCreated {
+    /// The created chat.
+    pub chat_id: String,
+    /// The project it was created in, when any.
+    pub project_id: Option<String>,
+}
+
+/// Public payload of `chat.updated`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct PublicChatUpdated {
+    /// The updated chat.
+    pub chat_id: String,
+    /// The user who updated it.
+    #[schema(value_type = String)]
+    pub actor_user_id: MacroUserIdStr<'static>,
+    /// What changed; read the chat for the new values.
+    pub changes: Vec<ChatChange>,
+}
+
+/// Public payload of `chat.deleted` and `chat.restored`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct PublicChatTrash {
+    /// The chat moved to or out of the trash.
+    pub chat_id: String,
+    /// The user who acted, if any.
+    #[schema(value_type = Option<String>)]
+    pub actor_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+/// Public payload of `chat.copied`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct PublicChatCopied {
+    /// The new chat.
+    pub chat_id: String,
+    /// The chat it was copied from.
+    pub source_chat_id: String,
+}
+
+/// Public payload of `chat.message_sent`: no content, model or attachments.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct PublicChatMessageSent {
+    /// The chat the message is in.
+    pub chat_id: String,
+    /// The new message.
+    pub message_id: String,
+    /// Who the message is from.
+    pub role: ChatMessageRole,
+    /// The user who sent it, for user messages.
+    #[schema(value_type = Option<String>)]
+    pub actor_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+/// Public payload of `chat.message_deleted`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct PublicChatMessageDeleted {
+    /// The chat the message was in.
+    pub chat_id: String,
+    /// The deleted message.
+    pub message_id: String,
+}
+
+/// The public projection of [`ChatTopicEvent`], delivered under the same
+/// event names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum ChatPublicEvent {
+    /// A chat was created.
+    #[serde(rename = "chat.created")]
+    Created(PublicChatCreated),
+    /// A chat's name, project or sharing changed.
+    #[serde(rename = "chat.updated")]
+    Updated(PublicChatUpdated),
+    /// A chat was moved to the trash.
+    #[serde(rename = "chat.deleted")]
+    Deleted(PublicChatTrash),
+    /// A chat was restored from the trash.
+    #[serde(rename = "chat.restored")]
+    Restored(PublicChatTrash),
+    /// A chat was copied.
+    #[serde(rename = "chat.copied")]
+    Copied(PublicChatCopied),
+    /// A message was added to a chat.
+    #[serde(rename = "chat.message_sent")]
+    MessageSent(PublicChatMessageSent),
+    /// A message was deleted from a chat.
+    #[serde(rename = "chat.message_deleted")]
+    MessageDeleted(PublicChatMessageDeleted),
+}
+
 impl TopicEvent for ChatTopicEvent {
     type Topic = MacroChatsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = ChatPublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let (name, chat_id, payload) = match self {
+            Self::Created(metadata) => (
+                "chat.created",
+                &metadata.chat_id,
+                ChatPublicEvent::Created(PublicChatCreated {
+                    chat_id: metadata.chat_id.clone(),
+                    project_id: metadata.project_id.clone(),
+                }),
+            ),
+            Self::Updated(metadata) => (
+                "chat.updated",
+                &metadata.chat_id,
+                ChatPublicEvent::Updated(PublicChatUpdated {
+                    chat_id: metadata.chat_id.clone(),
+                    actor_user_id: metadata.actor_user_id.clone(),
+                    changes: [
+                        (metadata.name.is_some(), ChatChange::Name),
+                        (metadata.project_id.is_some(), ChatChange::Project),
+                        (metadata.share_permission_updated, ChatChange::Sharing),
+                    ]
+                    .into_iter()
+                    .filter_map(|(changed, change)| changed.then_some(change))
+                    .collect(),
+                }),
+            ),
+            Self::Deleted(metadata) => (
+                "chat.deleted",
+                &metadata.chat_id,
+                ChatPublicEvent::Deleted(PublicChatTrash {
+                    chat_id: metadata.chat_id.clone(),
+                    actor_user_id: metadata.actor_user_id.clone(),
+                }),
+            ),
+            Self::Restored(metadata) => (
+                "chat.restored",
+                &metadata.chat_id,
+                ChatPublicEvent::Restored(PublicChatTrash {
+                    chat_id: metadata.chat_id.clone(),
+                    actor_user_id: metadata.actor_user_id.clone(),
+                }),
+            ),
+            Self::Copied(metadata) => (
+                "chat.copied",
+                &metadata.chat_id,
+                ChatPublicEvent::Copied(PublicChatCopied {
+                    chat_id: metadata.chat_id.clone(),
+                    source_chat_id: metadata.source_chat_id.clone(),
+                }),
+            ),
+            Self::MessageSent(metadata) => (
+                "chat.message_sent",
+                &metadata.chat_id,
+                ChatPublicEvent::MessageSent(PublicChatMessageSent {
+                    chat_id: metadata.chat_id.clone(),
+                    message_id: metadata.message_id.clone(),
+                    role: metadata.role,
+                    actor_user_id: metadata.actor_user_id.clone(),
+                }),
+            ),
+            Self::MessageDeleted(metadata) => (
+                "chat.message_deleted",
+                &metadata.chat_id,
+                ChatPublicEvent::MessageDeleted(PublicChatMessageDeleted {
+                    chat_id: metadata.chat_id.clone(),
+                    message_id: metadata.message_id.clone(),
+                }),
+            ),
+            Self::PermanentlyDeleted(_) => {
+                return Ok(Exposure::internal_by_design(
+                    "carries no owner and its grants are gone when consumed, so it has no audience; chat.deleted is the public signal",
+                ));
+            }
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Chat, chat_id.clone()),
+            audience: Audience::Entity {
+                entity_type: EntityType::Chat,
+                entity_id: chat_id.clone(),
+            },
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroChatsTopic`], keyed by the chat's bare id.

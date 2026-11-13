@@ -18,7 +18,17 @@ import { MacroEntity } from '../entity';
 import { EmailAttachment } from './attachment';
 import type { Label } from './label';
 import { Link } from './link';
-import { EmailThread } from './thread';
+import type { EmailThread } from './thread';
+
+/**
+ * `EmailThread`, loaded when first needed. A static import would close the
+ * cycle message → thread → draft → message, and `EmailDraft extends
+ * EmailMessage` would then run before `EmailMessage` exists whenever this
+ * module is the first of the three to load.
+ */
+async function loadThread(): Promise<typeof EmailThread> {
+  return (await import('./thread')).EmailThread;
+}
 
 /** The API's representation of an email message (`ParsedMessage`). */
 export type EmailMessageData = GetMessageResponses[200];
@@ -215,7 +225,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       throw new Error('The confirmed send did not report a sent message');
     return {
       message: EmailMessage.byId(client, response.sent.message_id),
-      thread: EmailThread.byId(client, response.sent.thread_id),
+      thread: (await loadThread()).byId(client, response.sent.thread_id),
     };
   }
 
@@ -461,7 +471,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    * @readonly
    */
   async thread(): Promise<EmailThread> {
-    return EmailThread.byId(
+    return (await loadThread()).byId(
       this.client,
       (await this.detail.get()).thread_db_id,
     );

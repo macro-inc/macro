@@ -324,3 +324,192 @@ fn sync_extract_drops_invalid_attribution_strings() {
     assert_eq!(metadata.actor, None);
     assert_eq!(metadata.on_behalf_of, None);
 }
+
+mod exposure {
+    use super::*;
+    use crate::domain::events::{
+        DocumentChangePublicEvent, DocumentPublicEvent, DocumentSyncEditor,
+    };
+    use activity::Actor;
+    use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_user_id::user_id::MacroUserIdStr;
+
+    fn user(id: &str) -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from(id.to_owned()).unwrap()
+    }
+
+    fn public(event: &DocumentTopicEvent) -> PublicEvent<'_, DocumentPublicEvent> {
+        match event.exposure().unwrap() {
+            Exposure::Public(public) => public,
+            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        }
+    }
+
+    fn document_audience() -> Audience {
+        Audience::Entity {
+            entity_type: EntityType::Document,
+            entity_id: DOCUMENT_ID.to_owned(),
+        }
+    }
+
+    fn appearance_update() -> DocumentTopicEvent {
+        DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+            appearance_change: Some([
+                model_entity::EntityAppearance::default(),
+                model_entity::EntityAppearance::default(),
+            ]),
+            document_id: DOCUMENT_ID.to_owned(),
+            owner: owner(),
+            actor_user_id: Some(user("macro|editor@example.com")),
+            actor: None,
+            on_behalf_of: None,
+            document_name: None,
+            previous_project_id: None,
+            project_id: None,
+            file_type: None,
+            share_permission_updated: false,
+        })
+    }
+
+    #[test]
+    fn uploads_and_sync_snapshots_are_one_preview_content_change() {
+        let upload = DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
+            document_id: DOCUMENT_ID.to_owned(),
+            owner: owner(),
+            file_type: FileType::Pdf,
+            document_version_id: Some("v2".to_owned()),
+        });
+        let public = public(&upload);
+        assert_eq!(public.name, "document.content_changed");
+        assert_eq!(public.stage, Stage::Preview);
+        assert_eq!(public.audience, document_audience());
+        assert_eq!(
+            serde_json::to_value(public.payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "document.content_changed",
+                "metadata": {
+                    "document_id": DOCUMENT_ID,
+                    "document_version_id": "v2",
+                    "editors": [],
+                },
+            })
+        );
+
+        let snapshot = DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            document_id: DOCUMENT_ID.to_owned(),
+            file_type: FileType::Md,
+            document_version_id: None,
+            actor: None,
+            on_behalf_of: None,
+            editors: vec![DocumentSyncEditor {
+                agent_correlation_id: Some(Uuid::nil()),
+                actor: Actor::new_from_user(user("macro|editor@example.com")),
+                on_behalf_of: None,
+            }],
+        });
+        let public = super::exposure::public(&snapshot);
+        assert_eq!(public.name, "document.content_changed");
+        assert_eq!(public.audience, document_audience());
+        assert_eq!(
+            serde_json::to_value(public.payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "document.content_changed",
+                "metadata": {
+                    "document_id": DOCUMENT_ID,
+                    "document_version_id": null,
+                    "editors": [{"actor": "macro|editor@example.com", "on_behalf_of": null}],
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn a_legacy_sync_actor_is_its_editor() {
+        let snapshot = DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            document_id: DOCUMENT_ID.to_owned(),
+            file_type: FileType::Md,
+            document_version_id: None,
+            actor: Some(Actor::new_from_user(user("macro|editor@example.com"))),
+            on_behalf_of: None,
+            editors: Vec::new(),
+        });
+        let public = public(&snapshot);
+        let DocumentPublicEvent::Change(DocumentChangePublicEvent::ContentChanged(change)) =
+            public.payload.as_ref()
+        else {
+            panic!("a sync snapshot is a content change");
+        };
+        assert_eq!(change.editors.len(), 1);
+    }
+
+    #[test]
+    fn appearance_only_updates_are_a_preview_appearance_change() {
+        let event = appearance_update();
+        let public = public(&event);
+        assert_eq!(public.name, "document.appearance_changed");
+        assert_eq!(public.stage, Stage::Preview);
+        assert_eq!(public.audience, document_audience());
+        assert_eq!(
+            serde_json::to_value(public.payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "document.appearance_changed",
+                "metadata": {
+                    "document_id": DOCUMENT_ID,
+                    "actor": "macro|editor@example.com",
+                    "on_behalf_of": null,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn lifecycle_events_stay_stable_and_unchanged() {
+        let event = DocumentTopicEvent::Copied(DocumentCopiedMetadata {
+            document_id: DOCUMENT_ID.to_owned(),
+            source_document_id: DOCUMENT_ID.to_owned(),
+            source_version_id: None,
+            owner: owner(),
+            actor: None,
+            on_behalf_of: None,
+            document_name: "Copy".to_owned(),
+            file_type: None,
+            project_id: None,
+            sub_type: None,
+        });
+        let public = public(&event);
+        assert_eq!(public.stage, Stage::Stable);
+        assert_eq!(
+            serde_json::to_value(public.payload.as_ref()).unwrap(),
+            serde_json::to_value(&event).unwrap()
+        );
+    }
+
+    #[test]
+    fn purge_stays_internal() {
+        let event = DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+            document_id: DOCUMENT_ID.to_owned(),
+        });
+        assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+    }
+
+    /// A delivered lifecycle event's public body is the broker body, byte
+    /// for byte, under the same audience.
+    #[test]
+    fn a_plain_update_keeps_its_exact_body() {
+        let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+            appearance_change: None,
+            ..match appearance_update() {
+                DocumentTopicEvent::Updated(metadata) => metadata,
+                _ => unreachable!(),
+            }
+        });
+        let public = public(&event);
+        assert_eq!(public.name, "document.updated");
+        assert_eq!(public.stage, Stage::Stable);
+        assert_eq!(public.audience, document_audience());
+        assert_eq!(
+            serde_json::to_string(public.payload.as_ref()).unwrap(),
+            serde_json::to_string(&event).unwrap()
+        );
+    }
+}

@@ -1,0 +1,1321 @@
+//! Fan-out per audience class: who receives an event, who stops receiving
+//! when access changes, and how much access work one event costs.
+
+use crate::domain::models::{
+    Invalidation, LogRecord, PrincipalKind, StreamPrincipal, WebhookScope,
+};
+use crate::domain::ports::TeamRole;
+use crate::domain::test_support::*;
+use event_exposure::{Audience, EntityType, MinTeamRole};
+use std::sync::atomic::Ordering;
+use uuid::Uuid;
+
+const TEAM: Uuid = Uuid::from_u128(0x7ea7);
+const OTHER_TEAM: Uuid = Uuid::from_u128(0x07e7);
+const BOT: Uuid = Uuid::from_u128(0xb07);
+
+/// A bot acting for `acting`; `owned` when `acting` owns it (a team bot
+/// acting for a member never is).
+fn bot(acting: &macro_user_id::user_id::MacroUserIdStr<'static>, owned: bool) -> StreamPrincipal {
+    StreamPrincipal {
+        kind: PrincipalKind::Bot {
+            bot_id: BOT,
+            user: acting.clone(),
+            owned_by_user: owned,
+        },
+        credential_id: "bot-token".to_owned(),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_entity_event_reaches_accessors_and_nobody_else() {
+    let harness = Harness::default();
+    let owner = user("owner@example.com");
+    let stranger = user("stranger@example.com");
+    harness
+        .access
+        .grant(EntityType::Document, DOC, owner.as_ref());
+    let mut owner_stream = harness
+        .open(
+            person(&owner),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+            None,
+        )
+        .await
+        .unwrap();
+    // A link-share viewer is not an accessor: they are absent from the set.
+    let mut stranger_stream = harness
+        .open(
+            person(&stranger),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("document.updated", "document", DOC),
+            entity(EntityType::Document, DOC),
+        ))
+        .await;
+
+    assert_eq!(
+        owner_stream.next_event_name().await.as_deref(),
+        Some("document.updated")
+    );
+    assert_eq!(stranger_stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_revoked_accessor_stops_receiving_once_the_revocation_is_logged() {
+    let harness = Harness::default();
+    let member = user("member@example.com");
+    harness
+        .access
+        .grant(EntityType::Channel, CHANNEL, member.as_ref());
+    let mut stream = harness
+        .open(
+            person(&member),
+            WebhookScope::User,
+            filter(&["message.posted"]),
+            None,
+        )
+        .await
+        .unwrap();
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("message.posted")
+    );
+
+    harness
+        .access
+        .revoke(EntityType::Channel, CHANNEL, member.as_ref());
+    harness
+        .publish(LogRecord {
+            event: None,
+            invalidations: vec![Invalidation::Entity {
+                entity_type: EntityType::Channel,
+                entity_id: CHANNEL.to_owned(),
+            }],
+        })
+        .await;
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+
+    assert_eq!(stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_participant_still_receives_their_removal() {
+    let harness = Harness::default();
+    let removed = user("removed@example.com");
+    let mut stream = harness
+        .open(
+            person(&removed),
+            WebhookScope::User,
+            filter(&["channel.participant_removed", "message.posted"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    // The grant is already gone when the event is consumed.
+    let mut removal = public(
+        event("channel.participant_removed", "channel", CHANNEL),
+        Audience::Any(vec![
+            entity(EntityType::Channel, CHANNEL),
+            Audience::Snapshot {
+                user_ids: vec![removed.clone()],
+            },
+        ]),
+    );
+    removal.invalidations = vec![Invalidation::Entity {
+        entity_type: EntityType::Channel,
+        entity_id: CHANNEL.to_owned(),
+    }];
+    harness.publish(removal).await;
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("channel.participant_removed")
+    );
+    assert_eq!(stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_recipient_event_reaches_only_its_recipient_and_never_a_borrowed_bot() {
+    let harness = Harness::default();
+    let callee = user("callee@example.com");
+    let other = user("other@example.com");
+    harness.preview.enable(&callee);
+    let recipient = Audience::Recipient {
+        user_id: callee.clone(),
+    };
+    let mut callee_stream = harness
+        .open(
+            person(&callee),
+            WebhookScope::User,
+            filter(&["call.ringing"]),
+            None,
+        )
+        .await
+        .unwrap();
+    let mut other_stream = harness
+        .open(
+            person(&other),
+            WebhookScope::User,
+            filter(&["call.ringing"]),
+            None,
+        )
+        .await
+        .unwrap();
+    let mut borrowed_bot = harness
+        .open(
+            bot(&callee, false),
+            WebhookScope::User,
+            filter(&["call.ringing"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(event("call.ringing", "call", DOC), recipient))
+        .await;
+
+    assert_eq!(
+        callee_stream.next_event_name().await.as_deref(),
+        Some("call.ringing")
+    );
+    assert_eq!(other_stream.next_event_name().await, None);
+    assert_eq!(borrowed_bot.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_owner_event_reaches_the_owner_and_their_own_bot() {
+    let harness = Harness::default();
+    let owner = user("owner@example.com");
+    let other = user("other@example.com");
+    let mut owned_bot = harness
+        .open(
+            bot(&owner, true),
+            WebhookScope::User,
+            filter(&["agent_session.deleted"]),
+            None,
+        )
+        .await
+        .unwrap();
+    let mut team_scope = harness
+        .open(
+            person(&owner),
+            WebhookScope::User,
+            filter(&["agent_session.deleted"]),
+            None,
+        )
+        .await
+        .unwrap();
+    let mut other_stream = harness
+        .open(
+            person(&other),
+            WebhookScope::User,
+            filter(&["agent_session.deleted"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("agent_session.deleted", "agent_session", DOC),
+            Audience::Owner {
+                user_id: owner.clone(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        owned_bot.next_event_name().await.as_deref(),
+        Some("agent_session.deleted")
+    );
+    assert_eq!(
+        team_scope.next_event_name().await.as_deref(),
+        Some("agent_session.deleted")
+    );
+    assert_eq!(other_stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_team_event_reaches_members_and_admin_events_only_admins() {
+    let harness = Harness::default();
+    let admin = user("admin@example.com");
+    let member = user("member@example.com");
+    let outsider = user("outsider@example.com");
+    harness.teams.add(TEAM, &admin, TeamRole::Admin);
+    harness.teams.add(TEAM, &member, TeamRole::Member);
+    let names = &["team.updated", "team.invite_created"];
+    let mut admin_stream = harness
+        .open(person(&admin), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut member_stream = harness
+        .open(person(&member), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut outsider_stream = harness
+        .open(person(&outsider), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut bot_stream = harness
+        .open(bot(&member, false), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("team.updated", "team", &TEAM.to_string()),
+            Audience::Team {
+                team_id: TEAM,
+                min_role: MinTeamRole::Member,
+            },
+        ))
+        .await;
+    harness
+        .publish(public(
+            event("team.invite_created", "team", &TEAM.to_string()),
+            Audience::Team {
+                team_id: TEAM,
+                min_role: MinTeamRole::Admin,
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        admin_stream.next_event_name().await.as_deref(),
+        Some("team.updated")
+    );
+    assert_eq!(
+        admin_stream.next_event_name().await.as_deref(),
+        Some("team.invite_created")
+    );
+    assert_eq!(
+        member_stream.next_event_name().await.as_deref(),
+        Some("team.updated")
+    );
+    assert_eq!(member_stream.next_event_name().await, None);
+    assert_eq!(outsider_stream.next_event_name().await, None);
+    assert_eq!(
+        bot_stream.next_event_name().await.as_deref(),
+        Some("team.updated")
+    );
+    assert_eq!(bot_stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_member_removed_from_a_team_stops_receiving_its_events() {
+    let harness = Harness::default();
+    let member = user("member@example.com");
+    harness.teams.add(TEAM, &member, TeamRole::Member);
+    let team = Audience::Team {
+        team_id: TEAM,
+        min_role: MinTeamRole::Member,
+    };
+    let mut stream = harness
+        .open(
+            person(&member),
+            WebhookScope::User,
+            filter(&["team.updated"]),
+            None,
+        )
+        .await
+        .unwrap();
+    harness
+        .publish(public(
+            event("team.updated", "team", &TEAM.to_string()),
+            team.clone(),
+        ))
+        .await;
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("team.updated")
+    );
+
+    harness.teams.remove(TEAM, &member);
+    harness
+        .publish(LogRecord {
+            event: None,
+            invalidations: vec![Invalidation::Team {
+                team_id: TEAM,
+                user_id: Some(member.clone()),
+            }],
+        })
+        .await;
+    harness
+        .publish(public(
+            event("team.updated", "team", &TEAM.to_string()),
+            team,
+        ))
+        .await;
+
+    assert_eq!(stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_teams_of_event_reaches_streams_of_the_users_teams() {
+    let harness = Harness::default();
+    let subject = user("subject@example.com");
+    let teammate = user("teammate@example.com");
+    let elsewhere = user("elsewhere@example.com");
+    harness.teams.add(TEAM, &subject, TeamRole::Member);
+    harness.teams.add(TEAM, &teammate, TeamRole::Member);
+    harness.teams.add(OTHER_TEAM, &elsewhere, TeamRole::Owner);
+    let mut teammate_stream = harness
+        .open(
+            person(&teammate),
+            WebhookScope::Team,
+            filter(&["user.picture_changed"]),
+            None,
+        )
+        .await
+        .unwrap();
+    let mut elsewhere_stream = harness
+        .open(
+            person(&elsewhere),
+            WebhookScope::Team,
+            filter(&["user.picture_changed"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("user.picture_changed", "user", subject.as_ref()),
+            Audience::TeamsOf {
+                user_id: subject.clone(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        teammate_stream.next_event_name().await.as_deref(),
+        Some("user.picture_changed")
+    );
+    assert_eq!(elsewhere_stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_contacts_of_event_reaches_the_user_and_their_contacts_only() {
+    let harness = Harness::default();
+    let subject = user("subject@example.com");
+    let contact = user("contact@example.com");
+    let stranger = user("stranger@example.com");
+    harness.contacts.connect(&subject, &contact);
+    let audience = Audience::ContactsOf {
+        user_id: subject.clone(),
+    };
+    let names = &["user.picture_changed"];
+    let mut subject_stream = harness
+        .open(person(&subject), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut contact_stream = harness
+        .open(person(&contact), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut stranger_stream = harness
+        .open(person(&stranger), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("user.picture_changed", "user", subject.as_ref()),
+            audience,
+        ))
+        .await;
+
+    assert_eq!(
+        subject_stream.next_event_name().await.as_deref(),
+        Some("user.picture_changed")
+    );
+    assert_eq!(
+        contact_stream.next_event_name().await.as_deref(),
+        Some("user.picture_changed")
+    );
+    assert_eq!(stranger_stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_workspace_event_reaches_only_the_matching_workspace_stream() {
+    let harness = Harness::default();
+    let owner = user("owner@example.com");
+    let teammate = user("teammate@example.com");
+    harness.teams.add(TEAM, &owner, TeamRole::Owner);
+    harness.teams.add(TEAM, &teammate, TeamRole::Member);
+    let names = &["webhook.created"];
+    let mut personal = harness
+        .open(person(&owner), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut team_stream = harness
+        .open(person(&teammate), WebhookScope::Team, filter(names), None)
+        .await
+        .unwrap();
+    let mut teammate_personal = harness
+        .open(person(&teammate), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("webhook.created", "webhook", "wh_personal"),
+            Audience::Workspace {
+                workspace_id: owner.as_ref().to_owned(),
+            },
+        ))
+        .await;
+    harness
+        .publish(public(
+            event("webhook.created", "webhook", "wh_team"),
+            Audience::Workspace {
+                workspace_id: TEAM.to_string(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        personal.next_event_name().await.as_deref(),
+        Some("webhook.created")
+    );
+    assert_eq!(personal.next_event_name().await, None);
+    assert_eq!(
+        team_stream.next_event_name().await.as_deref(),
+        Some("webhook.created")
+    );
+    assert_eq!(team_stream.next_event_name().await, None);
+    assert_eq!(teammate_personal.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_flagged_bot_listens_as_its_acting_user_without_their_personal_events() {
+    let harness = Harness::default();
+    let member = user("member@example.com");
+    harness.preview.enable(&member);
+    harness
+        .access
+        .grant(EntityType::Document, DOC, member.as_ref());
+    let mut stream = harness
+        .open(
+            bot(&member, false),
+            WebhookScope::User,
+            filter(&["document.updated", "call.ringing", "webhook.created"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("document.updated", "document", DOC),
+            entity(EntityType::Document, DOC),
+        ))
+        .await;
+    harness
+        .publish(public(
+            event("call.ringing", "call", DOC),
+            Audience::Recipient {
+                user_id: member.clone(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("document.updated")
+    );
+    assert_eq!(stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_flagged_account_manager_never_receives_webhook_lifecycle() {
+    let harness = Harness::default();
+    let managed = user("managed@example.com");
+    harness.preview.enable(&managed);
+    let manager = StreamPrincipal {
+        kind: PrincipalKind::AccountManager {
+            user: managed.clone(),
+        },
+        credential_id: "manager-key".to_owned(),
+    };
+    harness
+        .access
+        .grant(EntityType::Document, DOC, managed.as_ref());
+    let mut stream = harness
+        .open(
+            manager,
+            WebhookScope::User,
+            filter(&["webhook.created", "document.updated"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("webhook.created", "webhook", "wh_1"),
+            Audience::Workspace {
+                workspace_id: managed.as_ref().to_owned(),
+            },
+        ))
+        .await;
+    harness
+        .publish(public(
+            event("document.updated", "document", DOC),
+            entity(EntityType::Document, DOC),
+        ))
+        .await;
+
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("document.updated")
+    );
+    assert_eq!(stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn many_listeners_cost_one_accessor_lookup_and_few_cost_exact_checks() {
+    let harness = Harness::default();
+    let mut streams = Vec::new();
+    for index in 0..20 {
+        let listener = user(&format!("listener{index}@example.com"));
+        harness
+            .access
+            .grant(EntityType::Channel, CHANNEL, listener.as_ref());
+        streams.push(
+            harness
+                .open(
+                    person(&listener),
+                    WebhookScope::User,
+                    filter(&["message.posted"]),
+                    None,
+                )
+                .await
+                .unwrap(),
+        );
+    }
+
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+
+    assert_eq!(
+        harness.access.list_calls.load(Ordering::SeqCst),
+        1,
+        "cached for the second event"
+    );
+    assert_eq!(harness.access.exact_calls.load(Ordering::SeqCst), 0);
+    for stream in &mut streams {
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("message.posted")
+        );
+    }
+
+    let few = Harness::default();
+    let one = user("one@example.com");
+    few.access.grant(EntityType::Channel, CHANNEL, one.as_ref());
+    let mut stream = few
+        .open(
+            person(&one),
+            WebhookScope::User,
+            filter(&["message.posted"]),
+            None,
+        )
+        .await
+        .unwrap();
+    few.publish(public(
+        event("message.posted", "channel", CHANNEL),
+        entity(EntityType::Channel, CHANNEL),
+    ))
+    .await;
+
+    assert_eq!(few.access.list_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(few.access.exact_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("message.posted")
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_event_no_stream_filters_for_costs_no_access_lookup() {
+    let harness = Harness::default();
+    let listener = user("listener@example.com");
+    let _stream = harness
+        .open(
+            person(&listener),
+            WebhookScope::User,
+            filter(&["document.created"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+
+    assert_eq!(harness.access.list_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.access.exact_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_access_lookup_drops_the_event_and_keeps_the_stream() {
+    let harness = Harness::default();
+    let listener = user("listener@example.com");
+    let mut stream = harness
+        .open(
+            person(&listener),
+            WebhookScope::User,
+            filter(&["message.posted"]),
+            None,
+        )
+        .await
+        .unwrap();
+    harness.access.state.lock().unwrap().fail = true;
+
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+
+    assert_eq!(stream.next_event_name().await, None);
+
+    harness.access.state.lock().unwrap().fail = false;
+    harness
+        .access
+        .grant(EntityType::Channel, CHANNEL, listener.as_ref());
+    harness
+        .publish(public(
+            event("message.posted", "channel", CHANNEL),
+            entity(EntityType::Channel, CHANNEL),
+        ))
+        .await;
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("message.posted")
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_deleted_bot_loses_its_streams() {
+    let harness = Harness::default();
+    let acting = user("acting@example.com");
+    harness.preview.enable(&acting);
+    let mut stream = harness
+        .open(
+            bot(&acting, true),
+            WebhookScope::User,
+            filter(&["team.updated"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(LogRecord {
+            event: None,
+            invalidations: vec![Invalidation::BotDeleted { bot_id: BOT }],
+        })
+        .await;
+
+    match stream.next_now().await {
+        Some(crate::domain::models::StreamItem::Control(control)) => assert_eq!(
+            control,
+            crate::domain::models::ControlEvent::Revoked {
+                reason: "bot_deleted"
+            }
+        ),
+        other => panic!("expected a revoked control event, got {other:?}"),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_github_installation_event_reaches_only_claimants() {
+    let harness = Harness::default();
+    let claimant = user("claimant@example.com");
+    let teammate_without_link = user("unlinked@example.com");
+    harness.github.claim(&claimant, "4242");
+    let names = &["github_webhook.received"];
+    let mut claimant_stream = harness
+        .open(person(&claimant), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut other_stream = harness
+        .open(
+            person(&teammate_without_link),
+            WebhookScope::User,
+            filter(names),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("github_webhook.received", "github_installation", "4242"),
+            Audience::GithubInstallation {
+                installation_id: "4242".to_owned(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        claimant_stream.next_event_name().await.as_deref(),
+        Some("github_webhook.received")
+    );
+    assert_eq!(other_stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_entity_at_least_event_reaches_only_accessors_at_that_level() {
+    use event_exposure::MinAccessLevel;
+    let harness = Harness::default();
+    let editor = user("editor@example.com");
+    let viewer = user("viewer@example.com");
+    let form = "0193b3a0-0000-7000-8000-0000000f0f00";
+    harness
+        .access
+        .grant(EntityType::Form, form, editor.as_ref());
+    harness
+        .access
+        .grant(EntityType::Form, form, viewer.as_ref());
+    harness.access.set_level(
+        EntityType::Form,
+        form,
+        editor.as_ref(),
+        MinAccessLevel::Edit,
+    );
+    let names = &["form.response_submitted"];
+    let mut editor_stream = harness
+        .open(person(&editor), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut viewer_stream = harness
+        .open(person(&viewer), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("form.response_submitted", "form", form),
+            Audience::EntityAtLeast {
+                entity_type: EntityType::Form,
+                entity_id: form.to_owned(),
+                min_level: MinAccessLevel::Edit,
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        editor_stream.next_event_name().await.as_deref(),
+        Some("form.response_submitted")
+    );
+    assert_eq!(viewer_stream.next_event_name().await, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_recipient_nested_in_any_still_excludes_a_borrowed_bot() {
+    let harness = Harness::default();
+    let first = user("first@example.com");
+    let second = user("second@example.com");
+    harness.preview.enable(&first);
+    harness.preview.enable(&second);
+    let audience = Audience::Any(vec![
+        Audience::Recipient {
+            user_id: first.clone(),
+        },
+        Audience::Recipient {
+            user_id: second.clone(),
+        },
+    ]);
+    let names = &["notification.created"];
+    let mut person_stream = harness
+        .open(person(&first), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut owned_bot = harness
+        .open(bot(&second, true), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+    let mut borrowed_bot = harness
+        .open(bot(&first, false), WebhookScope::User, filter(names), None)
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("notification.created", "notification", DOC),
+            audience,
+        ))
+        .await;
+
+    assert_eq!(
+        person_stream.next_event_name().await.as_deref(),
+        Some("notification.created")
+    );
+    assert_eq!(
+        owned_bot.next_event_name().await.as_deref(),
+        Some("notification.created")
+    );
+    assert_eq!(borrowed_bot.next_event_name().await, None);
+}
+
+/// Ported from the webhook crate's stream tests (composer session requests
+/// to team-shared runtimes): a requested session reaches the requester's own
+/// streams in any scope and the stream of the user its runtime runs as, and
+/// no other member of the team.
+mod requested_sessions {
+    use super::*;
+    use agent_trigger::domain::broker_events::{
+        AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+    use macro_event_broker::exposure::Exposure;
+    use macro_event_broker::{Event, TopicEvent as _};
+
+    const REQUESTER: &str = "requester@example.com";
+    const TEAMMATE: &str = "teammate@example.com";
+    const BUYER: &str = "buyer@example.com";
+
+    /// The audience the producer declares for a composer request.
+    fn requested_audience(requester: &str, runtime_user: Option<&str>) -> Audience {
+        let event = Event::new(AgentTriggerTopicEvent::New(
+            NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+                origin: trigger_context::TriggerOrigin::Unknown,
+                repo_url: None,
+                bot_id: bot_id::BotId::new_from_uuid(BOT),
+                session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(
+                    Uuid::from_u128(0x5E55),
+                ),
+                owner: user(requester).as_ref().to_owned(),
+                context: None,
+                runtime_user: runtime_user.map(|runtime| user(runtime).as_ref().to_owned()),
+            }),
+        ));
+        match event.event.exposure().unwrap() {
+            Exposure::Public(public) => public.audience,
+            Exposure::Internal(reason) => panic!("requested sessions are public: {reason}"),
+        }
+    }
+
+    /// Whether a stream held by `subscriber` in `scope` receives the request.
+    async fn receives(subscriber: &str, scope: WebhookScope, audience: Audience) -> bool {
+        let harness = Harness::default();
+        let subscriber = user(subscriber);
+        harness.teams.add(TEAM, &subscriber, TeamRole::Member);
+        let mut stream = harness
+            .open(
+                person(&subscriber),
+                scope,
+                filter(&["agent_trigger.new"]),
+                None,
+            )
+            .await
+            .unwrap();
+        harness
+            .publish(public(
+                event("agent_trigger.new", "bot", &BOT.to_string()),
+                audience,
+            ))
+            .await;
+        stream.next_event_name().await.is_some()
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_requested_session_reaches_the_requesters_team_stream() {
+        assert!(
+            receives(
+                REQUESTER,
+                WebhookScope::Team,
+                requested_audience(REQUESTER, None)
+            )
+            .await
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_requested_session_does_not_reach_a_teammates_team_stream() {
+        assert!(
+            !receives(
+                TEAMMATE,
+                WebhookScope::Team,
+                requested_audience(REQUESTER, None)
+            )
+            .await
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_requested_session_reaches_the_requesters_user_stream() {
+        assert!(
+            receives(
+                REQUESTER,
+                WebhookScope::User,
+                requested_audience(REQUESTER, None)
+            )
+            .await
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_teammates_request_reaches_the_runtime_owners_team_stream() {
+        let audience = requested_audience(TEAMMATE, Some(BUYER));
+        assert!(receives(BUYER, WebhookScope::Team, audience).await);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_teammates_request_does_not_reach_a_third_members_team_stream() {
+        let audience = requested_audience(TEAMMATE, Some(BUYER));
+        assert!(!receives(REQUESTER, WebhookScope::Team, audience).await);
+    }
+}
+
+/// `agent_session.deleted` keeps its pre-exposure stream audience: the
+/// owner's personal stream, whichever credential acts for them, including a
+/// bot the owner does not own.
+#[tokio::test(start_paused = true)]
+async fn a_deleted_session_reaches_any_credential_acting_for_its_owner() {
+    let harness = Harness::default();
+    let owner = user("owner@example.com");
+    let audience = Audience::Any(vec![
+        Audience::Owner {
+            user_id: owner.clone(),
+        },
+        Audience::Workspace {
+            workspace_id: owner.as_ref().to_owned(),
+        },
+    ]);
+    let mut borrowed = harness
+        .open(
+            bot(&owner, false),
+            WebhookScope::User,
+            filter(&["agent_session.deleted"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("agent_session.deleted", "agent_session", DOC),
+            audience,
+        ))
+        .await;
+
+    assert_eq!(
+        borrowed.next_event_name().await.as_deref(),
+        Some("agent_session.deleted")
+    );
+}
+
+/// A snapshot (people whose grants are gone) is not a personal class: a bot
+/// acting for a removed member still receives the removal.
+#[tokio::test(start_paused = true)]
+async fn a_snapshot_reaches_a_bot_acting_for_a_captured_user() {
+    let harness = Harness::default();
+    let removed = user("removed@example.com");
+    let mut borrowed = harness
+        .open(
+            bot(&removed, false),
+            WebhookScope::User,
+            filter(&["team.member_removed"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("team.member_removed", "team", &TEAM.to_string()),
+            Audience::Snapshot {
+                user_ids: vec![removed.clone()],
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        borrowed.next_event_name().await.as_deref(),
+        Some("team.member_removed")
+    );
+}
+
+/// Without the flag, webhook lifecycle reaches the workspace's stream
+/// whoever acts for it, as before.
+#[tokio::test(start_paused = true)]
+async fn an_unflagged_account_manager_still_receives_webhook_lifecycle() {
+    let harness = Harness::default();
+    let managed = user("managed@example.com");
+    let manager = StreamPrincipal {
+        kind: PrincipalKind::AccountManager {
+            user: managed.clone(),
+        },
+        credential_id: "manager-key".to_owned(),
+    };
+    let mut stream = harness
+        .open(
+            manager,
+            WebhookScope::User,
+            filter(&["webhook.created"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("webhook.created", "webhook", "wh_1"),
+            Audience::Workspace {
+                workspace_id: managed.as_ref().to_owned(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("webhook.created")
+    );
+}
+
+/// Without the flag a bot acting for a user still receives that user's
+/// addressed events, as before.
+#[tokio::test(start_paused = true)]
+async fn an_unflagged_bot_still_receives_its_users_addressed_events() {
+    let harness = Harness::default();
+    let callee = user("callee@example.com");
+    let mut stream = harness
+        .open(
+            bot(&callee, false),
+            WebhookScope::User,
+            filter(&["call.ringing"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("call.ringing", "call", DOC),
+            Audience::Recipient {
+                user_id: callee.clone(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("call.ringing")
+    );
+}
+
+/// `*` on a stream (main's contract, no flag needed).
+mod wildcard_streams {
+    use super::*;
+    use crate::domain::filters::WebhookFilter;
+    use crate::domain::models::NormalizedEvent;
+    use event_exposure::Stage;
+
+    const OTHER_DOC: &str = "0193b3a0-0000-7000-8000-00000000d0c2";
+
+    fn preview(event: NormalizedEvent, audience: Audience) -> LogRecord {
+        let mut record = public(event, audience);
+        if let Some(event) = record.event.as_mut() {
+            event.stage = Stage::Preview;
+        }
+        record
+    }
+
+    /// Every stable event the user may see, whatever its type, and nothing
+    /// they may not: entity access is still checked per event. Preview
+    /// events stay behind the flag.
+    #[tokio::test(start_paused = true)]
+    async fn wildcard_stream_delivers_future_event_types_only_with_current_access() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        harness
+            .access
+            .grant(EntityType::Document, DOC, reader.as_ref());
+        let mut stream = harness
+            .open(person(&reader), WebhookScope::User, filter(&["*"]), None)
+            .await
+            .unwrap();
+
+        for record in [
+            public(
+                event("document.updated", "document", OTHER_DOC),
+                entity(EntityType::Document, OTHER_DOC),
+            ),
+            public(
+                event("webhook.created", "webhook", "wh_foreign"),
+                Audience::Workspace {
+                    workspace_id: "someone-else".to_owned(),
+                },
+            ),
+            preview(
+                event("document.content_changed", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ),
+            public(
+                event("document.updated", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ),
+            public(
+                event("webhook.created", "webhook", "wh_1"),
+                Audience::Workspace {
+                    workspace_id: reader.as_ref().to_owned(),
+                },
+            ),
+        ] {
+            harness.publish(record).await;
+        }
+
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("document.updated")
+        );
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("webhook.created")
+        );
+        assert_eq!(stream.next_event_name().await, None);
+    }
+
+    /// With the flag the same `*` also carries preview events.
+    #[tokio::test(start_paused = true)]
+    async fn a_flagged_wildcard_stream_also_receives_preview_events() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        harness.preview.enable(&reader);
+        harness
+            .access
+            .grant(EntityType::Document, DOC, reader.as_ref());
+        let mut stream = harness
+            .open(person(&reader), WebhookScope::User, filter(&["*"]), None)
+            .await
+            .unwrap();
+
+        harness
+            .publish(preview(
+                event("document.content_changed", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ))
+            .await;
+
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("document.content_changed")
+        );
+    }
+
+    /// `*` widens the event names, never the entity ids.
+    #[tokio::test(start_paused = true)]
+    async fn wildcard_stream_preserves_entity_id_filters() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        for doc in [DOC, OTHER_DOC] {
+            harness
+                .access
+                .grant(EntityType::Document, doc, reader.as_ref());
+        }
+        let mut stream = harness
+            .open(
+                person(&reader),
+                WebhookScope::User,
+                vec![WebhookFilter {
+                    events: vec!["*".to_owned()],
+                    ids: Some(vec![DOC.to_owned()]),
+                    entity_types: None,
+                }],
+                None,
+            )
+            .await
+            .unwrap();
+
+        for doc in [OTHER_DOC, DOC] {
+            harness
+                .publish(public(
+                    event("document.updated", "document", doc),
+                    entity(EntityType::Document, doc),
+                ))
+                .await;
+        }
+
+        match stream.next_now().await {
+            Some(crate::domain::models::StreamItem::Event { event, .. }) => {
+                assert_eq!(event.entity_id, DOC);
+            }
+            other => panic!("expected the event on {DOC}, got {other:?}"),
+        }
+        assert_eq!(stream.next_event_name().await, None);
+    }
+
+    /// A family wildcard stays a literal name without the flag.
+    #[tokio::test(start_paused = true)]
+    async fn an_unflagged_family_wildcard_matches_nothing() {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        harness
+            .access
+            .grant(EntityType::Document, DOC, reader.as_ref());
+        let mut stream = harness
+            .open(
+                person(&reader),
+                WebhookScope::User,
+                filter(&["document.*"]),
+                None,
+            )
+            .await
+            .unwrap();
+
+        harness
+            .publish(public(
+                event("document.updated", "document", DOC),
+                entity(EntityType::Document, DOC),
+            ))
+            .await;
+
+        assert_eq!(stream.next_event_name().await, None);
+    }
+}

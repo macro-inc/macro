@@ -16,29 +16,10 @@ pub const WEBHOOK_EVENT_QUEUE_MESSAGE_VERSION: u8 = 1;
 
 /// Event data normalized from a broker envelope for webhook matching and delivery.
 ///
-/// `broker_envelope` retains the complete payload received from the broker and is
-/// the only value sent as the webhook HTTP request body.
+/// Shared with live streams, which normalize through the same exposure code.
+/// `broker_envelope` is the only value sent as the webhook HTTP request body.
 #[cfg(feature = "ports")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct NormalizedWebhookEvent {
-    /// Broker event identifier, represented as a string for transport neutrality.
-    pub event_id: String,
-    /// Version of the broker event payload schema.
-    pub schema_version: u8,
-    /// Exact event name used for webhook filter matching.
-    pub event_name: String,
-    /// Normalized entity type used for access resolution and delivery records.
-    pub entity_type: String,
-    /// Entity identifier used for access resolution and webhook filter matching.
-    pub entity_id: String,
-    /// Key that preserves the event ordering observed during ingestion.
-    pub ordering_key: String,
-    /// Time at which the broker event was ingested for webhook processing.
-    pub occurred_at: DateTime<Utc>,
-    /// Complete broker envelope forwarded as the webhook HTTP request body.
-    pub broker_envelope: serde_json::Value,
-}
+pub use event_stream::domain::models::NormalizedEvent as NormalizedWebhookEvent;
 
 /// Versioned queue payload for delivering one event to one webhook.
 ///
@@ -265,85 +246,16 @@ pub enum WebhookWorkerDisposition {
     RetryAfter(Duration),
 }
 
-/// Event and optional entity-id constraints used to match webhook deliveries.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(deny_unknown_fields)]
-pub struct WebhookFilter {
-    /// Event names matched by this filter.
-    pub events: Vec<String>,
-    /// Entity ids matched by this filter. When absent, the filter matches all entity ids.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ids: Option<Vec<String>>,
-}
+/// Filters are shared with live streams; see `event_stream::domain::filters`.
+pub use event_stream::domain::filters::{WebhookFilter, WebhookFilters};
 
-impl WebhookFilter {
-    /// Return whether this filter accepts an event name and entity id.
-    pub fn accepts(&self, event_name: &str, entity_id: &str) -> bool {
-        self.events.iter().any(|event| event == event_name)
-            && self
-                .ids
-                .as_ref()
-                .is_none_or(|ids| ids.iter().any(|id| id == entity_id))
-    }
-}
+/// Webhook lifecycle status; its type lives with the webhook lifecycle
+/// events in `event_stream`.
+pub use event_stream::domain::webhook_lifecycle::WebhookStatus;
 
-/// Collection of webhook filters used to decide delivery eligibility.
-pub type WebhookFilters = Vec<WebhookFilter>;
-
-/// Webhook lifecycle status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum WebhookStatus {
-    /// Webhook is active and eligible for delivery once validated.
-    Active,
-    /// Webhook is paused and should not receive deliveries.
-    Paused,
-    /// Webhook was disabled by the system.
-    Disabled,
-}
-
-impl WebhookStatus {
-    /// Storage representation.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Active => "active",
-            Self::Paused => "paused",
-            Self::Disabled => "disabled",
-        }
-    }
-}
-
-impl std::str::FromStr for WebhookStatus {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "active" => Ok(Self::Active),
-            "paused" => Ok(Self::Paused),
-            "disabled" => Ok(Self::Disabled),
-            other => Err(format!("unknown webhook status: {other}")),
-        }
-    }
-}
-
-/// Scope that owns a newly-created webhook.
-///
-/// Clients serialize this, so both derives are used. `Display`/`FromStr`
-/// spell the same names as serde, for query strings and config values.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
-)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum WebhookScope {
-    /// The authenticated user's personal workspace.
-    User,
-    /// The authenticated user's team workspace.
-    Team,
-}
+/// Scope that owns a newly-created webhook; also selects a live stream's
+/// workspace.
+pub use event_stream::domain::models::WebhookScope;
 
 /// Endpoint restrictions applied to webhook URLs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

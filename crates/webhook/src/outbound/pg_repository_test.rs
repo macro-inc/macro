@@ -40,6 +40,7 @@ fn create_request_with_namespace(namespace: &str) -> CreateWebhookRequest {
         filters: vec![WebhookFilter {
             events: vec!["build.created".to_string()],
             ids: None,
+            entity_types: None,
         }],
     }
 }
@@ -139,6 +140,7 @@ fn webhook_filter(events: &[&str], ids: Option<&[&str]>) -> WebhookFilter {
     WebhookFilter {
         events: events.iter().map(|event| (*event).to_string()).collect(),
         ids: ids.map(|ids| ids.iter().map(|id| (*id).to_string()).collect()),
+        entity_types: None,
     }
 }
 
@@ -201,6 +203,7 @@ async fn create_inserts_webhook_with_filters(pool: PgPool) -> anyhow::Result<()>
         vec![WebhookFilter {
             events: vec!["build.created".to_string()],
             ids: None,
+            entity_types: None,
         }]
     );
     assert!(!webhook.is_valid);
@@ -713,5 +716,120 @@ async fn get_user_team_workspace_id_returns_team_membership(pool: PgPool) -> any
         WebhookWorkspaceResolver::get_user_team_workspace_id(&repo, user_id()).await?,
         Some(TEAM_ID.to_string())
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_matching_event_fetches_family_and_star_wildcards_with_their_ids(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_webhook_for_matching(
+        &pool,
+        "wh_family",
+        USER_ID,
+        vec![webhook_filter(&["document.*"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_star_doc_2",
+        USER_ID,
+        vec![webhook_filter(&["*"], Some(&["doc_2"]))],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_other_family",
+        USER_ID,
+        vec![webhook_filter(&["channel.*"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    let repo = PgRepository::new(pool);
+
+    let doc_1 = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.updated".to_string(),
+            "doc_1".to_string(),
+        )
+        .await?;
+    let doc_2 = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.updated".to_string(),
+            "doc_2".to_string(),
+        )
+        .await?;
+
+    assert_eq!(webhook_ids(&doc_1), vec!["wh_family"]);
+    assert_eq!(webhook_ids(&doc_2), vec!["wh_family", "wh_star_doc_2"]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn any_webhook_names_finds_exact_family_and_star_filters_of_live_webhooks(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::WebhookInterest as _;
+
+    insert_webhook_for_matching(
+        &pool,
+        "wh_exact",
+        USER_ID,
+        vec![webhook_filter(&["message.posted"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_family",
+        USER_ID,
+        vec![webhook_filter(&["document.*"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_paused_star",
+        USER_ID,
+        vec![webhook_filter(&["*"], None)],
+        WebhookStatus::Paused,
+        true,
+        false,
+    )
+    .await?;
+    let repo = PgRepository::new(pool.clone());
+
+    assert!(repo.any_webhook_names("message.posted").await?);
+    assert!(repo.any_webhook_names("document.updated").await?);
+    assert!(
+        !repo.any_webhook_names("channel.created").await?,
+        "only a paused * names it"
+    );
+
+    insert_webhook_for_matching(
+        &pool,
+        "wh_star",
+        USER_ID,
+        vec![webhook_filter(&["*"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    assert!(repo.any_webhook_names("channel.created").await?);
     Ok(())
 }

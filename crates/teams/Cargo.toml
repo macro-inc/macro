@@ -35,6 +35,8 @@ backfill_binary = [
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
+# OpenAPI schemas for the public event projection.
+schema = ["dep:utoipa", "macro_user_id/schema"]
 outbound = [
   "model_user/sqlx",
   "dep:analytics_client",

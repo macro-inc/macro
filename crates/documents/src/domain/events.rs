@@ -281,10 +281,212 @@ pub enum DocumentTopicEvent {
     Interaction(DocumentInteractionMetadata),
 }
 
+/// An editor of a document content change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct PublicDocumentEditor {
+    /// User or bot that edited.
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub actor: Actor<'static>,
+    /// User the actor acted for, if any.
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+}
+
+/// Public payload of `document.content_changed`: new bytes were stored or a
+/// live document's content moved. Read the document for the content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct PublicDocumentContentChanged {
+    /// The document.
+    pub document_id: String,
+    /// The version written, when the write was versioned.
+    pub document_version_id: Option<String>,
+    /// Who edited since the previous notification; empty when unknown, as
+    /// for uploads.
+    pub editors: Vec<PublicDocumentEditor>,
+}
+
+/// Public payload of `document.appearance_changed`: the icon or color
+/// changed. Read the document for the new appearance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct PublicDocumentAppearanceChanged {
+    /// The document.
+    pub document_id: String,
+    /// Who changed it, when attributable.
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user the actor acted for, if any.
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+}
+
+/// Thin projections of document edits that were not delivered before
+/// projections existed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum DocumentChangePublicEvent {
+    /// A document's content changed: an upload or a live-collab snapshot.
+    #[serde(rename = "document.content_changed")]
+    ContentChanged(PublicDocumentContentChanged),
+    /// A document's icon or color changed.
+    #[serde(rename = "document.appearance_changed")]
+    AppearanceChanged(PublicDocumentAppearanceChanged),
+}
+
+/// The public projection of [`DocumentTopicEvent`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum DocumentPublicEvent {
+    /// Lifecycle events delivered unchanged since before projections, so
+    /// their wire shape stays exactly the broker's.
+    Lifecycle(Box<DocumentTopicEvent>),
+    /// Content and appearance edits, as thin projections.
+    Change(DocumentChangePublicEvent),
+}
+
 impl TopicEvent for DocumentTopicEvent {
     type Topic = MacroDocumentsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = DocumentPublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, ExposureError, PendingPhase, PublicEvent,
+            Stage,
+        };
+        use std::borrow::Cow;
+
+        let (name, document_id, stage, payload) = match self {
+            Self::Created(metadata) => (
+                "document.created",
+                &metadata.document_id,
+                Stage::Stable,
+                None,
+            ),
+            Self::Updated(metadata) if metadata.appearance_change.is_some() => (
+                "document.appearance_changed",
+                &metadata.document_id,
+                Stage::Preview,
+                Some(DocumentChangePublicEvent::AppearanceChanged(
+                    PublicDocumentAppearanceChanged {
+                        document_id: metadata.document_id.clone(),
+                        actor: metadata
+                            .actor
+                            .clone()
+                            .or_else(|| metadata.actor_user_id.clone().map(Actor::new_from_user)),
+                        on_behalf_of: metadata.on_behalf_of.clone(),
+                    },
+                )),
+            ),
+            Self::Updated(metadata) => (
+                "document.updated",
+                &metadata.document_id,
+                Stage::Stable,
+                None,
+            ),
+            Self::Deleted(metadata) => (
+                "document.deleted",
+                &metadata.document_id,
+                Stage::Stable,
+                None,
+            ),
+            Self::Copied(metadata) => (
+                "document.copied",
+                &metadata.document_id,
+                Stage::Stable,
+                None,
+            ),
+            Self::Interaction(metadata) => (
+                "document.interaction",
+                &metadata.document_id,
+                Stage::Stable,
+                None,
+            ),
+            // An upload and a live-collab snapshot are the same fact to a
+            // subscriber: the content moved. The owner is S3 routing, and
+            // the file type is the stored rendition's, not the document's.
+            Self::ContentUploaded(metadata) => (
+                "document.content_changed",
+                &metadata.document_id,
+                Stage::Preview,
+                Some(DocumentChangePublicEvent::ContentChanged(
+                    PublicDocumentContentChanged {
+                        document_id: metadata.document_id.clone(),
+                        document_version_id: metadata.document_version_id.clone(),
+                        editors: Vec::new(),
+                    },
+                )),
+            ),
+            Self::SyncContentUpdated(metadata) => {
+                let editors = if metadata.editors.is_empty() {
+                    metadata
+                        .actor
+                        .iter()
+                        .map(|actor| PublicDocumentEditor {
+                            actor: actor.clone(),
+                            on_behalf_of: metadata.on_behalf_of.clone(),
+                        })
+                        .collect()
+                } else {
+                    metadata
+                        .editors
+                        .iter()
+                        .map(|editor| PublicDocumentEditor {
+                            actor: editor.actor.clone(),
+                            on_behalf_of: editor.on_behalf_of.clone(),
+                        })
+                        .collect()
+                };
+                (
+                    "document.content_changed",
+                    &metadata.document_id,
+                    Stage::Preview,
+                    Some(DocumentChangePublicEvent::ContentChanged(
+                        PublicDocumentContentChanged {
+                            document_id: metadata.document_id.clone(),
+                            document_version_id: metadata.document_version_id.clone(),
+                            editors,
+                        },
+                    )),
+                )
+            }
+            Self::Purged(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::ProducerChange,
+                    "carries only the document id and its grants are gone when consumed; needs Owner plus an audience snapshot",
+                ));
+            }
+        };
+        if uuid::Uuid::parse_str(document_id).is_err() {
+            return Err(ExposureError::InvalidEntityId {
+                entity_type: "document",
+                entity_id: document_id.clone(),
+            });
+        }
+        let payload = match payload {
+            Some(change) => DocumentPublicEvent::Change(change),
+            None => DocumentPublicEvent::Lifecycle(Box::new(self.clone())),
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Document, document_id.clone()),
+            audience: Audience::Entity {
+                entity_type: EntityType::Document,
+                entity_id: document_id.clone(),
+            },
+            stage,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroDocumentsTopic`], keyed by document id.

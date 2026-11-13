@@ -28,6 +28,7 @@ fn deserializes_filter_with_events_and_ids() {
         vec![WebhookFilter {
             events: vec!["document.created".to_string()],
             ids: Some(vec!["doc_1".to_string()]),
+            entity_types: None,
         }]
     );
 }
@@ -41,6 +42,7 @@ fn deserializes_absent_ids_as_none() {
         vec![WebhookFilter {
             events: vec!["e".to_string()],
             ids: None,
+            entity_types: None,
         }]
     );
 }
@@ -55,6 +57,7 @@ fn deserializes_null_ids_as_none() {
         vec![WebhookFilter {
             events: vec!["e".to_string()],
             ids: None,
+            entity_types: None,
         }]
     );
 }
@@ -64,6 +67,7 @@ fn serializes_none_ids_without_ids_key() {
     let filter = WebhookFilter {
         events: vec!["e".to_string()],
         ids: None,
+        entity_types: None,
     };
 
     let value = serde_json::to_value(filter).unwrap();

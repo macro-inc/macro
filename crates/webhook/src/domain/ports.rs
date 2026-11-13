@@ -86,6 +86,21 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
+/// Whether any webhook could want an event, before its audience is resolved.
+pub trait WebhookInterest: Send + Sync + 'static {
+    /// Error.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Whether any active, valid webhook has a filter naming `event_name`
+    /// exactly, by its family wildcard (`document.*`), or as `*`, in any
+    /// workspace. `false` means no webhook can match the event, so its
+    /// audience need not be resolved.
+    fn any_webhook_names(
+        &self,
+        event_name: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
 /// Resolver that expands people into personal and team webhook workspace ids.
 pub trait WebhookWorkspaceResolver: Clone + Send + Sync + 'static {
     /// Resolver error.
@@ -103,20 +118,6 @@ pub trait WebhookWorkspaceResolver: Clone + Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
-}
-
-/// Exact contact-graph membership check for live streams.
-pub trait WebhookContactChecker: Clone + Send + Sync + 'static {
-    /// Checker error.
-    type Err: Into<anyhow::Error> + Send;
-
-    /// Whether `other` is a contact of `user`: one bounded point lookup, never
-    /// a contact-list read. `user == other` is the caller's concern.
-    fn is_contact(
-        &self,
-        user: MacroUserIdStr<'static>,
-        other: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Port for enqueueing one normalized event for one matched webhook.

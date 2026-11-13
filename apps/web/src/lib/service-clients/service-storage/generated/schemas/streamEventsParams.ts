@@ -12,8 +12,14 @@ export type StreamEventsParams = {
    */
   scope: WebhookScope;
   /**
- * URL-encoded JSON array of webhook filters, identical to the persisted
-webhook `filters` field.
+ * URL-encoded JSON array of filters, identical to the persisted webhook
+`filters` field.
  */
   filters?: string;
+  /**
+ * Resume after this cursor (an SSE `id`). `Last-Event-ID` wins when both
+are sent. Requires the `public-event-stream` feature; ignored without
+it.
+ */
+  cursor?: string;
 };

@@ -41,6 +41,40 @@ pub enum MessageTopicEvent {
 impl TopicEvent for MessageTopicEvent {
     type Topic = MacroMessagesTopic;
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{Audience, EntityRef, Exposure, PublicEvent, Stage};
+        use std::borrow::Cow;
+
+        // The entity is the message's parent: access and `ids` filters are by
+        // the channel or document that owns the conversation.
+        let (name, parent) = match self {
+            Self::Posted(metadata) => ("message.posted", &metadata.parent),
+            Self::Patched(metadata) => ("message.patched", &metadata.parent),
+            Self::Deleted(metadata) => ("message.deleted", &metadata.parent),
+            Self::Mentioned(metadata) => ("message.mentioned", &metadata.parent),
+            Self::AttachmentCreated(metadata) => ("message.attachment_created", &metadata.parent),
+            Self::AttachmentRemoved(metadata) => ("message.attachment_removed", &metadata.parent),
+        };
+        let entity_id = parent.entity_id();
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(parent.access_entity_type(), entity_id.clone()),
+            audience: Audience::Entity {
+                entity_type: parent.access_entity_type(),
+                entity_id,
+            },
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// Message facts keyed by thread root to preserve conversation ordering.

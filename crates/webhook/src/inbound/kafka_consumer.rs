@@ -1,8 +1,7 @@
 //! Kafka consumer that feeds broker events into webhook ingestion.
 //!
-//! Subscribes to [`DocumentMacroEvent`], [`ChannelMacroEvent`], and
-//! [`WebhookMacroEvent`] topics and hands every decoded event envelope to a
-//! [`WebhookEventIngestionService`].
+//! Subscribes to every public topic ([`DeclaredMacroEvent`]) and hands every
+//! decoded event envelope to a [`WebhookEventIngestionService`].
 //!
 //! Delivery is at-least-once: an event's offset is committed only after the
 //! ingestion service accepted it or permanently rejected it. Transient
@@ -40,8 +39,10 @@ struct WebhookEventIngestionConsumerGroup;
 
 impl GroupName for WebhookEventIngestionConsumerGroup {
     const GROUP_NAME: &'static str = "webhook-event-ingestion";
-    // `macro.messages` joined this group's subscription with no committed
-    // offset; starting at its head avoids replaying the topic's retention.
+    // Deliberate for every topic that joins this group's subscription (first
+    // `macro.messages`, then each family made public since): a topic with no
+    // committed offset starts at its head instead of replaying its retention
+    // into webhooks. Existing topics resume from their committed offsets.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
@@ -132,6 +133,54 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::UserMacroEvent(event) => {
                         service.ingest_user_event(event.event().clone()).await
                     }
+                    DeclaredMacroEvent::ProjectMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::ChatMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::DatabaseMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::FormMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::InitiativeMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::PropertyMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::CallMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::GithubPullRequestMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::EmailMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::CalendarMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::ActivityMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::JsonNotificationMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::MentionMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::TeamMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::BotMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::GithubWebhookMacroEvent(event) => {
+                        service.ingest_public_event(event.event().clone()).await
+                    }
                 };
 
                 match &result {
@@ -181,9 +230,8 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
 
 /// Run the webhook event consumer until `shutdown` resolves.
 ///
-/// Connects to `brokers` and subscribes to the topics declared by
-/// [`DocumentMacroEvent`], [`ChannelMacroEvent`], and [`WebhookMacroEvent`]
-/// under the `webhook-event-ingestion` consumer group. Every decoded event is fed to
+/// Connects to `brokers` and subscribes to the topics of
+/// [`DeclaredMacroEvent`] under the `webhook-event-ingestion` consumer group. Every decoded event is fed to
 /// `service`, committing each offset only
 /// after ingestion succeeds (see `ingest_with_retry` for the retry policy).
 /// Returns an error when the consumer cannot be created or subscribed, or when

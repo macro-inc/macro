@@ -149,6 +149,13 @@ enforced by the ordinary backend APIs.
   `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
   `/initiatives/{id}/activity`. Code mode hides the matching direct tools.
+- `src/events/`: `macro.events`. `subscribe.ts` is the one live transport
+  (`GET /events/stream`, falling back to `/webhook/events/stream` on a 404):
+  reconnect with backoff from the cursor as `Last-Event-ID`, `lagged`
+  reconnects at once, `reset` throws `EventStreamResetError`, `revoked` ends
+  the loop, dedupe by `event_id`. `listen()`/`on()` run on it; `webhook()`
+  shares the dispatch. One hydrator per family in `hydrate/`; a family
+  without one is delivered raw, and `types.ts` re-narrows grouped arms.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 - `src/calls/`: optional Node and browser LiveKit helpers, exported only as
   `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of

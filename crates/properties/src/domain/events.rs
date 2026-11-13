@@ -3,8 +3,12 @@
 //! Property definition and option events are keyed by property definition id.
 //! Entity property events are keyed by entity id to preserve per-entity ordering.
 
+pub mod definitions;
+pub mod public;
 #[cfg(test)]
 mod test;
+
+pub use public::PropertyPublicEvent;
 
 use activity::Actor;
 use chrono::{DateTime, Utc};
@@ -61,6 +65,10 @@ pub struct PropertyOptionCreatedMetadata {
     pub option_id: Uuid,
     /// Identifier of the option's property definition.
     pub property_definition_id: Uuid,
+    /// Scope that owns the option's property definition. Absent on events
+    /// published before options carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<PropertyOwner>,
     /// Authenticated user who created the option, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// Selectable option value.
@@ -78,6 +86,10 @@ pub struct PropertyOptionUpdatedMetadata {
     pub option_id: Uuid,
     /// Identifier of the option's property definition.
     pub property_definition_id: Uuid,
+    /// Scope that owns the option's property definition. Absent on events
+    /// published before options carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<PropertyOwner>,
     /// Authenticated user who updated the option, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// Full option value after the update.
@@ -95,6 +107,10 @@ pub struct PropertyOptionDeletedMetadata {
     pub option_id: Uuid,
     /// Identifier of the option's property definition.
     pub property_definition_id: Uuid,
+    /// Scope that owns the option's property definition. Absent on events
+    /// published before options carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<PropertyOwner>,
     /// Authenticated user who deleted the option, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// Option value at deletion time.
@@ -219,6 +235,105 @@ impl TopicEvent for PropertyTopicEvent {
     type Topic = MacroPropertiesTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = PropertyPublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, Exposure, PendingPhase, PublicEvent, Stage,
+        };
+        use public::{
+            PublicEntityPropertiesCleared, PublicEntityPropertyUpdated, acting, public_entity_type,
+        };
+        use std::borrow::Cow;
+
+        const NO_ENTITY_AUDIENCE: &str = "a property on a calendar event or user has no entity accessor list; it stays internal until those families have an audience";
+        const MAYBE_PERSONAL_TAG: &str = "may be a personal tag, which only its owner may see; the event carries neither the definition's data type nor its owner, so the producer must add them before select and tag changes can be public";
+
+        // A property value is visible to whoever can see the entity carrying
+        // it, so the audience is that entity's.
+        let (name, entity_type, entity_id, payload) = match self {
+            Self::EntityPropertyUpdated(metadata) => {
+                // Tags, personal ones included, hold select-option values; an
+                // update whose value is neither cannot be a tag.
+                let is_select = |value: &Option<PropertyValue>| {
+                    matches!(value, Some(PropertyValue::SelectOption(_)))
+                };
+                if is_select(&metadata.value)
+                    || is_select(&metadata.previous_value)
+                    || (metadata.value.is_none() && metadata.previous_value.is_none())
+                {
+                    return Ok(Exposure::pending(
+                        PendingPhase::ProducerChange,
+                        MAYBE_PERSONAL_TAG,
+                    ));
+                }
+                let Some(entity_type) = public_entity_type(metadata.entity_type) else {
+                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
+                };
+                (
+                    "entity_property.updated",
+                    entity_type,
+                    &metadata.entity_id,
+                    PropertyPublicEvent::EntityPropertyUpdated(PublicEntityPropertyUpdated {
+                        entity_property_id: metadata.entity_property_id,
+                        entity_type,
+                        entity_id: metadata.entity_id.clone(),
+                        property_definition_id: metadata.property_definition_id,
+                        actor: acting(metadata.actor.as_ref(), metadata.actor_user_id.as_ref()),
+                        on_behalf_of: metadata.on_behalf_of.clone(),
+                        value: metadata.value.clone(),
+                        previous_value: metadata.previous_value.clone(),
+                        updated_at: metadata.updated_at,
+                    }),
+                )
+            }
+            // Says which property left the entity, which for a personal tag
+            // reveals it to every viewer.
+            Self::EntityPropertyDeleted(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::ProducerChange,
+                    MAYBE_PERSONAL_TAG,
+                ));
+            }
+            Self::EntityPropertiesCleared(metadata) => {
+                let Some(entity_type) = public_entity_type(metadata.entity_type) else {
+                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
+                };
+                (
+                    "entity_properties.cleared",
+                    entity_type,
+                    &metadata.entity_id,
+                    PropertyPublicEvent::EntityPropertiesCleared(PublicEntityPropertiesCleared {
+                        entity_type,
+                        entity_id: metadata.entity_id.clone(),
+                        actor: acting(metadata.actor.as_ref(), metadata.actor_user_id.as_ref()),
+                        on_behalf_of: metadata.on_behalf_of.clone(),
+                    }),
+                )
+            }
+            Self::Created(_)
+            | Self::Deleted(_)
+            | Self::OptionCreated(_)
+            | Self::OptionUpdated(_)
+            | Self::OptionDeleted(_) => return definitions::exposure(self),
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(entity_type, entity_id.clone()),
+            audience: Audience::Entity {
+                entity_type,
+                entity_id: entity_id.clone(),
+            },
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroPropertiesTopic`].

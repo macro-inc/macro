@@ -682,6 +682,68 @@ impl AccessRepository for MockRepo {
         Ok(self.channel_users.lock().await.clone())
     }
 
+    async fn get_entity_users_at_least(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        _min_level: AccessLevel,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.get_entity_users(entity_id, entity_type).await
+    }
+
+    async fn is_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> Result<bool, AccessError> {
+        Ok(self
+            .get_entity_users(entity_id, entity_type)
+            .await?
+            .iter()
+            .any(|user| user.as_ref() == principal_id))
+    }
+
+    async fn is_direct_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> Result<bool, AccessError> {
+        Ok(self
+            .get_direct_entity_users(entity_id, entity_type)
+            .await?
+            .iter()
+            .any(|user| user.as_ref() == principal_id))
+    }
+
+    async fn is_channel_user(
+        &self,
+        channel_id: &Uuid,
+        principal_id: &str,
+    ) -> Result<bool, AccessError> {
+        Ok(self
+            .get_channel_users(channel_id)
+            .await?
+            .iter()
+            .any(|user| user.as_ref() == principal_id))
+    }
+
+    async fn get_entity_users_uncached(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.get_entity_users(entity_id, entity_type).await
+    }
+
+    async fn get_channel_users_uncached(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.get_channel_users(channel_id).await
+    }
+
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,

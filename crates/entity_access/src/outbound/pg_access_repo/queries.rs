@@ -35,6 +35,7 @@ pub mod crm_entity_users;
 pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;
+pub mod entity_accessor;
 pub mod foreign_entity_access;
 pub mod form_access;
 pub mod initiative_access;
@@ -205,8 +206,8 @@ pub async fn get_team_scope_source_ids(
     Ok(SourceIds(source_ids))
 }
 
-/// Grabs all user IDs with access to an entity via the entity_access table.
-#[tracing::instrument(skip(pool), err)]
+/// Grabs all user IDs with access to an entity via the entity_access table,
+/// cached for 10 s per process. [`get_entity_users_uncached`] reads through.
 #[cfg_attr(
     not(test),
     cached(
@@ -217,6 +218,17 @@ pub async fn get_team_scope_source_ids(
     )
 )]
 pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
+    pool: &Pool<Postgres>,
+    entity_id: &uuid::Uuid,
+    entity_type: EntityType,
+) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+    get_entity_users_uncached(pool, entity_id, entity_type).await
+}
+
+/// Grabs all user IDs with access to an entity via the entity_access table,
+/// reading the database every time.
+#[tracing::instrument(skip(pool), err)]
+pub(in crate::outbound::pg_access_repo) async fn get_entity_users_uncached(
     pool: &Pool<Postgres>,
     entity_id: &uuid::Uuid,
     entity_type: EntityType,
@@ -258,47 +270,7 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
         vec![]
     };
 
-    let mut users: Vec<MacroUserIdStr<'static>> = sqlx::query_scalar!(
-        r#"
-    SELECT user_id FROM (
-        -- Direct user grants
-        SELECT source_id as user_id FROM entity_access
-        WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'user'
-
-        UNION ALL
-
-        -- Channel Members
-        SELECT cp.user_id FROM comms_channel_participants cp
-        WHERE cp.left_at IS NULL AND cp.channel_id IN (
-            SELECT source_id::uuid FROM entity_access
-            WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'channel'
-        )
-
-        UNION ALL
-
-        -- Team Members
-        SELECT tu.user_id FROM team_user tu
-        WHERE tu.team_id IN (
-            SELECT source_id::uuid FROM entity_access
-            WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'team'
-        )
-    ) AS combined_users
-
-    "#,
-        entity_id,
-        entity_type.as_ref(),
-    )
-    .fetch_all(pool)
-    .await?
-    .into_iter()
-    .filter_map(|u| {
-        u.and_then(|u| {
-            MacroUserIdStr::parse_from_str(u.as_str())
-                .ok()
-                .map(|u| u.into_owned())
-        })
-    })
-    .collect::<Vec<MacroUserIdStr<'static>>>();
+    let mut users = entity_access_db_utils::entity_users(pool, entity_id, entity_type).await?;
 
     // add in email owner (if applicable)
     users.append(&mut email_owner);

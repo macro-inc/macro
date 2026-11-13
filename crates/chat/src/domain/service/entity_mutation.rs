@@ -8,6 +8,7 @@ use entity_mutation::{
     MoveEntity, RenameEntity, RestoreEntity, TrashEntity, UpdateEntitySharePolicy,
     capability::MoveEntityRequest, project_refs,
 };
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
@@ -61,9 +62,10 @@ async fn chat_project_id<S: ChatService>(
     service.get_metadata(view_receipt).await.ok()?.project_id
 }
 
-impl<R, ToolSetContext, Eam> RenameEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, ToolSetContext, Eam, B> RenameEntity for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -87,9 +89,10 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> MoveEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, ToolSetContext, Eam, B> MoveEntity for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -128,9 +131,11 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> UpdateEntitySharePolicy for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, ToolSetContext, Eam, B> UpdateEntitySharePolicy
+    for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -154,9 +159,10 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> TrashEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, ToolSetContext, Eam, B> TrashEntity for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -178,9 +184,10 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> RestoreEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, ToolSetContext, Eam, B> RestoreEntity for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -202,9 +209,11 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> DeleteEntityPermanently for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, ToolSetContext, Eam, B> DeleteEntityPermanently
+    for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -226,9 +235,10 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> DuplicateEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, ToolSetContext, Eam, B> DuplicateEntity for ChatServiceImpl<R, ToolSetContext, Eam, B>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
+    B: MacroEventBroker,
     Self: ChatService,
 {
     type Receipt = ViewAccessLevel;

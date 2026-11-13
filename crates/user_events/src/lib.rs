@@ -41,6 +41,39 @@ impl TopicEvent for UserTopicEvent {
     type Topic = MacroUsersTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = Self;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let (name, user_id) = match self {
+            Self::PictureChanged(metadata) => ("user.picture_changed", &metadata.user_id),
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::User, user_id.to_string()),
+            // The user, their contacts, and the members of their teams.
+            audience: Audience::Any(vec![
+                Audience::ContactsOf {
+                    user_id: user_id.clone(),
+                },
+                Audience::TeamsOf {
+                    user_id: user_id.clone(),
+                },
+            ]),
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroUsersTopic`], keyed by user id so one user's

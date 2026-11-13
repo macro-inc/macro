@@ -82,6 +82,19 @@ export function hydrateDocumentEvent(
       metadata,
       document: Document.byId(client, metadata.document_id),
     }))
+    .with({ event_type: 'document.content_changed' }, ({ metadata }) => ({
+      event_type: 'document.content_changed' as const,
+      metadata,
+      document: Document.byId(client, metadata.document_id),
+    }))
+    .with({ event_type: 'document.appearance_changed' }, ({ metadata }) => ({
+      event_type: 'document.appearance_changed' as const,
+      metadata,
+      document: Document.byId(client, metadata.document_id),
+      onBehalfOf: metadata.on_behalf_of
+        ? User.byId(client, metadata.on_behalf_of)
+        : undefined,
+    }))
     .exhaustive((unknown) => {
       console.warn('macro sdk: unknown document event', unknown);
       return undefined;

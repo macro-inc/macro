@@ -860,6 +860,21 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_entity_users_uncached(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        // The CRM listing has no process cache.
+        if matches!(entity_type, EntityType::CrmCompany | EntityType::CrmContact) {
+            return self.get_entity_users(entity_id, entity_type).await;
+        }
+        queries::get_entity_users_uncached(&self.pool, entity_id, entity_type)
+            .await
+            .map_err(anyhow_access_error)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_direct_entity_users(
         &self,
         entity_id: &Uuid,
@@ -883,11 +898,78 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_entity_users_at_least(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        min_level: AccessLevel,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(queries::entity_accessor::entity_users_at_least(
+            &self.pool,
+            entity_id,
+            entity_type,
+            min_level,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self, principal_id))]
+    async fn is_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> Result<bool, AccessError> {
+        Ok(queries::entity_accessor::is_entity_user(
+            &self.pool,
+            entity_id,
+            entity_type,
+            principal_id,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self, principal_id))]
+    async fn is_direct_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> Result<bool, AccessError> {
+        Ok(queries::entity_accessor::is_direct_entity_user(
+            &self.pool,
+            entity_id,
+            entity_type,
+            principal_id,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self, principal_id))]
+    async fn is_channel_user(
+        &self,
+        channel_id: &Uuid,
+        principal_id: &str,
+    ) -> Result<bool, AccessError> {
+        Ok(queries::entity_accessor::is_channel_user(&self.pool, channel_id, principal_id).await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_channel_users(
         &self,
         channel_id: &Uuid,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         queries::channel_users::get_channel_users(&self.pool, channel_id)
+            .await
+            .map_err(AccessError::from)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_users_uncached(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        queries::channel_users::get_channel_users_uncached(&self.pool, channel_id)
             .await
             .map_err(AccessError::from)
     }

@@ -69,6 +69,85 @@ impl TopicEvent for MentionTopicEvent {
     type Topic = MacroMentionsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = MentionPublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef as PublicEntityRef, EntityType, Exposure, ExposureError,
+            PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+        use std::str::FromStr as _;
+
+        let (name, metadata, wrap): (_, _, fn(PublicMention) -> MentionPublicEvent) = match self {
+            Self::Created(metadata) => ("mention.created", metadata, MentionPublicEvent::Created),
+            Self::Deleted(metadata) => ("mention.deleted", metadata, MentionPublicEvent::Deleted),
+            Self::MessageSent(_) => {
+                return Ok(Exposure::internal_by_design(
+                    "message.mentioned already delivers each message mention to the message's audience",
+                ));
+            }
+        };
+        // The API only records mentions from documents, but the source kind
+        // travels as a string; any kind that is not an entity type is a
+        // contract violation.
+        let source_type = EntityType::from_str(&metadata.source.kind).map_err(|_| {
+            ExposureError::InvalidEntityId {
+                entity_type: "mention source",
+                entity_id: metadata.source.kind.clone(),
+            }
+        })?;
+        let source_id = metadata.source.id.clone();
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: PublicEntityRef::new(source_type, source_id.clone()),
+            audience: Audience::Entity {
+                entity_type: source_type,
+                entity_id: source_id.clone(),
+            },
+            stage: Stage::Preview,
+            payload: Cow::Owned(wrap(PublicMention {
+                source_type,
+                source_id,
+                mentioned_kind: metadata.mentioned.kind.clone(),
+                mentioned_id: metadata.mentioned.id.clone(),
+            })),
+        }))
+    }
+}
+
+/// The public projection of [`MentionTopicEvent`], delivered to the explicit
+/// accessors of the entity the mention appears in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum MentionPublicEvent {
+    /// A mention was added to an entity, such as a document.
+    #[serde(rename = "mention.created")]
+    Created(PublicMention),
+    /// A mention was removed from an entity.
+    #[serde(rename = "mention.deleted")]
+    Deleted(PublicMention),
+}
+
+/// Public body of a mention event: where the mention is and what it names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct PublicMention {
+    /// Type of the entity the mention appears in.
+    pub source_type: macro_event_broker::exposure::EntityType,
+    /// The entity the mention appears in.
+    pub source_id: String,
+    /// Kind of the mentioned entity, such as `user` or `document`.
+    pub mentioned_kind: String,
+    /// The mentioned entity.
+    pub mentioned_id: String,
 }
 
 /// Publishable event for [`MacroMentionsTopic`], keyed by the mentioned

@@ -3,8 +3,11 @@
 //! Event payloads deliberately exclude subscription, customer, Stripe, payment,
 //! and other billing identifiers. Creation exposes only whether a team is paid.
 
+mod public;
 #[cfg(test)]
 mod test;
+
+pub use public::*;
 
 use bot_id::BotId;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -252,6 +255,102 @@ impl TopicEvent for TeamTopicEvent {
     type Topic = MacroTeamsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+
+    type PublicPayload = TeamPublicEvent;
+
+    fn exposure(
+        &self,
+    ) -> Result<
+        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::exposure::ExposureError,
+    > {
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, MinTeamRole, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let team = |team_id: Uuid, min_role| Audience::Team { team_id, min_role };
+        let (name, team_id, audience, payload) = match self {
+            Self::Created(m) => (
+                "team.created",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Member),
+                TeamPublicEvent::Created(m.into()),
+            ),
+            Self::Updated(m) => (
+                "team.updated",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Member),
+                TeamPublicEvent::Updated(m.into()),
+            ),
+            Self::MemberJoined(m) => (
+                "team.member_joined",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Member),
+                TeamPublicEvent::MemberJoined(m.into()),
+            ),
+            Self::MemberRoleChanged(m) => (
+                "team.member_role_changed",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Member),
+                TeamPublicEvent::MemberRoleChanged(m.into()),
+            ),
+            // The removed member is no longer on the team when the event is
+            // delivered, so they are captured to see their own removal.
+            Self::MemberRemoved(m) => (
+                "team.member_removed",
+                m.team_id,
+                Audience::Any(vec![
+                    team(m.team_id, MinTeamRole::Member),
+                    Audience::Snapshot {
+                        user_ids: vec![m.member_id.clone()],
+                    },
+                ]),
+                TeamPublicEvent::MemberRemoved(m.into()),
+            ),
+            // Membership is gone by delivery; the producer captured it.
+            Self::Deleted(m) => (
+                "team.deleted",
+                m.team_id,
+                Audience::Snapshot {
+                    user_ids: m.member_user_ids.clone(),
+                },
+                TeamPublicEvent::Deleted(m.into()),
+            ),
+            // These carry an invitee email or the domain: admins only.
+            Self::InviteCreated(m) => (
+                "team.invite_created",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Admin),
+                TeamPublicEvent::InviteCreated(m.into()),
+            ),
+            Self::InviteRejected(m) => (
+                "team.invite_rejected",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Admin),
+                TeamPublicEvent::InviteRejected(m.into()),
+            ),
+            Self::InviteRevoked(m) => (
+                "team.invite_revoked",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Admin),
+                TeamPublicEvent::InviteRevoked(m.into()),
+            ),
+            Self::AutoJoinDomainToggled(m) => (
+                "team.auto_join_domain_toggled",
+                m.team_id,
+                team(m.team_id, MinTeamRole::Admin),
+                TeamPublicEvent::AutoJoinDomainToggled(m.into()),
+            ),
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Team, team_id.to_string()),
+            audience,
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroTeamsTopic`], keyed by the team's bare UUID.

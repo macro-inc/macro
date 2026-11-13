@@ -75,32 +75,54 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 
 ## Event ingestion and matching
 
-The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
-`macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
-`macro.agent_session_lifecycle`, and `macro.users`. It supports these event names:
+The `webhook-event-ingestion` Kafka consumer reads every topic with public
+events: today `macro.documents`, `macro.channels`, `macro.messages`,
+`macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
+`macro.users`, and `macro.call_notifications` (declared once in
+`crates/event_stream/src/topics.rs`, shared with the live stream's log; every
+other topic is listed there as internal). The group starts at `Latest` on a
+partition it has never committed, so a topic added to it does not replay its
+retention.
 
-- Documents: `document.created`, `document.updated`, `document.deleted`, and
-  `document.copied`.
-- Channels: `channel.created`, `channel.updated`, `channel.deleted`,
+What is delivered, to whom, and in what shape is declared by each event's
+`TopicEvent::exposure()` in its producing crate (vocabulary in
+`crates/event_exposure`) and normalized by `event_stream::domain::normalize`,
+shared with live streams; `src/domain/ingestion.rs` only maps the declared
+`Audience` to webhook workspaces. Internal events are skipped. `Preview`
+events reach a webhook only when its creator has the `public-event-stream`
+feature flag. Live streams (`GET /events/stream`) live in
+`crates/event_stream`. It supports these event names:
+
+- Documents: `document.created`, `document.updated`, `document.deleted`,
+  `document.copied`, and `document.interaction` (a peer joined or left, or a
+  periodic save). An update that only changes the icon or color is not
+  delivered.
+- Channels: `channel.created`, `channel.updated`, `channel.picture_changed`,
+  `channel.deleted`,
   `channel.participant_added`, `channel.participant_removed`, and
   `channel.access_requested` (someone outside a private or team channel asked
-  to join; the payload carries the request id).
+  to join; the payload carries the request id). Participant events reach the
+  channel's current members: a removed participant does not receive their own
+  `channel.participant_removed`.
 - Messages, on channels and document discussions alike: `message.posted`,
   `message.patched`, `message.deleted`, `message.attachment_created`,
   `message.attachment_removed`, and `message.mentioned`. Each payload carries
-  the message's `parent` (`{"type": "channel" | "document", "id": ...}`).
+  the message's `parent` (`{"type": "channel" | "document" | "initiative" |
+  "crm_company" | "crm_contact" | "call", "id": ...}`), which is also the
+  event's `entity_type`.
 - Webhooks: `webhook.created`, `webhook.updated`, `webhook.deleted`, and
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
 - Agent sessions: `agent_session.opened`, `agent_session.turn_started`,
   `agent_session.turn_ended`, `agent_session.settled`,
   `agent_session.waiting_for_input`, `agent_session.input_received`,
+  `agent_session.command_rejected`, `agent_session.mentioned`,
   `agent_session.stopped`, `agent_session.renamed`, and
   `agent_session.deleted`.
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
   are the user id; `file_id` and `url` are both null when the picture was
   removed). Persisted webhooks go only to the changed user's own personal and
-  team workspaces. The live SSE stream also reaches the user's contacts (user
+  team workspaces. The live stream also reaches the user's contacts (user
   scope only) and the team-scoped streams of the user's teams.
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
@@ -114,7 +136,8 @@ personal webhook workspace and personal event stream may receive them. The
 broker's recipient routing field is removed from delivered metadata.
 
 For document, channel, and message events, ingestion asks `EntityAccessService`
-for the people who currently have access to the entity; a message's entity is
+for the people who currently have access to the entity, uncached, so a grant
+or revocation just before the event counts; a message's entity is
 its parent channel or document. The matching workspace set
 contains each person's Macro user ID, for personal webhooks, plus every team ID
 to which any of those people belongs. The set is deduplicated before matching,
@@ -130,8 +153,9 @@ travels in the payload's `mentioned` field for consumers to filter on (e.g.
 the SDK's `events.onSelfMention`).
 
 Agent trigger events use `entity_type = "bot"`: a filter's `ids` selects one
-bot's whole trigger stream. Access is gated by the channel the mention sits in
-for `agent_trigger.new`, and by the session for `agent_trigger.existing`.
+bot's whole trigger stream. Access is gated by the message's parent (the
+channel or document the mention, assignment or follow-up sits in); a composer
+request reaches only its requester. Agent conversation messages are internal.
 
 Agent session lifecycle events use `entity_type = "agent_session"` with the
 session as entity and ordering key, so `ids` selects one session and events of
@@ -148,16 +172,36 @@ workspace expansion, and actor membership does not make another workspace
 eligible.
 
 A webhook matches only when it is active, valid, not soft-deleted, owned by an
-eligible workspace, and has one filter element that matches both the exact
-event name and entity ID. An event match in one filter element cannot be
+eligible workspace, and has one filter element that matches the event name,
+the entity ID and, when present, the entity type. An event match in one filter element cannot be
 combined with an ID match in another element. Because deletion is published
 after soft deletion, a webhook cannot receive its own `webhook.deleted` event;
 other eligible webhooks in the same owner workspace can receive it.
 
-### Filter-ID semantics
+Team and GitHub audiences: a team event for every member matches the team's
+workspace; an admin-only team event (invites) matches only the personal
+workspaces of the team's current admins and owners, never the team workspace,
+whose webhook creator need not be an admin. A GitHub installation's events
+match the personal workspaces of the users who hold a claim on it (its user
+and team owners with a linked GitHub account, the rule routines use) and the
+webhooks of the owning teams' workspaces whose creator holds such a claim.
 
-Each filter requires `events`. `ids` is optional; an absent or `null` value
-matches every entity ID for that filter's events:
+### Filter semantics
+
+Each filter requires `events`. `ids` and `entity_types` are optional; an
+absent or `null` value matches every entity ID or type for that filter's
+events. A webhook holds at most 50 filters (a live stream 32, the routine
+trigger cap) of at most 100 events and 100 ids each; every other rule is
+shared with live streams.
+
+`events` entries are exact names, a family wildcard such as `document.*`, or
+`*`. Wildcards expand at match time against the event catalog
+(`event_stream::domain::catalog`), so a new event in a family arrives without
+editing the webhook. They need the `public-event-stream` feature flag for the
+webhook's creator; without it a wildcard, `*` included, is a literal name that
+matches nothing, as before, and any `*` string is accepted as such. (Live
+streams honour `*` without the flag.) For a flagged creator a `*` entry that
+is neither `*` nor `family.*` is a 400.
 
 ```json
 [
@@ -178,9 +222,23 @@ an absent or `null` `ids` field matches every webhook ID in the strict owner
 workspace.
 
 The matching query stores filters in the `webhook.filters` `JSONB NOT NULL`
-column, protected by the `webhook_filters_is_array` constraint. It uses the
-`webhook_filters_gin_idx` `jsonb_path_ops` GIN index for the event containment
-probe and an exact JSONPath recheck to enforce same-filter event/ID matching.
+column, protected by the `webhook_filters_is_array` constraint. It narrows by
+owner workspace (`webhook_workspace_status_idx`), probes the
+`webhook_filters_gin_idx` `jsonb_path_ops` GIN index for the exact name, the
+family wildcard and `*`, and rechecks with JSONPath that one filter element
+matches both the event and the ID. Ingestion then applies the creator's flag
+to wildcard and preview matches and checks `entity_types`.
+
+### Ordering and delivery guarantees
+
+- Events of one entity arrive in order (the Kafka key); there is no order
+  across entities or topics.
+- Webhooks are at least once from ingestion (below). Live streams are at
+  least once inside the one-hour replay window when the client resumes with
+  its cursor, best effort beyond it.
+- Upstream publication is at most once relative to the write: producers
+  publish after commit with no outbox, so a committed change can have no
+  event. Clients that need certainty reconcile through the list APIs.
 
 Ingestion concurrently enqueues one message for every matched webhook and waits
 for every send. It succeeds only if all sends complete. Repository,
@@ -213,15 +271,18 @@ reuse the same delivery record.
 
 FIFO preserves the order in which the current consumer enqueues events for one
 webhook. It does not create a global order across Kafka partitions or across the
-`macro.documents`, `macro.channels`, `macro.messages`, and `macro.webhooks`
-topics. Consumers must
+subscribed topics. Consumers must
 therefore treat the order as observed order, not total event order.
 
 ## HTTP delivery contract
 
 Delivery is an HTTPS `POST` with a five-second timeout and redirects disabled.
-The complete broker envelope is serialized as the exact request body; normalized
-queue and delivery fields are not wrapped around or merged into it. Its shape is:
+The broker envelope around the event's declared public payload is serialized
+as the exact request body; normalized queue and delivery fields are not wrapped
+around or merged into it. For every event delivered today the public payload is
+the event's metadata, unchanged except for a call's recipient routing field, so
+the body is the broker envelope. A field a producer adds to an internal event
+is never delivered. Its shape is:
 
 ```json
 {

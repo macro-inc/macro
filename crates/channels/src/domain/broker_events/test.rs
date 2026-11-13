@@ -106,11 +106,70 @@ fn decode_round_trips() {
 }
 
 #[test]
+fn deleted_event_wire_shape_carries_participant_routing() {
+    let event = Event::with_event_id(
+        Uuid::nil(),
+        ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+            channel_id: Uuid::nil(),
+            actor: user("macro|owner@example.com"),
+            participant_user_ids: vec![
+                user_id("macro|owner@example.com"),
+                user_id("macro|member@example.com"),
+            ],
+        }),
+    );
+
+    let value = serde_json::to_value(&event).expect("serializable");
+    assert_eq!(
+        value,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000000",
+            "schema_version": 1,
+            "event_type": "channel.deleted",
+            "metadata": {
+                "channel_id": "00000000-0000-0000-0000-000000000000",
+                "actor": "macro|owner@example.com",
+                "participant_user_ids": [
+                    "macro|owner@example.com",
+                    "macro|member@example.com",
+                ],
+            },
+        })
+    );
+}
+
+#[test]
+fn deleted_event_published_before_participant_routing_decodes_empty() {
+    let channel_id = Uuid::nil();
+    let payload = json!({
+        "event_id": "00000000-0000-0000-0000-000000000000",
+        "schema_version": 1,
+        "event_type": "channel.deleted",
+        "metadata": {
+            "channel_id": channel_id,
+            "actor": "macro|owner@example.com",
+        },
+    });
+
+    let decoded = ChannelMacroEvent::decode(
+        &channel_id.to_string(),
+        &serde_json::to_vec(&payload).expect("serializable"),
+    )
+    .expect("old payload decodes");
+
+    let ChannelTopicEvent::Deleted(metadata) = &decoded.event().event else {
+        panic!("expected channel.deleted");
+    };
+    assert!(metadata.participant_user_ids.is_empty());
+}
+
+#[test]
 fn events_are_keyed_by_channel_id() {
     let channel_id = Uuid::new_v4();
     let event = ChannelMacroEvent::deleted(ChannelDeletedMetadata {
         channel_id,
         actor: user("macro|owner@example.com"),
+        participant_user_ids: Vec::new(),
     });
     assert_eq!(event.key(), channel_id.to_string());
 }
@@ -151,4 +210,92 @@ fn event_type_strings_follow_dot_convention() {
         let value = serde_json::to_value(event.event()).expect("serializable");
         assert_eq!(value["event_type"], *expected_type);
     }
+}
+
+fn deleted_with_participants() -> ChannelTopicEvent {
+    ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+        channel_id: Uuid::nil(),
+        actor: user("macro|owner@example.com"),
+        participant_user_ids: vec![
+            user_id("macro|owner@example.com"),
+            user_id("macro|member@example.com"),
+        ],
+    })
+}
+
+/// Participant rows are gone by the time the delete is consumed, so the
+/// captured participants join the channel's (now empty) accessor set.
+#[test]
+fn deleted_channel_reaches_its_captured_participants() {
+    use macro_event_broker::exposure::{Audience, EntityType, Exposure, Stage};
+
+    let event = deleted_with_participants();
+    let Exposure::Public(public) = event.exposure().unwrap() else {
+        panic!("channel.deleted is public");
+    };
+
+    assert_eq!(public.stage, Stage::Stable);
+    assert_eq!(
+        public.audience,
+        Audience::Any(vec![
+            Audience::Entity {
+                entity_type: EntityType::Channel,
+                entity_id: Uuid::nil().to_string(),
+            },
+            Audience::Snapshot {
+                user_ids: vec![
+                    user_id("macro|owner@example.com"),
+                    user_id("macro|member@example.com"),
+                ],
+            },
+        ])
+    );
+}
+
+/// The public body is exactly what was delivered before the routing field
+/// existed: the snapshot never leaves Macro.
+#[test]
+fn deleted_channel_public_body_omits_the_participant_snapshot() {
+    use macro_event_broker::exposure::Exposure;
+
+    let event = Event::with_event_id(Uuid::nil(), deleted_with_participants());
+    let Exposure::Public(public) = event.event.exposure().unwrap() else {
+        panic!("channel.deleted is public");
+    };
+    let body = Event {
+        event_id: event.event_id,
+        agent_correlation_id: None,
+        routine_id: None,
+        agent_verb: None,
+        schema_version: event.schema_version,
+        event: public.payload.as_ref(),
+    };
+
+    assert_eq!(
+        serde_json::to_string(&body).unwrap(),
+        r#"{"event_id":"00000000-0000-0000-0000-000000000000","schema_version":1,"event_type":"channel.deleted","metadata":{"channel_id":"00000000-0000-0000-0000-000000000000","actor":"macro|owner@example.com"}}"#
+    );
+}
+
+/// A delete published before the snapshot existed keeps today's audience.
+#[test]
+fn deleted_channel_without_a_snapshot_keeps_the_channel_audience() {
+    use macro_event_broker::exposure::{Audience, EntityType, Exposure};
+
+    let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+        channel_id: Uuid::nil(),
+        actor: user("macro|owner@example.com"),
+        participant_user_ids: Vec::new(),
+    });
+    let Exposure::Public(public) = event.exposure().unwrap() else {
+        panic!("channel.deleted is public");
+    };
+
+    assert_eq!(
+        public.audience,
+        Audience::Entity {
+            entity_type: EntityType::Channel,
+            entity_id: Uuid::nil().to_string(),
+        }
+    );
 }

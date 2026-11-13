@@ -22,4 +22,25 @@ pub trait GithubInstallationClaims: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
         installation_id: u64,
     ) -> impl Future<Output = Result<bool, GithubError>> + Send;
+
+    /// The users among `users` who hold a claim to the installation, by the
+    /// rule [`Self::has_claim`] states.
+    ///
+    /// The default asks [`Self::has_claim`] for each; the Postgres adapter
+    /// answers in one read.
+    fn claimants(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        installation_id: u64,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, GithubError>> + Send {
+        async move {
+            let mut claimants = Vec::new();
+            for user in users {
+                if self.has_claim(user, installation_id).await? {
+                    claimants.push(user.clone());
+                }
+            }
+            Ok(claimants)
+        }
+    }
 }
