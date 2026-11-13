@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Keep decorator browser fixtures in `tsconfig.decorator-browser-tests.json`, outside the main web typecheck; check them after their actual WASM package has been built.
+
 - Read document action markdown from the mounted body engine, preferring its native runtime when present; preserve external-export bytes and reject unavailable engines instead of substituting an empty body.
 
 - Grant `local-network-access` in fresh Chromium contexts for the local HTTPS preview before waiting for document initialization; a blocked WebSocket is a harness failure.
