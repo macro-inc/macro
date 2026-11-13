@@ -7,8 +7,8 @@ expression: snapshot(&export)
     "itemsByKind": {
       "login": 5,
       "card": 1,
-      "note": 2,
-      "identity": 1,
+      "note": 3,
+      "identity": 3,
       "api": 1
     },
     "folders": 3,
@@ -235,6 +235,178 @@ expression: snapshot(&export)
           {
             "label": "Fingerprint",
             "value": "SHA256:synthetic",
+            "concealed": false
+          }
+        ],
+        "totp": null,
+        "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000101",
+        "kind": "note",
+        "name": "Bank account",
+        "url": null,
+        "username": "",
+        "password": "",
+        "notes": "",
+        "fields": [
+          {
+            "label": "Bank name",
+            "value": "Synthetic Bank",
+            "concealed": false
+          },
+          {
+            "label": "Name on account",
+            "value": "Synthetic Holder",
+            "concealed": false
+          },
+          {
+            "label": "Account type",
+            "value": "checking",
+            "concealed": false
+          },
+          {
+            "label": "Account number",
+            "value": "000111222",
+            "concealed": true
+          },
+          {
+            "label": "Routing number",
+            "value": "000000000",
+            "concealed": false
+          },
+          {
+            "label": "PIN",
+            "value": "0000",
+            "concealed": true
+          },
+          {
+            "label": "SWIFT code",
+            "value": "SYNTXX00",
+            "concealed": false
+          },
+          {
+            "label": "IBAN",
+            "value": "XX00SYNTHETIC",
+            "concealed": true
+          },
+          {
+            "label": "Phone",
+            "value": "555-0100",
+            "concealed": false
+          }
+        ],
+        "totp": null,
+        "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000102",
+        "kind": "identity",
+        "name": "Driver's license",
+        "url": null,
+        "username": "Synthetic Driver",
+        "password": "",
+        "notes": "",
+        "fields": [
+          {
+            "label": "License number",
+            "value": "D000000",
+            "concealed": true
+          },
+          {
+            "label": "License class",
+            "value": "C",
+            "concealed": false
+          },
+          {
+            "label": "Date of birth",
+            "value": "1990-01-02",
+            "concealed": false
+          },
+          {
+            "label": "Issuing country",
+            "value": "XX",
+            "concealed": false
+          },
+          {
+            "label": "Issuing state",
+            "value": "Synthetic State",
+            "concealed": false
+          },
+          {
+            "label": "Issued on",
+            "value": "2020-01-02",
+            "concealed": false
+          },
+          {
+            "label": "Expires",
+            "value": "2030-01-31",
+            "concealed": false
+          }
+        ],
+        "totp": null,
+        "folder": null,
+        "favorite": false
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000103",
+        "kind": "identity",
+        "name": "Passport",
+        "url": null,
+        "username": "Synthetic Traveler",
+        "password": "",
+        "notes": "",
+        "fields": [
+          {
+            "label": "Passport number",
+            "value": "P0000000",
+            "concealed": true
+          },
+          {
+            "label": "Passport type",
+            "value": "P",
+            "concealed": false
+          },
+          {
+            "label": "Nationality",
+            "value": "Synthetic",
+            "concealed": false
+          },
+          {
+            "label": "Sex",
+            "value": "X",
+            "concealed": false
+          },
+          {
+            "label": "Date of birth",
+            "value": "1990-01-02",
+            "concealed": false
+          },
+          {
+            "label": "Place of birth",
+            "value": "Synthetic City",
+            "concealed": false
+          },
+          {
+            "label": "Issuing country",
+            "value": "XX",
+            "concealed": false
+          },
+          {
+            "label": "Issuing authority",
+            "value": "Synthetic Authority",
+            "concealed": false
+          },
+          {
+            "label": "Issued on",
+            "value": "2020-01-02",
+            "concealed": false
+          },
+          {
+            "label": "Expires",
+            "value": "2030-01-02",
             "concealed": false
           }
         ],
