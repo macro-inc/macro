@@ -180,6 +180,7 @@ export * from './importNotionPageResult';
 export * from './importRun';
 export * from './importRunError';
 export * from './importRunReviewId';
+export * from './importRunReviewSessionId';
 export * from './importRunScanned';
 export * from './importSource';
 export * from './importState';

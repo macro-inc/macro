@@ -5711,6 +5711,11 @@
             "format": "uuid",
             "description": "The review presenting the run's plan, once one does. A Notion plan is\npresented while it is still `running`; rows staged after that take it."
           },
+          "review_session_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent session presenting that review."
+          },
           "scanned": {
             "oneOf": [
               {

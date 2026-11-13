@@ -1042,6 +1042,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.

@@ -1459,6 +1459,10 @@ stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
+Desktop shows every import run in the corner's import tray
+(`features/import-jobs`, in `ToastRegion`), independent of the import dialog
+and never on phones. Its backend-free check is
+`bunx playwright test --config src/features/import-jobs/browser-test/playwright.config.ts`.
 
 ### Agent backend hosting
 
