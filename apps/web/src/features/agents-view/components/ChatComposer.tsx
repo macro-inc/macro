@@ -114,9 +114,11 @@ export function ChatComposer(props: {
   // The editor reports a host draft back as its own export, which can differ
   // (a code block loses trailing blank lines). Passing that on would rewrite
   // the draft under another composer showing it while someone types there.
+  // That covers the export it reports while connecting with the draft, too.
   let hostMarkdown: string | undefined;
+  let editorConnected = false;
   const reportDraft = (markdown: string) => {
-    if (markdown === hostMarkdown) return;
+    if (!editorConnected || markdown === hostMarkdown) return;
     hostMarkdown = undefined;
     props.onDraftChange(markdown);
   };
@@ -283,6 +285,7 @@ export function ChatComposer(props: {
         config={editor}
         initialValue={props.draft}
         onConnect={() => {
+          editorConnected = true;
           if (props.draft) placeCaretAfterDraft();
         }}
         placeholder={

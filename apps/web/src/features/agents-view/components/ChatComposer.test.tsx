@@ -326,6 +326,25 @@ describe('Chat session input', () => {
     expect(change).toHaveBeenCalledWith('```\nfoo\n```\nmore');
   });
 
+  it('does not pass back the export it reports while connecting with a draft', () => {
+    // MarkdownShell reports its initial export before calling onConnect.
+    editor.connect = (markdown) =>
+      editor.change?.(markdown.replace('\n\n```', '\n```'));
+    const change = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft={'```\nfoo\n\n```'}
+        onDraftChange={change}
+        onSend={vi.fn()}
+        selector={null}
+      />
+    ));
+    expect(change).not.toHaveBeenCalled();
+
+    type('```\nfoo\n```\nmore');
+    expect(change).toHaveBeenCalledWith('```\nfoo\n```\nmore');
+  });
+
   it('preloads the fold only when focused without sending or changing the draft', () => {
     const send = vi.fn();
     const change = vi.fn();
