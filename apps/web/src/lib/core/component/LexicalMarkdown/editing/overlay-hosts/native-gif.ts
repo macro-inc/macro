@@ -35,10 +35,20 @@ interface PickerRegistration {
   readonly onOpen: () => void;
 }
 
-/** A captured selection whose nodes the mirror no longer has. */
-function isDetached(view: EditorView, selection: ViewSelection) {
-  if (selection.kind === 'range')
-    return !view.node(selection.anchor.key) || !view.node(selection.focus.key);
+/** A captured range whose points the mirror no longer has (Source's recheck). */
+function isRangeDetached(view: EditorView, selection: ViewSelection) {
+  return (
+    selection.kind === 'range' &&
+    (!view.node(selection.anchor.key) || !view.node(selection.focus.key))
+  );
+}
+
+/**
+ * A captured node or table selection whose nodes are gone. Source does not
+ * recheck these: $insertNodesAndSplitList attaches nothing, and the commit
+ * still reports insertion (a shared orphan-upload leak, kept for parity).
+ */
+function isOtherDetached(view: EditorView, selection: ViewSelection) {
   if (selection.kind === 'node')
     return selection.keys.some((key) => !view.node(key));
   if (selection.kind === 'table')
@@ -56,6 +66,19 @@ function references(view: EditorView, staticFileId: string) {
   for (const node of view.mirror.values())
     if (node.type === 'image' && node.props().id === staticFileId) count++;
   return count;
+}
+
+/** A failing reporter must not turn an owned commit into a rejection. */
+function reportInserted(onInserted: () => void) {
+  try {
+    onInserted();
+  } catch (error) {
+    try {
+      Telemetry.error(error, { source: 'native-gif-on-inserted' });
+    } catch {
+      /* the upload stays owned either way */
+    }
+  }
 }
 
 /** Selections Source restores with `$setSelection(saved)`. */
@@ -104,7 +127,9 @@ export function createNativeGifContext(): {
       mounted.root === insertion.root &&
       insertion.canEdit() &&
       editable(mounted) &&
-      !(insertion.target && isDetached(mounted, insertion.target.selection))
+      !(
+        insertion.target && isRangeDetached(mounted, insertion.target.selection)
+      )
     );
   };
 
@@ -163,6 +188,14 @@ export function createNativeGifContext(): {
       if (!fresh(insertion)) return false;
       const mounted = insertion.view;
       const target = insertion.target;
+      let reportedWithoutInsert = false;
+      const insertNothing = () => {
+        reportedWithoutInsert = true;
+        reportInserted(onInserted);
+        return true;
+      };
+      if (target && isOtherDetached(mounted, target.selection))
+        return insertNothing();
       let before = 0;
       let evidence: InputCommitEvidence | undefined;
       const mainCommit = createInputCommitObservation((copied) => {
@@ -187,6 +220,10 @@ export function createNativeGifContext(): {
             ...(target ? { at: () => target.selection } : {}),
             admit: () => {
               if (!fresh(insertion)) return false;
+              if (target && isOtherDetached(mounted, target.selection)) {
+                insertNothing();
+                return false;
+              }
               before = references(mounted, staticFileId);
               return true;
             },
@@ -196,6 +233,7 @@ export function createNativeGifContext(): {
       } catch (error) {
         failure = { error };
       }
+      if (reportedWithoutInsert) return true;
       // Ownership: this input's entry was published and the document gained a
       // reference to the file, read after every commit observer ran or threw.
       const published = evidence?.status === 'published';
@@ -219,16 +257,7 @@ export function createNativeGifContext(): {
             /* the upload stays owned either way */
           }
         }
-        try {
-          onInserted();
-        } catch (error) {
-          // A failing reporter must not turn a published, owned commit into a rejection.
-          try {
-            Telemetry.error(error, { source: 'native-gif-on-inserted' });
-          } catch {
-            /* the upload stays owned either way */
-          }
-        }
+        reportInserted(onInserted);
         return true;
       }
       if (failure) throw failure.error;

@@ -613,7 +613,11 @@ test('healthy table selection: admitted and handled, but attaches no image, as S
   expect(runtime.view.query.serializedState()).toBe(before);
 });
 
-test('table focus cell deleted while the insert is queued (table and anchor remain): refused', async () => {
+// Source oracle: plugins/gif/detachedCapture.source.test.ts. Source rechecks
+// attachment only for a captured range; a detached node or table capture
+// commits true, attaches nothing and reports the upload owned. That orphan
+// upload is a known shared Source leak, mirrored here for exact parity.
+test('table focus cell deleted while the insert is queued (table and anchor remain): nothing attached, owned, as Source', async () => {
   const runtime = mount();
   const gif = bound(runtime);
   const { table, anchor, focus } = tableSelection(runtime);
@@ -646,15 +650,34 @@ test('table focus cell deleted while the insert is queued (table and anchor rema
       },
     }
   );
-  await expect(pending).resolves.toBe(false);
+  await expect(pending).resolves.toBe(true);
   const rest = {
     table: runtime.view.node(table.key) !== null,
     anchor: runtime.view.node(anchor.key) !== null,
     focus: runtime.view.node(focus.key) !== null,
   };
   expect(rest).toEqual({ table: true, anchor: true, focus: false });
-  expect(onInserted).not.toHaveBeenCalled();
+  expect(onInserted).toHaveBeenCalledTimes(1);
   expect(images(runtime)).toHaveLength(0);
+});
+
+test('a table capture detached before commit: nothing attached, stale selection kept, true and owned, as Source', async () => {
+  const runtime = mount();
+  const gif = bound(runtime);
+  const { table } = tableSelection(runtime);
+  const insertion = prepared(gif);
+  runtime.port.setState(REPLACED);
+  expect(runtime.view.node(table.key)).toBeNull();
+  const before = runtime.view.query.serializedState();
+  const selectionBefore = runtime.view.selection().selection;
+  const onInserted = vi.fn();
+  await expect(
+    gif.host.commit(insertion, GIF, FILE_ID, onInserted)
+  ).resolves.toBe(true);
+  expect(onInserted).toHaveBeenCalledTimes(1);
+  expect(images(runtime)).toHaveLength(0);
+  expect(runtime.view.query.serializedState()).toBe(before);
+  expect(runtime.view.selection().selection).toEqual(selectionBefore);
 });
 
 for (const [label, cause] of [
