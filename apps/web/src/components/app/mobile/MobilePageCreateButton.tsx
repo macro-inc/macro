@@ -8,6 +8,8 @@ import {
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
 import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
 import { type TranslationKey, t } from '@app/lib/i18n';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -17,7 +19,8 @@ import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import DocumentIcon from '@icon/system/regular/file-text.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
+import { projectLocation } from '../split-layout/project-back-navigation';
 import { MobileCreateButton } from './MobileCreateButton';
 import {
   MobileCreateMenu,
@@ -134,27 +137,36 @@ export function MobilePageCreateButton() {
     return viewAction() && key ? t(key) : t('mobile.new');
   };
 
+  const isProjectOverview = () => {
+    if (!isMobile()) return false;
+    // Project sections share a view id; read the live route, including on Back.
+    const content = globalSplitManager()?.activeSplit()?.content() ?? null;
+    const location = projectLocation(content);
+    return location?.kind === 'detail' && location.section === 'overview';
+  };
+
   return (
     <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
-      <Show
-        when={foregroundView() === 'home'}
+      <Switch
         fallback={
-          <Show
-            when={foregroundView() === 'calendar' && calendarEnabled()}
-            fallback={
-              <MobileCreateButton
-                ariaLabel={actionAriaLabel()}
-                label={action().label}
-                onClick={() => action().onSelect()}
-              />
-            }
-          >
-            <MobileCreateMenu items={calendarActions()} />
-          </Show>
+          <MobileCreateButton
+            ariaLabel={actionAriaLabel()}
+            label={action().label}
+            onClick={() => action().onSelect()}
+          />
         }
       >
-        <MobileCreateMenu items={quickActions()} />
-      </Show>
+        <Match when={isProjectOverview()}>
+          {/* Keep the floating inset stable when switching sections or going Back. */}
+          <div aria-hidden="true" class="h-(--mobile-chrome-button-size)" />
+        </Match>
+        <Match when={foregroundView() === 'home'}>
+          <MobileCreateMenu items={quickActions()} />
+        </Match>
+        <Match when={foregroundView() === 'calendar' && calendarEnabled()}>
+          <MobileCreateMenu items={calendarActions()} />
+        </Match>
+      </Switch>
     </Show>
   );
 }

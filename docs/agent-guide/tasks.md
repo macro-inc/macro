@@ -1201,6 +1201,10 @@ the header shows Back, the truncating project title, a Tasks island with the
 project's completion ring, then Details. Share stays in the title drawer and
 appears before Details in the phone Tasks header. Tap Tasks to push the project's
 Tasks view; the header caret and hardware/browser Back return to Overview.
+No floating creation button appears on phone Overview. It remains available on
+the Projects list and project Tasks view; switching sections or using Back updates
+it immediately. The empty Overview slot keeps the same floating inset, so hiding
+the action does not shift the page.
 From Overview, the same caret-only Back island returns to the previous Projects
 list, retaining its selected view and filters. Direct links also show the caret:
 it returns from Tasks to Overview, then to Projects without reopening the direct
