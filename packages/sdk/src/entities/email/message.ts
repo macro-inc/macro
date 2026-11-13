@@ -6,6 +6,7 @@ import type {
 import type {
   ApiDraftContactInfo,
   GetMessageResponses,
+  GetThreadResponses,
   MessageOperationResponse,
   ResolveMessageOperationRequest,
   TransferDraftRequest,
@@ -41,6 +42,54 @@ export interface SendEmailOptions {
    * name. An unverified or unknown address is refused.
    */
   from?: string;
+}
+
+type ThreadMessages = GetThreadResponses[200]['thread']['messages'];
+
+// One read of a thread serves the attachments of every message in it, per
+// client: a program walking a thread's messages and asking each for its
+// attachments otherwise reads the whole thread once per message. A message's
+// attachments never change; a message missing from the cached read (it
+// arrived since) reads the thread again.
+const threadReads = new WeakMap<
+  MacroClient,
+  Map<string, Promise<ThreadMessages>>
+>();
+
+async function readThreadMessages(
+  client: MacroClient,
+  threadId: string,
+): Promise<ThreadMessages> {
+  const { thread } = unwrap(
+    await client.email.getThread({
+      path: { thread_id: threadId },
+      query: { limit: 100 },
+    }),
+  );
+  return thread.messages;
+}
+
+async function threadMessages(
+  client: MacroClient,
+  threadId: string,
+  fresh: boolean,
+): Promise<ThreadMessages> {
+  let reads = threadReads.get(client);
+  if (!reads) {
+    reads = new Map();
+    threadReads.set(client, reads);
+  }
+  const cached = fresh ? undefined : reads.get(threadId);
+  if (cached) return cached;
+  const read = readThreadMessages(client, threadId);
+  reads.set(threadId, read);
+  try {
+    return await read;
+  } catch (error) {
+    // A failed read isn't kept, so a later call tries again.
+    if (reads.get(threadId) === read) reads.delete(threadId);
+    throw error;
+  }
 }
 
 // The HTTP schema is opaque: the server serializes the Rust tool response,
@@ -226,13 +275,11 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    */
   async attachments(): Promise<EmailAttachment[]> {
     const { thread_db_id } = await this.detail.get();
-    const { thread } = unwrap(
-      await this.client.email.getThread({
-        path: { thread_id: thread_db_id },
-        query: { limit: 100 },
-      }),
-    );
-    const message = thread.messages.find((m) => m.db_id === this.id);
+    const find = async (fresh: boolean) =>
+      (await threadMessages(this.client, thread_db_id, fresh)).find(
+        (m) => m.db_id === this.id,
+      );
+    const message = (await find(false)) ?? (await find(true));
     if (!message)
       throw new Error(
         `Message ${this.id} is not among its thread's first 100 messages`,

@@ -197,3 +197,66 @@ describe('EmailDraft.send', () => {
     expect(Date.parse(request.body.send_time)).toBeGreaterThan(before);
   });
 });
+
+describe('EmailMessage.attachments', () => {
+  test('reads a thread once for all of its messages', async () => {
+    let threadReads = 0;
+    const client = {
+      email: {
+        getMessage: async ({ path }: { path: { id: string } }) => ({
+          data: { db_id: path.id, thread_db_id: 'thread-1' },
+        }),
+        getThread: async () => {
+          threadReads++;
+          return {
+            data: {
+              thread: {
+                messages: [
+                  { db_id: 'first', attachments: [{ db_id: 'logo' }] },
+                  { db_id: 'second', attachments: [{ db_id: 'q3-xlsx' }] },
+                ],
+              },
+            },
+          };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const [first, second] = await Promise.all(
+      ['first', 'second'].map((id) =>
+        EmailMessage.byId(client, id).attachments(),
+      ),
+    );
+
+    expect(first.map((a) => a.id)).toEqual(['logo']);
+    expect(second.map((a) => a.id)).toEqual(['q3-xlsx']);
+    expect(threadReads).toBe(1);
+  });
+
+  test('reads the thread again for a message that arrived since', async () => {
+    const reads = [
+      [{ db_id: 'first', attachments: [] }],
+      [
+        { db_id: 'first', attachments: [] },
+        { db_id: 'newer', attachments: [{ db_id: 'invoice' }] },
+      ],
+    ];
+    let threadReads = 0;
+    const client = {
+      email: {
+        getMessage: async ({ path }: { path: { id: string } }) => ({
+          data: { db_id: path.id, thread_db_id: 'thread-1' },
+        }),
+        getThread: async () => ({
+          data: { thread: { messages: reads[threadReads++] } },
+        }),
+      },
+    } as unknown as MacroClient;
+
+    await EmailMessage.byId(client, 'first').attachments();
+    const newer = await EmailMessage.byId(client, 'newer').attachments();
+
+    expect(newer.map((a) => a.id)).toEqual(['invoice']);
+    expect(threadReads).toBe(2);
+  });
+});
