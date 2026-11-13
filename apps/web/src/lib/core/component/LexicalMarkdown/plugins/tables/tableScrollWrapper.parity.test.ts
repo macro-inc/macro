@@ -59,7 +59,7 @@ const cell = (text: string) => ({
     },
   ],
 });
-const STATE = {
+const stateWith = (frozen: number | null) => ({
   root: {
     type: 'root',
     version: 1,
@@ -68,6 +68,9 @@ const STATE = {
         type: 'table',
         version: 1,
         colWidths: [120, 120, 120],
+        ...(frozen === null
+          ? {}
+          : { frozenColumnCount: frozen, frozenRowCount: frozen }),
         children: [0, 1, 2].map((row) => ({
           type: 'tablerow',
           version: 1,
@@ -76,15 +79,20 @@ const STATE = {
       },
     ],
   },
-};
+});
+const STATE = stateWith(null);
 
 /** Tag and sorted classes from the root's first child down to the table. */
 function shape(root: HTMLElement) {
   const path: string[] = [];
   let element = root.firstElementChild;
   while (element) {
+    const frozen = ['data-lexical-frozen-column', 'data-lexical-frozen-row']
+      .filter((name) => element?.getAttribute(name) === 'true')
+      .map((name) => `[${name}]`)
+      .join('');
     path.push(
-      `${element.tagName.toLowerCase()}.${[...element.classList].sort().join('.')}`
+      `${element.tagName.toLowerCase()}.${[...element.classList].sort().join('.')}${frozen}`
     );
     if (element.tagName === 'TABLE') break;
     element = element.firstElementChild;
@@ -92,7 +100,7 @@ function shape(root: HTMLElement) {
   return path;
 }
 
-function sourceShape() {
+function sourceShape(state: object = STATE) {
   const editor = createEditor({
     namespace: 'table-scroll-source',
     nodes: [...SupportedNodeTypes],
@@ -111,7 +119,7 @@ function sourceShape() {
   })(editor);
   editor.setRootElement(root);
   try {
-    editor.setEditorState(editor.parseEditorState(JSON.stringify(STATE)));
+    editor.setEditorState(editor.parseEditorState(JSON.stringify(state)));
     editor.update(() => $getRoot().getChildrenSize(), { discrete: true });
     return shape(root);
   } finally {
@@ -121,7 +129,7 @@ function sourceShape() {
   }
 }
 
-async function nativeShape() {
+async function nativeShape(state: object = STATE) {
   const root = document.createElement('div');
   document.body.append(root);
   const runtime = mountLocalSessionView(
@@ -152,7 +160,7 @@ async function nativeShape() {
     }
   );
   try {
-    runtime.port.setState(JSON.stringify(STATE));
+    runtime.port.setState(JSON.stringify(state));
     return shape(root);
   } finally {
     await runtime.close();
@@ -169,4 +177,13 @@ test('the Source markdown table is wrapped in the scrollable wrapper', () => {
 
 test('the native markdown table has the same scrollable wrapper as Source', async () => {
   expect(await nativeShape()).toEqual(sourceShape());
+});
+
+test('frozen column and row counts mark the wrapper and table as Source does', async () => {
+  const frozen = stateWith(1);
+  expect(sourceShape(frozen)).toEqual([
+    'div.first:mt-1.5.md-table-frozen-column.md-table-frozen-row.md-table-scrollable-wrapper',
+    'table.md-table[data-lexical-frozen-column][data-lexical-frozen-row]',
+  ]);
+  expect(await nativeShape(frozen)).toEqual(sourceShape(frozen));
 });

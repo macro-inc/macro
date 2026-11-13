@@ -381,17 +381,51 @@ export function registerMacroElementViews(
       throw new Error('Missing scrollable table element');
     return inner;
   };
+  // Source updateTableWrapper: frozen counts toggle a wrapper class and a
+  // table attribute, applied only when the count changes from the previous node.
+  const frozen = (
+    previous: ViewNode | null,
+    next: ViewNode,
+    wrapper: HTMLElement,
+    inner: HTMLElement,
+    ctx: RenderContext
+  ) => {
+    for (const [prop, themeKey, attribute] of [
+      ['frozenColumnCount', 'tableFrozenColumn', 'data-lexical-frozen-column'],
+      ['frozenRowCount', 'tableFrozenRow', 'data-lexical-frozen-row'],
+    ] as const) {
+      const count = (node: ViewNode | null) => {
+        const value = node?.props()[prop];
+        return typeof value === 'number' ? value : 0;
+      };
+      if (count(next) === count(previous)) continue;
+      const classes = themeClass(ctx.theme, themeKey)
+        .split(' ')
+        .filter(Boolean);
+      if (count(next) > 0) {
+        wrapper.classList.add(...classes);
+        inner.setAttribute(attribute, 'true');
+      } else {
+        wrapper.classList.remove(...classes);
+        inner.removeAttribute(attribute);
+      }
+    }
+  };
   registry.replace('table', {
     createDOM(node, ctx) {
       const wrapper = ctx.document.createElement('div');
       const classes = themeClass(ctx.theme, 'tableScrollableWrapper');
       if (classes) wrapper.className = classes;
       else wrapper.style.overflowX = 'auto';
-      wrapper.appendChild(table.createDOM(node, ctx));
+      const inner = table.createDOM(node, ctx);
+      wrapper.appendChild(inner);
+      frozen(null, node, wrapper, inner, ctx);
       return wrapper;
     },
     updateDOM(previous, next, dom, ctx) {
-      return table.updateDOM(previous, next, innerTable(dom), ctx);
+      const inner = innerTable(dom);
+      frozen(previous, next, dom, inner, ctx);
+      return table.updateDOM(previous, next, inner, ctx);
     },
     getDOMSlot(node, dom) {
       const inner = innerTable(dom);
