@@ -57,7 +57,8 @@ function Cell(props: ParentProps<{ label: string; class?: string }>) {
 export function RoutineListRow(props: {
   row: RoutineRow;
   pending: boolean;
-  onOpen: (id: string, history?: boolean) => void;
+  /** Absent for a row the viewer can't open: it shows, but does nothing. */
+  onOpen?: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
   /** Whether the routines its runs created show under it; absent when it has none. */
   expanded?: boolean;
@@ -89,10 +90,12 @@ export function RoutineListRow(props: {
     <div
       role="row"
       class={cn(
-        'soup-list-entity @container/entity mx-1 min-w-[760px] rounded-xl hover:bg-list-hover focus-within:bg-list-highlighted @max-[760px]/routines:min-w-0',
+        'soup-list-entity @container/entity mx-1 min-w-[760px] rounded-xl @max-[760px]/routines:min-w-0',
+        props.onOpen &&
+          'not-touch:hover:bg-list-hover focus-within:bg-list-highlighted',
         !props.row.enabled && 'opacity-60'
       )}
-      onClick={() => props.onOpen(props.row.id)}
+      onClick={() => props.onOpen?.(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
         <EntitySlot
@@ -135,12 +138,21 @@ export function RoutineListRow(props: {
           <TriggerIcon kind={props.row.whenKind} />
           <span class="flex min-w-0 flex-col">
             <Tooltip label={props.row.name} class="min-w-0 max-w-full">
-              <button
-                type="button"
-                class="block min-w-0 max-w-full truncate text-left font-medium text-ink outline-none focus-visible:underline"
+              <Show
+                when={props.onOpen}
+                fallback={
+                  <span class="block min-w-0 max-w-full truncate font-medium text-ink">
+                    {props.row.name}
+                  </span>
+                }
               >
-                {props.row.name}
-              </button>
+                <button
+                  type="button"
+                  class="block min-w-0 max-w-full truncate text-left font-medium text-ink outline-none focus-visible:underline"
+                >
+                  {props.row.name}
+                </button>
+              </Show>
             </Tooltip>
             <Show when={!props.expanded && props.row.children.length > 0}>
               <span class="truncate text-[13px] text-ink-extra-muted">

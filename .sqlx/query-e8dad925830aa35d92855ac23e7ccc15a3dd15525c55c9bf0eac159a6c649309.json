@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                date_trunc($4, created_at, 'UTC') AS \"start!\",\n                SUM(total::float8) AS \"cost_usd!\"\n            FROM ai_usage\n            WHERE user_id = $1\n              AND created_at >= $2\n              AND created_at < $3\n              AND total IS NOT NULL\n            GROUP BY 1\n            ORDER BY 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "start!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "cost_usd!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "e8dad925830aa35d92855ac23e7ccc15a3dd15525c55c9bf0eac159a6c649309"
+}

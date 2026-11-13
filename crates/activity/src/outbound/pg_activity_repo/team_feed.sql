@@ -3,7 +3,8 @@
 --
 -- $1 viewer id, $2/$3 cursor position (NULL for the first page),
 -- $4 rows to return, $5 fewest raw rows one teammate's scan reads,
--- $6 raw rows one page reads across all teammates.
+-- $6 raw rows one page reads across all teammates, $7 the one teammate to
+-- read (NULL for every teammate).
 WITH viewer_source AS (
     -- The principals an `entity_access` grant can name to reach the viewer:
     -- the viewer, their teams, and the channels they are active in.
@@ -27,6 +28,7 @@ teammate AS (
     FROM team_user viewer
     JOIN team_user member ON member.team_id = viewer.team_id
     WHERE viewer.user_id = $1 AND member.user_id <> $1
+      AND ($7::text IS NULL OR member.user_id = $7)
 ),
 scan AS (
     SELECT GREATEST($5, $6 / GREATEST(count(*), 1))::bigint AS rows FROM teammate

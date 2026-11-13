@@ -79,6 +79,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
         crate::inbound::template_router::activate_template,
+        crate::inbound::agent_routine_router::list_agent_routines,
     ),
     components(
         schemas(
@@ -87,6 +88,10 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::models::SubRoutine,
             crate::domain::models::CreatedRoutine,
             crate::domain::catalog::CatalogEntry,
+            crate::domain::agent_routines::AgentRoutines,
+            crate::domain::agent_routines::AgentRoutine,
+            crate::domain::agent_routines::TriggerKind,
+            crate::domain::agent_routines::LastRun,
             routine_program::Surface,
             routine_program::NamedItemKind,
             crate::domain::suggestions::model::RoutineSuggestions,

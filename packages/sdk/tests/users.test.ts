@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { Macro } from '../src/macro';
+import { type AgentSpend, Macro } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -82,4 +82,102 @@ test('person search failures propagate and a blank query is refused', async () =
   status = 500;
   await expect(macro.users.search('Alice')).rejects.toThrow();
   await expect(macro.users.search('  ')).rejects.toThrow('name or email');
+});
+
+test('agent spend reads one bucketed window for the agent account', async () => {
+  const requests: Request[] = [];
+  const body: AgentSpend = {
+    bucket: 'week',
+    from: '2026-05-18T00:00:00Z',
+    until: '2026-11-13T07:00:00Z',
+    currency: 'USD',
+    buckets: [{ start: '2026-11-09T00:00:00Z', costUsd: 1.25 }],
+  };
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json(body);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'user', apiKey: 'mak_test' },
+    hosts: { cognition: 'https://cognition.test' },
+  });
+
+  const spend = await macro.users
+    .byId('macro|agent@example.com')
+    .spend({ bucket: 'week' });
+
+  expect(spend).toEqual(body);
+  expect(requests.map((request) => request.url)).toEqual([
+    'https://cognition.test/ai-cost/agents/macro%7Cagent%40example.com/spend?bucket=week',
+  ]);
+});
+
+test('agent routines read one summary and hand back routine handles', async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json({
+        routines: [
+          {
+            id: '0199a000-0000-7000-8000-000000000001',
+            name: 'Morning digest',
+            enabled: true,
+            running: false,
+            triggerKind: 'cron',
+            nextRunAt: '2026-11-14T09:00:00Z',
+            lastRun: {
+              startedAt: '2026-11-13T09:00:00Z',
+              endedAt: '2026-11-13T09:02:00Z',
+              succeeded: false,
+            },
+          },
+          {
+            id: '0199a000-0000-7000-8000-000000000002',
+            name: 'On new mail',
+            enabled: false,
+            running: true,
+            triggerKind: 'events',
+          },
+        ],
+        truncated: true,
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'user', apiKey: 'mak_test' },
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+
+  const { routines, truncated } = await macro.users
+    .byId('macro|agent@example.com')
+    .routines();
+
+  expect(requests.map((request) => request.url)).toEqual([
+    'https://routines.test/scheduled-actions/agents/macro%7Cagent%40example.com',
+  ]);
+  expect(truncated).toBe(true);
+  expect(routines.map((r) => r.routine.id)).toEqual([
+    '0199a000-0000-7000-8000-000000000001',
+    '0199a000-0000-7000-8000-000000000002',
+  ]);
+  expect(routines[0]?.lastRun).toEqual({
+    startedAt: '2026-11-13T09:00:00Z',
+    endedAt: '2026-11-13T09:02:00Z',
+    succeeded: false,
+  });
+  expect(routines[1]).toMatchObject({
+    name: 'On new mail',
+    enabled: false,
+    running: true,
+    triggerKind: 'events',
+    nextRunAt: undefined,
+    lastRun: undefined,
+  });
 });

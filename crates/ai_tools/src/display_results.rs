@@ -26,6 +26,7 @@ mod test;
 )]
 pub struct DisplayResults {
     #[serde(deserialize_with = "dynamic_ui::deserialize_view")]
+    #[schemars(with = "dynamic_ui::ViewWithoutDashboards")]
     pub view: View,
 }
 

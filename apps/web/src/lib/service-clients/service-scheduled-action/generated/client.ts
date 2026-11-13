@@ -9,6 +9,7 @@ import type {
   AcceptSuggestionRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
+  AgentRoutines,
   AiAdmissionErrorBody,
   AttachDraft,
   CatalogEntry,
@@ -265,6 +266,64 @@ export const createScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as createScheduledActionResponse;
+};
+
+export type listAgentRoutinesResponse200 = {
+  data: AgentRoutines;
+  status: 200;
+};
+
+export type listAgentRoutinesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentRoutinesResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type listAgentRoutinesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentRoutinesResponseSuccess = listAgentRoutinesResponse200 & {
+  headers: Headers;
+};
+export type listAgentRoutinesResponseError = (
+  | listAgentRoutinesResponse401
+  | listAgentRoutinesResponse404
+  | listAgentRoutinesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentRoutinesResponse =
+  | listAgentRoutinesResponseSuccess
+  | listAgentRoutinesResponseError;
+
+export const getListAgentRoutinesUrl = (agentId: string) => {
+  return `/scheduled-actions/agents/${agentId}`;
+};
+
+export const listAgentRoutines = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<listAgentRoutinesResponse> => {
+  const res = await fetch(getListAgentRoutinesUrl(agentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentRoutinesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentRoutinesResponse;
 };
 
 export type routineCatalogResponse200 = {

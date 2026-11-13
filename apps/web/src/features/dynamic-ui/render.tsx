@@ -10,6 +10,10 @@ import type {
   WidgetType,
 } from './view';
 import { AgentUpdates } from './widgets/AgentUpdates';
+import { Activity } from './widgets/agent-panes/Activity';
+import { Routines } from './widgets/agent-panes/Routines';
+import { Sessions } from './widgets/agent-panes/Sessions';
+import { Spend } from './widgets/agent-panes/Spend';
 import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
 import { Events } from './widgets/Events';
@@ -36,6 +40,10 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'tags' }, (n) => <Tags {...n} />)
     .with({ type: 'agentUpdates' }, (n) => <AgentUpdates {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)
+    .with({ type: 'sessions' }, (n) => <Sessions {...n} />)
+    .with({ type: 'activity' }, (n) => <Activity {...n} />)
+    .with({ type: 'routines' }, (n) => <Routines {...n} />)
+    .with({ type: 'spend' }, (n) => <Spend {...n} />)
     .exhaustive();
 }
 
@@ -49,6 +57,9 @@ const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
   'events',
   'tags',
   'agentUpdates',
+  'sessions',
+  'activity',
+  'routines',
 ]);
 
 /**

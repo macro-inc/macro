@@ -676,6 +676,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         .with_enforcement(enforcement),
     );
 
+    let agent_spend_repo = ai_usage::outbound::PgAgentSpendRepo::new(pool.clone());
+    let agent_spend_service = Arc::new(ai_usage::domain::spend::AgentSpendServiceImpl::new(
+        agent_spend_repo.clone(),
+        agent_spend_repo,
+        ai_usage::outbound::FlaggedAgentDashboards(None),
+    ));
+
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
@@ -774,6 +781,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_tool_context: document_tool_context.clone(),
         memory_service,
         usage_service,
+        agent_spend_service,
         ai_projections_service,
         properties_tool_context,
         email_tool_context,

@@ -32,6 +32,8 @@ Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+  `tools/list` serves ExecuteCode's description with the dashboard widgets
+  only when the session owner has `enable-agent-dashboards`.
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
@@ -245,6 +247,10 @@ Pulumi stacks; they do not host extra agent processes.
   suggestions' resolution consumer (group `suggestions-resolution`) and runs
   consumer (group `suggestions-runs`, both `crates/suggestions`) beside the
   event intake, under the same readiness gate and shutdown.
+  The agent dashboard's routines summary
+  (`GET /scheduled-actions/agents/{agent_id}`, `AgentRoutineServiceImpl`)
+  reuses the scheduling PostHog flags (`enable-agent-dashboards` for the
+  caller) and the routine repository's last runs.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
@@ -368,7 +374,9 @@ code does not read them. `POSTHOG_API_KEY` and `POSTHOG_HOST` drive
 feature flags and the MCP and integration analytics; when the key is unset,
 analytics are off and routine template publishing, reads, and activation are
 disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
-owner unsharing and already activated routines remain available.
+owner unsharing and already activated routines remain available. Without
+the key nobody is offered the agent-dashboard widgets, and the agent routines
+summary is off (404) too.
 `AUTHENTICATION_SERVICE_SECRET_KEY` is required in harness, cognition, and
 scheduling configs regardless of billing flags. It is a Secrets Manager name
 in deployed configs and a direct key locally. Resolve it for the harness, cognition, and

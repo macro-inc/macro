@@ -470,6 +470,9 @@ export type Query_Serialize = {
   emailView?: EmailView;
 };
 
+/**  The period a spend pane's bars cover. */
+export type SpendBucket = 'day' | 'week' | 'month' | 'year';
+
 /**  How selected tags combine: items with any of them, or with all of them. */
 export type TagFilterMode = 'any' | 'all';
 
@@ -597,9 +600,12 @@ export type Widget_Deserialize =
    *  "md", never "markdown".
    */
   | ({ type: 'md'; markdown: string } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -608,6 +614,7 @@ export type Widget_Deserialize =
       justify?: never;
       limit?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       title?: never;
@@ -619,9 +626,12 @@ export type Widget_Deserialize =
       title?: string;
       events: TimelineEvent_Deserialize[];
     } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
@@ -630,6 +640,7 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       wrap?: never;
@@ -647,9 +658,12 @@ export type Widget_Deserialize =
       /**  Cap the number of rows shown. */
       limit?: number;
     } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -657,6 +671,7 @@ export type Widget_Deserialize =
       justify?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       tags?: never;
       wrap?: never;
     })
@@ -668,8 +683,11 @@ export type Widget_Deserialize =
       /**  The message to render. */
       messageId: string;
     } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -678,6 +696,7 @@ export type Widget_Deserialize =
       justify?: never;
       limit?: never;
       markdown?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       title?: never;
@@ -689,9 +708,12 @@ export type Widget_Deserialize =
    *  an answer is about calendar events instead of listing them in text.
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Deserialize[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
@@ -700,6 +722,7 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       wrap?: never;
@@ -712,9 +735,12 @@ export type Widget_Deserialize =
    *  widget for longer sets.
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -723,6 +749,7 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       wrap?: never;
@@ -734,9 +761,12 @@ export type Widget_Deserialize =
    *  table or a list in markdown.
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Deserialize[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -746,6 +776,7 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       wrap?: never;
     })
@@ -756,9 +787,12 @@ export type Widget_Deserialize =
    *  returns any: these cards are the only place the user can answer them.
    */
   | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -767,6 +801,7 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       title?: never;
@@ -784,15 +819,136 @@ export type Widget_Deserialize =
       title?: string;
       children: Widget_Deserialize[];
     } & {
+      agentId?: never;
+      bucket?: never;
       channelId?: never;
+      dense?: never;
       events?: never;
       groupBy?: never;
       items?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
+    })
+  /**
+   *  An agent's sessions and the sub-agents they started, as a tree with
+   *  live status and the questions waiting on someone.
+   */
+  | ({
+      type: 'sessions';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      title?: string;
+      /**  Cap the number of top-level sessions shown, 1-50. */
+      limit?: number;
+      dense?: boolean;
+    } & {
+      align?: never;
+      bucket?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      markdown?: never;
+      messageId?: never;
+      sessionId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
+    })
+  /**
+   *  What an agent did in the workspace, newest first: everything it did,
+   *  or only what one of its sessions did.
+   */
+  | ({
+      type: 'activity';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      /**  Only this agent session's activity. */
+      sessionId?: string;
+      title?: string;
+      /**  Cap the number of entries shown, 1-50. */
+      limit?: number;
+      dense?: boolean;
+    } & {
+      align?: never;
+      bucket?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
+    })
+  /**  The routines an agent owns, with each one's next run and last result. */
+  | ({
+      type: 'routines';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      title?: string;
+      dense?: boolean;
+    } & {
+      align?: never;
+      bucket?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      sessionId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
+    })
+  /**
+   *  An agent's AI cost as a bar chart, one bar per day, week, month or
+   *  year.
+   */
+  | ({
+      type: 'spend';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      /**  One bar per this period; day when omitted. */
+      bucket?: SpendBucket;
+      title?: string;
+      dense?: boolean;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      sessionId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
     });
 
 /**
@@ -805,9 +961,12 @@ export type Widget_Serialize =
    *  "md", never "markdown".
    */
   | ({ type: 'md'; markdown: string } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -816,6 +975,7 @@ export type Widget_Serialize =
       justify?: never;
       limit?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       title?: never;
@@ -823,9 +983,12 @@ export type Widget_Serialize =
     })
   /**  A chronological sequence of events. Great for "what happened" answers. */
   | ({ type: 'timeline'; title?: string; events: TimelineEvent_Serialize[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
@@ -834,6 +997,7 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       wrap?: never;
@@ -851,9 +1015,12 @@ export type Widget_Serialize =
       /**  Cap the number of rows shown. */
       limit?: number;
     } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -861,6 +1028,7 @@ export type Widget_Serialize =
       justify?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       tags?: never;
       wrap?: never;
     })
@@ -872,8 +1040,11 @@ export type Widget_Serialize =
       /**  The message to render. */
       messageId: string;
     } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -882,6 +1053,7 @@ export type Widget_Serialize =
       justify?: never;
       limit?: never;
       markdown?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       title?: never;
@@ -893,9 +1065,12 @@ export type Widget_Serialize =
    *  an answer is about calendar events instead of listing them in text.
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Serialize[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
@@ -904,6 +1079,7 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       wrap?: never;
@@ -916,9 +1092,12 @@ export type Widget_Serialize =
    *  widget for longer sets.
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -927,6 +1106,7 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       wrap?: never;
@@ -938,9 +1118,12 @@ export type Widget_Serialize =
    *  table or a list in markdown.
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Serialize[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -950,6 +1133,7 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       wrap?: never;
     })
@@ -960,9 +1144,12 @@ export type Widget_Serialize =
    *  returns any: these cards are the only place the user can answer them.
    */
   | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+      agentId?: never;
       align?: never;
+      bucket?: never;
       channelId?: never;
       children?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
@@ -971,6 +1158,7 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
       title?: never;
@@ -988,13 +1176,134 @@ export type Widget_Serialize =
       title?: string;
       children: Widget_Serialize[];
     } & {
+      agentId?: never;
+      bucket?: never;
       channelId?: never;
+      dense?: never;
       events?: never;
       groupBy?: never;
       items?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      sessionId?: never;
       source?: never;
       tags?: never;
+    })
+  /**
+   *  An agent's sessions and the sub-agents they started, as a tree with
+   *  live status and the questions waiting on someone.
+   */
+  | ({
+      type: 'sessions';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      title?: string;
+      /**  Cap the number of top-level sessions shown, 1-50. */
+      limit?: number;
+      dense?: boolean;
+    } & {
+      align?: never;
+      bucket?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      markdown?: never;
+      messageId?: never;
+      sessionId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
+    })
+  /**
+   *  What an agent did in the workspace, newest first: everything it did,
+   *  or only what one of its sessions did.
+   */
+  | ({
+      type: 'activity';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      /**  Only this agent session's activity. */
+      sessionId?: string;
+      title?: string;
+      /**  Cap the number of entries shown, 1-50. */
+      limit?: number;
+      dense?: boolean;
+    } & {
+      align?: never;
+      bucket?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
+    })
+  /**  The routines an agent owns, with each one's next run and last result. */
+  | ({
+      type: 'routines';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      title?: string;
+      dense?: boolean;
+    } & {
+      align?: never;
+      bucket?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      sessionId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
+    })
+  /**
+   *  An agent's AI cost as a bar chart, one bar per day, week, month or
+   *  year.
+   */
+  | ({
+      type: 'spend';
+      /**  The agent account's user id; omitted, the dashboard's agent. */
+      agentId?: string;
+      /**  One bar per this period; day when omitted. */
+      bucket?: SpendBucket;
+      title?: string;
+      dense?: boolean;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      sessionId?: never;
+      source?: never;
+      tags?: never;
+      wrap?: never;
     });

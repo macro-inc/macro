@@ -600,7 +600,14 @@ export {
   ExternalProfilePicture,
   type ProfilePicture,
 } from './entities/users/profile-picture';
-export type { ActivityReport } from './entities/users/user';
+export type {
+  ActivityReport,
+  AgentSpend,
+  AgentSpendBucket,
+  AgentRoutineList,
+  AgentRoutineSummary,
+  AgentRoutineTriggerKind,
+} from './entities/users/user';
 export type {
   WebFetchOptions,
   WebFetchResponse,

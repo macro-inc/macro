@@ -91,7 +91,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   'scheduled-action': {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
-    listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
+    listed: 'listScheduledActions listScheduledActionHistory listAgentRoutines listSuggestions',
     read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
     created: 'createScheduledAction addSuggestion',
     deleted: 'deleteScheduledAction',
@@ -143,7 +143,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     rejected: 'declineImportEntity',
     imported: 'importNotionPage',
     read: `
-      getUsageHandler getChatHistoryHandler getChat fetchWebPage
+      getUsageHandler getAgentSpendHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
     `,
     searched: 'searchWeb',

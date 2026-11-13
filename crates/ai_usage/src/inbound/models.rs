@@ -1,6 +1,7 @@
 //! HTTP representations of usage. Keep existing token fields compatible while
 //! the domain represents billing units with enums.
 
+use crate::domain::spend::{AgentSpend, SpendBucket};
 use crate::domain::{self, AiFeature, ModelPricing, UsageAmount};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -166,6 +167,60 @@ impl From<domain::UsageSummary> for UsageSummary {
                 })
                 .collect(),
             total: summary.total,
+        }
+    }
+}
+
+/// The currency spend is reported in.
+#[derive(Serialize, ToSchema)]
+pub enum Currency {
+    /// US dollars.
+    #[serde(rename = "USD")]
+    Usd,
+}
+
+/// The cost recorded in one bucket.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpendBucketTotal {
+    /// Start of the bucket, in UTC.
+    pub start: DateTime<Utc>,
+    /// Sum of priced usage in the bucket, in USD.
+    pub cost_usd: f64,
+}
+
+/// An agent's AI spend over a window ending now.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSpendResponse {
+    /// The period each bucket covers.
+    pub bucket: SpendBucket,
+    /// Start of the oldest bucket (inclusive), in UTC.
+    pub from: DateTime<Utc>,
+    /// End of the window (exclusive): the time of the request.
+    pub until: DateTime<Utc>,
+    /// Always `USD`.
+    pub currency: Currency,
+    /// Buckets with priced usage, oldest first. Buckets without usage are
+    /// omitted; fill them with zero.
+    pub buckets: Vec<SpendBucketTotal>,
+}
+
+impl From<AgentSpend> for AgentSpendResponse {
+    fn from(spend: AgentSpend) -> Self {
+        Self {
+            bucket: spend.window.bucket,
+            from: spend.window.from,
+            until: spend.window.until,
+            currency: Currency::Usd,
+            buckets: spend
+                .buckets
+                .into_iter()
+                .map(|point| SpendBucketTotal {
+                    start: point.start,
+                    cost_usd: point.cost_usd,
+                })
+                .collect(),
         }
     }
 }

@@ -217,7 +217,10 @@ each run.
   sub-routines and `parent=` returns one routine's, active ones plus its
   newest 200 finished one-time ones. Finished ones accumulate without bound,
   so every read of active sub-routines repeats the predicate of the partial
-  index `scheduled_action_active_children_idx` and never touches them; history rows carry `created`, the sub-routines that run created
+  index `scheduled_action_active_children_idx` and never touches them (the
+  agent routines summary reads top-level rows through
+  `scheduled_action_top_level_owner_idx`, comparing `owner COLLATE "C"` so
+  it can't fall back to the owner index); history rows carry `created`, the sub-routines that run created
   (`created_by_runs`). A sub-routine's run notification names its parent
   (`FinishedRoutineRun::parent_name`). Spans: `routine.create` (parent, run,
   keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`,
@@ -238,6 +241,14 @@ each run.
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
 - `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a
   routine as a template and activating it as someone else's routine.
+- `src/domain/agent_routines.rs` + `src/inbound/agent_routine_router.rs` +
+  `src/outbound/pg_agent_routines.rs`: `GET /scheduled-actions/agents/{agent_id}`,
+  the agent dashboard's routines pane. An agent account's top-level routines
+  (oldest 50, `truncated` past that) as a summary: name, enabled, running (a
+  live claim), trigger kind, next run and the last run's times and outcome
+  (`ScheduledActionRepo::last_runs`), never the task, steps, description,
+  event filters or run results. Span `routine.agent_list` (viewer
+  `agent`/`overseer`, count, truncated; no user ids).
 - `services/agent_harness_service/src/scheduling.rs`: the sole runtime host;
   this crate has no deployed binary.
 
@@ -250,6 +261,12 @@ each run.
   ID routes take a `ScheduledActionAccessExtractor` receipt and the domain
   loads the routine only for its owner (`granted_action`). Without a grant
   they answer 401; with a grant but not the owner, 404.
+  The one exception is the agent routines summary: the agent itself, or an
+  owner or admin of a team the agent account (`"User"."isAgent"`) belongs
+  to, may list that it has routines and how they ran, never their content.
+  It needs the caller's `enable-agent-dashboards` PostHog flag; everyone
+  else, a target that is not an agent account (even the caller itself), and
+  a missing, off or failed flag answer 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation

@@ -127,6 +127,7 @@ use utoipa::OpenApi;
             onboarding_api::dismiss_prompt_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
+            ai_usage_api::get_agent_spend_handler,
             ai_projections::inbound::axum_router::upsert_projection::handler::<crate::cognition::api::context::DcsAiProjectionService>,
             mcp_api::list_servers,
             mcp_api::add_server,
@@ -302,6 +303,10 @@ use utoipa::OpenApi;
                 ai_usage::inbound::models::CompletionUsage,
                 ai_usage::inbound::models::Usage,
                 ai_usage::inbound::models::Price,
+                ai_usage::inbound::models::AgentSpendResponse,
+                ai_usage::inbound::models::SpendBucketTotal,
+                ai_usage::inbound::models::Currency,
+                ai_usage::domain::spend::SpendBucket,
                 ai_usage::AiFeature,
 
                 // AI projections

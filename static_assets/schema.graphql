@@ -15,6 +15,13 @@ input ActivityFeedInput {
 	Whose activity to read; defaults to the user's own.
 	"""
 	scope: ActivityFeedScope! = MINE
+	"""
+	With the `TEAM` scope, only this teammate's activity: still only on
+	entities shared with the user, and none for someone who is not a
+	teammate. Not allowed with `MINE`, nor naming the user, whose own
+	activity is the `MINE` scope.
+	"""
+	actorId: String
 }
 
 """

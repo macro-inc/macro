@@ -5,7 +5,7 @@
 Part of billing: a robust log of AI usage with cost computed from model id
 and token counts (or audio duration, or provider credits a vendor such as
 Tavily bills), feeding `ai_billing`'s admission and ledger decisions, plus a
-flexible admin query API.
+flexible admin query API and an agent account's spend for its dashboard.
 
 ## Start here
 
@@ -20,6 +20,10 @@ flexible admin query API.
   `NON_BILLABLE_AI_FEATURES` allowlist.
 - `src/outbound/pg_usage_repo.rs`, `pg_tracking_repo.rs`,
   `pg_financial_usage_repo.rs`: the Postgres adapters.
+- `src/domain/spend.rs`: an agent account's spend by UTC day, ISO week,
+  month or year (`GET /ai-cost/agents/{agent_id}/spend`), its access rule and
+  the `enable-agent-dashboards` gate; `src/outbound/pg_agent_spend_repo.rs`
+  and `agent_dashboards_gate.rs` back it.
 
 ## Scope
 
@@ -29,7 +33,7 @@ flexible admin query API.
 
 ## Boundaries
 
-- Depends on: none notable outside the workspace-hack set.
+- Depends on: `feature_flags` (the agent dashboards gate).
 - Used by: `agent`, `agent_session`, `agent_harness`, `agent_trigger`,
   `ai_billing`, `ai_tools`, `ai_projections`, `anthropic`, `call`,
   `documents`, `import`, `image_generation`, `memory`, `channel_bots`,
@@ -64,6 +68,15 @@ flexible admin query API.
   `for_agent_session`, which stamps the session on any event that names
   none. A service that keeps the recorder it was built with (image
   generation) gets no stamp and must carry the session in its request.
+- Agent spend is readable by the agent itself and by owners and admins of a
+  team it belongs to, only with `enable-agent-dashboards` on for the caller;
+  everyone else, and any account that is not an agent, even read by
+  itself, gets 404, never 403. It counts rows its own API key paid for:
+  they are real spend, only kept out of quota counting. Buckets without
+  priced usage are omitted.
+- Per-user sums over `ai_usage` read every row in their range: keep them
+  index-only on `ai_usage_user_id_created_at_total_idx` (which includes
+  `total`) and under a `statement_timeout`.
 
 ## Related
 

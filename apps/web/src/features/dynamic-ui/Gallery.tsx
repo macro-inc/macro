@@ -1,8 +1,11 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import { ErrorBoundary, For, Suspense } from 'solid-js';
+import { useUserId } from '@core/context/user';
+import { Input } from '@ui';
+import { createSignal, ErrorBoundary, For, Show, Suspense } from 'solid-js';
 import type { View, Widget } from './view';
 import { Widget as WidgetNS } from './widget';
+import { AgentScope } from './widgets/panes/agent-scope';
 
 /**
  * Debug gallery for the dynamic-ui widget library.
@@ -405,6 +408,8 @@ function GalleryBody() {
             </div>
           </section>
 
+          <AgentPanesSection />
+
           <section class="flex flex-col gap-4">
             <h2 class="text-ink text-base font-semibold">Composed views</h2>
             <For each={COMPOSED}>
@@ -418,5 +423,66 @@ function GalleryBody() {
         </div>
       </div>
     </StaticMarkdownContext>
+  );
+}
+
+/**
+ * Agent panes (with `enable-agent-dashboards`): each reads the agent named
+ * in the field as you, so an agent you can't oversee shows No access. The
+ * field defaults to you, which every pane can read.
+ */
+function AgentPanesSection() {
+  const viewer = useUserId();
+  const [agent, setAgent] = createSignal('');
+  const [session, setSession] = createSignal('');
+  const agentId = () => agent().trim() || viewer();
+  const panes = (): Widget[] => [
+    { type: 'sessions', limit: 5 },
+    { type: 'activity', limit: 8 },
+    ...(session().trim()
+      ? [
+          {
+            type: 'activity',
+            title: 'One session',
+            sessionId: session().trim(),
+            limit: 8,
+          } as const,
+        ]
+      : []),
+    { type: 'routines' },
+    { type: 'spend', bucket: 'day' },
+    { type: 'spend', bucket: 'month', dense: true, title: 'Spend by month' },
+  ];
+  return (
+    <section class="flex flex-col gap-3">
+      <h2 class="text-ink text-base font-semibold">Agent panes</h2>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <Input
+          aria-label="Agent user id"
+          placeholder="Agent user id (macro|…); empty reads yours"
+          value={agent()}
+          onInput={(event) => setAgent(event.currentTarget.value)}
+        />
+        <Input
+          aria-label="Agent session id"
+          placeholder="Agent session id for one session's activity"
+          value={session()}
+          onInput={(event) => setSession(event.currentTarget.value)}
+        />
+      </div>
+      <Show when={agentId()} keyed>
+        {(id) => (
+          <AgentScope agentId={id}>
+            <For each={panes()}>
+              {(widget) => (
+                <DemoCell label={widget.type}>
+                  <WidgetNS.Render node={widget} />
+                </DemoCell>
+              )}
+            </For>
+          </AgentScope>
+        )}
+      </Show>
+    </section>
   );
 }

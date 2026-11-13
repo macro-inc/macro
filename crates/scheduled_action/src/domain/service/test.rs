@@ -44,7 +44,7 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
     activities: Mutex<Vec<activity::Activity>>,
-    records: Mutex<Vec<ActionExecutionRecord>>,
+    pub(crate) records: Mutex<Vec<ActionExecutionRecord>>,
     /// Runs in progress, as claims would show them.
     running: Mutex<Vec<RunningRun>>,
 }

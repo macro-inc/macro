@@ -149,6 +149,8 @@ enforced by the ordinary backend APIs.
   `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
   `/initiatives/{id}/activity`. Code mode hides the matching direct tools.
+  `User.spend()` reads an agent account's bucketed AI spend (cognition
+  `/ai-cost/agents/{id}/spend`, behind `enable-agent-dashboards`).
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 - `src/calls/`: optional Node and browser LiveKit helpers, exported only as
   `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of

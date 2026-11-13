@@ -219,6 +219,65 @@
         }
       }
     },
+    "/scheduled-actions/agents/{agent_id}": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_agent_routines",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "User ID of the agent account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The agent's top-level routines, oldest first, summarized without their content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRoutines"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not the agent or an owner or admin of its team, not an agent account, or agent dashboards are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/catalog": {
       "get": {
         "tags": ["scheduled actions"],
@@ -3093,6 +3152,63 @@
           }
         }
       },
+      "AgentRoutine": {
+        "type": "object",
+        "description": "One routine, without its content.",
+        "required": ["id", "name", "enabled", "running", "triggerKind"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lastRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LastRun",
+                "description": "The latest finished run, absent when it never ran."
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "nextRunAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The next scheduled firing; absent for event routines and finished\none-time ones."
+          },
+          "running": {
+            "type": "boolean",
+            "description": "A run is in progress: the routine is claimed and its claim has not\nexpired."
+          },
+          "triggerKind": {
+            "$ref": "#/components/schemas/TriggerKind"
+          }
+        }
+      },
+      "AgentRoutines": {
+        "type": "object",
+        "description": "An agent's top-level routines, oldest first.",
+        "required": ["routines", "truncated"],
+        "properties": {
+          "routines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRoutine"
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when the agent owns more than 50 top-level routines and the\nnewest were left out."
+          }
+        }
+      },
       "AgentStep": {
         "type": "object",
         "description": "Hand the run to a model running as Macro, or to an agent.",
@@ -4501,6 +4617,24 @@
       "KnobName": {
         "type": "string",
         "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
+      },
+      "LastRun": {
+        "type": "object",
+        "description": "When a routine's latest finished run ran and whether it succeeded.",
+        "required": ["startedAt", "endedAt", "succeeded"],
+        "properties": {
+          "endedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "succeeded": {
+            "type": "boolean"
+          }
+        }
       },
       "NamedItemKind": {
         "type": "string",
@@ -6471,6 +6605,11 @@
           }
         ],
         "description": "A user-specific part of a shared routine."
+      },
+      "TriggerKind": {
+        "type": "string",
+        "description": "What kind of trigger starts a routine, as `ActionTrigger` names it.",
+        "enum": ["cron", "events", "once", "multiple"]
       },
       "UpgradeOutcome": {
         "type": "string",
