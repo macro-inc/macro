@@ -1,25 +1,22 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { type ResultError, ThrownResultError } from '@core/util/result';
+import type { Dashboard as DashboardDto } from '@service-storage/generated/schemas/dashboard';
+import { getDashboardResponse } from '@service-storage/generated/zod';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import type { Dashboard, DashboardFailure } from '../core/dashboard';
 
-// Hand-written until the storage service's OpenAPI lands; then the requests
-// here become calls into the generated client (`bun run gen-api`).
-
 type DashboardWidget = Dashboard['view']['widgets'][number];
 
 /**
- * The server decodes every view (`decode_view`) before storing it, so the
- * renderer takes it as serialized; only the envelope is checked here.
+ * The generated response schema, with the view kept whole: on the wire it is
+ * an opaque object (the server decodes it with `decode_view` before saving),
+ * which the generated `object({})` would strip. Only its widget list is
+ * checked here; the renderer takes the view as serialized.
  */
-const DASHBOARD = z.object({
-  id: z.string(),
-  ownerId: z.string(),
-  title: z.string().nullable(),
-  version: z.number(),
-  view: z.object({
+const DASHBOARD_RESPONSE = getDashboardResponse.extend({
+  view: z.looseObject({
     title: z.string().optional(),
     widgets: z.array(
       z.custom<DashboardWidget>(
@@ -31,10 +28,20 @@ const DASHBOARD = z.object({
       )
     ),
   }),
-  accessLevel: z.enum(['view', 'comment', 'edit', 'owner']),
-  createdAt: z.string(),
-  updatedAt: z.string(),
 });
+
+function toDashboard(dto: DashboardDto, view: Dashboard['view']): Dashboard {
+  return {
+    id: dto.id,
+    ownerId: dto.ownerId,
+    title: dto.title ?? null,
+    version: dto.version,
+    view,
+    accessLevel: dto.accessLevel,
+    createdAt: dto.createdAt,
+    updatedAt: dto.updatedAt,
+  };
+}
 
 export type DashboardFetch = (
   url: string
@@ -54,11 +61,13 @@ async function readDashboard(
   const response = await fetcher(url);
   if (response.isErr()) return err(response.error);
 
-  const parsed = DASHBOARD.safeParse(response.value);
+  const parsed = DASHBOARD_RESPONSE.safeParse(response.value);
   if (!parsed.success) {
     return err([{ code: 'INVALID_JSON', message: 'Unexpected dashboard' }]);
   }
-  return ok(parsed.data);
+  const { title, widgets } = parsed.data.view;
+  const view = title === undefined ? { widgets } : { title, widgets };
+  return ok(toDashboard(parsed.data, view));
 }
 
 /** The account's home dashboard; 404 when it has none or the viewer can't see it. */
