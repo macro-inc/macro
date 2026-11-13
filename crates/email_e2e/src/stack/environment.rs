@@ -35,6 +35,17 @@ const REDIS_URL: [&str; 2] = ["EMAIL_E2E_REDIS_URL", "REDIS_URI"];
 const SQS_URL: [&str; 1] = ["EMAIL_E2E_SQS_URL"];
 const KAFKA_BROKERS: [&str; 1] = ["EMAIL_E2E_KAFKA_BROKERS"];
 
+/// The search cluster, which only a stack that searches needs.
+const OPENSEARCH_URL: [&str; 1] = ["EMAIL_E2E_OPENSEARCH_URL"];
+
+/// Where the shared search cluster answers.
+pub(crate) fn opensearch_url() -> Result<String, Report> {
+    required(
+        &OPENSEARCH_URL,
+        "an OpenSearch cluster with the search indices, such as http://localhost:9200",
+    )
+}
+
 /// The servers every scenario shares, from the suite's environment.
 pub(crate) struct Servers {
     pub(crate) postgres: String,

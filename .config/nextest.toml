@@ -16,6 +16,16 @@ fail-fast = false
 [test-groups.email-e2e]
 max-threads = 6
 
+# The search scenarios share one search cluster and one consumer group for
+# the indexer, so only one of them runs at a time. First, because the first
+# override that matches a test decides its group.
+[test-groups.email-e2e-search]
+max-threads = 1
+
+[[profile.email-e2e.overrides]]
+filter = "package(email_e2e) & binary(search)"
+test-group = "email-e2e-search"
+
 [[profile.email-e2e.overrides]]
 filter = "package(email_e2e)"
 test-group = "email-e2e"

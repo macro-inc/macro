@@ -271,6 +271,16 @@ impl User {
             .await
     }
 
+    /// Searches as the web app does (`POST /search` on document storage,
+    /// on a stack with `search`). `request` is the body: `query`,
+    /// `match_type` (`exact` or `partial`) and optionally `filters` and
+    /// `search_on`. The hits are the answer's `results`. Indexing follows
+    /// the mail by a moment, so wait for a hit with [`eventually`].
+    pub async fn search(&self, request: &Value) -> Result<ApiResponse, Report> {
+        self.document_storage_request(Method::POST, "/search", Some(request))
+            .await
+    }
+
     pub(crate) fn http(&self) -> &reqwest::Client {
         &self.api.http
     }

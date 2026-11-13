@@ -35,6 +35,10 @@ const API: &str = "email_service";
 const WORKERS: &str = "pubsub_workers";
 /// The service behind the GraphQL API.
 const DOCUMENT_STORAGE: &str = "document_storage_service";
+/// The service that keeps the search index up to date.
+const SEARCH_INDEXER: &str = "search_processing_service";
+/// The consumer group the search indexer reads the event topics in.
+const SEARCH_INDEXER_GROUP: &str = "search-processing-service";
 /// The setting that names the Kafka brokers.
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 /// Where that service answers GraphQL.
@@ -61,6 +65,14 @@ pub struct StackOptions {
     /// the web app sends mail through ([`User::graphql`]). Off by default:
     /// it is a third large process per scenario.
     pub document_storage: bool,
+    /// Also start search: `search_processing_service` indexing the
+    /// scenario's mail into the OpenSearch cluster at
+    /// `EMAIL_E2E_OPENSEARCH_URL`, and `document_storage_service` (as with
+    /// `document_storage`) answering [`User::search`] from it. The cluster
+    /// and the indexer's consumer group are shared by every scenario, so
+    /// these scenarios run one at a time (the `email-e2e-search` test
+    /// group) and each uses addresses no other scenario does.
+    pub search: bool,
 }
 
 /// A running stack. Start one per scenario and end the scenario with
@@ -77,6 +89,9 @@ pub struct Stack {
     api: ServiceProcess,
     workers: Option<ServiceProcess>,
     document_storage: Option<ServiceProcess>,
+    search_indexer: Option<ServiceProcess>,
+    /// The search cluster, on a stack that searches.
+    opensearch_url: Option<String>,
     graphql_url: Option<String>,
     worker_env: BTreeMap<String, String>,
     api_url: String,
@@ -165,6 +180,8 @@ impl Stack {
             api,
             workers: Some(workers),
             document_storage: None,
+            search_indexer: None,
+            opensearch_url: None,
             graphql_url: None,
             worker_env: env,
             api_url,
@@ -175,8 +192,14 @@ impl Stack {
         };
         // The stack exists now, so a failure from here on is cleaned up by
         // its drop.
-        if options.document_storage {
+        if options.search {
+            stack.opensearch_url = Some(environment::opensearch_url()?);
+        }
+        if options.document_storage || options.search {
             stack.start_document_storage(&options).await?;
+        }
+        if options.search {
+            stack.start_search_indexer(&options).await?;
         }
         Ok(stack)
     }
@@ -207,7 +230,7 @@ impl Stack {
                 &document_storage_environment::DocumentStorage {
                     port,
                     database_url: self.database().url(),
-                    search_url: self.service_url(document_storage_environment::SEARCH),
+                    search_url: self.search_cluster_url(),
                     email_env: &self.worker_env,
                 },
             );
@@ -222,6 +245,62 @@ impl Stack {
                     }
                     self.graphql_url = Some(format!("{url}{GRAPHQL_PATH}"));
                     self.document_storage = Some(service);
+                    return Ok(());
+                }
+                Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
+                    tracing::warn!(error = ?error, port, "the port was taken; trying another");
+                    service.stop().await;
+                }
+                Err(error) => {
+                    let report = error.attach(format!(
+                        "the end of {}:\n{}",
+                        service.log_path().display(),
+                        service.log_tail()
+                    ));
+                    service.stop().await;
+                    return Err(report);
+                }
+            }
+        }
+    }
+
+    /// The search cluster `document_storage_service` is pointed at: the real
+    /// one on a stack that searches, otherwise the stand-in that answers its
+    /// health check.
+    fn search_cluster_url(&self) -> String {
+        self.opensearch_url
+            .clone()
+            .unwrap_or_else(|| self.service_url(document_storage_environment::SEARCH))
+    }
+
+    /// Starts `search_processing_service` on the scenario's database and
+    /// queues, writing to the shared search cluster.
+    async fn start_search_indexer(&mut self, options: &StackOptions) -> Result<(), Report> {
+        crate::process::ensure_built(&[SEARCH_INDEXER])?;
+        if let Some(brokers) = self.worker_env.get(KAFKA_BROKERS) {
+            crate::infra::kafka::start_group_at_end(brokers, SEARCH_INDEXER_GROUP).await?;
+        }
+
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let port = free_port().await?;
+            let mut env = document_storage_environment::document_storage_env(
+                &document_storage_environment::DocumentStorage {
+                    port,
+                    database_url: self.database().url(),
+                    search_url: self.search_cluster_url(),
+                    email_env: &self.worker_env,
+                },
+            );
+            env.extend(document_storage_environment::search_indexer_settings());
+            env.extend(options.env.iter().cloned());
+
+            let mut service = ServiceProcess::spawn(SEARCH_INDEXER, &env, &self.log_dir)?;
+            let url = format!("http://127.0.0.1:{port}");
+            match wait_for_health(&self.http, &url, &mut service).await {
+                Ok(()) => {
+                    self.search_indexer = Some(service);
                     return Ok(());
                 }
                 Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
@@ -345,6 +424,14 @@ impl Stack {
     /// Creates the Macro user `<name>@example.com`.
     pub async fn user(&self, name: &str) -> Result<User, Report> {
         User::create(self, &format!("{name}@example.com")).await
+    }
+
+    /// Creates a Macro user `<name>-<unique>@example.com` that no other
+    /// scenario and no earlier run has: for what is kept outside the
+    /// scenario's own database, such as the search index.
+    pub async fn unique_user(&self, name: &str) -> Result<User, Report> {
+        let unique = Uuid::now_v7().simple();
+        User::create(self, &format!("{name}-{unique}@example.com")).await
     }
 
     /// Puts mail in a mailbox at the provider before anyone links it,
@@ -614,6 +701,9 @@ impl Stack {
         if let Some(document_storage) = &mut self.document_storage {
             document_storage.ensure_running()?;
         }
+        if let Some(search_indexer) = &mut self.search_indexer {
+            search_indexer.ensure_running()?;
+        }
         Ok(())
     }
 
@@ -624,10 +714,16 @@ impl Stack {
             .as_ref()
             .map(ServiceProcess::log)
             .unwrap_or_default();
+        let search_indexer = self
+            .search_indexer
+            .as_ref()
+            .map(ServiceProcess::log)
+            .unwrap_or_default();
         for (name, log) in [
             (API, self.api_log()),
             (WORKERS, self.workers_log()),
             (DOCUMENT_STORAGE, document_storage),
+            (SEARCH_INDEXER, search_indexer),
         ] {
             if let Some(line) = log.lines().find(|line| line.contains(PANIC_MARKER)) {
                 bail!(
@@ -658,6 +754,12 @@ impl Stack {
     /// lease.
     async fn tear_down(&mut self) {
         self.api.stop().await;
+        // Told to stop rather than killed: it leaves its consumer group, so
+        // the next scenario's indexer is not kept waiting for this one's
+        // session to expire.
+        if let Some(mut search_indexer) = self.search_indexer.take() {
+            search_indexer.stop_gracefully().await;
+        }
         if let Some(mut document_storage) = self.document_storage.take() {
             document_storage.stop().await;
         }
@@ -692,7 +794,11 @@ impl Stack {
             "\n--- email_e2e: the scenario failed; service logs are in {} ---\n",
             self.log_dir.display()
         );
-        let others = self.workers.iter().chain(&self.document_storage);
+        let others = self
+            .workers
+            .iter()
+            .chain(&self.document_storage)
+            .chain(&self.search_indexer);
         for process in std::iter::once(&self.api).chain(others) {
             report.push_str(&format!(
                 "--- the end of {} ---\n{}\n",

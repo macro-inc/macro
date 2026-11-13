@@ -40,6 +40,10 @@ const PAYLOAD_HASH: &str = "x-amz-content-sha256";
 /// The largest request body the endpoint reads.
 const BODY_LIMIT: usize = 64 * 1024 * 1024;
 const DEFAULT_CONTENT_TYPE: &str = "application/octet-stream";
+/// How a DynamoDB call names its operation, in the same header.
+const DYNAMODB_TARGET: &str = "DynamoDB_";
+/// The one table a service finds: no scenario stores anything in it.
+const DYNAMODB_TABLE: &str = r#"{"Table":{"TableName":"email-e2e","TableStatus":"ACTIVE"}}"#;
 /// The operation a queue send is, at the end of its `x-amz-target`.
 const SEND_MESSAGE: &str = ".SendMessage";
 const SQS_CONTENT_TYPE: &str = "application/x-amz-json-1.0";
@@ -183,6 +187,11 @@ async fn answer(State(endpoint): State<Endpoint>, request: Request) -> Response 
         return StatusCode::PAYLOAD_TOO_LARGE.into_response();
     };
 
+    if let Some(target) = headers.get(SQS_TARGET).and_then(|value| value.to_str().ok())
+        && target.starts_with(DYNAMODB_TARGET)
+    {
+        return dynamodb_table();
+    }
     if headers.contains_key(SQS_TARGET) {
         if let Some(refusal) = refused_send(&endpoint.refused_sends, &headers, &body) {
             return refusal;
@@ -250,6 +259,16 @@ async fn answer(State(endpoint): State<Endpoint>, request: Request) -> Response 
         }
         _ => StatusCode::METHOD_NOT_ALLOWED.into_response(),
     }
+}
+
+/// Every DynamoDB call is answered as a description of an existing table:
+/// the search indexer only checks at startup that its job table is there.
+fn dynamodb_table() -> Response {
+    (
+        [(CONTENT_TYPE, "application/x-amz-json-1.0")],
+        DYNAMODB_TABLE,
+    )
+        .into_response()
 }
 
 fn get_any_bucket(objects: &Objects, key: &str) -> Response {

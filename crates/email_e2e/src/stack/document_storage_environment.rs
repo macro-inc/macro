@@ -114,3 +114,13 @@ const UNUSED_SETTINGS: &[&str] = &[
     "META_PIXEL_ID",
     "META_ACCESS_TOKEN",
 ];
+
+/// What `search_processing_service` reads besides what
+/// `document_storage_service` does.
+pub(crate) fn search_indexer_settings() -> [(String, String); 2] {
+    [
+        ("BACKFILL_JOBS_TABLE".to_owned(), UNUSED.to_owned()),
+        // The queue is the scenario's alone: no reason to wait for a batch.
+        ("QUEUE_WAIT_TIME_SECONDS".to_owned(), "1".to_owned()),
+    ]
+}

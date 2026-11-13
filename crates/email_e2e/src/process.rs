@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
 
 use rootcause::prelude::*;
 use tokio::process::{Child, Command};
@@ -11,6 +12,9 @@ use tokio::process::{Child, Command};
 /// The environment variable naming the directory that holds `email_service`
 /// and `pubsub_workers`.
 const BIN_DIR_ENV: &str = "EMAIL_E2E_BIN_DIR";
+
+/// How long a service may take to shut down when asked.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// How many of a log's last lines a failure shows.
 const LOG_TAIL_LINES: usize = 40;
@@ -93,6 +97,27 @@ impl ServiceProcess {
         let lines: Vec<&str> = log.lines().collect();
         let start = lines.len().saturating_sub(LOG_TAIL_LINES);
         lines[start..].join("\n")
+    }
+
+    /// Asks the process to shut down and waits for it; kills it when it
+    /// takes longer than a shutdown should.
+    pub(crate) async fn stop_gracefully(&mut self) {
+        let asked = self
+            .child
+            .id()
+            .and_then(|id| i32::try_from(id).ok())
+            .and_then(rustix::process::Pid::from_raw)
+            .is_some_and(|pid| {
+                rustix::process::kill_process(pid, rustix::process::Signal::TERM).is_ok()
+            });
+        if asked
+            && tokio::time::timeout(SHUTDOWN_TIMEOUT, self.child.wait())
+                .await
+                .is_ok()
+        {
+            return;
+        }
+        self.stop().await;
     }
 
     /// Kills the process and waits for it to be gone.
