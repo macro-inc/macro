@@ -111,6 +111,15 @@ export function ChatComposer(props: {
   const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
+  // The editor reports a host draft back as its own export, which can differ
+  // (a code block loses trailing blank lines). Passing that on would rewrite
+  // the draft under another composer showing it while someone types there.
+  let hostMarkdown: string | undefined;
+  const reportDraft = (markdown: string) => {
+    if (markdown === hostMarkdown) return;
+    hostMarkdown = undefined;
+    props.onDraftChange(markdown);
+  };
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
@@ -146,7 +155,7 @@ export function ChatComposer(props: {
       },
       onEnd: () => {},
     })
-    .onChange(props.onDraftChange);
+    .onChange(reportDraft);
 
   if (props.session) {
     editor.withAgentCommands({
@@ -190,6 +199,7 @@ export function ChatComposer(props: {
       (draft) => {
         if (draft === editor.controls.getMarkdown()) return;
         editor.controls.setMarkdown(draft);
+        hostMarkdown = editor.controls.getMarkdown();
         placeCaretAfterDraft();
       }
     )
