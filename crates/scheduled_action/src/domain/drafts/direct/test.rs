@@ -1451,3 +1451,19 @@ async fn areas_the_sdk_doesnt_have_give_the_writer_the_commonest_ones() {
             .contains("the reference of channels, tasks, email")
     );
 }
+
+#[test]
+fn found_items_go_in_steps_by_name_unless_tuned_to_ids() {
+    let code = Checker::default();
+    let by_name = DirectPrompts::new(&code, "the guide", ItemKnobs::Names);
+    let by_id = DirectPrompts::new(&code, "the guide", ItemKnobs::Ids);
+
+    for (code, conditions) in [(true, false), (true, true), (false, false), (false, true)] {
+        let named = by_name.write(code, conditions);
+        assert!(named.contains(ITEMS_BY_NAME.trim()));
+        assert!(!named.contains(ITEMS_BY_ID.trim()));
+        assert!(!named.contains("{items}"));
+        assert!(by_id.write(code, conditions).contains(ITEMS_BY_ID.trim()));
+    }
+    assert_eq!(DirectTuning::default().item_knobs, ItemKnobs::Names);
+}

@@ -260,7 +260,11 @@ struct Direct {
 impl<Code: RoutineCode, Sessions> RoutineDrafts<Code, Sessions> {
     /// Write every draft directly with `drafting` instead of in a session.
     pub fn with_direct(mut self, drafting: DirectDrafting) -> Self {
-        let prompts = DirectPrompts::new(self.code.as_ref(), self.agent.guide);
+        let prompts = DirectPrompts::new(
+            self.code.as_ref(),
+            self.agent.guide,
+            drafting.tuning.item_knobs,
+        );
         self.direct = Some(Arc::new(Direct { drafting, prompts }));
         self
     }

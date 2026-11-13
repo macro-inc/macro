@@ -12,14 +12,14 @@ Answer with JSON only, no prose and no code fence, in the shape the request asks
   - `{"type": "once", "at": "2026-03-14T15:00:00-04:00"}`: one time, in ISO 8601 with its offset.
   - `{"type": "events", "filters": [{"events": ["channel.message_posted"], "ids": ["<item id>"]}]}`: `ids` are the items whose events start it, such as the channels messages are posted in or the documents that change. Without `ids`, the event starts it for every item the owner can access, which suits the events that select no item (`task.created`, `email.message_received`, `document.created`, `channel.created`, calls). {conditions}
   - `{"type": "multiple", "triggers": [TRIGGER, ...]}` for more than one, never nested.
-- STEP is a code step, `{"type": "code", "title", "summary", "knobs", "sentence", "source"}`, written as below, or an Ask AI step, `{"type": "agent", "model": "<the Ask AI model>", "instructions": "..."}`, whose instructions stand alone: what to do, the items by id, and where to report.
+- STEP is a code step, `{"type": "code", "title", "summary", "knobs", "sentence", "source"}`, written as below, or an Ask AI step, `{"type": "agent", "model": "<the Ask AI model>", "instructions": "..."}`, whose instructions stand alone: what to do, the items it works on, and where to report.
 {setup}
 
 ## Items the request names
 
 Before you, the drafter looked up by name each item the request names, as the owner would see it.
 
-- Use each item listed under "Found" by its id: in a trigger filter's `ids`, or as the value of a `text` knob that the code reads (`knobs.channelId`). Never look it up again in code.
+{items}
 - A name listed under "Left for the owner" has no item, or several items have it: don't guess, don't create it and don't search for it in code. Leave it out, with a filter without its `ids` or a knob whose value is `""`, and the owner picks it before saving.
 - Anything else the code needs (the owner, a person by email address, their labels' or properties' ids), it reads from the SDK when it runs.
 

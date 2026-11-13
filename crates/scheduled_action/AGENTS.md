@@ -55,9 +55,13 @@ each run.
   routines guide, the code-step guide, the SDK's `ai` area and Macro's
   catalog code routines as examples), built once per mix of code and
   trigger conditions (`DirectPrompts`) so the provider caches it; its user
-  turn carries the request, the found items by id and the reference of the
-  areas named, or of the commonest ones when the SDK has none of them
-  (`RoutineCode::area_reference`). A `setup` module creating
+  turn carries the request, the found items (name and id) and the
+  reference of the areas named, or of the commonest ones when the SDK has
+  none of them (`RoutineCode::area_reference`). A found item goes in a
+  trigger filter by id, and in a knob or Ask AI instructions by its exact
+  name, which the step resolves when it runs, since the owner reads a text
+  knob as written (`ItemKnobs::Names`; `ItemKnobs::Ids` and
+  `direct/items_by_id.md` switch to ids). A `setup` module creating
   what the routine uses runs once, as the person, and its ids replace each
   `{{setup.<key>}}` (`Setup`): a run that failed runs again only once the
   writer changed it and only if it changed nothing, and a placeholder left

@@ -44,6 +44,9 @@ const FIND: &str = include_str!("direct/find.md");
 const WRITE: &str = include_str!("direct/write.md");
 /// What the writer is told about `setup`, when the draft may write code.
 const SETUP: &str = include_str!("direct/setup.md");
+/// What the writer is told to do with a found item, for each [`ItemKnobs`].
+const ITEMS_BY_NAME: &str = include_str!("direct/items_by_name.md");
+const ITEMS_BY_ID: &str = include_str!("direct/items_by_id.md");
 /// The most names one lookup takes.
 const MAX_NAMES: usize = 10;
 /// The longest name the lookup takes, in characters.
@@ -220,6 +223,8 @@ pub struct DirectTuning {
     pub thinking: bool,
     /// How many times the model may fix what the check found.
     pub max_fixes: u8,
+    /// What a step holds for an item the drafter found.
+    pub item_knobs: ItemKnobs,
 }
 
 impl Default for DirectTuning {
@@ -229,8 +234,22 @@ impl Default for DirectTuning {
             effort: Some(Effort::Low),
             thinking: false,
             max_fixes: 2,
+            item_knobs: ItemKnobs::default(),
         }
     }
+}
+
+/// What a code step's knob, or an Ask AI step's instructions, hold for an
+/// item the request named and the drafter found. A trigger filter takes its
+/// id either way.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ItemKnobs {
+    /// Its exact name, which the step resolves when it runs: the owner reads
+    /// a text knob's value as written, and an id means nothing to them.
+    #[default]
+    Names,
+    /// Its id, which the step uses as it is.
+    Ids,
 }
 
 /// The writer's instructions for each mix of what a draft may use, built
@@ -244,8 +263,13 @@ pub(super) struct DirectPrompts {
 }
 
 impl DirectPrompts {
-    pub(super) fn new(code: &impl RoutineCode, guide: &str) -> Self {
+    pub(super) fn new(code: &impl RoutineCode, guide: &str, item_knobs: ItemKnobs) -> Self {
         let ai = code.area_reference(&[AI_AREA.to_owned()]);
+        let items = match item_knobs {
+            ItemKnobs::Names => ITEMS_BY_NAME,
+            ItemKnobs::Ids => ITEMS_BY_ID,
+        }
+        .trim();
         let write = |code: bool, conditions: bool| {
             let steps = if code {
                 format!(
@@ -268,6 +292,7 @@ impl DirectPrompts {
             };
             WRITE
                 .replace("{setup}", setup)
+                .replace("{items}", items)
                 .replace("{conditions}", conditions)
                 .replace("{guide}", guide.trim())
                 .replace("{steps}", &steps)
