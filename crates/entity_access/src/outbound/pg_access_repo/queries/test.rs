@@ -397,22 +397,34 @@ fn source_list_uses(sql: &str) -> Vec<String> {
         "channel_id",
         "channel_id::text",
     ];
+    // Lowercase, with `=` spaced and whitespace collapsed, so every spelling
+    // of `source_id = ANY($n)` reads the same.
     let sql = sql
+        .to_lowercase()
+        .replace('=', " = ")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
-        .replace("( ", "(");
+        .replace("( ", "(")
+        .replace("any (", "any(");
     let mut uses = Vec::new();
-    for (at, _) in sql.match_indices(" = ANY($") {
+    for (at, _) in sql.match_indices(" = any($") {
         let column = sql[..at].rsplit([' ', '(', '.']).next().unwrap_or_default();
         if SOURCE_COLUMNS.contains(&column) {
-            uses.push(sql[at.saturating_sub(40)..(at + 12).min(sql.len())].to_string());
+            let start = (0..=at.saturating_sub(40))
+                .rev()
+                .find(|&i| sql.is_char_boundary(i))
+                .unwrap_or(0);
+            let end = ((at + 12).min(sql.len())..=sql.len())
+                .find(|&i| sql.is_char_boundary(i))
+                .unwrap_or(sql.len());
+            uses.push(sql[start..end].to_string());
         }
     }
     for banned in [
         "external_chat_access_level($1, $2)",
         "external_chat_sources(",
-        "NOT EXISTS (SELECT FROM entity_access_source_matches",
+        "not exists (select from entity_access_source_matches",
     ] {
         if sql.contains(banned) {
             uses.push(banned.to_string());
@@ -454,6 +466,9 @@ fn source_list_uses_finds_each_old_form() {
         "WHERE ea.source_id = ANY($1)",
         "ON owner_tu.team_id::text = ANY($2)",
         "WHERE c.channel_id = ANY(\n $3)",
+        "AND source_id=ANY($2)",
+        "AND ea.source_id =any ( $2 )",
+        "and team_id::text = any($1)",
         "SELECT external_chat_access_level($1, $2)",
         "AND NOT EXISTS (SELECT FROM entity_access_source_matches(x, $1, $2))",
     ] {
