@@ -1,0 +1,19 @@
+crates/macro_db_client/migrations/20261113131944_webhook_filters_live_gin_index.up.sql
+  s_8703f73ae8e37d::t_754a6b3a81ac5f 6-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "14a75836d863b8d755cb3c46da54cbcd1c3ec01d",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
