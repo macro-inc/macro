@@ -98,7 +98,10 @@ for (const provider of PROVIDERS) {
       await row(page, ids.Question).click();
       await expect(page.getByText('About Question.')).toBeVisible();
       await expect.poll(async () => (await held('Question'))?.read).toBe(true);
-      await mailbox.open();
+      // Back to the list in the app, as a user does: a reload here can cut
+      // off a read still in flight, which holds the mutation queue.
+      await page.keyboard.press('Escape');
+      await expect(page).toHaveURL(/\/app\/mail$/);
       await focusRow(page, ids.Question);
       await page.keyboard.press('u');
       await expect(notice(page, 'Marked as unread')).toBeVisible();
