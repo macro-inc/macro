@@ -8,7 +8,10 @@ use model_entity::EntityType;
 use sqlx::PgPool;
 
 use super::*;
-use crate::domain::model::{Category, EntityAction, RunMode, SuggestionStatus};
+use crate::domain::model::{
+    Category, EntityAction, ResolveReason, RunMode, SuggestionDraft, SuggestionStatus, Waiting,
+};
+use crate::domain::ports::{FoundDraft, ReplyWaits};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
 pub(crate) mod runs;
@@ -65,18 +68,46 @@ impl FakeDrafts {
 impl SuggestionDrafts for FakeDrafts {
     type Err = std::convert::Infallible;
 
-    async fn email_draft_thread(
+    async fn email_draft(
         &self,
         user: &MacroUserIdStr<'_>,
         draft: Uuid,
-    ) -> Result<Option<Uuid>, Self::Err> {
+    ) -> Result<Option<FoundDraft>, Self::Err> {
         Ok(self
             .0
             .lock()
             .unwrap()
             .get(&draft)
             .filter(|(owner, _)| *owner == user.as_ref())
-            .map(|(_, thread)| *thread))
+            .map(|(_, thread)| FoundDraft {
+                thread: *thread,
+                preview: Some(DRAFT_PREVIEW.to_owned()),
+            }))
+    }
+}
+
+/// What every fake draft says.
+pub(crate) const DRAFT_PREVIEW: &str = "Thanks, see you Monday";
+
+/// Who each item waits on the person for, by item id; items in `failing`
+/// can't be read.
+#[derive(Default)]
+pub(crate) struct FakeWaits {
+    waiting: Mutex<HashMap<String, Waiting>>,
+    failing: Mutex<HashSet<String>>,
+}
+
+#[async_trait::async_trait]
+impl ReplyWaits for FakeWaits {
+    async fn waiting(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        target: &Target,
+    ) -> Result<Option<Waiting>, rootcause::Report> {
+        if self.failing.lock().unwrap().contains(&target.entity_id) {
+            return Err(rootcause::report!("the item is unreadable"));
+        }
+        Ok(self.waiting.lock().unwrap().get(&target.entity_id).cloned())
     }
 }
 
@@ -162,6 +193,7 @@ pub(crate) struct Harness {
     pub(crate) service: Service,
     access: Arc<FakeAccess>,
     drafts: Arc<FakeDrafts>,
+    waits: Arc<FakeWaits>,
     audience: Arc<FakeAudience>,
     dismissal: Arc<FakeDismissal>,
     pool: PgPool,
@@ -183,6 +215,7 @@ pub(crate) async fn harness(pool: PgPool, flag: bool) -> Harness {
     }
     let access = Arc::new(FakeAccess::default());
     let drafts = Arc::new(FakeDrafts::default());
+    let waits = Arc::new(FakeWaits::default());
     let audience = Arc::new(FakeAudience::default());
     let dismissal = Arc::new(FakeDismissal::default());
     Harness {
@@ -195,9 +228,11 @@ pub(crate) async fn harness(pool: PgPool, flag: bool) -> Harness {
             audience.clone(),
             dismissal.clone(),
             Some(flags),
-        ),
+        )
+        .with_reply_waits(waits.clone()),
         access,
         drafts,
+        waits,
         audience,
         dismissal,
         pool,
@@ -856,10 +891,10 @@ async fn a_suggestion_whose_items_cant_be_checked_is_left_out_of_the_feed(pool: 
     );
 }
 
-/// `limit` caps each list, open best first and done latest first, counting
-/// only what the person can open.
+/// `limit` caps the open list, best first, and leaves out done; the counts
+/// count every suggestion the person can open either way.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn the_feed_returns_at_most_limit_of_each_list(pool: PgPool) {
+async fn the_feed_returns_at_most_limit_open_suggestions_and_counts_all(pool: PgPool) {
     let h = harness(pool, true).await;
     let session = h.session(OWNER, "suggestions").await;
     let mut ids = Vec::new();
@@ -904,22 +939,33 @@ async fn the_feed_returns_at_most_limit_of_each_list(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(keys(&feed.suggestions), ["b:high", "c:mid"]);
-    assert_eq!(keys(&feed.done), ["f:done-last", "e:done-first"]);
+    assert_eq!(feed.done, None);
+    let counts = FeedCounts {
+        open: 3,
+        running: 0,
+        failed: 0,
+        done: 2,
+    };
+    assert_eq!(feed.counts, counts);
     let feed = h
         .service
         .feed(&user(OWNER), SuggestionCaller::User, None, Some(1))
         .await
         .unwrap();
     assert_eq!(keys(&feed.suggestions), ["b:high"]);
-    assert_eq!(keys(&feed.done), ["f:done-last"]);
+    assert_eq!(feed.done, None);
+    assert_eq!(feed.counts, counts);
     let feed = h
         .service
         .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     assert_eq!(keys(&feed.suggestions), ["b:high", "c:mid", "a:low"]);
+    let done = feed.done.unwrap();
+    assert_eq!(keys(&done), ["f:done-last", "e:done-first"]);
+    assert_eq!(feed.counts, counts);
     assert!(feed.suggestions.iter().all(|suggestion| suggestion.status == SuggestionStatus::Open));
-    assert!(feed.done.iter().all(|suggestion| suggestion.status == SuggestionStatus::Done));
+    assert!(done.iter().all(|suggestion| suggestion.status == SuggestionStatus::Done));
 }
 
 /// Reading the feed counts the person in once per timezone while it is
@@ -971,8 +1017,9 @@ async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPo
         .await
         .unwrap();
     assert!(feed.suggestions.is_empty());
-    assert_eq!(feed.done[0].id, suggestion.id);
-    assert_eq!(feed.done[0].state, SuggestionState::Done);
+    let done = feed.done.unwrap();
+    assert_eq!(done[0].id, suggestion.id);
+    assert_eq!(done[0].state, SuggestionState::Done);
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
     assert!(matches!(
         h.service
@@ -1029,9 +1076,10 @@ async fn the_persons_own_agent_reads_accepts_and_dismisses_their_suggestions(poo
         .await
         .unwrap();
     assert!(feed.suggestions.is_empty());
-    assert_eq!(feed.done[0].id, prompt.id);
-    assert_eq!(feed.done[0].state, SuggestionState::Done);
-    assert_eq!(feed.done[0].kind, prompt.kind);
+    let done = feed.done.unwrap();
+    assert_eq!(done[0].id, prompt.id);
+    assert_eq!(done[0].state, SuggestionState::Done);
+    assert_eq!(done[0].kind, prompt.kind);
     assert_eq!(
         h.changes(prompt.id).await.len(),
         1,
@@ -1216,6 +1264,13 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
+    // It never comes back by restoring: its suggestion has no way back.
+    assert!(matches!(
+        h.service
+            .restore(&user(OWNER), SuggestionCaller::User, card.id)
+            .await,
+        Err(SuggestionError::NotRestorable)
+    ));
 }
 
 /// A reply suggestion about email thread `thread`.
@@ -1351,7 +1406,12 @@ async fn a_draft_is_attached_only_to_an_open_reply_suggestion_in_its_thread(pool
     assert!(attached.ok, "{:?}", attached.problems);
     let expected = SuggestionKind::Entity {
         action: EntityAction::Reply,
-        draft: Some(draft_target(thread, mine)),
+        draft: Some(SuggestionDraft {
+            target: draft_target(thread, mine),
+            preview: Some(DRAFT_PREVIEW.to_owned()),
+        }),
+        waiting_since: None,
+        from: None,
     };
     assert_eq!(attached.suggestion.unwrap().kind, expected);
     let feed = h
@@ -1409,7 +1469,12 @@ async fn a_new_draft_replaces_the_old_one_and_the_log_keeps_both(pool: PgPool) {
         replaced.suggestion.unwrap().kind,
         SuggestionKind::Entity {
             action: EntityAction::Reply,
-            draft: Some(draft_target(thread, second)),
+            draft: Some(SuggestionDraft {
+                target: draft_target(thread, second),
+                preview: Some(DRAFT_PREVIEW.to_owned()),
+            }),
+            waiting_since: None,
+            from: None,
         }
     );
     // The same draft again changes nothing.
@@ -1580,9 +1645,207 @@ async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
     );
     assert_eq!(
         feed.done
+            .unwrap()
             .iter()
             .map(|suggestion| suggestion.id)
             .collect::<Vec<_>>(),
         [ids[0]]
     );
+}
+
+/// Who a reply waits on, read from its item when a session writes it: kept
+/// when the item can't be read, and never read for other suggestions.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reply_suggestion_shows_who_it_waits_on(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let (asked, quiet) = (Uuid::now_v7(), Uuid::now_v7());
+    // Stored to the microsecond.
+    let since = chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 11, 2, 9, 30, 0).unwrap();
+    h.waits.waiting.lock().unwrap().insert(
+        asked.to_string(),
+        Waiting {
+            since,
+            from: Some("Ada Lovelace".to_owned()),
+        },
+    );
+    let waiting_of = |suggestion: &Suggestion| match &suggestion.kind {
+        SuggestionKind::Entity {
+            waiting_since,
+            from,
+            ..
+        } => (*waiting_since, from.clone()),
+        other => panic!("not an entity suggestion: {other:?}"),
+    };
+    let reply = h
+        .suggest(session, reply_suggestion("thread:reply", asked))
+        .await
+        .suggestion
+        .unwrap();
+    let expected = (Some(since), Some("Ada Lovelace".to_owned()));
+    assert_eq!(waiting_of(&reply), expected);
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
+        .await
+        .unwrap();
+    assert_eq!(waiting_of(&feed.suggestions[0]), expected);
+
+    // The item can't be read: what it showed stays.
+    h.waits.failing.lock().unwrap().insert(asked.to_string());
+    let mut again = reply_suggestion("thread:reply", asked);
+    again.title = "Answer the venue today".to_owned();
+    let rewritten = h.suggest(session, again).await.suggestion.unwrap();
+    assert_eq!(waiting_of(&rewritten), expected);
+
+    // About an item nobody waits on: nobody.
+    let moved = h
+        .service
+        .rewrite(
+            &principal(OWNER),
+            Some(session),
+            reply.id,
+            RewriteSuggestion {
+                about: Some(vec![Target {
+                    entity_type: EntityType::EmailThread,
+                    entity_id: quiet.to_string(),
+                    part_id: None,
+                }]),
+                reason: "It moved to another thread".to_owned(),
+                ..RewriteSuggestion::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(moved.ok, "{:?}", moved.problems);
+    assert_eq!(waiting_of(&moved.suggestion.unwrap()), (None, None));
+
+    // A suggestion to review the same thread shows no one.
+    let mut review = entity_suggestion("thread:review");
+    review.action = Some(EntityAction::Review);
+    review.about = reply_suggestion("thread:review", asked).about;
+    h.waits.failing.lock().unwrap().clear();
+    let review = h.suggest(session, review).await.suggestion.unwrap();
+    assert_eq!(waiting_of(&review), (None, None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn resolving_a_reply_clears_who_it_waits_on(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let thread = Uuid::now_v7();
+    h.waits.waiting.lock().unwrap().insert(
+        thread.to_string(),
+        Waiting {
+            since: Utc::now(),
+            from: Some("Ada Lovelace".to_owned()),
+        },
+    );
+    let reply = h
+        .suggest(session, reply_suggestion("thread:reply", thread))
+        .await
+        .suggestion
+        .unwrap();
+    let repo = PgSuggestionRepo::new(h.pool.clone());
+    assert!(
+        repo.resolve(&user(OWNER), reply.id, ResolveReason::Replied, Utc::now())
+            .await
+            .unwrap()
+    );
+    let resolved = repo.suggestion(&user(OWNER), reply.id).await.unwrap().unwrap();
+    assert!(matches!(
+        resolved.kind,
+        SuggestionKind::Entity {
+            waiting_since: None,
+            from: None,
+            ..
+        }
+    ));
+}
+
+/// The person takes back a dismissal within five minutes of it: the
+/// suggestion is proposed again. Later, or anything not dismissed, is refused.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_person_restores_a_suggestion_they_just_dismissed(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let suggestion = h
+        .suggest(session, entity_suggestion("venue:headcount"))
+        .await
+        .suggestion
+        .unwrap();
+    let restore = |who: &'static str| {
+        let service = &h.service;
+        async move {
+            service
+                .restore(&user(who), SuggestionCaller::User, suggestion.id)
+                .await
+        }
+    };
+    assert!(matches!(
+        restore(OWNER).await,
+        Err(SuggestionError::NotRestorable)
+    ));
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    assert!(matches!(restore(OTHER).await, Err(SuggestionError::NotFound)));
+    // Hidden sessions only manage the feed through their own tools.
+    assert!(matches!(
+        h.service
+            .restore(
+                &user(OWNER),
+                SuggestionCaller::Agent {
+                    correlation: Some(session),
+                },
+                suggestion.id,
+            )
+            .await,
+        Err(SuggestionError::Generating)
+    ));
+    restore(OWNER).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
+        .await
+        .unwrap();
+    assert_eq!(feed.suggestions[0].id, suggestion.id);
+    assert_eq!(feed.suggestions[0].state, SuggestionState::Proposed);
+    assert_eq!(feed.suggestions[0].status, SuggestionStatus::Open);
+    assert_eq!(h.changes(suggestion.id).await.len(), 1, "restoring logs no change");
+
+    // Dismissed longer ago than the window: it stays dismissed.
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE suggestion SET state_changed_at = now() - interval '6 minutes' WHERE id = $1",
+        suggestion.id,
+    )
+    .execute(&h.pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        restore(OWNER).await,
+        Err(SuggestionError::NotRestorable)
+    ));
+    let stored = PgSuggestionRepo::new(h.pool.clone())
+        .suggestion(&user(OWNER), suggestion.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.state, SuggestionState::Dismissed);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn restoring_is_gated_on_the_flag(pool: PgPool) {
+    let off = harness(pool, false).await;
+    assert!(matches!(
+        off.service
+            .restore(&user(OWNER), SuggestionCaller::User, Uuid::now_v7())
+            .await,
+        Err(SuggestionError::NotFound)
+    ));
 }

@@ -48,9 +48,48 @@ pub struct Suggestion {
     pub status: SuggestionStatus,
     /// A background prompt suggestion's latest run.
     pub run: Option<SuggestionRun>,
+    /// What to open to see how acting on it went, once known: the item its
+    /// finished run made (else the run's session), a failed run's session,
+    /// or what was made from a done suggestion that didn't run.
+    pub result: Option<Target>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
     pub kind: SuggestionKind,
+}
+
+/// What to open to see how acting on a suggestion in `state`, whose latest run
+/// is `run` and which produced `produced`, went: never before a run settles,
+/// and nothing for a cancelled run.
+pub fn result_of(
+    state: SuggestionState,
+    run: Option<&SuggestionRun>,
+    produced: &[Target],
+) -> Option<Target> {
+    let made = || {
+        produced
+            .iter()
+            .find(|target| target.entity_type != EntityType::AgentSession)
+            .cloned()
+    };
+    let session = |run: &SuggestionRun| Target {
+        entity_type: EntityType::AgentSession,
+        entity_id: run.session_id.to_string(),
+        part_id: None,
+    };
+    match run {
+        Some(run) => match run.state {
+            RunStateName::Finished => made().or_else(|| Some(session(run))),
+            RunStateName::Failed => Some(session(run)),
+            RunStateName::Starting
+            | RunStateName::Running
+            | RunStateName::Waiting
+            | RunStateName::Stopping
+            | RunStateName::Cancelling
+            | RunStateName::Cancelled => None,
+        },
+        None if state == SuggestionState::Done => made(),
+        None => None,
+    }
 }
 
 /// What a suggestion's card shows, from its state and its latest run.
@@ -64,7 +103,7 @@ pub enum SuggestionStatus {
     /// background prompt suggestion on for the person to run).
     Open,
     /// Its latest run hasn't settled: it is starting, working, waiting or
-    /// being stopped.
+    /// being stopped for running over its time.
     Running,
     /// Accepted, and its latest run failed: running it again retries.
     Failed,
@@ -75,14 +114,18 @@ pub enum SuggestionStatus {
 }
 
 impl SuggestionStatus {
-    /// The status of a suggestion in `state` whose latest run is `run`.
+    /// The status of a suggestion in `state` whose latest run is `run`. A run
+    /// being cancelled isn't running: its suggestion closed, or was restored
+    /// to be run again.
     pub fn of(state: SuggestionState, run: Option<&SuggestionRun>) -> Self {
         match (state, run.map(|run| run.state)) {
             (SuggestionState::Done, _) => Self::Done,
             (SuggestionState::Dismissed | SuggestionState::Resolved | SuggestionState::Retired, _) => {
                 Self::Closed
             }
-            (_, Some(run)) if !run.is_settled() => Self::Running,
+            (_, Some(run)) if !run.is_settled() && run != RunStateName::Cancelling => {
+                Self::Running
+            }
             (SuggestionState::Accepted, Some(RunStateName::Failed)) => Self::Failed,
             (SuggestionState::Proposed | SuggestionState::Accepted, _) => Self::Open,
         }
@@ -191,7 +234,12 @@ pub enum SuggestionKind {
         action: EntityAction,
         /// A reply suggestion's draft, once a session wrote one: the email thread
         /// it is in, with the draft as the part.
-        draft: Option<Target>,
+        draft: Option<SuggestionDraft>,
+        /// A reply suggestion's: when the message the person hasn't answered
+        /// came, as read from its item when the suggestion was last written.
+        waiting_since: Option<DateTime<Utc>>,
+        /// A reply suggestion's: that message's sender, by name.
+        from: Option<String>,
     },
     /// A routine suggestion, shown among suggestions.
     #[serde(rename_all = "camelCase")]
@@ -200,6 +248,56 @@ pub enum SuggestionKind {
         #[schema(value_type = String, format = Uuid)]
         routine_suggestion_id: Uuid,
     },
+}
+
+/// A reply suggestion's draft.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionDraft {
+    /// The email thread it is in, with the draft as the part.
+    #[serde(flatten)]
+    pub target: Target,
+    /// The start of its plain text, as it was when attached.
+    pub preview: Option<String>,
+}
+
+/// Who a reply suggestion's item waits on the person for, and since when.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Waiting {
+    /// When the message the person hasn't answered came.
+    pub since: DateTime<Utc>,
+    /// Its sender, by name, when they have one.
+    pub from: Option<String>,
+}
+
+/// The most characters of a sender's name a card shows.
+pub const MAX_SENDER_CHARS: usize = 80;
+
+/// `name` as a card may show it for who a reply waits on: one plain line,
+/// never an email address or other personal detail.
+pub fn sender_name(name: &str) -> Option<String> {
+    shown_text::line(name, MAX_SENDER_CHARS)
+        .filter(|name| shown_text::personal_detail(name).is_none())
+}
+
+/// The most characters of a draft's plain text a card previews.
+pub const DRAFT_PREVIEW_CHARS: usize = 300;
+
+/// The start of `text` a card previews: its words with whitespace collapsed,
+/// at most [`DRAFT_PREVIEW_CHARS`] characters; `None` when it has none.
+pub fn preview_of(text: &str) -> Option<String> {
+    let mut preview = String::new();
+    for (count, word) in text.split_whitespace().enumerate() {
+        if count > 0 {
+            preview.push(' ');
+        }
+        preview.push_str(word);
+        if preview.chars().count() >= DRAFT_PREVIEW_CHARS {
+            break;
+        }
+    }
+    let preview: String = preview.chars().take(DRAFT_PREVIEW_CHARS).collect();
+    (!preview.is_empty()).then_some(preview)
 }
 
 impl SuggestionKind {
@@ -374,14 +472,52 @@ pub struct Target {
 }
 
 /// A person's feed: their open suggestions, best first, and the ones they
-/// finished in the last day, newest first.
+/// finished in the last day, newest first. Both lists are in the order to
+/// show them.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SuggestionFeed {
-    /// The open suggestions.
+    /// The open suggestions, at most `limit` of them.
     pub suggestions: Vec<Suggestion>,
-    /// Suggestions done in the last 24 hours, with what they produced.
-    pub done: Vec<Suggestion>,
+    /// Suggestions done in the last 24 hours, with what they produced; left
+    /// out when the feed was read with a `limit`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub done: Option<Vec<Suggestion>>,
+    /// How many suggestions the whole feed holds of each status, whatever the
+    /// `limit`.
+    pub counts: FeedCounts,
+}
+
+/// How many of a person's shown suggestions have each status.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedCounts {
+    /// Open, nothing under way.
+    pub open: u32,
+    /// Their run is under way.
+    pub running: u32,
+    /// Their last run failed.
+    pub failed: u32,
+    /// Done in the last 24 hours.
+    pub done: u32,
+}
+
+impl FeedCounts {
+    /// The counts of `suggestions`.
+    pub fn of<'a>(suggestions: impl IntoIterator<Item = &'a Suggestion>) -> Self {
+        let mut counts = Self::default();
+        for suggestion in suggestions {
+            let count = match suggestion.status {
+                SuggestionStatus::Open => &mut counts.open,
+                SuggestionStatus::Running => &mut counts.running,
+                SuggestionStatus::Failed => &mut counts.failed,
+                SuggestionStatus::Done => &mut counts.done,
+                SuggestionStatus::Closed => continue,
+            };
+            *count = count.saturating_add(1);
+        }
+        counts
+    }
 }
 
 /// What a generation session reads before managing the person's suggestions:
@@ -543,6 +679,10 @@ pub struct SuggestionContent {
     pub prompt: Option<String>,
     /// A background prompt suggestion's [`SuggestionKind::Prompt::sends`].
     pub sends: Option<String>,
+    /// A reply suggestion's [`Waiting`], read from its items rather than
+    /// written by the session, so never in the change log.
+    #[serde(skip)]
+    pub waiting: Option<Waiting>,
 }
 
 impl SuggestionContent {
@@ -562,6 +702,19 @@ impl SuggestionContent {
             sends: match &suggestion.kind {
                 SuggestionKind::Prompt { sends, .. } => sends.clone(),
                 SuggestionKind::Entity { .. } | SuggestionKind::Routine { .. } => None,
+            },
+            waiting: match &suggestion.kind {
+                SuggestionKind::Entity {
+                    waiting_since: Some(since),
+                    from,
+                    ..
+                } => Some(Waiting {
+                    since: *since,
+                    from: from.clone(),
+                }),
+                SuggestionKind::Entity { .. }
+                | SuggestionKind::Prompt { .. }
+                | SuggestionKind::Routine { .. } => None,
             },
         }
     }
@@ -726,6 +879,10 @@ pub enum SuggestionError {
     /// The suggestion changed since the caller read it: here it is as it is now.
     #[error("the suggestion changed since it was read; read it again")]
     Changed(Box<Suggestion>),
+    /// Only a suggestion the person dismissed in the last few minutes comes
+    /// back, and not a routine suggestion.
+    #[error("only a suggestion dismissed in the last five minutes can be restored")]
+    NotRestorable,
     /// Anything else.
     #[error("internal suggestions error: {0:?}")]
     Internal(rootcause::Report),

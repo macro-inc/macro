@@ -196,7 +196,10 @@ Pulumi stacks; they do not host extra agent processes.
   in-process Macro agent (`SuggestionRunSessions` in `scheduling.rs`, which reads
   every page of a session's activity for what it created, each item once). Runs
   move from their sessions' lifecycle events and a reconcile sweep every five
-  minutes. The suggestions routes are served here too, and `scheduling.rs` runs
+  minutes. Reply suggestions read who they wait on from their email thread or
+  channel message through `ItemReplyWaits` (`crates/suggestions`), built over
+  the email repository and the shared pool. The suggestions routes are served
+  here too, and `scheduling.rs` runs
   suggestions' resolution consumer (group `suggestions-resolution`) and runs
   consumer (group `suggestions-runs`, both `crates/suggestions`) beside the
   event intake, under the same readiness gate and shutdown.

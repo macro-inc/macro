@@ -79,11 +79,68 @@ async fn only_an_unsent_draft_in_the_persons_own_inbox_counts(pool: PgPool) {
 
     let thread_of = |who: &'static str, id: Uuid| {
         let drafts = &drafts;
-        async move { drafts.email_draft_thread(&user(who), id).await.unwrap() }
+        async move {
+            drafts
+                .email_draft(&user(who), id)
+                .await
+                .unwrap()
+                .map(|found| found.thread)
+        }
     };
     assert_eq!(thread_of(OWNER, draft).await, Some(thread));
     assert_eq!(thread_of(OWNER, sent).await, None);
     assert_eq!(thread_of(OWNER, delegated_draft).await, None);
     assert_eq!(thread_of(OWNER, Uuid::now_v7()).await, None);
     assert_eq!(thread_of(TEAMMATE, draft).await, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_draft_previews_the_start_of_its_text(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let own = inbox(&pool, OWNER).await;
+    let (text, text_thread) = message(&pool, own, true).await;
+    let (html, html_thread) = message(&pool, own, true).await;
+    let (empty, empty_thread) = message(&pool, own, true).await;
+    let long = "word ".repeat(200);
+    sqlx::query!(
+        "UPDATE email_messages SET body_text = $2 WHERE id = $1",
+        text,
+        long,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_messages SET body_html_sanitized = $2 WHERE id = $1",
+        html,
+        "<p>Thanks,  <b>see you</b> Monday</p>",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let drafts = EmailSuggestionDrafts(EmailPgRepo::new(pool.clone()));
+
+    let found = drafts.email_draft(&user(OWNER), text).await.unwrap().unwrap();
+    assert_eq!(found.thread, text_thread);
+    let preview = found.preview.unwrap();
+    assert_eq!(preview.chars().count(), crate::domain::model::DRAFT_PREVIEW_CHARS);
+    assert!(preview.starts_with("word word"));
+
+    let found = drafts.email_draft(&user(OWNER), html).await.unwrap().unwrap();
+    assert_eq!(
+        found,
+        FoundDraft {
+            thread: html_thread,
+            preview: Some("Thanks, see you Monday".to_owned()),
+        }
+    );
+
+    let found = drafts.email_draft(&user(OWNER), empty).await.unwrap().unwrap();
+    assert_eq!(
+        found,
+        FoundDraft {
+            thread: empty_thread,
+            preview: None,
+        }
+    );
 }

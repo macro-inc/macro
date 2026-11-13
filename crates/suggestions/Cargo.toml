@@ -14,6 +14,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 documents = { path = "../documents", default-features = false, features = ["outbound", "ports"] }
 email = { path = "../email", default-features = false, features = ["outbound"] }
+email_utils = { path = "../email_utils" }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"] }
 feature_flags = { path = "../feature_flags" }

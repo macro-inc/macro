@@ -20166,6 +20166,7 @@ dependencies = [
  "chrono-tz",
  "documents",
  "email",
+ "email_utils",
  "entity_access",
  "entity_registry",
  "feature_flags",

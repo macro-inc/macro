@@ -18,15 +18,33 @@ scheduler's spec.
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
-- The feed (`GET /suggestions`) is `{ suggestions, done }`: open suggestions
-  best first, then those done in the last day, most recently first; `?limit`
-  caps each list. Each carries its server-computed `status` (`open`,
-  `running`, `failed`, `done`; `closed` only in `review`,
-  `SuggestionStatus::of`) and its latest `run` as stored. Reading it never
-  calls a session. A suggestion one of whose items can't be checked is left out
-  and logged, never failing the feed. Each process keeps a person's flag for
-  60 s and counts them in at most once an hour per time zone (`Recent`).
-- The feed, `accept` and `dismiss` (`UserOnly`) serve the person and anyone
+- The feed (`GET /suggestions`) is `{ suggestions, done, counts }`: open
+  suggestions best first, then those done in the last day, most recently
+  first (a finished run makes its suggestion done in the same write).
+  `?limit` caps the open list and leaves `done` out; `counts` (`open`,
+  `running`, `failed`, `done`) counts every suggestion shown either way. Each
+  carries its server-computed `status` (`open`, `running` while its latest run
+  is unsettled and not being cancelled, `failed`, `done`; `closed` only in
+  `review`, `SuggestionStatus::of`), its latest `run` as stored, and, once
+  that run settled, its `result` (`result_of`: what the run made over its
+  session, a failed run's session, or without a run what acting on it made).
+  Reading it never calls a session or reads an item. A suggestion one of whose
+  items can't be checked is left out and logged, never failing the feed. Each
+  process keeps a person's flag for 60 s and counts them in at most once an
+  hour per time zone (`Recent`).
+- A reply suggestion carries `waitingSince` and `from` (the sender's name,
+  never an address): its email thread's newest message, or its channel
+  message, unless the person sent it, read when a session writes it
+  (`ReplyWaits`, `outbound/reply_waits.rs`, wired in the harness; kept as it
+  was when the item can't be read) and cleared when it is resolved. Its draft
+  carries `preview`, the first 300 characters of its plain text, read when it
+  is attached.
+- The person takes back a dismissal within five minutes
+  (`POST /suggestions/{id}/restore`, lifecycle event `undismiss`): it is
+  proposed again, and a run the dismissal cancelled stays cancelled, so a new
+  one starts once that settles. A routine suggestion isn't restored (409):
+  its routine suggestion has no way back.
+- The feed, `accept`, `dismiss` and `restore` (`UserOnly`) serve the person and anyone
   acting for them: a code-mode credential is a Macro API token for the
   person, so it passes. The router labels the caller (`SuggestionCaller`, span
   field `suggestions.caller`): only the person's own session with no program's

@@ -16,11 +16,13 @@
 //! | `resolve` | proposed, accepted | resolved |
 //! | `rewrite`, `attach_draft` | proposed, accepted | the same |
 //! | `restore` | done, dismissed, resolved, retired | proposed |
+//! | `undismiss` | dismissed | proposed |
 //!
 //! Rules beyond the states sit with the service: a dismissed suggestion comes
-//! back only with a reason, a background prompt suggestion starts a run only
-//! while none is unsettled, and taking on an accepted suggestion or completing a
-//! done one changes nothing.
+//! back only with a reason, or undismissed by the person within five minutes;
+//! a background prompt suggestion starts a run only while none is unsettled;
+//! and taking on an accepted suggestion or completing a done one changes
+//! nothing.
 
 use strum::IntoEnumIterator;
 
@@ -54,6 +56,8 @@ pub enum LifecycleEvent {
     AttachDraft,
     /// A generation session suggests a closed suggestion again.
     Restore,
+    /// The person takes back their dismissal, within minutes of it.
+    Undismiss,
 }
 
 /// The state `event` moves a suggestion in state `from` to, or `None` when
@@ -71,6 +75,7 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
         (E::Resolve, S::Proposed | S::Accepted) => Some(S::Resolved),
         (E::Rewrite | E::AttachDraft, S::Proposed | S::Accepted) => Some(from),
         (E::Restore, S::Done | S::Dismissed | S::Resolved | S::Retired) => Some(S::Proposed),
+        (E::Undismiss, S::Dismissed) => Some(S::Proposed),
         (
             E::TakeOn
             | E::StartRun
@@ -81,7 +86,8 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
             | E::Resolve
             | E::Rewrite
             | E::AttachDraft
-            | E::Restore,
+            | E::Restore
+            | E::Undismiss,
             _,
         ) => None,
     }

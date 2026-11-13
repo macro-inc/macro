@@ -164,7 +164,7 @@ impl Harness {
             .unwrap();
         feed.suggestions
             .into_iter()
-            .chain(feed.done)
+            .chain(feed.done.into_iter().flatten())
             .find(|suggestion| suggestion.id == id)
     }
 
@@ -992,4 +992,102 @@ async fn one_failing_run_never_stops_the_sweep(pool: PgPool) {
         .await
         .unwrap();
     h.sweeps_to(sessions[0], RunStateName::Finished).await;
+}
+
+/// Restoring a suggestion whose dismissal stopped its run brings the
+/// suggestion back as proposed; the run stays cancelled, and a new one starts
+/// once it has settled.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_restored_suggestion_keeps_its_cancelled_run(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    let run = runs.last().session;
+    let counts = || {
+        let service = &h.service;
+        async move {
+            service
+                .feed(&user(OWNER), SuggestionCaller::User, None, Some(1))
+                .await
+                .unwrap()
+                .counts
+        }
+    };
+    assert_eq!(
+        counts().await,
+        FeedCounts {
+            running: 1,
+            ..FeedCounts::default()
+        }
+    );
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    assert_eq!(h.run_state(run).await, RunStateName::Cancelling);
+    h.service
+        .restore(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    let restored = h.in_feed(suggestion.id).await.unwrap();
+    assert_eq!(restored.state, SuggestionState::Proposed);
+    assert_eq!(restored.status, SuggestionStatus::Open);
+    assert_eq!(restored.result, None);
+    assert_eq!(restored.run.unwrap().state, RunStateName::Cancelling);
+    assert_eq!(
+        counts().await,
+        FeedCounts {
+            open: 1,
+            ..FeedCounts::default()
+        }
+    );
+    // Its old run still stopping, it can't run again yet.
+    assert!(matches!(
+        h.accept(&user(OWNER), suggestion.id).await,
+        Err(SuggestionError::NotFound)
+    ));
+    h.sweeps_to(run, RunStateName::Cancelled).await;
+    let restored = h.stored(suggestion.id).await;
+    assert_eq!(restored.state, SuggestionState::Proposed);
+    assert!(restored.produced.is_empty());
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    assert_eq!(runs.started().len(), 2);
+}
+
+/// A settled run's card opens what it made, or its session when it failed.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_settled_run_gives_its_suggestion_a_result(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let finished = h.background("quotes:compare").await;
+    h.accept(&user(OWNER), finished.id).await.unwrap();
+    let run = runs.last();
+    assert_eq!(h.in_feed(finished.id).await.unwrap().result, None);
+    h.news(
+        run.session,
+        SessionNews::TurnEnded {
+            action: run.action,
+            finished: true,
+        },
+    )
+    .await;
+    assert_eq!(
+        h.in_feed(finished.id).await.unwrap().result,
+        Some(comparison_doc())
+    );
+
+    let failed = h.background("quotes:summarize").await;
+    h.accept(&user(OWNER), failed.id).await.unwrap();
+    let run = runs.last();
+    h.news(
+        run.session,
+        SessionNews::TurnEnded {
+            action: run.action,
+            finished: false,
+        },
+    )
+    .await;
+    assert_eq!(
+        h.in_feed(failed.id).await.unwrap().result,
+        Some(session_target(run.session))
+    );
 }

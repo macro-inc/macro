@@ -91,6 +91,10 @@ where
             "/suggestions/{id}/dismiss",
             post(dismiss_suggestion::<S, Auth>),
         )
+        .route(
+            "/suggestions/{id}/restore",
+            post(restore_suggestion::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -117,6 +121,9 @@ impl IntoResponse for SuggestionApiError {
             }
             Self::Service(error @ SuggestionError::NotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
+            }
+            Self::Service(error @ SuggestionError::NotRestorable) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
             }
             Self::Service(
                 error @ (SuggestionError::NotGenerating | SuggestionError::Generating),
@@ -187,7 +194,8 @@ pub struct FeedQuery {
     #[param(value_type = Option<String>)]
     #[serde(default)]
     pub timezone: Option<chrono_tz::Tz>,
-    /// Most suggestions to return in each list, open and done; all when unset.
+    /// Most open suggestions to return, best first; all when unset. With a
+    /// limit the feed leaves out `done`; `counts` always counts every one.
     #[param(value_type = Option<u16>, minimum = 1)]
     #[serde(default)]
     pub limit: Option<std::num::NonZeroU16>,
@@ -306,6 +314,41 @@ where
     state
         .service
         .dismiss(&user.authorization.macro_user_id, caller, id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/{id}/restore",
+    tag = "suggestions",
+    operation_id = "restore_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    responses(
+        (status = 204, description = "Open again, as proposed; a run the dismissal stopped stays stopped"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not restore"),
+        (status = 404, body = String, description = "No suggestion with this id for the caller, or suggestions are off"),
+        (status = 409, body = String, description = "Not dismissed in the last five minutes, or a routine suggestion"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller, or their own agent, takes back dismissing a suggestion, within
+/// five minutes of it.
+pub async fn restore_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .restore(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

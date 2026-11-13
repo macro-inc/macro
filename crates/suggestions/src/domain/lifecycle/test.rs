@@ -28,6 +28,7 @@ const MOVES: &[(LifecycleEvent, SuggestionState, SuggestionState)] = &[
     (E::Restore, S::Dismissed, S::Proposed),
     (E::Restore, S::Resolved, S::Proposed),
     (E::Restore, S::Retired, S::Proposed),
+    (E::Undismiss, S::Dismissed, S::Proposed),
 ];
 
 #[test]
@@ -55,11 +56,14 @@ fn sources_are_the_states_an_event_applies_in() {
 }
 
 #[test]
-fn only_a_restore_reopens_a_closed_suggestion() {
+fn only_a_restore_or_undismiss_reopens_a_closed_suggestion() {
     for event in LifecycleEvent::iter() {
         for from in SuggestionState::iter().filter(|state| !state.is_open()) {
             if let Some(to) = transition(from, event) {
-                assert_eq!(event, E::Restore, "{event:?} from {from:?}");
+                assert!(
+                    matches!(event, E::Restore | E::Undismiss),
+                    "{event:?} from {from:?}"
+                );
                 assert_eq!(to, S::Proposed);
             }
         }
@@ -69,6 +73,13 @@ fn only_a_restore_reopens_a_closed_suggestion() {
 #[test]
 fn a_restore_applies_only_to_closed_suggestions() {
     assert!(sources(E::Restore).iter().all(|state| !state.is_open()));
+}
+
+/// The person only takes back a dismissal; anything else closed comes back
+/// through a session.
+#[test]
+fn only_a_dismissal_is_undone() {
+    assert_eq!(sources(E::Undismiss), vec![S::Dismissed]);
 }
 
 #[test]

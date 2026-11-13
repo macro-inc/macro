@@ -20,15 +20,15 @@ use model_owner::CreationPrincipal;
 use super::check;
 use super::lifecycle::{self, LifecycleEvent};
 use super::model::{
-    Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger,
-    KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, SessionKind,
+    Accept, AttachDraft, Change, ChangeAction, EntityAction, FeedCounts, GenerationSession,
+    GenerationTrigger, KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, SessionKind,
     Suggestion, SuggestionCaller, SuggestionContent, SuggestionError, SuggestionFeed,
-    SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
-    Target,
+    SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target, Waiting,
 };
 use super::ports::{
-    GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, RunSessions,
-    SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
+    GenerationSessions, Limits, ReplyWaits, RequestSessions, RoutineSuggestionDismissal,
+    RunSessions, SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts,
+    SuggestionRepo, Written,
 };
 use super::prompt;
 use recent::Recent;
@@ -47,6 +47,9 @@ pub const NEW_PER_GENERATION: u32 = 12;
 
 /// How long a finished suggestion stays in the feed's `done`.
 pub const DONE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::hours(24);
+
+/// How long after dismissing a suggestion the person may take it back.
+pub const RESTORE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::minutes(5);
 
 /// Suggestions whose items the feed checks at once.
 const ACCESS_CHECKS_AT_ONCE: usize = 8;
@@ -83,6 +86,7 @@ pub struct SuggestionService<Repo, Access, Drafts, Flags> {
     audience: Arc<dyn SuggestionAudience>,
     routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
     runs: Option<Runs>,
+    reply_waits: Option<Arc<dyn ReplyWaits>>,
     flags: Option<Flags>,
     /// The SDK reference a suggestions session's brief carries.
     sdk_reference: String,
@@ -128,6 +132,7 @@ where
             audience,
             routine_suggestions,
             runs: None,
+            reply_waits: None,
             flags,
             sdk_reference: String::new(),
             checker_model: String::new(),
@@ -156,6 +161,38 @@ where
     pub fn with_runs(mut self, sessions: Arc<dyn RunSessions>, agent: Uuid) -> Self {
         self.runs = Some(Runs { sessions, agent });
         self
+    }
+
+    /// Read who a reply suggestion's item waits on the person for from
+    /// `waits` when a session writes it. Without it, cards show no one.
+    pub fn with_reply_waits(mut self, waits: Arc<dyn ReplyWaits>) -> Self {
+        self.reply_waits = Some(waits);
+        self
+    }
+
+    /// Who the first email thread or channel message in a reply suggestion's
+    /// `about` waits on the person for. `known` when it can't be read:
+    /// a write never fails for it.
+    async fn waiting_on(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        about: &[Target],
+        known: Option<Waiting>,
+    ) -> Option<Waiting> {
+        let Some(waits) = self.reply_waits.as_ref() else {
+            return known;
+        };
+        let item = about.iter().find(|target| {
+            target.entity_type == EntityType::EmailThread
+                || (target.entity_type == EntityType::Channel && target.part_id.is_some())
+        })?;
+        waits
+            .waiting(user, item)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "could not read who a reply suggestion waits on");
+            })
+            .unwrap_or(known)
     }
 
     /// Move `suggestion` from one of `from` to `to` if it is still as `accept`
@@ -358,21 +395,14 @@ where
         Ok(true)
     }
 
-    /// The first `limit` of `ordered` the person can open every item of, in
-    /// order. A suggestion whose items can't be checked is left out and logged:
-    /// one failing check never fails the feed.
-    async fn viewable_first(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        ordered: Vec<Suggestion>,
-        limit: usize,
-    ) -> Viewable {
+    /// Those of `ordered` the person can open every item of, in order. A
+    /// suggestion whose items can't be checked is left out and logged: one
+    /// failing check never fails the feed.
+    async fn viewable_all(&self, user: &MacroUserIdStr<'_>, ordered: Vec<Suggestion>) -> Viewable {
         let mut viewable = Viewable::default();
-        if limit == 0 {
-            return viewable;
-        }
-        // Up to 30 suggestions of up to 5 items each: check a few at a time,
-        // in order, until enough are shown.
+        // Up to 30 open suggestions, and those done in a day, of up to 5 items
+        // each: check a few at a time, in order. Every one is checked, since
+        // the feed counts them all.
         let mut checked = futures::stream::iter(ordered)
             .map(|suggestion| async move {
                 let check = self.viewable(user, &suggestion).await;
@@ -381,12 +411,7 @@ where
             .buffered(ACCESS_CHECKS_AT_ONCE);
         while let Some((suggestion, check)) = checked.next().await {
             match check {
-                Ok(true) => {
-                    viewable.shown.push(suggestion);
-                    if viewable.shown.len() >= limit {
-                        break;
-                    }
-                }
+                Ok(true) => viewable.shown.push(suggestion),
                 Ok(false) => viewable.hidden += 1,
                 Err(error) => {
                     viewable.unchecked += 1;
@@ -548,17 +573,23 @@ where
                 .then(b.updated_at.cmp(&a.updated_at))
         });
         done.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
-        let limit = limit.unwrap_or(usize::MAX);
-        let open = self.viewable_first(user, open, limit).await;
-        let done = self.viewable_first(user, done, limit).await;
+        let open = self.viewable_all(user, open).await;
+        let done = self.viewable_all(user, done).await;
         let span = tracing::Span::current();
         span.record("suggestions.open", open.shown.len());
         span.record("suggestions.done", done.shown.len());
         span.record("suggestions.hidden", open.hidden + done.hidden);
         span.record("suggestions.unchecked", open.unchecked + done.unchecked);
+        let counts = FeedCounts::of(open.shown.iter().chain(&done.shown));
+        // A limited read is a glance at the best open ones: no done list.
+        let (suggestions, done) = match limit {
+            Some(limit) => (open.shown.into_iter().take(limit).collect(), None),
+            None => (open.shown, Some(done.shown)),
+        };
         Ok(SuggestionFeed {
-            suggestions: open.shown,
-            done: done.shown,
+            suggestions,
+            done,
+            counts,
         })
     }
 
@@ -708,6 +739,42 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(name = "suggestions.restore", skip_all, fields(
+        suggestion.id = %id,
+        suggestions.caller = tracing::field::Empty,
+    ), err)]
+    async fn restore(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> Result<(), SuggestionError> {
+        self.require_flag(user).await?;
+        self.admit(caller).await?;
+        let suggestion = self
+            .repo
+            .suggestion(user, id)
+            .await
+            .map_err(SuggestionError::internal)?
+            .ok_or(SuggestionError::NotFound)?;
+        // A routine suggestion was dismissed with its routine suggestion,
+        // which this can't bring back.
+        if suggestion.kind.name() == KindName::Routine {
+            return Err(SuggestionError::NotRestorable);
+        }
+        let now = Utc::now();
+        let restored = self
+            .repo
+            .undismiss(user, id, now - RESTORE_WITHIN, now)
+            .await
+            .map_err(SuggestionError::internal)?;
+        if !restored {
+            return Err(SuggestionError::NotRestorable);
+        }
+        tracing::info!(event = "suggestions.restored");
+        Ok(())
+    }
+
     #[tracing::instrument(name = "suggestions.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
@@ -818,7 +885,7 @@ where
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
-        let content = SuggestionContent {
+        let mut content = SuggestionContent {
             dedup_key,
             title,
             summary,
@@ -827,6 +894,7 @@ where
             about,
             prompt,
             sends,
+            waiting: None,
         };
         let now = Utc::now();
         let existing = self
@@ -834,6 +902,17 @@ where
             .by_dedup_key(&user, &content.dedup_key)
             .await
             .map_err(SuggestionError::internal)?;
+        if matches!(
+            kind,
+            super::model::NewKind::Entity {
+                action: EntityAction::Reply
+            }
+        ) {
+            let known = existing
+                .as_ref()
+                .and_then(|existing| SuggestionContent::of(existing).waiting);
+            content.waiting = self.waiting_on(&user, &content.about, known).await;
+        }
         let Some(existing) = existing else {
             let id = Uuid::now_v7();
             let change = Change {
@@ -1039,6 +1118,16 @@ where
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
+        if matches!(
+            existing.kind,
+            SuggestionKind::Entity {
+                action: EntityAction::Reply,
+                ..
+            }
+        ) {
+            let known = content.waiting.take();
+            content.waiting = self.waiting_on(&user, &content.about, known).await;
+        }
         let to = moved_by(existing.state, LifecycleEvent::Rewrite)?;
         let change = Change {
             session: session.session,
@@ -1195,20 +1284,23 @@ where
         let SuggestionKind::Entity {
             action: EntityAction::Reply,
             draft: old,
+            ..
         } = &existing.kind
         else {
             problems
                 .push("a draft is only for an entity suggestion with action `reply`".to_owned());
             return Ok(rejected(&span, problems));
         };
-        let thread = self
+        let old = old.as_ref().map(|old| &old.target);
+        let found = self
             .drafts
-            .email_draft_thread(&user, request.email_draft_id)
+            .email_draft(&user, request.email_draft_id)
             .await
             .map_err(SuggestionError::internal)?;
-        let draft = thread.map(|thread| Target {
+        let preview = found.as_ref().and_then(|found| found.preview.clone());
+        let draft = found.map(|found| Target {
             entity_type: EntityType::EmailThread,
-            entity_id: thread.to_string(),
+            entity_id: found.thread.to_string(),
             part_id: Some(request.email_draft_id.to_string()),
         });
         match &draft {
@@ -1228,7 +1320,7 @@ where
         let Some(draft) = draft.filter(|_| problems.is_empty()) else {
             return Ok(rejected(&span, problems));
         };
-        if old.as_ref() == Some(&draft) {
+        if old == Some(&draft) {
             span.record("suggestion.outcome", "unchanged");
             return Ok(SuggestionWriteOutcome::applied(existing));
         }
@@ -1236,14 +1328,14 @@ where
             session: session.session,
             generation: session.generation,
             action: ChangeAction::Rewritten,
-            old: draft_snapshot(old.as_ref()),
+            old: draft_snapshot(old),
             new: draft_snapshot(Some(&draft)),
             reason,
             at: Utc::now(),
         };
         let attached = self
             .repo
-            .set_draft(&user, id, &draft, &change)
+            .set_draft(&user, id, &draft, preview.as_deref(), &change)
             .await
             .map_err(SuggestionError::internal)?;
         if !attached {

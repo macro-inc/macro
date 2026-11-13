@@ -144,6 +144,8 @@ struct FakeSuggestions {
     /// The `limit` each feed read asked for.
     limits: Mutex<Vec<Option<usize>>>,
     refused: Option<Uuid>,
+    /// A suggestion dismissed too long ago to restore.
+    stale: Option<Uuid>,
 }
 
 impl FakeSuggestions {
@@ -179,7 +181,8 @@ impl SuggestionApi for FakeSuggestions {
         self.limits.lock().unwrap().push(limit);
         Ok(SuggestionFeed {
             suggestions: Vec::new(),
-            done: Vec::new(),
+            done: limit.is_none().then(Vec::new),
+            counts: crate::domain::model::FeedCounts::default(),
         })
     }
 
@@ -201,6 +204,19 @@ impl SuggestionApi for FakeSuggestions {
         _: Uuid,
     ) -> Result<(), SuggestionError> {
         self.reach(user, caller)
+    }
+
+    async fn restore(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> Result<(), SuggestionError> {
+        self.reach(user, caller)?;
+        if self.stale == Some(id) {
+            return Err(SuggestionError::NotRestorable);
+        }
+        Ok(())
     }
 
     fn brief(&self, _: GenerationTrigger, _: chrono_tz::Tz) -> String {
@@ -358,6 +374,7 @@ async fn a_refused_generation_session_gets_a_403() {
         ("GET", "/suggestions".to_owned()),
         ("POST", format!("/suggestions/{suggestion}/accept")),
         ("POST", format!("/suggestions/{suggestion}/dismiss")),
+        ("POST", format!("/suggestions/{suggestion}/restore")),
     ] {
         let status = send(&service, method, &uri, AGENT_JWT, true, Some(generation)).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{method} {uri}");
@@ -429,4 +446,26 @@ async fn the_feed_takes_a_limit() {
         assert_eq!(status, expected, "{uri}");
     }
     assert_eq!(*service.limits.lock().unwrap(), [None, Some(5)]);
+}
+
+#[tokio::test]
+async fn a_restore_too_late_is_a_conflict() {
+    let stale = Uuid::now_v7();
+    let service = Arc::new(FakeSuggestions {
+        stale: Some(stale),
+        ..FakeSuggestions::default()
+    });
+    let fresh = Uuid::now_v7();
+    for (id, expected) in [
+        (fresh, StatusCode::NO_CONTENT),
+        (stale, StatusCode::CONFLICT),
+    ] {
+        let uri = format!("/suggestions/{id}/restore");
+        let status = send(&service, "POST", &uri, SESSION_JWT, false, None).await;
+        assert_eq!(status, expected, "{uri}");
+    }
+    assert_eq!(
+        service.callers.lock().unwrap()[0].1,
+        SuggestionCaller::User
+    );
 }

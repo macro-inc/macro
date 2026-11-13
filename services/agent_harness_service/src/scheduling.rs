@@ -81,6 +81,7 @@ use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
 use suggestions::inbound::run_consumer::run_suggestion_runs_consumer;
 use suggestions::outbound::email_drafts::EmailSuggestionDrafts;
 use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use suggestions::outbound::reply_waits::ItemReplyWaits;
 use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
@@ -808,7 +809,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             suggestions::domain::prompt::SYMBOLS,
             suggestions::domain::prompt::FIELDS_OF,
         ))
-        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned()),
+        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned())
+        // A reply suggestion shows who its email thread or channel message waits
+        // on the person for, read when a session writes it.
+        .with_reply_waits(Arc::new(ItemReplyWaits {
+            email: email::outbound::EmailPgRepo::new(db.clone()),
+            pool: db.clone(),
+        })),
     );
     let generation = Arc::new(
         GenerationService::new(

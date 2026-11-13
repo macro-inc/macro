@@ -216,6 +216,15 @@ impl SuggestionApi for FakeSuggestions {
         unreachable!()
     }
 
+    async fn restore(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
+        _: Uuid,
+    ) -> Result<(), SuggestionError> {
+        unreachable!()
+    }
+
     fn brief(&self, trigger: GenerationTrigger, _: Tz) -> String {
         format!("suggestions {}", trigger.as_ref())
     }

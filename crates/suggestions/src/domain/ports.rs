@@ -13,7 +13,7 @@ use super::model::{
     OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RunStartError,
     SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller, SuggestionContent,
     SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
-    Target,
+    Target, Waiting,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 use super::run::{Advanced, RunState, SessionEvent};
@@ -182,14 +182,27 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Make `draft` the draft of the person's suggestion `id` while it is open,
-    /// replacing any draft it had, logging `change`; whether it was open.
+    /// Make `draft`, previewed as `preview`, the draft of the person's suggestion
+    /// `id` while it is open, replacing any draft it had, logging `change`;
+    /// whether it was open.
     fn set_draft(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
         draft: &Target,
+        preview: Option<&str>,
         change: &Change,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Bring back the person's suggestion `id` if they dismissed it at
+    /// `dismissed_since` or later, as proposed; a run its dismissal cancelled
+    /// stays cancelled. Whether it came back.
+    fn undismiss(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        dismissed_since: DateTime<Utc>,
+        now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Move the person's suggestion `id` to `to` when it is in one of `from` and
@@ -259,13 +272,36 @@ pub trait SuggestionDrafts: Send + Sync + 'static {
     /// The error type returned by draft reads.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// The thread of email draft `draft` when it is an unsent draft in one
-    /// of the person's own inboxes; `None` for anything else.
-    fn email_draft_thread(
+    /// Email draft `draft` when it is an unsent draft in one of the person's
+    /// own inboxes; `None` for anything else.
+    fn email_draft(
         &self,
         user: &MacroUserIdStr<'_>,
         draft: Uuid,
-    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<FoundDraft>, Self::Err>> + Send;
+}
+
+/// An email draft a reply suggestion may carry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundDraft {
+    /// The thread it is in.
+    pub thread: Uuid,
+    /// The start of its plain text, when it has any.
+    pub preview: Option<String>,
+}
+
+/// What a reply suggestion's item waits on the person for. Object-safe: the
+/// harness hands in one adapter over email and channels.
+#[async_trait::async_trait]
+pub trait ReplyWaits: Send + Sync + 'static {
+    /// For an email thread, its newest message; for a channel message, that
+    /// message: when it came and its sender, unless the person sent it. `None`
+    /// for any other item, or one with no such message.
+    async fn waiting(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        target: &Target,
+    ) -> Result<Option<Waiting>, rootcause::Report>;
 }
 
 /// The agent session behind a code-mode request. Object-safe, so one
@@ -367,6 +403,16 @@ pub trait SuggestionApi: Send + Sync + 'static {
 
     /// The person, or their own agent, isn't interested in an open suggestion.
     fn dismiss(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
+
+    /// The person, or their own agent, takes back dismissing a suggestion, within
+    /// [`RESTORE_WITHIN`](super::service::RESTORE_WITHIN) of it: it is proposed
+    /// again, and a run the dismissal cancelled stays cancelled.
+    fn restore(
         &self,
         user: &MacroUserIdStr<'static>,
         caller: SuggestionCaller,

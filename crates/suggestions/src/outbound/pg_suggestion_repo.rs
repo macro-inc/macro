@@ -13,8 +13,8 @@ use sqlx::{PgConnection, PgPool};
 use crate::domain::lifecycle::{self, LifecycleEvent};
 use crate::domain::model::{
     Category, Change, EntityAction, NewKind, OpenTarget, ResolveReason, StoredRun, Suggestion,
-    SuggestionContent, SuggestionKind, SuggestionRun, SuggestionState, SuggestionStatus, Target,
-    TargetRole,
+    SuggestionContent, SuggestionDraft, SuggestionKind, SuggestionRun, SuggestionState,
+    SuggestionStatus, Target, TargetRole, result_of,
 };
 use crate::domain::ports::{Limits, SuggestionRepo, Written};
 use crate::domain::run::{RunEvent, RunState};
@@ -63,6 +63,9 @@ struct SuggestionRow {
     run_mode: Option<String>,
     sends: Option<String>,
     action: Option<String>,
+    waiting_since: Option<DateTime<Utc>>,
+    waiting_from: Option<String>,
+    draft_preview: Option<String>,
     routine_suggestion_id: Option<Uuid>,
 }
 
@@ -96,7 +99,8 @@ impl PgSuggestionRepo {
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
-                              e.action AS "action?",
+                              e.action AS "action?", e.waiting_since AS "waiting_since?",
+                              e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM suggestion i
                        LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
@@ -121,7 +125,8 @@ impl PgSuggestionRepo {
                               i.created_at AS "created_at!", i.updated_at AS "updated_at!",
                               i.state_changed_at AS "state_changed_at!",
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
-                              e.action AS "action?",
+                              e.action AS "action?", e.waiting_since AS "waiting_since?",
+                              e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM (
                            SELECT * FROM suggestion
@@ -148,7 +153,8 @@ impl PgSuggestionRepo {
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
-                              e.action AS "action?",
+                              e.action AS "action?", e.waiting_since AS "waiting_since?",
+                              e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM suggestion i
                        LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
@@ -168,7 +174,8 @@ impl PgSuggestionRepo {
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
-                              e.action AS "action?",
+                              e.action AS "action?", e.waiting_since AS "waiting_since?",
+                              e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM suggestion i
                        LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
@@ -251,6 +258,8 @@ impl PgSuggestionRepo {
                         .map(|(_, target)| target.clone())
                         .collect()
                 };
+                let produced = of(TargetRole::Produced);
+                let result = result_of(state, run.as_ref(), &produced);
                 let kind = match (
                     row.kind.as_str(),
                     row.prompt,
@@ -265,7 +274,12 @@ impl PgSuggestionRepo {
                     },
                     ("entity", None, None, Some(action), None) => SuggestionKind::Entity {
                         action: parse(&action)?,
-                        draft: of(TargetRole::Draft).into_iter().next(),
+                        draft: of(TargetRole::Draft).into_iter().next().map(|target| SuggestionDraft {
+                            target,
+                            preview: row.draft_preview,
+                        }),
+                        waiting_since: row.waiting_since,
+                        from: row.waiting_from,
                     },
                     ("routine", None, None, None, Some(routine_suggestion_id)) => {
                         SuggestionKind::Routine {
@@ -294,11 +308,12 @@ impl PgSuggestionRepo {
                     state,
                     state_reason: row.state_reason,
                     about: of(TargetRole::About),
-                    produced: of(TargetRole::Produced),
+                    produced,
                     created_at: row.created_at,
                     updated_at: row.updated_at,
                     state_changed_at: row.state_changed_at,
                     status: SuggestionStatus::of(state, run.as_ref()),
+                    result,
                     run,
                     kind,
                 })
@@ -809,10 +824,14 @@ impl SuggestionRepo for PgSuggestionRepo {
                 .await?;
             }
             NewKind::Entity { action } => {
+                let waiting = content.waiting.as_ref();
                 sqlx::query!(
-                    "INSERT INTO suggestion_entity (suggestion_id, action) VALUES ($1, $2)",
+                    r#"INSERT INTO suggestion_entity (suggestion_id, action, waiting_since, waiting_from)
+                       VALUES ($1, $2, $3, $4)"#,
                     id,
                     action.as_ref(),
+                    waiting.map(|waiting| waiting.since),
+                    waiting.and_then(|waiting| waiting.from.as_deref()),
                 )
                 .execute(&mut *tx)
                 .await?;
@@ -895,6 +914,16 @@ impl SuggestionRepo for PgSuggestionRepo {
             )
             .execute(&mut *tx)
             .await?;
+        } else {
+            let waiting = content.waiting.as_ref();
+            sqlx::query!(
+                "UPDATE suggestion_entity SET waiting_since = $2, waiting_from = $3 WHERE suggestion_id = $1",
+                id,
+                waiting.map(|waiting| waiting.since),
+                waiting.and_then(|waiting| waiting.from.as_deref()),
+            )
+            .execute(&mut *tx)
+            .await?;
         }
         sqlx::query!(
             "DELETE FROM suggestion_target WHERE suggestion_id = $1 AND role = 'about'",
@@ -950,6 +979,7 @@ impl SuggestionRepo for PgSuggestionRepo {
         user: &MacroUserIdStr<'_>,
         id: Uuid,
         draft: &Target,
+        preview: Option<&str>,
         change: &Change,
     ) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await?;
@@ -977,6 +1007,13 @@ impl SuggestionRepo for PgSuggestionRepo {
         .execute(&mut *tx)
         .await?;
         insert_targets(&mut tx, id, TargetRole::Draft, std::slice::from_ref(draft)).await?;
+        sqlx::query!(
+            "UPDATE suggestion_entity SET draft_preview = $2 WHERE suggestion_id = $1",
+            id,
+            preview,
+        )
+        .execute(&mut *tx)
+        .await?;
         log(&mut tx, user, id, change).await?;
         tx.commit().await?;
         Ok(true)
@@ -1002,6 +1039,31 @@ impl SuggestionRepo for PgSuggestionRepo {
             to.as_ref(),
             now,
             shown_updated_at,
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            == 1;
+        Ok(moved)
+    }
+
+    async fn undismiss(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        dismissed_since: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let moved = sqlx::query!(
+            r#"UPDATE suggestion
+               SET state = $4, state_reason = NULL, updated_at = $5, state_changed_at = $5
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3) AND state_changed_at >= $6"#,
+            user.as_ref(),
+            id,
+            &state_names(&lifecycle::sources(LifecycleEvent::Undismiss)),
+            SuggestionState::Proposed.as_ref(),
+            now,
+            dismissed_since,
         )
         .execute(&self.pool)
         .await?
@@ -1091,6 +1153,12 @@ impl SuggestionRepo for PgSuggestionRepo {
             == 1;
         if moved {
             cancel_run(&mut tx, id, now).await?;
+            sqlx::query!(
+                "UPDATE suggestion_entity SET waiting_since = NULL, waiting_from = NULL WHERE suggestion_id = $1",
+                id,
+            )
+            .execute(&mut *tx)
+            .await?;
         }
         tx.commit().await?;
         Ok(moved)

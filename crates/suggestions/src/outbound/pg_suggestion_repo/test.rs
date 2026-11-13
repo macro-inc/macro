@@ -53,6 +53,7 @@ fn content(key: &str) -> SuggestionContent {
         about: Vec::new(),
         prompt: Some("Compare them.".to_owned()),
         sends: None,
+        waiting: None,
     }
 }
 
