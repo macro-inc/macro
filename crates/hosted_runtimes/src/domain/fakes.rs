@@ -387,10 +387,19 @@ impl ComputerRepo for FakeRepo {
                 policy: policy(),
             },
         );
-        let (state, effects) = match transitioned {
+        let (mut state, effects) = match transitioned {
             Ok(next) => next,
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
+        // Latch setup milestones like the Postgres applier.
+        let (phase, connected, waiting) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.waiting_for_capacity(),
+        );
+        if let Some(setup) = state.setup.as_mut() {
+            setup.advance(&phase, connected, waiting, now);
+        }
         computer.state = state;
         self.push_effects(computer, effects, now);
         Ok(Some(Applied::Changed(Box::new(computer.clone()))))
@@ -787,6 +796,26 @@ impl crate::domain::enrollment::DeploymentSource for FixedDeployment {
         crate::domain::enrollment::DeploymentUnavailable,
     > {
         Ok(deployment())
+    }
+}
+
+/// Records every setup notice sent; `fail` refuses every send after
+/// recording it.
+#[derive(Default)]
+pub struct FakeSetupNotices {
+    pub sent: Mutex<Vec<crate::domain::ports::SetupNotice>>,
+    pub fail: AtomicBool,
+}
+
+impl crate::domain::ports::SetupNotices for FakeSetupNotices {
+    type Err = FakeError;
+
+    async fn send(&self, notice: crate::domain::ports::SetupNotice) -> Result<(), FakeError> {
+        self.sent.lock().unwrap().push(notice);
+        if self.fail.load(Ordering::SeqCst) {
+            return Err(FakeError::Storage);
+        }
+        Ok(())
     }
 }
 

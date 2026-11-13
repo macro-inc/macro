@@ -388,7 +388,21 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
-    assert!(matches!(second[0].effect, Effect::Stop { .. }));
+    // The first connection told the buyer setup finished.
+    assert_eq!(
+        second[0].effect,
+        Effect::NotifySetup {
+            outcome: crate::domain::lifecycle::SetupOutcome::Ready,
+        }
+    );
+    repo.complete_effect(second[0].id).await.unwrap();
+
+    let third = repo
+        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .await
+        .unwrap();
+    assert_eq!(third.len(), 1);
+    assert!(matches!(third[0].effect, Effect::Stop { .. }));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -17,7 +17,7 @@ use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::{
     Billing as ComputerBilling, BillingPolicy, Effect, EffectWorker, Event, HostId, Rejected,
-    SubscriptionItemId, TimerKind,
+    SetupOutcome, SubscriptionItemId, TimerKind,
 };
 use crate::domain::models::{
     BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
@@ -641,6 +641,33 @@ pub struct HostedPairing {
     pub pairing_id: PairingId,
     /// Secret used to claim the pairing.
     pub device_secret: DeviceSecret,
+}
+
+/// What a computer's buyer hears when its first setup ends.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetupNotice {
+    /// The computer that was set up.
+    pub computer_id: ComputerId,
+    /// The team that owns the computer.
+    pub team_id: Uuid,
+    /// The computer's harness, once created.
+    pub harness_id: Option<HarnessId>,
+    /// The computer's name when the notice is sent.
+    pub computer_name: String,
+    /// Who bought the computer.
+    pub buyer: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// Ready, or why setup failed.
+    pub outcome: SetupOutcome,
+}
+
+/// Telling a buyer how setup ended.
+pub trait SetupNotices: Send + Sync + 'static {
+    /// Adapter failure type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Deliver `notice`. Delivering the same notice again (an effect
+    /// retried or redelivered) must not notify twice.
+    fn send(&self, notice: SetupNotice) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// The harness registry macrod pairs with.

@@ -358,6 +358,12 @@ attempt, so a busy database never fails a computer or abandons a removal.
   `computer.claude_sign_in.check` (`checked`, `notified`, `failed`); never put
   user ids or emails on it. The ports (`ClaudeSignIns`, `ClaudeSignInNotices`)
   are implemented in agent_harness_service.
+- **Setup notices**: `transition` emits `Effect::NotifySetup` when first setup
+  ends: `Ready` on the first macrod connection (before `setup.connected_at`
+  latches), `Failed` when a not-yet-connected computer gives up, once per
+  attempt. The fleet worker sends it to the buyer (`created_by`) through the
+  `SetupNotices` port as a `computer_setup` notification; a send that keeps
+  failing is dropped after its retries and never fails the computer.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 

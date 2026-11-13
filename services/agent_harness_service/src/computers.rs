@@ -39,6 +39,7 @@ pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
 mod presence;
+pub(crate) mod setup_notice;
 pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
@@ -54,7 +55,17 @@ const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// sign-in or sign-out made on the computer itself.
 const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
 
-pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+/// The notification ingress the operator's setup notices go through.
+pub type SetupNotifications =
+    notification::domain::service::SqsNotificationIngress<notification::outbound::queue::SqsQueue>;
+
+pub type Operator = ComputerOperator<
+    PgComputerRepo,
+    ConfiguredFleet,
+    HostedHarnesses,
+    SystemClock,
+    setup_notice::IngressSetupNotices<SetupNotifications>,
+>;
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// has no attached computer fleet (`COMPUTERS_FLEET` is absent).
@@ -64,6 +75,7 @@ pub(crate) async fn operator(
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    notifications: Arc<SetupNotifications>,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
@@ -139,6 +151,7 @@ pub(crate) async fn operator(
             service: harnesses,
             default_agents,
         },
+        setup_notice::IngressSetupNotices::new(notifications),
         SystemClock,
         Arc::new(ServiceDeployment),
     )
