@@ -406,6 +406,15 @@ impl email::domain::ports::EmailThreadPreviewService for CountingEmailService {
         // receipts reached the read.
         Ok(Vec::new())
     }
+
+    async fn get_owned_email_thread_preview(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
+        // Mutation replies read through `EmailMutationThreadReader` here.
+        Ok(None)
+    }
 }
 
 impl graphql_soup::EmailMutationThreadReader for CountingEmailService {

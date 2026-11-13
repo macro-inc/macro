@@ -53,6 +53,15 @@ mod tests;
 
 const MAX_PROJECT_NAME_GRAPHEMES: usize = 100;
 
+/// Record how large a trashed, restored or purged folder tree was on the
+/// current `project.trash` / `project.restore` / `project.purge` span.
+fn record_tree_counts(projects: usize, documents: usize, chats: usize) {
+    let span = tracing::Span::current();
+    span.record("project.count", projects);
+    span.record("document.count", documents);
+    span.record("chat.count", chats);
+}
+
 /// The user id to attribute a project lifecycle event to, when the caller is an
 /// authenticated user.
 fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
@@ -593,6 +602,17 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "project.trash",
+        skip_all,
+        fields(
+            project.id = %project.id,
+            project.count = tracing::field::Empty,
+            document.count = tracing::field::Empty,
+            chat.count = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn soft_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -604,6 +624,11 @@ where
             .soft_delete_project(&receipt.entity().entity_id)
             .await
             .map_err(|error| internal_error(error, "unable to delete project"))?;
+        record_tree_counts(
+            deleted.project_ids.len(),
+            deleted.document_ids.len(),
+            deleted.chat_ids.len(),
+        );
 
         if let Some(parent_id) = project.parent_id.as_deref() {
             self.bump_project_modified(parent_id).await;
@@ -639,6 +664,17 @@ where
         Ok(deleted)
     }
 
+    #[tracing::instrument(
+        name = "project.purge",
+        skip_all,
+        fields(
+            project.id = %project.id,
+            project.count = tracing::field::Empty,
+            document.count = tracing::field::Empty,
+            chat.count = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn permanently_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -649,6 +685,11 @@ where
             .purge_deleted_project_tree(&receipt.entity().entity_id)
             .await
             .map_err(|error| internal_error(error, "unable to permanently delete project"))?;
+        record_tree_counts(
+            purged.project_ids.len(),
+            purged.documents.len(),
+            purged.chat_ids.len(),
+        );
         let result = purged.clone();
 
         if !purged.bom_shas.is_empty() {
@@ -698,6 +739,17 @@ where
         Ok(result)
     }
 
+    #[tracing::instrument(
+        name = "project.restore",
+        skip_all,
+        fields(
+            project.id = %project.id,
+            project.count = tracing::field::Empty,
+            document.count = tracing::field::Empty,
+            chat.count = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn revert_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -709,6 +761,11 @@ where
             .revert_delete_project(&receipt.entity().entity_id, parent_project_id.clone())
             .await
             .map_err(|error| internal_error(error, "unable to revert project"))?;
+        record_tree_counts(
+            restored.project_ids.len(),
+            restored.document_ids.len(),
+            restored.chat_ids.len(),
+        );
         let result = restored.clone();
 
         let project_id = receipt.entity().entity_id.clone();

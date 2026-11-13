@@ -1511,6 +1511,19 @@ channel show **Conversation unavailable** with **Retry**, never permanent loadin
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
 
+Channel rows also show how many unread `channel_mention` notifications the viewer
+has there, thread replies included, from a second filtered edge (`unreadMentions`,
+limit 10, shown as **9+** above nine). The edge reads notification state, so a
+mention clears when it is marked seen: opening the channel clears top-level
+mentions, and a thread mention stays counted until its thread is read. On desktop
+the count replaces the row's unread dot, including Favorites; on phones the list
+row keeps its leading dot and puts the count under the timestamp, and pinned
+favorites show the count in place of the dot. Rows from other projections, and
+the REST list, show no count. To check, have another account mention you in a
+channel you are not viewing: the row shows **1** without a reload, and opening the
+channel clears it. Then mention yourself in a thread reply, open the channel
+without the thread, and the count should stay.
+
 A backend-free cache regression runs on desktop and phone viewports:
 `bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
 It uses the production normalized exchange, query adapter, and detail state with a

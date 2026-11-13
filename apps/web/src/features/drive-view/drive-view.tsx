@@ -18,7 +18,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ListEntityMetadataQueryProvider } from '@entity';
+import {
+  type KnownFolder,
+  KnownFoldersProvider,
+  ListEntityMetadataQueryProvider,
+} from '@entity';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import {
@@ -91,6 +95,21 @@ function DriveComposition(props: { route: DriveRouteState }) {
     databasesEnabled: () => databasesFlag().enabled,
     formsEnabled: () => formsFlag().enabled,
   });
+  // Rows show their folder's path from the folders the sidebar already holds.
+  const knownFolders = createMemo(
+    () =>
+      new Map<string, KnownFolder>(
+        sidebar.folders().map((folder) => [
+          folder.id,
+          {
+            id: folder.id,
+            name: folder.name,
+            parentId: folder.parentId,
+            ownerId: folder.userId,
+          },
+        ])
+      )
+  );
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
       selection,
@@ -207,7 +226,9 @@ function DriveComposition(props: { route: DriveRouteState }) {
         tutorials,
       }}
     >
-      <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+      <KnownFoldersProvider value={knownFolders}>
+        <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+      </KnownFoldersProvider>
     </DriveProvider>
   );
 }

@@ -14,6 +14,7 @@ import type {
   CodeUpgrade,
   CreateScheduledActionParams,
   Draft,
+  DraftJob,
   DraftRoutineRequest,
   EmptyResponse,
   EntityAppearance,
@@ -29,6 +30,7 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StartDraftJobRequest,
   SuggestOutcome,
   SuggestRequest,
 } from './schemas';
@@ -389,6 +391,261 @@ export const checkScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as checkScheduledActionResponse;
+};
+
+export type listRoutineDraftJobsResponse200 = {
+  data: DraftJob[];
+  status: 200;
+};
+
+export type listRoutineDraftJobsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listRoutineDraftJobsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listRoutineDraftJobsResponseSuccess =
+  listRoutineDraftJobsResponse200 & {
+    headers: Headers;
+  };
+export type listRoutineDraftJobsResponseError = (
+  | listRoutineDraftJobsResponse401
+  | listRoutineDraftJobsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listRoutineDraftJobsResponse =
+  | listRoutineDraftJobsResponseSuccess
+  | listRoutineDraftJobsResponseError;
+
+export const getListRoutineDraftJobsUrl = () => {
+  return `/scheduled-actions/draft-jobs`;
+};
+
+export const listRoutineDraftJobs = async (
+  options?: RequestInit
+): Promise<listRoutineDraftJobsResponse> => {
+  const res = await fetch(getListRoutineDraftJobsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listRoutineDraftJobsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listRoutineDraftJobsResponse;
+};
+
+export type startRoutineDraftJobResponse202 = {
+  data: DraftJob;
+  status: 202;
+};
+
+export type startRoutineDraftJobResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type startRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type startRoutineDraftJobResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
+export type startRoutineDraftJobResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type startRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type startRoutineDraftJobResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
+export type startRoutineDraftJobResponseSuccess =
+  startRoutineDraftJobResponse202 & {
+    headers: Headers;
+  };
+export type startRoutineDraftJobResponseError = (
+  | startRoutineDraftJobResponse400
+  | startRoutineDraftJobResponse401
+  | startRoutineDraftJobResponse402
+  | startRoutineDraftJobResponse409
+  | startRoutineDraftJobResponse500
+  | startRoutineDraftJobResponse503
+) & {
+  headers: Headers;
+};
+
+export type startRoutineDraftJobResponse =
+  | startRoutineDraftJobResponseSuccess
+  | startRoutineDraftJobResponseError;
+
+export const getStartRoutineDraftJobUrl = () => {
+  return `/scheduled-actions/draft-jobs`;
+};
+
+export const startRoutineDraftJob = async (
+  startDraftJobRequest: StartDraftJobRequest,
+  options?: RequestInit
+): Promise<startRoutineDraftJobResponse> => {
+  const res = await fetch(getStartRoutineDraftJobUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(startDraftJobRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startRoutineDraftJobResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startRoutineDraftJobResponse;
+};
+
+export type getRoutineDraftJobResponse200 = {
+  data: DraftJob;
+  status: 200;
+};
+
+export type getRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getRoutineDraftJobResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getRoutineDraftJobResponseSuccess =
+  getRoutineDraftJobResponse200 & {
+    headers: Headers;
+  };
+export type getRoutineDraftJobResponseError = (
+  | getRoutineDraftJobResponse401
+  | getRoutineDraftJobResponse404
+  | getRoutineDraftJobResponse500
+) & {
+  headers: Headers;
+};
+
+export type getRoutineDraftJobResponse =
+  | getRoutineDraftJobResponseSuccess
+  | getRoutineDraftJobResponseError;
+
+export const getGetRoutineDraftJobUrl = (id: string) => {
+  return `/scheduled-actions/draft-jobs/${id}`;
+};
+
+export const getRoutineDraftJob = async (
+  id: string,
+  options?: RequestInit
+): Promise<getRoutineDraftJobResponse> => {
+  const res = await fetch(getGetRoutineDraftJobUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getRoutineDraftJobResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getRoutineDraftJobResponse;
+};
+
+export type discardRoutineDraftJobResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type discardRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type discardRoutineDraftJobResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type discardRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type discardRoutineDraftJobResponseSuccess =
+  discardRoutineDraftJobResponse204 & {
+    headers: Headers;
+  };
+export type discardRoutineDraftJobResponseError = (
+  | discardRoutineDraftJobResponse401
+  | discardRoutineDraftJobResponse404
+  | discardRoutineDraftJobResponse500
+) & {
+  headers: Headers;
+};
+
+export type discardRoutineDraftJobResponse =
+  | discardRoutineDraftJobResponseSuccess
+  | discardRoutineDraftJobResponseError;
+
+export const getDiscardRoutineDraftJobUrl = (id: string) => {
+  return `/scheduled-actions/draft-jobs/${id}`;
+};
+
+export const discardRoutineDraftJob = async (
+  id: string,
+  options?: RequestInit
+): Promise<discardRoutineDraftJobResponse> => {
+  const res = await fetch(getDiscardRoutineDraftJobUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discardRoutineDraftJobResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discardRoutineDraftJobResponse;
 };
 
 export type draftRoutineResponse200 = {
