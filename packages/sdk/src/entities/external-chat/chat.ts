@@ -6,6 +6,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { FavoritableEntity } from '../entity';
 import { User } from '../users/user';
 import { communityOf, type WhatsAppCommunity } from '../whatsapp/chat';
@@ -41,6 +43,18 @@ export type ExternalChatContent =
 export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
   /** Canonical sharing and favorites kind. */
   readonly entityType = 'external_chat' as const;
+
+  /**
+   * Share this chat with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * chat; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'external_chat', this.id);
+  }
 
   /** Reference an added chat; access is checked on each request. */
   static byId(client: MacroClient, id: string): ExternalChat {

@@ -161,6 +161,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const hasCustomEntities = () => !!props.entities;
   const sessionsEnabled = () =>
     !hasCustomEntities() &&
+    props.menu.isOpen() &&
     (!props.sources || props.sources.includes('agentSessions'));
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
   const sessionList = quickAccess?.useList({
@@ -224,6 +225,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     useEntityMention({
       buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const docs = docsMention.entities;
 
@@ -232,6 +234,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     useEntityMention({
       buckets: ['channel', 'dm'],
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const channels = channelsMention.entities;
 
@@ -242,6 +245,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       useEntityMention({
         buckets: ['crm_company'],
         searchTerm: activeSearchTerm,
+        enabled: props.menu.isOpen,
       }))
     : undefined;
   const sourceEnabled = (source: MentionBucketId) =>
@@ -312,7 +316,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     : useEmailSearchMention({
         searchTerm: activeSearchTerm,
-        enabled: () => !props.sources || props.sources.includes('emails'),
+        enabled: () =>
+          props.menu.isOpen() &&
+          (!props.sources || props.sources.includes('emails')),
       });
 
   // An external chat mentioned in a channel is shared with its members; only

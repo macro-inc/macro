@@ -155,6 +155,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Controls appearance editing only; saved icons and colors remain visible. */
+export const enableEntityAppearance = defineFlag({
+  key: 'enable-entity-appearance',
+  env: 'ENABLE_ENTITY_APPEARANCE',
+  default: onInDev,
+});
+
 /**
  * Connect apps Macro Connect serves through it instead of Pipedream. The
  * backend reads the same PostHog key and decides per app; this side only
@@ -1024,6 +1031,14 @@ export const enableRoutineSuggestions = defineFlag({
 export const enableRoutineSharing = defineFlag({
   key: 'enable-routine-sharing',
   env: 'ENABLE_ROUTINE_SHARING',
+});
+
+// Event triggers (Macro and GitHub events). The server checks the same key per
+// routine owner, on save and before each run, so follow PostHog even in
+// development.
+export const enableEventRoutines = defineFlag({
+  key: 'enable-event-routines',
+  env: 'ENABLE_EVENT_ROUTINES',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
