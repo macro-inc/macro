@@ -55,7 +55,7 @@ mod typed_owner_test;
 pub struct SourceIds(pub Vec<String>);
 
 type UserSourceIdsKey = (DatabaseKey, String);
-type UserSourceIds = Result<SourceIds, Arc<sqlx::Error>>;
+type UserSourceIds = Result<Arc<SourceIds>, Arc<sqlx::Error>>;
 
 static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSourceIds>> =
     LazyLock::new(SingleFlight::new);
@@ -66,7 +66,28 @@ static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSo
 /// Callers that miss the cache at the same time for the same database and user
 /// share one run of the query. A failure reaches all of them as an
 /// `Arc<sqlx::Error>`.
-#[tracing::instrument(skip(pool), err, fields(coalesced = tracing::field::Empty))]
+pub async fn get_user_source_ids(
+    pool: &Pool<Postgres>,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+) -> anyhow::Result<SourceIds> {
+    let source_ids = shared_user_source_ids(pool, user_id).await?;
+
+    // The caller's own copy is made here, after the cache lock is released.
+    Ok(Arc::unwrap_or_clone(source_ids))
+}
+
+/// The source ids every caller of one lookup shares. The cache keeps them
+/// behind a pointer because it has one lock for all users, and a hit or a
+/// store that copied the list would hold that lock for the length of the list.
+///
+/// The span keeps the public function's name and, sitting above the cache,
+/// is opened only when the cache misses.
+#[tracing::instrument(
+    name = "get_user_source_ids",
+    skip(pool),
+    err,
+    fields(coalesced = tracing::field::Empty)
+)]
 #[cfg_attr(
     not(test),
     cached(
@@ -76,12 +97,12 @@ static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSo
         convert = r#"{format!("{}", user_id.map(AsRef::as_ref).unwrap_or(""))}"#,
     )
 )]
-pub async fn get_user_source_ids(
+async fn shared_user_source_ids(
     pool: &Pool<Postgres>,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
-) -> anyhow::Result<SourceIds> {
+) -> anyhow::Result<Arc<SourceIds>> {
     let Some(user_id) = user_id else {
-        return Ok(SourceIds(vec![]));
+        return Ok(Arc::new(SourceIds(vec![])));
     };
 
     let user_id = user_id.as_ref().to_string();
@@ -93,6 +114,7 @@ pub async fn get_user_source_ids(
         async move {
             query_user_source_ids(&pool, &user_id)
                 .await
+                .map(Arc::new)
                 .map_err(Arc::new)
         }
     };

@@ -319,6 +319,32 @@ describe('Message tool grouping', () => {
     ]);
   });
 
+  it('keeps one group across blank lines and thoughts between its calls', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          text('Looking.'),
+          tool('read'),
+          text('\n'),
+          { kind: 'thought', text: 'Next file.' },
+          text('\n\n'),
+          tool('edit'),
+          text('Done.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    expect(group.dataset.count).toBe('2');
+    // The thought is inside the fold, not a visible row between two groups.
+    expect(group.contains(view.getByTestId('thought'))).toBe(true);
+    expect(view.getAllByTestId('text').map((el) => el.textContent)).toEqual([
+      'Looking.',
+      'Done.',
+    ]);
+  });
+
   it('tells each call whether a later call of the turn saves the query', () => {
     const view = render(() => (
       <Message

@@ -23385,7 +23385,7 @@ export type TeamInviteResolved = {
 /**
  * How a member joined, without who invited them.
  */
-export type TeamJoinKind = 'invite_accepted' | 'domain_auto_join' | 'invite_link';
+export type TeamJoinKind = 'invite_accepted' | 'domain_auto_join' | 'invite_link' | 'team_agent';
 
 /**
  * Busy time and confidence for one explicitly included person.

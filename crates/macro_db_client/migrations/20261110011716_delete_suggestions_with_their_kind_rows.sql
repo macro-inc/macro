@@ -2,6 +2,8 @@
 -- the kind's row (a deleted routine suggestion cascading into suggestion_routine, a
 -- cleanup, a deleted user) deletes the suggestion with it, so no base row is left
 -- without its kind.
+SET LOCAL lock_timeout = '5s';
+
 CREATE FUNCTION delete_suggestion_of_kind_row() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN

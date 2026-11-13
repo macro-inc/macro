@@ -93,6 +93,7 @@ impl Harness {
                 NewKind::Entity { .. } => None,
             },
             sends: None,
+            waiting: None,
         };
         let change = Change {
             session: Uuid::now_v7(),

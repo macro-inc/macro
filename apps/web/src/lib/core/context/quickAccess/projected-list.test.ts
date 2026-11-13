@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createProjectedList,
   MAX_BROWSE_PAGES_PER_LOAD,
+  UNANSWERED_SEARCH_LIMIT_MS,
 } from './projected-list';
 import { type Bucket, exclude } from './types';
 
@@ -15,6 +16,7 @@ const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function root<T>(fn: () => T): T {
@@ -55,6 +57,64 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('keeps the listed rows when a cache revision replays the same search result', async () => {
+    const [revision, setRevision] = createSignal(0);
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page(['a', 'b']))
+      .mockResolvedValueOnce(page(['a', 'b']))
+      .mockResolvedValueOnce(page(['a', 'c']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(2));
+    const listed = list.items();
+
+    setRevision(1);
+    await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toBe(listed);
+
+    setRevision(2);
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.id)).toEqual([
+        'GraphqlSoupDocument:a',
+        'GraphqlSoupDocument:c',
+      ])
+    );
+    expect(list.items()[0]).toBe(listed[0]);
+  });
+
+  it('publishes a new list after a load-more that found no new row', async () => {
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page(['a', 'b'], true))
+      .mockResolvedValue(page(['a', 'b']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(2));
+    const listed = list.items();
+
+    await list.loadMore();
+
+    expect(list.items()).not.toBe(listed);
+    expect(list.items().map((item) => item.id)).toEqual([
+      'GraphqlSoupDocument:a',
+      'GraphqlSoupDocument:b',
+    ]);
+  });
+
   it('distinguishes a failed initial read from a successful empty retry', async () => {
     const [revision, setRevision] = createSignal(0);
     const error = new Error('Cache unavailable');
@@ -255,6 +315,95 @@ describe('Quick Access local projection', () => {
       expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }])
     );
     expect(list.isSearching()).toBe(false);
+  });
+
+  it('stops reporting a refused search as pending after the limit, and still replays it when the engine arrives', async () => {
+    vi.useFakeTimers();
+    const refused = Object.assign(new Error('cache reads unavailable'), {
+      errorCode: 'owner-handoff-blocked',
+    });
+    let engineReplaced = () => {};
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(refused)
+      .mockResolvedValueOnce(page(['seamus']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search,
+          onCacheGenerationChanged: (listener) => {
+            engineReplaced = () => listener({ storage: 'preserved' });
+            return () => {};
+          },
+        },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(list.error()).toBe(refused);
+    expect(list.isSearching()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(UNANSWERED_SEARCH_LIMIT_MS - 1);
+    expect(list.isSearching()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(list.isSearching()).toBe(false);
+
+    engineReplaced();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }]);
+  });
+
+  it('stops reporting a search the host never answers as pending after the limit', async () => {
+    vi.useFakeTimers();
+    const search = vi.fn(() => new Promise<SearchCachePage>(() => {}));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.advanceTimersByTimeAsync(UNANSWERED_SEARCH_LIMIT_MS - 1);
+    expect(list.isSearching()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(list.isSearching()).toBe(false);
+  });
+
+  it('tells the host to release a search once another query supersedes it', async () => {
+    const [query, setQuery] = createSignal('to');
+    const signals: (AbortSignal | undefined)[] = [];
+    const search = vi.fn(
+      (_args: SearchCacheArgs, options?: { signal?: AbortSignal }) => {
+        signals.push(options?.signal);
+        return new Promise<SearchCachePage>(() => {});
+      }
+    );
+    const dispose = createRoot((disposeRoot) => {
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: query,
+        materialize,
+      });
+      return disposeRoot;
+    });
+    await vi.waitFor(() => expect(signals).toHaveLength(1));
+    expect(signals[0]?.aborted).toBe(false);
+
+    setQuery('todo');
+    await vi.waitFor(() => expect(signals).toHaveLength(2));
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+
+    dispose();
+    expect(signals[1]?.aborted).toBe(true);
   });
 
   it('does not replay other failed searches when the engine is replaced', async () => {

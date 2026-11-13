@@ -192,6 +192,8 @@ pub enum TeamJoinKind {
     DomainAutoJoin,
     /// They opened the shareable invite link.
     InviteLink,
+    /// A team admin added this account as a team agent.
+    TeamAgent,
 }
 
 impl From<&TeamJoinMethod> for TeamJoinKind {
@@ -200,6 +202,7 @@ impl From<&TeamJoinMethod> for TeamJoinKind {
             TeamJoinMethod::InviteAccepted { .. } => Self::InviteAccepted,
             TeamJoinMethod::DomainAutoJoin => Self::DomainAutoJoin,
             TeamJoinMethod::InviteLink => Self::InviteLink,
+            TeamJoinMethod::TeamAgent { .. } => Self::TeamAgent,
         }
     }
 }

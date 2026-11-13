@@ -7,6 +7,7 @@ use serde_json::{Map, json};
 
 use super::model::CheckedSuggestion;
 use super::ports::{InboxMessage, RoutineSuggestionApi};
+use super::state::RoutineSuggestionEvent;
 use super::*;
 use crate::domain::ports::NoRoutineCode;
 use crate::domain::service::test::{TestService, configuration, service, user};
@@ -22,6 +23,32 @@ struct FakeRepo {
     changes: Mutex<Vec<(Uuid, &'static str, String)>>,
     /// Suggestions kept with a routine suggestion.
     cards: Mutex<Vec<Uuid>>,
+}
+
+impl FakeRepo {
+    /// Apply `event` to suggestion `id` as the store does.
+    fn apply(&self, id: Uuid, event: RoutineSuggestionEvent) -> Option<Transition> {
+        let mut suggestions = self.suggestions.lock().unwrap();
+        let suggestion = suggestions
+            .iter_mut()
+            .find(|suggestion| suggestion.id == id)?;
+        let transition = suggestion.state.on(event);
+        if let Transition::Move(to) = transition {
+            suggestion.state = to;
+            match to {
+                RoutineSuggestionState::Dismissed => suggestion.dismissed_at = Some(Utc::now()),
+                RoutineSuggestionState::Retired => suggestion.retired_at = Some(Utc::now()),
+                RoutineSuggestionState::Open | RoutineSuggestionState::Saved => {}
+            }
+        }
+        Some(transition)
+    }
+
+    /// The person saved a routine from suggestion `id`.
+    fn save(&self, id: Uuid) {
+        self.saved.lock().unwrap().push(id);
+        self.apply(id, RoutineSuggestionEvent::Save);
+    }
 }
 
 impl SuggestionRepo for FakeRepo {
@@ -43,6 +70,27 @@ impl SuggestionRepo for FakeRepo {
         suggestion: &CheckedSuggestion,
         now: DateTime<Utc>,
     ) -> Result<Kept> {
+        if self
+            .kept
+            .lock()
+            .unwrap()
+            .get(&session)
+            .copied()
+            .unwrap_or(0)
+            >= MAX_KEPT_PER_SESSION
+        {
+            return Ok(Kept::SessionFull);
+        }
+        if let StoredPick::Catalog { key, .. } = &suggestion.pick {
+            let taken = self.templates.lock().unwrap().contains(key)
+                || self.suggestions.lock().unwrap().iter().any(|stored| {
+                    stored.state != RoutineSuggestionState::Retired
+                        && matches!(&stored.pick, StoredPick::Catalog { key: other, .. } if other == key)
+                });
+            if taken {
+                return Ok(Kept::Taken);
+            }
+        }
         let id = Uuid::now_v7();
         self.suggestions.lock().unwrap().push(StoredSuggestion {
             id,
@@ -50,6 +98,7 @@ impl SuggestionRepo for FakeRepo {
             reason: suggestion.reason.clone(),
             keep_probability: suggestion.keep_probability,
             pick: suggestion.pick.clone(),
+            state: RoutineSuggestionState::Open,
             dismissed_at: None,
             retired_at: None,
             created_at: now,
@@ -72,21 +121,19 @@ impl SuggestionRepo for FakeRepo {
         _: Uuid,
         generation: Uuid,
         reason: &str,
-        now: DateTime<Utc>,
+        _: DateTime<Utc>,
     ) -> Result<bool> {
-        let mut suggestions = self.suggestions.lock().unwrap();
-        let Some(suggestion) = suggestions
-            .iter_mut()
-            .find(|suggestion| suggestion.id == id && suggestion.is_open())
-        else {
-            return Ok(false);
-        };
-        suggestion.retired_at = Some(now);
-        self.changes
-            .lock()
-            .unwrap()
-            .push((generation, "retired", reason.to_owned()));
-        Ok(true)
+        let moved = matches!(
+            self.apply(id, RoutineSuggestionEvent::Retire),
+            Some(Transition::Move(_))
+        );
+        if moved {
+            self.changes
+                .lock()
+                .unwrap()
+                .push((generation, "retired", reason.to_owned()));
+        }
+        Ok(moved)
     }
 
     async fn suggestions(&self, _: &MacroUserIdStr<'_>) -> Result<Vec<StoredSuggestion>> {
@@ -97,14 +144,8 @@ impl SuggestionRepo for FakeRepo {
         Ok(self.templates.lock().unwrap().clone())
     }
 
-    async fn dismiss(&self, _: &MacroUserIdStr<'_>, id: Uuid) -> Result<bool> {
-        let mut suggestions = self.suggestions.lock().unwrap();
-        let found = suggestions
-            .iter_mut()
-            .find(|suggestion| suggestion.id == id);
-        Ok(found
-            .map(|suggestion| suggestion.dismissed_at = Some(Utc::now()))
-            .is_some())
+    async fn dismiss(&self, _: &MacroUserIdStr<'_>, id: Uuid) -> Result<Option<Transition>> {
+        Ok(self.apply(id, RoutineSuggestionEvent::Dismiss))
     }
 
     async fn dismiss_template(&self, _: &MacroUserIdStr<'_>, key: &str) -> Result<()> {
@@ -114,6 +155,24 @@ impl SuggestionRepo for FakeRepo {
 
     async fn saved_from(&self, _: &MacroUserIdStr<'_>) -> Result<Vec<Uuid>> {
         Ok(self.saved.lock().unwrap().clone())
+    }
+
+    async fn drafted(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, crate::domain::models::ActionConfiguration)>> {
+        Ok(self
+            .suggestions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|suggestion| ids.contains(&suggestion.id))
+            .filter_map(|suggestion| match &suggestion.pick {
+                StoredPick::Routine { routine } => Some((suggestion.id, routine.clone())),
+                StoredPick::Catalog { .. } => None,
+            })
+            .collect())
     }
 }
 
@@ -152,6 +211,10 @@ impl GenerationSessions for FakeGenerations {
         session: Uuid,
     ) -> Result<Option<GenerationSession>, rootcause::Report> {
         Ok(self.sessions.lock().unwrap().get(&session).cloned())
+    }
+
+    async fn undeleted(&self, session: Uuid) -> Result<bool, rootcause::Report> {
+        Ok(self.sessions.lock().unwrap().contains_key(&session))
     }
 }
 
@@ -481,6 +544,7 @@ fn at_most_two_safe_catalog_picks_start_on() {
                 key: (*key).to_owned(),
                 knobs: Map::new(),
             },
+            state: RoutineSuggestionState::Open,
             dismissed_at: None,
             retired_at: None,
             created_at: Utc::now(),
@@ -510,6 +574,7 @@ async fn a_saved_routine_names_the_suggestion_it_came_from() {
             key: "inbox".to_owned(),
             knobs: Map::new(),
         },
+        state: RoutineSuggestionState::Open,
         dismissed_at: None,
         retired_at: None,
         created_at: Utc::now(),
@@ -579,6 +644,7 @@ fn stored(pick: StoredPick, surfaces: &[Surface], keep: f32) -> StoredSuggestion
         reason: "fits".to_owned(),
         keep_probability: keep,
         pick,
+        state: RoutineSuggestionState::Open,
         dismissed_at: None,
         retired_at: None,
         created_at: Utc::now(),
@@ -791,7 +857,7 @@ async fn a_routines_session_reviews_and_retires_and_a_retired_pick_may_return() 
     let id = kept.id.unwrap();
     let review = h.service.review(&principal, Some(night)).await.unwrap();
     assert_eq!(review.suggestions.len(), 1);
-    assert_eq!(review.suggestions[0].state, ReviewedState::Open);
+    assert_eq!(review.suggestions[0].state, RoutineSuggestionState::Open);
     assert_eq!(review.kept_left, MAX_KEPT_PER_SESSION - 1);
 
     // A reason naming someone's details is refused, and nothing is retired.
@@ -830,7 +896,7 @@ async fn a_routines_session_reviews_and_retires_and_a_retired_pick_may_return() 
             .all(|suggestion| suggestion.id != id)
     );
     let review = h.service.review(&principal, Some(night)).await.unwrap();
-    assert_eq!(review.suggestions[0].state, ReviewedState::Retired);
+    assert_eq!(review.suggestions[0].state, RoutineSuggestionState::Retired);
     assert!(review.suggestions[0].closed_at.is_some());
     // Retiring twice is refused.
     let again = h
@@ -869,6 +935,96 @@ async fn a_routines_session_reviews_and_retires_and_a_retired_pick_may_return() 
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn saving_wins_and_dismissing_a_retired_pick_is_for_good() {
+    let h = &harness(true);
+    let night = open_session(h, &[Surface::Email, Surface::Calendar, Surface::Tasks]).await;
+    let principal = &CreationPrincipal::User(user());
+    let retire = |id| {
+        h.service.retire(
+            principal,
+            Some(night),
+            id,
+            RetireSuggestion {
+                reason: "It no longer fits".to_owned(),
+            },
+        )
+    };
+    let state_of = |id| async move {
+        let review = h.service.review(principal, Some(night)).await.unwrap();
+        let reviewed = review
+            .suggestions
+            .into_iter()
+            .find(|suggestion| suggestion.id == id)
+            .unwrap();
+        (reviewed.state, reviewed.closed_at.is_some())
+    };
+
+    // Retired, then dismissed: never suggested again.
+    let inbox = suggest(h, night, catalog("inbox", &[Surface::Email], 0.8))
+        .await
+        .id
+        .unwrap();
+    assert!(retire(inbox).await.unwrap().ok);
+    h.service.dismiss(&user(), inbox).await.unwrap();
+    assert_eq!(
+        state_of(inbox).await,
+        (RoutineSuggestionState::Dismissed, true)
+    );
+    let again = suggest(h, night, catalog("inbox", &[Surface::Email], 0.8)).await;
+    assert!(!again.ok);
+    assert!(again.problems[0].contains("suggested already"), "{again:?}");
+
+    // Dismissed, then saved: saved, and no longer retired by a session.
+    let brief = suggest(h, night, catalog("brief", &[Surface::Calendar], 0.6))
+        .await
+        .id
+        .unwrap();
+    h.service.dismiss(&user(), brief).await.unwrap();
+    h.repo.save(brief);
+    assert_eq!(
+        state_of(brief).await,
+        (RoutineSuggestionState::Saved, false)
+    );
+    assert!(!retire(brief).await.unwrap().ok);
+    // Dismissing a saved suggestion again changes nothing, and isn't logged.
+    h.service.dismiss(&user(), brief).await.unwrap();
+    assert_eq!(
+        state_of(brief).await,
+        (RoutineSuggestionState::Saved, false)
+    );
+    // A saved catalog pick isn't suggested again either.
+    assert!(
+        !suggest(h, night, catalog("brief", &[Surface::Calendar], 0.6))
+            .await
+            .ok
+    );
+
+    // An open drafted routine saved: no longer shown, and not retired.
+    let drafted = suggest(h, night, drafted("You plan your week on Mondays", 0.7))
+        .await
+        .id
+        .unwrap();
+    h.repo.save(drafted);
+    assert!(
+        h.read(None)
+            .await
+            .suggestions
+            .iter()
+            .all(|suggestion| suggestion.id != drafted)
+    );
+    assert!(!retire(drafted).await.unwrap().ok);
+    let actions: Vec<&str> = h
+        .repo
+        .changes
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(_, action, _)| *action)
+        .collect();
+    assert_eq!(actions, ["created", "retired", "created", "created"]);
 }
 
 #[tokio::test]

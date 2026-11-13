@@ -1887,7 +1887,7 @@
     "/suggestions": {
       "get": {
         "tags": ["suggestions"],
-        "summary": "The caller's feed.",
+        "summary": "The caller's feed, for them or their own agent.",
         "operationId": "list_suggestions",
         "parameters": [
           {
@@ -1898,11 +1898,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Most open suggestions to return, best first; all when unset. With a\nlimit the feed leaves out `done`; `counts` always counts every one.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "The caller's open suggestions they can open every item of, best first",
+            "description": "The caller's open suggestions, best first, and their done ones, latest first: only those they can open every item of",
             "content": {
               "application/json": {
                 "schema": {
@@ -1913,6 +1924,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not read the feed",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2081,6 +2102,135 @@
         }
       }
     },
+    "/suggestions/generation": {
+      "get": {
+        "tags": ["suggestions"],
+        "summary": "The caller's suggestion generations now.",
+        "operationId": "get_suggestion_generation",
+        "responses": {
+          "200": {
+            "description": "The caller's generations now: whether one is running (poll while it is), how the last one ended, and when they may next ask for fresh suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationOverview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/regenerate": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Start fresh suggestions for the caller: at most once an hour, and not\nwhile one of their generations runs.",
+        "operationId": "regenerate_suggestions",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Fresh suggestions started in the background: the caller's whole workspace researched again and their feed brought up to date, with routine suggestions when the week's are due. Poll `GET /suggestions/generation` until it is idle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationStarted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "One of the caller's generations is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegenerationRunning"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller asked within the hour; `Retry-After` says in how many seconds they may ask again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegenerationCooldown"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions/review": {
       "get": {
         "tags": ["suggestions"],
@@ -2162,6 +2312,58 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/viewed": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller opened their feed: what it showed as new no longer is. The app\nsends it once the feed is on screen.",
+        "operationId": "record_suggestions_viewed",
+        "responses": {
+          "204": {
+            "description": "Recorded: suggestions proposed until now are no longer new in the feed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not record a visit",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2276,7 +2478,7 @@
     "/suggestions/{id}/accept": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller acts on a suggestion: a background prompt suggestion is taken on; any\nother is done once they act on it (open its item, the composer, the\nroutine), and shows in the feed's `done`.",
+        "summary": "The caller, or someone acting for them, acts on a suggestion: a background\nprompt suggestion starts its run when the person accepts it in the app (anyone\nelse only takes it on); a note or prompt is done once they act on it (open its\nitem or the composer), and shows in the feed's `done`. A routine suggestion is\nrefused: the person saves its routine in the app, which makes it done.",
         "operationId": "accept_suggestion",
         "parameters": [
           {
@@ -2304,7 +2506,7 @@
             "description": "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"
           },
           "400": {
-            "description": "",
+            "description": "A routine suggestion: the person saves its routine in the app instead",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2315,6 +2517,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not accept",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2334,7 +2546,7 @@
             }
           },
           "409": {
-            "description": "The suggestion changed since the caller read it: the body has it as it is now",
+            "description": "The suggestion changed since the caller read it, or a run of it is still settling: the body has it as it is now",
             "content": {
               "application/json": {
                 "schema": {
@@ -2359,7 +2571,7 @@
     "/suggestions/{id}/dismiss": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller isn't interested in an open suggestion.",
+        "summary": "The caller, or their own agent, isn't interested in an open suggestion.",
         "operationId": "dismiss_suggestion",
         "parameters": [
           {
@@ -2386,8 +2598,181 @@
               }
             }
           },
+          "403": {
+            "description": "A generation session may not dismiss",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No open suggestion with this id for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/draft": {
+      "put": {
+        "tags": ["suggestions"],
+        "summary": "Make a reply draft a suggestions generation session wrote the draft of an\nopen reply suggestion. Nothing is sent.",
+        "operationId": "attach_suggestion_draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the draft is now the suggestion's, replacing its old one, and what to fix when it isn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may attach a draft",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the user, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/restore": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller, or their own agent, takes back dismissing a suggestion, within\nfive minutes of it.",
+        "operationId": "restore_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Open again, as proposed; a run the dismissal stopped stays stopped"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not restore",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No suggestion with this id for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not dismissed in the last five minutes, or a routine suggestion",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2510,7 +2895,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "The suggestion's `updatedAt` as the caller read it. A background suggestion runs\nonly if it is unchanged since; otherwise the answer is 409."
+            "description": "The suggestion's `updatedAt` as the caller read it. A background suggestion runs\nonly if it is unchanged since and no run of it is still settling;\notherwise the answer is 409."
           }
         }
       },
@@ -2859,6 +3244,23 @@
           }
         ],
         "description": "The source of an entity's custom icon."
+      },
+      "AttachDraft": {
+        "type": "object",
+        "description": "A reply draft a session wrote for an open reply suggestion, as the user,\nthrough `macro.email.createDraft`. It replaces the suggestion's draft, if any;\nnothing is ever sent.",
+        "required": ["emailDraftId", "reason"],
+        "properties": {
+          "emailDraftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The email draft: an unsent draft in one of the user's own inboxes, in\nthe thread the suggestion is about."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          }
+        },
+        "additionalProperties": false
       },
       "CatalogEntry": {
         "type": "object",
@@ -3930,6 +4332,85 @@
           }
         }
       },
+      "FeedCounts": {
+        "type": "object",
+        "description": "How many of a person's shown suggestions have each status.",
+        "required": ["open", "running", "failed", "done"],
+        "properties": {
+          "done": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Done in the last 24 hours.",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Their last run failed.",
+            "minimum": 0
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Open, nothing under way.",
+            "minimum": 0
+          },
+          "running": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Their run is under way.",
+            "minimum": 0
+          }
+        }
+      },
+      "GenerationOverview": {
+        "type": "object",
+        "description": "The person's generations now, for the web app to show and poll.",
+        "required": ["state"],
+        "properties": {
+          "lastFinishedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the latest one that ended ended."
+          },
+          "lastOutcome": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SuggestionGenerationStatus",
+                "description": "How the latest one that ended ended."
+              }
+            ]
+          },
+          "regenerateAvailableAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the person may next ask for fresh suggestions, while they may\nnot; absent when they may (or must wait only for the running one)."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the running one started."
+          },
+          "state": {
+            "$ref": "#/components/schemas/GenerationState",
+            "description": "Whether one is running."
+          },
+          "trigger": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GenerationTrigger",
+                "description": "The running one's trigger."
+              }
+            ]
+          }
+        }
+      },
       "GenerationStarted": {
         "type": "object",
         "description": "What starting a generation did.",
@@ -3941,10 +4422,20 @@
           }
         }
       },
+      "GenerationState": {
+        "type": "string",
+        "description": "Whether one of the person's generations is running.",
+        "enum": ["idle", "running"]
+      },
       "GenerationStatus": {
         "type": "string",
         "description": "Where a person's suggestions are in being generated.",
         "enum": ["none", "generating", "ready", "failed"]
+      },
+      "GenerationTrigger": {
+        "type": "string",
+        "description": "What starts a generation: a person finishing onboarding, their night, or\nthe person asking for fresh suggestions. Shared by everything a\ngeneration's sessions write.",
+        "enum": ["onboarding", "nightly", "manual"]
       },
       "GithubSelector": {
         "type": "object",
@@ -4180,6 +4671,34 @@
         },
         "additionalProperties": false
       },
+      "RegenerationCooldown": {
+        "type": "object",
+        "description": "Fresh suggestions weren't started: the person asked within the hour.",
+        "required": ["availableAt"],
+        "properties": {
+          "availableAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When they may ask again."
+          }
+        }
+      },
+      "RegenerationRefusal": {
+        "type": "string",
+        "description": "Why fresh suggestions weren't started.",
+        "enum": ["running"]
+      },
+      "RegenerationRunning": {
+        "type": "object",
+        "description": "Fresh suggestions weren't started: a generation is running.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/RegenerationRefusal",
+            "description": "Why."
+          }
+        }
+      },
       "RetireSuggestion": {
         "type": "object",
         "description": "Retiring an open suggestion that no longer fits.",
@@ -4206,7 +4725,7 @@
       },
       "ReviewedState": {
         "type": "string",
-        "description": "Where one of the person's suggestions is, for a routines session\nmanaging them.",
+        "description": "Where one of the person's routine suggestions is.",
         "enum": ["open", "dismissed", "retired", "saved"]
       },
       "ReviewedSuggestion": {
@@ -4516,6 +5035,21 @@
         },
         "additionalProperties": false
       },
+      "RoutineSentencePart": {
+        "type": "object",
+        "description": "A part of a routine's sentence.",
+        "required": ["text", "picked"],
+        "properties": {
+          "picked": {
+            "type": "boolean",
+            "description": "It is a value AI picked, which the person can change."
+          },
+          "text": {
+            "type": "string",
+            "description": "What it says."
+          }
+        }
+      },
       "RoutineSoFar": {
         "type": "object",
         "description": "The routine a step is added to or changed in.",
@@ -4739,6 +5273,24 @@
           }
         }
       },
+      "RoutineText": {
+        "type": "object",
+        "description": "How a routine suggestion's drafted routine reads on its card.",
+        "required": ["sentence", "when"],
+        "properties": {
+          "sentence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSentencePart"
+            },
+            "description": "What it does: a step's sentence with the values AI picked marked, or\nits description (else its name) as one unmarked part."
+          },
+          "when": {
+            "type": "string",
+            "description": "When it runs, e.g. \"Fridays at 9:00 AM\" or \"New email received\"."
+          }
+        }
+      },
       "RoutineTrigger": {
         "oneOf": [
           {
@@ -4836,18 +5388,6 @@
         "description": "How a prompt suggestion runs.",
         "enum": ["composer", "background"]
       },
-      "RunProgress": {
-        "type": "string",
-        "description": "How a run is going, as its session says.",
-        "enum": [
-          "running",
-          "needs_approval",
-          "needs_input",
-          "finished",
-          "failed",
-          "unknown"
-        ]
-      },
       "RunStart": {
         "oneOf": [
           {
@@ -4905,6 +5445,20 @@
           }
         ],
         "description": "What started a run, for its page."
+      },
+      "RunStateName": {
+        "type": "string",
+        "description": "A run's state without its data: how it is stored and served.",
+        "enum": [
+          "starting",
+          "running",
+          "waiting",
+          "stopping",
+          "cancelling",
+          "finished",
+          "failed",
+          "cancelled"
+        ]
       },
       "RunVisibility": {
         "type": "string",
@@ -5422,7 +5976,9 @@
               "produced",
               "createdAt",
               "updatedAt",
-              "stateChangedAt"
+              "stateChangedAt",
+              "status",
+              "isNew"
             ],
             "properties": {
               "about": {
@@ -5459,12 +6015,27 @@
                 "description": "0 to 100, for ordering.",
                 "minimum": 0
               },
+              "isNew": {
+                "type": "boolean",
+                "description": "Proposed since the person last opened their feed. Only the feed sets\nit; false everywhere else."
+              },
               "produced": {
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/Target"
                 },
                 "description": "What acting on it produced."
+              },
+              "result": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Target",
+                    "description": "What to open to see how acting on it went, only while it is done or\nits latest run failed: the first item its latest, finished run made\n(else that run's session), a failed run's session, or what was made\nfrom a done suggestion that didn't run."
+                  }
+                ]
               },
               "run": {
                 "oneOf": [
@@ -5490,6 +6061,10 @@
                 "type": ["string", "null"],
                 "description": "Why it was resolved; only on resolved suggestions."
               },
+              "status": {
+                "$ref": "#/components/schemas/SuggestionStatus",
+                "description": "What the card shows: whether it is open, being run, failed or done."
+              },
               "summary": {
                 "type": "string",
                 "description": "Why, in a line or two."
@@ -5510,7 +6085,7 @@
       },
       "SuggestionChanged": {
         "type": "object",
-        "description": "The suggestion changed since the caller read it.",
+        "description": "The suggestion changed since the caller read it, or can't run until its\nlast run settles.",
         "required": ["message", "suggestion"],
         "properties": {
           "message": {
@@ -5523,24 +6098,46 @@
           }
         }
       },
+      "SuggestionDraft": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Target",
+            "description": "The email thread it is in, with the draft as the part."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "preview": {
+                "type": ["string", "null"],
+                "description": "The start of its plain text, as it was when attached."
+              }
+            }
+          }
+        ],
+        "description": "A reply suggestion's draft."
+      },
       "SuggestionFeed": {
         "type": "object",
-        "description": "A person's feed: their open suggestions, best first, and the ones they\nfinished in the last day, newest first.",
-        "required": ["suggestions", "done"],
+        "description": "A person's feed: their open suggestions, best first, and the ones they\nfinished in the last day, newest first. Both lists are in the order to\nshow them.",
+        "required": ["suggestions", "counts"],
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/FeedCounts",
+            "description": "How many suggestions the whole feed holds of each status, whatever the\n`limit`."
+          },
           "done": {
-            "type": "array",
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/Suggestion"
             },
-            "description": "Suggestions done in the last 24 hours, with what they produced."
+            "description": "Suggestions done in the last 24 hours, with what they produced; left\nout when the feed was read with a `limit`."
           },
           "suggestions": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Suggestion"
             },
-            "description": "The open suggestions."
+            "description": "The open suggestions, at most `limit` of them."
           }
         }
       },
@@ -5548,6 +6145,18 @@
         "type": "string",
         "description": "Who suggests a routine.",
         "enum": ["for_you", "macro"]
+      },
+      "SuggestionGenerationStatus": {
+        "type": "string",
+        "description": "Where a generation is.",
+        "enum": [
+          "generating",
+          "ready",
+          "partial",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ]
       },
       "SuggestionKind": {
         "oneOf": [
@@ -5589,14 +6198,23 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "#/components/schemas/Target",
-                    "description": "The draft made for it, once made."
+                    "$ref": "#/components/schemas/SuggestionDraft",
+                    "description": "A reply suggestion's draft, once a session wrote one: the email thread\nit is in, with the draft as the part."
                   }
                 ]
+              },
+              "from": {
+                "type": ["string", "null"],
+                "description": "A reply suggestion's: that message's sender, by name."
               },
               "kind": {
                 "type": "string",
                 "enum": ["entity"]
+              },
+              "waitingSince": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "A reply suggestion's: when the message the person hasn't answered\ncame, as read from its item when the suggestion was last written."
               }
             }
           },
@@ -5608,6 +6226,17 @@
               "kind": {
                 "type": "string",
                 "enum": ["routine"]
+              },
+              "routine": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RoutineText",
+                    "description": "How its drafted routine reads, in the feed only; absent when the\nroutine suggestion couldn't be read."
+                  }
+                ]
               },
               "routineSuggestionId": {
                 "type": "string",
@@ -5641,21 +6270,26 @@
       "SuggestionRun": {
         "type": "object",
         "description": "A run of a background prompt suggestion: a hidden agent session of the\nperson's, with the full toolset, that never stops to ask.",
-        "required": ["sessionId", "startedAt", "progress"],
+        "required": ["sessionId", "startedAt", "state", "stateChangedAt"],
         "properties": {
-          "progress": {
-            "$ref": "#/components/schemas/RunProgress",
-            "description": "How it is going, read from the session."
-          },
           "sessionId": {
             "type": "string",
             "format": "uuid",
-            "description": "The agent session: open it to see the result or answer what it\nwaits for."
+            "description": "The agent session: open it to see the result."
           },
           "startedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When it started."
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunStateName",
+            "description": "Where it is, as stored: reading it never asks the session."
+          },
+          "stateChangedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it entered `state`."
           }
         }
       },
@@ -5670,6 +6304,11 @@
           "resolved",
           "retired"
         ]
+      },
+      "SuggestionStatus": {
+        "type": "string",
+        "description": "What a suggestion's card shows, from its state and its latest run.",
+        "enum": ["open", "running", "failed", "done", "closed"]
       },
       "SuggestionWriteOutcome": {
         "type": "object",

@@ -15,4 +15,5 @@ export const TeamJoinKind = {
   invite_accepted: 'invite_accepted',
   domain_auto_join: 'domain_auto_join',
   invite_link: 'invite_link',
+  team_agent: 'team_agent',
 } as const;

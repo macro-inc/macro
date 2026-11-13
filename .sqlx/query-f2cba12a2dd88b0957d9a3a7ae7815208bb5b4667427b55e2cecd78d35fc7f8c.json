@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT running.trigger AS \"running_trigger?\",\n                   running.started_at AS \"running_started_at?\",\n                   ended.status AS \"ended_status?\",\n                   ended.finished_at AS \"ended_at?\",\n                   manual.status AS \"manual_status?\",\n                   manual.attempt AS \"manual_attempt?\",\n                   manual.started_at AS \"manual_started_at?\"\n               FROM (SELECT 1) AS one\n               LEFT JOIN LATERAL (\n                   SELECT trigger, started_at FROM suggestion_generation\n                   WHERE user_id = $1 AND status = 'generating'\n                   LIMIT 1) AS running ON true\n               LEFT JOIN LATERAL (\n                   SELECT status, finished_at FROM suggestion_generation\n                   WHERE user_id = $1 AND status <> 'generating'\n                   ORDER BY started_at DESC\n                   LIMIT 1) AS ended ON true\n               LEFT JOIN LATERAL (\n                   SELECT status, attempt, started_at FROM suggestion_generation\n                   WHERE user_id = $1 AND trigger = $2\n                   ORDER BY started_at DESC\n                   LIMIT 1) AS manual ON true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "running_trigger?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "running_started_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "ended_status?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "ended_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "manual_status?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "manual_attempt?",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "manual_started_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "f2cba12a2dd88b0957d9a3a7ae7815208bb5b4667427b55e2cecd78d35fc7f8c"
+}
