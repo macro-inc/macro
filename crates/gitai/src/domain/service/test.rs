@@ -317,7 +317,7 @@ async fn ingesting_the_mixed_upload_stores_only_the_macro_repository() {
 
 #[tokio::test]
 async fn a_retried_batch_counts_nothing_twice() {
-    let (service, _, index, metrics) = service();
+    let (service, objects, index, metrics) = service();
     let credential = mint(&service).await;
     let body = fixture_body("metrics-upload-mixed.json");
 
@@ -329,6 +329,14 @@ async fn a_retried_batch_counts_nothing_twice() {
         .ingest_metrics(&device(&service, &credential).await, &headers(), &body)
         .await
         .unwrap();
+
+    // Same batch id, so the retry overwrote its own objects.
+    let raw = objects
+        .keys(Bucket::Events)
+        .into_iter()
+        .filter(|key| key.starts_with("raw/"))
+        .count();
+    assert_eq!(raw, 1);
 
     let state = index.state.lock().unwrap();
     assert_eq!(state.sessions["s_5b121f435f7f3f"].event_count, 5);

@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashSet};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest as _, Sha256};
 use tracing::field::Empty;
-use uuid::Uuid;
 
 use super::ingest::{
     CommitRecord, EventError, IngestPlan, SessionChunk, StoredLine, TokenBucket, TokenDelta, jsonl,
@@ -343,6 +343,16 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
         span.record("sessions", plan.sessions.len());
         span.record("token_buckets", plan.token_buckets.len());
 
+        // S3 first: the table only ever points at objects that exist. The
+        // batch id is a hash of who sent what, so a retried batch overwrites
+        // its own objects instead of adding copies (within the same hour
+        // partition; a retry that crosses one writes a second copy).
+        let batch_id = batch_id(identity, body);
+        self.store_objects(&plan, &batch_id).await?;
+        self.index_plan(&plan).await?;
+
+        // Counted once the batch is stored, so a failed attempt and its
+        // retry count once.
         for (event, result, count) in plan.tally.iter() {
             self.metrics.record(Metric::Events {
                 event,
@@ -351,10 +361,6 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
             });
         }
         self.record_redaction(&plan.redaction);
-
-        // S3 first: the table only ever points at objects that exist.
-        self.store_objects(&plan).await?;
-        self.index_plan(&plan).await?;
         Ok(plan.errors)
     }
 
@@ -377,8 +383,7 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
             .map_err(internal)
     }
 
-    async fn store_objects(&self, plan: &IngestPlan) -> Result<(), GitaiError> {
-        let batch_id = Uuid::now_v7().simple().to_string();
+    async fn store_objects(&self, plan: &IngestPlan, batch_id: &str) -> Result<(), GitaiError> {
         let received_at = plan.envelope.received_at;
 
         if !plan.raw_events.is_empty() {
@@ -389,7 +394,7 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
             let body = jsonl_zst(lines).map_err(internal)?;
             self.put(
                 Bucket::Events,
-                &layout::raw_key(received_at, &batch_id),
+                &layout::raw_key(received_at, batch_id),
                 body,
                 ZSTD_JSONL,
             )
@@ -412,7 +417,7 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
         }
         for (repository, commits) in commits_by_repository {
             let body = jsonl_zst(commits).map_err(internal)?;
-            let key = layout::commits_key(repository, received_at, &batch_id);
+            let key = layout::commits_key(repository, received_at, batch_id);
             self.put(Bucket::Events, &key, body, ZSTD_JSONL).await?;
         }
 
@@ -420,7 +425,7 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
             let body = jsonl_zst(&plan.token_buckets).map_err(internal)?;
             self.put(
                 Bucket::Events,
-                &layout::usage_key(received_at, &batch_id),
+                &layout::usage_key(received_at, batch_id),
                 body,
                 ZSTD_JSONL,
             )
@@ -441,7 +446,7 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
         }
         if !index_lines.is_empty() {
             let body = jsonl(index_lines).map_err(internal)?;
-            let key = layout::session_index_key(received_at, &batch_id);
+            let key = layout::session_index_key(received_at, batch_id);
             self.put(Bucket::Sessions, &key, body, JSONL).await?;
         }
         Ok(())
@@ -760,6 +765,16 @@ impl<Objects: ObjectStore, Index: IndexStore, Metrics: IngestMetrics>
         })
         .await
     }
+}
+
+/// Hex of the first 16 bytes of SHA-256(credential id, body): the same
+/// upload from the same device always gets the same id.
+fn batch_id(identity: &DeviceIdentity, body: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(identity.credential_id.to_string().as_bytes());
+    hasher.update(b"\n");
+    hasher.update(body);
+    hex::encode(hasher.finalize().get(..16).unwrap_or_default())
 }
 
 /// How a failed client request is counted.

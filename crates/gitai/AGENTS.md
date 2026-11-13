@@ -77,20 +77,22 @@ Events bucket (versioned, kept; IA after 90 days):
 
 | Key | Holds |
 | --- | --- |
-| `raw/v=1/dt=<date>/hour=<hh>/<uuidv7>.jsonl.zst` | Kept non-transcript events, one line each: `{"envelope", "event"}` |
+| `raw/v=1/dt=<date>/hour=<hh>/<batch id>.jsonl.zst` | Kept non-transcript events, one line each: `{"envelope", "event"}` |
 | `notes/<aa>/<sha>` | Latest note text (redacted) |
-| `commits/repo=<owner>__<name>/dt=<date>/<uuidv7>.jsonl.zst` | One `CommitRecord` row per commit |
-| `usage/dt=<date>/<uuidv7>.jsonl.zst` | One `TokenBucket` row per bucket revision |
+| `commits/repo=<owner>__<name>/dt=<date>/<batch id>.jsonl.zst` | One `CommitRecord` row per commit |
+| `usage/dt=<date>/<batch id>.jsonl.zst` | One `TokenBucket` row per bucket revision |
 
 Sessions bucket (unversioned; expires after 180 days):
 
 | Key | Holds |
 | --- | --- |
 | `sessions/tool=<tool>/sid=<session id>/<first ts, 10 digits>-<chunk id>.jsonl.zst` | One batch's lines of one session, oldest first; each `{"envelope", "event"}`, the transcript line is `event.v["0"]` |
-| `session-index/dt=<date>/<uuidv7>.jsonl` | One line per chunk written |
+| `session-index/dt=<date>/<batch id>.jsonl` | One line per chunk written |
 
 `envelope` = `{received_at, credential_id, email, hostname, distinct_id,
-client_version}`. Dates are the server's receive time (UTC).
+client_version}`. Dates are the server's receive time (UTC). `<batch id>` is
+the first 16 bytes (hex) of SHA-256 of the credential id and the request
+body, so a retried upload overwrites its own objects.
 
 Table (string `pk`/`sk`, GSI `gsi1` on `gsi1pk`/`gsi1sk`, TTL on
 `expires_at`):
