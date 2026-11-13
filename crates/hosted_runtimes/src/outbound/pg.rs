@@ -40,7 +40,10 @@ const COMPUTER_GUARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::fr
 pub enum PgComputerError {
     /// A database operation failed.
     #[error(transparent)]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
+    /// No connection could be had from the pool in time.
+    #[error("{0}")]
+    Unavailable(#[source] crate::domain::ports::StorageUnavailable),
     /// Stored computer data violates a domain contract.
     #[error("stored computer data is invalid: {0}")]
     Corrupt(String),
@@ -50,6 +53,17 @@ pub enum PgComputerError {
     /// Only fleet and billing effects are stored in the outbox.
     #[error("{0:?} effects are not stored in the outbox")]
     NotAnOutboxWorker(EffectWorker),
+}
+
+impl From<sqlx::Error> for PgComputerError {
+    fn from(error: sqlx::Error) -> Self {
+        match error {
+            sqlx::Error::PoolTimedOut => Self::Unavailable(
+                crate::domain::ports::StorageUnavailable(Box::new(error)),
+            ),
+            error => Self::Sqlx(error),
+        }
+    }
 }
 
 impl From<std::num::TryFromIntError> for PgComputerError {
