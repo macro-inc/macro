@@ -802,6 +802,38 @@ fn a_seed_without_an_owner_is_refused() {
 }
 
 #[tokio::test]
+async fn creating_a_repo_without_a_creator_is_refused() {
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let mut persona = seed();
+    persona.creator_id = None;
+
+    let created = service
+        .create_repo(
+            MacroUserIdStr::try_from(AGENT.to_owned()).unwrap(),
+            TEAM,
+            &persona,
+        )
+        .await;
+
+    assert!(matches!(created, Err(AgentGitError::MissingCreator)));
+}
+
+#[tokio::test]
 async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
     let service = AgentGitServiceImpl::new(
         AgentGitAdapters {

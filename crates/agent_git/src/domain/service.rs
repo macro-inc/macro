@@ -12,7 +12,7 @@ use crate::domain::models::{
 use crate::domain::ports::{
     AgentGitService, GitBackend, PushRateLimiter, RepoRepository, RepoStore, TeamAdmins,
 };
-use crate::domain::template::{PersonaSeed, WorkspaceTemplate};
+use crate::domain::template::{PersonaSeed, RenderError, WorkspaceTemplate};
 use crate::domain::voice::{VOICE_PATH, VoiceConfig};
 
 /// The adapters [`AgentGitServiceImpl`] runs on.
@@ -86,6 +86,15 @@ impl<Repos: RepoRepository, Store, Admins, Limiter, Backend, Flags>
 
 fn internal(error: impl std::error::Error + Send + Sync + 'static) -> AgentGitError {
     AgentGitError::Internal(rootcause::Report::new(error).into_dynamic())
+}
+
+/// A seed without a creator is the caller's mistake; other render failures
+/// are the template's.
+fn render_error(error: RenderError) -> AgentGitError {
+    match error {
+        RenderError::MissingCreator => AgentGitError::MissingCreator,
+        other => internal(other),
+    }
 }
 
 /// Fail the body once it carries more than `limit` bytes, so a single push
@@ -164,7 +173,7 @@ where
                 &self
                     .template
                     .render(&agent_user_id, seed)
-                    .map_err(internal)?,
+                    .map_err(render_error)?,
             )
             .await
             .map_err(internal)?;
@@ -228,7 +237,7 @@ where
                 &self
                     .template
                     .render(&agent_user_id, seed)
-                    .map_err(internal)?,
+                    .map_err(render_error)?,
             )
             .await
             .map_err(internal)?;
