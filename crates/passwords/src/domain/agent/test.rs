@@ -1445,3 +1445,33 @@ async fn a_verification_seed_cannot_reuse_a_request_id_as_its_operation() {
         .unwrap();
     assert_eq!(vault.provider.calls.load(Ordering::SeqCst), seeded);
 }
+
+#[test]
+fn a_patch_clears_the_optional_identifier_but_never_the_secret() {
+    let patch =
+        |json: serde_json::Value| -> AgentSecretPatch { serde_json::from_value(json).unwrap() };
+    let mut stored = values("account", "secret");
+    patch(serde_json::json!({"kind": "login", "username": ""}))
+        .apply(&mut stored)
+        .unwrap();
+    assert_eq!(stored.username.0, "");
+    assert_eq!(stored.password.0, "secret");
+
+    let mut stored = values("key", "secret");
+    patch(serde_json::json!({"kind": "api", "key": ""}))
+        .apply(&mut stored)
+        .unwrap();
+    assert_eq!(stored.username.0, "");
+
+    for empty_secret in [
+        serde_json::json!({"kind": "login", "password": ""}),
+        serde_json::json!({"kind": "api", "secret": ""}),
+    ] {
+        let mut stored = values("account", "secret");
+        assert!(matches!(
+            patch(empty_secret).apply(&mut stored),
+            Err(AgentError::Invalid)
+        ));
+        assert_eq!(stored.password.0, "secret");
+    }
+}

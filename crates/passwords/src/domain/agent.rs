@@ -242,10 +242,15 @@ impl AgentSecretPatch {
             Self::Login { username, password } => (username, password),
             Self::Api { key, secret } => (key, secret),
         };
-        for value in [&username, &password].into_iter().flatten() {
-            if value.0.is_empty() || value.0.len() > MAX_SLOT {
-                return Err(AgentError::Invalid);
-            }
+        // The identifier is optional, as on create, so an empty one clears it.
+        if username
+            .as_ref()
+            .is_some_and(|value| value.0.len() > MAX_SLOT)
+            || password
+                .as_ref()
+                .is_some_and(|value| value.0.is_empty() || value.0.len() > MAX_SLOT)
+        {
+            return Err(AgentError::Invalid);
         }
         if let Some(username) = username {
             values.username = username;
