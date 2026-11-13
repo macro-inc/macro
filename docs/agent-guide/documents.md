@@ -84,8 +84,14 @@ and Channels sections with Off using the same account and search. Check section
 order, row order, View all and paging. Pick a document, task and channel by both
 keyboard and pointer; the literal search must disappear and the referenced
 mention must render at the current caret after tracking completes. The native
-document/channel provider activation does not qualify the remaining date, group,
-booking, contact or agent-session insertion kinds.
+document/channel provider activation does not qualify group, booking, contact or
+agent-session insertion kinds. For native dates, pick the same date-provider row
+by keyboard and pointer in both engines. Check that search removal precedes
+insertion, that the displayed date matches the selected row, and that subsequent
+typing uses the current caret. Compare the raw date and display-format fields,
+undo, and a fresh reopen after the matching acknowledgement and committed WAL
+write. A retired, stale-generation or read-only view must not read date payload
+getters or insert a date; the next editable interaction must still work.
 
 In the native body, `#` opens the same tags menu as the Off engine: after a
 space, an opening bracket or a quote, and not inside code. Filter by typing,

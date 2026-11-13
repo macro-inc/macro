@@ -17,7 +17,7 @@
 
 - Dispatch native application commands a reader can reach (menu search close, mention preview collapse, diff accept/reject, checklist filters) through `dispatchApplicationCommandIfSessionEdit` or `dispatchApplicationCommandSettledIfSessionEdit`: it checks actual Session access at admission, and a ReadOnly refusal is a fatal session error that closes the editor.
 
-- Validate native mention provider wiring with the shared menu and real settled input; preserve Source section/row order and View all, REMOVE before tracking, and current model selection after tracking. Keep remaining kinds and live-service browser coverage explicit.
+- Validate native mention provider wiring with the shared menu and real settled input; preserve Source section/row order and View all, REMOVE before tracking, and current model selection after tracking. Build date payloads only inside admitted SessionEdit factories after search removal; retain generation, access and retirement fences. Keep remaining kinds and live-service browser coverage explicit.
 
 - Preserve Source call-expression order at overlay host seams: capture initial dependencies inside the async action and use lazy payload builders when a callee getter must run before payload getters.
 

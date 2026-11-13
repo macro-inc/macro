@@ -1,7 +1,9 @@
 import type { EntityItem } from '@core/context/quickAccess';
+import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { selectionMessage } from '@macro-inc/lexical-wasm-view/view/session-port';
 import {
+  handleDateMentionWithInsertion,
   handleEntityMentionWithInsertion,
   tracksMentions,
 } from '../../component/menu/MentionsMenu/utils/mentionHandlers';
@@ -33,6 +35,36 @@ export function createNativeUserMentionMenuHost(
   const { blockName, sourceDocumentId, onUserMention, disableMentionTracking } =
     source;
   const active = () => alive() && view.isMounted;
+  async function selectDate(dateOption: DateOption): Promise<void> {
+    const generation = view.mirror.keyGeneration;
+    if (!active() || generation === null) return;
+    const port = view.port;
+    if (!port.inputSettledIfSessionEdit)
+      throw new Error('Date mentions require settled session edit admission');
+    const inputSettled = port.inputSettledIfSessionEdit.bind(port);
+    const current = () => active() && view.mirror.keyGeneration === generation;
+    const command = async (name: string, buildPayload: () => unknown) => {
+      if (!current()) return false;
+      const result = await inputSettled(
+        () => ({
+          name,
+          json: JSON.stringify(buildPayload()),
+          generation,
+          selection: selectionMessage({ kind: 'keep' }),
+        }),
+        { admit: current }
+      );
+      if (result.status === 'error') throw result.error;
+      return result.status === 'success';
+    };
+    if (!(await command('group-a.search-remove', () => ({}))) || !current())
+      return;
+    await handleDateMentionWithInsertion(dateOption, () => ({
+      async insert(buildPayload) {
+        await command('group-a.insert-date-mention', buildPayload);
+      },
+    }));
+  }
   async function selectEntity(item: EntityItem): Promise<void> {
     const generation = view.mirror.keyGeneration;
     if (!active() || generation === null) return;
@@ -87,9 +119,10 @@ export function createNativeUserMentionMenuHost(
     },
     async select(item) {
       if (item.kind === 'entity') return await selectEntity(item);
+      if (item.kind === 'date') return await selectDate(item.data);
       if (item.kind !== 'user')
         throw new Error(
-          'This native mention stage supports user and document entity choices only'
+          'This native mention stage supports user, date and document entity choices only'
         );
       if (!active()) return;
       const removal = await dispatchApplicationCommandSettled(
