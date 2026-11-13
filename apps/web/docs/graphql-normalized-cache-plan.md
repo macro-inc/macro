@@ -313,10 +313,10 @@ replaying delivery. This context never enters GraphQL extensions or the wire.
 
 A subscription whose payloads no reader takes from the cache opts out of these
 effects with the exchange's `isUncachedSubscription` option; its results are
-delivered unchanged. `ActivityUpdates` is one: a push only names the entity
-whose mounted activity queries refetch, and a bulk upload or delete sends one
-push per item to everyone with access. Writing each would advance the revision
-and make every open list and live query read again.
+delivered unchanged. `ActivityUpdates` is one: a push only tells mounted
+activity queries to refetch, and a bulk upload or delete sends one push per
+item to everyone with access. Writing each would advance the revision and make
+open lists and broadly registered live queries read again.
 
 Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
 or defer requests wait for storage and retain their position ahead of later

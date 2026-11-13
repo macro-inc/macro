@@ -10,8 +10,8 @@ export const ACTIVITY_PUSH_DEBOUNCE_MS = 300;
 export const ACTIVITY_PUSH_JITTER_MS = 700;
 
 /**
- * A push only names the entity whose mounted activity queries refetch; no
- * reader takes pushed events from the cache. A bulk upload or delete sends one
+ * A push only tells mounted activity queries to refetch; no reader takes
+ * pushed events from the cache. A bulk upload or delete sends one
  * push per item to everyone with access to the folder.
  */
 export function isActivityUpdatesSubscription(operation: Operation): boolean {

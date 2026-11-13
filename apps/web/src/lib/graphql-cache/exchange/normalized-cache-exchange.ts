@@ -480,9 +480,9 @@ export interface NormalizedCacheExchangeOptions {
   mutationQueueTelemetry?: MutationQueueTelemetry;
   /**
    * True for a subscription whose payloads no reader takes from the cache,
-   * such as a signal that only names what to refetch. Its results are
+   * such as a signal that only tells queries to refetch. Its results are
    * delivered without a cache write: every write advances the revision, and
-   * each open list and live query then reads again.
+   * open lists and broadly registered live queries then read again.
    */
   isUncachedSubscription?: (operation: Operation) => boolean;
 }
