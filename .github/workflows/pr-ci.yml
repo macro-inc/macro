@@ -481,7 +481,6 @@ jobs:
             - 'tooling/xtask/**/Cargo.toml'
             - 'Cargo.lock'
             - 'deny.toml'
-            - '.github/advisory-db-rev'
             - '.github/workflows/cargo_deny.yml'
           workspace_dependencies:
             - 'Cargo.toml'

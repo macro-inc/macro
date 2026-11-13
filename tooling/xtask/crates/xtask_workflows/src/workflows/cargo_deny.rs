@@ -2,24 +2,27 @@
 //! workspace on PRs that touch manifests. Generated into `cargo_deny.yml`
 //! (replaces the hand-written `cargo-deny.yml`).
 //!
-//! Advisories come from the RustSec database at the commit in
-//! [`ADVISORY_DB_REV`], never the live one, so a newly published advisory
-//! can't fail every PR at once. [`super::advisory_db_bump`] moves the pin in a
-//! PR of its own, which is the one a new advisory fails.
+//! Advisories come from the live RustSec database, so one published against a
+//! package already in `Cargo.lock` would fail every PR that touches Cargo
+//! files until `main` changes. A PR therefore fails only on advisories against
+//! packages it adds to `Cargo.lock` (`scripts/cargo_deny_new_advisories.ts`);
+//! [`super::cargo_deny_advisories`] fails on the rest, daily on `main`.
 
 use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
-use xtask_paths::{RepoFile, RepoGlob};
+use xtask_paths::RepoGlob;
 
-use crate::workflows::runners;
+use crate::workflows::{runners, steps};
 
-/// The RustSec advisory-db commit cargo-deny reads.
-pub const ADVISORY_DB_REV: RepoFile<'static> = xtask_paths::repo_file!(".github/advisory-db-rev");
+#[cfg(test)]
+mod test;
 
-/// Where cargo-deny opens the default database: `db-path` in `deny.toml`, then
-/// a directory cargo-deny names after a hash of the database URL. If a newer
-/// cargo-deny names it differently, `--disable-fetch` finds no database and
-/// the check fails, never passes.
-const ADVISORY_DB_DIR: &str = "target/advisory-dbs/advisory-db-3157b0e258782691";
+/// The cargo-deny release both workflows run, and the SHA-256 of its
+/// `x86_64-unknown-linux-musl` archive.
+const CARGO_DENY_VERSION: &str = "0.19.8";
+const CARGO_DENY_SHA256: &str = "70e769ae3872e34d45132b17040859175e11401dc12dddb0303e0b8c7d088f3f";
+
+/// cargo-deny's arguments before `check`, in both workflows.
+const DENY_ARGS: &str = "--all-features --manifest-path Cargo.toml";
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
@@ -29,7 +32,6 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"),
     xtask_paths::repo_glob!("Cargo.lock"),
     xtask_paths::repo_glob!("deny.toml"),
-    RepoGlob::new(ADVISORY_DB_REV.as_str()),
     xtask_paths::repo_glob!(".github/workflows/cargo_deny.yml"),
 ];
 
@@ -40,18 +42,28 @@ pub fn cargo_deny() -> Workflow {
         .add_job("cargo-deny", cargo_deny_job())
 }
 
-/// The deny action ships its own musl cargo-deny binary — no toolchain, no
-/// cache volume needed. Small suffices.
 fn cargo_deny_job() -> Job {
     Job::default()
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
-        .add_step(checkout())
-        .add_step(fetch_advisory_db())
-        .add_step(deny("--disable-fetch"))
+        // `PR CI` checks out the PR's merge commit, whose first parent is the
+        // base: the advisories step reads the base's `Cargo.lock` from it.
+        .add_step(checkout().add_with(("fetch-depth", 2)))
+        .add_step(steps::setup_rust_light())
+        .add_step(install_cargo_deny())
+        .add_step(deny("bans licenses sources"))
+        .add_step(
+            Step::new("cargo deny check advisories, for packages this PR adds")
+                .run(steps::node_script(include_str!(
+                    "scripts/cargo_deny_new_advisories.ts"
+                )))
+                .shell("bash")
+                .add_env(("DENY_ARGS", DENY_ARGS))
+                .add_env(("BASE_REV", "HEAD^1")),
+        )
 }
 
-fn checkout() -> Step<Use> {
+pub(crate) fn checkout() -> Step<Use> {
     Step::new("Checkout Repo").uses(
         "actions",
         "checkout",
@@ -59,45 +71,29 @@ fn checkout() -> Step<Use> {
     ) // v6
 }
 
-/// Clone the pinned commit where cargo-deny looks for the database. The action
-/// runs in a container that sees only the workspace, so it goes there.
-///
-/// A later `cargo deny check` without `--disable-fetch` runs `git fetch` here,
-/// then resets to the first ref in `FETCH_HEAD`. On this detached clone that
-/// is `main` only because `origin` tracks nothing else; with every branch, it
-/// would be whichever advisory-db branch sorts first. Without a remote, the
-/// fetch would fail and cargo-deny, which ignores that, would stay on the pin.
-pub(crate) fn fetch_advisory_db() -> Step<Run> {
-    Step::new("Fetch the pinned advisory database")
+/// Put the pinned cargo-deny release on `PATH`, after checking its archive.
+/// cargo-deny calls `cargo metadata`, so the toolchain comes first.
+pub(crate) fn install_cargo_deny() -> Step<Run> {
+    Step::new("Install cargo-deny")
         .run(format!(
             indoc::indoc! {r#"
                 set -euo pipefail
-                db={db}
-                rm -rf "$db"
-                git init -q "$db"
-                git -C "$db" remote add -t main origin https://github.com/rustsec/advisory-db
-                git -C "$db" fetch -q --depth 1 origin "$(cat {rev})"
-                git -C "$db" checkout -q --detach FETCH_HEAD
-                echo "advisory-db at $(git -C "$db" log -1 --format='%h %cI')"
+                name=cargo-deny-{version}-x86_64-unknown-linux-musl
+                curl -fsSL -o "$RUNNER_TEMP/$name.tar.gz" \
+                  "https://github.com/EmbarkStudios/cargo-deny/releases/download/{version}/$name.tar.gz"
+                echo "{sha256}  $RUNNER_TEMP/$name.tar.gz" | sha256sum --check --quiet
+                tar -xzf "$RUNNER_TEMP/$name.tar.gz" -C "$RUNNER_TEMP"
+                echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
             "#},
-            db = ADVISORY_DB_DIR,
-            rev = ADVISORY_DB_REV.as_str(),
+            version = CARGO_DENY_VERSION,
+            sha256 = CARGO_DENY_SHA256,
         ))
         .shell("bash")
 }
 
-/// `cargo deny check` with the given check arguments, reading the database
-/// [`fetch_advisory_db`] cloned.
-pub(crate) fn deny(check_arguments: &str) -> Step<Use> {
-    Step::new("cargo deny")
-        .uses(
-            "EmbarkStudios",
-            "cargo-deny-action",
-            "bb137d7af7e4fb67e5f82a49c4fce4fad40782fe",
-        ) // v2
-        .add_with((
-            "manifest-path",
-            xtask_paths::repo_file!("Cargo.toml").as_str(),
-        ))
-        .add_with(("command-arguments", check_arguments))
+/// `cargo deny check` with the given checks.
+pub(crate) fn deny(checks: &str) -> Step<Run> {
+    Step::new(format!("cargo deny check {checks}"))
+        .run(format!("cargo-deny {DENY_ARGS} check {checks}"))
+        .shell("bash")
 }

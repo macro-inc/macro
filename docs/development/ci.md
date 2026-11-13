@@ -21,18 +21,13 @@ generated from Rust; see the
 
 ## RustSec advisories
 
-The `cargo deny` check reads the RustSec advisory database at the commit in
-`.github/advisory-db-rev`, not the live one, so a newly published advisory
-can't fail every PR that touches Cargo files. Each day the `Advisory DB Bump`
-workflow moves the pin to the latest commit, in one PR from the
-`ci/advisory-db-bump` branch, and writes into its description whether
-cargo-deny passes on the new pin. Whoever owns CI health owns that PR: if it
-fails, push the fix (update the crate, or ignore the advisory in `deny.toml`
-with a reason) to that branch, add `run-ci`, and merge. Its later runs add
-commits on top of yours.
+`cargo deny` reads the live RustSec advisory database. On a PR it fails only
+on advisories against packages the PR adds to `Cargo.lock`: a name and
+version the base's lockfile doesn't have. An advisory published against a
+package already on `main` doesn't fail PRs. The daily `cargo deny advisories`
+workflow fails on it instead, and a failed run posts to the Macro Alerts
+channel. The CI owner fixes it on `main`: update the crate, or ignore the
+advisory in `deny.toml` with a reason.
 
-To check the pinned database locally from the repository root, run the
-commands of the `Fetch the pinned advisory database` step in
-`.github/workflows/cargo_deny.yml`, then `cargo deny check --disable-fetch`.
-A plain `cargo deny check` moves that clone to the latest database, which is
-what the next bump will see.
+Locally, `cargo deny check advisories` reports every advisory, as the daily
+run does.

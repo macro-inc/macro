@@ -25,11 +25,17 @@ secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
 secret!(MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64);
 secret!(MACOS_RELEASE_DOPPLER_TOKEN);
+secret!(MACRO_BUILD_ALERT_BOT_TOKEN);
 secret!(NIX_CACHE_SIGNING_KEY);
 secret!(POSTHOG_API_KEY);
 secret!(PULUMI_ACCESS_TOKEN);
 secret!(SEGMENT_WRITE_KEY);
 secret!(SEGMENT_WRITE_KEY_PRODUCTION);
+
+/// Webhook that posts to the Macro Alerts channel, a repo *variable*; it takes
+/// [`MACRO_BUILD_ALERT_BOT_TOKEN`] in an `x-macro-channel-bot-token` header.
+/// The hand-written `alert-native-build-failures.yml` posts there too.
+pub const MACRO_BUILD_ALERT_WEBHOOK_URL: &str = "${{ vars.MACRO_BUILD_ALERT_WEBHOOK_URL }}";
 
 /// Cloudflare account id. A repo *variable* (not a secret).
 pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
