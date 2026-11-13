@@ -69,13 +69,15 @@ export function useRoutineRowMenuActions(
   });
   const share = (row: RoutineRow) =>
     openShareRoutineDialog({ routineId: row.id, name: row.name }, owner);
-  const remove = (row: RoutineRow) => {
+  const remove = async (row: RoutineRow) => {
     const entity = operations.entity(row.id);
     if (!entity) return;
-    // Its sub-routines are deleted with it: say how many.
-    const created = source
-      .subRoutines()
-      .filter((routine) => routine.parent?.id === row.id).length;
+    // Everything its runs created is deleted with it, finished one-time
+    // routines too, which the list doesn't hold: say how many.
+    const created =
+      (await operations.createdCount(row.id)) ??
+      source.subRoutines().filter((routine) => routine.parent?.id === row.id)
+        .length;
     openBulkEditModal({
       view: 'delete',
       entities: [entity],
@@ -94,7 +96,7 @@ export function useRoutineRowMenuActions(
     canOpenInNewSplit: () => globalSplitManager()?.canAppendSplit() ?? false,
     onOpenInNewTab: openInNewTab && ((row) => openInNewTab(row.id)),
     onRun: (row) => operations.run(row.id),
-    runPending: (row) => operations.runPendingId() === row.id,
+    runPending: (row) => operations.runPending(row.id),
     onDuplicate: (row) => operations.duplicate(row.id),
     onKeep: (row) => operations.keepAsOwn(row.id),
     onCopyLink: (row) =>
@@ -104,7 +106,7 @@ export function useRoutineRowMenuActions(
     get onShare() {
       return sharing().enabled ? share : undefined;
     },
-    onDelete: remove,
+    onDelete: (row) => fireAndForget(remove(row), 'routines'),
     entity: (row) => operations.entity(row.id),
   };
 }

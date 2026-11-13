@@ -58,9 +58,14 @@ export type RoutineRowOperations = {
   /** The routine as an entity, for links, sharing and delete. */
   entity(id: string): RoutineEntity | undefined;
   run(id: string): void;
-  /** The routine whose "Run now" the server hasn't answered yet. */
-  runPendingId: Accessor<string | undefined>;
+  /** Its "Run now" was chosen and the server hasn't answered yet. */
+  runPending(id: string): boolean;
   duplicate(id: string): void;
   /** Make a sub-routine the owner's own: it stops following its parent. */
   keepAsOwn(id: string): void;
+  /**
+   * How many routines its runs created, finished one-time ones included:
+   * deleting it deletes them all. Undefined when they couldn't be read.
+   */
+  createdCount(id: string): Promise<number | undefined>;
 };

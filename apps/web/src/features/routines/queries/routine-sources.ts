@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
+import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { readEntityAppearance } from '../../entity-appearance/core/appearance';
@@ -25,6 +26,7 @@ import {
 import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
+  fetchChildren,
   invalidateSchedules,
   useChildrenQuery,
   useCodeUpgradesQuery,
@@ -265,6 +267,27 @@ type RowOperationCallbacks = {
 };
 
 /**
+ * One request per routine at a time, for several routines at once: a mutation's
+ * own `isPending` and `variables` cover only its latest call.
+ */
+function createPerRoutineMutation(mutate: (id: string) => Promise<unknown>) {
+  const [pending, setPending] = createSignal<readonly string[]>([]);
+  const settle = async (id: string) => {
+    // The mutation's own callbacks report how it went.
+    await ResultAsync.fromPromise(mutate(id), (error) => error);
+    setPending((ids) => ids.filter((other) => other !== id));
+  };
+  return {
+    start(id: string) {
+      if (pending().includes(id)) return;
+      setPending((ids) => [...ids, id]);
+      fireAndForget(settle(id), 'routines');
+    },
+    pending: (id: string) => pending().includes(id),
+  };
+}
+
+/**
  * What the list's row menus do, over the list's own queries: routines and
  * sub-routines both, since either can be a row.
  */
@@ -297,20 +320,29 @@ export function createRoutineRowOperations(
     onSuccess: () => callbacks.onKept(),
     onError: (error) => callbacks.onError('keep', error),
   });
+  const running = createPerRoutineMutation((id) =>
+    run.mutateAsync({ scheduleId: id })
+  );
+  const duplicating = createPerRoutineMutation(async (id) => {
+    const schedule = find(id);
+    const body = schedule && scheduleToDuplicateBody(schedule);
+    if (body) await duplicate.mutateAsync({ body });
+  });
+  const keeping = createPerRoutineMutation((id) =>
+    keep.mutateAsync({ scheduleId: id })
+  );
   return {
     entity(id) {
       const schedule = find(id);
       return schedule ? scheduleToEntity(schedule) : undefined;
     },
-    run: (id) => run.mutate({ scheduleId: id }),
-    runPendingId: () => (run.isPending ? run.variables?.scheduleId : undefined),
-    duplicate(id) {
-      const schedule = find(id);
-      const body = schedule && scheduleToDuplicateBody(schedule);
-      if (body && !duplicate.isPending) duplicate.mutate({ body });
-    },
-    keepAsOwn(id) {
-      if (!keep.isPending) keep.mutate({ scheduleId: id });
+    run: running.start,
+    runPending: running.pending,
+    duplicate: duplicating.start,
+    keepAsOwn: keeping.start,
+    async createdCount(id) {
+      const created = await fetchChildren(id);
+      return created.isOk() ? created.value.length : undefined;
     },
   };
 }

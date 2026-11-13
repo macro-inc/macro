@@ -16,6 +16,7 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
 import { routineTargetKind } from './routine-draft';
@@ -167,6 +168,21 @@ export function useChildrenQuery(
   enabled: Accessor<boolean>
 ) {
   return useQuery(() => childrenQueryOptions(scheduleId(), enabled()));
+}
+
+/**
+ * Read a routine's children now, as a delete would remove them: fresh, and
+ * without a retry that would hold up the confirmation.
+ */
+export function fetchChildren(scheduleId: string) {
+  return ResultAsync.fromPromise(
+    queryClient.fetchQuery({
+      ...childrenQueryOptions(scheduleId, true),
+      staleTime: 0,
+      retry: false,
+    }),
+    (error) => error
+  );
 }
 
 /** Every active routine another routine's run created. */
