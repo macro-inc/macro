@@ -14,6 +14,7 @@ use super::MailboxError;
 use super::connection::ConnectionSourceError;
 use super::inbox_sync::build_notification_recipients;
 use crate::domain::events::{EmailMacroEvent, LinkReauthRequiredMetadata};
+use crate::domain::notification_events::EmailEventBroker as _;
 use anyhow::{Context, anyhow};
 use macro_event_broker::MacroEventBroker;
 use models_email::service::link::Link;
@@ -135,7 +136,7 @@ where
         // transition, so the event stays edge-triggered.
         let _ = self
             .broker
-            .send_event(&EmailMacroEvent::link_reauth_required(
+            .send_email_event(&EmailMacroEvent::link_reauth_required(
                 LinkReauthRequiredMetadata {
                     link_id: link.id,
                     owner: link.macro_id.clone(),

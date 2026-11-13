@@ -77,7 +77,8 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 
 The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 `macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
-`macro.agent_session_lifecycle`, and `macro.users`. It supports these event names:
+`macro.agent_session_lifecycle`, `macro.users`, `macro.call_notifications`, and
+`macro.email_notifications`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
@@ -105,6 +106,13 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
   `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
+- Email: `email.link_connected`, `email.link_disconnected`,
+  `email.link_reauth_required`, `email.message_received`,
+  `email.message_draft_synced`, `email.message_sent`, `email.message_deleted`,
+  `email.message_send_queued`, `email.message_send_cancelled`,
+  `email.thread_archived`, `email.thread_trashed`, `email.thread_read`,
+  `email.thread_starred`, `email.thread_spam_changed`,
+  `email.thread_project_changed`, and `email.thread_labels_updated`.
 
 Call events use `entity_type = "call"` and the call ID as the entity and
 ordering key. Public events resolve the call's current accessor set before
@@ -112,6 +120,43 @@ matching personal and team webhooks or streaming to a subscriber. Ringing,
 answered, declined, and invited events address one user: only that user's
 personal webhook workspace and personal event stream may receive them. The
 broker's recipient routing field is removed from delivered metadata.
+
+Email message and thread events use `entity_type = "email_thread"` and the
+thread ID as the entity and ordering key. The three `email.link_*` events use
+`entity_type = "email_link"` and the link ID instead. Delivered email events
+go only to the personal webhook workspace whose ID is `metadata.owner` and
+the owner's `scope=user` event stream. Ingestion does no entity-access lookup
+or team-workspace expansion, and team-scoped streams never match.
+
+Creating or patching a webhook, or opening `GET /webhook/events/stream`, with
+any filter event name beginning `email.` requires a directly authenticated
+user credential or an internal service credential acting for a user. Bot and
+harness credentials, including bots acting as a user, receive HTTP 403 with
+`email events require the inbox owner's own credential`. The same credentials
+may not patch any field of, or revalidate, a webhook whose stored filters name
+an `email.*` event, so they cannot redirect, pause, or rename a webhook that
+delivers mail events. Revalidation is refused because a changed endpoint only
+delivers again once it is validated. Webhooks stored before this check existed
+had any `email.*` names removed from their filters by a migration. Webhooks and streams without `email.*` event names retain their
+existing credential behavior.
+
+Email events come from `macro.email_notifications`, not the internal
+`macro.email` topic. The email service publishes each `macro.email` event
+there too, with the same event ID and link-ID key, unless it is internal:
+`email.thread_backfilled`, `email.threads_reindex_requested`, and an
+`email.message_received` with `is_spam_or_trash = true` (as in routines'
+new-mail trigger) never reach it. The rule is
+`EmailNotificationEvent::from_topic_event` in the `email` crate, and the
+OpenAPI and SDK event unions carry `EmailNotificationEvent`, so they list only
+delivered events. The delivered payload is the broker envelope verbatim. Message data is limited to headers such as subject and
+addresses; the envelope never carries bodies, snippets, bcc addresses, or
+attachment names. Consumers read content back through the API. Email topic
+publication is best-effort and can be lost or repeated on retry. Duplicates
+carry the same IDs, so consumers treat events as idempotent state notifications.
+`metadata.origin`, where present, distinguishes Macro user actions from
+provider sync. The consumer group starts new topic partitions at the latest
+offset, so its first subscription to `macro.email_notifications` does not
+replay historical mail events.
 
 For document, channel, and message events, ingestion asks `EntityAccessService`
 for the people who currently have access to the entity; a message's entity is
@@ -173,9 +218,10 @@ channel event, IDs mean `channel_id`. This includes attachment and participant
 events: their attachment and participant IDs are not used for webhook filtering.
 For message events, IDs mean the parent's id (`metadata.parent.id`, a channel
 or document); message ids are not used for webhook filtering. For webhook
-events, IDs mean the subject `webhook_id`;
-an absent or `null` `ids` field matches every webhook ID in the strict owner
-workspace.
+events, IDs mean the subject `webhook_id`; an absent or `null` `ids` field
+matches every webhook ID in the strict owner workspace. For email events, IDs
+mean `thread_id`, except the three `email.link_*` events, where they mean
+`link_id`; message ids are not used for webhook filtering.
 
 The matching query stores filters in the `webhook.filters` `JSONB NOT NULL`
 column, protected by the `webhook_filters_is_array` constraint. It uses the
@@ -213,9 +259,8 @@ reuse the same delivery record.
 
 FIFO preserves the order in which the current consumer enqueues events for one
 webhook. It does not create a global order across Kafka partitions or across the
-`macro.documents`, `macro.channels`, `macro.messages`, and `macro.webhooks`
-topics. Consumers must
-therefore treat the order as observed order, not total event order.
+subscribed Kafka topics. Consumers must therefore treat the order as observed
+order, not total event order.
 
 ## HTTP delivery contract
 
@@ -351,7 +396,12 @@ example:
 RUST_LOG=info,webhook=trace,webhook::outbound::sqs_queue=trace
 ```
 
-Ingestion spans expose event ID/name, entity type/ID, accessor count, workspace
+Each consumed record, in both the ingestion consumer and the process-level
+stream consumer (`messaging.consumer.group.name = webhook-stream`), opens a
+`kafka.process` span parented on the record's propagated trace context, so
+ingestion and stream fan-out join the publishing request's trace.
+Delivery starts its own trace per queue message; correlate it by webhook or
+event ID. Ingestion spans expose event ID/name, entity type/ID, accessor count, workspace
 count, match count, and webhook ID. Worker and delivery spans expose queue
 message ID, webhook/event/delivery/attempt IDs, attempt number, delivery status,
 HTTP status, duration, and retry delay. Queue polling and acknowledgment errors

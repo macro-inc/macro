@@ -849,14 +849,14 @@ the event names already registered with `.on()`. Pass `scope: 'team'` for a
 team workspace (defaults to `'user'`). Delivery is best-effort: there is no
 replay if you disconnect.
 
-Handlers receive the same hydrated payloads as webhook deliveries — ORM
-handles for every entity the event names.
+Handlers receive the same hydrated payloads as webhook deliveries, with entity
+handles attached where the event names a readable entity.
 
-Five families are delivered: `document.*`, `channel.*`, `message.*`, `user.*`,
-and `agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
-`attachment_created`, `attachment_removed`) cover channel messages and document
-comments alike: `metadata.parent` names the channel or document, and the
-hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
+Event families include `document.*`, `channel.*`, `call.*`, `message.*`,
+`user.*`, `agent_session.*`, and `email.*`. Message events (`posted`, `patched`,
+`deleted`, `mentioned`, `attachment_created`, `attachment_removed`) cover channel
+messages and document comments alike: `metadata.parent` names the channel or
+document. The hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
 reply) or a `Document` plus `Comment`. `macro.events.onSelfMention` subscribes to
 `message.mentioned` deliveries that name the caller.
 `user.picture_changed` tells you a user's own profile picture changed (set or
@@ -878,6 +878,47 @@ macro.events.on('agent_session.settled', async ({ metadata, session, thread }) =
   await thread?.reply(msg`Done — see ${session}`);
 });
 ```
+
+Email events cover inbox connections (`email.link_connected`,
+`email.link_disconnected`, `email.link_reauth_required`), messages
+(`email.message_received`, `email.message_draft_synced`, `email.message_sent`,
+`email.message_deleted`, `email.message_send_queued`,
+`email.message_send_cancelled`), and thread state (`email.thread_archived`,
+`email.thread_trashed`, `email.thread_read`, `email.thread_starred`,
+`email.thread_spam_changed`, `email.thread_project_changed`,
+`email.thread_labels_updated`). These 16 events are delivered to the inbox
+owner only: a personal (`scope: 'user'`) stream or personal-workspace webhook.
+Team-scoped streams and team webhooks never receive them. Spam or trash arrivals
+are not delivered as `email.message_received`.
+
+Opening a stream with an `email.*` filter, creating a webhook with one, or
+changing anything on a webhook that has one, requires the owner's own token or
+API key, or an internal service acting for the owner. Bot credentials, including `requestedAs(user)`, and
+harness credentials receive HTTP 403 with
+`email events require the inbox owner's own credential`. `listen()`
+rejects with `MacroForbiddenError` in that case; it rejects with `MacroApiError`
+for any other subscription the server refuses on the first connection, such as
+invalid filters. A 401 is retried like a network failure, so a token source can
+supply a fresh token.
+
+```ts
+macro.events.on('email.message_received', async ({ metadata, thread, message }) => {
+  console.log(metadata.subject, thread.id, message.id);
+});
+```
+
+The `event_type` and `metadata` envelope is delivered unchanged. Email message
+payloads contain only header-level data, such as subject and addresses when
+present, never bodies. Read content through the `message` or `draft` handle.
+Every email event has `inbox` and `owner` handles. Events with a thread id also
+have `thread`; events with a message id have `message`, except
+`email.message_draft_synced` (which has `draft`) and `email.message_deleted`
+(whose message is gone).
+Events whose metadata has `actor` carry a `User` handle or `undefined`.
+Where present, `metadata.origin` is `user_action` or `provider_sync`.
+An event filter's `ids` selects thread ids; for `email.link_*`, it selects inbox
+ids. Internal email sync signals are not public events, so they are neither
+typed nor delivered.
 
 ### Persisted webhooks
 

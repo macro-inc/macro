@@ -39,6 +39,7 @@ use uuid::Uuid;
 
 /// Whether a change was initiated by a Macro user action or first observed
 /// syncing from the email provider. Lets automation ignore its own echoes.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EmailEventOrigin {
@@ -49,6 +50,8 @@ pub enum EmailEventOrigin {
 }
 
 /// Reference to an email label carried on wire events.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLabelRef))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LabelRef {
     /// Macro's label row id, when the label is known locally.
@@ -60,6 +63,8 @@ pub struct LabelRef {
 }
 
 /// Why an email link (connected inbox) was disconnected.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkDisconnectReason))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LinkDisconnectReason {
@@ -76,6 +81,8 @@ pub enum LinkDisconnectReason {
 }
 
 /// Why a queued send was cancelled before reaching the provider.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailSendCancelReason))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SendCancelReason {
@@ -96,6 +103,8 @@ pub enum ThreadsReindexReason {
 }
 
 /// Metadata for [`EmailTopicEvent::LinkConnected`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkConnectedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinkConnectedMetadata {
     /// The id of the connected link (inbox).
@@ -113,6 +122,8 @@ pub struct LinkConnectedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::LinkDisconnected`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkDisconnectedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinkDisconnectedMetadata {
     /// The id of the disconnected link.
@@ -126,6 +137,8 @@ pub struct LinkDisconnectedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::LinkReauthRequired`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkReauthRequiredMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinkReauthRequiredMetadata {
     /// The id of the link needing re-authentication.
@@ -139,6 +152,8 @@ pub struct LinkReauthRequiredMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageReceived`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageReceivedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageReceivedMetadata {
     /// The link (inbox) that received the message.
@@ -172,6 +187,8 @@ pub struct MessageReceivedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageDraftSynced`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageDraftSyncedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageDraftSyncedMetadata {
     /// The link (inbox) containing the draft.
@@ -191,6 +208,8 @@ pub struct MessageDraftSyncedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSent`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageSentMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSentMetadata {
     /// The link (inbox) the message was sent from.
@@ -222,6 +241,8 @@ pub struct MessageSentMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageDeleted`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageDeletedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageDeletedMetadata {
     /// The link (inbox) the message belonged to.
@@ -237,6 +258,8 @@ pub struct MessageDeletedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSendQueued`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageSendQueuedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSendQueuedMetadata {
     /// The link (inbox) the message will be sent from.
@@ -257,6 +280,8 @@ pub struct MessageSendQueuedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSendCancelled`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageSendCancelledMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSendCancelledMetadata {
     /// The link (inbox) the message would have been sent from.
@@ -274,6 +299,8 @@ pub struct MessageSendCancelledMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadArchived`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadArchivedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadArchivedMetadata {
     /// The link (inbox) containing the thread.
@@ -292,6 +319,8 @@ pub struct ThreadArchivedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadTrashed`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadTrashedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadTrashedMetadata {
     /// The link (inbox) containing the thread.
@@ -310,6 +339,8 @@ pub struct ThreadTrashedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadRead`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadReadMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadReadMetadata {
     /// The link (inbox) containing the thread.
@@ -328,6 +359,8 @@ pub struct ThreadReadMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadStarred`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadStarredMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadStarredMetadata {
     /// The link (inbox) containing the thread.
@@ -346,6 +379,8 @@ pub struct ThreadStarredMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadSpamChanged`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadSpamChangedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadSpamChangedMetadata {
     /// The link (inbox) containing the thread.
@@ -364,6 +399,8 @@ pub struct ThreadSpamChangedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadProjectChanged`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadProjectChangedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadProjectChangedMetadata {
     /// The link (inbox) containing the thread.
@@ -387,6 +424,8 @@ pub struct ThreadProjectChangedMetadata {
 /// [`EmailTopicEvent::ThreadArchived`] / [`EmailTopicEvent::ThreadTrashed`] /
 /// [`EmailTopicEvent::ThreadRead`] / [`EmailTopicEvent::ThreadStarred`] /
 /// [`EmailTopicEvent::ThreadSpamChanged`] events instead.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadLabelsUpdatedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadLabelsUpdatedMetadata {
     /// The link (inbox) containing the thread.
@@ -430,7 +469,8 @@ pub struct ThreadsReindexRequestedMetadata {
     pub reason: ThreadsReindexReason,
 }
 
-/// Events that can be published to [`MacroEmailTopic`].
+/// Events that can be published to [`MacroEmailTopic`]. The public subset is
+/// [`crate::domain::notification_events::EmailNotificationEvent`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum EmailTopicEvent {
@@ -469,7 +509,7 @@ pub enum EmailTopicEvent {
     MessageDeleted(MessageDeletedMetadata),
     /// A send was committed and queued (undo window or scheduled send).
     /// Emitted from the email domain service and the schedule handler.
-    /// Always resolved by exactly one later `message_sent` or
+    /// A completed send or cancellation may later publish `message_sent` or
     /// `message_send_cancelled` for the same message.
     #[serde(rename = "email.message_send_queued")]
     MessageSendQueued(MessageSendQueuedMetadata),

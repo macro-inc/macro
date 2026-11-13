@@ -15,8 +15,9 @@ before changing ingestion or delivery behavior.
 - `src/inbound/kafka_consumer.rs` / `kafka_stream_consumer.rs`: ingestion
   consumers for `macro.documents`, `macro.channels`, `macro.messages`,
   `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
-  `macro.users`, and `macro.call_notifications`.
+  `macro.users`, `macro.call_notifications`, and `macro.email_notifications`.
 - `src/inbound/worker.rs`: the SQS delivery worker.
+- `src/inbound/email_event_access.rs`: credential gate for email subscriptions.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 - `src/domain/blocked_address.rs`: the one blocked-address classifier, used by
   create/patch validation and outbound delivery. `src/outbound/address_guard.rs`
@@ -31,16 +32,21 @@ before changing ingestion or delivery behavior.
 ## Boundaries
 
 - Depends on: `channels`, `documents`, `messages`, `agent_session`,
-  `agent_trigger`, `user_events`, `entity_access`, `macro_event_broker`, `kafka_util`,
-  `rdkafka`, `rate_limit`.
+  `agent_trigger`, `email`, `user_events`, `entity_access`, `macro_event_broker`,
+  `kafka_util`, `rdkafka`, `rate_limit`.
 - Used by: `services/document_storage_service`, `crates/coding_agent_worker`.
 
 ## Recipes
 
 - Add a new ingestible event: `src/domain/ingestion.rs` (match rule) →
   `src/inbound/kafka_consumer.rs` and `kafka_stream_consumer.rs`
-  (subscribe/decode) → README's event table. Private call notifications
-  match only the named user's personal workspace and stream.
+  (subscribe/decode) → README's event table. Private call notifications match
+  only the recipient's personal workspace and stream; delivered email events
+  match only the inbox owner's personal workspace and user-scoped stream.
+- Email filters on stream opens, webhook creates, and webhook patches require a
+  `UserOrInternal` credential. Bot and harness credentials receive HTTP 403
+  (`email events require the inbox owner's own credential`); filters without
+  `email.*` events retain their existing access rules.
 - Stream audiences: `StreamAudience` in `src/domain/stream.rs`. `ContactsOf`
   (the user plus their contacts) is decided per subscriber by one exact
   `WebhookContactChecker::is_contact` lookup (adapter over the contacts

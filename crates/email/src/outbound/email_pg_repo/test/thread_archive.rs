@@ -5,7 +5,7 @@ use crate::domain::{ports::EmailMessageEnqueuer, service::EmailServiceImpl};
 use crm::domain::service::NoOpCrmService;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 
-struct RecordingBroker(Arc<std::sync::Mutex<Vec<serde_json::Value>>>);
+struct RecordingBroker(Arc<std::sync::Mutex<Vec<(&'static str, serde_json::Value)>>>);
 impl macro_event_broker::MacroEventBroker for RecordingBroker {
     fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
         &self,
@@ -17,7 +17,7 @@ impl macro_event_broker::MacroEventBroker for RecordingBroker {
         self.0
             .lock()
             .unwrap()
-            .push(serde_json::to_value(event.event())?);
+            .push((event.event().topic(), serde_json::to_value(event.event())?));
         Ok(tokio::spawn(async { Ok(()) }))
     }
 }
@@ -41,10 +41,16 @@ async fn archive_publishes_one_user_attributed_event_after_commit(
         .await?;
     assert_inbox_state(&service.email_repo, id, false).await?;
     let events = events.lock().unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0]["event_type"], "email.thread_archived");
-    assert_eq!(events[0]["metadata"]["actor"], owner.as_ref());
-    assert_eq!(events[0]["metadata"]["archived"], true);
+    let topics: Vec<_> = events.iter().map(|(topic, _)| *topic).collect();
+    assert_eq!(topics, ["macro.email", "macro.email_notifications"]);
+    assert_eq!(
+        events[0].1, events[1].1,
+        "the public copy is the same envelope"
+    );
+    let event = &events[0].1;
+    assert_eq!(event["event_type"], "email.thread_archived");
+    assert_eq!(event["metadata"]["actor"], owner.as_ref());
+    assert_eq!(event["metadata"]["archived"], true);
     Ok(())
 }
 

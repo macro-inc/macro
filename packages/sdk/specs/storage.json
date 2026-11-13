@@ -42680,6 +42680,11 @@
         "description": "The audience affected by a domain exclusion.",
         "enum": ["team", "personal"]
       },
+      "EmailEventOrigin": {
+        "type": "string",
+        "description": "Whether a change was initiated by a Macro user action or first observed\nsyncing from the email provider. Lets automation ignore its own echoes.",
+        "enum": ["user_action", "provider_sync"]
+      },
       "EmailFilters": {
         "type": "object",
         "description": "The email filters used to filter down what emails you search over.",
@@ -42908,6 +42913,713 @@
           }
         }
       },
+      "EmailLabelRef": {
+        "type": "object",
+        "description": "Reference to an email label carried on wire events.",
+        "required": ["provider_label_id"],
+        "properties": {
+          "label_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Macro's label row id, when the label is known locally."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Label display name, when known."
+          },
+          "provider_label_id": {
+            "type": "string",
+            "description": "Provider (Gmail) label id."
+          }
+        }
+      },
+      "EmailLinkConnectedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::LinkConnected`].",
+        "required": [
+          "link_id",
+          "owner",
+          "email_address",
+          "provider",
+          "is_primary",
+          "connected_at"
+        ],
+        "properties": {
+          "connected_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link was connected."
+          },
+          "email_address": {
+            "type": "string",
+            "description": "Address of the connected inbox."
+          },
+          "is_primary": {
+            "type": "boolean",
+            "description": "Whether this is the owner's primary inbox."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the connected link (inbox)."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Email provider (e.g. `GMAIL`)."
+          }
+        }
+      },
+      "EmailLinkDisconnectReason": {
+        "type": "string",
+        "description": "Why an email link (connected inbox) was disconnected.",
+        "enum": [
+          "unused",
+          "inactive",
+          "manually_disabled",
+          "user_deleted",
+          "access_revoked"
+        ]
+      },
+      "EmailLinkDisconnectedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::LinkDisconnected`].",
+        "required": ["link_id", "owner", "email_address", "reason"],
+        "properties": {
+          "email_address": {
+            "type": "string",
+            "description": "Address of the disconnected inbox."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the disconnected link."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owned the link."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/EmailLinkDisconnectReason",
+            "description": "Why the link was disconnected."
+          }
+        }
+      },
+      "EmailLinkReauthRequiredMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::LinkReauthRequired`].",
+        "required": ["link_id", "owner", "email_address", "observed_at"],
+        "properties": {
+          "email_address": {
+            "type": "string",
+            "description": "Address of the inbox needing re-authentication."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the link needing re-authentication."
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the dead grant was observed."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          }
+        }
+      },
+      "EmailMessageDeletedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::MessageDeleted`].",
+        "required": [
+          "link_id",
+          "owner",
+          "message_id",
+          "provider_message_id",
+          "thread_id"
+        ],
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) the message belonged to."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's message row id."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "provider_message_id": {
+            "type": "string",
+            "description": "Provider (Gmail) message id."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailMessageDraftSyncedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::MessageDraftSynced`].",
+        "required": [
+          "link_id",
+          "owner",
+          "message_id",
+          "provider_message_id",
+          "thread_id",
+          "provider_thread_id",
+          "is_spam_or_trash"
+        ],
+        "properties": {
+          "is_spam_or_trash": {
+            "type": "boolean",
+            "description": "Whether the draft is currently spam or trash."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the draft."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's message row id."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "provider_message_id": {
+            "type": "string",
+            "description": "Provider (Gmail) message id."
+          },
+          "provider_thread_id": {
+            "type": "string",
+            "description": "Provider (Gmail) thread id."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailMessageReceivedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::MessageReceived`].",
+        "required": [
+          "link_id",
+          "owner",
+          "message_id",
+          "provider_message_id",
+          "thread_id",
+          "provider_thread_id",
+          "is_new_thread",
+          "to_emails",
+          "attachment_count",
+          "is_spam_or_trash"
+        ],
+        "properties": {
+          "attachment_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of attachments on the message.",
+            "minimum": 0
+          },
+          "from_email": {
+            "type": ["string", "null"],
+            "description": "Sender address."
+          },
+          "from_name": {
+            "type": ["string", "null"],
+            "description": "Sender display name."
+          },
+          "is_new_thread": {
+            "type": "boolean",
+            "description": "Whether the message started a thread new to this inbox."
+          },
+          "is_spam_or_trash": {
+            "type": "boolean",
+            "description": "Whether the message arrived as spam or trash."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) that received the message."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's message row id."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "provider_message_id": {
+            "type": "string",
+            "description": "Provider (Gmail) message id."
+          },
+          "provider_thread_id": {
+            "type": "string",
+            "description": "Provider (Gmail) thread id."
+          },
+          "received_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider-reported receive time."
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "Message subject header."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          },
+          "to_emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Recipient (`To`) addresses."
+          }
+        }
+      },
+      "EmailMessageSendCancelledMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::MessageSendCancelled`].",
+        "required": ["link_id", "owner", "message_id", "thread_id", "reason"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who cancelled the send."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) the message would have been sent from."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's message row id."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/EmailSendCancelReason",
+            "description": "Why the queued send was cancelled."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailMessageSendQueuedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::MessageSendQueued`].",
+        "required": [
+          "link_id",
+          "owner",
+          "message_id",
+          "thread_id",
+          "scheduled_send_at",
+          "is_scheduled"
+        ],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who queued the send."
+              }
+            ]
+          },
+          "is_scheduled": {
+            "type": "boolean",
+            "description": "`true` for an explicit scheduled send; `false` for the undo-window\ndelay on an immediate send."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) the message will be sent from."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's message row id."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "scheduled_send_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message is scheduled to leave."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailMessageSentMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::MessageSent`].",
+        "required": [
+          "link_id",
+          "owner",
+          "message_id",
+          "provider_message_id",
+          "thread_id",
+          "provider_thread_id",
+          "to_emails",
+          "cc_emails",
+          "origin",
+          "sent_at"
+        ],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who sent the message; `None` when the send was\nfirst observed from the provider (sent from another client)."
+              }
+            ]
+          },
+          "cc_emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Carbon-copy (`Cc`) addresses. `Bcc` addresses are never published."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) the message was sent from."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's message row id."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Whether the send was performed through Macro or observed from the\nprovider."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "provider_message_id": {
+            "type": "string",
+            "description": "Provider (Gmail) message id."
+          },
+          "provider_thread_id": {
+            "type": "string",
+            "description": "Provider (Gmail) thread id."
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the provider accepted the message."
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "Message subject header."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          },
+          "to_emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Recipient (`To`) addresses."
+          }
+        }
+      },
+      "EmailNotificationEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An inbox was connected.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_connected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkConnectedMetadata",
+                "description": "An inbox was connected."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An inbox was disconnected.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_disconnected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkDisconnectedMetadata",
+                "description": "An inbox was disconnected."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An inbox's OAuth grant went dead and needs re-authentication.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_reauth_required"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkReauthRequiredMetadata",
+                "description": "An inbox's OAuth grant went dead and needs re-authentication."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new inbound message arrived outside spam and trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_received"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageReceivedMetadata",
+                "description": "A new inbound message arrived outside spam and trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A draft was persisted or updated while syncing from the provider.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_draft_synced"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageDraftSyncedMetadata",
+                "description": "A draft was persisted or updated while syncing from the provider."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was accepted by the provider.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_sent"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSentMetadata",
+                "description": "A message was accepted by the provider."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was permanently deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageDeletedMetadata",
+                "description": "A message was permanently deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A send was committed and queued (undo window or scheduled send).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_send_queued"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSendQueuedMetadata",
+                "description": "A send was committed and queued (undo window or scheduled send)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A queued send was cancelled before reaching the provider.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_send_cancelled"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSendCancelledMetadata",
+                "description": "A queued send was cancelled before reaching the provider."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was archived or unarchived.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_archived"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadArchivedMetadata",
+                "description": "A thread was archived or unarchived."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was trashed or restored.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_trashed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadTrashedMetadata",
+                "description": "A thread was trashed or restored."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was marked read or unread.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_read"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadReadMetadata",
+                "description": "A thread was marked read or unread."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was starred or unstarred.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_starred"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadStarredMetadata",
+                "description": "A thread was starred or unstarred."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was marked or unmarked spam.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_spam_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadSpamChangedMetadata",
+                "description": "A thread was marked or unmarked spam."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was assigned to or removed from a project.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_project_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadProjectChangedMetadata",
+                "description": "A thread was assigned to or removed from a project."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread's user labels changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_labels_updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadLabelsUpdatedMetadata",
+                "description": "A thread's user labels changed."
+              }
+            }
+          }
+        ],
+        "description": "Email events delivered to the inbox owner's webhooks and event stream.\n\nEach variant has the same `event_type` tag and metadata as its\n[`EmailTopicEvent`] counterpart. Payloads carry header-level data only."
+      },
       "EmailPrivacyChange": {
         "oneOf": [
           {
@@ -43050,6 +43762,301 @@
             "type": "string",
             "format": "uuid",
             "description": "Original email identity, never a mirror reminder identity."
+          }
+        }
+      },
+      "EmailSendCancelReason": {
+        "type": "string",
+        "description": "Why a queued send was cancelled before reaching the provider.",
+        "enum": ["undo", "thread_trashed"]
+      },
+      "EmailThreadArchivedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::ThreadArchived`].",
+        "required": ["link_id", "owner", "thread_id", "archived", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who changed the state; `None` for\nprovider-initiated changes."
+              }
+            ]
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "New state: `true` = archived, `false` = moved back to the inbox."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailThreadLabelsUpdatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::ThreadLabelsUpdated`].\n\nCarries **user label** changes only; system-label changes (INBOX, TRASH,\nUNREAD, STARRED, SPAM) are published as the semantic\n[`EmailTopicEvent::ThreadArchived`] / [`EmailTopicEvent::ThreadTrashed`] /\n[`EmailTopicEvent::ThreadRead`] / [`EmailTopicEvent::ThreadStarred`] /\n[`EmailTopicEvent::ThreadSpamChanged`] events instead.",
+        "required": [
+          "link_id",
+          "owner",
+          "thread_id",
+          "added",
+          "removed",
+          "origin"
+        ],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who changed the labels; `None` for\nprovider-initiated changes."
+              }
+            ]
+          },
+          "added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLabelRef"
+            },
+            "description": "Labels added to the thread's messages."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLabelRef"
+            },
+            "description": "Labels removed from the thread's messages."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailThreadProjectChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::ThreadProjectChanged`].",
+        "required": ["link_id", "owner", "actor", "thread_id"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The authenticated user who changed the project."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the thread."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "previous_project_id": {
+            "type": ["string", "null"],
+            "description": "Project id before the change, when any."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "New project id; `None` when the thread was removed from its project."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailThreadReadMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::ThreadRead`].",
+        "required": ["link_id", "owner", "thread_id", "is_read", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who changed the state; `None` for\nprovider-initiated changes."
+              }
+            ]
+          },
+          "is_read": {
+            "type": "boolean",
+            "description": "New state: `true` = read, `false` = unread."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailThreadSpamChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::ThreadSpamChanged`].",
+        "required": ["link_id", "owner", "thread_id", "spam", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who changed the state; `None` for\nprovider-initiated changes."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "spam": {
+            "type": "boolean",
+            "description": "New state: `true` = marked spam, `false` = unmarked."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailThreadStarredMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::ThreadStarred`].",
+        "required": ["link_id", "owner", "thread_id", "starred", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who changed the state; `None` for\nprovider-initiated changes."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "starred": {
+            "type": "boolean",
+            "description": "New state: `true` = starred, `false` = unstarred."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          }
+        }
+      },
+      "EmailThreadTrashedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`EmailTopicEvent::ThreadTrashed`].",
+        "required": ["link_id", "owner", "thread_id", "trashed", "origin"],
+        "properties": {
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The authenticated user who changed the state; `None` for\nprovider-initiated changes."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link (inbox) containing the thread."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EmailEventOrigin",
+            "description": "Where the change originated."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The Macro user who owns the link."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro's thread row id."
+          },
+          "trashed": {
+            "type": "boolean",
+            "description": "New state: `true` = trashed, `false` = restored."
           }
         }
       },
@@ -64757,6 +65764,10 @@
           {
             "$ref": "#/components/schemas/MessageTopicEvent",
             "description": "Message facts for channels and documents from the `macro.messages` topic."
+          },
+          {
+            "$ref": "#/components/schemas/EmailNotificationEvent",
+            "description": "Public email events from the `macro.email_notifications` topic."
           },
           {
             "$ref": "#/components/schemas/AgentSessionLifecycleEvent",

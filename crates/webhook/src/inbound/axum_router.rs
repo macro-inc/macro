@@ -10,6 +10,9 @@ use crate::domain::{
     },
     ports::{WebhookError, WebhookService},
 };
+use crate::inbound::email_event_access::{
+    EmailEventsForbidden, admits_email_events, authorize_email_event_filters,
+};
 use axum::{
     Json, RequestPartsExt, Router,
     extract::{FromRef, FromRequestParts, Path, State},
@@ -19,8 +22,10 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    ActingUser, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
@@ -233,6 +238,7 @@ pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
+    authorize_email_event_filters(&authorization.authorization.principal, &request.filters)?;
     let webhook = service
         .create_webhook(authorization.authorization.user.macro_user_id, request)
         .await?;
@@ -310,13 +316,16 @@ pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Path(path): Path<WebhookPath>,
     Json(request): Json<PatchWebhookRequest>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
+    let principal = &authorization.authorization.principal;
+    let caller = authorization.authorization.user.macro_user_id.clone();
+    if let Some(filters) = &request.filters {
+        authorize_email_event_filters(principal, filters)?;
+    }
+    authorize_stored_email_filters(service.as_ref(), principal, &caller, &path.webhook_id).await?;
+
     Ok(Json(
         service
-            .patch_webhook(
-                authorization.authorization.user.macro_user_id,
-                path.webhook_id,
-                request,
-            )
+            .patch_webhook(caller, path.webhook_id, request)
             .await?,
     ))
 }
@@ -367,39 +376,82 @@ pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, ActingUser>>,
     Path(path): Path<WebhookPath>,
 ) -> Result<Json<ValidateWebhookResponse>, WebhookHandlerError> {
+    let caller = authorization.authorization.user.macro_user_id;
+    authorize_stored_email_filters(
+        service.as_ref(),
+        &authorization.authorization.principal,
+        &caller,
+        &path.webhook_id,
+    )
+    .await?;
+
     Ok(Json(
-        service
-            .validate_webhook(
-                authorization.authorization.user.macro_user_id,
-                path.webhook_id,
-            )
-            .await?,
+        service.validate_webhook(caller, path.webhook_id).await?,
     ))
 }
 
+/// Refuse a credential that may not subscribe to email events when the stored
+/// webhook already delivers them, so it cannot redirect, pause, or revalidate
+/// that webhook. Revalidation is included because a changed endpoint only
+/// delivers again once it is validated.
+async fn authorize_stored_email_filters<S: WebhookService>(
+    service: &S,
+    principal: &MacroAuthorization,
+    caller: &MacroUserIdStr<'static>,
+    webhook_id: &WebhookId,
+) -> Result<(), WebhookHandlerError> {
+    if admits_email_events(principal) {
+        return Ok(());
+    }
+    let existing = service
+        .get_webhook(caller.clone(), webhook_id.clone())
+        .await?;
+    authorize_email_event_filters(principal, &existing.filters)?;
+    Ok(())
+}
+
 /// Webhook handler error.
-pub struct WebhookHandlerError(WebhookError);
+pub struct WebhookHandlerError(WebhookHandlerErrorKind);
+
+enum WebhookHandlerErrorKind {
+    Service(WebhookError),
+    EmailEventsForbidden(EmailEventsForbidden),
+}
 
 impl From<WebhookError> for WebhookHandlerError {
     fn from(error: WebhookError) -> Self {
-        Self(error)
+        Self(WebhookHandlerErrorKind::Service(error))
+    }
+}
+
+impl From<EmailEventsForbidden> for WebhookHandlerError {
+    fn from(error: EmailEventsForbidden) -> Self {
+        Self(WebhookHandlerErrorKind::EmailEventsForbidden(error))
     }
 }
 
 impl IntoResponse for WebhookHandlerError {
     fn into_response(self) -> Response {
-        let status = match self.0 {
-            WebhookError::BadRequest(_) => StatusCode::BAD_REQUEST,
-            WebhookError::Conflict(_) => StatusCode::CONFLICT,
-            WebhookError::Unauthorized => StatusCode::FORBIDDEN,
-            WebhookError::NotFound(_) => StatusCode::NOT_FOUND,
-            WebhookError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error=?self.0, "webhook handler error");
-            "internal server error".to_string()
-        } else {
-            self.0.to_string()
+        let (status, message) = match self.0 {
+            WebhookHandlerErrorKind::Service(error) => {
+                let status = match error {
+                    WebhookError::BadRequest(_) => StatusCode::BAD_REQUEST,
+                    WebhookError::Conflict(_) => StatusCode::CONFLICT,
+                    WebhookError::Unauthorized => StatusCode::FORBIDDEN,
+                    WebhookError::NotFound(_) => StatusCode::NOT_FOUND,
+                    WebhookError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
+                    tracing::error!(error=?error, "webhook handler error");
+                    "internal server error".to_string()
+                } else {
+                    error.to_string()
+                };
+                (status, message)
+            }
+            WebhookHandlerErrorKind::EmailEventsForbidden(error) => {
+                (StatusCode::FORBIDDEN, error.to_string())
+            }
         };
         (
             status,

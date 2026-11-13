@@ -11,6 +11,7 @@ use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use call::domain::notification_events::CallNotificationMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
+use email::domain::notification_events::EmailNotificationMacroEvent;
 use messages::outbound::broker::MessageMacroEvent;
 use user_events::UserMacroEvent;
 
@@ -19,6 +20,7 @@ macro_event_broker::declare_topics!(
     ChannelMacroEvent,
     CallNotificationMacroEvent,
     MessageMacroEvent,
+    EmailNotificationMacroEvent,
     WebhookMacroEvent,
     AgentSessionMacroEvent,
     AgentSessionLifecycleMacroEvent,

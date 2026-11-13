@@ -202,6 +202,8 @@ pub enum WebhookEvent {
     Call(call::domain::notification_events::CallNotificationEvent),
     /// Message facts for channels and documents from the `macro.messages` topic.
     Message(messages::outbound::broker::MessageTopicEvent),
+    /// Public email events from the `macro.email_notifications` topic.
+    Email(email::domain::notification_events::EmailNotificationEvent),
     /// Agent session lifecycle events from the `macro.agent_session_lifecycle`
     /// topic.
     AgentSession(agent_session::domain::events::AgentSessionLifecycleEvent),

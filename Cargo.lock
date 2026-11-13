@@ -22463,6 +22463,7 @@ dependencies = [
  "channels",
  "chrono",
  "documents",
+ "email",
  "entity_access",
  "futures",
  "kafka_util",

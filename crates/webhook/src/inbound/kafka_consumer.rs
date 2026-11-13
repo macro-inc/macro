@@ -1,7 +1,7 @@
 //! Kafka consumer that feeds broker events into webhook ingestion.
 //!
-//! Subscribes to [`DocumentMacroEvent`], [`ChannelMacroEvent`], and
-//! [`WebhookMacroEvent`] topics and hands every decoded event envelope to a
+//! Subscribes to document, channel, message, email, call, webhook, and agent
+//! topics and hands every decoded event envelope to a
 //! [`WebhookEventIngestionService`].
 //!
 //! Delivery is at-least-once: an event's offset is committed only after the
@@ -24,7 +24,7 @@ mod test;
 use crate::domain::ingestion::{WebhookEventIngestionError, WebhookEventIngestionService};
 use crate::topics::DeclaredMacroEvent;
 use anyhow::Context as _;
-use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
@@ -33,6 +33,7 @@ use rdkafka::message::{BorrowedMessage, Message};
 use std::future::Future;
 use std::time::Duration;
 use tokio_retry::{RetryIf, strategy::ExponentialBackoff};
+use tracing::Instrument as _;
 
 /// Consumer group for webhook event ingestion. Offsets are committed under
 /// this group, so restarts resume where the previous run left off.
@@ -40,8 +41,9 @@ struct WebhookEventIngestionConsumerGroup;
 
 impl GroupName for WebhookEventIngestionConsumerGroup {
     const GROUP_NAME: &'static str = "webhook-event-ingestion";
-    // `macro.messages` joined this group's subscription with no committed
-    // offset; starting at its head avoids replaying the topic's retention.
+    // New topics, including `macro.email_notifications`, join this group's subscription
+    // without committed offsets; starting at their heads avoids replaying
+    // retained history.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
@@ -116,6 +118,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::MessageMacroEvent(event) => {
                         service.ingest_message_event(event.event().clone()).await
                     }
+                    DeclaredMacroEvent::EmailNotificationMacroEvent(event) => {
+                        service.ingest_email_event(event.event().clone()).await
+                    }
                     DeclaredMacroEvent::WebhookMacroEvent(event) => {
                         service.ingest_webhook_event(event.event().clone()).await
                     }
@@ -182,7 +187,7 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
 /// Run the webhook event consumer until `shutdown` resolves.
 ///
 /// Connects to `brokers` and subscribes to the topics declared by
-/// [`DocumentMacroEvent`], [`ChannelMacroEvent`], and [`WebhookMacroEvent`]
+/// document, channel, message, email, call, webhook, and agent topics
 /// under the `webhook-event-ingestion` consumer group. Every decoded event is fed to
 /// `service`, committing each offset only
 /// after ingestion succeeds (see `ingest_with_retry` for the retry policy).
@@ -228,35 +233,46 @@ where
                     }
                 };
                 let kafka_message = message.inner();
-                match message.decode_payload() {
-                    Ok(event) => {
-                        tracing::trace!(
+                // Parent on the publisher's trace context so one trace runs
+                // from the producing request through ingestion.
+                let span = consumer_span(
+                    kafka_message,
+                    WebhookEventIngestionConsumerGroup::GROUP_NAME,
+                );
+                async {
+                    match message.decode_payload() {
+                        Ok(event) => {
+                            tracing::trace!(
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "decoded broker event"
+                            );
+                            ingest_with_retry(
+                                &service,
+                                &event,
+                                kafka_message.partition(),
+                                kafka_message.offset(),
+                            )
+                            .await?;
+                        }
+                        // Undecodable messages are logged and skipped rather than
+                        // wedging the partition on a poison message.
+                        Err(e) => tracing::error!(
+                            error = ?e,
+                            topic = kafka_message.topic(),
                             partition = kafka_message.partition(),
                             offset = kafka_message.offset(),
-                            "decoded broker event"
-                        );
-                        ingest_with_retry(
-                            &service,
-                            &event,
-                            kafka_message.partition(),
-                            kafka_message.offset(),
-                        )
-                        .await?;
+                            "failed to decode broker event"
+                        ),
                     }
-                    // Undecodable messages are logged and skipped rather than
-                    // wedging the partition on a poison message.
-                    Err(e) => tracing::error!(
-                        error = ?e,
-                        topic = kafka_message.topic(),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
-                        "failed to decode broker event"
-                    ),
-                }
 
-                // Commit only after the event was ingested or permanently
-                // rejected: at-least-once, retried across restarts.
-                commit_logged(&consumer, kafka_message);
+                    // Commit only after the event was ingested or permanently
+                    // rejected: at-least-once, retried across restarts.
+                    commit_logged(&consumer, kafka_message);
+                    anyhow::Ok(())
+                }
+                .instrument(span)
+                .await?;
             }
         }
     }

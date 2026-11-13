@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::events::{EmailMacroEvent, ThreadBackfilledMetadata};
 use crate::domain::mailbox::connection::ConnectionSourceError;
+use crate::domain::notification_events::EmailEventBroker as _;
 use macro_event_broker::MacroEventBroker;
 use models_email::service::{
     backfill::*,
@@ -63,9 +64,7 @@ where
 }
 
 fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
-    let _ = broker
-        .send_event(event)
-        .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
+    broker.publish_email_event(event);
 }
 
 /// Classify a database failure while preserving its original context chain.

@@ -2001,6 +2001,216 @@ fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
     );
 }
 
+#[test]
+fn email_events_normalize_with_thread_or_link_ids_and_unchanged_envelopes() {
+    use serde_json::json;
+
+    let link_id = Uuid::now_v7();
+    let thread_id = Uuid::now_v7();
+    let message_id = Uuid::now_v7();
+    let correlation_id = Uuid::now_v7();
+    let routine_id = Uuid::now_v7();
+    let cases = [
+        (
+            "email.link_connected",
+            json!({"email_address":"owner@example.com","provider":"GMAIL","is_primary":true,"connected_at":"2026-01-02T03:04:05Z"}),
+            false,
+        ),
+        (
+            "email.link_disconnected",
+            json!({"email_address":"owner@example.com","reason":"access_revoked"}),
+            false,
+        ),
+        (
+            "email.link_reauth_required",
+            json!({"email_address":"owner@example.com","observed_at":"2026-01-02T03:04:05Z"}),
+            false,
+        ),
+        (
+            "email.message_received",
+            json!({"provider_message_id":"m","provider_thread_id":"t","is_new_thread":true,"subject":null,"from_email":null,"from_name":null,"to_emails":[],"attachment_count":0,"is_spam_or_trash":false,"received_at":null}),
+            true,
+        ),
+        (
+            "email.message_draft_synced",
+            json!({"provider_message_id":"m","provider_thread_id":"t","is_spam_or_trash":true}),
+            true,
+        ),
+        (
+            "email.message_sent",
+            json!({"actor":null,"provider_message_id":"m","provider_thread_id":"t","subject":null,"to_emails":[],"cc_emails":[],"origin":"user_action","sent_at":"2026-01-02T03:04:05Z"}),
+            true,
+        ),
+        (
+            "email.message_deleted",
+            json!({"provider_message_id":"m"}),
+            true,
+        ),
+        (
+            "email.message_send_queued",
+            json!({"actor":null,"scheduled_send_at":"2026-01-02T03:04:05Z","is_scheduled":false}),
+            true,
+        ),
+        (
+            "email.message_send_cancelled",
+            json!({"actor":null,"reason":"undo"}),
+            true,
+        ),
+        (
+            "email.thread_archived",
+            json!({"actor":null,"archived":true,"origin":"user_action"}),
+            true,
+        ),
+        (
+            "email.thread_trashed",
+            json!({"actor":null,"trashed":true,"origin":"user_action"}),
+            true,
+        ),
+        (
+            "email.thread_read",
+            json!({"actor":null,"is_read":true,"origin":"user_action"}),
+            true,
+        ),
+        (
+            "email.thread_starred",
+            json!({"actor":null,"starred":true,"origin":"user_action"}),
+            true,
+        ),
+        (
+            "email.thread_spam_changed",
+            json!({"actor":null,"spam":true,"origin":"user_action"}),
+            true,
+        ),
+        (
+            "email.thread_project_changed",
+            json!({"actor":"macro|editor@example.com","previous_project_id":null,"project_id":null}),
+            true,
+        ),
+        (
+            "email.thread_labels_updated",
+            json!({"actor":null,"added":[],"removed":[],"origin":"user_action"}),
+            true,
+        ),
+    ];
+
+    for (name, mut metadata, is_thread) in cases {
+        let object = metadata.as_object_mut().expect("metadata object");
+        object.insert("link_id".to_string(), json!(link_id));
+        object.insert("owner".to_string(), json!(PERSONAL_WORKSPACE_ID));
+        if is_thread {
+            object.insert("thread_id".to_string(), json!(thread_id));
+        }
+        if name.starts_with("email.message_") {
+            object.insert("message_id".to_string(), json!(message_id));
+        }
+        let envelope = json!({
+            "event_id": Uuid::now_v7(),
+            "agent_correlation_id": correlation_id,
+            "routine_id": routine_id,
+            "schema_version": 1,
+            "event_type": name,
+            "metadata": metadata,
+        });
+        let event: Event<email::domain::notification_events::EmailNotificationEvent> =
+            serde_json::from_value(envelope.clone()).expect("valid email event");
+        let (normalized, owner) = normalized_email_event(&event).expect("normalizes");
+        assert_eq!(normalized.event_name, name);
+        assert_eq!(
+            normalized.entity_type,
+            if is_thread {
+                "email_thread"
+            } else {
+                "email_link"
+            }
+        );
+        assert_eq!(
+            normalized.entity_id,
+            if is_thread { thread_id } else { link_id }.to_string()
+        );
+        assert_eq!(normalized.ordering_key, normalized.entity_id);
+        assert_eq!(normalized.broker_envelope, envelope);
+        assert_eq!(owner.to_string(), PERSONAL_WORKSPACE_ID);
+    }
+}
+
+#[test]
+fn email_internal_signals_are_not_public_events() {
+    use serde_json::json;
+
+    // Internal `macro.email` signals never reach the public topic; the
+    // producer drops them (see `EmailNotificationEvent::from_topic_event`).
+    for name in ["email.thread_backfilled", "email.threads_reindex_requested"] {
+        let envelope = json!({
+            "event_id": Uuid::now_v7(),
+            "schema_version": 1,
+            "event_type": name,
+            "metadata": {"link_id": Uuid::now_v7(), "owner": PERSONAL_WORKSPACE_ID},
+        });
+        assert!(
+            serde_json::from_value::<
+                Event<email::domain::notification_events::EmailNotificationEvent>,
+            >(envelope)
+            .is_err(),
+            "{name} is not a public email event"
+        );
+    }
+}
+
+#[tokio::test]
+async fn email_message_matches_only_owners_personal_workspace() {
+    use email::domain::events::MessageReceivedMetadata;
+    use email::domain::notification_events::EmailNotificationEvent;
+
+    let thread_id = Uuid::now_v7();
+    let event = Event::new(EmailNotificationEvent::MessageReceived(
+        MessageReceivedMetadata {
+            link_id: Uuid::now_v7(),
+            owner: user_id(PERSONAL_WORKSPACE_ID),
+            message_id: Uuid::now_v7(),
+            provider_message_id: "m".to_string(),
+            thread_id,
+            provider_thread_id: "t".to_string(),
+            is_new_thread: true,
+            subject: Some("Subject".to_string()),
+            from_email: None,
+            from_name: None,
+            to_emails: vec![],
+            attachment_count: 0,
+            is_spam_or_trash: false,
+            received_at: None,
+        },
+    ));
+    let access = MockAccessService::with_users(vec![]);
+    let repository = MockRepository::new(
+        vec![TEAM_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_owner", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    service(access.clone(), repository.clone(), enqueuer.clone())
+        .ingest_email_event(event.clone())
+        .await
+        .expect("ingests");
+
+    assert!(lock(&access.calls).is_empty());
+    let state = lock(&repository.state);
+    assert!(state.workspace_calls.is_empty());
+    assert_eq!(state.match_calls.len(), 1);
+    assert_eq!(
+        state.match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_string()]
+    );
+    assert_eq!(state.match_calls[0].event_name, "email.message_received");
+    assert_eq!(state.match_calls[0].entity_id, thread_id.to_string());
+    drop(state);
+    let messages = lock(&enqueuer.state);
+    assert_eq!(messages.attempted_messages.len(), 1);
+    assert_eq!(messages.attempted_messages[0].webhook_id, "wh_owner");
+    assert_eq!(
+        messages.attempted_messages[0].event.broker_envelope,
+        serde_json::to_value(&event).expect("serializable")
+    );
+}
+
 #[tokio::test]
 async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
     let user = "macro|owner@example.com";

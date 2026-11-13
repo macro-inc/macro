@@ -169,7 +169,8 @@ export class Webhook extends MacroEntity<WebhookRecord> {
   }
 
   /**
-   * Replace the webhook's delivery filters (must be non-empty).
+   * Replace the webhook's delivery filters (must be non-empty). Filters naming
+   * `email.*` events need the inbox owner's own token or API key.
    *
    * @write
    * @idempotent

@@ -4,7 +4,8 @@ use super::{
     LifecycleAudience, TriggerAudience, WebhookEventIngestionError, lifecycle_audience,
     normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
     normalized_call_notification_event, normalized_channel_event, normalized_document_event,
-    normalized_message_event, normalized_user_event, normalized_webhook_event,
+    normalized_email_event, normalized_message_event, normalized_user_event,
+    normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
@@ -15,6 +16,7 @@ use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
+use email::domain::notification_events::EmailNotificationEvent;
 use entity_access::domain::models::EntityType;
 use macro_event_broker::Event;
 use messages::outbound::broker::MessageTopicEvent;
@@ -74,6 +76,18 @@ pub(crate) fn message_stream_candidate(
             entity_type,
         },
         event: normalized,
+    })
+}
+
+pub(crate) fn email_stream_candidate(
+    event: &Event<EmailNotificationEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let (normalized, owner) = normalized_email_event(event)?;
+    Ok(StreamCandidateEvent {
+        event: normalized,
+        audience: StreamAudience::User {
+            user_id: owner.to_string(),
+        },
     })
 }
 

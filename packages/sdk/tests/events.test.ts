@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Macro } from '../src/macro';
-import { MacroError } from '../src/utils';
+import { MacroError, MacroForbiddenError } from '../src/utils';
 
 const originalFetch = globalThis.fetch;
 
@@ -110,6 +110,81 @@ describe('MacroEvents', () => {
     expect(JSON.parse(url.searchParams.get('filters') ?? '[]')).toEqual([
       { events: ['message.posted'], ids: ['chan_1'] },
     ]);
+  });
+
+  test('listen() rejects when the server refuses the subscription', async () => {
+    let calls = 0;
+    globalThis.fetch = (async (_input) => {
+      calls += 1;
+      return Response.json(
+        { message: "email events require the inbox owner's own credential" },
+        { status: 403 },
+      );
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      auth: { type: 'bot', token: 'mbot_token' },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('email.message_received', () => {});
+
+    const refused = macro.events.listen();
+    await expect(refused).rejects.toThrow(MacroForbiddenError);
+    await expect(refused).rejects.toThrow(
+      "email events require the inbox owner's own credential",
+    );
+    expect(calls).toBe(1);
+  });
+
+  test('listen() keeps retrying after a server failure', async () => {
+    globalThis.fetch = (async (_input) =>
+      new Response('unavailable', { status: 503 })) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+
+    const stop = await macro.events.listen();
+    stop();
+  });
+
+  test('listen() returns when the token source throws before any request', async () => {
+    let calls = 0;
+    globalThis.fetch = (async (_input) => {
+      calls += 1;
+      return new Response('', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      token: () => {
+        throw new Error('token source unavailable');
+      },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+
+    const stop = await macro.events.listen();
+    stop();
+    expect(calls).toBe(0);
+  });
+
+  test('listen() keeps retrying after a 401', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ message: 'expired' }, { status: 401 })) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+
+    const stop = await macro.events.listen();
+    stop();
   });
 
   test('listen() throws when there are no filters or handlers', async () => {

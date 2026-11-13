@@ -3,12 +3,13 @@ import type {
   WebhookFilter,
   WebhookScope,
 } from '../../generated/storage/types.gen';
-import { MacroError } from '../utils';
+import { MacroApiError, MacroError, MacroForbiddenError } from '../utils';
 import type { MacroClient } from '../utils/client';
 import { hydrateAgentSessionEvent } from './hydrate/agentSession';
 import { hydrateCallEvent } from './hydrate/call';
 import { hydrateChannelEvent } from './hydrate/channel';
 import { hydrateDocumentEvent } from './hydrate/document';
+import { hydrateEmailEvent } from './hydrate/email';
 import { hydrateMessageEvent } from './hydrate/message';
 import { hydrateUserEvent } from './hydrate/user';
 import type {
@@ -25,17 +26,35 @@ type AnyHandler = (event: unknown) => void | Promise<void>;
 /** Sent by Macro when validating a newly registered endpoint; acked, never dispatched. */
 const VALIDATION_EVENT = 'webhook.validation.test';
 
+/**
+ * Whether the server refused the subscription itself (bad filters, a
+ * credential that may not subscribe), as opposed to a failure worth retrying.
+ */
+function isRefusal(status: number): boolean {
+  // 401 stays retryable: a token source may hand out a fresh token next time.
+  return (
+    status >= 400 &&
+    status < 500 &&
+    status !== 401 &&
+    status !== 408 &&
+    status !== 429
+  );
+}
+
 /** Options for {@link MacroEvents.listen}. */
 export interface ListenOptions {
   /**
    * Event/entity-id filters, identical to persisted webhook `filters`.
    * Defaults to one filter covering every event currently registered with
    * {@link MacroEvents.on}.
+   * For email events, `ids` select inboxes for `email.link_*` and threads
+   * for all other events.
    */
   filters?: WebhookFilter[];
   /**
    * Personal or team workspace whose webhook lifecycle events are delivered.
-   * Defaults to `'user'`.
+   * Defaults to `'user'`. Email events are private to the inbox owner and
+   * arrive only on a personal stream, never a team stream.
    */
   scope?: WebhookScope;
   /** Abort the stream. */
@@ -59,6 +78,9 @@ function hydrate(
     )
     .with({ event_type: P.string.startsWith('message.') }, (messageEvent) =>
       hydrateMessageEvent(client, messageEvent),
+    )
+    .with({ event_type: P.string.startsWith('email.') }, (emailEvent) =>
+      hydrateEmailEvent(client, emailEvent),
     )
     .with({ event_type: P.string.startsWith('user.') }, (userEvent) =>
       hydrateUserEvent(client, userEvent),
@@ -138,8 +160,14 @@ export class MacroEvents {
    * Filters default to the event names currently registered with {@link on}.
    * The stream uses those filters for its lifetime; later `.on` / unsubscribe
    * calls do not change what the server sends.
+   * Email filters require the inbox owner's user token or API key; bot and
+   * harness credentials receive HTTP 403.
    *
    * @returns A function that closes the stream.
+   * @throws {MacroApiError} if the server refuses the subscription on the
+   *   first connection, such as invalid filters or a credential that may not
+   *   subscribe to the requested events ({@link MacroForbiddenError}). A 401
+   *   is retried like a network failure.
    */
   async listen(opts: ListenOptions = {}): Promise<() => void> {
     const filters = opts.filters ?? this.filtersFromHandlers();
@@ -163,12 +191,58 @@ export class MacroEvents {
       }
     }
 
+    // The generated SSE client retries every failed connection, so a
+    // subscription the server refuses would otherwise retry forever in
+    // silence. Watch the first response and fail listen() on a refusal.
+    let settleOpened: (refusal?: MacroApiError) => void = () => {};
+    const opened = new Promise<void>((resolve, reject) => {
+      settleOpened = (refusal) => (refusal ? reject(refusal) : resolve());
+    });
+    controller.signal.addEventListener('abort', () => settleOpened(), {
+      once: true,
+    });
+    if (controller.signal.aborted) settleOpened();
+    let connected = false;
+    const watchFirstResponse = async (
+      input: Request | URL | string,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      if (connected) return globalThis.fetch(input, init);
+      connected = true;
+      let response: Response;
+      try {
+        response = await globalThis.fetch(input, init);
+      } catch (error) {
+        settleOpened();
+        throw error;
+      }
+      if (isRefusal(response.status)) {
+        const data: unknown = await response
+          .clone()
+          .json()
+          .catch(() => undefined);
+        settleOpened(
+          response.status === 403
+            ? new MacroForbiddenError(data)
+            : new MacroApiError(response.status, data),
+        );
+        controller.abort();
+      } else {
+        settleOpened();
+      }
+      return response;
+    };
+
     const { stream } = await this.client.storage.streamEvents({
       query: {
         scope: opts.scope ?? 'user',
         filters: JSON.stringify(filters),
       },
       signal: controller.signal,
+      fetch: watchFirstResponse as typeof fetch,
+      // A failure before any response (such as a token source that throws)
+      // is retried by the client; don't hold listen() open for it.
+      onSseError: () => settleOpened(),
     });
 
     const consume = (async () => {
@@ -186,6 +260,8 @@ export class MacroEvents {
       // failure after listen() has returned must not become an unhandled
       // rejection; the caller already has `stop`.
     });
+
+    await opened;
 
     return () => {
       controller.abort();

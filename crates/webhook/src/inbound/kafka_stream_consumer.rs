@@ -5,17 +5,22 @@ use crate::domain::ingestion::{
     stream::{
         agent_session_lifecycle_stream_candidate, agent_trigger_stream_candidate,
         call_stream_candidate, channel_stream_candidate, document_stream_candidate,
-        message_stream_candidate, user_stream_candidate, webhook_stream_candidate,
+        email_stream_candidate, message_stream_candidate, user_stream_candidate,
+        webhook_stream_candidate,
     },
     user_event_subject,
 };
 use crate::domain::ports::WebhookWorkspaceResolver;
 use crate::domain::stream::StreamCandidateEvent;
 use crate::topics::DeclaredMacroEvent;
-use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
+use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped, consumer_span};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEvent as _, MacroEventConsumerService};
 use std::time::Duration;
 use tokio::sync::broadcast;
+use tracing::Instrument as _;
+
+/// Names this ungrouped consumer on its `kafka.process` spans.
+const STREAM_CONSUMER_NAME: &str = "webhook-stream";
 
 /// Time allowed for topic metadata lookup.
 const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
@@ -41,24 +46,31 @@ pub async fn run_webhook_stream_consumer<R: WebhookWorkspaceResolver>(
 
     loop {
         let message = consumer.recv().await?;
-        let decoded = match message.decode_payload() {
-            Ok(decoded) => decoded,
-            // Poison records must not wedge the process-level stream consumer.
-            Err(error) => {
-                tracing::warn!(error = ?error, "skipping undecodable broker event");
-                continue;
-            }
-        };
-        match candidate_from(&decoded, workspace_resolver).await {
-            Ok(Some(candidate)) => {
-                // Having no active subscribers is expected; SSE delivery is best-effort.
-                let _ = sender.send(candidate);
-            }
-            Ok(None) => {}
-            Err(error) => {
-                tracing::warn!(error = ?error, "skipping non-streamable broker event");
+        // Parent on the publisher's trace context so one trace runs from the
+        // producing request to the stream fan-out.
+        let span = consumer_span(message.inner(), STREAM_CONSUMER_NAME);
+        async {
+            let decoded = match message.decode_payload() {
+                Ok(decoded) => decoded,
+                // Poison records must not wedge the process-level stream consumer.
+                Err(error) => {
+                    tracing::warn!(error = ?error, "skipping undecodable broker event");
+                    return;
+                }
+            };
+            match candidate_from(&decoded, workspace_resolver).await {
+                Ok(Some(candidate)) => {
+                    // Having no active subscribers is expected; SSE delivery is best-effort.
+                    let _ = sender.send(candidate);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::warn!(error = ?error, "skipping non-streamable broker event");
+                }
             }
         }
+        .instrument(span)
+        .await;
     }
 }
 
@@ -80,6 +92,9 @@ async fn candidate_from<R: WebhookWorkspaceResolver>(
         }
         DeclaredMacroEvent::MessageMacroEvent(event) => {
             message_stream_candidate(event.event()).map(Some)
+        }
+        DeclaredMacroEvent::EmailNotificationMacroEvent(event) => {
+            email_stream_candidate(event.event()).map(Some)
         }
         DeclaredMacroEvent::WebhookMacroEvent(event) => {
             webhook_stream_candidate(event.event()).map(Some)

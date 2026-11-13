@@ -2,6 +2,7 @@ use super::*;
 use crm::domain::model::CrmError;
 use email_api_client::domain::models::EmailApiError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
+use macro_event_topics::Topic as _;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use models_email::service::{cache::TokenCacheKey, link::UserProvider};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -269,6 +270,11 @@ impl MacroEventBroker for Fake {
         &self,
         event: &T,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        // The public `macro.email_notifications` copy is covered by
+        // `notification_events`' tests; these record `macro.email` only.
+        if event.event().topic() == macro_event_topics::MacroEmailNotificationsTopic::TOPIC_STR {
+            return Ok(tokio::spawn(async { Ok(()) }));
+        }
         let mut payload = serde_json::to_value(event.event()).unwrap();
         let event_id = payload.as_object_mut().unwrap().remove("event_id").unwrap();
         assert!(Uuid::parse_str(event_id.as_str().unwrap()).is_ok());

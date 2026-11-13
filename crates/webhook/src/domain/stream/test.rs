@@ -605,6 +605,155 @@ async fn agent_session_events_fall_back_to_access_level() {
     assert_eq!(*access_level_calls.lock().unwrap(), 1);
 }
 
+#[tokio::test]
+async fn email_stream_requires_owner_user_scope_and_thread_filter() {
+    use crate::domain::ingestion::stream::email_stream_candidate;
+    use email::domain::events::{EmailEventOrigin, ThreadReadMetadata};
+    use email::domain::notification_events::EmailNotificationEvent;
+    use macro_event_broker::Event;
+
+    let link_id = Uuid::now_v7();
+    let thread_id = Uuid::now_v7();
+    let owner = subscriber();
+    let event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
+        link_id,
+        owner: owner.clone(),
+        actor: None,
+        thread_id,
+        is_read: true,
+        origin: EmailEventOrigin::UserAction,
+    }));
+    let candidate = email_stream_candidate(&event).expect("normalizes");
+    assert_eq!(
+        candidate.audience,
+        StreamAudience::User {
+            user_id: SUBSCRIBER_ID.to_string()
+        }
+    );
+    assert_eq!(candidate.event.entity_id, thread_id.to_string());
+    assert_eq!(candidate.event.entity_type, "email_thread");
+    assert_eq!(candidate.event.ordering_key, thread_id.to_string());
+    assert_eq!(
+        candidate.event.broker_envelope,
+        serde_json::to_value(&event).unwrap()
+    );
+
+    let (service, sender) = service(FakeAccessService::allowing(&[]));
+    let matching = vec![WebhookFilter {
+        events: vec!["email.thread_read".to_string()],
+        ids: Some(vec![thread_id.to_string()]),
+    }];
+    let owner_stream = service
+        .open_stream(owner.clone(), WebhookScope::User, matching.clone())
+        .await
+        .unwrap();
+    let other_stream = service
+        .open_stream(
+            MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap(),
+            WebhookScope::User,
+            matching.clone(),
+        )
+        .await
+        .unwrap();
+    let team_stream = service
+        .open_stream(
+            owner.clone(),
+            WebhookScope::Team,
+            filter(&["email.thread_read", "webhook.created"]),
+        )
+        .await
+        .unwrap();
+    let other_thread_id = Uuid::now_v7();
+    let wrong_id_stream = service
+        .open_stream(
+            owner,
+            WebhookScope::User,
+            vec![WebhookFilter {
+                events: vec!["email.thread_read".to_string()],
+                ids: Some(vec![other_thread_id.to_string()]),
+            }],
+        )
+        .await
+        .unwrap();
+    sender.send(candidate.clone()).unwrap();
+
+    let other_event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
+        link_id,
+        owner: MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap(),
+        actor: None,
+        thread_id,
+        is_read: true,
+        origin: EmailEventOrigin::UserAction,
+    }));
+    let other_candidate = email_stream_candidate(&other_event).expect("normalizes");
+    sender.send(other_candidate.clone()).unwrap();
+
+    let team_candidate = workspace_candidate("webhook.created", TEAM_WORKSPACE_ID);
+    sender.send(team_candidate.clone()).unwrap();
+
+    let other_thread_event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
+        link_id,
+        owner: subscriber(),
+        actor: None,
+        thread_id: other_thread_id,
+        is_read: true,
+        origin: EmailEventOrigin::UserAction,
+    }));
+    let other_thread_candidate = email_stream_candidate(&other_thread_event).expect("normalizes");
+    sender.send(other_thread_candidate.clone()).unwrap();
+
+    let owner_events: Vec<_> = owner_stream.take(1).collect().await;
+    assert_eq!(owner_events[0].event_id, candidate.event.event_id);
+    assert_eq!(
+        owner_events[0].broker_envelope,
+        candidate.event.broker_envelope
+    );
+    let other_events: Vec<_> = other_stream.take(1).collect().await;
+    assert_eq!(other_events[0].event_id, other_candidate.event.event_id);
+    let team_events: Vec<_> = team_stream.take(1).collect().await;
+    assert_eq!(team_events[0].event_id, team_candidate.event.event_id);
+    let wrong_id_events: Vec<_> = wrong_id_stream.take(1).collect().await;
+    assert_eq!(
+        wrong_id_events[0].event_id,
+        other_thread_candidate.event.event_id
+    );
+}
+
+#[test]
+fn email_link_stream_candidate_filters_by_link_id() {
+    use crate::domain::ingestion::stream::email_stream_candidate;
+    use email::domain::events::{LinkDisconnectReason, LinkDisconnectedMetadata};
+    use email::domain::notification_events::EmailNotificationEvent;
+    use macro_event_broker::Event;
+
+    let link_id = Uuid::now_v7();
+    let event = Event::new(EmailNotificationEvent::LinkDisconnected(
+        LinkDisconnectedMetadata {
+            link_id,
+            owner: subscriber(),
+            email_address: "reader@example.com".to_string(),
+            reason: LinkDisconnectReason::ManuallyDisabled,
+        },
+    ));
+    let candidate = email_stream_candidate(&event).expect("normalizes");
+
+    assert_eq!(candidate.event.event_name, "email.link_disconnected");
+    assert_eq!(candidate.event.entity_type, "email_link");
+    assert_eq!(candidate.event.entity_id, link_id.to_string());
+    assert_eq!(candidate.event.ordering_key, link_id.to_string());
+    assert_eq!(
+        candidate.audience,
+        StreamAudience::User {
+            user_id: SUBSCRIBER_ID.to_string()
+        }
+    );
+    let link_filter = WebhookFilter {
+        events: vec!["email.link_disconnected".to_string()],
+        ids: Some(vec![link_id.to_string()]),
+    };
+    assert!(link_filter.accepts(&candidate.event.event_name, &candidate.event.entity_id));
+}
+
 const CHANGED_USER_ID: &str = "macro|changed@example.com";
 
 fn picture_candidate(team_workspace_ids: &[&str]) -> StreamCandidateEvent {

@@ -1,5 +1,6 @@
 use super::*;
 use macro_event_broker::{EventBrokerError, MacroEvent};
+use macro_event_topics::Topic as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Mutex;
 
@@ -153,6 +154,11 @@ impl MacroEventBroker for Broker {
         &self,
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        // The public `macro.email_notifications` copy is covered by
+        // `notification_events`' tests; these record `macro.email` only.
+        if event.event().topic() == macro_event_topics::MacroEmailNotificationsTopic::TOPIC_STR {
+            return Ok(tokio::spawn(async { Ok(()) }));
+        }
         self.calls.lock().unwrap().push(Call::Event);
         self.events
             .lock()

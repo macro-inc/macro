@@ -2,6 +2,7 @@
 
 use super::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
 use super::ports::EmailMessageEnqueuer;
+use crate::domain::notification_events::EmailEventBroker as _;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -268,9 +269,7 @@ where
                 EmailEventOrigin::UserAction,
             );
             if let Some(event) = event {
-                let _ = self.broker.send_event(&event).inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to publish email macro event");
-                });
+                self.broker.publish_email_event(&event);
             }
         }
 

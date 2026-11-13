@@ -71,6 +71,7 @@ fn subscribes_to_all_ingestion_topics() {
             "macro.channels",
             "macro.call_notifications",
             "macro.messages",
+            "macro.email_notifications",
             "macro.webhooks",
             "macro.agent_sessions",
             "macro.agent_session_lifecycle",
@@ -159,6 +160,7 @@ fn rejects_malformed_webhook_payloads() {
 #[derive(Clone)]
 struct FlakyIngestionService {
     attempts: Arc<AtomicU32>,
+    email_attempts: Arc<AtomicU32>,
     failures: u32,
     transient: bool,
 }
@@ -186,6 +188,14 @@ impl FlakyIngestionService {
 }
 
 impl WebhookEventIngestionService for FlakyIngestionService {
+    async fn ingest_email_event(
+        &self,
+        _event: Event<email::domain::notification_events::EmailNotificationEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.email_attempts.fetch_add(1, Ordering::SeqCst);
+        self.ingest()
+    }
+
     async fn ingest_call_notification_event(
         &self,
         _event: macro_event_broker::Event<call::domain::notification_events::CallNotificationEvent>,
@@ -246,6 +256,7 @@ fn flaky_service(failures: u32, transient: bool) -> (FlakyIngestionService, Arc<
     let attempts = Arc::new(AtomicU32::new(0));
     let service = FlakyIngestionService {
         attempts: attempts.clone(),
+        email_attempts: Arc::new(AtomicU32::new(0)),
         failures,
         transient,
     };
@@ -284,4 +295,38 @@ async fn permanent_webhook_failures_are_commit_safe_without_retry() {
         .expect("permanent failures are skipped so the offset commits");
 
     assert_eq!(attempts.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn decodes_and_dispatches_email_events() {
+    use email::domain::events::{EmailEventOrigin, ThreadReadMetadata};
+    use email::domain::notification_events::EmailNotificationEvent;
+
+    let link_id = Uuid::new_v4();
+    let event = Event::new(EmailNotificationEvent::ThreadRead(ThreadReadMetadata {
+        link_id,
+        owner: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user"),
+        actor: None,
+        thread_id: Uuid::new_v4(),
+        is_read: true,
+        origin: EmailEventOrigin::ProviderSync,
+    }));
+    let payload = serde_json::to_vec(&event).expect("serializable");
+    let decoded = decode_message("macro.email_notifications", &payload).expect("decodable");
+
+    match &decoded {
+        DeclaredMacroEvent::EmailNotificationMacroEvent(decoded) => {
+            assert_eq!(decoded.event(), &event)
+        }
+        _ => panic!("decoded into the wrong topic variant"),
+    }
+
+    let (service, attempts) = flaky_service(0, false);
+
+    ingest_with_retry(&service, &decoded, 0, 0)
+        .await
+        .expect("dispatches the email event to ingestion");
+
+    assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    assert_eq!(service.email_attempts.load(Ordering::SeqCst), 1);
 }

@@ -9,6 +9,7 @@ use chrono::Utc;
 use email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, MessageDeletedMetadata, MessageSentMetadata,
 };
+use email::domain::notification_events::EmailEventBroker as _;
 use email::domain::scheduled_delivery::state::{self as delivery, DeliveryClaim};
 use email::domain::scheduled_delivery::{
     ClaimedDelivery, DELIVERY_LEASE_SECONDS, DeliveryMode, DeliveryPause,
@@ -18,7 +19,7 @@ use email::domain::scheduled_delivery::{
 };
 use email::domain::send_attempt::{PreparedSendContentUnavailable, SendSnapshot};
 use email_api_client::domain::models::{EmailApiError, PreparedSendMessage, SendRequest, SentIds};
-use macro_event_broker::{KafkaEventPublisher, MacroEventBroker, MacroEventBrokerService};
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{attachment::AttachmentDraft, link::Link, message::MessageToSend};
@@ -75,7 +76,7 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
             )
             .await?
         {
-            let _ = self.macro_event_broker.send_event(&EmailMacroEvent::message_deleted(MessageDeletedMetadata {
+            let _ = self.macro_event_broker.send_email_event(&EmailMacroEvent::message_deleted(MessageDeletedMetadata {
                 link_id,
                 owner: link.macro_id,
                 message_id,
@@ -207,7 +208,7 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
                         async {
                             let _ = ctx
                         .macro_event_broker
-                        .send_event(&EmailMacroEvent::message_sent(MessageSentMetadata {
+                        .send_email_event(&EmailMacroEvent::message_sent(MessageSentMetadata {
                             link_id: link.id,
                             owner: link.macro_id.clone(),
                             actor,

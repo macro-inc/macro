@@ -1,5 +1,6 @@
 use connection_gateway_client::client::ConnectionGatewayClient;
 use email::domain::events::EmailMacroEvent;
+use email::domain::notification_events::EmailEventBroker as _;
 use macro_event_broker::MacroEventBroker;
 /// shared utils across different pubsub workers
 use models_email::api::refresh::RefreshEmailEvent;
@@ -42,12 +43,11 @@ pub async fn complete_transaction_with_processing_error<T>(
     }
 }
 
-/// Publish an email event to the `macro.email` Kafka topic, logging and
-/// dropping failures — event emission must never fail the email operation.
+/// Publish an email event to `macro.email` and its public form to
+/// `macro.email_notifications`, logging and dropping failures — event
+/// emission must never fail the email operation.
 pub fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
-    let _ = broker
-        .send_event(event)
-        .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
+    broker.publish_email_event(event);
 }
 
 /// Send message to connection gateway to trigger email refresh if user is active on FE

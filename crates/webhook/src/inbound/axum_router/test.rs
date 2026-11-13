@@ -350,6 +350,59 @@ async fn create_passes_authenticated_user_and_body_to_service() {
 }
 
 #[tokio::test]
+async fn bot_cannot_create_email_webhook() {
+    let service = FakeService::default();
+    let mut body = create_body();
+    body["filters"] = json!([{"events": ["email.thread_archived"]}]);
+
+    let response = send_bot_request(service.clone(), "POST", "/webhooks", body).await;
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        body["message"],
+        "email events require the inbox owner's own credential"
+    );
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn session_user_can_create_email_webhook() {
+    let service = FakeService::default();
+    let mut body = create_body();
+    body["filters"] = json!([{"events": ["email.thread_archived"]}]);
+
+    let response = send(
+        service.clone(),
+        FakeRateLimiter::default(),
+        "POST",
+        "/webhooks",
+        body,
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert!(matches!(
+        service.calls().as_slice(),
+        [ServiceCall::Create(..)]
+    ));
+}
+
+#[tokio::test]
+async fn bot_can_create_document_webhook() {
+    let service = FakeService::default();
+
+    let response = send_bot_request(service.clone(), "POST", "/webhooks", create_body()).await;
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert!(matches!(
+        service.calls().as_slice(),
+        [ServiceCall::Create(..)]
+    ));
+}
+
+#[tokio::test]
 async fn namespace_conflict_maps_to_409() {
     let service = FakeService::default();
     service.set_response(Err(WebhookError::Conflict(
@@ -400,6 +453,145 @@ async fn patch_passes_authenticated_user_path_and_body_to_service() {
         }
         other => panic!("unexpected call: {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn bot_cannot_patch_email_filters() {
+    let service = FakeService::default();
+
+    let response = send_bot_request(
+        service.clone(),
+        "PATCH",
+        "/webhooks/wh_123",
+        json!({"filters": [{"events": ["email.message_received"]}]}),
+    )
+    .await;
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        body["message"],
+        "email events require the inbox owner's own credential"
+    );
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_can_patch_name_without_filters() {
+    let service = FakeService::default();
+
+    let response = send_bot_request(
+        service.clone(),
+        "PATCH",
+        "/webhooks/wh_123",
+        json!({"name": "Renamed"}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(matches!(
+        service.calls().as_slice(),
+        [ServiceCall::Get(..), ServiceCall::Patch(..)]
+    ));
+}
+
+#[tokio::test]
+async fn bot_cannot_change_a_webhook_that_delivers_email_events() {
+    for patch in [
+        json!({"endpoint_url": "https://elsewhere.example.com/hook"}),
+        json!({"name": "Renamed"}),
+        json!({"status": "paused"}),
+        json!({"headers": {"x-extra": "1"}}),
+        json!({"filters": [{"events": ["document.created"]}]}),
+    ] {
+        let service = FakeService::default();
+        let mut stored = webhook();
+        stored.filters = vec![crate::domain::models::WebhookFilter {
+            events: vec![
+                "document.created".to_string(),
+                "email.thread_archived".to_string(),
+            ],
+            ids: None,
+        }];
+        service.set_response(Ok(ServiceResponse::Webhook(stored)));
+
+        let response =
+            send_bot_request(service.clone(), "PATCH", "/webhooks/wh_123", patch.clone()).await;
+        let status = response.status();
+        let body = response_json(response).await;
+
+        assert_eq!(status, StatusCode::FORBIDDEN, "{patch}");
+        assert_eq!(
+            body["message"],
+            "email events require the inbox owner's own credential"
+        );
+        assert!(
+            matches!(service.calls().as_slice(), [ServiceCall::Get(..)]),
+            "{patch}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn bot_cannot_validate_a_webhook_that_delivers_email_events() {
+    let service = FakeService::default();
+    let mut stored = webhook();
+    stored.filters = vec![crate::domain::models::WebhookFilter {
+        events: vec!["email.message_received".to_string()],
+        ids: None,
+    }];
+    service.set_response(Ok(ServiceResponse::Webhook(stored)));
+
+    let response = send_bot_request(
+        service.clone(),
+        "POST",
+        "/webhooks/wh_123/validate",
+        json!({}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(matches!(service.calls().as_slice(), [ServiceCall::Get(..)]));
+}
+
+#[tokio::test]
+async fn bot_can_validate_a_webhook_without_email_events() {
+    let service = FakeService::default();
+
+    let response = send_bot_request(
+        service.clone(),
+        "POST",
+        "/webhooks/wh_123/validate",
+        json!({}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(matches!(
+        service.calls().as_slice(),
+        [ServiceCall::Get(..), ServiceCall::Validate(..)]
+    ));
+}
+
+#[tokio::test]
+async fn user_can_change_a_webhook_that_delivers_email_events() {
+    let service = FakeService::default();
+
+    let response = send(
+        service.clone(),
+        FakeRateLimiter::default(),
+        "PATCH",
+        "/webhooks/wh_123",
+        json!({"endpoint_url": "https://elsewhere.example.com/hook"}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(matches!(
+        service.calls().as_slice(),
+        [ServiceCall::Patch(..)]
+    ));
 }
 
 #[tokio::test]
@@ -635,6 +827,32 @@ async fn send(
         body,
     )
     .await
+}
+
+async fn send_bot_request(
+    service: FakeService,
+    method: &str,
+    uri: &str,
+    body: serde_json::Value,
+) -> axum::response::Response {
+    let authorization_state =
+        MacroAuthorizationState::new(Arc::new(FakeAuthorizationService::default()));
+    let router = webhook_router::<_, _, _, ()>(WebhookRouterState::new(
+        service,
+        FakeRateLimiter::default(),
+        authorization_state,
+    ));
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("x-macro-bot-token", "mbot_feed_test")
+        .header("x-macro-bot-scope", "user")
+        .header("x-macro-bot-for-macro-user-id", user_id())
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    router.oneshot(request).await.unwrap()
 }
 
 async fn send_request(
