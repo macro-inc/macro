@@ -1296,6 +1296,24 @@ async fn permanent_delete_finishes_after_the_request_is_dropped() {
     assert_eq!(finished_rx.await, Ok(()));
 }
 
+/// Events a folder operation publishes carry the agent attribution of the
+/// request that started it, so the spawned task must keep it.
+#[tokio::test]
+async fn run_on_own_task_keeps_the_agent_attribution() {
+    let agent_correlation_id = Uuid::from_u128(0xa6e7);
+
+    let seen = agent_correlation::context::scope(
+        Some(agent_correlation_id),
+        super::delete_project::run_on_own_task(async {
+            Ok::<_, ProjectError>(agent_correlation::context::current())
+        }),
+    )
+    .await
+    .expect("work should succeed");
+
+    assert_eq!(seen, Some(agent_correlation_id));
+}
+
 #[tokio::test]
 async fn permanent_delete_requires_owner_access() {
     let service = FakeProjectService::with_project("macro|owner@example.com", true);

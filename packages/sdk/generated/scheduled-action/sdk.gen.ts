@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, AttachSuggestionDraftData, AttachSuggestionDraftErrors, AttachSuggestionDraftResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DetachScheduledActionData, DetachScheduledActionErrors, DetachScheduledActionResponses, DiscardRoutineDraftJobData, DiscardRoutineDraftJobErrors, DiscardRoutineDraftJobResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetRoutineDraftJobData, GetRoutineDraftJobErrors, GetRoutineDraftJobResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListRoutineDraftJobsData, ListRoutineDraftJobsErrors, ListRoutineDraftJobsResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, RecordSuggestionsSeenData, RecordSuggestionsSeenErrors, RecordSuggestionsSeenResponses, RetireRoutineSuggestionData, RetireRoutineSuggestionErrors, RetireRoutineSuggestionResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewRoutineSuggestionsData, ReviewRoutineSuggestionsErrors, ReviewRoutineSuggestionsResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, StartRoutineDraftJobData, StartRoutineDraftJobErrors, StartRoutineDraftJobResponses, StartSuggestionGenerationData, StartSuggestionGenerationErrors, StartSuggestionGenerationResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, AttachSuggestionDraftData, AttachSuggestionDraftErrors, AttachSuggestionDraftResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DetachScheduledActionData, DetachScheduledActionErrors, DetachScheduledActionResponses, DiscardRoutineDraftJobData, DiscardRoutineDraftJobErrors, DiscardRoutineDraftJobResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetRoutineDraftJobData, GetRoutineDraftJobErrors, GetRoutineDraftJobResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, GetSuggestionGenerationData, GetSuggestionGenerationErrors, GetSuggestionGenerationResponses, ListRoutineDraftJobsData, ListRoutineDraftJobsErrors, ListRoutineDraftJobsResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, RecordSuggestionsSeenData, RecordSuggestionsSeenErrors, RecordSuggestionsSeenResponses, RecordSuggestionsViewedData, RecordSuggestionsViewedErrors, RecordSuggestionsViewedResponses, RegenerateSuggestionsData, RegenerateSuggestionsErrors, RegenerateSuggestionsResponses, RestoreSuggestionData, RestoreSuggestionErrors, RestoreSuggestionResponses, RetireRoutineSuggestionData, RetireRoutineSuggestionErrors, RetireRoutineSuggestionResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewRoutineSuggestionsData, ReviewRoutineSuggestionsErrors, ReviewRoutineSuggestionsResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, StartRoutineDraftJobData, StartRoutineDraftJobErrors, StartRoutineDraftJobResponses, StartSuggestionGenerationData, StartSuggestionGenerationErrors, StartSuggestionGenerationResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -302,6 +302,21 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * The caller's suggestion generations now.
+     */
+    public getSuggestionGeneration<ThrowOnError extends boolean = false>(options?: Options<GetSuggestionGenerationData, ThrowOnError>): RequestResult<GetSuggestionGenerationResponses, GetSuggestionGenerationErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetSuggestionGenerationResponses, GetSuggestionGenerationErrors, ThrowOnError>({ url: '/suggestions/generation', ...options });
+    }
+
+    /**
+     * Start fresh suggestions for the caller: at most once an hour, and not
+     * while one of their generations runs.
+     */
+    public regenerateSuggestions<ThrowOnError extends boolean = false>(options: Options<RegenerateSuggestionsData, ThrowOnError>): RequestResult<RegenerateSuggestionsResponses, RegenerateSuggestionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RegenerateSuggestionsResponses, RegenerateSuggestionsErrors, ThrowOnError>({ url: '/suggestions/regenerate', ...options });
+    }
+
+    /**
      * What a suggestions generation session reads before managing suggestions.
      */
     public reviewSuggestions<ThrowOnError extends boolean = false>(options?: Options<ReviewSuggestionsData, ThrowOnError>): RequestResult<ReviewSuggestionsResponses, ReviewSuggestionsErrors, ThrowOnError> {
@@ -313,6 +328,14 @@ export class Sdk extends HeyApiClient {
      */
     public recordSuggestionsSeen<ThrowOnError extends boolean = false>(options: Options<RecordSuggestionsSeenData, ThrowOnError>): RequestResult<RecordSuggestionsSeenResponses, RecordSuggestionsSeenErrors, ThrowOnError> {
         return (options.client ?? this.client).post<RecordSuggestionsSeenResponses, RecordSuggestionsSeenErrors, ThrowOnError>({ url: '/suggestions/seen', ...options });
+    }
+
+    /**
+     * The caller opened their feed: what it showed as new no longer is. The app
+     * sends it once the feed is on screen.
+     */
+    public recordSuggestionsViewed<ThrowOnError extends boolean = false>(options?: Options<RecordSuggestionsViewedData, ThrowOnError>): RequestResult<RecordSuggestionsViewedResponses, RecordSuggestionsViewedErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<RecordSuggestionsViewedResponses, RecordSuggestionsViewedErrors, ThrowOnError>({ url: '/suggestions/viewed', ...options });
     }
 
     /**
@@ -332,8 +355,9 @@ export class Sdk extends HeyApiClient {
     /**
      * The caller, or someone acting for them, acts on a suggestion: a background
      * prompt suggestion starts its run when the person accepts it in the app (anyone
-     * else only takes it on); any other is done once they act on it (open its
-     * item, the composer, the routine), and shows in the feed's `done`.
+     * else only takes it on); a note or prompt is done once they act on it (open its
+     * item or the composer), and shows in the feed's `done`. A routine suggestion is
+     * refused: the person saves its routine in the app, which makes it done.
      */
     public acceptSuggestion<ThrowOnError extends boolean = false>(options: Options<AcceptSuggestionData, ThrowOnError>): RequestResult<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError>({
@@ -366,6 +390,14 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * The caller, or their own agent, takes back dismissing a suggestion, within
+     * five minutes of it.
+     */
+    public restoreSuggestion<ThrowOnError extends boolean = false>(options: Options<RestoreSuggestionData, ThrowOnError>): RequestResult<RestoreSuggestionResponses, RestoreSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RestoreSuggestionResponses, RestoreSuggestionErrors, ThrowOnError>({ url: '/suggestions/{id}/restore', ...options });
     }
 
     /**

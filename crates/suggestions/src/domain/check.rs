@@ -188,13 +188,13 @@ pub fn keeps_draft(kind: &SuggestionKind, about: &[Target], problems: &mut Vec<S
     if let SuggestionKind::Entity {
         draft: Some(draft), ..
     } = kind
-        && !draft_is_about(draft, about)
+        && !draft_is_about(&draft.target, about)
     {
         problems.push(format!(
             "this suggestion's draft is in {} `{}`, so `about` keeps it; for another item, retire \
              this suggestion and suggest a new one",
-            draft.entity_type.as_ref(),
-            draft.entity_id
+            draft.target.entity_type.as_ref(),
+            draft.target.entity_id
         ));
     }
 }

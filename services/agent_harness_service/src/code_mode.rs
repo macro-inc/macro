@@ -29,8 +29,9 @@ pub trait SessionScopes: Send + Sync + 'static {
 }
 
 /// Suggestion generation sessions read, and write only through their own
-/// tools and email drafts; a background run whose suggestion sends nothing
-/// reaches nobody.
+/// tools and email drafts, until they are deleted: one whose turn ended but
+/// is still being stopped, or whose delete was given up, keeps the scope. A
+/// background run whose suggestion sends nothing reaches nobody.
 pub struct HarnessScopes {
     pub generations: Arc<dyn suggestions::domain::ports::GenerationSessions>,
     pub runs: Arc<dyn suggestions::domain::ports::RunScopes>,
@@ -39,7 +40,7 @@ pub struct HarnessScopes {
 #[async_trait]
 impl SessionScopes for HarnessScopes {
     async fn scope(&self, session: uuid::Uuid) -> Result<Option<SessionScope>, rootcause::Report> {
-        if self.generations.open_session(session).await?.is_some() {
+        if self.generations.undeleted(session).await? {
             return Ok(Some(SessionScope::Generation));
         }
         Ok(self

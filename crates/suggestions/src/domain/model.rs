@@ -7,6 +7,11 @@ use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::run::{RunState, RunStateName};
+
+#[cfg(test)]
+mod test;
+
 /// One proactive suggestion for one person.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -39,11 +44,111 @@ pub struct Suggestion {
     pub updated_at: DateTime<Utc>,
     /// When its state last changed, such as when it was dismissed.
     pub state_changed_at: DateTime<Utc>,
+    /// What the card shows: whether it is open, being run, failed or done.
+    pub status: SuggestionStatus,
+    /// Proposed since the person last opened their feed. Only the feed sets
+    /// it; false everywhere else.
+    pub is_new: bool,
     /// A background prompt suggestion's latest run.
     pub run: Option<SuggestionRun>,
+    /// What to open to see how acting on it went, only while it is done or
+    /// its latest run failed: the first item its latest, finished run made
+    /// (else that run's session), a failed run's session, or what was made
+    /// from a done suggestion that didn't run.
+    pub result: Option<Target>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
     pub kind: SuggestionKind,
+}
+
+/// What to open to see how acting on a suggestion in `state`, whose latest run
+/// is `run` and which produced `produced`, went: only for a done suggestion
+/// (what its finished run made, else the session; what was made without a
+/// run) or an accepted one whose run failed (the session). An open suggestion
+/// shows none, even one restored while its old run settled.
+///
+/// Each finished run adds its session to `produced`, then what it made, so
+/// the latest run's items are those after its session: an earlier run, one
+/// cancelled before the suggestion was restored and run again, never
+/// answers for it.
+pub fn result_of(
+    state: SuggestionState,
+    run: Option<&SuggestionRun>,
+    produced: &[Target],
+) -> Option<Target> {
+    let is_item = |target: &&Target| target.entity_type != EntityType::AgentSession;
+    let made = || produced.iter().find(is_item).cloned();
+    let session = |run: &SuggestionRun| Target {
+        entity_type: EntityType::AgentSession,
+        entity_id: run.session_id.to_string(),
+        part_id: None,
+    };
+    let made_by = |run: &SuggestionRun| {
+        let own = session(run);
+        match produced.iter().position(|target| *target == own) {
+            Some(at) => produced.iter().skip(at + 1).find(is_item).cloned(),
+            None => made(),
+        }
+    };
+    match (state, run) {
+        (SuggestionState::Done, Some(run)) if run.state == RunStateName::Finished => {
+            made_by(run).or_else(|| Some(session(run)))
+        }
+        (SuggestionState::Done, None) => made(),
+        (SuggestionState::Accepted, Some(run)) if run.state == RunStateName::Failed => {
+            Some(session(run))
+        }
+        _ => None,
+    }
+}
+
+/// What a suggestion's card shows, from its state and its latest run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, strum::AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SuggestionStatus {
+    /// Open, nothing under way: shown to act on (an agent may have taken a
+    /// background prompt suggestion on for the person to run).
+    Open,
+    /// Its latest run hasn't settled: it is starting, working, waiting,
+    /// being stopped for running over its time, or, for a suggestion
+    /// restored after a dismissal, still being cancelled (it runs again once
+    /// that settles).
+    Running,
+    /// Accepted, and its latest run failed: running it again retries.
+    Failed,
+    /// Done.
+    Done,
+    /// Dismissed, resolved or retired; never in the feed.
+    Closed,
+}
+
+impl SuggestionStatus {
+    /// The status of a suggestion in `state` whose latest run is `run`. An
+    /// open suggestion whose run is still being cancelled (restored after a
+    /// dismissal) shows running: it can't run again until that settles.
+    pub fn of(state: SuggestionState, run: Option<&SuggestionRun>) -> Self {
+        match (state, run.map(|run| run.state)) {
+            (SuggestionState::Done, _) => Self::Done,
+            (
+                SuggestionState::Dismissed | SuggestionState::Resolved | SuggestionState::Retired,
+                _,
+            ) => Self::Closed,
+            (_, Some(run)) if !run.is_settled() => Self::Running,
+            (SuggestionState::Accepted, Some(RunStateName::Failed)) => Self::Failed,
+            (SuggestionState::Proposed | SuggestionState::Accepted, _) => Self::Open,
+        }
+    }
+}
+
+impl Suggestion {
+    /// Whether it became proposed after `viewed`, when the person last opened
+    /// their feed; with no visit, every proposed one is. Accepted and closed
+    /// suggestions never are.
+    pub fn proposed_since(&self, viewed: Option<DateTime<Utc>>) -> bool {
+        self.state == SuggestionState::Proposed
+            && viewed.is_none_or(|viewed| self.state_changed_at > viewed)
+    }
 }
 
 /// A run of a background prompt suggestion: a hidden agent session of the
@@ -51,40 +156,15 @@ pub struct Suggestion {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SuggestionRun {
-    /// The agent session: open it to see the result or answer what it
-    /// waits for.
+    /// The agent session: open it to see the result.
     #[schema(value_type = String, format = Uuid)]
     pub session_id: Uuid,
     /// When it started.
     pub started_at: DateTime<Utc>,
-    /// How it is going, read from the session.
-    pub progress: RunProgress,
-}
-
-/// How a run is going, as its session says.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema, strum::AsRefStr)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum RunProgress {
-    /// Working.
-    Running,
-    /// Waiting for the person to approve a tool call.
-    NeedsApproval,
-    /// Waiting for the person to answer a question.
-    NeedsInput,
-    /// Done; its result is in the session and the suggestion's `produced`.
-    Finished,
-    /// It stopped without finishing; accepting the suggestion again retries.
-    Failed,
-    /// The session couldn't be read just now.
-    Unknown,
-}
-
-impl RunProgress {
-    /// Finished or failed: nothing more will happen.
-    pub fn is_over(self) -> bool {
-        matches!(self, Self::Finished | Self::Failed)
-    }
+    /// Where it is, as stored: reading it never asks the session.
+    pub state: RunStateName,
+    /// When it entered `state`.
+    pub state_changed_at: DateTime<Utc>,
 }
 
 /// Where a run's session is, as the scheduler reads it.
@@ -106,19 +186,6 @@ pub enum SessionState {
     Failed,
 }
 
-impl SessionState {
-    /// How the run shows on its suggestion.
-    pub fn progress(self) -> RunProgress {
-        match self {
-            Self::AwaitingPrompt | Self::Running | Self::Disconnected => RunProgress::Running,
-            Self::NeedsApproval => RunProgress::NeedsApproval,
-            Self::NeedsInput => RunProgress::NeedsInput,
-            Self::Finished => RunProgress::Finished,
-            Self::Failed => RunProgress::Failed,
-        }
-    }
-}
-
 /// Why a run's session couldn't be read.
 #[derive(Debug)]
 pub enum SessionReadError {
@@ -138,7 +205,7 @@ pub enum RunStartError {
     Uncertain(rootcause::Report),
 }
 
-/// A run as stored, before its progress is read.
+/// A run as stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StoredRun {
     /// The agent session.
@@ -153,17 +220,12 @@ pub struct StoredRun {
     pub action: Uuid,
     /// When it started.
     pub started_at: DateTime<Utc>,
-    /// Whether it was settled, and how.
-    pub settled: Option<RunSettled>,
-}
-
-/// How a finished run was settled.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RunSettled {
-    /// It finished: the suggestion is done.
-    Finished,
-    /// It failed: the suggestion may be accepted again.
-    Failed,
+    /// Where it is.
+    pub state: RunState,
+    /// When it entered `state`: with `state`, what a write expects to find.
+    pub state_changed_at: DateTime<Utc>,
+    /// What it may send or post: the suggestion's `sends` when it started.
+    pub sends: Option<String>,
 }
 
 /// What kind of suggestion it is, with that kind's data. A kind never changes.
@@ -191,7 +253,12 @@ pub enum SuggestionKind {
         action: EntityAction,
         /// A reply suggestion's draft, once a session wrote one: the email thread
         /// it is in, with the draft as the part.
-        draft: Option<Target>,
+        draft: Option<SuggestionDraft>,
+        /// A reply suggestion's: when the message the person hasn't answered
+        /// came, as read from its item when the suggestion was last written.
+        waiting_since: Option<DateTime<Utc>>,
+        /// A reply suggestion's: that message's sender, by name.
+        from: Option<String>,
     },
     /// A routine suggestion, shown among suggestions.
     #[serde(rename_all = "camelCase")]
@@ -199,7 +266,82 @@ pub enum SuggestionKind {
         /// The suggestion it shows.
         #[schema(value_type = String, format = Uuid)]
         routine_suggestion_id: Uuid,
+        /// How its drafted routine reads, in the feed only; absent when the
+        /// routine suggestion couldn't be read.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        routine: Option<RoutineText>,
     },
+}
+
+/// How a routine suggestion's drafted routine reads on its card.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineText {
+    /// What it does: a step's sentence with the values AI picked marked, or
+    /// its description (else its name) as one unmarked part.
+    pub sentence: Vec<RoutineSentencePart>,
+    /// When it runs, e.g. "Fridays at 9:00 AM" or "New email received".
+    pub when: String,
+}
+
+/// A part of a routine's sentence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineSentencePart {
+    /// What it says.
+    pub text: String,
+    /// It is a value AI picked, which the person can change.
+    pub picked: bool,
+}
+
+/// A reply suggestion's draft.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionDraft {
+    /// The email thread it is in, with the draft as the part.
+    #[serde(flatten)]
+    pub target: Target,
+    /// The start of its plain text, as it was when attached.
+    pub preview: Option<String>,
+}
+
+/// Who a reply suggestion's item waits on the person for, and since when.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Waiting {
+    /// When the message the person hasn't answered came.
+    pub since: DateTime<Utc>,
+    /// Its sender, by name, when they have one.
+    pub from: Option<String>,
+}
+
+/// The most characters of a sender's name a card shows.
+pub const MAX_SENDER_CHARS: usize = 80;
+
+/// `name` as a card may show it for who a reply waits on: one plain line,
+/// never an email address or other personal detail.
+pub fn sender_name(name: &str) -> Option<String> {
+    shown_text::line(name, MAX_SENDER_CHARS)
+        .filter(|name| shown_text::personal_detail(name).is_none())
+}
+
+/// The most characters of a draft's plain text a card previews.
+pub const DRAFT_PREVIEW_CHARS: usize = 300;
+
+/// The start of `text` a card previews: its words with whitespace collapsed,
+/// at most [`DRAFT_PREVIEW_CHARS`] characters; `None` when it has none.
+pub fn preview_of(text: &str) -> Option<String> {
+    let mut preview = String::new();
+    for (count, word) in text.split_whitespace().enumerate() {
+        if count > 0 {
+            preview.push(' ');
+        }
+        preview.push_str(word);
+        if preview.chars().count() >= DRAFT_PREVIEW_CHARS {
+            break;
+        }
+    }
+    let preview: String = preview.chars().take(DRAFT_PREVIEW_CHARS).collect();
+    (!preview.is_empty()).then_some(preview)
 }
 
 impl SuggestionKind {
@@ -249,6 +391,7 @@ pub enum KindName {
     ToSchema,
     strum::EnumString,
     strum::AsRefStr,
+    strum::EnumIter,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -373,14 +516,52 @@ pub struct Target {
 }
 
 /// A person's feed: their open suggestions, best first, and the ones they
-/// finished in the last day, newest first.
+/// finished in the last day, newest first. Both lists are in the order to
+/// show them.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SuggestionFeed {
-    /// The open suggestions.
+    /// The open suggestions, at most `limit` of them.
     pub suggestions: Vec<Suggestion>,
-    /// Suggestions done in the last 24 hours, with what they produced.
-    pub done: Vec<Suggestion>,
+    /// Suggestions done in the last 24 hours, with what they produced; left
+    /// out when the feed was read with a `limit`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub done: Option<Vec<Suggestion>>,
+    /// How many suggestions the whole feed holds of each status, whatever the
+    /// `limit`.
+    pub counts: FeedCounts,
+}
+
+/// How many of a person's shown suggestions have each status.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedCounts {
+    /// Open, nothing under way.
+    pub open: u32,
+    /// Their run is under way.
+    pub running: u32,
+    /// Their last run failed.
+    pub failed: u32,
+    /// Done in the last 24 hours.
+    pub done: u32,
+}
+
+impl FeedCounts {
+    /// The counts of `suggestions`.
+    pub fn of<'a>(suggestions: impl IntoIterator<Item = &'a Suggestion>) -> Self {
+        let mut counts = Self::default();
+        for suggestion in suggestions {
+            let count = match suggestion.status {
+                SuggestionStatus::Open => &mut counts.open,
+                SuggestionStatus::Running => &mut counts.running,
+                SuggestionStatus::Failed => &mut counts.failed,
+                SuggestionStatus::Done => &mut counts.done,
+                SuggestionStatus::Closed => continue,
+            };
+            *count = count.saturating_add(1);
+        }
+        counts
+    }
 }
 
 /// What a generation session reads before managing the person's suggestions:
@@ -542,6 +723,10 @@ pub struct SuggestionContent {
     pub prompt: Option<String>,
     /// A background prompt suggestion's [`SuggestionKind::Prompt::sends`].
     pub sends: Option<String>,
+    /// A reply suggestion's [`Waiting`], read from its items rather than
+    /// written by the session, so never in the change log.
+    #[serde(skip)]
+    pub waiting: Option<Waiting>,
 }
 
 impl SuggestionContent {
@@ -562,6 +747,19 @@ impl SuggestionContent {
                 SuggestionKind::Prompt { sends, .. } => sends.clone(),
                 SuggestionKind::Entity { .. } | SuggestionKind::Routine { .. } => None,
             },
+            waiting: match &suggestion.kind {
+                SuggestionKind::Entity {
+                    waiting_since: Some(since),
+                    from,
+                    ..
+                } => Some(Waiting {
+                    since: *since,
+                    from: from.clone(),
+                }),
+                SuggestionKind::Entity { .. }
+                | SuggestionKind::Prompt { .. }
+                | SuggestionKind::Routine { .. } => None,
+            },
         }
     }
 }
@@ -581,17 +779,32 @@ pub enum NewKind {
     },
 }
 
-/// What starts a generation: a person finishing onboarding, or their night.
-/// Shared by everything a generation's sessions write.
+/// What starts a generation: a person finishing onboarding, their night, or
+/// the person asking for fresh suggestions. Shared by everything a
+/// generation's sessions write.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr, strum::IntoStaticStr,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::EnumString,
+    strum::AsRefStr,
+    strum::IntoStaticStr,
+    strum::EnumIter,
+    serde::Serialize,
+    utoipa::ToSchema,
 )]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum GenerationTrigger {
     /// The person just signed up; their workspace is nearly empty.
     Onboarding,
     /// The nightly run in the person's night: full research, then manage.
     Nightly,
+    /// The person asked for fresh suggestions: the nightly run's research,
+    /// while they wait.
+    Manual,
 }
 
 /// What a generation session may call: suggestions or routine suggestions.
@@ -722,9 +935,19 @@ pub enum SuggestionError {
     /// the person.
     #[error("a generation session may not read the feed or act on suggestions")]
     Generating,
-    /// The suggestion changed since the caller read it: here it is as it is now.
+    /// The suggestion changed since the caller read it, or a run of it is
+    /// still settling: here it is as it is now.
     #[error("the suggestion changed since it was read; read it again")]
     Changed(Box<Suggestion>),
+    /// A routine suggestion isn't accepted: the person saves its routine in
+    /// the app, which saves the suggestion and records the routine it
+    /// produced.
+    #[error("a routine suggestion is not accepted; the user saves its routine in the app")]
+    RoutineNotAccepted,
+    /// Only a suggestion the person dismissed in the last few minutes comes
+    /// back, and not a routine suggestion.
+    #[error("only a suggestion dismissed in the last five minutes can be restored")]
+    NotRestorable,
     /// Anything else.
     #[error("internal suggestions error: {0:?}")]
     Internal(rootcause::Report),

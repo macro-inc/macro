@@ -613,6 +613,7 @@ dependencies = [
  "channels",
  "chat",
  "chrono",
+ "chrono-tz",
  "clap",
  "code_execution",
  "code_mode_assets",
@@ -1405,9 +1406,9 @@ checksum = "c880a97d28a3681c0267bd29cff89621202715b065127cd445fa0f0fe0aa2880"
 
 [[package]]
 name = "ammonia"
-version = "4.1.8"
+version = "4.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f6660fb4ff692ef4937b1b4e74ab3d378653d8588389587d91f96a296907ea0"
+checksum = "935c841d86ee68ba89a983ea6e4255436f769ab1e2b701574653baf4b30739ce"
 dependencies = [
  "cssparser 0.37.0",
  "html5ever 0.39.0",
@@ -17504,6 +17505,7 @@ name = "routine_program"
 version = "0.1.0"
 dependencies = [
  "bots",
+ "nom 8.0.0",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -20171,6 +20173,7 @@ name = "suggestions"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
+ "agent_session",
  "async-trait",
  "axum",
  "bot_id",
@@ -20179,6 +20182,7 @@ dependencies = [
  "chrono-tz",
  "documents",
  "email",
+ "email_utils",
  "entity_access",
  "entity_registry",
  "feature_flags",

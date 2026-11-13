@@ -5,6 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { Target } from './target';
+import type { SuggestionDraft } from './suggestionDraft';
 
-export type SuggestionKindOneOfFourDraft = null | Target;
+export type SuggestionKindOneOfFourDraft = null | SuggestionDraft;

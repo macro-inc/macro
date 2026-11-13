@@ -1,3 +1,5 @@
+// Everything else the app imports from it is the real module's.
+export * from '../../../../../lib/queries/computers/claude';
 export function useClaudeModeQuery() {
   return { isSuccess: false, data: undefined };
 }

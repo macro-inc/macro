@@ -118,6 +118,10 @@ Pulumi stacks; they do not host extra agent processes.
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
+- `src/computers/setup_notice.rs`: `IngressSetupNotices`, the operator's
+  `SetupNotices` port: sends the buyer `computer_setup` (ready, or failed with
+  the status's failure reason; inbox, gateway, push) on the team entity, with
+  an id derived from computer and outcome (plus `failed_at` for a failure).
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
   the harness can run code, every client but ChatGPT gets only
@@ -201,9 +205,15 @@ Pulumi stacks; they do not host extra agent processes.
   every minute and starts nightly generations every five minutes, once the
   process is ready.
   Accepted background prompt suggestions run in hidden, billable sessions of the
-  in-process Macro agent (`SuggestionRunSessions` in `scheduling.rs`), settled
-  every 30 s. The suggestions routes are served here too, and `scheduling.rs` runs suggestions'
-  resolution consumer (group `suggestions-resolution`, `crates/suggestions`) beside the
+  in-process Macro agent (`SuggestionRunSessions` in `scheduling.rs`, which reads
+  every page of a session's activity for what it created, each item once). Runs
+  move from their sessions' lifecycle events and a reconcile sweep every five
+  minutes. Reply suggestions read who they wait on from their email thread or
+  channel message through `ItemReplyWaits` (`crates/suggestions`), built over
+  the email repository and the shared pool. The suggestions routes are served
+  here too, and `scheduling.rs` runs
+  suggestions' resolution consumer (group `suggestions-resolution`) and runs
+  consumer (group `suggestions-runs`, both `crates/suggestions`) beside the
   event intake, under the same readiness gate and shutdown.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar

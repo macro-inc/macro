@@ -23,3 +23,7 @@ the `suggestions` crate's repository shares the lock, limit and change-log helpe
 
 - `add_routine_card` takes the person's advisory lock; call it before any
   other suggestion write in the same transaction, or limits can race.
+- `move_routine_card` moves a card only from the state its routine
+  suggestion's transition expects; only `crates/scheduled_action`'s
+  `pg_suggestion_repo::transition` calls it, after locking the routine
+  suggestion's row, and never takes the advisory lock.
