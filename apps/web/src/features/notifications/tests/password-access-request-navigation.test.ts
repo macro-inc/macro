@@ -101,6 +101,25 @@ it('opens Passwords on the requested item of its team, in a new split when asked
   );
 });
 
+it('points an already open Passwords split at the requested item', async () => {
+  const replace = vi.fn();
+  openWithSplit.mockReturnValueOnce({
+    status: 'reused',
+    split: { replace },
+  } as never);
+
+  expect((await openNotification(notification, layout)).isOk()).toBe(true);
+
+  expect(replace).toHaveBeenCalledExactlyOnceWith({
+    next: expect.objectContaining({
+      id: 'passwords',
+      params: { teamId: 'team-1', itemId: 'item-1', requestId: 'request-1' },
+    }),
+    mergeHistory: true,
+    referredFrom: null,
+  });
+});
+
 it('opens nothing once Passwords is turned off', async () => {
   mocks.passwordsEnabled = false;
 
