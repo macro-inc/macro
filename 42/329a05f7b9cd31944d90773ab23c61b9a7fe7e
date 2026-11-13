@@ -1,0 +1,23 @@
+apps/web/scripts/cached-wasm-build.sh
+  s_c1146e8a8b951b::t_1d5f88cabb249d 99-106
+nix/cloud-storage.nix
+  s_c1146e8a8b951b::t_bbed55d2ceab3d 1276-1287
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build.rs
+  s_c1146e8a8b951b::t_d7fc8896845eef 250-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "42329a05f7b9cd31944d90773ab23c61b9a7fe7e",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
