@@ -40,6 +40,12 @@ agents use for attribution. `services/gitai_service` wires it up.
   `last_used_at` is rewritten at most every 5 minutes.
 - Identity on stored data is the credential's email and hostname;
   `X-Author-Identity` is never read.
+- `/worker/*` handlers authenticate from the headers before reading the
+  body, so an unauthenticated request never makes the task buffer it.
+- Trust model: every enrolled device is trusted equally. Any device
+  credential can overwrite any commit's index item and `notes/<sha>` (the
+  last Committed event or notes upload wins), and read every session's
+  transcript. Revoking the credential is the remedy for a bad device.
 
 ## Ingest rules
 
@@ -117,6 +123,9 @@ back in time order. Counter attributes are absent while zero.
   `DeviceAuthenticator` (implemented by `GitaiService`). Response shapes are
   the plan's READ API contract (snake_case, not the repo's camelCase DTOs),
   plus `unattributed_commits`.
+- Contract deviation: a commit or pull request that GitHub knows but that has
+  no stored notes answers 200 with every commit in `unattributed_commits` and
+  no sessions, not 404. 404 means neither GitHub nor the index knows it.
 - A commit with an indexed note answers from it (`resolved_via: note`).
   Otherwise GitHub's commit subject must end in `(#N)`; pull request N's
   commits (GitHub lists at most 250) are joined to indexed commits
@@ -125,7 +134,9 @@ back in time order. Counter attributes are absent while zero.
 - GitHub answers are cached: a commit's link 30 days, an open pull request's
   commits 5 minutes, a closed one's 30 days. Notes are joined on every read.
 - Per-session `ai_lines` come from each note's line attestations
-  (`domain/read/attestation.rs`); `tokens`/`cost_usd` are whole sessions'.
+  (`domain/read/attestation.rs`). `tokens` and `cost_usd` are each session's
+  whole-life totals, attributed in full to every commit or pull request the
+  session touched, so they are not additive across commits.
   Pull request totals add per-commit numbers, so lines rewritten by a later
   commit of the same pull request count twice.
 - Blame uses GitHub's GraphQL blame, which needs `GITHUB_TOKEN` (501

@@ -275,9 +275,9 @@ pub struct SessionSummary {
     pub last_seen: Option<DateTime<Utc>>,
     /// Lines its notes attribute to it in these commits.
     pub ai_lines: u64,
-    /// The whole session's tokens.
+    /// The whole session's tokens, not only this commit's share.
     pub tokens: Tokens,
-    /// The whole session's cost.
+    /// The whole session's cost, not only this commit's share.
     pub cost_usd: f64,
     /// Its index entry.
     pub url: String,
@@ -294,7 +294,10 @@ impl SessionSummary {
     }
 }
 
-/// `GET /v1/commits/{sha}` and `GET /v1/prs/macro-inc/macro/{n}`.
+/// `GET /v1/commits/{sha}` and `GET /v1/prs/macro-inc/macro/{n}`. A commit
+/// or pull request GitHub knows but with no stored notes is answered with
+/// every commit unattributed and no sessions (the contract says 404; 404 here
+/// means nothing is known at all).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Attribution {
     /// Always [`REPOSITORY`].
@@ -317,9 +320,10 @@ pub struct Attribution {
     pub human_lines: u64,
     /// `ai_lines / (ai_lines + human_lines)`; `None` when both are zero.
     pub ai_share: Option<f64>,
-    /// Tokens of the sessions, whole sessions.
+    /// Tokens of the sessions: each session's whole-life total, so a
+    /// session that also wrote other commits counts in full here too.
     pub tokens: Tokens,
-    /// Cost of the sessions, whole sessions.
+    /// Cost of the sessions, whole-life totals like `tokens`.
     pub cost_usd: f64,
     /// The sessions, most lines first.
     pub sessions: Vec<SessionSummary>,
