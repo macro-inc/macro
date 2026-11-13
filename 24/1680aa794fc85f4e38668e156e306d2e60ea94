@@ -1,0 +1,21 @@
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_39eee246ac6b4a::t_71ee0646f5015c 102
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_39eee246ac6b4a::t_bb4eb38a5d8bd1 814
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "241680aa794fc85f4e38668e156e306d2e60ea94",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
