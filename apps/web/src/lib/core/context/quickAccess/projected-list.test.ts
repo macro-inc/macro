@@ -222,6 +222,41 @@ describe('Quick Access local projection', () => {
     expect(search).toHaveBeenCalledTimes(2);
   });
 
+  it('replays a search lost with its engine once the replacement arrives', async () => {
+    const lost = Object.assign(new Error('owner epoch lost'), {
+      errorCode: 'owner-epoch-lost',
+    });
+    let engineReplaced = () => {};
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(lost)
+      .mockResolvedValueOnce(page(['seamus']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search,
+          onCacheGenerationChanged: (listener) => {
+            engineReplaced = () => listener({ storage: 'preserved' });
+            return () => {};
+          },
+        },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.error()).toBe(lost));
+    expect(list.isSearching()).toBe(true);
+
+    engineReplaced();
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }])
+    );
+    expect(list.isSearching()).toBe(false);
+  });
+
   it('does not replay other failed searches when the engine is replaced', async () => {
     let engineReplaced = () => {};
     const search = vi
