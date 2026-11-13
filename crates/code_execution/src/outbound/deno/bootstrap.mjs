@@ -100,7 +100,7 @@ try {
     for (const entry of calls) if (entry[1] > top[1]) top = entry;
     return top;
   };
-  const advice = "Before running anything again, check what those calls did: writes among them took effect. Then rewrite the program: stop iterating once you have what you need (break out of for await loops), read each item once and reuse it, prefer list and batch reads over one read per item, or narrow the search.";
+  const advice = "Calls already started, writes included, may have taken effect: check what they did before running anything again. Then rewrite the program: stop iterating once you have what you need (break out of for await loops), read each item once and reuse it, prefer list and batch reads over one read per item, or narrow the search.";
   const stop = (message) => {
     emit({type: "error", message});
     exit(0);
@@ -109,7 +109,7 @@ try {
     const key = `${service}.${operation}`;
     const count = (calls.get(key) ?? 0) + 1;
     if (count > maxCallsPerOperation) {
-      stop(`Stopped: this program called ${key} more than ${maxCallsPerOperation} times, so it is probably looping. The first ${maxCallsPerOperation} calls ran. ${advice} A job that truly needs more calls of one operation can be split across executions.`);
+      stop(`Stopped: this program called ${key} more than ${maxCallsPerOperation} times, so it is probably looping. ${advice} A job that truly needs more calls of one operation must be split into smaller jobs.`);
     }
     calls.set(key, count);
     if (dryRun && catalog.get(key)?.write !== false) return {skip: {data: {}}};
@@ -119,7 +119,7 @@ try {
     const timer = bootstrapTimeout(() => {
       const [key, count] = mostCalled();
       if (count >= LOOP_HINT_CALLS) {
-        stop(`Stopped near the deadline: this program called ${key} ${count} times and did not finish, so it is probably looping. ${advice}`);
+        stop(`Stopped near the deadline: this program called ${key} ${count} times and did not finish, so it may be looping, or the job is too big for one run. ${advice}`);
       }
     }, remainingMs - Math.min(1500, remainingMs / 4));
     Deno.unrefTimer(timer);

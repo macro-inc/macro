@@ -259,4 +259,33 @@ describe('EmailMessage.attachments', () => {
     expect(newer.map((a) => a.id)).toEqual(['invoice']);
     expect(threadReads).toBe(2);
   });
+
+  test("reads an unsent draft's attachments fresh each time", async () => {
+    const reads = [
+      [{ db_id: 'draft', is_draft: true, is_sent: false, attachments: [] }],
+      [
+        {
+          db_id: 'draft',
+          is_draft: true,
+          is_sent: false,
+          attachments: [{ db_id: 'added' }],
+        },
+      ],
+    ];
+    let threadReads = 0;
+    const client = {
+      email: {
+        getMessage: async ({ path }: { path: { id: string } }) => ({
+          data: { db_id: path.id, thread_db_id: 'thread-1' },
+        }),
+        getThread: async () => ({
+          data: { thread: { messages: reads[threadReads++] } },
+        }),
+      },
+    } as unknown as MacroClient;
+    const draft = EmailMessage.byId(client, 'draft');
+
+    expect(await draft.attachments()).toEqual([]);
+    expect((await draft.attachments()).map((a) => a.id)).toEqual(['added']);
+  });
 });

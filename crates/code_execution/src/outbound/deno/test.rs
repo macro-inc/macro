@@ -1004,7 +1004,7 @@ export async function main({ macro }) {
     );
     assert!(
         error.message.starts_with(
-            "Stopped: this program called email.getThread more than 3 times, so it is probably looping. The first 3 calls ran."
+            "Stopped: this program called email.getThread more than 3 times, so it is probably looping. Calls already started"
         ),
         "{}",
         error.message
@@ -1055,7 +1055,7 @@ export async function main({ macro }) {
 }
 "#;
     let hanging = hanging_server().await;
-    let outcome = run_in_session(&service, source, &host, Some(&hanging), 4_000).await;
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 9_000).await;
     let Outcome::Failed { error } = outcome else {
         panic!("{outcome:?}");
     };
