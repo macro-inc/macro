@@ -16,11 +16,8 @@ export function NativeAppInfo(props: { title: string; description: string }) {
       return 'Not available';
     }
   });
-  const bundleInfoRequest = getBundleDebugInfo();
-  const [bundleInfo] = createResource(() => bundleInfoRequest);
-  const [buildDate] = createResource(() =>
-    getNativeBuildDate(bundleInfoRequest)
-  );
+  const [bundleInfo] = createResource(getBundleDebugInfo);
+  const [buildDate] = createResource(getNativeBuildDate);
 
   return (
     <AppInfo
