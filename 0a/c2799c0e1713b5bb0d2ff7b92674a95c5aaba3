@@ -1,0 +1,43 @@
+crates/event_stream/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_7681e3b0baf12e 225-232
+crates/event_stream/src/domain/test_support.rs
+  s_48270cd6f8d6f1::t_64743ec99e718e 376-388
+crates/github/src/domain/ports/installation_claims.rs
+  s_48270cd6f8d6f1::t_3a24ef436f9677 25-45
+crates/github/src/outbound/pg_installation_claims.rs
+  s_48270cd6f8d6f1::t_1e787fee06f443 73-118
+crates/github/src/outbound/pg_installation_claims/test.rs
+  s_48270cd6f8d6f1::t_5c9ef6916b8fc0 144-184
+crates/webhook/src/domain/ingestion.rs
+  s_48270cd6f8d6f1::t_a7edb483502ef0 250-257,428-432,450-455
+crates/webhook/src/domain/ingestion/test.rs
+  s_48270cd6f8d6f1::t_8b919422c7e82f 2491-2506
+services/document_storage_service/src/outbound/event_stream.rs
+  s_48270cd6f8d6f1::t_c01098f917eee0 95-111
+apps/web/src/lib/service-clients/orval.config.ts
+  s_1656893481611a::t_eb7a89f2c36fa7 199-201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0ac2799c0e1713b5bb0d2ff7b92674a95c5aaba3",
+  "prompts": {},
+  "sessions": {
+    "s_1656893481611a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b222a84f-15df-400c-9f06-1a0c64e2aa0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

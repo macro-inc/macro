@@ -1,0 +1,23 @@
+crates/event_stream/src/domain/catalog.rs
+  s_8703f73ae8e37d::t_f35984488f3038 206-211
+crates/event_stream/src/domain/catalog/test.rs
+  s_8703f73ae8e37d::t_6249d0eca2396e 318-357
+crates/webhook/README.md
+  s_8703f73ae8e37d::t_911ef8896ea492 110-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cf38fc23ff4fb3b3b5ffa85e28e27d95d8c53b1a",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
