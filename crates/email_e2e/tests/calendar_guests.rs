@@ -95,7 +95,12 @@ async fn a_guests_rename_is_refused_before_it_reaches_google() -> Result<(), Rep
     );
     let can = &item["event"]["viewerCan"];
     assert_eq!(
-        (&can["editDetails"], &can["inviteGuests"], &can["rsvp"], &can["organize"]),
+        (
+            &can["editDetails"],
+            &can["inviteGuests"],
+            &can["rsvp"],
+            &can["organize"]
+        ),
         (&json!(false), &json!(true), &json!(true), &json!(false)),
         "{item}"
     );
@@ -107,11 +112,21 @@ async fn a_guests_rename_is_refused_before_it_reaches_google() -> Result<(), Rep
         )
         .await?;
     assert_eq!(refused.status, 403, "{}", refused.text);
-    assert_eq!(refused.json["code"], "guests_cannot_modify", "{}", refused.text);
-    assert_eq!(event_writes(&stack, &gus), [], "the guest's change reached Google");
+    assert_eq!(
+        refused.json["code"], "guests_cannot_modify",
+        "{}",
+        refused.text
+    );
+    assert_eq!(
+        event_writes(&stack, &gus),
+        [],
+        "the guest's change reached Google"
+    );
     for user in [&olga, &gus] {
         let held = stack.gmail().events(user.email(), PRIMARY)?;
-        let event = held.iter().find(|event| event["id"] == provider_id.as_str());
+        let event = held
+            .iter()
+            .find(|event| event["id"] == provider_id.as_str());
         assert_eq!(event.map(|event| &event["summary"]), Some(&json!("Review")));
     }
 
@@ -162,9 +177,14 @@ async fn an_organizers_guest_policy_reaches_guest_copies_at_once() -> Result<(),
         )
         .await?
         .ok()?;
-    assert_eq!(changed["guestPolicy"]["canInviteOthers"], false, "{changed}");
+    assert_eq!(
+        changed["guestPolicy"]["canInviteOthers"], false,
+        "{changed}"
+    );
     let held = stack.gmail().events(olga.email(), PRIMARY)?;
-    let event = held.iter().find(|event| event["id"] == provider_id.as_str());
+    let event = held
+        .iter()
+        .find(|event| event["id"] == provider_id.as_str());
     assert_eq!(
         event.map(|event| &event["guestsCanInviteOthers"]),
         Some(&json!(false))
@@ -190,7 +210,11 @@ async fn an_organizers_guest_policy_reaches_guest_copies_at_once() -> Result<(),
         )
         .await?;
     assert_eq!(refused.status, 403, "{}", refused.text);
-    assert_eq!(refused.json["code"], "guests_cannot_invite", "{}", refused.text);
+    assert_eq!(
+        refused.json["code"], "guests_cannot_invite",
+        "{}",
+        refused.text
+    );
     let asked: Vec<_> = stack
         .gmail()
         .requests()

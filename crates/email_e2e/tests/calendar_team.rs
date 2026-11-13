@@ -115,7 +115,10 @@ async fn refreshes_after(
     .await
 }
 
-fn out_of_office(title: &str, start: email_e2e::chrono::DateTime<email_e2e::chrono::Utc>) -> NewEvent {
+fn out_of_office(
+    title: &str,
+    start: email_e2e::chrono::DateTime<email_e2e::chrono::Utc>,
+) -> NewEvent {
     events::google_with(
         title,
         start,
@@ -209,9 +212,10 @@ async fn clients_reload_team_out_of_office_only_when_it_changed() -> Result<(), 
             email: grace.email().to_owned(),
             ..Default::default()
         })?;
-    let vacation = stack
-        .gmail()
-        .add_event(grace.email(), PRIMARY, out_of_office("Vacation", day))?;
+    let vacation =
+        stack
+            .gmail()
+            .add_event(grace.email(), PRIMARY, out_of_office("Vacation", day))?;
     let standup = stack.gmail().add_event(
         grace.email(),
         PRIMARY,
@@ -241,9 +245,14 @@ async fn clients_reload_team_out_of_office_only_when_it_changed() -> Result<(), 
     calendar.wait_for_event("Standup, renamed").await?;
     let new = refreshes_after(&stack, seen, 1).await?;
     assert_eq!(flags(&new), [json!(false), json!(false)], "{new:?}");
-    assert!(new.iter().any(|refresh| refresh.message["event"] == "synced"), "{new:?}");
     assert!(
-        new.iter().any(|refresh| refresh.message["event"] == "team_sharing_changed"),
+        new.iter()
+            .any(|refresh| refresh.message["event"] == "synced"),
+        "{new:?}"
+    );
+    assert!(
+        new.iter()
+            .any(|refresh| refresh.message["event"] == "team_sharing_changed"),
         "{new:?}"
     );
     calendar.wait_until_synced(grace.email()).await?;
@@ -306,7 +315,10 @@ async fn an_outlook_teammates_out_of_office_shows_to_the_team() -> Result<(), Re
     ada.link_gmail_with_calendar().await?;
     grace.link_outlook_with_calendar().await?;
     let own = grace.calendar()?.wait_for_event("Vacation").await?;
-    assert_eq!(own["event"]["sources"][0]["eventType"], "out_of_office", "{own}");
+    assert_eq!(
+        own["event"]["sources"][0]["eventType"], "out_of_office",
+        "{own}"
+    );
 
     let seen = team_out_of_office(&ada.calendar()?, day).await?;
     let owners: Vec<_> = seen.iter().map(|item| item["ownerId"].clone()).collect();

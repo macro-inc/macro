@@ -1,7 +1,7 @@
 //! Which of a user's inboxes a calendar action is taken as.
 
-use email_e2e::gmail_emulator::{Route, SeedCalendar, SeedMailbox};
 use email_e2e::chrono::{DateTime, Duration, Utc};
+use email_e2e::gmail_emulator::{Route, SeedCalendar, SeedMailbox};
 use email_e2e::{
     DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, StackOptions, events, eventually,
 };
@@ -318,7 +318,7 @@ async fn an_invitation_card_answers_as_the_inbox_its_mail_arrived_in() -> Result
     let meeting = events::google_with(
         "Sync",
         start,
-        json!({ "id": "sync1", "attendees": [
+        json!({ "id": "meet01", "attendees": [
             { "email": organizer, "responseStatus": "accepted" },
             { "email": work },
             { "email": ada.email() },
@@ -367,8 +367,16 @@ async fn an_invitation_card_answers_as_the_inbox_its_mail_arrived_in() -> Result
         },
     )?;
     personal.deliver(
-        &Mail::new(&format!("Olga <{organizer}>"), "Invitation: Sync (personal)", "You are invited.")
-            .with_attachment("invite.ics", "text/calendar; method=REQUEST", file.as_bytes()),
+        &Mail::new(
+            &format!("Olga <{organizer}>"),
+            "Invitation: Sync (personal)",
+            "You are invited.",
+        )
+        .with_attachment(
+            "invite.ics",
+            "text/calendar; method=REQUEST",
+            file.as_bytes(),
+        ),
     )?;
     let office_thread = office
         .wait_for_preview("inbox", "Invitation: Sync (office)")
@@ -381,8 +389,11 @@ async fn an_invitation_card_answers_as_the_inbox_its_mail_arrived_in() -> Result
     assert_eq!(card["kind"], "resolved", "{card}");
     assert_eq!(card["responding_email"], work, "{card}");
     let card_event = card["event"]["id"].as_str().unwrap_or_default();
-    let other =
-        invitation_card(&personal, personal_thread["id"].as_str().unwrap_or_default()).await?;
+    let other = invitation_card(
+        &personal,
+        personal_thread["id"].as_str().unwrap_or_default(),
+    )
+    .await?;
     assert_eq!(other["kind"], "resolved", "{other}");
     assert_eq!(other["responding_email"], ada.email(), "{other}");
 
@@ -402,8 +413,12 @@ async fn an_invitation_card_answers_as_the_inbox_its_mail_arrived_in() -> Result
         Some(&json!("accepted")),
         "{held:?}"
     );
-    let at_google = organizers_event(&stack, organizer, "sync1")?;
-    assert_eq!(answer_of(&at_google, ada.email()), "needsAction", "{at_google}");
+    let at_google = organizers_event(&stack, organizer, "meet01")?;
+    assert_eq!(
+        answer_of(&at_google, ada.email()),
+        "needsAction",
+        "{at_google}"
+    );
 
     stack.finish().await
 }

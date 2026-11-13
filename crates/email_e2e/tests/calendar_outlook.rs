@@ -177,7 +177,8 @@ async fn an_outlook_organizer_shows_as_accepted_and_cannot_answer() -> Result<()
     let stack = calendar_stack().await?;
     let ada = stack.user("ada").await?;
     add_mailbox(&stack, &ada)?;
-    let required = |email: &str| json!({ "emailAddress": { "address": email }, "type": "required" });
+    let required =
+        |email: &str| json!({ "emailAddress": { "address": email }, "type": "required" });
     let meeting = events::outlook_with(
         "Planning",
         events::hour_in_days(2),

@@ -372,13 +372,15 @@ async fn a_refused_google_watch_is_not_retried_on_every_sync() -> Result<(), Rep
 /// When Google answers a calendar sync with 429 and `Retry-After`, the
 /// service leaves that account's calendars alone for that long, whatever
 /// pushes arrive meanwhile, and catches up afterwards. Fails while the
-/// service ignores the header and asks again on the next push, seconds
-/// later, which is how an account keeps itself rate limited.
+/// service ignores the header and asks again as soon as its queue hands the
+/// sync back, sooner than Google asked, which is how an account keeps
+/// itself rate limited.
 /// (cal-google-retry-after-ignored)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "known bug: cal-google-retry-after-ignored"]
 async fn google_retry_after_is_honoured_by_calendar_sync() -> Result<(), Report> {
-    const RETRY_AFTER_SECONDS: u32 = 30;
+    // Longer than the minute after which the queue redelivers a failed sync.
+    const RETRY_AFTER_SECONDS: u32 = 90;
 
     let stack = calendar_stack().await?;
     let ada = stack.user("ada").await?;
@@ -580,7 +582,9 @@ async fn one_unreadable_google_calendar_does_not_stop_the_others() -> Result<(),
     calendar.wait_for_event("Review").await?;
     calendar.wait_until_synced(ada.email()).await?;
 
-    stack.gmail().fail_calendar(ada.email(), TEAM_CALENDAR, None)?;
+    stack
+        .gmail()
+        .fail_calendar(ada.email(), TEAM_CALENDAR, None)?;
     stack.gmail().add_event(
         ada.email(),
         TEAM_CALENDAR,

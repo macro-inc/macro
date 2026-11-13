@@ -2,7 +2,7 @@
 
 use email_e2e::chrono::{DateTime, Duration, Utc};
 use email_e2e::gmail_emulator::{SeedCalendar, SeedMailbox};
-use email_e2e::{Calendar, DEFAULT_TIMEOUT, Report, Stack, StackOptions, User, eventually, events};
+use email_e2e::{Calendar, DEFAULT_TIMEOUT, Report, Stack, StackOptions, User, events, eventually};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -68,7 +68,11 @@ async fn share_in_channel(
 async fn preview(viewer: &Calendar, event_id: &str) -> Result<Value, Report> {
     let body = json!({ "items": [{ "eventId": event_id, "occurrenceKey": null }] });
     let previews = viewer
-        .read(reqwest::Method::POST, "/calendar-events/preview", Some(&body))
+        .read(
+            reqwest::Method::POST,
+            "/calendar-events/preview",
+            Some(&body),
+        )
         .await?
         .ok()?;
     Ok(previews["items"][0].clone())
@@ -206,7 +210,10 @@ async fn a_booking_link_ignores_calendars_that_do_not_count_toward_availability(
         .ok()?;
 
     let before = offered(&calendar, &link, day).await?;
-    assert!(before.contains(&(ten + Duration::minutes(30))), "{before:?}");
+    assert!(
+        before.contains(&(ten + Duration::minutes(30))),
+        "{before:?}"
+    );
     assert!(!before.contains(&ten), "{before:?}");
     assert!(!before.contains(&eleven), "{before:?}");
 
@@ -296,7 +303,9 @@ async fn copying_a_shared_event_puts_a_copy_on_the_copiers_calendar() -> Result<
     let ben = stack.user("ben").await?;
     let (_, bens, event_id) = shared_offsite(&stack, &ada, &ben).await?;
 
-    let copied = bens.post(&format!("/events/{event_id}/copy"), &json!({})).await?;
+    let copied = bens
+        .post(&format!("/events/{event_id}/copy"), &json!({}))
+        .await?;
     assert_eq!(copied.status, 201, "{}", copied.text);
     assert_eq!(copied.json["isSnapshot"], true, "{}", copied.text);
 
@@ -309,7 +318,11 @@ async fn copying_a_shared_event_puts_a_copy_on_the_copiers_calendar() -> Result<
         .flatten()
         .map(|guest| (&guest["email"], &guest["responseStatus"]))
         .collect();
-    assert_eq!(guests, [(&json!(ben.email()), &json!("accepted"))], "{copy}");
+    assert_eq!(
+        guests,
+        [(&json!(ben.email()), &json!("accepted"))],
+        "{copy}"
+    );
     let item = bens.wait_for_event("Offsite").await?;
     assert_eq!(item["event"]["isSnapshot"], true, "{item}");
 
@@ -331,11 +344,16 @@ async fn an_event_cannot_be_copied_while_a_request_to_join_it_is_open() -> Resul
     let request = ask_to_join(&bens, &event_id).await?;
     assert_eq!(request["status"], "pending", "{request}");
 
-    let copied = bens.post(&format!("/events/{event_id}/copy"), &json!({})).await?;
+    let copied = bens
+        .post(&format!("/events/{event_id}/copy"), &json!({}))
+        .await?;
     assert_eq!(copied.status, 409, "{}", copied.text);
     assert_eq!(copied.json["code"], "join_request_open", "{}", copied.text);
     assert_eq!(imports(&stack, &ben), 0);
-    assert_eq!(stack.gmail().events(ben.email(), PRIMARY)?, Vec::<Value>::new());
+    assert_eq!(
+        stack.gmail().events(ben.email(), PRIMARY)?,
+        Vec::<Value>::new()
+    );
 
     stack.finish().await
 }
@@ -523,7 +541,11 @@ async fn an_exported_event_file_leaves_out_the_macro_call_link() -> Result<(), R
         .await?;
     assert_eq!(file.status, 200, "{}", file.text);
     assert!(file.text.contains("BEGIN:VEVENT"), "{}", file.text);
-    assert!(file.text.contains("Bring the budget draft"), "{}", file.text);
+    assert!(
+        file.text.contains("Bring the budget draft"),
+        "{}",
+        file.text
+    );
     assert!(!file.text.contains("/meet/join/"), "{}", file.text);
 
     stack.finish().await
@@ -554,7 +576,10 @@ async fn a_channel_shared_event_shows_others_no_macro_call_link() -> Result<(), 
     let shown = preview(&ben.calendar()?, &event_id).await?;
     assert_eq!(shown["type"], "access", "{shown}");
     assert_eq!(shown["event"]["title"], "Budget", "{shown}");
-    assert!(!shown["event"].to_string().contains("/meet/join/"), "{shown}");
+    assert!(
+        !shown["event"].to_string().contains("/meet/join/"),
+        "{shown}"
+    );
     assert!(
         shown["event"]["description"]
             .as_str()

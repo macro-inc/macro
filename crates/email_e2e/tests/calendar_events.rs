@@ -89,7 +89,10 @@ fn google_guests(event: &Value) -> Vec<(String, String)> {
         .map(|guest| {
             (
                 guest["email"].as_str().unwrap_or_default().to_owned(),
-                guest["responseStatus"].as_str().unwrap_or_default().to_owned(),
+                guest["responseStatus"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
             )
         })
         .collect();
@@ -125,7 +128,9 @@ async fn daily_series(stack: &Stack, user: &User) -> Result<(Calendar, String, S
 }
 
 fn recurrence_id(item: &Value) -> &str {
-    item["occurrence"]["recurrenceId"].as_str().unwrap_or_default()
+    item["occurrence"]["recurrenceId"]
+        .as_str()
+        .unwrap_or_default()
 }
 
 /// Renaming one occurrence of a series renames that occurrence only: the
@@ -150,7 +155,10 @@ async fn renaming_one_occurrence_leaves_the_series_alone() -> Result<(), Report>
         .ok()?;
     assert_eq!(renamed["title"], "Standup, other room", "{renamed}");
 
-    assert_eq!(google_event(&stack, &ada, &provider_id)?["summary"], "Standup");
+    assert_eq!(
+        google_event(&stack, &ada, &provider_id)?["summary"],
+        "Standup"
+    );
     let exceptions = google_exceptions(&stack, &ada, &provider_id)?;
     let summaries: Vec<_> = exceptions.iter().map(|event| &event["summary"]).collect();
     assert_eq!(summaries, ["Standup, other room"], "{exceptions:?}");
@@ -164,13 +172,25 @@ async fn renaming_one_occurrence_leaves_the_series_alone() -> Result<(), Report>
         .await?;
     let mut titles: Vec<(Option<DateTime<Utc>>, &str)> = listed
         .iter()
-        .map(|item| (starts_at(item), item["event"]["title"].as_str().unwrap_or_default()))
+        .map(|item| {
+            (
+                starts_at(item),
+                item["event"]["title"].as_str().unwrap_or_default(),
+            )
+        })
         .collect();
     titles.sort();
     let titles: Vec<_> = titles.into_iter().map(|(_, title)| title).collect();
     assert_eq!(
         titles,
-        ["Standup", "Standup", "Standup, other room", "Standup", "Standup", "Standup"]
+        [
+            "Standup",
+            "Standup",
+            "Standup, other room",
+            "Standup",
+            "Standup",
+            "Standup"
+        ]
     );
 
     stack.finish().await
@@ -231,7 +251,14 @@ async fn answering_one_occurrence_leaves_the_series_answer_alone() -> Result<(),
     let answers: Vec<_> = answers.iter().map(|(_, answer)| answer.as_str()).collect();
     assert_eq!(
         answers,
-        ["accepted", "accepted", "accepted", "accepted", "tentative", "accepted"]
+        [
+            "accepted",
+            "accepted",
+            "accepted",
+            "accepted",
+            "tentative",
+            "accepted"
+        ]
     );
 
     stack.finish().await
@@ -259,7 +286,10 @@ async fn deleting_one_occurrence_keeps_the_rest_of_the_series() -> Result<(), Re
         !left.iter().any(|item| starts_at(item) == starts_at(second)),
         "{left:?}"
     );
-    assert_eq!(google_event(&stack, &ada, &provider_id)?["status"], "confirmed");
+    assert_eq!(
+        google_event(&stack, &ada, &provider_id)?["status"],
+        "confirmed"
+    );
     let exceptions = google_exceptions(&stack, &ada, &provider_id)?;
     let statuses: Vec<_> = exceptions.iter().map(|event| &event["status"]).collect();
     assert_eq!(statuses, ["cancelled"], "{exceptions:?}");
@@ -397,7 +427,10 @@ async fn a_meeting_created_with_guests_lists_its_organizer_as_accepted() -> Resu
     let kickoff = kickoff.unwrap_or_else(|| panic!("Google holds no Kickoff: {at_google:?}"));
     assert_eq!(
         google_guests(kickoff),
-        [guest(ada.email(), "accepted"), guest(GUEST_ONE, "needsAction")]
+        [
+            guest(ada.email(), "accepted"),
+            guest(GUEST_ONE, "needsAction")
+        ]
     );
     let item = calendar.wait_for_event("Kickoff").await?;
     assert_eq!(
@@ -418,7 +451,8 @@ async fn adding_an_outlook_guest_keeps_the_guests_already_invited() -> Result<()
     let stack = calendar_stack().await?;
     let ada = stack.user("ada").await?;
     add_outlook_mailbox(&stack, &ada)?;
-    let required = |email: &str| json!({ "emailAddress": { "address": email }, "type": "required" });
+    let required =
+        |email: &str| json!({ "emailAddress": { "address": email }, "type": "required" });
     let meeting = events::outlook_with(
         "Planning",
         events::hour_in_days(2),
@@ -442,7 +476,9 @@ async fn adding_an_outlook_guest_keeps_the_guests_already_invited() -> Result<()
         .ok()?;
 
     let at_outlook = stack.outlook().events(ada.email(), DEFAULT)?;
-    let planning = at_outlook.iter().find(|event| event["subject"] == "Planning");
+    let planning = at_outlook
+        .iter()
+        .find(|event| event["subject"] == "Planning");
     let planning = planning.unwrap_or_else(|| panic!("Outlook holds no Planning: {at_outlook:?}"));
     let mut guests: Vec<(String, String)> = planning["attendees"]
         .as_array()
@@ -450,8 +486,14 @@ async fn adding_an_outlook_guest_keeps_the_guests_already_invited() -> Result<()
         .flatten()
         .map(|attendee| {
             (
-                attendee["emailAddress"]["address"].as_str().unwrap_or_default().to_owned(),
-                attendee["status"]["response"].as_str().unwrap_or_default().to_owned(),
+                attendee["emailAddress"]["address"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+                attendee["status"]["response"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
             )
         })
         .collect();
