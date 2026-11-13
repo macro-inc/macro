@@ -9,7 +9,8 @@ export const useIsAuthenticated = () => () => true;
 export const useAugmentUserWithDmActivity = () => (user: unknown) => user;
 export const emailToId = (email: string) => email;
 export const UserIcon = () => null;
-export const validateSearchServiceText = (text: string) => text.length >= 3;
+export const validateSearchServiceText = (text: string) =>
+  text.trim().length > 0;
 
 const params = new URLSearchParams(location.search);
 const selector = params.get('selector');
@@ -127,7 +128,8 @@ export const useSearchSoupQuery = (
   options?: () => { enabled?: boolean }
 ) => {
   const query = () => args().body.query.toLowerCase();
-  const enabled = () => options?.().enabled !== false && query().length >= 3;
+  const enabled = () =>
+    options?.().enabled !== false && validateSearchServiceText(query());
   const matchingEmails = () =>
     remoteEmails.filter((email) => email.name.toLowerCase().includes(query()));
   const items = () =>

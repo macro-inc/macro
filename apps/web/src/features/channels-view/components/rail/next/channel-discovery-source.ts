@@ -4,13 +4,11 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { usePending } from '@app/observability/flow';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, isChannelEntity } from '@entity';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { validateSearchServiceText } from '@queries/soup/search';
-import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { type ChannelsDataSource, deduplicateChannels } from '../../../queries';
 import { createChannelSearchSource } from '../../../queries/channel-search-source';
 import { orderSectionSearchResults } from './channel-discovery';
@@ -44,25 +42,6 @@ export function createSectionSearchSource(options: {
       ? (unjoined.data?.entities ?? []).filter(isChannelEntity)
       : []
   );
-  const localSearch = () =>
-    options.text().trim().length > 0 &&
-    !validateSearchServiceText(options.text());
-  const loadDiscoveryPage = async () => {
-    if (
-      !unjoined.isEnabled ||
-      unjoined.isFetching ||
-      unjoined.error ||
-      unjoined.fetchError ||
-      !unjoined.hasNextPage
-    )
-      return;
-    await unjoined.fetchNextPage();
-  };
-  // Short name searches cannot reach the service; complete their authorized local pool.
-  createEffect(() => {
-    if (!options.enabled() || !localSearch()) return;
-    fireAndForget(loadDiscoveryPage(), 'channels-discovery');
-  });
   const initial: ChannelsDataSource = {
     items: () => deduplicateChannels([discovered(), options.recent().items()]),
     isLoading: () => unjoined.isLoading || options.recent().isLoading(),
@@ -111,29 +90,14 @@ export function createSectionSearchSource(options: {
   return {
     ...search,
     items: results,
-    hasMore: () =>
-      options.enabled() &&
-      (search.hasMore() || (localSearch() && unjoined.hasNextPage)),
+    hasMore: () => options.enabled() && search.hasMore(),
     isFetching: () =>
       search.isFetching() || (options.enabled() && unjoined.isFetching),
-    isLoading: () =>
-      search.isLoading() ||
-      (options.enabled() &&
-        localSearch() &&
-        unjoined.isLoading &&
-        search.items().length === 0),
-    isLoadingMore: () =>
-      options.enabled() &&
-      (search.isLoadingMore() ||
-        (localSearch() && unjoined.isFetchingNextPage)),
-    error: () =>
-      options.enabled()
-        ? (search.error() ?? (localSearch() ? unjoined.error : undefined))
-        : undefined,
+    isLoadingMore: () => options.enabled() && search.isLoadingMore(),
+    error: () => (options.enabled() ? search.error() : undefined),
     loadMore: async () => {
       if (!options.enabled()) return;
-      if (localSearch()) await loadDiscoveryPage();
-      else await search.loadMore();
+      await search.loadMore();
     },
   };
 }

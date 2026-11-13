@@ -32,9 +32,9 @@ interface SearchQueryOptions {
   staleTime?: number;
 }
 
-/** Search service won't accept text less than 3 characters */
+/** The search service accepts any query that has a character left after trimming. */
 export const validateSearchServiceText = (text: string) => {
-  return text.length >= 3;
+  return text.trim().length > 0;
 };
 
 // Only plain request values and channel metadata enter the cached callbacks.

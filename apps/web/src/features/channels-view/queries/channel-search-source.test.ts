@@ -527,49 +527,6 @@ describe('shared channel search source', () => {
     s.setEnabled(false);
     expect(s.source.error()).toBeUndefined();
   });
-
-  it('searches discovery pages beyond the initial page for short queries', () => {
-    const [page, setPage] = createStore({
-      entities: [
-        {
-          ...channel('first', 'Research'),
-          channelType: 'team' as const,
-          isParticipant: false,
-        },
-      ],
-      hasNextPage: true,
-    });
-    const nextPage = vi.fn(async () => {
-      setPage('entities', [
-        {
-          ...channel('later', 'Xylophone'),
-          channelType: 'team',
-          isParticipant: false,
-        },
-      ]);
-      setPage('hasNextPage', false);
-    });
-    astQueryMock.mockReturnValue({
-      isEnabled: true,
-      isPending: false,
-      isLoading: false,
-      isFetching: false,
-      isFetchingNextPage: false,
-      error: undefined,
-      fetchError: undefined,
-      get data() {
-        return { entities: page.entities };
-      },
-      get hasNextPage() {
-        return page.hasNextPage;
-      },
-      fetchNextPage: nextPage,
-      refresh: vi.fn(async () => {}),
-    });
-    const { source } = setup('xy', 'search', undefined, true);
-    expect(nextPage).toHaveBeenCalledOnce();
-    expect(ids(source)).toContain('later');
-  });
   it('hydrates unknown search membership before grouping a server-only channel', async () => {
     astQueryMock.mockReturnValue({
       isEnabled: true,
