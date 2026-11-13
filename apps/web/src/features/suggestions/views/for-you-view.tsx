@@ -4,6 +4,7 @@ import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, Card, Tabs } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import { RefreshSuggestions } from '../components/refresh-suggestions';
 import {
   DismissedSuggestion,
   DoneSuggestionRow,
@@ -15,6 +16,7 @@ import type {
 } from '../context/suggestions-source';
 import type { FeedFilter } from '../core/suggestion';
 import type { FeedEntry, SuggestionsFeed } from '../primitives/feed';
+import type { Refresh } from '../primitives/refresh';
 
 function SectionLabel(props: { children: JSX.Element }) {
   return (
@@ -48,6 +50,7 @@ export function ForYouView(props: {
   feed: SuggestionsFeed;
   actions: Pick<SuggestionActions, 'routineText' | 'openItem'>;
   parts: SuggestionItemParts;
+  refresh: Refresh;
   focusedId?: string;
   onRetry(): void;
 }) {
@@ -137,7 +140,18 @@ export function ForYouView(props: {
       aria-label={t('nav.forYou')}
     >
       <div class="mx-auto w-full max-w-200 pt-12 pb-16">
-        <h1 class="text-3xl font-medium tracking-tight">{t('nav.forYou')}</h1>
+        <div class="flex items-center justify-between gap-4">
+          <h1 class="text-3xl font-medium tracking-tight">{t('nav.forYou')}</h1>
+          <Show when={props.refresh.state()} keyed>
+            {(state) => (
+              <RefreshSuggestions
+                state={state}
+                failed={props.refresh.failed()}
+                onRefresh={props.refresh.refresh}
+              />
+            )}
+          </Show>
+        </div>
         <p class="mt-3 text-sm text-ink-muted">{t('suggestions.subtitle')}</p>
         <div class="mt-8 border-b border-edge-muted pb-4">
           <Tabs

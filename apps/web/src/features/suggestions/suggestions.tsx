@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useForYouRoutineSuggestions } from '../routine-suggestions/routine-suggestions';
+import { useSuggestionGeneration } from './queries/generation';
 import { useSuggestionsSource } from './queries/suggestions-source';
 import { createSuggestionActions } from './suggestion-actions';
 
@@ -13,5 +14,9 @@ export function useSuggestions() {
     turnOnRoutine: routines.turnOn,
   });
 
-  return { source: useSuggestionsSource(), actions };
+  return {
+    source: useSuggestionsSource(),
+    generation: useSuggestionGeneration(),
+    actions,
+  };
 }

@@ -1,4 +1,5 @@
 import type { Accessor, Component } from 'solid-js';
+import type { Generation } from '../core/generation';
 import type { Suggestion, SuggestionTarget } from '../core/suggestion';
 
 /** The person's suggestions and the two writes they can make. */
@@ -20,6 +21,17 @@ export type SuggestionsSource = {
   ): Promise<'accepted' | 'changed'>;
   /** Turn an suggestion down. `leaving` sends it so it survives the page closing. */
   dismiss(id: string, options?: { leaving?: boolean }): Promise<void>;
+};
+
+/** Whether suggestions are being looked for, and asking for a fresh run. */
+export type GenerationSource = {
+  /** Undefined until read, or where the server can't say. */
+  generation: Accessor<Generation | undefined>;
+  /**
+   * Ask for a fresh run. Afterwards `generation` says what happened: it is
+   * running, or it must wait until `regenerateAvailableAt`.
+   */
+  regenerate(): Promise<void>;
 };
 
 /** A routine suggestion's drafted routine, as its card words it. */

@@ -5,17 +5,18 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
-import { createMemo } from 'solid-js';
+import { createEffect, createMemo } from 'solid-js';
 import type { SuggestionsSource } from '../context/suggestions-source';
 import { type Suggestion, suggestionStatus } from '../core/suggestion';
 import { useSuggestionsFlag } from '../use-suggestions-flag';
 import { toSuggestion, toSuggestions } from './decode';
+import { generationOptions } from './generation';
 import { suggestionsKeys } from './keys';
 
-/** How often to read again while a run is under way. */
-const RUNNING_POLL_MS = 5_000;
+/** How often to read the feed again while a run or a generation is under way. */
+const WORKING_POLL_MS = 10_000;
 
-function feedOptions(userId: string, enabled: boolean) {
+function feedOptions(userId: string, enabled: boolean, generating: boolean) {
   return queryOptions({
     ...suggestionsKeys.feed(userId),
     queryFn: async () =>
@@ -27,11 +28,14 @@ function feedOptions(userId: string, enabled: boolean) {
         )
       ),
     enabled,
+    // Nothing is polled unless something is being worked on: a card's run,
+    // or a generation that may add or change cards.
     refetchInterval: (query) =>
+      generating ||
       query.state.data?.some(
         (suggestion) => suggestionStatus(suggestion) === 'running'
       )
-        ? RUNNING_POLL_MS
+        ? WORKING_POLL_MS
         : false,
   });
 }
@@ -39,19 +43,37 @@ function feedOptions(userId: string, enabled: boolean) {
 /**
  * The person's suggestions from the scheduler service. Nothing is read while suggestions
  * are off. The feed is read again after each write, since the server decides
- * where an suggestion goes next, and every few seconds while a run is under way.
+ * where a suggestion goes next, and every ten seconds while a run or a
+ * generation is under way.
  */
 export function useSuggestionsSource(): SuggestionsSource {
   const enabled = useSuggestionsFlag();
   const userId = useUserId();
+  const generation = useQuery(() =>
+    generationOptions(userId() ?? '', enabled() && userId() !== undefined)
+  );
+  const generating = () => generation.data?.state === 'running';
   const feed = useQuery(() =>
-    feedOptions(userId() ?? '', enabled() && userId() !== undefined)
+    feedOptions(
+      userId() ?? '',
+      enabled() && userId() !== undefined,
+      generating()
+    )
   );
   const queryClient = useQueryClient();
-  const key = () => feedOptions(userId() ?? '', false).queryKey;
+  const key = () => feedOptions(userId() ?? '', false, false).queryKey;
   const refresh = async () => {
     await feed.refetch();
   };
+
+  // A generation that just ended may have written its last cards after the
+  // feed was last read.
+  createEffect((wasGenerating: boolean) => {
+    const now = generating();
+    if (wasGenerating && !now) fireAndForget(refresh(), 'suggestions');
+
+    return now;
+  }, false);
 
   // FE-49: the feed is read again under open cards; an suggestion that didn't
   // change keeps its object, so its card isn't rebuilt.

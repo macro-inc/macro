@@ -14,6 +14,7 @@ import { onCleanup, Show } from 'solid-js';
 import { forYouSearch } from './for-you-search';
 import { createSuggestionsFeed } from './primitives/feed';
 import { createLastSeen } from './primitives/last-seen';
+import { createRefresh } from './primitives/refresh';
 import { SUGGESTION_ITEM_PARTS } from './suggestion-items';
 import { useSuggestions } from './suggestions';
 import { useSuggestionsFlag } from './use-suggestions-flag';
@@ -22,7 +23,8 @@ import { ForYouView } from './views/for-you-view';
 function ForYouPage() {
   usePageViewTracking('for-you');
   const [search] = createSearchParams(forYouSearch);
-  const { source, actions } = useSuggestions();
+  const { source, generation, actions } = useSuggestions();
+  const refresh = createRefresh(generation);
   const lastSeen = createLastSeen(useUserId());
   const feed = createSuggestionsFeed(source, actions, {
     lastSeenAt: lastSeen.before,
@@ -42,6 +44,7 @@ function ForYouPage() {
           feed={feed}
           actions={actions}
           parts={SUGGESTION_ITEM_PARTS}
+          refresh={refresh}
           focusedId={search.suggestion}
           onRetry={source.retry}
         />

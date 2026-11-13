@@ -50,6 +50,11 @@ export default {
   loading: 'Loading your suggestions',
   loadError: 'Your suggestions couldn’t be loaded.',
   retry: 'Try again',
+  refresh: 'Refresh suggestions',
+  refreshRunning: 'Looking for suggestions',
+  refreshAvailableAt: 'Available at {{time}}',
+  refreshCooldown: 'Suggestions can be refreshed once an hour.',
+  refreshFailed: 'Couldn’t refresh. Try again.',
   emptyTitle: 'You’re all caught up',
   emptyBody:
     'Nothing is waiting and nothing is running. New suggestions arrive overnight from your inbox, chats and docs.',

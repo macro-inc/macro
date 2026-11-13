@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import '../../../index.css';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import type {
@@ -10,9 +11,11 @@ import type {
   SuggestionsSource,
 } from '../context/suggestions-source';
 import { layoutDay } from '../core/day';
+import type { Generation } from '../core/generation';
 import type { Suggestion } from '../core/suggestion';
 import { topPriorities } from '../core/suggestion';
 import { createSuggestionsFeed } from '../primitives/feed';
+import { createRefresh } from '../primitives/refresh';
 import {
   backgroundSuggestion,
   composerSuggestion,
@@ -161,6 +164,35 @@ function Fixture() {
   const feed = createSuggestionsFeed(source, actions, {
     lastSeenAt: () => '2026-11-09T05:00:00Z',
   });
+  // `?generation=`: running, cooldown (ends after `?cooldownMs=`), none (a
+  // server that can't say), else idle.
+  const cooldownEnd = () =>
+    new Date(
+      Date.now() + Number(PARAMS.get('cooldownMs') ?? 3_600_000)
+    ).toISOString();
+  const [generation, setGeneration] = createSignal<Generation | undefined>(
+    match(PARAMS.get('generation'))
+      .returnType<Generation | undefined>()
+      .with('none', () => undefined)
+      .with('running', () => ({ state: 'running', trigger: 'nightly' }))
+      .with('cooldown', () => ({
+        state: 'idle',
+        regenerateAvailableAt: cooldownEnd(),
+      }))
+      .otherwise(() => ({ state: 'idle' }))
+  );
+  const refresh = createRefresh({
+    generation,
+    regenerate: async () => {
+      record('regenerate');
+      if (PARAMS.get('regenerate') === 'fails') throw new Error('refused');
+
+      setGeneration({ state: 'running', trigger: 'manual' });
+    },
+  });
+  /** End the generation, as the server's next status would. */
+  const finishGeneration = () =>
+    setGeneration({ state: 'idle', regenerateAvailableAt: cooldownEnd() });
   /** Finish the fixture's runs, as the server's next answer would. */
   const finishRuns = () =>
     setSuggestions((list) =>
@@ -190,12 +222,16 @@ function Fixture() {
           feed={feed}
           actions={actions}
           parts={PARTS}
+          refresh={refresh}
           focusedId={PARAMS.get('suggestion') ?? undefined}
           onRetry={source.retry}
         />
         <footer class="flex shrink-0 items-center gap-3 border-t border-edge-muted px-4 py-2 text-xs text-ink-muted">
           <button type="button" onClick={finishRuns}>
             Finish runs
+          </button>
+          <button type="button" onClick={finishGeneration}>
+            Finish generation
           </button>
           <button type="button" onClick={feed.sendDismissals}>
             Leave page

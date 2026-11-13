@@ -55,6 +55,24 @@ import type {
   SuggestionFeed,
 } from './generated/schemas';
 
+// TODO(suggestions): take these two from the generated schemas once the
+// generation status and regenerate endpoints are in the service spec.
+/** `GET /suggestions/generation`. */
+export type SuggestionGenerationStatus = {
+  state: 'idle' | 'running';
+  trigger?: string | null;
+  startedAt?: string | null;
+  lastFinishedAt?: string | null;
+  lastOutcome?: string | null;
+  regenerateAvailableAt?: string | null;
+};
+
+/** How `POST /suggestions/regenerate` answered. */
+export type RegenerateAnswer =
+  | { kind: 'started' }
+  | { kind: 'running' }
+  | { kind: 'cooldown'; availableAt: string };
+
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
 
 function scheduledActionFetch(
@@ -244,6 +262,41 @@ export const scheduledActionClient = {
     if (changed) return ok({ changed: changed.suggestion });
 
     return result.map(() => ({}));
+  },
+
+  /** Whether a generation is running, and when a refresh may be asked for. */
+  suggestionGeneration: () =>
+    scheduledActionFetch<SuggestionGenerationStatus>(
+      '/suggestions/generation',
+      { method: 'GET' }
+    ),
+
+  /**
+   * Ask for a fresh run of suggestions. `running` and `cooldown` are the two
+   * refusals: one is under way, or one was asked for within the hour.
+   */
+  regenerateSuggestions: async (): Promise<
+    Result<RegenerateAnswer, ResultError<FetchWithTokenErrorCode>[]>
+  > => {
+    let refusal: RegenerateAnswer | undefined;
+    const result = await fetchWithToken<{}>(
+      `${scheduledActionHost}/suggestions/regenerate`,
+      {
+        method: 'POST',
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) refusal = { kind: 'running' };
+          if (response.status === 429) {
+            const body: { availableAt: string } = await response.clone().json();
+            refusal = { kind: 'cooldown', availableAt: body.availableAt };
+          }
+
+          return statusError(response.status);
+        },
+      }
+    );
+    if (refusal) return ok(refusal);
+
+    return result.map(() => ({ kind: 'started' }));
   },
 
   /** `keepalive` lets the call outlive a page that is closing. */
