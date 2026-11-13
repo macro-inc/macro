@@ -243,3 +243,21 @@ fn a_bitwarden_item_with_one_collection_id_string_is_shared() {
         .collect();
     assert_eq!(skipped, vec![password_import::SkipReason::SharedCollection]);
 }
+
+#[test]
+fn a_null_after_a_full_list_does_not_overflow_it() {
+    let uris = vec![r#"{"uri":"https://example.com"}"#; 256].join(",");
+    let json = format!(
+        r#"{{"encrypted":false,"items":[{{"id":"item1","type":1,"name":"Example","login":{{"uris":[{uris},null],"username":"user-one"}}}}]}}"#
+    );
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert!(export.skipped.is_empty());
+    assert_eq!(export.items.len(), 1);
+}

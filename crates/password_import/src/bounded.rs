@@ -52,8 +52,8 @@ impl<'de, T: Deserialize<'de>, const MAX: usize> Visitor<'de> for BoundedVisitor
                 None => return Ok(bounded),
             }
         }
-        while seq.next_element::<IgnoredAny>()?.is_some() {
-            bounded.overflowed = true;
+        while let Some(entry) = seq.next_element::<Option<IgnoredAny>>()? {
+            bounded.overflowed |= entry.is_some();
         }
 
         Ok(bounded)
