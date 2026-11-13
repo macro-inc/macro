@@ -75,7 +75,7 @@ export type Fire =
   | { type: 'execute' }
   /** A person posts in a channel. */
   | { type: 'message'; channel: string; from: string; text: string }
-  /** The owner moves a seeded task to a status; it's put back afterwards. */
+  /** The owner moves a seeded task from its seeded status (`restore`) to `status`; it's put back afterwards. */
   | { type: 'task_status'; task: string; status: Status; restore: Status }
   /** The owner creates a task, in a folder when given; it's deleted afterwards. */
   | { type: 'task_created'; name: string; project?: string };

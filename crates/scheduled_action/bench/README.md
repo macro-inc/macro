@@ -62,7 +62,8 @@ draft on a busy machine can be told apart.
   made for them with its body, its own notifications, what its run
   returned; mail it sent isn't read. A run whose condition wasn't met did
   nothing. A fired event the trigger doesn't match is never admitted, so the
-  check stops after 90 s with none; any other run gets four minutes.
+  check stops after 90 s with none; any other run gets four minutes. A draft
+  that moved the task the check changes fails, saying so.
 - *Judge*: a model that sees only the request and the routine, with a glossary
   of the ids in it, grades it 1 to 5 (`RUBRIC` in `judge.ts`); 4 or 5 is a
   draft the person would keep.
@@ -166,7 +167,7 @@ call on 16.
 `harness --bin <dir>` points the stack at one build; `reread` checks results
 again after a change to the checks (`--traces` reads the traces again,
 `--judge` grades again); it reads the database without the lock, so it can
-run beside a draft.
+run beside a draft, but each grade waits for the lock.
 
 If every draft prints `no trace`, the stack isn't exporting: when the shared
 collector restarts it drops off the instance's network, and the harness logs

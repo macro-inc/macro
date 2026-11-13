@@ -141,6 +141,15 @@ export async function setTaskStatus(at: Stack, token: string, taskId: string, st
   });
 }
 
+/** A task's status, by the seed's status names. */
+export async function taskStatus(db: SQL, taskId: string): Promise<string | undefined> {
+  const [row] = (await db`
+    select values from entity_properties
+    where property_definition_id = ${STATUS}::uuid and entity_id = ${taskId}`) as { values: { value?: unknown[] } | null }[];
+  const option = row?.values?.value?.[0];
+  return Object.keys(STATUS_OPTIONS).find((name) => STATUS_OPTIONS[name] === option);
+}
+
 /** Put back the seeded statuses of tasks something moved, as the owner; returns how many. */
 export async function restoreStatuses(at: Stack, db: SQL, token: string): Promise<number> {
   const seeded = new Map(Object.entries(tasks()).map(([key, task]) => [seedId(SCENARIO_NAME, 'task', key), task.status]));

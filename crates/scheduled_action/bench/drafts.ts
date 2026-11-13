@@ -572,16 +572,23 @@ async function reread(args: string[]) {
         item.breakdown = breakdown(spans, item.arm === 'bare' ? window : undefined) ?? item.breakdown;
       }
       if (session && values.judge && item.draft && !item.error) {
-        item.grade = await judge(
-          session.at,
-          session.judgeToken,
-          found,
-          item.draft,
-          item.reply,
-          // The ids this file's drafts saw, which may predate the stack's setup.
-          glossary(ids),
-          baseOf(session, found),
+        const { at, judgeToken } = session;
+        const draft = item.draft;
+        // Its model call goes through the stack's harness, so it waits for a draft running there.
+        item.grade = await exclusive(at.instance, `reread judge ${item.case}`, () =>
+          judge(
+            at,
+            judgeToken,
+            found,
+            draft,
+            item.reply,
+            // The ids this file's drafts saw, which may predate the stack's setup.
+            glossary(ids),
+            baseOf(session, found),
+          ),
         );
+        // Longer than a waiter's poll, so a draft waiting for the stack gets it.
+        await Bun.sleep(1500);
       }
     }
     writeFileSync(path, `${JSON.stringify(results, null, 1)}\n`);

@@ -5,7 +5,7 @@
 import { SQL } from 'bun';
 
 import type { Case, Context, DraftResult, Effects, Fire } from './cases';
-import { restoreStatuses, seedId, setTaskStatus } from './setup';
+import { restoreStatuses, seedId, setTaskStatus, taskStatus } from './setup';
 import { type Stack, call, sdk } from './stack';
 import { OWNER, PERSON_KEYS, SCENARIO_NAME, userId } from './workspace';
 
@@ -244,8 +244,13 @@ export async function runCheck(
       firedMessage = sent.id;
     } else if (fire.type === 'task_status') {
       const id = context.ids[fire.task];
-      await setTaskStatus(at, owner, id, fire.status);
-      restore = () => setTaskStatus(at, owner, id, fire.restore);
+      // Putting it back now would fire a routine already on; a draft that moved
+      // the person's task fails, saying so, and `reset` puts it back.
+      const was = await taskStatus(db, id);
+      if (was === fire.restore) {
+        await setTaskStatus(at, owner, id, fire.status);
+        restore = () => setTaskStatus(at, owner, id, fire.restore);
+      } else error = `the task was ${was ?? 'unset'}, not ${fire.restore}: the draft moved it`;
     } else {
       const project = fire.project ? sdk(at, owner).projects.byId(context.ids[fire.project]) : undefined;
       await sdk(at, owner).tasks.create({ name: fire.name, project });
