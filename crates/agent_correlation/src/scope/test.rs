@@ -67,7 +67,7 @@ fn a_scope_is_stored_by_name() {
 }
 
 /// A run that sends nothing changes the person's own items but never sends,
-/// posts, shares, invites or sets up a routine.
+/// posts, shares, invites, pings or sets up a routine.
 #[test]
 fn a_run_that_sends_nothing_reaches_nobody() {
     let scope = SessionScope::NoSend;
@@ -94,6 +94,7 @@ fn a_run_that_sends_nothing_reaches_nobody() {
             "/agent-sessions/a/code-executions/b/connected-apps/slack/send/calls",
         ),
         ("POST", "/team/invite"),
+        ("POST", "/notification/v1/user_notifications/send"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }

@@ -1,4 +1,5 @@
 use attention_feed::test_support::*;
+use model_entity::Entity;
 use notification::domain::models::NotificationState;
 use serde_json::{Value, json};
 
@@ -572,6 +573,17 @@ fn an_agent_waiting_for_the_viewer_offers_an_answer() {
 }
 
 #[test]
+fn a_ping_after_a_question_leaves_it_to_answer() {
+    let session = group(EntityType::AgentSession, SESSION);
+    let pinged = entity(EntityType::AgentSession, SESSION);
+    let listed = rows_of(&session, &[waiting(2, 2), ping(3, pinged, None, 3)]);
+    assert_eq!(
+        listed[0].actions,
+        vec![action(InboxRowActionKind::Answer, None, None)]
+    );
+}
+
+#[test]
 fn requests_offer_their_answers_on_the_request() {
     let listed = rows_of(
         &group(EntityType::Document, DOC),
@@ -667,6 +679,291 @@ fn a_requested_review_offers_the_pull_request() {
         listed[0].actor, None,
         "GitHub users are not Macro principals"
     );
+}
+
+/// A ping from the agent Scout, filed under `entity`.
+fn ping(
+    id: u128,
+    entity: Entity<'static>,
+    message: Option<Value>,
+    minute: u32,
+) -> FeedNotification {
+    let mut content = json!({
+        "title": "Deploy finished",
+        "agent": { "id": uuid(0xB07), "name": "Scout" },
+    });
+    if let Some(message) = message {
+        content["message"] = message;
+    }
+    notification(
+        id,
+        entity,
+        "ping",
+        content,
+        minute,
+        NotificationState::Unseen,
+    )
+}
+
+#[test]
+fn a_ping_joins_its_entitys_comments_from_its_agent_or_its_sender() {
+    let document = group(EntityType::Document, DOC);
+    let listed = rows_of(
+        &document,
+        &[
+            doc_comment(1, DOC, 0x200, 0x200, 1),
+            ping(2, entity(EntityType::Document, DOC), None, 2),
+        ],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::DiscussionMessages,
+            vec![uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+    assert_eq!(
+        listed[0].id.id(),
+        format!("document:{}#top_level", uuid(DOC))
+    );
+    assert_eq!(listed[0].actor, agent());
+    assert!(listed[0].unseen);
+
+    let mut from_script = notification(
+        3,
+        entity(EntityType::Document, DOC),
+        "ping",
+        json!({ "title": "Invoice sent" }),
+        3,
+        NotificationState::Unseen,
+    );
+    std::sync::Arc::make_mut(&mut from_script).sender_id =
+        Some(MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap());
+    let listed = rows_of(&document, &[from_script]);
+    assert_eq!(listed[0].row_type, InboxRowType::DiscussionMessages);
+    assert_eq!(
+        listed[0].actor,
+        Some(InboxActor::User(
+            MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap()
+        ))
+    );
+}
+
+#[test]
+fn a_ping_on_a_task_leaves_its_assignment_a_row_of_its_own() {
+    let task = notification(
+        1,
+        entity(EntityType::Document, DOC),
+        "task_assigned",
+        json!({ "taskId": uuid(DOC), "taskName": "Ship", "assignedBy": "macro|other@example.com" }),
+        1,
+        NotificationState::Unseen,
+    );
+    let listed = rows_of(
+        &group(EntityType::Document, DOC),
+        &[task, ping(2, entity(EntityType::Document, DOC), None, 2)],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::DiscussionMessages, vec![uuid(2)], vec![]),
+            (InboxRowType::Task, vec![uuid(1)], vec![]),
+        ]
+    );
+}
+
+#[test]
+fn a_ping_joins_the_comments_of_a_folder_project_or_crm_record() {
+    for (entity_type, name) in [
+        (EntityType::Project, "project"),
+        (EntityType::Initiative, "initiative"),
+        (EntityType::CrmCompany, "crm_company"),
+        (EntityType::CrmContact, "crm_contact"),
+    ] {
+        let listed = rows_of(
+            &group(entity_type, 0x90),
+            &[ping(1, entity(entity_type, 0x90), None, 1)],
+        );
+        assert_eq!(
+            shape(&listed),
+            vec![(InboxRowType::DiscussionMessages, vec![uuid(1)], vec![])],
+            "{name}"
+        );
+        assert_eq!(
+            listed[0].id.id(),
+            format!("{name}:{}#top_level", uuid(0x90))
+        );
+    }
+
+    let project = group(EntityType::Initiative, 0x1A);
+    let listed = rows_of(
+        &project,
+        &[
+            project_discussion(1, "owner", 0x300, 0x300, 1),
+            ping(2, entity(EntityType::Initiative, 0x1A), None, 2),
+        ],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::DiscussionMessages,
+            vec![uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+}
+
+#[test]
+fn a_ping_joins_the_email_event_and_agent_rows() {
+    let thread = group(EntityType::EmailThread, 0xE0);
+    let listed = rows(
+        &thread,
+        &[
+            new_email(1, 0xE0, 1, NotificationState::Unseen),
+            ping(2, entity(EntityType::EmailThread, 0xE0), None, 2),
+        ],
+        Some(MailFacts {
+            inbox_visible: true,
+            is_read: true,
+        }),
+        &viewer_id(),
+        at(59),
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::Email, vec![uuid(2), uuid(1)], vec![])]
+    );
+    assert!(
+        listed[0].unseen,
+        "an unseen ping keeps read mail's row unread"
+    );
+    let seen = rows(
+        &thread,
+        &[with_state(
+            &ping(2, entity(EntityType::EmailThread, 0xE0), None, 2),
+            NotificationState::Seen,
+        )],
+        Some(MailFacts {
+            inbox_visible: true,
+            is_read: true,
+        }),
+        &viewer_id(),
+        at(59),
+    );
+    assert!(!seen[0].unseen);
+
+    let event = group(EntityType::CalendarEvent, 0xCA);
+    let listed = rows(
+        &event,
+        &[
+            calendar_reminder(1, 30),
+            ping(2, entity(EntityType::CalendarEvent, 0xCA), None, 2),
+        ],
+        None,
+        &viewer_id(),
+        at(25),
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::CalendarEvent, vec![uuid(2), uuid(1)], vec![])]
+    );
+
+    let session = group(EntityType::AgentSession, SESSION);
+    let listed = rows_of(
+        &session,
+        &[
+            settled(1, 1),
+            ping(2, entity(EntityType::AgentSession, SESSION), None, 2),
+        ],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::Agent, vec![uuid(2), uuid(1)], vec![])]
+    );
+
+    let chat = group(EntityType::Chat, 0xC4);
+    let listed = rows_of(&chat, &[ping(1, entity(EntityType::Chat, 0xC4), None, 1)]);
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::Agent, vec![uuid(1)], vec![])]
+    );
+}
+
+#[test]
+fn a_ping_on_a_channel_joins_its_top_level_row_and_counts_as_unread() {
+    let channel = entity(EntityType::Channel, CHANNEL);
+    let listed = channel_rows(&[
+        channel_send(1, CHANNEL, 0x100, 1),
+        ping(2, channel.clone(), None, 2),
+    ]);
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::ChannelMessages,
+            vec![uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+    assert_eq!(listed[0].actor, agent());
+
+    // A ping is shown and unread by itself, unlike a call starting.
+    let alone = channel_rows(&[ping(2, channel, None, 2)]);
+    assert_eq!(
+        shape(&alone),
+        vec![(InboxRowType::ChannelMessages, vec![uuid(2)], vec![])]
+    );
+    assert!(alone[0].unseen);
+}
+
+#[test]
+fn a_ping_on_a_message_joins_that_messages_thread() {
+    let channel = entity(EntityType::Channel, CHANNEL);
+    let on_root = ping(
+        2,
+        channel.clone(),
+        Some(json!({ "messageId": uuid(ROOT) })),
+        2,
+    );
+
+    // The message it is about comes off the channel's row to stack with it.
+    let listed = channel_rows(&[
+        channel_send(1, CHANNEL, ROOT, 1),
+        on_root.clone(),
+        channel_send(3, CHANNEL, 0x100, 3),
+    ]);
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::ChannelMessages, vec![uuid(3)], vec![]),
+            (InboxRowType::ChannelThread, vec![uuid(2), uuid(1)], vec![]),
+        ]
+    );
+    assert_eq!(
+        listed[1].id.id(),
+        format!("channel:{}#thread:{}", uuid(CHANNEL), uuid(ROOT))
+    );
+    assert_eq!(listed[1].thread_id, Some(uuid(ROOT).to_string()));
+
+    // A ping on a reply joins the thread the reply is in.
+    let on_reply = ping(
+        4,
+        channel,
+        Some(json!({ "messageId": uuid(0x101), "threadId": uuid(ROOT) })),
+        4,
+    );
+    let listed = channel_rows(&[channel_reply(1, CHANNEL, ROOT, 0x101, 1), on_root, on_reply]);
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::ChannelThread,
+            vec![uuid(4), uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+
+    // A done of the ping takes nothing else with it.
+    assert_eq!(speaks_for(&listed[0], uuid(2), &viewer_id()), vec![uuid(2)]);
 }
 
 #[test]

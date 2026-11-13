@@ -1424,6 +1424,13 @@ export type NotifEvent = {
     tag: 'computer_setup';
 } | {
     /**
+     * Someone, usually agent code through the SDK, sent the user a
+     * notification they wrote.
+     */
+    content: PingMetadata;
+    tag: 'ping';
+} | {
+    /**
      * A runtime's owner removed the user's access to it, and agents of
      * theirs living there stopped.
      */
@@ -1466,6 +1473,95 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  * newtype wrapper for the the typename of a Notification
  */
 export type NotificationTypeName = string;
+
+/**
+ * The agent a ping reads as being from, as it was when sent.
+ */
+export type PingAgent = {
+    /**
+     * The agent's avatar.
+     */
+    avatarUrl?: string | null;
+    /**
+     * A string on the wire: system bots have fixed ids that are not RFC 4122
+     * uuids.
+     */
+    id: string;
+    /**
+     * The agent's display name.
+     */
+    name: string;
+};
+
+/**
+ * What a ping opens.
+ */
+export type PingLink = {
+    /**
+     * The entity's id.
+     */
+    entityId: string;
+    /**
+     * One of document, chat, channel, channel_message, project, initiative,
+     * email_thread, calendar_event, crm_company, crm_contact or
+     * agent_session: the kinds the inbox lists. A channel message is filed
+     * under its channel and opens at the message. Each recipient's inbox
+     * must also list it: their access comes from a share the inbox reads
+     * (not a link share or an attachment), it is not deleted, a session is
+     * listed, and an email thread is the recipient's own Signal mail in
+     * their inbox. Anyone else is skipped as `not_listed`.
+     */
+    entityType: EntityType;
+};
+
+/**
+ * The channel message a ping points at.
+ */
+export type PingMessage = {
+    /**
+     * The message.
+     */
+    messageId: string;
+    /**
+     * The top-level message it replies to; absent when it is top-level
+     * itself.
+     */
+    threadId?: string | null;
+};
+
+/**
+ * A notification written by its sender: a title, an optional body, and the
+ * entity it opens. The sender is the notification's `sender_id`, or nobody
+ * when people notify themselves. One about a channel message is filed under
+ * the message's channel and names the message.
+ */
+export type PingMetadata = {
+    agent?: null | PingAgent;
+    /**
+     * More detail, as the sender wrote it.
+     */
+    body?: string | null;
+    message?: null | PingMessage;
+    /**
+     * The headline, as the sender wrote it.
+     */
+    title: string;
+};
+
+/**
+ * Who a ping was sent to. A notified recipient's own
+ * preferences can still keep it from them; that is theirs to know.
+ */
+export type PingOutcome = {
+    /**
+     * The recipients it was queued for, in the order they were named.
+     */
+    notified: Array<string>;
+    /**
+     * The recipients it was not sent to.
+     */
+    skipped: Array<SkippedRecipient>;
+};
 
 /**
  * the value we send as the payload in the ios notification
@@ -1668,6 +1764,49 @@ export type RuntimeAccessRemovedMetadata = {
      * The runtime's name.
      */
     runtimeName: string;
+};
+
+/**
+ * A notification written by the caller.
+ */
+export type SendPingRequest = {
+    /**
+     * More detail, at most 1000 characters.
+     */
+    body?: string | null;
+    /**
+     * What the notification opens; the caller must be able to see it.
+     */
+    link: PingLink;
+    /**
+     * Who gets it, at most 100; the caller when omitted or empty. Anyone
+     * who cannot already see `link`, or whose inbox would not list it, is
+     * skipped, never given access.
+     */
+    recipientIds?: Array<string>;
+    /**
+     * The headline, at most 120 characters.
+     */
+    title: string;
+};
+
+/**
+ * Why a recipient was left out of a ping.
+ */
+export type SkipReason = 'no_access' | 'not_listed' | 'recipient_limit';
+
+/**
+ * A recipient a ping was not sent to.
+ */
+export type SkippedRecipient = {
+    /**
+     * Why they were left out.
+     */
+    reason: SkipReason;
+    /**
+     * The recipient.
+     */
+    userId: string;
 };
 
 /**
@@ -2163,6 +2302,46 @@ export type EnableNotificationTypeError = EnableNotificationTypeErrors[keyof Ena
 export type EnableNotificationTypeResponses = {
     200: unknown;
 };
+
+export type SendPingData = {
+    body: SendPingRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/send';
+};
+
+export type SendPingErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * Agent notifications are not enabled for the caller
+     */
+    403: ErrorResponse;
+    /**
+     * The link does not exist or the caller cannot see it
+     */
+    404: ErrorResponse;
+    /**
+     * The sender has notified too many recipients this hour; `Retry-After` says when to try again
+     */
+    429: ErrorResponse;
+    500: ErrorResponse;
+    /**
+     * Whether agent notifications are enabled for the caller could not be checked; try again
+     */
+    503: ErrorResponse;
+};
+
+export type SendPingError = SendPingErrors[keyof SendPingErrors];
+
+export type SendPingResponses = {
+    /**
+     * Queued for the recipients who can see the link
+     */
+    200: PingOutcome;
+};
+
+export type SendPingResponse = SendPingResponses[keyof SendPingResponses];
 
 export type DeleteUserNotificationV2Data = {
     body?: never;

@@ -201,6 +201,10 @@ pub struct CandidateRequest {
     pub after: Option<FeedPosition>,
     /// Restrict to these candidate keys, for recomputing known entries.
     pub only: Option<Vec<Entity<'static>>>,
+    /// Treat every `only` key as if a notification about it were pending
+    /// now, to ask whether a new notification would be listed. Requires
+    /// `only` and no own work.
+    pub assume_attention: bool,
 }
 
 /// One hydrated, authorized candidate.
@@ -335,7 +339,8 @@ impl From<rootcause::Report> for FeedError {
 }
 
 /// Whether a notification makes its entry unread. Channel events other than
-/// messages, mentions and reactions (invites, calls) never do.
+/// messages, mentions, reactions and pings (invites, calls)
+/// never do.
 pub fn counts_as_unseen(notification: &UserNotificationRow<NotifEvent>) -> bool {
     if notification.state != NotificationState::Unseen {
         return false;
@@ -350,6 +355,7 @@ pub fn counts_as_unseen(notification: &UserNotificationRow<NotifEvent>) -> bool 
             | NotifEvent::ChannelMessageReaction(_)
             | NotifEvent::ChannelMessageReply(_)
             | NotifEvent::DocumentMention(_)
+            | NotifEvent::Ping(_)
     )
 }
 

@@ -109,6 +109,23 @@ const groupChatRowName = (row: NotificationInboxRow, place: string) => {
   return groupChatName(name);
 };
 
+/**
+ * Where a ping on a row's entity is: the channel as its messages name it, and
+ * anything else by its own name. A DM names the other person.
+ */
+const pingPlace = (entity: NotificationInboxRow['content']['entity']) =>
+  entity.type === 'channel' &&
+  (entity.channelType === 'public' || entity.channelType === 'team')
+    ? `#${entity.name}`
+    : entity.name;
+
+/**
+ * What a ping's sender did. A ping people send themselves from a script has
+ * no one to name, so it says what it is instead.
+ */
+const pingDeed = (sender: string | undefined) =>
+  sender ? `${sender} pinged you` : 'Ping';
+
 /** Channel verbs drop their preposition in a DM, which needs no place. */
 function channelAction(
   actor: string | undefined,
@@ -210,6 +227,10 @@ function describeNotification(
     }))
     .with({ tag: 'ai_response' }, () => ({
       action: 'Macro responded',
+      subject: content ?? entityName,
+    }))
+    .with({ tag: 'ping' }, () => ({
+      action: pingDeed(actor),
       subject: content ?? entityName,
     }))
     .with(
@@ -394,6 +415,23 @@ export function describeInboxCard(
       ? who
       : join(who, stackVerb(latest));
 
+  // A ping is its sender's own words about the row's entity, whichever row it
+  // joined: the entity is the middle line. A stack that mixes pings with
+  // other things names only its people, since no one verb fits them all.
+  if (metadata.tag === 'ping') {
+    const onlyPings = row.content.notifications.every(
+      (notification) => notification.notification_metadata.tag === 'ping'
+    );
+    return withoutRepeats(
+      {
+        who: onlyPings || !who ? pingDeed(who || undefined) : who,
+        what: pingPlace(row.content.entity),
+        body,
+      },
+      entityName
+    );
+  }
+
   const card = match(row.type)
     .with('channel_thread', 'channel_mention', () =>
       isStack
@@ -469,16 +507,22 @@ export function describeInboxCard(
 
 /**
  * The kind of notification a row is. A stack's newest notification decides,
- * except that a mention stays one: it is why the row is there.
+ * so a ping on top makes any row a ping, except that a mention stays one: it
+ * is why the row is there.
  */
 export function inboxCardKind(row: NotificationInboxRow): InboxCardKind {
   const metadata = row.content.notifications[0]?.notification_metadata;
   const isDirect =
     (metadata?.content as ChannelContent | undefined)?.channelType ===
     'directMessage';
+  const isPing = metadata?.tag === 'ping';
   return match(row.type)
     .returnType<InboxCardKind>()
     .with('channel_mention', 'discussion_mention', () => 'mention')
+    .when(
+      () => isPing,
+      () => 'ping'
+    )
     .with('channel_thread', () =>
       metadata?.tag === 'channel_message_reaction' ? 'reaction' : 'reply'
     )
@@ -515,7 +559,10 @@ export function describeStackItem(
   const sender = senderOf(row, notification, names);
   return {
     id: notification.id,
-    by: join(sender, stackVerb(notification)),
+    by:
+      notification.notification_metadata.tag === 'ping'
+        ? pingDeed(sender)
+        : join(sender, stackVerb(notification)),
     text: describeNotification(row, notification, sender).subject,
     at: new Date(notification.created_at),
   };

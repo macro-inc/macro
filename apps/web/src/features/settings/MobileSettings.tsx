@@ -3,6 +3,7 @@ import { t } from '@app/lib/i18n';
 import { useLogout } from '@core/auth/logout';
 import { UserIcon } from '@core/component/UserIcon';
 import {
+  enableAgentNotifications,
   enableEmailSignatures,
   enableMacroComputers,
 } from '@core/constant/featureFlags';
@@ -21,6 +22,7 @@ export function MobileSettings() {
   const settings = useMobileSettings();
   const signatures = useFeatureFlag(enableEmailSignatures);
   const macroComputers = useFeatureFlag(enableMacroComputers);
+  const agentNotifications = useFeatureFlag(enableAgentNotifications);
   // Always mounted on phones; read the providers only once settings open.
   const outlook = useOutlookAvailable(settings.open);
   const { groups, searchGroups } = useSettingsTabs();
@@ -47,6 +49,7 @@ export function MobileSettings() {
       emailSignatures={signatures().enabled}
       outlook={outlook()}
       macroComputers={macroComputers().enabled}
+      agentNotifications={agentNotifications().enabled}
       name={displayName()}
       email={email() ?? ''}
       avatar={

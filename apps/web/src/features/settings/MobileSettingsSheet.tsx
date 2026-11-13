@@ -39,6 +39,8 @@ type MobileSettingsSheetProps = {
   outlook?: boolean;
   /** Whether search lists Macro computer settings; see `searchSettings`. */
   macroComputers?: boolean;
+  /** Whether search lists the Agent pings setting; see `searchSettings`. */
+  agentNotifications?: boolean;
   name: string;
   email: string;
   avatar: JSX.Element;
@@ -57,6 +59,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
       emailSignatures: props.emailSignatures,
       outlook: props.outlook,
       macroComputers: props.macroComputers,
+      agentNotifications: props.agentNotifications,
     })
   );
   let mainScrollTop = 0;

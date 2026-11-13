@@ -3,6 +3,7 @@ import {
   getSortedKeyProperties,
   soupPropertyToProperty,
 } from '@entity/extractors-property/property-helpers';
+import { pingText } from '@notifications/notification-metadata';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { match } from 'ts-pattern';
 
@@ -117,6 +118,9 @@ export function itemContent(
   ) {
     return;
   }
+
+  // What the sender wrote, not the linked channel's latest message.
+  if (meta?.tag === 'ping') return pingText(meta.content);
 
   const channel = channelMessageContent(entity);
   if (channel) return channel;

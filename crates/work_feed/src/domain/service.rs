@@ -12,9 +12,9 @@ use attention_feed::domain::{
         FeedKey, FeedViewer, Loaded, counts_as_unseen,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
-    reader::FeedReader,
+    reader::{self, FeedReader},
 };
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use model_notifications::NotifEvent;
 use rootcause::Report;
 use uuid::Uuid;
@@ -22,7 +22,8 @@ use uuid::Uuid;
 use super::{
     models::{
         WorkFeedChange, WorkFeedDoneOutcome, WorkFeedDoneTarget, WorkFeedEntry, WorkFeedItem,
-        WorkFeedItemState, WorkFeedPage, WorkFeedPrimaryReason, WorkFeedQuery, WorkFeedScope,
+        WorkFeedItemState, WorkFeedMode, WorkFeedPage, WorkFeedPrimaryReason, WorkFeedQuery,
+        WorkFeedScope,
     },
     policy, stacking,
 };
@@ -113,7 +114,23 @@ fn candidate_request(viewer: &FeedViewer, scope: &WorkFeedScope) -> CandidateReq
         limit: 0,
         after: None,
         only: None,
+        assume_attention: false,
     }
+}
+
+/// Whether Home would list a new notification about `entity`, in the
+/// narrowest Home scope: every item kind, snippets left out.
+pub async fn admits_new_notification<S: CandidateSource>(
+    source: &S,
+    viewer: &FeedViewer,
+    entity: Entity<'static>,
+) -> Result<bool, Report> {
+    let scope = WorkFeedScope {
+        mode: WorkFeedMode::Attention,
+        types: Vec::new(),
+        include_snippets: false,
+    };
+    reader::would_list(source, candidate_request(viewer, &scope), entity).await
 }
 
 /// Build one item from its loaded candidate. Returns `None` when, after

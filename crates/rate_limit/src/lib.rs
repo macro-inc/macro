@@ -13,6 +13,6 @@ pub mod outbound;
 pub use domain::models::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitKeyBuilder, RateLimitResult,
 };
-pub use domain::ports::{RateLimitPort, RateLimitService};
+pub use domain::ports::{RateBudgetPort, RateLimitPort, RateLimitService};
 pub use domain::service::RateLimitServiceImpl;
-pub use outbound::redis::{RedisRateLimitAdapter, RedisRateLimitOps};
+pub use outbound::redis::{RedisRateBudgetOps, RedisRateLimitAdapter, RedisRateLimitOps};

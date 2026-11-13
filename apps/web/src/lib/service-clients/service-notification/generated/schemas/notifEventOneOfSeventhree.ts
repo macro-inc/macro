@@ -6,15 +6,15 @@
  */
 
 import type { NotifEventOneOfSeventhreeTag } from './notifEventOneOfSeventhreeTag';
-import type { RuntimeAccessRemovedMetadata } from './runtimeAccessRemovedMetadata';
+import type { PingMetadata } from './pingMetadata';
 
 /**
- * A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped.
+ * Someone, usually agent code through the SDK, sent the user a
+notification they wrote.
  */
 export type NotifEventOneOfSeventhree = {
-  /** A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped. */
-  content: RuntimeAccessRemovedMetadata;
+  /** Someone, usually agent code through the SDK, sent the user a
+notification they wrote. */
+  content: PingMetadata;
   tag: NotifEventOneOfSeventhreeTag;
 };

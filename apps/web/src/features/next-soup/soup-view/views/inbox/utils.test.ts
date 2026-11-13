@@ -44,3 +44,30 @@ it.each(['view', 'comment', 'edit'] as const)(
     );
   }
 );
+
+it('shows what a ping says, not the linked channel message', () => {
+  const entity = {
+    type: 'channel',
+    id: 'channel',
+    name: 'Deploys',
+    ownerId: 'owner',
+    latestRootMessage: { content: 'Someone else wrote this' },
+  } as EntityData;
+  const notification: Notification = {
+    id: 'notification',
+    entity_id: entity.id,
+    entity_type: 'channel',
+    created_at: '2026-11-09T00:00:00Z',
+    updated_at: '2026-11-09T00:00:00Z',
+    sent: true,
+    state: 'unseen',
+    notification_event_type: 'ping',
+    notification_metadata: {
+      tag: 'ping',
+      content: { title: 'Deploy finished', body: 'All 3 services are live.' },
+    },
+  };
+  expect(itemContent(entity, notification)).toBe(
+    'Deploy finished — All 3 services are live.'
+  );
+});

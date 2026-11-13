@@ -34,7 +34,7 @@ use model_notifications::{
     GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
     GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
     InboxReauthRequiredMetadata, InviteToTeamMetadata, MentionedInDocumentCommentMetadata,
-    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, ReminderMetadata,
+    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, PingMetadata, ReminderMetadata,
     RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
     RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
@@ -891,6 +891,57 @@ impl GraphqlComputerSetupMetadata {
     }
 }
 
+/// GraphQL wrapper for ping metadata.
+pub struct GraphqlPingMetadata(PingMetadata);
+
+/// Metadata for a notification its sender wrote.
+#[Object]
+impl GraphqlPingMetadata {
+    /// The headline, as the sender wrote it.
+    async fn title(&self) -> &str {
+        &self.0.title
+    }
+
+    /// More detail, as the sender wrote it.
+    async fn body(&self) -> Option<&str> {
+        self.0.body.as_deref()
+    }
+
+    /// The agent whose code sent it, when one did.
+    async fn agent_id(&self) -> Option<ID> {
+        self.0.agent.as_ref().map(|agent| ID(agent.id.to_string()))
+    }
+
+    /// The sending agent's name when it was sent.
+    async fn agent_name(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.name.as_str())
+    }
+
+    /// The sending agent's avatar when it was sent.
+    async fn agent_avatar_url(&self) -> Option<&str> {
+        self.0
+            .agent
+            .as_ref()
+            .and_then(|agent| agent.avatar_url.as_deref())
+    }
+
+    /// The channel message it opens at, when the sender linked one.
+    async fn message_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .map(|message| ID(message.message_id.to_string()))
+    }
+
+    /// The top-level message the linked message replies to, when it is a
+    /// reply.
+    async fn thread_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .and_then(|message| message.thread_id)
+            .map(|thread| ID(thread.to_string()))
+    }
+}
+
 /// GraphQL wrapper for removed runtime access metadata.
 pub struct GraphqlRuntimeAccessRemovedMetadata(RuntimeAccessRemovedMetadata);
 
@@ -1498,6 +1549,8 @@ pub enum GraphqlNotifEvent {
     AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata),
     /// Computer setup metadata.
     ComputerSetup(GraphqlComputerSetupMetadata),
+    /// Ping metadata.
+    Ping(GraphqlPingMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1568,6 +1621,7 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::ComputerSetup(metadata) => {
                 Self::ComputerSetup(GraphqlComputerSetupMetadata(metadata))
             }
+            NotifEvent::Ping(metadata) => Self::Ping(GraphqlPingMetadata(metadata)),
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))
             }

@@ -11,7 +11,8 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 
 - `src/domain/rows.rs`: the row rules — every notification's home row,
   one message one row, one stack per top-level message and per entity's
-  comments, noise hidden in its natural row.
+  comments, a ping on its entity's own row, noise hidden in
+  its natural row.
 - `src/domain/service.rs`: page, recompute, done (of rows or of one notification of a
   stack), seen and undo.
 - `src/domain/policy.rs`: which groups the inbox lists.
@@ -28,7 +29,8 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 
 - Depends on: `attention_feed`, `item_filters`, `filter_ast`,
   `model_notifications`.
-- Used by: `graphql_notification_inbox`, `document_storage_service`
+- Used by: `graphql_notification_inbox`, `document_storage_service`,
+  `notification_service` (`admits_new_notification`, for pings)
   (composition).
 
 ## Recipes
@@ -49,6 +51,9 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 
 - Groups use `CandidateKeying::FiledEntity`: a channel's group holds its
   threads, so channel rows partition the whole channel's notifications.
+- A ping never gets a row type of its own: `ping_slot` and
+  `ChannelKind::Ping` place it on the row its entity already has, so a new
+  kind of linkable entity needs a slot there or it lands on the agent row.
 - Row types, actor kinds and action kinds only grow: add values, never
   repurpose or remove them; clients skip values they do not know.
 - Only rows have an `id` in GraphQL; the client cache reads any `id` field as

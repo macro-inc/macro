@@ -89,7 +89,7 @@ pending AS MATERIALIZED (
         WHERE n.id = un.notification_id
         OFFSET 0
     ) notified
-    WHERE un.user_id = $1
+    WHERE un.user_id = $1{probe_skips_pending}
     AND un.deleted_at IS NULL
     AND un.state <> 'done'
     AND un.created_at >= COALESCE(
@@ -109,7 +109,7 @@ attention_page AS (
             latest_own.occurred_at AS touched_at
         FROM (
             SELECT entity_type, entity_id, attention_at
-            FROM pending
+            FROM {attention_source}
             WHERE ($3::timestamptz IS NULL OR (attention_at, entity_id) < ($3, $4))
             AND ($10::text[] IS NULL OR (entity_type, entity_id) IN (
                 SELECT entity_type, entity_id FROM only_keys

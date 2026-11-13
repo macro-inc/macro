@@ -9,6 +9,7 @@ import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
 import {
+  enableAgentNotifications,
   enableEmailSignatures,
   enableMacroComputers,
 } from '@core/constant/featureFlags';
@@ -109,6 +110,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const agentNotifications = useFeatureFlag(enableAgentNotifications);
   const outlook = useOutlookAvailable();
   const macroComputers = useFeatureFlag(enableMacroComputers);
 
@@ -122,6 +124,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       emailSignatures: signatures().enabled,
       outlook: outlook(),
       macroComputers: macroComputers().enabled,
+      agentNotifications: agentNotifications().enabled,
     })
   );
 

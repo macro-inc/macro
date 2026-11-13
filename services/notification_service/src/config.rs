@@ -33,6 +33,13 @@ maybe_env_vars! {
     /// SES configuration set that publishes email delivery events. Unset sends without one.
     #[derive(Debug, Clone)]
     pub(crate) struct SesConfigurationSet;
+    /// PostHog project key for per-user feature flags. Unset leaves flagged
+    /// features off outside a local stack.
+    #[derive(Debug, Clone)]
+    pub(crate) struct PosthogApiKey;
+    /// PostHog ingestion origin. Unset uses the US cloud.
+    #[derive(Debug, Clone)]
+    pub(crate) struct PosthogHost;
 }
 
 env_var!(
@@ -96,6 +103,13 @@ pub struct Config {
     /// events are published per notification type. Optional: the set must exist in SES
     /// before this is configured, or sends fail.
     pub(crate) ses_configuration_set: SesConfigurationSet,
+
+    /// PostHog project key for per-user feature flags. Optional: without it
+    /// flagged features stay off outside a local stack.
+    pub(crate) posthog_api_key: PosthogApiKey,
+
+    /// PostHog ingestion origin. Optional: defaults to the US cloud.
+    pub(crate) posthog_host: PosthogHost,
 }
 
 impl Config {

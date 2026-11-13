@@ -19,7 +19,7 @@ use utoipa::OpenApi;
 
 use crate::{
     api::{
-        health,
+        health, ping,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
         user_notification,
     },
@@ -41,6 +41,7 @@ use crate::{
                 user_notification::bulk_get_typed_notifications_by_event_item_ids,
                 user_notification::get_typed_by_event_item_id,
                 user_notification::get_typed_notification_by_id,
+                ping::send_ping,
                 notification_crate::inbound::http::delete_notification,
                 notification_crate::inbound::http::bulk_delete_notifications,
                 notification_crate::inbound::http::bulk_mark_seen,
