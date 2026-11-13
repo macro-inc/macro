@@ -1,0 +1,19 @@
+packages/graphics/src/core/index.ts
+  s_39eee246ac6b4a::t_ead096d38b0af3 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b1e6cb92291b9c8815a4cdea1d30bc92874975c4",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
