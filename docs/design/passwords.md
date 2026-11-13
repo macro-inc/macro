@@ -118,9 +118,11 @@ provider path. The bootstrap script provisions mounts and JWT roles idempotently
 Macro-issued JWTs use a dedicated audience, short expiry, and a team claim bound
 by the namespace's JWT role. Value-role policy allows only the required KV/TOTP
 paths; the separate lifecycle role permits exact-team namespace read/delete.
-The service reuses each team's value-role token in memory until 15 seconds before
-its lease ends, logging in once per team at a time; a rejected token is replaced
-by one fresh login and the call is retried once.
+The service reuses each team's value-role token in memory until 20 seconds before
+its lease ends (never trusting a lease beyond 60 seconds), logging in once per team
+at a time. A rejected cached token is replaced by one fresh login and the operation
+is retried once; a freshly issued token that is denied is a policy failure and is
+not retried.
 Runtime tokens cannot create namespaces, policies, or auth roles. A
 separate provisioning identity owns those operations; never ship a root token
 to the browser or use it for hosted runtime requests. Agents may become typed

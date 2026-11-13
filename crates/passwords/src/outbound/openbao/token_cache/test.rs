@@ -71,7 +71,7 @@ async fn refreshes_before_the_lease_ends() {
         .session(team, || counted_login(&logins, &session))
         .await
         .expect("miss");
-    tokio::time::advance(Duration::from_secs(44)).await;
+    tokio::time::advance(Duration::from_secs(39)).await;
     assert!(
         cache
             .session(team, || counted_login(&logins, &session))
@@ -91,21 +91,52 @@ async fn refreshes_before_the_lease_ends() {
 }
 
 #[tokio::test]
-async fn never_caches_a_lease_shorter_than_the_margin() {
-    let session = issue(15).await;
+async fn never_caches_a_lease_within_the_margin() {
+    for lease in [0, 20] {
+        let session = issue(lease).await;
+        let cache = TokenCache::new(CAPACITY);
+        let logins = AtomicUsize::new(0);
+        let team = team();
+        for _ in 0..3 {
+            assert!(
+                !cache
+                    .session(team, || counted_login(&logins, &session))
+                    .await
+                    .expect("login")
+                    .cache_hit
+            );
+        }
+        assert_eq!(logins.load(Ordering::SeqCst), 3, "lease {lease}");
+    }
+}
+
+#[tokio::test]
+async fn a_huge_lease_is_clamped_to_the_service_token_ttl() {
+    let session = issue(u64::MAX).await;
+    tokio::time::pause();
     let cache = TokenCache::new(CAPACITY);
     let logins = AtomicUsize::new(0);
     let team = team();
-    for _ in 0..3 {
-        assert!(
-            !cache
-                .session(team, || counted_login(&logins, &session))
-                .await
-                .expect("login")
-                .cache_hit
-        );
-    }
-    assert_eq!(logins.load(Ordering::SeqCst), 3);
+    cache
+        .session(team, || counted_login(&logins, &session))
+        .await
+        .expect("no overflow");
+    tokio::time::advance(Duration::from_secs(39)).await;
+    assert!(
+        cache
+            .session(team, || counted_login(&logins, &session))
+            .await
+            .expect("live")
+            .cache_hit
+    );
+    tokio::time::advance(Duration::from_secs(1)).await;
+    assert!(
+        !cache
+            .session(team, || counted_login(&logins, &session))
+            .await
+            .expect("refreshed at the 60-second bound")
+            .cache_hit
+    );
 }
 
 #[tokio::test]
@@ -129,7 +160,7 @@ async fn teams_never_share_a_token() {
 }
 
 #[tokio::test]
-async fn invalidation_drops_only_the_rejected_token() {
+async fn replacement_logs_in_once_for_a_rejected_token() {
     let session = issue(60).await;
     let cache = TokenCache::new(CAPACITY);
     let logins = AtomicUsize::new(0);
@@ -138,19 +169,76 @@ async fn invalidation_drops_only_the_rejected_token() {
         .session(team, || counted_login(&logins, &session))
         .await
         .expect("miss");
-    cache.invalidate(team, &rejected).await;
     let replacement = cache
-        .session(team, || counted_login(&logins, &session))
+        .replace(team, &rejected, || counted_login(&logins, &session))
         .await
         .expect("relogin");
     assert!(!replacement.cache_hit);
-    // A late rejection of the old token must not evict its replacement.
-    cache.invalidate(team, &rejected).await;
+    // A second caller rejected on the same old token reuses the replacement.
+    assert!(
+        cache
+            .replace(team, &rejected, || counted_login(&logins, &session))
+            .await
+            .expect("replacement shared")
+            .cache_hit
+    );
     assert!(
         cache
             .session(team, || counted_login(&logins, &session))
             .await
             .expect("replacement kept")
+            .cache_hit
+    );
+    assert_eq!(logins.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn a_cancelled_login_leaves_the_next_caller_to_log_in() {
+    let session = issue(60).await;
+    let cache = TokenCache::new(CAPACITY);
+    let logins = AtomicUsize::new(0);
+    let team = team();
+    {
+        let abandoned = cache.session(team, || async {
+            logins.fetch_add(1, Ordering::SeqCst);
+            std::future::pending::<Result<Session, crate::domain::models::Error>>().await
+        });
+        tokio::pin!(abandoned);
+        assert!(futures::poll!(&mut abandoned).is_pending());
+    }
+    let lease = cache
+        .session(team, || counted_login(&logins, &session))
+        .await
+        .expect("waiter logs in after cancellation");
+    assert!(!lease.cache_hit);
+    assert_eq!(logins.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn eviction_never_drops_a_slot_with_a_login_in_flight() {
+    let session = issue(60).await;
+    let cache = TokenCache::new(NonZeroUsize::new(1).expect("capacity"));
+    let logins = AtomicUsize::new(0);
+    let (busy, other) = (team(), team());
+    let (release, released) = tokio::sync::oneshot::channel::<()>();
+    let in_flight = cache.session(busy, || async {
+        logins.fetch_add(1, Ordering::SeqCst);
+        released.await.expect("release");
+        Ok(session.clone())
+    });
+    tokio::pin!(in_flight);
+    assert!(futures::poll!(&mut in_flight).is_pending());
+    cache
+        .session(other, || counted_login(&logins, &session))
+        .await
+        .expect("other team");
+    release.send(()).expect("release");
+    in_flight.await.expect("busy team login");
+    assert!(
+        cache
+            .session(busy, || counted_login(&logins, &session))
+            .await
+            .expect("busy team kept its single-flight slot")
             .cache_hit
     );
     assert_eq!(logins.load(Ordering::SeqCst), 2);

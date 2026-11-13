@@ -83,8 +83,12 @@ impl OpenBaoProvider {
             .await
     }
 
-    /// Runs `call` with the team's token. A cached token the provider rejects
-    /// is dropped and the call runs once more with a fresh login.
+    /// Runs `call` with the team's token. When the provider rejects a cached
+    /// token, the token is replaced and `call` runs once more from the start,
+    /// so every `call` must be safe to re-run after a 401/403: rejected
+    /// requests are not applied, and multi-request steps are CAS-fenced or
+    /// idempotent. A freshly issued token that is rejected is a policy denial;
+    /// it is neither retried nor evicted.
     async fn with_session<Output, Call, Pending>(
         &self,
         team: TeamId,
@@ -95,22 +99,19 @@ impl OpenBaoProvider {
         Pending: Future<Output = Result<Output, CallError>>,
     {
         let lease = self.tokens.session(team, || self.login(team)).await?;
-        tracing::Span::current().set_attribute("cache_hit", lease.cache_hit);
-        let error = match call(lease.session.clone()).await {
-            Err(CallError::Provider(error)) if error.cause() == Cause::Authentication => error,
+        let span = tracing::Span::current();
+        span.set_attribute("cache_hit", lease.cache_hit);
+        match call(lease.session.clone()).await {
+            Err(CallError::Provider(error))
+                if error.cause() == Cause::Authentication && lease.cache_hit => {}
             outcome => return outcome.map_err(Error::from),
-        };
-        self.tokens.invalidate(team, &lease).await;
-        if !lease.cache_hit {
-            return Err(provider_error(error));
         }
-        let retry = self.tokens.session(team, || self.login(team)).await?;
-        let outcome = call(retry.session.clone()).await;
-        if matches!(&outcome, Err(CallError::Provider(error)) if error.cause() == Cause::Authentication)
-        {
-            self.tokens.invalidate(team, &retry).await;
-        }
-        outcome.map_err(Error::from)
+        span.set_attribute("token_retry", true);
+        let retry = self
+            .tokens
+            .replace(team, &lease, || self.login(team))
+            .await?;
+        call(retry.session.clone()).await.map_err(Error::from)
     }
 
     async fn authenticated_client(
