@@ -420,6 +420,12 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     // The writing text leaves out how the SDK spells a filter's items, and
     // what to create beforehand; drafting says both.
     assert!(prompt.contains(super::FILTER_ITEMS), "{prompt}");
+    // Hidden draft sessions also carry the Compose Routines skill, which asks
+    // and saves; the brief says its points come first.
+    assert!(
+        prompt.contains("in place of the Compose Routines skill"),
+        "{prompt}"
+    );
     assert!(prompt.contains("Create nothing else."), "{prompt}");
     // Macro's code routines are its worked examples.
     let inbox = routine_program::CATALOG

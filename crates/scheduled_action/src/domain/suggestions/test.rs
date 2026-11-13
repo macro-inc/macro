@@ -338,7 +338,7 @@ fn harness(turn: Turn, first_try_empty: bool, flag: bool) -> Harness {
         Some(flags),
         SuggestionAgent {
             bot: bot_id::MACRO_NEW_BOT_ID,
-            guide: "The routines guide.",
+            guide: "The guide.",
             model: "test-model".to_owned(),
         },
         TaskTracker::new(),
@@ -443,7 +443,7 @@ async fn the_brief_holds_the_inbox_as_data_that_cannot_close_its_tag() {
     h.generate().await;
     let prompts = h.sessions.prompts.lock().unwrap().clone();
     let brief = &prompts[0];
-    assert!(brief.contains("The routines guide."));
+    assert!(brief.contains("The guide."));
     assert!(brief.contains("Delivery confirmed"));
     assert!(brief.contains("\"slack\""));
     // The subject's closing tag can't end the untrusted block early.

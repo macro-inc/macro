@@ -23,6 +23,7 @@ fn the_catalog_shown_is_the_sessions_surfaces() {
     assert!(brief.contains("Code steps can't be used"));
     assert!(brief.contains("<writing-routines>\nThe guide.\n</writing-routines>"));
     assert!(brief.contains(FILTER_ITEMS));
+    assert!(brief.contains("takes the place of the Compose Routines skill"));
 }
 
 #[test]
