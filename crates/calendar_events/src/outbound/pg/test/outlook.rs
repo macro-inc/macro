@@ -10,10 +10,21 @@ use crate::domain::ports::CalendarProviderErrorKind;
 async fn mailbox(pool: &PgPool) -> (PgCalendarRepository, Uuid, String) {
     let owner = "macro|outlook-owner@example.com".to_owned();
     insert_user(pool, &owner).await;
-    let link = insert_link(pool, &owner).await;
+    let link = outlook_link(pool, &owner).await;
+    (PgCalendarRepository::new(pool.clone()), link, owner)
+}
+async fn outlook_link(pool: &PgPool, owner: &str) -> Uuid {
+    let link = insert_link(pool, owner).await;
     sqlx::query!("UPDATE email_links SET provider='OUTLOOK',sync_generation=1,grant_generation=1,is_sync_active=true WHERE id=$1",link).execute(pool).await.unwrap();
     sqlx::query!("INSERT INTO email_link_microsoft_scopes(link_id,grant_generation,granted_scopes) VALUES($1,1,ARRAY['Calendars.ReadWrite'])",link).execute(pool).await.unwrap();
-    (PgCalendarRepository::new(pool.clone()), link, owner)
+    link
+}
+/// Each work row's scan identity, which only a reset replaces.
+async fn scans(pool: &PgPool, account_id: Uuid) -> Vec<(Uuid, Uuid, i64, i64, Option<String>)> {
+    sqlx::query!("SELECT id,scan_id,sync_generation,grant_generation,cursor FROM calendar_outlook_work WHERE account_id=$1 ORDER BY id",account_id)
+        .fetch_all(pool).await.unwrap().into_iter()
+        .map(|w| (w.id, w.scan_id, w.sync_generation, w.grant_generation, w.cursor))
+        .collect()
 }
 /// The reader revision of the tests' worker.
 const READER_REVISION: i16 = 1;
@@ -858,6 +869,184 @@ async fn reconnect_clears_only_the_replaced_credentials_reauth_state(pool: PgPoo
     .await
     .unwrap();
     assert_eq!(status, "ready");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn replaced_generations_reset_each_work_row_exactly_once(pool: PgPool) {
+    let (repo, link, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    repo.commit_outlook_calendar(&lease, Some(vec![]), Some("cursor".into()))
+        .await
+        .unwrap();
+    let settled = scans(&pool, lease.account_id).await;
+    assert_eq!(settled.len(), 2);
+    assert!(claim(&repo).await.is_none());
+    assert_eq!(scans(&pool, lease.account_id).await, settled);
+
+    // A newer link generation sorts above the work's, an older one below it.
+    sqlx::query!("UPDATE email_links SET sync_generation=2 WHERE id=$1", link)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET grant_generation=5 WHERE id=$1",
+        lease.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(claim(&repo).await.is_some());
+    let reset = scans(&pool, lease.account_id).await;
+    for (before, after) in settled.iter().zip(&reset) {
+        assert_ne!(after.1, before.1);
+        assert_eq!((after.2, after.3, after.4.as_deref()), (2, 1, None));
+    }
+    while claim(&repo).await.is_some() {}
+    assert_eq!(scans(&pool, lease.account_id).await, reset);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn month_rollover_resets_only_expired_windows_once(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    repo.commit_outlook_calendar(&lease, Some(vec![]), Some("cursor".into()))
+        .await
+        .unwrap();
+    let settled = scans(&pool, lease.account_id).await;
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET ends_at=ends_at-interval '1 month' WHERE id=$1",
+        lease.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let rolled = claim(&repo).await.unwrap();
+    assert_eq!(rolled.id, lease.id);
+    assert!(rolled.cursor.is_none());
+    assert_eq!(
+        rolled.target.unwrap().range.ends_at,
+        OccurrenceRange::maintenance_horizon(Utc::now()).ends_at
+    );
+    let reset = scans(&pool, lease.account_id).await;
+    for (before, after) in settled.iter().zip(&reset) {
+        assert_eq!(after.1 == before.1, after.0 != lease.id);
+    }
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET lease_until=now()-interval '1 second' WHERE id=$1",
+        lease.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(claim(&repo).await.is_some());
+    assert_eq!(scans(&pool, lease.account_id).await, reset);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unclaimable_accounts_never_starve_claimable_work(pool: PgPool) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    let [reauth, revoked, inactive] = [
+        outlook_link(&pool, &owner).await,
+        outlook_link(&pool, &owner).await,
+        outlook_link(&pool, &owner).await,
+    ];
+    while claim(&repo).await.is_some() {}
+    let deleted = repo
+        .upsert_calendar_fixture(lease.account_id, discovered_calendar("deleted").calendar)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "INSERT INTO calendar_outlook_work(id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at)
+            SELECT $1,account_id,$2,sync_generation,grant_generation,starts_at,ends_at FROM calendar_outlook_work WHERE id=$3",
+        Uuid::now_v7(),
+        deleted,
+        lease.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("UPDATE calendars SET is_deleted=true WHERE id=$1", deleted)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_accounts SET sync_status='reauth_required' WHERE email_link_id=$1",
+        reauth
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "DELETE FROM email_link_microsoft_scopes WHERE link_id=$1",
+        revoked
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active=false WHERE id=$1",
+        inactive
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Every unclaimable row is due long before the one claimable row.
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,
+            next_run_at=CASE WHEN id=$1 THEN now()-interval '1 minute' WHEN account_id=$2 AND calendar_id IS NULL THEN now()+interval '1 hour' ELSE now()-interval '1 day' END",
+        lease.id,
+        lease.account_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(claim(&repo).await.unwrap().id, lease.id);
+    assert!(claim(&repo).await.is_none());
+    let status = |link: Uuid| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar!(
+                "SELECT sync_status FROM calendar_accounts WHERE email_link_id=$1",
+                link
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        }
+    };
+    assert_eq!(status(reauth).await, "reauth_required");
+    assert_eq!(status(revoked).await, "disabled");
+    assert_eq!(status(inactive).await, "disabled");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn claims_take_due_work_in_order_across_accounts(pool: PgPool) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    for _ in 0..2 {
+        outlook_link(&pool, &owner).await;
+    }
+    let mut discovered = vec![];
+    while let Some(lease) = claim(&repo).await {
+        discovered.push(lease.id);
+    }
+    assert_eq!(discovered.len(), 3);
+    for (minutes, id) in [3, 1, 2].into_iter().zip(&discovered) {
+        sqlx::query!(
+            "UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,next_run_at=now()-make_interval(mins=>$2) WHERE id=$1",
+            id,
+            minutes
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let mut claimed = vec![];
+    while let Some(lease) = claim(&repo).await {
+        claimed.push(lease.id);
+    }
+    assert_eq!(claimed, [discovered[0], discovered[2], discovered[1]]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
