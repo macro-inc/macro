@@ -114,6 +114,15 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   `stack.unique_user(name)`, and keep search scenarios in `tests/search.rs`,
   whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
+- The labels the owner made at the provider (Gmail labels, Outlook
+  categories): `stack.provider_labels(&inbox)` reads them and
+  `stack.make_provider_label(&inbox, name)` makes one, through the
+  provider's own API as another mail client would. See
+  `tests/journey_parity.rs`.
+- Linking Gmail the way signing in with Google does:
+  `user.link_gmail_through_sign_in()`, after `stack.gmail().add_mailbox`
+  with the `scopes` the grant should hold. Macro asks the emulator's
+  tokeninfo which scopes it has. See `tests/journey_connect.rs`.
 - A user at an address that matters (a staff domain): `stack.user_at`.
 - Failures of what the services depend on: a provider fault on the emulator,
   `stack.fail_next_service_request` (`_with` for a JSON body) for another
@@ -127,6 +136,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 ## Start here
 
 - `tests/gmail.rs`, `tests/outlook.rs`: one worked scenario per provider.
+- `tests/journey_*.rs`: whole user journeys (compose, organise, read,
+  account, sender rules, agent, provider parity, connect), each for Gmail
+  and Outlook where the product has both.
 - `src/stack.rs`: `Stack`, what it starts and what a scenario can ask it.
 - `src/inbox.rs`, `src/user.rs`: the scenario's vocabulary.
 

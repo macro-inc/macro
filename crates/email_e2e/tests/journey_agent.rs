@@ -1,6 +1,7 @@
-//! What an AI agent does in a user's mail with the email tools: replying
-//! with SendEmail, reading the inbox's labels with ListLabels, and deciding
-//! where a sender's mail lands with SetSenderPolicy.
+//! What an AI agent does in a user's mail with the email tools: drafting a
+//! reply with SendEmail and sending it once the user confirms, reading the
+//! inbox's labels with ListLabels, and deciding where a sender's mail lands
+//! with SetSenderPolicy.
 //!
 //! The tools run in the test process on the scenario's database and
 //! queues; the scenario's workers carry out what they stage, so each
