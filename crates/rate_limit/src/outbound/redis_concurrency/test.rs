@@ -5,7 +5,8 @@ use crate::domain::models::{ConcurrencyLease, ConcurrencyLimitConfig, RateLimitK
 use crate::domain::ports::ConcurrencyLimitPort;
 
 fn adapter() -> RedisConcurrencyLimitAdapter {
-    let url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
+    let url = macro_env_var::maybe_read_env("REDIS_URL")
+        .unwrap_or_else(|| "redis://127.0.0.1:6379".to_owned());
     RedisConcurrencyLimitAdapter {
         redis: redis::Client::open(url).expect("failed to create Redis client"),
     }

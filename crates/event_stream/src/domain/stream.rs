@@ -373,9 +373,7 @@ where
         mut deliveries: mpsc::Receiver<Delivery>,
         mut closed: oneshot::Receiver<CloseReason>,
     ) {
-        let reason = match self.stream(resume, &mut deliveries, &mut closed).await {
-            Stop::Closed(reason) => reason,
-        };
+        let Stop::Closed(reason) = self.stream(resume, &mut deliveries, &mut closed).await;
         self.finish(reason).await;
     }
 

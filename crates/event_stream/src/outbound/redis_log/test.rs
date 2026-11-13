@@ -7,7 +7,8 @@ use event_exposure::EntityType;
 use redis::AsyncCommands as _;
 
 fn client() -> redis::Client {
-    let url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
+    let url = macro_env_var::maybe_read_env("REDIS_URL")
+        .unwrap_or_else(|| "redis://127.0.0.1:6379".to_owned());
     redis::Client::open(url).expect("valid Redis URL")
 }
 

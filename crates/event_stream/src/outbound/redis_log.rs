@@ -419,7 +419,7 @@ impl LogTail for RedisLogTail {
                     self.last = Some(cursor);
                 }
                 if let Some(entry) = self.log.entry(&raw) {
-                    return Ok(TailItem::Entry(entry));
+                    return Ok(TailItem::Entry(Box::new(entry)));
                 }
                 continue;
             }

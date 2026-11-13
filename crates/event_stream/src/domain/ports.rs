@@ -47,7 +47,7 @@ pub trait LogTail: Send + 'static {
 #[derive(Debug)]
 pub enum TailItem {
     /// The next entry.
-    Entry(LogEntry),
+    Entry(Box<LogEntry>),
     /// The tail lost its place: entries were trimmed before it read them
     /// (Redis was unreachable for longer than the retention). Every stream
     /// has missed events it cannot replay.

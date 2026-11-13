@@ -60,7 +60,7 @@ where
                 item = tail.next() => item,
             };
             match item {
-                Ok(TailItem::Entry(entry)) => self.deliver(entry).await,
+                Ok(TailItem::Entry(entry)) => self.deliver(*entry).await,
                 Ok(TailItem::Gap) => {
                     tracing::error!(
                         open_streams = self.registry.len(),
