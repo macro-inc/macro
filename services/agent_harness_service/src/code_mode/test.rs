@@ -224,6 +224,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "auth.postProfilePictures",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
+        // Stopping a chat's stream reaches nobody and starts nothing.
         "cognition.stopChatStream",
         "email.createDraft",
         "email.deleteDraft",
@@ -267,7 +268,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.externalChatRead",
         "storage.externalChatUpload",
         "storage.externalChatRemove",
-        "storage.externalChatUpdatePermissions",
         "storage.removeBotFromChannelByBot",
         "storage.deleteCallRecord",
         "storage.editCallRecord",
@@ -309,6 +309,55 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.setChannelSection",
         "storage.updateChannelSection",
         "scheduled-action.attachSuggestionDraft",
+        // Reads and inference sent as POST.
+        "agent-harness.agentSessionsForPullRequest",
+        "agent-harness.agentSessionsForPullRequests",
+        "agent-harness.chooseAgentMode",
+        "agent-harness.classify",
+        "agent-harness.extract",
+        "agent-harness.discoverAgentCapabilitiesHandler",
+        "agent-harness.discoverConnectedApps",
+        "agent-harness.loadAgentModelsHandler",
+        // Presenting a review asks the person; deciding one is refused.
+        "agent-harness.createSessionReview",
+        // Shown only to the person.
+        "agent-harness.openInApp",
+        "agent-harness.presentSessionView",
+        // The person's own sessions' names, links and settings; none of
+        // them runs a session.
+        "agent-harness.deleteAgentSession",
+        "agent-harness.linkAgentSessionPullRequest",
+        "agent-harness.linkAgentSessionTask",
+        "agent-harness.putAgentSessionAutoArchive",
+        "agent-harness.putAgentSessionSandboxSize",
+        "agent-harness.refreshAgentSessionChanges",
+        "agent-harness.registerAgentSessionWork",
+        "agent-harness.removeQueuedAction",
+        "agent-harness.renameAgentSession",
+        "agent-harness.setAgentSessionArchived",
+        "agent-harness.unlinkAgentSessionPullRequest",
+        "agent-harness.unregisterAgentSessionWork",
+        // The person's own preferences.
+        "agent-harness.putAgentAutoArchivePreferences",
+        "agent-harness.putAgentCodingPreferences",
+        "agent-harness.putAgentSandboxSize",
+        // Edits to the person's own chat; running a tool call is refused.
+        "cognition.rejectToolCall",
+        "cognition.updateToolCall",
+        "cognition.updateToolResponse",
+        // Withdrawing the person's own request, like a channel's.
+        "storage.accessRequestsCancel",
+        // They issue credentials, which `AccountHolderOrInternal` refuses a
+        // scoped one.
+        "storage.approveHarnessPairing",
+        "storage.createBotToken",
+        // Unauthenticated: a credential adds nothing.
+        "storage.claimHarnessPairing",
+        "storage.createHarnessPairing",
+        // Document tokens for the editing worker, whose routes edit
+        // documents, which a run that sends nothing may do.
+        "storage.getDocumentPermissionsToken",
+        "storage.validateDocumentPermissionsToken",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();
@@ -342,6 +391,13 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
             "welcome",
             "draft",
             "email",
+            "permissions",
+            "access",
+            "/agents",
+            "/bots",
+            "agent-sessions",
+            "harness",
+            "/tool",
         ]
         .iter()
         .any(|word| text.contains(word))
@@ -362,7 +418,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
 
 /// A run that sends nothing starts no work that runs with the person's full
 /// access: no agent session, session control or queued prompt, tool
-/// approval, review decision, session share, or chat tool call.
+/// approval, review decision, session share, chat tool call, or agent or
+/// bot, which acts later.
 #[test]
 fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
     let operations = code_execution::domain::operations();
@@ -376,7 +433,14 @@ fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
         "agent-harness.updateAgentSessionPermissions",
         "agent-harness.startFreshAgentConversation",
         "agent-harness.retryAgentConversationTurn",
+        "agent-harness.warmAgentSessionHandler",
+        "agent-harness.reportAgentSessionAppConnected",
         "cognition.callTool",
+        "storage.createAgent",
+        "storage.updateAgent",
+        "storage.patchAgent",
+        "storage.createBot",
+        "storage.patchBot",
     ] {
         let operation = operations
             .get(key)

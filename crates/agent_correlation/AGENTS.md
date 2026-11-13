@@ -20,7 +20,8 @@ code, not in its prompt. The harness also signs the scope into the credential
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
   someone else or start work with the person's full access (agent sessions,
-  session control, tool approvals, review decisions, chat tool calls). The
+  session control, tool approvals, review decisions, chat tool calls, and
+  agents, bots and the computers they run on). The
   harness tests `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk`
   (every send-like SDK write is refused or reviewed) and
   `a_run_that_sends_nothing_starts_no_work_with_the_persons_access` hold
