@@ -37,6 +37,27 @@ export type ImportFolderNode = {
 };
 
 /** Item failures worth sending again: the vault was busy or briefly unavailable. */
+/**
+ * `base`, or the first free `numbered(n)` (n = 2, 3, …) when a root folder
+ * already has that name, ignoring case.
+ */
+export function uniqueRootFolderName(
+  base: string,
+  vaultFolders: readonly PasswordFolder[],
+  numbered: (number: number) => string
+) {
+  const taken = new Set(
+    vaultFolders
+      .filter((folder) => folder.parentId === null)
+      .map((folder) => folder.name.trim().toLowerCase())
+  );
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let number = 2; ; number++) {
+    const name = numbered(number);
+    if (!taken.has(name.toLowerCase())) return name;
+  }
+}
+
 export function isRetryable(code: string | undefined) {
   return code === 'busy' || code === 'vault_unavailable';
 }

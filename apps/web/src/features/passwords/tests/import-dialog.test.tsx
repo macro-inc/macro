@@ -12,7 +12,7 @@ import {
   type PasswordSource,
   PasswordsProvider,
 } from '../context/passwords-context';
-import type { PasswordItem } from '../core/types';
+import type { PasswordFolder, PasswordItem } from '../core/types';
 import { ImportDialog } from '../views/import-dialog';
 import { createFakePasswordSource } from './fake-source';
 import { createMemoryImportResume, FIXTURE_SCOPE } from './fixture-scope';
@@ -99,9 +99,11 @@ function chooseFileOnClick(file: File) {
 function mount(
   source: PasswordSource,
   reply: ParseReply,
-  importResume = createMemoryImportResume()
+  importResume = createMemoryImportResume(),
+  vault: { items?: PasswordItem[]; folders?: PasswordFolder[] } = {}
 ) {
   const onOpenFolder = vi.fn();
+  const onClose = vi.fn();
   render(() => (
     <PasswordsProvider
       value={{
@@ -116,15 +118,15 @@ function mount(
       }}
     >
       <ImportDialog
-        items={() => [EXISTING]}
-        folders={() => []}
+        items={() => vault.items ?? [EXISTING]}
+        folders={() => vault.folders ?? []}
         refresh={async () => {}}
         onOpenFolder={onOpenFolder}
-        onClose={() => {}}
+        onClose={onClose}
       />
     </PasswordsProvider>
   ));
-  return { onOpenFolder };
+  return { onOpenFolder, onClose };
 }
 
 it('previews an export, skips what the vault already has, and imports the rest', async () => {
@@ -239,4 +241,67 @@ it('asks for a supported export when the layout is too old', async () => {
       'export a .1pux file or a 1Password 8 CSV'
     )
   );
+});
+
+it('names the new folder apart from one an earlier import made', async () => {
+  const source = createFakePasswordSource();
+  const earlier = `Imported from Bitwarden ${new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+  }).format(new Date())}`;
+  mount(source, { outcome: 'parsed', export: EXPORT }, undefined, {
+    items: [],
+    folders: [{ id: 'earlier', name: earlier, parentId: null }],
+  });
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await screen.findByText(`New folder “${earlier} (2)”`);
+  fireEvent.click(screen.getByRole('button', { name: 'Import 3 items' }));
+  await screen.findByText('Import finished');
+
+  const folders = await source.folders();
+  expect(folders.map((folder) => folder.name)).toContain(`${earlier} (2)`);
+});
+
+it('offers Done and says how to import anyway when everything is already there', async () => {
+  const source = createFakePasswordSource();
+  const vaultCopy = (
+    sourceItem: (typeof EXPORT.items)[number],
+    index: number
+  ) => ({
+    ...EXISTING,
+    id: `019a0000-0000-7000-8000-00000000000${index}`,
+    name: sourceItem.name,
+    kind: sourceItem.kind,
+    url: sourceItem.url,
+  });
+  const { onClose } = mount(
+    source,
+    { outcome: 'parsed', export: EXPORT },
+    undefined,
+    { items: EXPORT.items.map(vaultCopy) }
+  );
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await screen.findByText(
+    'Everything in this file is already in the vault. Turn off Skip items I already have to import copies anyway.'
+  );
+  expect(screen.queryByRole('button', { name: /^Import \d/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+  expect(onClose).toHaveBeenCalled();
+
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: 'Skip items I already have' })
+  );
+  expect(screen.getByRole('button', { name: 'Import 3 items' })).toBeTruthy();
+});
+
+it('lists the skipped items behind Show items, counting each reason once', async () => {
+  mount(createFakePasswordSource(), { outcome: 'parsed', export: EXPORT });
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await screen.findByText('Show items');
+  expect(screen.queryByText('1 item')).toBeNull();
 });

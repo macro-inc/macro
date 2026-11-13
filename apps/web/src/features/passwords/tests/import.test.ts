@@ -10,6 +10,7 @@ import {
   duplicateKeys,
   foldersFor,
   planBatches,
+  uniqueRootFolderName,
 } from '../core/import';
 import type { PasswordItem } from '../core/types';
 import { sendImport } from '../primitives/import';
@@ -143,6 +144,22 @@ describe('duplicateKeys', () => {
       existing
     );
     expect([...keys].sort()).toEqual(['card', 'same']);
+  });
+});
+
+describe('uniqueRootFolderName', () => {
+  it('numbers the name past root folders that already use it, ignoring case', () => {
+    const numbered = (number: number) => `Imported (${number})`;
+    const folders = [
+      { id: 'a', name: 'imported', parentId: null },
+      { id: 'b', name: 'Imported (2)', parentId: null },
+      { id: 'c', name: 'Imported (3)', parentId: 'a' },
+    ];
+
+    expect(uniqueRootFolderName('Imported', [], numbered)).toBe('Imported');
+    expect(uniqueRootFolderName('Imported', folders, numbered)).toBe(
+      'Imported (3)'
+    );
   });
 });
 

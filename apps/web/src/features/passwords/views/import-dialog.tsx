@@ -119,24 +119,30 @@ export function ImportDialog(props: {
                 <Button variant="ghost" size="sm" onClick={controller.reset}>
                   {t('passwords.importChooseAnother')}
                 </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={
-                    controller.sendCount() === 0 ||
-                    controller.folderCheck()?.tooMany ||
-                    controller.folderCheck()?.tooDeep
-                  }
-                  onClick={() =>
-                    fireAndForget(controller.start(), 'passwords-import')
+                <Show
+                  when={controller.sendCount() > 0}
+                  fallback={
+                    <Button variant="primary" size="sm" onClick={props.onClose}>
+                      {t('passwords.importClose')}
+                    </Button>
                   }
                 >
-                  {controller.sendCount() === 0
-                    ? t('passwords.importNothing')
-                    : t('passwords.importStart', {
-                        count: controller.sendCount(),
-                      })}
-                </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={
+                      controller.folderCheck()?.tooMany ||
+                      controller.folderCheck()?.tooDeep
+                    }
+                    onClick={() =>
+                      fireAndForget(controller.start(), 'passwords-import')
+                    }
+                  >
+                    {t('passwords.importStart', {
+                      count: controller.sendCount(),
+                    })}
+                  </Button>
+                </Show>
               </Match>
               <Match when={controller.result()}>
                 {(result) => (

@@ -267,6 +267,16 @@ export function ImportPreviewStep(props: {
               {t('passwords.importSkipDuplicates')}
             </Checkbox.Label>
           </Checkbox>
+          <Show
+            when={
+              props.skipDuplicates &&
+              props.preview.duplicates === props.preview.itemCount
+            }
+          >
+            <p class="text-sm text-ink-muted" data-passwords-import-all-present>
+              {t('passwords.importAllPresent')}
+            </p>
+          </Show>
         </div>
       </Show>
       <Show when={props.preview.skipped.length > 0}>
@@ -283,9 +293,7 @@ export function ImportPreviewStep(props: {
           </ul>
           <details class="text-sm">
             <summary class="text-ink-muted">
-              {t('passwords.importItems', {
-                count: props.preview.skipped.length,
-              })}
+              {t('passwords.importShowSkipped')}
             </summary>
             <ul class="mt-1 flex max-h-40 flex-col overflow-auto">
               <For each={props.preview.skipped.slice(0, LIST_LIMIT)}>
@@ -320,24 +328,27 @@ export function ImportPreviewStep(props: {
           {t('passwords.importDestination')}
         </span>
         <div class="flex flex-wrap items-center gap-2">
+          <p class="flex min-w-0 basis-full items-start gap-1.5 text-sm">
+            <FolderIcon class="mt-0.5 size-4 shrink-0" />
+            <span class="min-w-0 break-words" data-passwords-import-target>
+              {destinationLabel(
+                props.destination,
+                props.preview,
+                props.vaultFolders
+              )}
+            </span>
+          </p>
           <Dropdown>
             <Dropdown.Trigger
               variant="secondary"
               size="sm"
-              aria-label={t('passwords.importDestination')}
+              aria-label={t('passwords.importDestinationChange')}
             >
-              <FolderIcon class="size-4" />
-              <span class="max-w-64 truncate">
-                {destinationLabel(
-                  props.destination,
-                  props.preview,
-                  props.vaultFolders
-                )}
-              </span>
+              {t('passwords.importDestinationChange')}
             </Dropdown.Trigger>
             <Dropdown.Content class="min-w-56 max-w-[calc(100vw-2rem)]">
               <Dropdown.Item onSelect={() => props.onDestination('new')}>
-                <span class="truncate">
+                <span class="min-w-0 break-words">
                   {t('passwords.importNewFolder', {
                     name: props.preview.newFolderName,
                   })}
@@ -351,7 +362,7 @@ export function ImportPreviewStep(props: {
                   <Dropdown.Item
                     onSelect={() => props.onDestination(`folder:${folder.id}`)}
                   >
-                    <span class="truncate">
+                    <span class="min-w-0 break-words">
                       {folderPath(props.vaultFolders, folder.id).join(' / ')}
                     </span>
                   </Dropdown.Item>

@@ -29,6 +29,7 @@ import {
   isRetryable,
   MAX_DUPLICATE_SEARCHES,
   planBatches,
+  uniqueRootFolderName,
   VAULT_LIST_CAP,
 } from '../core/import';
 import type { PasswordFolder, PasswordItem } from '../core/types';
@@ -341,12 +342,23 @@ export function createPasswordImport(props: {
         duplicates: duplicates.size,
         duplicatesPartial: known.partial,
         resumed: entry === earlier,
-        newFolderName: importFolderName(
-          parsed.format,
-          new Date(entry.startedAt)
+        newFolderName: newFolderName(
+          importFolderName(parsed.format, new Date(entry.startedAt)),
+          entry === earlier
         ),
       },
     });
+  }
+
+  /**
+   * A resumed import reuses the folder its first run made (the server keys it
+   * by import id), so only a fresh import avoids names already in use.
+   */
+  function newFolderName(base: string, resumed: boolean) {
+    if (resumed) return base;
+    return uniqueRootFolderName(base, props.folders(), (number) =>
+      t('passwords.importFolderNameNumbered', { name: base, number })
+    );
   }
 
   async function start() {

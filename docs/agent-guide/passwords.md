@@ -77,11 +77,14 @@ The preview shows the format, counts per kind, the source folder tree, items
 not imported with their reasons, parts not carried over (attachments,
 passkeys, previous passwords, unusual verification codes), and how many items
 look like ones the vault has (same kind, name ignoring case, website host).
-Skip items I already have is on by default. When the vault list is at its
+Skip items I already have is on by default; when it would leave nothing to
+import, the preview says so (turn it off to import copies) and offers Done. When the vault list is at its
 500-item cap, each distinct name is searched (up to 100 names, metadata
 only); otherwise the preview says duplicates were checked against the first
-500. Import into picks a new folder "Imported from <source> <date>" (default),
-an existing folder, or the root; source folders nest under it. Keep imported
+500. Import into shows the full destination and a Change menu: a new folder
+"Imported from <source> <date>" (default; numbered " (2)", " (3)"… when a root
+folder already has that name, except when continuing an import, which reuses
+its folder), an existing folder, or the root; source folders nest under it. Keep imported
 items private to me leaves out the team grant. The 500-folder team limit and
 the 8-level depth limit are checked here and block the import.
 
