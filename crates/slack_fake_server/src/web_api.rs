@@ -466,9 +466,7 @@ pub(crate) fn add_message(state: &mut State, channel: &str, message: Value) {
 /// Adds a message to a conversation's history and returns it as the
 /// websocket event its members would get; `None` for an unknown channel.
 pub(crate) fn store_message(state: &mut State, channel: &str, message: Value) -> Option<Value> {
-    let Some(conversation) = state.conversations.get_mut(channel) else {
-        return None;
-    };
+    let conversation = state.conversations.get_mut(channel)?;
     let thread_ts = message
         .get("thread_ts")
         .and_then(Value::as_str)

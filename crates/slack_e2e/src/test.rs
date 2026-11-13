@@ -533,6 +533,7 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
         .await
         .unwrap();
     let sockets = slack.socket_connections();
+    let listings = slack.calls_of("users.conversations").len();
     let again = service
         .submit_session(
             &alice,
@@ -572,6 +573,22 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     .await
     .expect("the account is connected again");
     assert!(slack.calls_of("auth.signout").is_empty());
+    // A catalogue refresh asked for now runs from the account's loop, after
+    // its startup catch-up: once Slack sees that second listing, the startup
+    // catch-up is over.
+    sqlx::query!(
+        "UPDATE slack_account SET catalogue_requested_at = NULL WHERE user_id = $1",
+        ALICE
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(service.conversations(&alice).await.unwrap().refreshing);
+    wait_for_rows(&pool, WAIT, || async {
+        (slack.calls_of("users.conversations").len() >= listings + 2).then_some(())
+    })
+    .await
+    .expect("the account's loop refreshes the catalogue");
     // The chat no account observes is offered again; adding it resumes the
     // same chat.
     let offered = wait_for_rows(&pool, WAIT, || async {
