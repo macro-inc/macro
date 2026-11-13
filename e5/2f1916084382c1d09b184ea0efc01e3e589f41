@@ -1,0 +1,454 @@
+crates/dashboards/src/domain.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-5
+crates/dashboards/Cargo.toml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-43
+packages/code-mode-sdk/scripts/catalog.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 47
+crates/dynamic_ui/src/lib.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 8
+crates/dashboards/src/outbound.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-5
+packages/sdk/generated/storage/index.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 4
+apps/web/src/features/agent-dashboards/views/shared/agent-tabs.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-30
+services/document_storage_service/src/api/context.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 674-686,998
+apps/web/src/routes/lazy-route-views.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 150-157,208-209
+apps/web/src/components/app/split-layout/split-router/legacy-route.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 2-4,285-287,429-430
+  s_48270cd6f8d6f1::t_86663b10c044f8 1,431
+crates/dashboards/src/outbound/gate.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-22
+crates/dashboards/src/outbound/access.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-28
+docs/agent-guide/navigation.md
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 265-266
+rules/ast-grep/ts-feature-core-pure.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 20
+agent-teammates/starter-agent/behavior/capabilities/dashboard/index.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-195
+crates/model-entity/src/tests.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 82-92
+apps/web/src/features/agent-dashboards/views/dashboard-page.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-26
+apps/web/src/features/agent-dashboards/views/shared/page-props.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-28
+apps/web/src/features/agent-dashboards/components/dashboard-states.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-88
+apps/web/src/features/agent-dashboards/dashboard-navigation.test.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-167
+docs/agent-guide/agent-dashboards.md
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-56
+Cargo.toml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 21
+crates/graphql_common/src/entity_type.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 99-100,139,195,233
+packages/sdk/specs/agent-harness.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 6589-6590
+apps/web/src/features/agent-dashboards/queries/keys.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-11
+packages/sdk/specs/notification.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 2132-2133
+packages/sdk/specs/cognition.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 4770-4771
+apps/web/src/components/app/split-layout/componentRegistry.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 43-50,351-360
+packages/sdk/specs/storage.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 11204,11206-11208,11215,11221-11231,11253-11255,11260,11267,11272,11288-11298,11320-11324,11329,11336-11339,11344,11349-11350,11359-11360,11369-11370,11378-11387,11389-11400,11422,11424-11426,11429,11431,11434,11444,11449-11450,11459-11460,11469,11479,11484,11489,11498-11520,11525,11530,11550,11571-11575,11578,11580,11583-11584,11591-11593,11599,11604,11610,11614-11624,11630,11640-11650,11670-11674,11679,11688-11689,11692,11702,11734-11738,11743,11749-11757,11764,11776-12625,19846-19847,20068-20069,30078-30079,35793-35794,37412-37422,38742-38895,44157-44158,46052-46053,46109-46110,54248-54264,58029-58039,58261-58262,64610-64626,65296-65301
+crates/entity_access/src/domain/service/test.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 444-450
+crates/entity_access/src/outbound/pg_access_repo/queries/dashboard_access/test.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-162
+apps/web/src/features/agent-dashboards/views/shared/dashboard-body.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-40
+crates/dashboards/src/outbound/pg_dashboard_repo/test.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-220
+apps/web/src/vite-env.d.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 37
+crates/entity_access_db_utils/src/lib.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 421-422,504-505
+apps/web/src/routes/routes.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-4,631-652
+  s_48270cd6f8d6f1::t_fcc37fe4f509c2 653
+crates/macro_db_client/src/item_access/delete.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 80
+crates/dashboards/src/inbound.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-3
+apps/web/src/features/agent-dashboards/context/dashboard-source.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-21
+crates/macro_db_client/migrations/20261113041230_dashboard_entities.up.sql
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-43
+packages/lexical-core/generated/dynamic-ui.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 683,715,752,788,826-831,866,900-905,939,971,1009,1051,1083,1122,1155-1161,1192-1198,1235,1265-1270,1304,1340,1378-1383,1418,1452-1457,1491,1523,1561,1635,1674,1707,1709-1710,1713,1744,1746,1748,1750
+  s_cf7b4d0600b97c::t_7798648a75fb0d 1603,1708,1711-1712,1745,1747,1749
+apps/web/src/features/agent-dashboards/agent-dashboard-button.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-57
+crates/dynamic_ui/src/view.rs
+  s_48270cd6f8d6f1::t_5ed74f769e8a88 166-169,197-203,207-210,229-232,244-247,260-263
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 26-32,35-38,48-51,68-71,81-84,96-99,110-113,123-129,132-135,274-289
+  s_48270cd6f8d6f1::t_25a3abf841b315 290
+crates/dashboards/AGENTS.md
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-58
+apps/web/src/features/agent-dashboards/core/dashboard.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-47
+agent-teammates/starter-agent/package.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 19
+apps/web/src/features/agent-dashboards/views/shared/dashboard-body.test.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-54
+apps/web/src/lib/i18n/locales/en/agent-dashboards.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-14
+crates/model-entity/src/lib.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 97-99,159-161
+services/document_storage_service/src/server.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 954,2183-2187,2500-2501
+  s_48270cd6f8d6f1::t_a6e37dafbcdffb 2502-2503
+apps/web/src/lib/i18n/locales/en.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 3,47
+apps/web/src/features/agent-dashboards/views/agent-page.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-38
+apps/web/src/features/agent-dashboards/core/dashboard.test.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-75
+crates/entity_access/src/outbound/pg_access_repo/queries/dashboard_access.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-56
+rules/ast-grep/ts-feature-components-presentational.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 18
+rules/ast-grep/tsx-feature-components-presentational.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 18
+apps/web/src/routes/app-router-view.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 43,53,97,130,381-385
+apps/web/src/features/agent-dashboards/routes.test.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-33
+agent-teammates/starter-agent/README.md
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 59
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1235
+crates/agent_code_mode/src/domain/ui_commands/navigable_routes.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 90-91
+agent-teammates/starter-agent/behavior/capabilities/dashboard/test/dashboard.test.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-195
+crates/dashboards/src/domain/service.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-446
+crates/macro_db_client/migrations/20261113041230_dashboard_entities.down.sql
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-5
+packages/sdk/generated/storage/sdk.gen.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 5,2097-2208
+  s_48270cd6f8d6f1::t_8dab0255d6a786 2209
+packages/sdk/src/macro.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 15,231-233,283,458-465
+crates/dynamic_ui/src/pane.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-16,24-26,29,37-43,49-51,53,58-64,70-77,79-102,108-118
+  s_48270cd6f8d6f1::t_5ed74f769e8a88 17-23,27-28,30-36,44-48,52,54-57,65-69,78,103-107
+crates/dashboards/src/domain/service/test.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-655
+apps/web/src/features/agent-dashboards/views/mobile/agent-page.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-39
+crates/properties/src/domain/model.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 69
+apps/web/src/features/agent-dashboards/primitives/dashboard-view.test.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-64
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1887
+rules/ast-grep/tsx-feature-data-no-ui.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 18-19
+docs/agent-guide/README.md
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 28
+services/document_storage_service/src/api.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 312-314
+  s_48270cd6f8d6f1::t_2301230da48016 311
+packages/sdk/generated/storage/types.gen.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 289,4202,5246-5258,6318-6451,9492,10706,10728,15882-15898,18121-18130,18208,22348-22363,22810-22814,28268-28587,32129,32198
+crates/agent_harness/src/outbound/channel_announcer/test.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 577
+packages/sdk/src/utils/verbs.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 235,248,271,285,294,316
+agent-teammates/starter-agent/cli.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 27,84-87
+crates/entity_access/src/outbound/pg_access_repo.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 324-348,682-683
+  s_48270cd6f8d6f1::t_c4bdf3cd5401db 323
+apps/web/src/features/agent-dashboards/route-views.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-126
+apps/web/src/features/agent-dashboards/queries/dashboard-source.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-78
+packages/sdk/generated/notification/types.gen.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 723
+services/document_storage_service/Cargo.toml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 305-308
+packages/sdk/specs/connection.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 319-320
+apps/web/src/features/agent-dashboards/primitives/dashboard-view.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-39
+services/document_storage_service/src/api/swagger.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 548-561,888-897
+crates/dashboards/src/inbound/axum_router.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-637
+apps/web/src/features/dynamic-ui/generated/types.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 683,715,752,788,826-831,866,900-905,939,971,1009,1051,1083,1122,1155-1161,1192-1198,1235,1265-1270,1304,1340,1378-1383,1418,1452-1457,1491,1523,1561,1635,1674,1707,1709-1710,1713,1744,1746,1748,1750
+  s_cf7b4d0600b97c::t_cb01559be0b225 1603,1708,1711-1712,1745,1747,1749
+crates/access_requests/src/domain/models.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 35-36,51
+rules/ast-grep/tsx-feature-core-pure.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 20
+crates/favorites/src/domain/mutation_service.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 116
+packages/sdk/generated/connection/types.gen.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 43
+rules/ast-grep/tsx-no-device-composition.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 27
+static_assets/schema.graphql
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 5479-5482
+crates/access_requests/src/domain/service.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 57
+packages/sdk/specs/scheduled-action.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 2501-2502,2664-2665
+services/document_storage_service/src/service/entity_mutation.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 467,528,583,647,686,745,896
+apps/web/src/features/channel/Channel/ChannelDetail.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 11,218-220
+crates/entity_access/src/outbound/pg_access_repo/queries.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 35
+crates/dashboards/src/domain/models.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-232
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 405,478
+.github/workspace-dep-closures.json
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 5212-5252,5786
+crates/dashboards/src/lib.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-9
+rules/ast-grep/ts-feature-data-no-ui.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 18-19
+apps/web/src/features/agent-dashboards/views/shared/dashboard-panes.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-64
+apps/web/src/features/agent-dashboards/tests/fake-dashboard.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-21
+crates/folds/agent_fold/src/domain/model/segment/test.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 544
+packages/sdk/src/entities/me/namespace.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 3-4,122-156
+crates/entity_access/src/outbound/pg_explain_access_repo.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 165-177
+rules/ast-grep/ts-feature-layers-use-context.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 28-32
+apps/web/src/features/agent-dashboards/components/account-identity.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-17
+crates/dynamic_ui/AGENTS.md
+  s_48270cd6f8d6f1::t_aaef0e8ba4554a 34-35
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 25-27,42-44
+rules/ast-grep/tsx-feature-layers-use-context.yml
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 28-32
+crates/dashboards/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-198
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1183-1195
+apps/web/src/features/agent-dashboards/views/mobile/dashboard-page.tsx
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-22
+packages/sdk/generated/cognition/types.gen.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 654
+apps/web/src/lib/service-clients/service-storage/graphql-favorites.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 53-54,86-91,105-107,177-178
+crates/entity_access/src/domain/service.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 79,307-308,579,694
+packages/sdk/src/entities/dashboards/namespace.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-65
+crates/dynamic_ui/src/test.rs
+  s_48270cd6f8d6f1::t_310d468c62af94 1,401-402
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 10,156,210-213,403-453
+apps/web/src/features/agent-dashboards/queries/dashboard-client.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-102
+crates/dashboards/src/outbound/pg_dashboard_repo.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-385
+apps/web/src/features/agent-dashboards/queries/dashboard-client.test.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-58
+crates/entity_access/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 126-131
+  s_48270cd6f8d6f1::t_433ae882f083e8 124-125
+agent-teammates/starter-agent/behavior/index.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 18,85
+apps/web/src/features/agent-dashboards/dashboard-navigation.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-79
+apps/web/src/lib/queries/notification/notification-soup.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 44-46
+crates/entity_access_db_utils/src/direct_share.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 36-37
+packages/sdk/generated/agent-fold/index.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 2966,2972,3006,3067,3073,3107
+  s_6074238f41262d::t_7b0145c13b64ed 2959,2961,2982,2990,2997,3004,3013,3029,3031,3040,3044,3049,3060,3062,3083,3091,3098,3105,3114,3130,3132,3141,3145,3150
+packages/sdk/tests/dashboards.test.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-152
+packages/sdk/AGENTS.md
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 121-126
+packages/sdk/src/entities/dashboards/dashboard.ts
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 1-204
+crates/graphql_soup/src/loaders.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 628
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_48270cd6f8d6f1::t_8d091d7ea1e6c6 511-512
+.sqlx/query-037f9409b415444c5a8a5d6397187df2fc0a705039d2d877207d5a493dda20df.json
+  s_48270cd6f8d6f1::t_6da5a639cfc127 1-22
+.sqlx/query-22d034976acd76646b12301a73d08582f898e322ea33950e950b955455a5dfbc.json
+  s_48270cd6f8d6f1::t_0317e05b84dc8d 1-28
+.sqlx/query-33fe113cf764d668d68acfc29e43d6dba1bcb652b17dfd9f98b4534440713a96.json
+  s_48270cd6f8d6f1::t_4ba7747231d310 1-17
+.sqlx/query-5304479ac4da76a4aab322f259f1ac2b253f78761980a4b62197c7e78f337846.json
+  s_48270cd6f8d6f1::t_30d4206ea8a889 1-58
+.sqlx/query-771246b4c1464e8e65812276ddd67ea01dca62c2c79b8f65be89db6091559cda.json
+  s_48270cd6f8d6f1::t_b986b0835e456a 1-47
+.sqlx/query-95032bc7cd8ae76770d5fc7c7eb06655ae370d08906e8806031e052bd2d18783.json
+  s_48270cd6f8d6f1::t_bc3df70c67d99e 1-35
+.sqlx/query-9538c7c69e729c6c7a4195da2557c197c5ce5b370690336bf3e327fca9c2b5b6.json
+  s_48270cd6f8d6f1::t_2d8e94b83b77cc 1-36
+.sqlx/query-98eeb25a0ea4675243ce54ad30d15693fd5a44578a44242a7c5de19b506962ec.json
+  s_48270cd6f8d6f1::t_1445a33f0696cc 1-16
+.sqlx/query-9ad0d1634c7b9c492a553f98bc698a1d391b80518fb9586bb1b791b0005a3c1c.json
+  s_48270cd6f8d6f1::t_ca42d8d070287c 1-15
+.sqlx/query-a912dfb699465bb99455ffb162ba0cb72c0e522f86567796059694865bf7d37e.json
+  s_48270cd6f8d6f1::t_9ea0917c2e9e56 1-42
+.sqlx/query-ad1d1548c06759c7dba1944705b5682395a44260712b71a913fb4772044039c2.json
+  s_48270cd6f8d6f1::t_62c0048755b5bc 1-28
+.sqlx/query-b21cb0743307e00addede42924e53a48ef6b901ac1afe5b69c162fa92650e054.json
+  s_48270cd6f8d6f1::t_6c2d44d1307df7 1-14
+.sqlx/query-f054d6d5c30abc466719da1e4553f2e4e71ed0fc4970956cdd566cccaad93690.json
+  s_48270cd6f8d6f1::t_263381249abc44 1-14
+.sqlx/query-f3f78f52132ddcf61c9954a5dad9788e14cb74b1643d205f43b01b52e71a2a23.json
+  s_48270cd6f8d6f1::t_34e3333d81e295 1-30
+.sqlx/query-fb90e8dc16ba1605d1927dddda3225dc86920e684e2d9d95d1d2d82a89278950.json
+  s_48270cd6f8d6f1::t_a9187cd1d4d3bc 1-41
+Cargo.lock
+  s_48270cd6f8d6f1::t_db64a816754da5 6036-6064,6734
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_6074238f41262d::t_d46a4a82c8a0b2 4152,4184,4221,4257,4295-4300,4335,4369-4374,4408,4440,4478,4520,4552,4591,4624-4630,4661-4667,4704,4734-4739,4773,4809,4847-4852,4887,4921-4926,4960,4992,5030,5072,5104,5143,5176-5182,5213-5219
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/entityType.ts
+  s_48270cd6f8d6f1::t_682681d3d40211 40
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_48270cd6f8d6f1::t_c7726ac3364f92 6589-6590
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/entityType.ts
+  s_48270cd6f8d6f1::t_c2a5fed6ef24f1 40
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_48270cd6f8d6f1::t_b204bc8550bf60 16641
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_48270cd6f8d6f1::t_4a8a712e14c649 4770-4771
+apps/web/src/lib/service-clients/service-connection/generated/schemas/entityType.ts
+  s_48270cd6f8d6f1::t_8a01532abe6453 40
+apps/web/src/lib/service-clients/service-connection/openapi.json
+  s_48270cd6f8d6f1::t_e17a81c06358b7 319-320
+apps/web/src/lib/service-clients/service-notification/generated/schemas/entityType.ts
+  s_48270cd6f8d6f1::t_dbfecea9e67e68 40
+apps/web/src/lib/service-clients/service-notification/generated/zod.ts
+  s_48270cd6f8d6f1::t_167f4b443143e5 72,120,165,216,331,2599,4817,7040
+apps/web/src/lib/service-clients/service-notification/openapi.json
+  s_48270cd6f8d6f1::t_14c0a253ab060b 2132-2133
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/createdItemEntityType.ts
+  s_48270cd6f8d6f1::t_f098beb48a4543 37-38
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftCreatedEntityType.ts
+  s_48270cd6f8d6f1::t_8e4b0b5dc194f7 37-38
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_48270cd6f8d6f1::t_7e84dbb341aa26 2501-2502,2664-2665
+apps/web/src/lib/service-clients/service-storage/generated/schemas/addFavoriteRequestEntityType.ts
+  s_48270cd6f8d6f1::t_1f176c5df343c3 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/collabSurfaceResponseParentEntityType.ts
+  s_48270cd6f8d6f1::t_0319bd0d0f690f 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createDashboardBody.ts
+  s_48270cd6f8d6f1::t_13520bceaa7701 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createDashboardBodyView.ts
+  s_48270cd6f8d6f1::t_53853c408b12a9 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboard.ts
+  s_48270cd6f8d6f1::t_b0295160c227b6 1-33
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardId.ts
+  s_48270cd6f8d6f1::t_4602c9ba29ca13 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardList.ts
+  s_48270cd6f8d6f1::t_ce197f961171f2 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardSummary.ts
+  s_48270cd6f8d6f1::t_02b17aa89d5ebc 1-25
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardSummaryTitle.ts
+  s_48270cd6f8d6f1::t_1dd68110fd0ded 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardTitle.ts
+  s_48270cd6f8d6f1::t_ccb3c4aec2ffb7 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersion.ts
+  s_48270cd6f8d6f1::t_fbf73b5bfc2be5 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersionList.ts
+  s_48270cd6f8d6f1::t_ecc3f361311e60 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersionSummary.ts
+  s_48270cd6f8d6f1::t_2bf329577a87bc 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersionView.ts
+  s_48270cd6f8d6f1::t_35b36e4825be0e 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardView.ts
+  s_48270cd6f8d6f1::t_a406e4713e5e89 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/ensureCollabSurfaceRequestParentEntityType.ts
+  s_48270cd6f8d6f1::t_f9e15dee7e4136 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/favoriteEntityRefEntityType.ts
+  s_48270cd6f8d6f1::t_7259a78cad45c3 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/favoriteEntityType.ts
+  s_48270cd6f8d6f1::t_500305b3f86ec9 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_48270cd6f8d6f1::t_9e0fc97afb78bc 713-714,841-851,2251-2253,2606,3250-3252,3329
+apps/web/src/lib/service-clients/service-storage/generated/schemas/listFavoritesEntityTypeItem.ts
+  s_48270cd6f8d6f1::t_9b788420468879 41
+apps/web/src/lib/service-clients/service-storage/generated/schemas/patchDashboardPaneBody.ts
+  s_48270cd6f8d6f1::t_ec0d91d1ac621b 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/patchDashboardPaneBodyExpectedVersion.ts
+  s_48270cd6f8d6f1::t_5c3dc4b2b86a9c 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/patchDashboardPaneBodyWidget.ts
+  s_48270cd6f8d6f1::t_9a243487cc37e9 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/setHomeDashboardBody.ts
+  s_48270cd6f8d6f1::t_fabb863efb9779 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/shareEntityType.ts
+  s_48270cd6f8d6f1::t_f7fff810235816 26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateDashboardBody.ts
+  s_48270cd6f8d6f1::t_a3c8c9f26dc867 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateDashboardBodyExpectedVersion.ts
+  s_48270cd6f8d6f1::t_e251170c356a48 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateDashboardBodyView.ts
+  s_48270cd6f8d6f1::t_e5833e1eb0c499 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/version.ts
+  s_48270cd6f8d6f1::t_d4248cb8ee3a94 1-12
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_48270cd6f8d6f1::t_4d112514755815 7118,7177,7217,16431-16785,39388,39560,39634,39662,39737,39771,39811,41730,41797,41852,41908,41961,42007
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_48270cd6f8d6f1::t_61422c6e90b68e 1581-1582
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_48270cd6f8d6f1::t_f3aec5a3285d54 11204,11206-11208,11215,11221-11231,11253-11255,11260,11267,11272,11288-11298,11320-11324,11329,11336-11339,11344,11349-11350,11359-11360,11369-11370,11378-11387,11389-11400,11422,11424-11426,11429,11431,11434,11444,11449-11450,11459-11460,11469,11479,11484,11489,11498-11520,11525,11530,11550,11571-11575,11578,11580,11583-11584,11591-11593,11599,11604,11610,11614-11624,11630,11640-11650,11670-11674,11679,11688-11689,11692,11702,11734-11738,11743,11749-11757,11764,11776-12625,19846-19847,20068-20069,30078-30079,35793-35794,37412-37422,38742-38895,44157-44158,46052-46053,46109-46110,54248-54264,58029-58039,58261-58262,64610-64626,65296-65301
+crates/dashboards/CLAUDE.md
+  s_48270cd6f8d6f1::t_9b73aae5c5d98d 1
+crates/dynamic_ui/src/snapshots/dynamic_ui__test__the_dashboard_schema_is_pinned.snap
+  s_48270cd6f8d6f1::t_df36c289255be5 1444-1451,1475-1482,1514-1521,1558-1565,1591-1598,1619-1626,1653-1660,1687-1694,1751-1758,1815-1822,1867-1874,1908-1915,1953-1960,1990-1997,2027-2034
+crates/dynamic_ui/src/snapshots/dynamic_ui__test__the_present_view_schema_is_pinned.snap
+  s_48270cd6f8d6f1::t_513e3084cefd68 1292-1299,1323-1330,1362-1369,1406-1413,1439-1446,1467-1474,1501-1508,1535-1542,1599-1606
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_48270cd6f8d6f1::t_2c877c8b44a1e8 35-37,53-54,71-72,91-92
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_48270cd6f8d6f1::t_f9656e5c960ce5 310-326,587,589,674-675,677,773,776
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e52f1916084382c1d09b184ea0efc01e3e589f41",
+  "prompts": {},
+  "sessions": {
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6074238f41262d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "065ecd00-1bb3-4dcb-b08b-07f3a94973dd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_cf7b4d0600b97c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c812f4b4-f31c-4488-ba73-674e565b8869",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
