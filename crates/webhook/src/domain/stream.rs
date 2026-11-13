@@ -237,10 +237,10 @@ where
                     Ok(accessors) => Ok(accessors
                         .iter()
                         .any(|user| user.as_ref() == self.subscriber.as_ref())),
-                    // Agent sessions (and other non-fanout types) have no
-                    // accessor expansion. Fall back to the subscriber's own
-                    // access level so existing-session triggers still reach
-                    // an authorized listener.
+                    // Entity types `get_users_by_entity` cannot expand fall
+                    // back to the subscriber's own access level. Agent
+                    // sessions do expand now, so this covers only types
+                    // without an accessor listing.
                     Err(AccessError::BadRequest(_)) => Ok(self
                         .entity_access_service
                         .get_access_level(Some(&self.subscriber), entity_id, *entity_type)

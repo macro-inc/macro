@@ -42,6 +42,11 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
+use uuid::Uuid;
+
+const DOCUMENT_ENTITY_TYPE: &str = "document";
+const CHANNEL_ENTITY_TYPE: &str = "channel";
+const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 const COPIED_DOCUMENT_ID: &str = "22222222-2222-2222-2222-222222222222";
@@ -1074,7 +1079,7 @@ async fn search_only_document_events_skip_webhook_delivery() {
 
     for (event_name, event) in search_only_document_event_cases() {
         assert!(
-            normalized_document_event(&event)
+            normalize(&event)
                 .unwrap_or_else(|error| panic!("{event_name} normalization failed: {error}"))
                 .is_none(),
             "{event_name} should not normalize to a public webhook event"
@@ -1974,9 +1979,9 @@ async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
 /// The live stream mirrors the persisted fan-out: a departed session's owner
 /// keeps ownership, so the stream audience is the union of the owner's
 /// workspace and the origin parent, not the parent alone.
-#[test]
-fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
-    use crate::domain::ingestion::stream::agent_session_lifecycle_stream_candidate;
+#[tokio::test]
+async fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
+    use crate::domain::ingestion::stream::stream_candidate;
     use crate::domain::stream::StreamAudience;
     use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
 
@@ -1984,8 +1989,11 @@ fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
         AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
     });
 
-    let candidate =
-        agent_session_lifecycle_stream_candidate(&event).expect("a deleted session streams");
+    let repository = MockRepository::new(Vec::new(), Vec::new());
+    let candidate = stream_candidate(&event, &repository)
+        .await
+        .expect("a deleted session streams")
+        .expect("a deleted session is public");
 
     assert_eq!(
         candidate.audience,
@@ -2077,4 +2085,205 @@ async fn user_event_workspace_resolution_failure_is_transient() {
         .expect_err("resolution failure surfaces");
 
     assert!(error.is_transient());
+}
+
+/// The envelope the webhook system delivered before exposure existed: the
+/// complete broker envelope, minus a call's private routing field. Kept here
+/// as the reference the exposure-driven normalization must reproduce.
+fn legacy_envelope<E: serde::Serialize>(event: &Event<E>) -> String {
+    let mut envelope = serde_json::to_value(event).unwrap();
+    if let Some(metadata) = envelope
+        .get_mut("metadata")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        metadata.remove("recipient_user_id");
+    }
+    serde_json::to_string(&envelope).unwrap()
+}
+
+/// The delivered body, byte for byte, as the HTTP worker and SSE send it.
+fn delivered_envelope<E: TopicEvent>(event: &Event<E>) -> (NormalizedWebhookEvent, String) {
+    let (normalized, _) = normalize(event)
+        .unwrap_or_else(|error| panic!("normalization failed: {error}"))
+        .expect("delivered event is public");
+    let body = serde_json::to_string(&normalized.broker_envelope).unwrap();
+    (normalized, body)
+}
+
+fn assert_wire_unchanged<E: TopicEvent>(event: &Event<E>) {
+    let (normalized, body) = delivered_envelope(event);
+    assert_eq!(body, legacy_envelope(event), "{}", normalized.event_name);
+    assert_eq!(
+        normalized.broker_envelope["event_type"], normalized.event_name,
+        "the public name is the payload tag"
+    );
+}
+
+fn call_events() -> Vec<Event<CallNotificationEvent>> {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let public = || {
+        let mut metadata = CallNotificationMetadata::new(call_id, Some(Uuid::from_u128(9)));
+        metadata.created_by = Some("macro|creator@example.com".to_string());
+        metadata.identity = Some("room-identity".to_string());
+        metadata.user_id = Some("macro|joiner@example.com".to_string());
+        metadata
+    };
+    let private = || {
+        let mut metadata = public();
+        metadata.meeting_id = Some(Uuid::from_u128(10));
+        metadata.invited_by = Some("macro|sender@example.com".to_string());
+        metadata.recipient_user_id = Some(PERSONAL_WORKSPACE_ID.to_string());
+        metadata
+    };
+    [
+        CallNotificationEvent::Started(public()),
+        CallNotificationEvent::Ended(public()),
+        CallNotificationEvent::ParticipantJoined(public()),
+        CallNotificationEvent::ParticipantLeft(public()),
+        CallNotificationEvent::RecordingReady(public()),
+        CallNotificationEvent::Summarized(public()),
+        CallNotificationEvent::Ringing(private()),
+        CallNotificationEvent::Answered(private()),
+        CallNotificationEvent::Declined(private()),
+        CallNotificationEvent::Invited(private()),
+    ]
+    .into_iter()
+    .map(Event::new)
+    .collect()
+}
+
+/// Every delivered event keeps today's wire shape exactly: same keys, same
+/// order, same values, with only a call's routing field stripped.
+#[test]
+fn delivered_envelopes_are_byte_identical_to_the_legacy_envelope() {
+    for case in document_event_cases()
+        .into_iter()
+        .chain(channel_event_cases())
+        .chain(message_event_cases())
+    {
+        match &case.event {
+            TestBrokerEvent::Document(event) => assert_wire_unchanged(event),
+            TestBrokerEvent::Channel(event) => assert_wire_unchanged(event),
+            TestBrokerEvent::Message(event) => assert_wire_unchanged(event),
+        }
+    }
+    for case in webhook_event_cases() {
+        assert_wire_unchanged(&case.event);
+    }
+    for event in call_events() {
+        assert_wire_unchanged(&event);
+    }
+    for event in [
+        agent_trigger_new_event(),
+        agent_trigger_requested_event(),
+        agent_trigger_document_event(),
+        agent_trigger_existing_event(),
+        agent_trigger_task_assignment_event(),
+    ] {
+        assert_wire_unchanged(&event);
+    }
+    {
+        use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+        assert_wire_unchanged(&agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+        }));
+    }
+    assert_wire_unchanged(&Event::new(user_events::UserTopicEvent::PictureChanged(
+        user_events::UserPictureChangedMetadata {
+            user_id: user_id("macro|owner@example.com"),
+            file_id: Some("file_1".to_string()),
+            url: Some("https://example.com/picture.png".to_string()),
+        },
+    )));
+}
+
+/// Optional envelope fields survive in place when present.
+#[test]
+fn delivered_envelopes_keep_correlation_fields() {
+    let mut event = Event::with_event_id(
+        Uuid::from_u128(0x0198_0000_0000_7000_8000_0000_0000_0001),
+        DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+            sub_type: None,
+            document_id: DOCUMENT_ID.to_string(),
+            actor_user_id: Some(user_id("macro|owner@example.com")),
+            actor: None,
+            on_behalf_of: None,
+            project_id: None,
+        }),
+    );
+    event.agent_correlation_id = Some(Uuid::from_u128(5));
+    event.routine_id = Some(Uuid::from_u128(6));
+    event.agent_verb = Some("future-verb".to_string());
+
+    assert_wire_unchanged(&event);
+}
+
+/// A literal of today's private call payload: the recipient routes the event
+/// and is never delivered.
+#[test]
+fn call_invitation_wire_shape_is_unchanged() {
+    let mut metadata = CallNotificationMetadata::new(Uuid::parse_str(CALL_ID).unwrap(), None);
+    metadata.recipient_user_id = Some(PERSONAL_WORKSPACE_ID.to_string());
+    metadata.invited_by = Some("macro|sender@example.com".to_string());
+    let event = Event::with_event_id(
+        Uuid::from_u128(0x0198_0000_0000_7000_8000_0000_0000_0002),
+        CallNotificationEvent::Invited(metadata),
+    );
+
+    let (normalized, body) = delivered_envelope(&event);
+
+    assert_eq!(normalized.event_name, "call.invited");
+    assert_eq!(normalized.entity_type, "call");
+    assert_eq!(normalized.entity_id, CALL_ID);
+    assert_eq!(
+        body,
+        r#"{"event_id":"01980000-0000-7000-8000-000000000002","schema_version":1,"event_type":"call.invited","metadata":{"call_id":"0198a1b2-c3d4-7e5f-8061-728394a5b6c7","invited_by":"macro|sender@example.com"}}"#
+    );
+}
+
+/// A literal of today's user picture payload.
+#[test]
+fn user_picture_changed_wire_shape_is_unchanged() {
+    let event = Event::with_event_id(
+        Uuid::from_u128(0x0198_0000_0000_7000_8000_0000_0000_0003),
+        user_events::UserTopicEvent::PictureChanged(user_events::UserPictureChangedMetadata {
+            user_id: user_id("macro|owner@example.com"),
+            file_id: None,
+            url: None,
+        }),
+    );
+
+    let (normalized, body) = delivered_envelope(&event);
+
+    assert_eq!(normalized.entity_type, "user");
+    assert_eq!(normalized.entity_id, "macro|owner@example.com");
+    assert_eq!(
+        body,
+        r#"{"event_id":"01980000-0000-7000-8000-000000000003","schema_version":1,"event_type":"user.picture_changed","metadata":{"user_id":"macro|owner@example.com","file_id":null,"url":null}}"#
+    );
+}
+
+/// An agent conversation message was never delivered (it has no mention or
+/// request to route); it is now declared internal instead of failing.
+#[test]
+fn agent_conversation_messages_stay_undelivered() {
+    use agent_trigger::domain::broker_events::{
+        AgentConversationMessageEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+
+    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::Mentioned(mentioned)) =
+        agent_trigger_document_event().event
+    else {
+        panic!("the document trigger fixture is a mention");
+    };
+    let event = Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::ConversationMessage(AgentConversationMessageEvent {
+            bot_id: mentioned.bot_id,
+            session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+            message: mentioned.message,
+            context: None,
+        }),
+    ));
+
+    assert!(normalize(&event).unwrap().is_none());
 }

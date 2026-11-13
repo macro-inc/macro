@@ -77,11 +77,22 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 
 The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 `macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
-`macro.agent_session_lifecycle`, and `macro.users`. It supports these event names:
+`macro.agent_session_lifecycle`, `macro.users`, and `macro.call_notifications`
+(`src/topics.rs`; every other topic is listed there as internal).
 
-- Documents: `document.created`, `document.updated`, `document.deleted`, and
-  `document.copied`.
-- Channels: `channel.created`, `channel.updated`, `channel.deleted`,
+What is delivered, to whom, and in what shape is declared by each event's
+`TopicEvent::exposure()` in its producing crate (vocabulary in
+`crates/event_exposure`); `src/domain/ingestion.rs` and `ingestion/stream.rs`
+only map the declared `Audience` to webhook workspaces and stream checks.
+Internal events, and `Preview` ones until the stream's flag gate exists, are
+skipped. It supports these event names:
+
+- Documents: `document.created`, `document.updated`, `document.deleted`,
+  `document.copied`, and `document.interaction` (a peer joined or left, or a
+  periodic save). An update that only changes the icon or color is not
+  delivered.
+- Channels: `channel.created`, `channel.updated`, `channel.picture_changed`,
+  `channel.deleted`,
   `channel.participant_added`, `channel.participant_removed`, and
   `channel.access_requested` (someone outside a private or team channel asked
   to join; the payload carries the request id).
@@ -95,6 +106,7 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 - Agent sessions: `agent_session.opened`, `agent_session.turn_started`,
   `agent_session.turn_ended`, `agent_session.settled`,
   `agent_session.waiting_for_input`, `agent_session.input_received`,
+  `agent_session.command_rejected`, `agent_session.mentioned`,
   `agent_session.stopped`, `agent_session.renamed`, and
   `agent_session.deleted`.
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
@@ -130,8 +142,9 @@ travels in the payload's `mentioned` field for consumers to filter on (e.g.
 the SDK's `events.onSelfMention`).
 
 Agent trigger events use `entity_type = "bot"`: a filter's `ids` selects one
-bot's whole trigger stream. Access is gated by the channel the mention sits in
-for `agent_trigger.new`, and by the session for `agent_trigger.existing`.
+bot's whole trigger stream. Access is gated by the message's parent (the
+channel or document the mention, assignment or follow-up sits in); a composer
+request reaches only its requester. Agent conversation messages are internal.
 
 Agent session lifecycle events use `entity_type = "agent_session"` with the
 session as entity and ordering key, so `ids` selects one session and events of
@@ -213,15 +226,18 @@ reuse the same delivery record.
 
 FIFO preserves the order in which the current consumer enqueues events for one
 webhook. It does not create a global order across Kafka partitions or across the
-`macro.documents`, `macro.channels`, `macro.messages`, and `macro.webhooks`
-topics. Consumers must
+subscribed topics. Consumers must
 therefore treat the order as observed order, not total event order.
 
 ## HTTP delivery contract
 
 Delivery is an HTTPS `POST` with a five-second timeout and redirects disabled.
-The complete broker envelope is serialized as the exact request body; normalized
-queue and delivery fields are not wrapped around or merged into it. Its shape is:
+The broker envelope around the event's declared public payload is serialized
+as the exact request body; normalized queue and delivery fields are not wrapped
+around or merged into it. For every event delivered today the public payload is
+the event's metadata, unchanged except for a call's recipient routing field, so
+the body is the broker envelope. A field a producer adds to an internal event
+is never delivered. Its shape is:
 
 ```json
 {

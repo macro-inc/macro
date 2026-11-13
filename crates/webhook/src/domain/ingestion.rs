@@ -15,7 +15,7 @@ use crate::domain::{
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
-use agent_session::domain::events::{AgentSessionLifecycleEvent, AgentSessionLifecycleEventName};
+use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
@@ -24,22 +24,14 @@ use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::{AccessError, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use futures::future::join_all;
-use macro_event_broker::Event;
+use macro_event_broker::exposure::{Audience, Exposure, ExposureError, MinTeamRole, Stage};
+use macro_event_broker::{Event, TopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::models::MessageParent;
 use messages::outbound::broker::MessageTopicEvent;
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
 use user_events::UserTopicEvent;
-use uuid::Uuid;
-
-const DOCUMENT_ENTITY_TYPE: &str = "document";
-const CHANNEL_ENTITY_TYPE: &str = "channel";
-const CALL_ENTITY_TYPE: &str = "call";
-const USER_ENTITY_TYPE: &str = "user";
-const WEBHOOK_ENTITY_TYPE: &str = "webhook";
-const AGENT_SESSION_ENTITY_TYPE: &str = "agent_session";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -55,12 +47,15 @@ pub enum WebhookEventIngestionError {
         /// Invalid entity identifier.
         entity_id: String,
     },
-    /// A private call notification has no explicit recipient.
+    /// A private event, such as a call invitation, has no explicit recipient.
     #[error("private call notification has no recipient")]
     MissingCallRecipient,
     /// The broker envelope could not be represented by the queue contract.
     #[error("failed to serialize broker envelope: {0}")]
     Serialization(#[from] serde_json::Error),
+    /// The event's audience has a class webhook delivery cannot resolve yet.
+    #[error("unsupported webhook audience: {0}")]
+    UnsupportedAudience(&'static str),
     /// Failed to resolve personal and team webhook workspaces.
     #[error("failed to resolve webhook workspaces: {0}")]
     WorkspaceResolution(#[source] anyhow::Error),
@@ -70,6 +65,21 @@ pub enum WebhookEventIngestionError {
     /// Failed to enqueue at least one matched webhook event.
     #[error("failed to enqueue webhook event: {0}")]
     Enqueue(#[source] anyhow::Error),
+}
+
+impl From<ExposureError> for WebhookEventIngestionError {
+    fn from(error: ExposureError) -> Self {
+        match error {
+            ExposureError::InvalidEntityId {
+                entity_type,
+                entity_id,
+            } => Self::InvalidEntityId {
+                entity_type,
+                entity_id,
+            },
+            ExposureError::MissingRecipient => Self::MissingCallRecipient,
+        }
+    }
 }
 
 impl WebhookEventIngestionError {
@@ -190,38 +200,6 @@ where
             event_name = %event.event_name,
             entity_type = %event.entity_type,
             entity_id = %event.entity_id,
-            accessor_count = tracing::field::Empty,
-            workspace_count = tracing::field::Empty,
-        ),
-        err
-    )]
-    async fn resolve_entity_access_and_enqueue(
-        &self,
-        event: NormalizedWebhookEvent,
-        entity_type: EntityType,
-    ) -> Result<(), WebhookEventIngestionError> {
-        let accessors = self
-            .users_with_access(&event.entity_id, entity_type)
-            .await?;
-        tracing::Span::current().record("accessor_count", accessors.len());
-
-        let workspace_ids = self
-            .repository
-            .resolve_workspace_ids(accessors)
-            .await
-            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
-        tracing::Span::current().record("workspace_count", workspace_ids.len());
-
-        self.match_and_enqueue(event, workspace_ids).await
-    }
-
-    #[tracing::instrument(
-        skip_all,
-        fields(
-            event_id = %event.event_id,
-            event_name = %event.event_name,
-            entity_type = %event.entity_type,
-            entity_id = %event.entity_id,
             workspace_count = workspace_ids.len(),
             match_count = tracing::field::Empty,
         ),
@@ -272,401 +250,186 @@ where
     }
 }
 
-pub(crate) fn normalized_document_event(
-    event: &Event<DocumentTopicEvent>,
-) -> Result<Option<NormalizedWebhookEvent>, WebhookEventIngestionError> {
-    let (event_name, entity_id) = match &event.event {
-        DocumentTopicEvent::Created(metadata) => ("document.created", &metadata.document_id),
-        DocumentTopicEvent::Updated(metadata) if metadata.appearance_change.is_some() => {
-            return Ok(None);
-        }
-        DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
-        DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
-        DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),
-        DocumentTopicEvent::Interaction(metadata) => {
-            ("document.interaction", &metadata.document_id)
-        }
-        DocumentTopicEvent::ContentUploaded(_)
-        | DocumentTopicEvent::SyncContentUpdated(_)
-        | DocumentTopicEvent::Purged(_) => return Ok(None),
-    };
-
-    if Uuid::parse_str(entity_id).is_err() {
-        return Err(WebhookEventIngestionError::InvalidEntityId {
-            entity_type: DOCUMENT_ENTITY_TYPE,
-            entity_id: entity_id.clone(),
-        });
-    }
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok(Some(normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        DOCUMENT_ENTITY_TYPE,
-        entity_id,
-        broker_envelope,
-    )))
-}
-
-/// Normalize a call event and remove its private routing field before delivery.
-pub(crate) fn normalized_call_notification_event(
-    event: &Event<CallNotificationEvent>,
-) -> Result<(NormalizedWebhookEvent, Option<String>), WebhookEventIngestionError> {
-    let metadata = event.event.metadata();
-    let recipient = match &event.event {
-        CallNotificationEvent::Ringing(_)
-        | CallNotificationEvent::Answered(_)
-        | CallNotificationEvent::Declined(_)
-        | CallNotificationEvent::Invited(_) => Some(
-            metadata
-                .recipient_user_id
-                .clone()
-                .filter(|id| !id.is_empty())
-                .ok_or(WebhookEventIngestionError::MissingCallRecipient)?,
-        ),
-        _ => None,
-    };
-    let mut broker_envelope = serde_json::to_value(event)?;
-    if let Some(metadata) = broker_envelope
-        .get_mut("metadata")
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        metadata.remove("recipient_user_id");
-    }
-    let call_id = metadata.call_id.to_string();
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event.event.name(),
-            CALL_ENTITY_TYPE,
-            &call_id,
-            broker_envelope,
-        ),
-        recipient,
-    ))
-}
-
-pub(crate) fn normalized_channel_event(
-    event: &Event<ChannelTopicEvent>,
-) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
-    let (event_name, channel_id) = match &event.event {
-        ChannelTopicEvent::Created(metadata) => ("channel.created", metadata.channel_id),
-        ChannelTopicEvent::Updated(metadata) => ("channel.updated", metadata.channel_id),
-        ChannelTopicEvent::PictureChanged(metadata) => {
-            ("channel.picture_changed", metadata.channel_id)
-        }
-        ChannelTopicEvent::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
-        ChannelTopicEvent::ParticipantAdded(metadata) => {
-            ("channel.participant_added", metadata.channel_id)
-        }
-        ChannelTopicEvent::ParticipantRemoved(metadata) => {
-            ("channel.participant_removed", metadata.channel_id)
-        }
-        ChannelTopicEvent::AccessRequested(metadata) => {
-            ("channel.access_requested", metadata.channel_id)
-        }
-    };
-    let entity_id = channel_id.to_string();
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok(normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        CHANNEL_ENTITY_TYPE,
-        &entity_id,
-        broker_envelope,
-    ))
-}
-
-/// The user a user fact is about.
-pub(crate) fn user_event_subject(event: &Event<UserTopicEvent>) -> MacroUserIdStr<'static> {
-    match &event.event {
-        UserTopicEvent::PictureChanged(metadata) => metadata.user_id.clone(),
-    }
-}
-
-/// Normalize one user fact. The entity is the user whose profile changed, and
-/// they are also the only audience.
-pub(crate) fn normalized_user_event(
-    event: &Event<UserTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
-    let (event_name, user_id) = match &event.event {
-        UserTopicEvent::PictureChanged(metadata) => {
-            ("user.picture_changed", metadata.user_id.clone())
-        }
-    };
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event_name,
-            USER_ENTITY_TYPE,
-            user_id.as_ref(),
-            broker_envelope,
-        ),
-        user_id,
-    ))
-}
-
-/// Normalize one message fact.
+/// Normalize one broker event for delivery from its declared exposure.
 ///
-/// The entity is the message's parent, so access and `ids` filtering are by
-/// the channel or document that owns the conversation, and the parent travels
-/// in the payload for consumers to route on.
-pub(crate) fn normalized_message_event(
-    event: &Event<MessageTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, EntityType), WebhookEventIngestionError> {
-    let (event_name, parent) = match &event.event {
-        MessageTopicEvent::Posted(metadata) => ("message.posted", &metadata.parent),
-        MessageTopicEvent::Patched(metadata) => ("message.patched", &metadata.parent),
-        MessageTopicEvent::Deleted(metadata) => ("message.deleted", &metadata.parent),
-        MessageTopicEvent::Mentioned(metadata) => ("message.mentioned", &metadata.parent),
-        MessageTopicEvent::AttachmentCreated(metadata) => {
-            ("message.attachment_created", &metadata.parent)
-        }
-        MessageTopicEvent::AttachmentRemoved(metadata) => {
-            ("message.attachment_removed", &metadata.parent)
-        }
+/// `None` when the event is internal (or still in preview): it is not
+/// delivered by webhook or stream. The delivered body is the broker envelope
+/// around the event's public payload, so the payload's `event_type` and
+/// `metadata` sit where they always have.
+pub(crate) fn normalize<E: TopicEvent>(
+    event: &Event<E>,
+) -> Result<Option<(NormalizedWebhookEvent, Audience)>, WebhookEventIngestionError> {
+    let public = match event.event.exposure()? {
+        Exposure::Public(public) => public,
+        Exposure::Internal(_) => return Ok(None),
     };
-    let entity_id = parent.entity_id();
-
-    let broker_envelope = serde_json::to_value(event)?;
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event_name,
-            parent.entity_type(),
-            &entity_id,
-            broker_envelope,
-        ),
-        parent.access_entity_type(),
-    ))
-}
-
-pub(crate) fn normalized_webhook_event(
-    event: &Event<WebhookTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
-    let (event_name, webhook_id, workspace_id) = match &event.event {
-        WebhookTopicEvent::Created(metadata) => (
-            "webhook.created",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-        WebhookTopicEvent::Updated(metadata) => (
-            "webhook.updated",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-        WebhookTopicEvent::Deleted(metadata) => (
-            "webhook.deleted",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-        WebhookTopicEvent::Validated(metadata) => (
-            "webhook.validated",
-            &metadata.webhook_id,
-            &metadata.workspace_id,
-        ),
-    };
-
-    if webhook_id.is_empty() || !webhook_id.starts_with("wh_") {
-        return Err(WebhookEventIngestionError::InvalidEntityId {
-            entity_type: WEBHOOK_ENTITY_TYPE,
-            entity_id: webhook_id.clone(),
-        });
+    match public.stage {
+        Stage::Stable => {}
+        // Preview families are flag-gated by the event stream; until that
+        // gate exists here, they are not delivered.
+        Stage::Preview => return Ok(None),
     }
-
-    let broker_envelope = serde_json::to_value(event)?;
-    let normalized = normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        WEBHOOK_ENTITY_TYPE,
-        webhook_id,
-        broker_envelope,
-    );
-    Ok((normalized, workspace_id.clone()))
-}
-
-fn normalized_event(
-    event_id: Uuid,
-    schema_version: u8,
-    event_name: &str,
-    entity_type: &str,
-    entity_id: &str,
-    broker_envelope: serde_json::Value,
-) -> NormalizedWebhookEvent {
-    NormalizedWebhookEvent {
-        event_id: event_id.to_string(),
-        schema_version,
-        event_name: event_name.to_string(),
-        entity_type: entity_type.to_string(),
-        entity_id: entity_id.to_string(),
-        ordering_key: entity_id.to_string(),
+    let envelope = Event {
+        event_id: event.event_id,
+        agent_correlation_id: event.agent_correlation_id,
+        routine_id: event.routine_id,
+        agent_verb: event.agent_verb.clone(),
+        schema_version: event.schema_version,
+        event: public.payload.as_ref(),
+    };
+    let broker_envelope = serde_json::to_value(&envelope)?;
+    let entity_id = public.entity.entity_id;
+    let normalized = NormalizedWebhookEvent {
+        event_id: event.event_id.to_string(),
+        schema_version: event.schema_version,
+        event_name: public.name.to_string(),
+        entity_type: public.entity.entity_type.to_string(),
+        ordering_key: entity_id.clone(),
+        entity_id,
         occurred_at: Utc::now(),
         broker_envelope,
+    };
+    Ok(Some((normalized, public.audience)))
+}
+
+/// Every audience nested in `audience`, depth first, with `Any` expanded.
+fn audience_members(audience: &Audience) -> Vec<&Audience> {
+    match audience {
+        Audience::Any(audiences) => audiences.iter().flat_map(audience_members).collect(),
+        Audience::Entity { .. }
+        | Audience::Recipient { .. }
+        | Audience::Owner { .. }
+        | Audience::Team { .. }
+        | Audience::TeamsOf { .. }
+        | Audience::ContactsOf { .. }
+        | Audience::GithubInstallation { .. }
+        | Audience::Workspace { .. }
+        | Audience::Snapshot { .. } => vec![audience],
     }
 }
 
-/// Whose access decides who may see one trigger event.
+/// The webhook workspaces an audience reaches.
 ///
-/// Not the bot the event names: that is what a subscriber filters on, and a
-/// bot is not an entity anyone holds access to.
-pub(crate) enum TriggerAudience {
-    /// Whoever currently holds access to an entity.
-    Entity {
-        entity_id: String,
-        entity_type: EntityType,
-    },
-    /// Named people, when nothing was posted anywhere to hold access to.
-    People(Vec<MacroUserIdStr<'static>>),
+/// People reached through access (entity accessors, owners, a user whose
+/// contacts or teams are the audience) expand to their personal and team
+/// workspaces in one resolution. Addressed people and workspaces match
+/// exactly, with no team expansion. Webhooks cannot enumerate contacts, so
+/// `ContactsOf` reaches only the user's own workspaces.
+#[derive(Default)]
+struct WorkspaceAudience {
+    /// Whether any member needs workspace resolution, even with no people.
+    resolve: bool,
+    /// People to resolve into personal and team workspaces, in order.
+    people: Vec<MacroUserIdStr<'static>>,
+    /// Workspaces matched exactly.
+    exact: Vec<String>,
 }
 
-impl TriggerAudience {
-    /// Whoever may currently read the conversation's parent.
-    fn parent(parent: &MessageParent) -> Self {
-        Self::Entity {
-            entity_id: parent.entity_id(),
-            entity_type: parent.access_entity_type(),
+impl WorkspaceAudience {
+    fn add_person(&mut self, person: &MacroUserIdStr<'static>) {
+        self.resolve = true;
+        if !self.people.contains(person) {
+            self.people.push(person.clone());
         }
     }
-
-    /// The one person who asked for a session from the composer: nothing was
-    /// posted, so nobody else's access is in question. Their runtime, or
-    /// their team's, is who serves it.
-    fn requester(owner: &str) -> Result<Self, WebhookEventIngestionError> {
-        let owner = MacroUserIdStr::try_from(owner.to_owned()).map_err(|_| {
-            WebhookEventIngestionError::InvalidEntityId {
-                entity_type: "user",
-                entity_id: owner.to_owned(),
-            }
-        })?;
-        Ok(Self::People(vec![owner]))
-    }
 }
 
-/// Normalize one agent-trigger event.
-///
-/// The entity - and the ordering key, mirroring the broker's partitioning -
-/// is the bot: a subscriber consumes a bot's whole trigger stream, in order.
-/// Returned alongside is whose access gates it, which differs by shape.
-///
-/// Every message trigger includes parent content, so delivery rechecks access to
-/// that parent, including follow-ups to a session with independently shared access.
-pub(crate) fn normalized_agent_trigger_event(
-    event: &Event<AgentTriggerTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
-    use agent_trigger::domain::broker_events::AgentTriggerEventName;
-
-    let (bot_id, audience) = match &event.event {
-        AgentTriggerTopicEvent::New(
-            agent_trigger::domain::broker_events::NewAgentSessionEvent::AssignedToTask(assigned),
-        ) => Some((assigned.bot_id, TriggerAudience::parent(&assigned.parent))),
-        AgentTriggerTopicEvent::New(new) => match (new.mention(), new.requested()) {
-            (Some(mention), _) => Some((
-                mention.bot_id,
-                TriggerAudience::parent(&mention.message.parent),
-            )),
-            (None, Some(requested)) => Some((
-                requested.bot_id,
-                TriggerAudience::requester(&requested.owner)?,
-            )),
-            (None, None) => None,
-        },
-        AgentTriggerTopicEvent::Existing(existing) => existing.session_message().map(|message| {
-            (
-                message.bot_id,
-                TriggerAudience::parent(&message.message.parent),
-            )
-        }),
+impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q>
+where
+    A: EntityAccessService,
+    R: WebhookRepo + WebhookWorkspaceResolver,
+    Q: WebhookEventEnqueuer,
+{
+    /// Normalize one event and enqueue it for every matching webhook its
+    /// audience reaches.
+    async fn ingest<E: TopicEvent>(
+        &self,
+        event: &Event<E>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let Some((normalized, audience)) = normalize(event)? else {
+            return Ok(());
+        };
+        self.resolve_audience_and_enqueue(normalized, &audience)
+            .await
     }
-    // Both trigger enums are non-exhaustive on purpose; an unknown shape
-    // has no bot to route to. Permanent, so the consumer skips it.
-    .ok_or_else(|| WebhookEventIngestionError::InvalidEntityId {
-        entity_type: "bot",
-        entity_id: "unrecognized agent-trigger event shape".to_owned(),
-    })?;
-    let event_name: &'static str = AgentTriggerEventName::from(&event.event).into();
-    let broker_envelope = serde_json::to_value(event)?;
-    let bot_id = bot_id.to_string();
-    Ok((
-        normalized_event(
-            event.event_id,
-            event.schema_version,
-            event_name,
-            "bot",
-            &bot_id,
-            broker_envelope,
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            event_id = %event.event_id,
+            event_name = %event.event_name,
+            entity_type = %event.entity_type,
+            entity_id = %event.entity_id,
+            accessor_count = tracing::field::Empty,
+            workspace_count = tracing::field::Empty,
         ),
-        audience,
-    ))
-}
+        err
+    )]
+    async fn resolve_audience_and_enqueue(
+        &self,
+        event: NormalizedWebhookEvent,
+        audience: &Audience,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let mut workspaces = WorkspaceAudience::default();
+        for member in audience_members(audience) {
+            match member {
+                Audience::Entity {
+                    entity_type,
+                    entity_id,
+                } => {
+                    workspaces.resolve = true;
+                    for accessor in self.users_with_access(entity_id, *entity_type).await? {
+                        workspaces.add_person(&accessor);
+                    }
+                }
+                Audience::Owner { user_id }
+                | Audience::TeamsOf { user_id }
+                | Audience::ContactsOf { user_id } => workspaces.add_person(user_id),
+                Audience::Recipient { user_id } => workspaces.exact.push(user_id.to_string()),
+                Audience::Snapshot { user_ids } => workspaces
+                    .exact
+                    .extend(user_ids.iter().map(ToString::to_string)),
+                Audience::Workspace { workspace_id } => {
+                    workspaces.exact.push(workspace_id.clone());
+                }
+                Audience::Team {
+                    team_id,
+                    min_role: MinTeamRole::Member,
+                } => workspaces.exact.push(team_id.to_string()),
+                Audience::Team {
+                    min_role: MinTeamRole::Admin,
+                    ..
+                } => {
+                    return Err(WebhookEventIngestionError::UnsupportedAudience(
+                        "team admins",
+                    ));
+                }
+                Audience::GithubInstallation { .. } => {
+                    return Err(WebhookEventIngestionError::UnsupportedAudience(
+                        "GitHub installation",
+                    ));
+                }
+                Audience::Any(_) => {
+                    return Err(WebhookEventIngestionError::UnsupportedAudience(
+                        "unflattened union",
+                    ));
+                }
+            }
+        }
+        tracing::Span::current().record("accessor_count", workspaces.people.len());
 
-/// Normalize one agent-session lifecycle event.
-///
-/// Unlike a trigger, whose entity is the bot, a lifecycle stream is about one
-/// session: the entity and the ordering key are the session, mirroring the
-/// broker's partition key, and the session's own grants - its owner and the
-/// channel it came from - decide who may see it.
-pub(crate) fn normalized_agent_session_lifecycle_event(
-    event: &Event<AgentSessionLifecycleEvent>,
-) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
-    let event_name: &'static str = AgentSessionLifecycleEventName::from(&event.event).into();
-    let broker_envelope = serde_json::to_value(event)?;
-    let session_id = event.event.session_id().to_string();
-    Ok(normalized_event(
-        event.event_id,
-        event.schema_version,
-        event_name,
-        AGENT_SESSION_ENTITY_TYPE,
-        &session_id,
-        broker_envelope,
-    ))
-}
+        let mut workspace_ids = if workspaces.resolve {
+            self.repository
+                .resolve_workspace_ids(workspaces.people)
+                .await
+                .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?
+        } else {
+            Vec::new()
+        };
+        workspace_ids.extend(workspaces.exact);
+        tracing::Span::current().record("workspace_count", workspace_ids.len());
 
-/// Whose access gates one lifecycle event.
-///
-/// A live session carries its own grants. A deleted one does not: its access
-/// rows go with the row, so asking who may see the session answers nobody.
-/// The event itself still knows who the session belonged to, and that is the
-/// audience the last fact about it is delivered to.
-pub(crate) enum LifecycleAudience {
-    /// Everyone with access to the session.
-    Session,
-    /// The session is gone: its owner, plus the channel or document it was
-    /// opened from.
-    Departed {
-        owner: MacroUserIdStr<'static>,
-        origin_parent: Option<MessageParent>,
-    },
-}
-
-pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> LifecycleAudience {
-    match event {
-        AgentSessionLifecycleEvent::Deleted(deleted) => LifecycleAudience::Departed {
-            owner: deleted.identity.owner_id.clone(),
-            origin_parent: deleted
-                .identity
-                .origin
-                .as_ref()
-                .map(|origin| origin.parent.clone()),
-        },
-        AgentSessionLifecycleEvent::Opened(_)
-        | AgentSessionLifecycleEvent::TurnStarted(_)
-        | AgentSessionLifecycleEvent::TurnEnded(_)
-        | AgentSessionLifecycleEvent::CommandRejected(_)
-        | AgentSessionLifecycleEvent::Settled(_)
-        | AgentSessionLifecycleEvent::WaitingForInput(_)
-        | AgentSessionLifecycleEvent::InputReceived(_)
-        | AgentSessionLifecycleEvent::Mentioned(_)
-        | AgentSessionLifecycleEvent::Stopped(_)
-        | AgentSessionLifecycleEvent::Renamed(_) => LifecycleAudience::Session,
+        self.match_and_enqueue(event, workspace_ids).await
     }
 }
 
@@ -681,11 +444,7 @@ where
         &self,
         event: Event<DocumentTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let Some(event) = normalized_document_event(&event)? else {
-            return Ok(());
-        };
-        self.resolve_entity_access_and_enqueue(event, EntityType::Document)
-            .await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -693,9 +452,7 @@ where
         &self,
         event: Event<ChannelTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let event = normalized_channel_event(&event)?;
-        self.resolve_entity_access_and_enqueue(event, EntityType::Channel)
-            .await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -703,27 +460,7 @@ where
         &self,
         event: Event<CallNotificationEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (normalized, recipient) = normalized_call_notification_event(&event)?;
-        match recipient {
-            Some(recipient) => {
-                // The recipient is the grant for a private notification.
-                // In particular, an invitation precedes call entity access.
-                self.match_and_enqueue(normalized, vec![recipient]).await
-            }
-            None => {
-                let accessors = self
-                    .users_with_access(&normalized.entity_id, EntityType::Call)
-                    .await?;
-                let workspace_ids = self
-                    .repository
-                    .resolve_workspace_ids(accessors)
-                    .await
-                    .map_err(|error| {
-                        WebhookEventIngestionError::WorkspaceResolution(error.into())
-                    })?;
-                self.match_and_enqueue(normalized, workspace_ids).await
-            }
-        }
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -731,9 +468,7 @@ where
         &self,
         event: Event<MessageTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, entity_type) = normalized_message_event(&event)?;
-        self.resolve_entity_access_and_enqueue(event, entity_type)
-            .await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -741,8 +476,7 @@ where
         &self,
         event: Event<WebhookTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, workspace_id) = normalized_webhook_event(&event)?;
-        self.match_and_enqueue(event, vec![workspace_id]).await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -750,20 +484,7 @@ where
         &self,
         event: Event<AgentTriggerTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, audience) = normalized_agent_trigger_event(&event)?;
-        let accessors = match audience {
-            TriggerAudience::Entity {
-                entity_id,
-                entity_type,
-            } => self.users_with_access(&entity_id, entity_type).await?,
-            TriggerAudience::People(people) => people,
-        };
-        let workspace_ids = self
-            .repository
-            .resolve_workspace_ids(accessors)
-            .await
-            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
-        self.match_and_enqueue(event, workspace_ids).await
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -771,33 +492,7 @@ where
         &self,
         event: Event<AgentSessionLifecycleEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let normalized = normalized_agent_session_lifecycle_event(&event)?;
-        match lifecycle_audience(&event.event) {
-            LifecycleAudience::Session => {
-                self.resolve_entity_access_and_enqueue(normalized, EntityType::AgentSession)
-                    .await
-            }
-            LifecycleAudience::Departed {
-                owner,
-                origin_parent,
-            } => {
-                let mut accessors = vec![owner];
-                if let Some(parent) = origin_parent {
-                    accessors.extend(
-                        self.users_with_access(&parent.entity_id(), parent.access_entity_type())
-                            .await?,
-                    );
-                }
-                let workspace_ids = self
-                    .repository
-                    .resolve_workspace_ids(accessors)
-                    .await
-                    .map_err(|error| {
-                        WebhookEventIngestionError::WorkspaceResolution(error.into())
-                    })?;
-                self.match_and_enqueue(normalized, workspace_ids).await
-            }
-        }
+        self.ingest(&event).await
     }
 
     #[tracing::instrument(
@@ -810,14 +505,6 @@ where
         &self,
         event: Event<UserTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (normalized, user_id) = normalized_user_event(&event)?;
-        // Only the changed user's own workspaces see their profile change;
-        // contacts and entity access are deliberately not resolved.
-        let workspace_ids = self
-            .repository
-            .resolve_workspace_ids(vec![user_id])
-            .await
-            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
-        self.match_and_enqueue(normalized, workspace_ids).await
+        self.ingest(&event).await
     }
 }

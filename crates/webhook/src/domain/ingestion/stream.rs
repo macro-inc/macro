@@ -1,177 +1,139 @@
-//! Stream-candidate adapters over shared webhook event normalization.
+//! Stream candidates from the shared, exposure-driven event normalization.
 
-use super::{
-    LifecycleAudience, TriggerAudience, WebhookEventIngestionError, lifecycle_audience,
-    normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
-    normalized_call_notification_event, normalized_channel_event, normalized_document_event,
-    normalized_message_event, normalized_user_event, normalized_webhook_event,
-};
-use crate::domain::{
-    events::WebhookTopicEvent,
-    stream::{StreamAudience, StreamCandidateEvent},
-};
-use agent_session::domain::events::AgentSessionLifecycleEvent;
-use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
-use call::domain::notification_events::CallNotificationEvent;
-use channels::domain::broker_events::ChannelTopicEvent;
-use documents::domain::events::DocumentTopicEvent;
-use entity_access::domain::models::EntityType;
-use macro_event_broker::Event;
-use messages::outbound::broker::MessageTopicEvent;
-use user_events::UserTopicEvent;
+use super::{WebhookEventIngestionError, normalize};
+use crate::domain::ports::WebhookWorkspaceResolver;
+use crate::domain::stream::{StreamAudience, StreamCandidateEvent};
+use macro_event_broker::exposure::{Audience, MinTeamRole};
+use macro_event_broker::{Event, TopicEvent};
+use macro_user_id::user_id::MacroUserIdStr;
 
-pub(crate) fn document_stream_candidate(
-    event: &Event<DocumentTopicEvent>,
+/// Normalize one broker event into a stream candidate.
+///
+/// `None` means the event is not exposed to subscribers, exactly as webhook
+/// ingestion skips it. `workspace_resolver` expands `TeamsOf` audiences once
+/// per event, not once per subscriber.
+pub(crate) async fn stream_candidate<E: TopicEvent, R: WebhookWorkspaceResolver>(
+    event: &Event<E>,
+    workspace_resolver: &R,
 ) -> Result<Option<StreamCandidateEvent>, WebhookEventIngestionError> {
-    Ok(
-        normalized_document_event(event)?.map(|normalized| StreamCandidateEvent {
-            audience: StreamAudience::Entity {
-                entity_id: normalized.entity_id.clone(),
-                entity_type: EntityType::Document,
-            },
-            event: normalized,
-        }),
-    )
-}
-
-pub(crate) fn channel_stream_candidate(
-    event: &Event<ChannelTopicEvent>,
-) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
-    let normalized = normalized_channel_event(event)?;
-    Ok(StreamCandidateEvent {
-        audience: StreamAudience::Entity {
-            entity_id: normalized.entity_id.clone(),
-            entity_type: EntityType::Channel,
-        },
-        event: normalized,
-    })
-}
-
-pub(crate) fn call_stream_candidate(
-    event: &Event<CallNotificationEvent>,
-) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
-    let (normalized, recipient) = normalized_call_notification_event(event)?;
-    let audience = match recipient {
-        Some(user_id) => StreamAudience::User { user_id },
-        None => StreamAudience::Entity {
-            entity_id: normalized.entity_id.clone(),
-            entity_type: EntityType::Call,
-        },
+    let Some((normalized, audience)) = normalize(event)? else {
+        return Ok(None);
     };
-    Ok(StreamCandidateEvent {
+    let audience = stream_audience(&audience, workspace_resolver).await?;
+    Ok(Some(StreamCandidateEvent {
         event: normalized,
         audience,
-    })
+    }))
 }
 
-pub(crate) fn message_stream_candidate(
-    event: &Event<MessageTopicEvent>,
-) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
-    let (normalized, entity_type) = normalized_message_event(event)?;
-    Ok(StreamCandidateEvent {
-        audience: StreamAudience::Entity {
-            entity_id: normalized.entity_id.clone(),
+/// The per-subscriber check for one audience.
+///
+/// Addressed people and owners match the person's own stream; team audiences
+/// match team-scoped streams of that team.
+async fn stream_audience<R: WebhookWorkspaceResolver>(
+    audience: &Audience,
+    workspace_resolver: &R,
+) -> Result<StreamAudience, WebhookEventIngestionError> {
+    Ok(match audience {
+        Audience::Entity {
             entity_type,
-        },
-        event: normalized,
-    })
-}
-
-/// `team_workspace_ids` are the user's team workspaces (resolved once per
-/// event by the consumer); the user and their contacts are matched per
-/// subscriber through [`StreamAudience::ContactsOf`].
-pub(crate) fn user_stream_candidate(
-    event: &Event<UserTopicEvent>,
-    team_workspace_ids: Vec<String>,
-) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
-    let (normalized, user_id) = normalized_user_event(event)?;
-    let mut audiences = vec![StreamAudience::ContactsOf {
-        user_id: user_id.to_string(),
-    }];
-    audiences.extend(
-        team_workspace_ids
-            .into_iter()
-            .map(|workspace_id| StreamAudience::Workspace { workspace_id }),
-    );
-    Ok(StreamCandidateEvent {
-        audience: StreamAudience::Any(audiences),
-        event: normalized,
-    })
-}
-
-pub(crate) fn webhook_stream_candidate(
-    event: &Event<WebhookTopicEvent>,
-) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
-    let (normalized, workspace_id) = normalized_webhook_event(event)?;
-    Ok(StreamCandidateEvent {
-        audience: StreamAudience::Workspace { workspace_id },
-        event: normalized,
-    })
-}
-
-pub(crate) fn agent_trigger_stream_candidate(
-    event: &Event<AgentTriggerTopicEvent>,
-) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
-    let (normalized, audience) = normalized_agent_trigger_event(event)?;
-    let audience = match audience {
-        TriggerAudience::Entity {
             entity_id,
-            entity_type,
         } => StreamAudience::Entity {
-            entity_id,
-            entity_type,
+            entity_id: entity_id.clone(),
+            entity_type: *entity_type,
         },
-        // Named people subscribe from their own workspaces, as a departed
-        // session's owner does.
-        TriggerAudience::People(people) => StreamAudience::Any(
-            people
-                .into_iter()
-                .map(|person| StreamAudience::Workspace {
-                    workspace_id: person.to_string(),
+        Audience::Recipient { user_id } => StreamAudience::User {
+            user_id: user_id.to_string(),
+        },
+        Audience::Owner { user_id } => StreamAudience::Workspace {
+            workspace_id: user_id.to_string(),
+        },
+        Audience::Workspace { workspace_id } => StreamAudience::Workspace {
+            workspace_id: workspace_id.clone(),
+        },
+        Audience::ContactsOf { user_id } => StreamAudience::ContactsOf {
+            user_id: user_id.to_string(),
+        },
+        Audience::Snapshot { user_ids } => StreamAudience::Any(
+            user_ids
+                .iter()
+                .map(|user_id| StreamAudience::User {
+                    user_id: user_id.to_string(),
                 })
                 .collect(),
         ),
-    };
-    Ok(StreamCandidateEvent {
-        audience,
-        event: normalized,
+        Audience::Team {
+            team_id,
+            min_role: MinTeamRole::Member,
+        } => StreamAudience::Workspace {
+            workspace_id: team_id.to_string(),
+        },
+        Audience::Team {
+            min_role: MinTeamRole::Admin,
+            ..
+        } => {
+            return Err(WebhookEventIngestionError::UnsupportedAudience(
+                "team admins",
+            ));
+        }
+        Audience::GithubInstallation { .. } => {
+            return Err(WebhookEventIngestionError::UnsupportedAudience(
+                "GitHub installation",
+            ));
+        }
+        Audience::TeamsOf { user_id } => {
+            StreamAudience::Any(team_workspaces(workspace_resolver, user_id).await)
+        }
+        Audience::Any(audiences) => {
+            let mut members = Vec::with_capacity(audiences.len());
+            for audience in audiences {
+                match audience {
+                    // Splice the user's teams into the union rather than
+                    // nesting a second one.
+                    Audience::TeamsOf { user_id } => {
+                        members.extend(team_workspaces(workspace_resolver, user_id).await);
+                    }
+                    other => {
+                        members.push(Box::pin(stream_audience(other, workspace_resolver)).await?);
+                    }
+                }
+            }
+            StreamAudience::Any(members)
+        }
     })
 }
 
-pub(crate) fn agent_session_lifecycle_stream_candidate(
-    event: &Event<AgentSessionLifecycleEvent>,
-) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
-    let normalized = normalized_agent_session_lifecycle_event(event)?;
-    let audience = match lifecycle_audience(&event.event) {
-        LifecycleAudience::Session => StreamAudience::Entity {
-            entity_id: normalized.entity_id.clone(),
-            entity_type: EntityType::AgentSession,
-        },
-        // The session's grants are gone with it. The owner keeps ownership, so
-        // they must still receive the departure even after losing access to the
-        // parent; the channel or document it came from also still knows its
-        // audience. Deliver to the union of the two.
-        LifecycleAudience::Departed {
-            owner,
-            origin_parent: Some(parent),
-        } => StreamAudience::Any(vec![
-            StreamAudience::Workspace {
-                workspace_id: owner.to_string(),
-            },
-            StreamAudience::Entity {
-                entity_id: parent.entity_id(),
-                entity_type: parent.access_entity_type(),
-            },
-        ]),
-        LifecycleAudience::Departed {
-            owner,
-            origin_parent: None,
-        } => StreamAudience::Workspace {
-            workspace_id: owner.to_string(),
-        },
-    };
-    Ok(StreamCandidateEvent {
-        audience,
-        event: normalized,
-    })
+/// One workspace audience per team of `user`.
+async fn team_workspaces<R: WebhookWorkspaceResolver>(
+    workspace_resolver: &R,
+    user: &MacroUserIdStr<'static>,
+) -> Vec<StreamAudience> {
+    user_team_workspace_ids(workspace_resolver, user.clone())
+        .await
+        .into_iter()
+        .map(|workspace_id| StreamAudience::Workspace { workspace_id })
+        .collect()
+}
+
+/// The user's team workspaces, excluding their personal workspace (the user id).
+///
+/// A resolution failure degrades to the rest of the audience: SSE is
+/// best-effort, and persisted webhooks still deliver durably.
+#[tracing::instrument(name = "webhook.stream.resolve_user_teams", skip_all, fields(user_id = %user))]
+async fn user_team_workspace_ids<R: WebhookWorkspaceResolver>(
+    workspace_resolver: &R,
+    user: MacroUserIdStr<'static>,
+) -> Vec<String> {
+    let personal = user.as_ref().to_string();
+    match workspace_resolver.resolve_workspace_ids(vec![user]).await {
+        Ok(mut workspace_ids) => {
+            workspace_ids.retain(|id| *id != personal);
+            workspace_ids
+        }
+        Err(error) => {
+            let error: anyhow::Error = error.into();
+            tracing::warn!(error = ?error, "failed to resolve user team workspaces for stream");
+            Vec::new()
+        }
+    }
 }

@@ -30,24 +30,27 @@ before changing ingestion or delivery behavior.
 
 ## Boundaries
 
-- Depends on: `channels`, `documents`, `messages`, `agent_session`,
+- Depends on: `event_exposure` (via `macro_event_broker::exposure`),
+  `channels`, `documents`, `messages`, `agent_session`,
   `agent_trigger`, `user_events`, `entity_access`, `macro_event_broker`, `kafka_util`,
   `rdkafka`, `rate_limit`.
 - Used by: `services/document_storage_service`, `crates/coding_agent_worker`.
 
 ## Recipes
 
-- Add a new ingestible event: `src/domain/ingestion.rs` (match rule) →
-  `src/inbound/kafka_consumer.rs` and `kafka_stream_consumer.rs`
-  (subscribe/decode) → README's event table. Private call notifications
-  match only the named user's personal workspace and stream.
+- Add a new ingestible event: declare it `Public` in its producer's
+  `TopicEvent::exposure()` (`docs/guides/add-kafka-event.md`, section 8) →
+  subscribe its topic in `src/topics.rs` (and drop it from `INTERNAL_TOPICS`)
+  → README's event list. Ingestion and streaming need no per-event code; a new
+  `Audience` class needs a mapping in `src/domain/ingestion.rs` and
+  `ingestion/stream.rs`.
 - Stream audiences: `StreamAudience` in `src/domain/stream.rs`. `ContactsOf`
   (the user plus their contacts) is decided per subscriber by one exact
   `WebhookContactChecker::is_contact` lookup (adapter over the contacts
   crate's `lookup_contact_ids` in `document_storage_service`); never page a
-  contact list in the stream. `user.picture_changed` uses `Any([ContactsOf,
-  Workspace per user team])`, with teams resolved once per event in
-  `kafka_stream_consumer.rs`.
+  contact list in the stream. `user.picture_changed` declares
+  `Any([ContactsOf, TeamsOf])`; `ingestion/stream.rs` expands `TeamsOf` into
+  one `Workspace` per team, once per event.
 - Change delivery retry behavior: `src/domain/delivery.rs` → README's retry
   schedule table (keep them in sync).
 
