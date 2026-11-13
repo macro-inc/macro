@@ -1,0 +1,30 @@
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_b0da33e00deeb2::t_87b765f1ab5d23 3-4,209-210
+  s_b0da33e00deeb2::t_43b73aecc41e5a 42-45,136-159
+crates/event_stream/Cargo.toml
+  s_b0da33e00deeb2::t_43b73aecc41e5a 23-25,27-28,52-58
+Cargo.lock
+  s_b0da33e00deeb2::t_fb5d48b65a2119 8138,8140,8145,8147,8149,8159-8160
+crates/event_stream/src/topics.rs
+  s_b0da33e00deeb2::t_b4e62bad9a65dd 16,19-20,22-24,27-28,31-32,45-52,64-71
+crates/event_stream/src/domain/catalog.rs
+  s_b0da33e00deeb2::t_6917e7d1bcef61 13,16-17,20-22,24-25,140,207-267
+crates/event_stream/src/domain/invalidations.rs
+  s_b0da33e00deeb2::t_43b73aecc41e5a 72-80,103-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f133031a48af660d7b9934b718ed4a5c2d7aae93",
+  "prompts": {},
+  "sessions": {
+    "s_b0da33e00deeb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70fd566d-6642-47ee-813b-5061c81e1901",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
