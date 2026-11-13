@@ -1,0 +1,10 @@
+{"timestamp":"2026-11-11T10:00:00.000Z","type":"session_meta","payload":{"id":"019a0000-0000-7000-8000-000000000001","cwd":"/work/example","originator":"codex_exec"}}
+{"timestamp":"2026-11-11T10:00:00.100Z","type":"turn_context","payload":{"cwd":"/work/example","model":"gpt-6-sol"}}
+{"timestamp":"2026-11-11T10:00:00.200Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /work/example"}]}}
+{"timestamp":"2026-11-11T10:00:00.300Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>\n  <cwd>/work/example</cwd>\n</environment_context>"}]}}
+{"timestamp":"2026-11-11T10:00:00.400Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"List the files."}]}}
+{"timestamp":"2026-11-11T10:00:01.000Z","type":"response_item","payload":{"type":"reasoning","content":[{"type":"output_text","text":"Use ls."}]}}
+{"timestamp":"2026-11-11T10:00:02.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_1","name":"exec_command","arguments":"{\"cmd\":\"ls\"}"}}
+{"timestamp":"2026-11-11T10:00:03.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":{"output":"a.ts\nb.ts","exit_code":1}}}
+{"timestamp":"2026-11-11T10:00:04.000Z","type":"token_usage_record","payload":{"usage":{"input_tokens":900,"output_tokens":40,"cached_input_tokens":800}}}
+{"timestamp":"2026-11-11T10:00:05.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Two files: a.ts and b.ts."}]}}
