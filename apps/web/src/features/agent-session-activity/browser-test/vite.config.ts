@@ -27,10 +27,6 @@ export default defineConfig({
         replacement: `${directory}/stubs.tsx`,
       },
       {
-        find: /^@core\/util\/useCopyLink$/,
-        replacement: `${directory}/stubs.tsx`,
-      },
-      {
         find: /^@app\/features\/activity\/open-entity-in-split$/,
         replacement: `${directory}/stubs.tsx`,
       },
