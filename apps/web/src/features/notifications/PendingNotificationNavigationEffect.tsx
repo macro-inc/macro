@@ -30,7 +30,9 @@ type NavigationAttempt = {
 
 export function usePendingNotificationNavigationEffect(
   notificationSource: Pick<NotificationSource, 'notifications'>,
-  recipientId: Accessor<string | undefined>
+  recipientId: Accessor<string | undefined>,
+  /** Flag-gated handlers would read a still-loading flag as off and drop the tap. */
+  flagsLoaded: Accessor<boolean>
 ) {
   const [retryRevision, setRetryRevision] = createSignal(0);
   let disposed = false;
@@ -61,6 +63,7 @@ export function usePendingNotificationNavigationEffect(
       !notificationId ||
       !layoutManager ||
       !navigationReady ||
+      !flagsLoaded() ||
       (intent.recipientId && !account)
     ) {
       activeAttempt = undefined;

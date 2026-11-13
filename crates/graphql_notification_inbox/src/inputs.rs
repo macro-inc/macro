@@ -46,6 +46,8 @@ pub enum GraphqlNotificationInboxRowType {
     CalendarEvent,
     /// A request to join a calendar event the viewer shared.
     CalendarJoinRequest,
+    /// An agent's request for access to a vault item the viewer manages.
+    PasswordAccessRequested,
     /// A request for access to something the viewer can share.
     AccessRequested,
     /// Access the viewer requested was granted.
@@ -71,6 +73,7 @@ impl From<GraphqlNotificationInboxRowType> for InboxRowType {
             G::PullRequest => Self::PullRequest,
             G::CalendarEvent => Self::CalendarEvent,
             G::CalendarJoinRequest => Self::CalendarJoinRequest,
+            G::PasswordAccessRequested => Self::PasswordAccessRequested,
             G::AccessRequested => Self::AccessRequested,
             G::AccessGranted => Self::AccessGranted,
             G::AccessRemoved => Self::AccessRemoved,
@@ -94,6 +97,7 @@ impl From<InboxRowType> for GraphqlNotificationInboxRowType {
             D::PullRequest => Self::PullRequest,
             D::CalendarEvent => Self::CalendarEvent,
             D::CalendarJoinRequest => Self::CalendarJoinRequest,
+            D::PasswordAccessRequested => Self::PasswordAccessRequested,
             D::AccessRequested => Self::AccessRequested,
             D::AccessGranted => Self::AccessGranted,
             D::AccessRemoved => Self::AccessRemoved,

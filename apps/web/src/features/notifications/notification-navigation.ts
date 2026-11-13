@@ -22,6 +22,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
+  enablePasswords,
   enableProjects,
   enableWhatsappLinked,
   isFeatureEnabled,
@@ -78,7 +79,8 @@ type OpenOptions = {
   onApplied?: VoidFunction;
 };
 
-function openContent(
+/** Opens `content` and returns the layout's result, for callers that act on reuse. */
+function openContentWithResult(
   layoutManager: SplitManager,
   content: SplitContent,
   options: OpenOptions
@@ -98,6 +100,15 @@ function openContent(
   });
   if (result?.status === 'opened' || result?.status === 'reused')
     reportApplied();
+  return result;
+}
+
+function openContent(
+  layoutManager: SplitManager,
+  content: SplitContent,
+  options: OpenOptions
+): void {
+  openContentWithResult(layoutManager, content, options);
 }
 
 /** Chats open in External's main pane; the chat's route claim reuses an open one. */
@@ -631,6 +642,41 @@ function getSupportedHandler(
               ...(onApplied ? { onApplied } : {}),
             }
           );
+        };
+      })
+      .with('password_access_requested', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'password_access_requested') return null;
+        // The request is answered in the item's pane in Passwords.
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          if (!isFeatureEnabled(enablePasswords)) {
+            onApplied?.();
+            return;
+          }
+          const content: SplitContent = {
+            type: 'component',
+            id: 'passwords',
+            params: {
+              teamId: meta.content.teamId,
+              itemId: meta.content.itemId,
+              requestId: meta.content.requestId,
+            },
+            entryMetadata: {
+              route: paneRoute({ id: 'view-passwords', params: {} }),
+            },
+          };
+          const result = openContentWithResult(lm, content, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+          // Reuse only activates the open vault; hand it this item's params.
+          if (result?.status === 'reused')
+            result.split?.replace({
+              next: content,
+              mergeHistory: true,
+              referredFrom: null,
+            });
         };
       })
       .with('crm_discussion', () => {

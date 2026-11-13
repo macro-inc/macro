@@ -541,3 +541,37 @@ async fn runtime_access_notifications_are_candidates(pool: Pool<Postgres>) -> an
     );
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed", "attention_teams")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn team_notifications_are_candidates_only_for_members(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.types = &[EntityType::Team];
+    request.keying = AttentionKeying::FiledEntity;
+    let page = attention_soup_page(&pool, request).await?;
+
+    // team-2's request stays out: user-1 is not a member. The invite is filed
+    // under an invite id, which names no team.
+    assert_eq!(
+        keys(&page),
+        vec![(
+            EntityType::Team,
+            "bbbbbbbb-0000-0000-0000-000000000001".to_string()
+        )]
+    );
+
+    // Membership alone never lists a team: user-2 is in team-2, whose request
+    // notification is user-1's, not theirs.
+    let mut teammate = req(ATTENTION, &link_ids, &sources);
+    teammate.types = &[EntityType::Team];
+    teammate.keying = AttentionKeying::FiledEntity;
+    teammate.user_id = MacroUserIdStr::parse_from_str("macro|user-2@example.com")?;
+    assert!(attention_soup_page(&pool, teammate).await?.is_empty());
+    Ok(())
+}

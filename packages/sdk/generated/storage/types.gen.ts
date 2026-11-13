@@ -63,6 +63,33 @@ export type AccessRequest = {
 };
 
 /**
+ * How an agent's access request was resolved.
+ */
+export type AccessRequestResolution = 'approved' | 'denied' | 'revoked';
+
+/**
+ * Metadata for [`PasswordTopicEvent::AccessRequestResolved`].
+ */
+export type AccessRequestResolvedMetadata = {
+    /**
+     * Requested item.
+     */
+    itemId: string;
+    /**
+     * Resolved request.
+     */
+    requestId: string;
+    /**
+     * Resolution.
+     */
+    status: AccessRequestResolution;
+    /**
+     * Team owning the item.
+     */
+    teamId: string;
+};
+
+/**
  * Share state visible to one authenticated viewer.
  */
 export type AccessRequestState = {
@@ -15264,6 +15291,425 @@ export type PasswordActivity = {
 };
 
 /**
+ * Access request body.
+ */
+export type PasswordAgentAccessRequestBody = {
+    /**
+     * Requested permission.
+     */
+    permission: PasswordPermission;
+};
+
+/**
+ * A page of requests for human review.
+ */
+export type PasswordAgentAccessRequestPage = {
+    /**
+     * Opaque cursor of the next page.
+     */
+    nextCursor?: string | null;
+    /**
+     * Pending requests on items the caller may manage.
+     */
+    requests: Array<PasswordAgentAccessRequestState>;
+};
+
+/**
+ * An agent's request state.
+ */
+export type PasswordAgentAccessRequestState = {
+    /**
+     * Current access.
+     */
+    access: PasswordAgentItemAccess;
+    /**
+     * Agent account.
+     */
+    agentAccountId: string;
+    /**
+     * Item id.
+     */
+    itemId: PasswordItemId;
+    permission?: null | PasswordPermission;
+    /**
+     * Request id; null when none exists.
+     */
+    requestId?: string | null;
+    /**
+     * Request revision; 0 when none exists.
+     */
+    revision: number;
+    /**
+     * Request status.
+     */
+    status: PasswordAgentRequestStatus;
+    /**
+     * Last transition.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * Whether the agent can use an item now.
+ */
+export type PasswordAgentAccessStatus = 'usable' | 'request_access' | 'pending';
+
+/**
+ * API credential fields an agent may select.
+ */
+export type PasswordAgentApiField = 'key' | 'secret';
+
+/**
+ * Agent item creation; the kind is the secret's tag.
+ */
+export type PasswordAgentCreateItem = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * UUIDv7, stable across retries; becomes the item id.
+     */
+    operationId: string;
+    /**
+     * Typed values.
+     */
+    secret: PasswordAgentCreateSecret;
+    url?: null | PasswordLoginUrl;
+};
+
+/**
+ * New item values; the item kind is this tag.
+ */
+export type PasswordAgentCreateSecret = {
+    kind: 'login';
+    /**
+     * Required non-empty password.
+     */
+    password: PasswordSecretString;
+    username?: null | PasswordSecretString;
+} | {
+    key?: null | PasswordSecretString;
+    kind: 'api';
+    /**
+     * Required non-empty API secret.
+     */
+    secret: PasswordSecretString;
+};
+
+/**
+ * One-field disclosure request.
+ */
+export type PasswordAgentDiscloseRequest = {
+    /**
+     * When given, the committed version must match.
+     */
+    expectedVersion?: number | null;
+    /**
+     * Audited intent.
+     */
+    purpose: PasswordAgentPurpose;
+    /**
+     * The single slot to disclose.
+     */
+    selector: PasswordAgentSecretSelector;
+};
+
+/**
+ * One disclosed field.
+ */
+export type PasswordAgentDisclosed = {
+    /**
+     * The selector that was disclosed.
+     */
+    selector: PasswordAgentSecretSelector;
+    /**
+     * The selected value.
+     */
+    value: PasswordSecretString;
+    /**
+     * Committed version it was read from.
+     */
+    version: number;
+};
+
+/**
+ * Agent-editable display fields.
+ */
+export type PasswordAgentEditableMetadata = {
+    /**
+     * New display name.
+     */
+    name?: string | null;
+    /**
+     * New URL; null clears it, absent keeps it.
+     */
+    url?: string | null;
+};
+
+/**
+ * Closed, payload-free failure codes of the agent vault API.
+ */
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable';
+
+/**
+ * Sanitized agent vault failure.
+ */
+export type PasswordAgentFailure = {
+    /**
+     * Machine-readable category; never contains request or secret values.
+     */
+    code: PasswordAgentErrorCode;
+    /**
+     * Present only on `rate_limited`.
+     */
+    retryAfterMs?: number | null;
+};
+
+/**
+ * Current agent access to one item, recomputed on every use.
+ */
+export type PasswordAgentItemAccess = {
+    /**
+     * Whether the agent may enroll a verification-code seed.
+     */
+    canSetTotp: boolean;
+    /**
+     * Whether the agent may update values and metadata.
+     */
+    canUpdate: boolean;
+    /**
+     * Live request awaiting review.
+     */
+    pendingRequestId?: string | null;
+    /**
+     * Revision of this agent's grant/approval on the item.
+     */
+    permissionRevision: number;
+    /**
+     * Current status.
+     */
+    status: PasswordAgentAccessStatus;
+    useBasis?: null | PasswordAgentUseBasis;
+};
+
+/**
+ * Login item fields an agent may select.
+ */
+export type PasswordAgentLoginField = 'username' | 'password';
+
+/**
+ * Agent item update.
+ */
+export type PasswordAgentPatchItem = {
+    /**
+     * Committed version the update applies to.
+     */
+    expectedVersion: number;
+    metadataPatch?: null | PasswordAgentEditableMetadata;
+    /**
+     * UUIDv7, stable across retries of this one update.
+     */
+    operationId: string;
+    secretPatch?: null | PasswordAgentSecretPatch;
+};
+
+/**
+ * Accepted disclosure intent. Typing is a later additive value.
+ */
+export type PasswordAgentPurpose = 'copy';
+
+/**
+ * Wire request status.
+ */
+export type PasswordAgentRequestStatus = 'none' | 'pending' | 'approved' | 'denied' | 'revoked';
+
+/**
+ * Human decision on a pending request.
+ */
+export type PasswordAgentResolveRequest = {
+    decision: 'approve';
+    /**
+     * Granted permission.
+     */
+    permission: PasswordPermission;
+    /**
+     * Request revision observed by the reviewer.
+     */
+    revision: number;
+} | {
+    decision: 'deny';
+    /**
+     * Request revision observed by the reviewer.
+     */
+    revision: number;
+};
+
+/**
+ * Human revocation of agent access.
+ */
+export type PasswordAgentRevokeBody = {
+    /**
+     * Permission revision observed by the reviewer.
+     */
+    expectedPermissionRevision: number;
+    /**
+     * What to remove.
+     */
+    scope: PasswordAgentRevokeScope;
+};
+
+/**
+ * What a revocation removes.
+ */
+export type PasswordAgentRevokeScope = 'approval' | 'grant_and_approval';
+
+/**
+ * Metadata-only search hit; never values, usernames, notes or custom fields.
+ */
+export type PasswordAgentSearchHit = {
+    /**
+     * Current access.
+     */
+    access: PasswordAgentItemAccess;
+    /**
+     * Item id.
+     */
+    id: PasswordItemId;
+    /**
+     * Stored kind.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Website URL.
+     */
+    url?: string | null;
+    /**
+     * Committed positive version.
+     */
+    version: number;
+};
+
+/**
+ * One search page.
+ */
+export type PasswordAgentSearchPage = {
+    /**
+     * Hits, newest first.
+     */
+    items: Array<PasswordAgentSearchHit>;
+    /**
+     * Opaque cursor of the next page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * Replacement of supplied slots; absent slots keep their stored value.
+ */
+export type PasswordAgentSecretPatch = {
+    kind: 'login';
+    password?: null | PasswordSecretString;
+    username?: null | PasswordSecretString;
+} | {
+    key?: null | PasswordSecretString;
+    kind: 'api';
+    secret?: null | PasswordSecretString;
+};
+
+/**
+ * Closed kind-aware selector of exactly one stored slot. Notes, custom fields
+ * and TOTP seeds are never selectable.
+ */
+export type PasswordAgentSecretSelector = {
+    /**
+     * Selected login field.
+     */
+    field: PasswordAgentLoginField;
+    kind: 'login';
+} | {
+    /**
+     * Selected API credential field.
+     */
+    field: PasswordAgentApiField;
+    kind: 'api';
+};
+
+/**
+ * Verification-code seed setup for an item the agent created.
+ */
+export type PasswordAgentSetTotp = {
+    /**
+     * Committed version the setup applies to.
+     */
+    expectedVersion: number;
+    /**
+     * UUIDv7, stable across retries; identifies the enrollment generation.
+     */
+    operationId: string;
+    /**
+     * Base32 seed.
+     */
+    seed: PasswordSecretString;
+};
+
+/**
+ * A verification code with a conservative server-computed lifetime.
+ */
+export type PasswordAgentTotpCode = {
+    /**
+     * Current code; never the seed.
+     */
+    code: PasswordSecretString;
+    /**
+     * Conservative usable-until time under the documented provider clock bound;
+     * not an observed generation instant.
+     */
+    expiresAt: string;
+    /**
+     * Code period in seconds.
+     */
+    periodSeconds: number;
+    /**
+     * Whole milliseconds from the server's final check until `expiresAt`.
+     */
+    validForMs: number;
+};
+
+/**
+ * Verification-code request.
+ */
+export type PasswordAgentTotpCodeRequest = {
+    /**
+     * Audited intent.
+     */
+    purpose: PasswordAgentPurpose;
+};
+
+/**
+ * Why a usable item is usable.
+ */
+export type PasswordAgentUseBasis = 'creator_grant' | 'approved_grant';
+
+/**
+ * Created or updated item.
+ */
+export type PasswordAgentWriteResult = {
+    /**
+     * Item after the write.
+     */
+    item: PasswordAgentSearchHit;
+    /**
+     * Committed version.
+     */
+    version: number;
+};
+
+/**
  * New folder, at the top level or inside another folder of the team.
  */
 export type PasswordCreateFolderBody = {
@@ -15343,9 +15789,10 @@ export type PasswordGrant = {
 };
 
 /**
- * Future principals can extend this without exposing agent controls in v1.
+ * Grant recipient category. Agent grants are managed only through the agent
+ * access routes and never appear in, or count toward, human sharing.
  */
-export type PasswordGranteeKind = 'user' | 'team';
+export type PasswordGranteeKind = 'user' | 'team' | 'agent';
 
 /**
  * Searchable display fields, without any credential values.
@@ -15560,6 +16007,17 @@ export type PasswordShareBody = {
  * Team isolation boundary.
  */
 export type PasswordTeamId = string;
+
+/**
+ * An authorized human resolved, or revoked, an agent's access request.
+ */
+export type PasswordTopicEvent = {
+    event_type: 'passwords.access_request.resolved';
+    /**
+     * An authorized human resolved, or revoked, an agent's access request.
+     */
+    metadata: AccessRequestResolvedMetadata;
+};
 
 /**
  * Private seed submitted only to the verification-code provider.
@@ -19532,6 +19990,12 @@ export type SoupItem = {
      */
     data: SoupHarness;
     tag: 'harness';
+} | {
+    /**
+     * Team, listed only by attention feeds.
+     */
+    data: SoupTeam;
+    tag: 'team';
 };
 
 /**
@@ -19721,6 +20185,26 @@ export type SoupProperty = {
      */
     id: string;
     value?: null | PropertyValue;
+};
+
+/**
+ * A team, listed only by attention feeds: team-scoped notifications (a
+ * vault access request) are filed under it, and it has no page of its own.
+ * Teams carry no timestamps; attention feeds order by attention time.
+ */
+export type SoupTeam = {
+    /**
+     * The team uuid.
+     */
+    id: string;
+    /**
+     * The team's display name.
+     */
+    name: string;
+    /**
+     * The user who owns the team.
+     */
+    ownerId: string;
 };
 
 /**
@@ -22972,7 +23456,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent | PasswordTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -33447,6 +33931,311 @@ export type EntityMessageTypingResponses = {
 
 export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
 
+export type PasswordsAgentSearchData = {
+    body?: never;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Metadata search text; never a value search.
+         */
+        q?: string | null;
+        /**
+         * Page size, 1 to 100; default 50.
+         */
+        limit?: string | null;
+        /**
+         * Cursor from the previous page.
+         */
+        cursor?: string | null;
+    };
+    url: '/passwords/agent/teams/{team}/items';
+};
+
+export type PasswordsAgentSearchErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentSearchError = PasswordsAgentSearchErrors[keyof PasswordsAgentSearchErrors];
+
+export type PasswordsAgentSearchResponses = {
+    200: PasswordAgentSearchPage;
+};
+
+export type PasswordsAgentSearchResponse = PasswordsAgentSearchResponses[keyof PasswordsAgentSearchResponses];
+
+export type PasswordsAgentCreateData = {
+    body: PasswordAgentCreateItem;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items';
+};
+
+export type PasswordsAgentCreateErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentCreateError = PasswordsAgentCreateErrors[keyof PasswordsAgentCreateErrors];
+
+export type PasswordsAgentCreateResponses = {
+    /**
+     * Replay of an accepted operation
+     */
+    200: PasswordAgentWriteResult;
+    201: PasswordAgentWriteResult;
+};
+
+export type PasswordsAgentCreateResponse = PasswordsAgentCreateResponses[keyof PasswordsAgentCreateResponses];
+
+export type PasswordsAgentUpdateData = {
+    body: PasswordAgentPatchItem;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}';
+};
+
+export type PasswordsAgentUpdateErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentUpdateError = PasswordsAgentUpdateErrors[keyof PasswordsAgentUpdateErrors];
+
+export type PasswordsAgentUpdateResponses = {
+    200: PasswordAgentWriteResult;
+};
+
+export type PasswordsAgentUpdateResponse = PasswordsAgentUpdateResponses[keyof PasswordsAgentUpdateResponses];
+
+export type PasswordsAgentRequestAccessData = {
+    body: PasswordAgentAccessRequestBody;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/access-requests';
+};
+
+export type PasswordsAgentRequestAccessErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    429: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentRequestAccessError = PasswordsAgentRequestAccessErrors[keyof PasswordsAgentRequestAccessErrors];
+
+export type PasswordsAgentRequestAccessResponses = {
+    /**
+     * Already usable
+     */
+    200: PasswordAgentAccessRequestState;
+    202: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentRequestAccessResponse = PasswordsAgentRequestAccessResponses[keyof PasswordsAgentRequestAccessResponses];
+
+export type PasswordsAgentMyRequestData = {
+    body?: never;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/access-requests/mine';
+};
+
+export type PasswordsAgentMyRequestErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentMyRequestError = PasswordsAgentMyRequestErrors[keyof PasswordsAgentMyRequestErrors];
+
+export type PasswordsAgentMyRequestResponses = {
+    200: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentMyRequestResponse = PasswordsAgentMyRequestResponses[keyof PasswordsAgentMyRequestResponses];
+
+export type PasswordsAgentDiscloseData = {
+    body: PasswordAgentDiscloseRequest;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/disclose';
+};
+
+export type PasswordsAgentDiscloseErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentDiscloseError = PasswordsAgentDiscloseErrors[keyof PasswordsAgentDiscloseErrors];
+
+export type PasswordsAgentDiscloseResponses = {
+    200: PasswordAgentDisclosed;
+};
+
+export type PasswordsAgentDiscloseResponse = PasswordsAgentDiscloseResponses[keyof PasswordsAgentDiscloseResponses];
+
+export type PasswordsAgentSetTotpData = {
+    body: PasswordAgentSetTotp;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/totp';
+};
+
+export type PasswordsAgentSetTotpErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentSetTotpError = PasswordsAgentSetTotpErrors[keyof PasswordsAgentSetTotpErrors];
+
+export type PasswordsAgentSetTotpResponses = {
+    204: void;
+};
+
+export type PasswordsAgentSetTotpResponse = PasswordsAgentSetTotpResponses[keyof PasswordsAgentSetTotpResponses];
+
+export type PasswordsAgentTotpCodeData = {
+    body: PasswordAgentTotpCodeRequest;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/totp/code';
+};
+
+export type PasswordsAgentTotpCodeErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentTotpCodeError = PasswordsAgentTotpCodeErrors[keyof PasswordsAgentTotpCodeErrors];
+
+export type PasswordsAgentTotpCodeResponses = {
+    200: PasswordAgentTotpCode;
+};
+
+export type PasswordsAgentTotpCodeResponse = PasswordsAgentTotpCodeResponses[keyof PasswordsAgentTotpCodeResponses];
+
 export type PasswordsTeamsData = {
     body?: never;
     path?: never;
@@ -33466,6 +34255,43 @@ export type PasswordsTeamsResponses = {
 };
 
 export type PasswordsTeamsResponse = PasswordsTeamsResponses[keyof PasswordsTeamsResponses];
+
+export type PasswordsAgentAccessRequestsData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Managed item: list every agent's access to it instead of the pending queue.
+         */
+        itemId?: string | null;
+        /**
+         * Page size, 1 to 100; default 50.
+         */
+        limit?: string | null;
+        /**
+         * Cursor from the previous page.
+         */
+        cursor?: string | null;
+    };
+    url: '/passwords/teams/{team}/agent-access-requests';
+};
+
+export type PasswordsAgentAccessRequestsErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentAccessRequestsError = PasswordsAgentAccessRequestsErrors[keyof PasswordsAgentAccessRequestsErrors];
+
+export type PasswordsAgentAccessRequestsResponses = {
+    200: PasswordAgentAccessRequestPage;
+};
+
+export type PasswordsAgentAccessRequestsResponse = PasswordsAgentAccessRequestsResponses[keyof PasswordsAgentAccessRequestsResponses];
 
 export type PasswordsFoldersData = {
     body?: never;
@@ -33793,6 +34619,72 @@ export type PasswordsActivityResponses = {
 };
 
 export type PasswordsActivityResponse = PasswordsActivityResponses[keyof PasswordsActivityResponses];
+
+export type PasswordsAgentResolveRequestData = {
+    body: PasswordAgentResolveRequest;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+        request: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve';
+};
+
+export type PasswordsAgentResolveRequestErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentResolveRequestError = PasswordsAgentResolveRequestErrors[keyof PasswordsAgentResolveRequestErrors];
+
+export type PasswordsAgentResolveRequestResponses = {
+    200: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentResolveRequestResponse = PasswordsAgentResolveRequestResponses[keyof PasswordsAgentResolveRequestResponses];
+
+export type PasswordsAgentRevokeData = {
+    body: PasswordAgentRevokeBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+        agent: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/agents/{agent}/revoke';
+};
+
+export type PasswordsAgentRevokeErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentRevokeError = PasswordsAgentRevokeErrors[keyof PasswordsAgentRevokeErrors];
+
+export type PasswordsAgentRevokeResponses = {
+    200: PasswordAgentItemAccess;
+};
+
+export type PasswordsAgentRevokeResponse = PasswordsAgentRevokeResponses[keyof PasswordsAgentRevokeResponses];
 
 export type PasswordsCopyData = {
     body: PasswordRevealBody;

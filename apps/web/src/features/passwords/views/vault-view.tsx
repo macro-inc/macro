@@ -58,6 +58,8 @@ import {
 } from '../core/types';
 import { createPasswordFolderDrag } from '../primitives/folder-drag';
 import { createVault, type VaultController } from '../primitives/vault';
+import type { AgentRequestSource } from '../queries/agent-requests';
+import { ItemAgentRequests } from './item-agent-requests';
 
 type MobileTab = 'all' | 'favorites' | 'recent' | 'shared' | 'folders';
 
@@ -112,6 +114,7 @@ function ItemPane(props: {
   vault: VaultController;
   item: PasswordItem;
   now: number;
+  agentRequests?: AgentRequestSource;
   onBack: () => void;
 }) {
   const { source, recipients, recipientsLoading, recipientsError } =
@@ -284,6 +287,11 @@ function ItemPane(props: {
                     fireAndForget(props.vault.loadHistory(), 'passwords'),
                 }}
               />
+              <Show when={props.item.canManage && props.agentRequests}>
+                {(source) => (
+                  <ItemAgentRequests source={source()} itemId={props.item.id} />
+                )}
+              </Show>
             </>
           }
         >
@@ -485,10 +493,59 @@ function LeavePrompt(props: {
   );
 }
 
+/** An item to open, from a notification; `focusRequestId` makes each request distinct. */
+export type PasswordsFocus = {
+  itemId: string;
+  focusRequestId: number;
+};
+
+/**
+ * The item a notification's split params point at, when it belongs to the
+ * viewer's current team; any other team opens the vault without a selection.
+ */
+export function focusFromParams(
+  params: Record<string, unknown> | undefined,
+  teamId: string | undefined,
+  focusRequestId: number
+): PasswordsFocus | undefined {
+  if (
+    !params ||
+    typeof params.itemId !== 'string' ||
+    params.teamId !== teamId ||
+    teamId === undefined
+  )
+    return;
+  return { itemId: params.itemId, focusRequestId };
+}
+
+/**
+ * Each focus request selects its item once, after the list loads; a failed
+ * load keeps it waiting for a retry. An item the viewer cannot see is never
+ * selected.
+ */
+export function createFocusSelection(
+  vault: VaultController,
+  focus: () => PasswordsFocus | undefined
+) {
+  let handledFocus: number | undefined;
+  createEffect(() => {
+    const current = focus();
+    if (!current || current.focusRequestId === handledFocus) return;
+    if (!vault.items.isSuccess) return;
+    handledFocus = current.focusRequestId;
+    const item = vault.loadedItems().find(({ id }) => id === current.itemId);
+    if (item) vault.select(item);
+  });
+}
+
 export function VaultView(props: {
   onGuard?: (guard: () => Promise<boolean>) => void;
+  /** Absent when the agent vault is off: no agent controls render. */
+  agentRequests?: AgentRequestSource;
+  focus?: PasswordsFocus;
 }) {
   const vault = createVault();
+  createFocusSelection(vault, () => props.focus);
   const { source, scope } = usePasswords();
   let root: HTMLDivElement | undefined;
   const logo = loadLogo(source);
@@ -873,6 +930,7 @@ export function VaultView(props: {
                   vault={vault}
                   item={item}
                   now={now()}
+                  agentRequests={props.agentRequests}
                   onBack={() => vault.select(undefined)}
                 />
               )}

@@ -18,6 +18,10 @@ pub use crm_discussion::GraphqlCrmDiscussionMetadata;
 /// Request to join a channel-shared calendar event notification metadata.
 mod calendar_join_request;
 pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
+
+/// Agent request for access to a vault item notification metadata.
+mod password_access_request;
+pub use password_access_request::GraphqlPasswordAccessRequestedMetadata;
 /// Request-to-join-a-channel notification metadata.
 mod channel_access_request;
 pub use channel_access_request::GraphqlChannelAccessRequestedMetadata;
@@ -1490,6 +1494,8 @@ pub enum GraphqlNotifEvent {
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
     /// Calendar event join request metadata.
     CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
+    /// Agent request for access to a vault item metadata.
+    PasswordAccessRequested(GraphqlPasswordAccessRequestedMetadata),
     /// Request-to-join-a-channel metadata.
     ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata),
     /// Finished routine run metadata.
@@ -1542,6 +1548,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::CrmDiscussion(metadata) => Self::CrmDiscussion(metadata.into()),
             NotifEvent::CalendarEventJoinRequest(metadata) => {
                 Self::CalendarEventJoinRequest(metadata.into())
+            }
+            NotifEvent::PasswordAccessRequested(metadata) => {
+                Self::PasswordAccessRequested(metadata.into())
             }
             NotifEvent::ChannelInvite(metadata) => {
                 Self::ChannelInvite(GraphqlChannelInviteMetadata(metadata))

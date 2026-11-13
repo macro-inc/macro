@@ -957,6 +957,8 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 pub(crate) struct ApiContext {
     pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
     pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
+    pub passwords_agent_state:
+        passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
     pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,

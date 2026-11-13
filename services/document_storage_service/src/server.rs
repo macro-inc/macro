@@ -917,31 +917,56 @@ async fn run_server() -> anyhow::Result<()> {
             "Passwords requires OPENBAO_ADDRESS, PASSWORDS_JWT_ISSUER and PASSWORDS_JWT_SIGNING_KEY together"
         ),
     };
-    let passwords_availability: Arc<dyn passwords::domain::ports::Availability> = match config
-        .environment
-    {
-        Environment::Local => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: passwords::outbound::availability::LocalPasswordsFlags,
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
-        _ => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: flags.clone(),
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
+    let (passwords_availability, passwords_agent_availability): (
+        Arc<dyn passwords::domain::ports::Availability>,
+        Arc<dyn passwords::domain::agent::ports::AgentAvailability>,
+    ) = match config.environment {
+        Environment::Local => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: passwords::outbound::availability::LocalPasswordsFlags,
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
+        _ => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: flags.clone(),
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
     };
+    let passwords_repository = Arc::new(
+        passwords::outbound::postgres::PgRepository::new(db.clone())
+            .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
+    );
     let passwords_state = passwords::inbound::router::PasswordRouterState {
         service: Arc::new(passwords::domain::service::PasswordService {
-            repository: Arc::new(
-                passwords::outbound::postgres::PgRepository::new(db.clone())
-                    .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
-            ),
+            repository: passwords_repository.clone(),
             provider: passwords_provider,
             availability: passwords_availability,
         }),
         authorization: authorization_state.clone(),
     };
+    // The agent platform supplies the authoritative directory adapter; until it
+    // is composed, every agent call is `invalid_agent` with the flags on.
+    let passwords_agent_state = passwords::inbound::agent_router::AgentRouterState {
+        service: Arc::new(passwords::domain::agent::service::AgentVaultService {
+            vault: passwords_state.service.clone(),
+            agents: passwords_repository,
+            directory: Arc::new(passwords::outbound::agent_directory::NoAgents),
+            availability: passwords_agent_availability,
+            events: Arc::new(crate::outbound::passwords_access::PasswordAccessDelivery {
+                ingress: notification_ingress_service.clone(),
+                broker: macro_event_broker.clone(),
+            }),
+            clock: Arc::new(chrono::Utc::now),
+        }),
+        authorization: authorization_state.clone(),
+    };
     consumer_tracker.spawn(crate::passwords_cleanup::run(
         passwords_state.service.clone(),
+        passwords_agent_state.service.clone(),
         consumer_cancellation_token.clone(),
     ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
@@ -2657,6 +2682,7 @@ async fn run_server() -> anyhow::Result<()> {
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
         passwords_state,
+        passwords_agent_state,
         authorization_state: authorization_state.clone(),
         jwt_validation_args,
         dss_auth_key,

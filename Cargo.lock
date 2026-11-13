@@ -6854,6 +6854,7 @@ dependencies = [
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
+ "password_events",
  "passwords",
  "projects",
  "properties",
@@ -15368,6 +15369,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "password_events"
+version = "0.1.0"
+dependencies = [
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "passwords"
 version = "0.1.0"
 dependencies = [
@@ -22703,6 +22718,7 @@ dependencies = [
  "model-error-response",
  "model_owner",
  "model_user",
+ "password_events",
  "rate_limit",
  "rdkafka",
  "reqwest 0.13.4",

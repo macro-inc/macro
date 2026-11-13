@@ -53498,6 +53498,20 @@ export const getItemsSoupResponse = zod
               tag: zod.enum(['harness']),
             })
             .describe('Paired runtime, listed only by attention feeds.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  id: zod.uuid().describe('The team uuid.'),
+                  name: zod.string().describe("The team's display name."),
+                  ownerId: zod.string().describe('The user who owns the team.'),
+                })
+                .describe(
+                  'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                ),
+              tag: zod.enum(['team']),
+            })
+            .describe('Team, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -58659,6 +58673,20 @@ export const postItemsSoupResponse = zod
               tag: zod.enum(['harness']),
             })
             .describe('Paired runtime, listed only by attention feeds.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  id: zod.uuid().describe('The team uuid.'),
+                  name: zod.string().describe("The team's display name."),
+                  ownerId: zod.string().describe('The user who owns the team.'),
+                })
+                .describe(
+                  'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                ),
+              tag: zod.enum(['team']),
+            })
+            .describe('Team, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -63261,6 +63289,20 @@ export const postItemsSoupAstResponse = zod
               tag: zod.enum(['harness']),
             })
             .describe('Paired runtime, listed only by attention feeds.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  id: zod.uuid().describe('The team uuid.'),
+                  name: zod.string().describe("The team's display name."),
+                  ownerId: zod.string().describe('The user who owns the team.'),
+                })
+                .describe(
+                  'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                ),
+              tag: zod.enum(['team']),
+            })
+            .describe('Team, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -68450,6 +68492,22 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['harness']),
                   })
                   .describe('Paired runtime, listed only by attention feeds.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        id: zod.uuid().describe('The team uuid.'),
+                        name: zod.string().describe("The team's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe('The user who owns the team.'),
+                      })
+                      .describe(
+                        'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                      ),
+                    tag: zod.enum(['team']),
+                  })
+                  .describe('Team, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -73023,6 +73081,22 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['harness']),
                   })
                   .describe('Paired runtime, listed only by attention feeds.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        id: zod.uuid().describe('The team uuid.'),
+                        name: zod.string().describe("The team's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe('The user who owns the team.'),
+                      })
+                      .describe(
+                        'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                      ),
+                    tag: zod.enum(['team']),
+                  })
+                  .describe('Team, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -77222,12 +77296,796 @@ export const entityMessageTypingBody = zod
   .describe('Transient typing update.');
 
 /**
+ * @summary Search the agent's catalog: metadata and current access only.
+ */
+export const passwordsAgentSearchParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsAgentSearchQueryParams = zod.object({
+  q: zod
+    .string()
+    .nullish()
+    .describe('Metadata search text; never a value search.'),
+  limit: zod.string().nullish().describe('Page size, 1 to 100; default 50.'),
+  cursor: zod.string().nullish().describe('Cursor from the previous page.'),
+});
+
+export const passwordsAgentSearchHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+});
+
+export const passwordsAgentSearchResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            access: zod
+              .object({
+                canSetTotp: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may enroll a verification-code seed.'
+                  ),
+                canUpdate: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may update values and metadata.'
+                  ),
+                pendingRequestId: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Live request awaiting review.'),
+                permissionRevision: zod
+                  .number()
+                  .describe(
+                    "Revision of this agent's grant\/approval on the item."
+                  ),
+                status: zod
+                  .enum(['usable', 'request_access', 'pending'])
+                  .describe('Whether the agent can use an item now.'),
+                useBasis: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['creator_grant', 'approved_grant'])
+                      .describe('Why a usable item is usable.'),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Current agent access to one item, recomputed on every use.'
+              ),
+            id: zod
+              .uuid()
+              .describe('Vault item identity, UUIDv7 for new items.'),
+            kind: zod
+              .enum([
+                'login',
+                'card',
+                'note',
+                'identity',
+                'api',
+                'verification_code',
+              ])
+              .describe(
+                'Product template. Values use the same protected representation for every template.'
+              ),
+            name: zod.string().describe('Display name.'),
+            url: zod.string().nullish().describe('Website URL.'),
+            version: zod.number().describe('Committed positive version.'),
+          })
+          .describe(
+            'Metadata-only search hit; never values, usernames, notes or custom fields.'
+          )
+      )
+      .describe('Hits, newest first.'),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Opaque cursor of the next page.'),
+  })
+  .describe('One search page.');
+
+/**
+ * @summary Create a login or API item attributed to this agent.
+ */
+export const passwordsAgentCreateParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsAgentCreateHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentCreateBody = zod
+  .object({
+    name: zod.string().describe('Display name.'),
+    operationId: zod
+      .uuid()
+      .describe('UUIDv7, stable across retries; becomes the item id.'),
+    secret: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['login']),
+            password: zod
+              .string()
+              .describe(
+                'Owned sensitive text. Deliberately does not implement Debug or Display.'
+              ),
+            username: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              ])
+              .optional(),
+          })
+          .describe('A website or application login.'),
+        zod
+          .object({
+            key: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              ])
+              .optional(),
+            kind: zod.enum(['api']),
+            secret: zod
+              .string()
+              .describe(
+                'Owned sensitive text. Deliberately does not implement Debug or Display.'
+              ),
+          })
+          .describe('An API credential.'),
+      ])
+      .describe('New item values; the item kind is this tag.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe("Agent item creation; the kind is the secret's tag.");
+
+export const passwordsAgentCreateResponse = zod
+  .object({
+    item: zod
+      .object({
+        access: zod
+          .object({
+            canSetTotp: zod
+              .boolean()
+              .describe(
+                'Whether the agent may enroll a verification-code seed.'
+              ),
+            canUpdate: zod
+              .boolean()
+              .describe('Whether the agent may update values and metadata.'),
+            pendingRequestId: zod
+              .uuid()
+              .nullish()
+              .describe('Live request awaiting review.'),
+            permissionRevision: zod
+              .number()
+              .describe(
+                "Revision of this agent's grant\/approval on the item."
+              ),
+            status: zod
+              .enum(['usable', 'request_access', 'pending'])
+              .describe('Whether the agent can use an item now.'),
+            useBasis: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['creator_grant', 'approved_grant'])
+                  .describe('Why a usable item is usable.'),
+              ])
+              .optional(),
+          })
+          .describe(
+            'Current agent access to one item, recomputed on every use.'
+          ),
+        id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+        kind: zod
+          .enum([
+            'login',
+            'card',
+            'note',
+            'identity',
+            'api',
+            'verification_code',
+          ])
+          .describe(
+            'Product template. Values use the same protected representation for every template.'
+          ),
+        name: zod.string().describe('Display name.'),
+        url: zod.string().nullish().describe('Website URL.'),
+        version: zod.number().describe('Committed positive version.'),
+      })
+      .describe(
+        'Metadata-only search hit; never values, usernames, notes or custom fields.'
+      ),
+    version: zod.number().describe('Committed version.'),
+  })
+  .describe('Created or updated item.');
+
+/**
+ * @summary Replace supplied fields of a login or API item.
+ */
+export const passwordsAgentUpdateParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentUpdateHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentUpdateBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .describe('Committed version the update applies to.'),
+    metadataPatch: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod.string().nullish().describe('New display name.'),
+            url: zod
+              .string()
+              .nullish()
+              .describe('New URL; null clears it, absent keeps it.'),
+          })
+          .describe('Agent-editable display fields.'),
+      ])
+      .optional(),
+    operationId: zod
+      .uuid()
+      .describe('UUIDv7, stable across retries of this one update.'),
+    secretPatch: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['login']),
+                password: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+                username: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe('Login slots to replace.'),
+            zod
+              .object({
+                key: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+                kind: zod.enum(['api']),
+                secret: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe('API credential slots to replace.'),
+          ])
+          .describe(
+            'Replacement of supplied slots; absent slots keep their stored value.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Agent item update.');
+
+export const passwordsAgentUpdateResponse = zod
+  .object({
+    item: zod
+      .object({
+        access: zod
+          .object({
+            canSetTotp: zod
+              .boolean()
+              .describe(
+                'Whether the agent may enroll a verification-code seed.'
+              ),
+            canUpdate: zod
+              .boolean()
+              .describe('Whether the agent may update values and metadata.'),
+            pendingRequestId: zod
+              .uuid()
+              .nullish()
+              .describe('Live request awaiting review.'),
+            permissionRevision: zod
+              .number()
+              .describe(
+                "Revision of this agent's grant\/approval on the item."
+              ),
+            status: zod
+              .enum(['usable', 'request_access', 'pending'])
+              .describe('Whether the agent can use an item now.'),
+            useBasis: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['creator_grant', 'approved_grant'])
+                  .describe('Why a usable item is usable.'),
+              ])
+              .optional(),
+          })
+          .describe(
+            'Current agent access to one item, recomputed on every use.'
+          ),
+        id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+        kind: zod
+          .enum([
+            'login',
+            'card',
+            'note',
+            'identity',
+            'api',
+            'verification_code',
+          ])
+          .describe(
+            'Product template. Values use the same protected representation for every template.'
+          ),
+        name: zod.string().describe('Display name.'),
+        url: zod.string().nullish().describe('Website URL.'),
+        version: zod.number().describe('Committed positive version.'),
+      })
+      .describe(
+        'Metadata-only search hit; never values, usernames, notes or custom fields.'
+      ),
+    version: zod.number().describe('Committed version.'),
+  })
+  .describe('Created or updated item.');
+
+/**
+ * @summary Ask authorized humans for access to an item.
+ */
+export const passwordsAgentRequestAccessParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentRequestAccessHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentRequestAccessBody = zod
+  .object({
+    permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
+  })
+  .describe('Access request body.');
+
+export const passwordsAgentRequestAccessResponse = zod
+  .object({
+    access: zod
+      .object({
+        canSetTotp: zod
+          .boolean()
+          .describe('Whether the agent may enroll a verification-code seed.'),
+        canUpdate: zod
+          .boolean()
+          .describe('Whether the agent may update values and metadata.'),
+        pendingRequestId: zod
+          .uuid()
+          .nullish()
+          .describe('Live request awaiting review.'),
+        permissionRevision: zod
+          .number()
+          .describe("Revision of this agent's grant\/approval on the item."),
+        status: zod
+          .enum(['usable', 'request_access', 'pending'])
+          .describe('Whether the agent can use an item now.'),
+        useBasis: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['creator_grant', 'approved_grant'])
+              .describe('Why a usable item is usable.'),
+          ])
+          .optional(),
+      })
+      .describe('Current agent access to one item, recomputed on every use.'),
+    agentAccountId: zod.string().describe('Agent account.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    permission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
+    requestId: zod
+      .uuid()
+      .nullish()
+      .describe('Request id; null when none exists.'),
+    revision: zod.number().describe('Request revision; 0 when none exists.'),
+    status: zod
+      .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+      .describe('Wire request status.'),
+    updatedAt: zod.iso.datetime({}).nullish().describe('Last transition.'),
+  })
+  .describe("An agent's request state.");
+
+/**
+ * @summary This agent's own request state for the item.
+ */
+export const passwordsAgentMyRequestParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentMyRequestHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+});
+
+export const passwordsAgentMyRequestResponse = zod
+  .object({
+    access: zod
+      .object({
+        canSetTotp: zod
+          .boolean()
+          .describe('Whether the agent may enroll a verification-code seed.'),
+        canUpdate: zod
+          .boolean()
+          .describe('Whether the agent may update values and metadata.'),
+        pendingRequestId: zod
+          .uuid()
+          .nullish()
+          .describe('Live request awaiting review.'),
+        permissionRevision: zod
+          .number()
+          .describe("Revision of this agent's grant\/approval on the item."),
+        status: zod
+          .enum(['usable', 'request_access', 'pending'])
+          .describe('Whether the agent can use an item now.'),
+        useBasis: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['creator_grant', 'approved_grant'])
+              .describe('Why a usable item is usable.'),
+          ])
+          .optional(),
+      })
+      .describe('Current agent access to one item, recomputed on every use.'),
+    agentAccountId: zod.string().describe('Agent account.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    permission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
+    requestId: zod
+      .uuid()
+      .nullish()
+      .describe('Request id; null when none exists.'),
+    revision: zod.number().describe('Request revision; 0 when none exists.'),
+    status: zod
+      .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+      .describe('Wire request status.'),
+    updatedAt: zod.iso.datetime({}).nullish().describe('Last transition.'),
+  })
+  .describe("An agent's request state.");
+
+/**
+ * @summary Disclose one selected field to the agent's capability.
+ */
+export const passwordsAgentDiscloseParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentDiscloseHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentDiscloseBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .nullish()
+      .describe('When given, the committed version must match.'),
+    purpose: zod
+      .enum(['copy'])
+      .describe(
+        'Accepted disclosure intent. Typing is a later additive value.'
+      ),
+    selector: zod
+      .union([
+        zod
+          .object({
+            field: zod
+              .enum(['username', 'password'])
+              .describe('Login item fields an agent may select.'),
+            kind: zod.enum(['login']),
+          })
+          .describe('A login item field.'),
+        zod
+          .object({
+            field: zod
+              .enum(['key', 'secret'])
+              .describe('API credential fields an agent may select.'),
+            kind: zod.enum(['api']),
+          })
+          .describe('An API credential field.'),
+      ])
+      .describe(
+        'Closed kind-aware selector of exactly one stored slot. Notes, custom fields\nand TOTP seeds are never selectable.'
+      ),
+  })
+  .describe('One-field disclosure request.');
+
+export const passwordsAgentDiscloseResponse = zod
+  .object({
+    selector: zod
+      .union([
+        zod
+          .object({
+            field: zod
+              .enum(['username', 'password'])
+              .describe('Login item fields an agent may select.'),
+            kind: zod.enum(['login']),
+          })
+          .describe('A login item field.'),
+        zod
+          .object({
+            field: zod
+              .enum(['key', 'secret'])
+              .describe('API credential fields an agent may select.'),
+            kind: zod.enum(['api']),
+          })
+          .describe('An API credential field.'),
+      ])
+      .describe(
+        'Closed kind-aware selector of exactly one stored slot. Notes, custom fields\nand TOTP seeds are never selectable.'
+      ),
+    value: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod.number().describe('Committed version it was read from.'),
+  })
+  .describe('One disclosed field.');
+
+/**
+ * @summary Enroll a verification-code seed on an item this agent created.
+ */
+export const passwordsAgentSetTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentSetTotpHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentSetTotpBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .describe('Committed version the setup applies to.'),
+    operationId: zod
+      .uuid()
+      .describe(
+        'UUIDv7, stable across retries; identifies the enrollment generation.'
+      ),
+    seed: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+  })
+  .describe('Verification-code seed setup for an item the agent created.');
+
+/**
+ * @summary The current verification code of a login or verification-code item.
+ */
+export const passwordsAgentTotpCodeParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentTotpCodeHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentTotpCodeBody = zod
+  .object({
+    purpose: zod
+      .enum(['copy'])
+      .describe(
+        'Accepted disclosure intent. Typing is a later additive value.'
+      ),
+  })
+  .describe('Verification-code request.');
+
+export const passwordsAgentTotpCodeResponsePeriodSecondsMin = 0;
+
+export const passwordsAgentTotpCodeResponseValidForMsMin = 0;
+
+export const passwordsAgentTotpCodeResponse = zod
+  .object({
+    code: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    expiresAt: zod.iso
+      .datetime({})
+      .describe(
+        'Conservative usable-until time under the documented provider clock bound;\nnot an observed generation instant.'
+      ),
+    periodSeconds: zod
+      .number()
+      .min(passwordsAgentTotpCodeResponsePeriodSecondsMin)
+      .describe('Code period in seconds.'),
+    validForMs: zod
+      .number()
+      .min(passwordsAgentTotpCodeResponseValidForMsMin)
+      .describe(
+        "Whole milliseconds from the server's final check until `expiresAt`."
+      ),
+  })
+  .describe(
+    'A verification code with a conservative server-computed lifetime.'
+  );
+
+/**
  * @summary List current teams available to the authenticated human.
  */
 export const passwordsTeamsResponseItem = zod
   .uuid()
   .describe('Team isolation boundary.');
 export const passwordsTeamsResponse = zod.array(passwordsTeamsResponseItem);
+
+/**
+ * @summary Pending agent requests on items the caller may manage.
+ */
+export const passwordsAgentAccessRequestsParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsAgentAccessRequestsQueryParams = zod.object({
+  itemId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Managed item: list every agent's access to it instead of the pending queue."
+    ),
+  limit: zod.string().nullish().describe('Page size, 1 to 100; default 50.'),
+  cursor: zod.string().nullish().describe('Cursor from the previous page.'),
+});
+
+export const passwordsAgentAccessRequestsResponse = zod
+  .object({
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Opaque cursor of the next page.'),
+    requests: zod
+      .array(
+        zod
+          .object({
+            access: zod
+              .object({
+                canSetTotp: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may enroll a verification-code seed.'
+                  ),
+                canUpdate: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may update values and metadata.'
+                  ),
+                pendingRequestId: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Live request awaiting review.'),
+                permissionRevision: zod
+                  .number()
+                  .describe(
+                    "Revision of this agent's grant\/approval on the item."
+                  ),
+                status: zod
+                  .enum(['usable', 'request_access', 'pending'])
+                  .describe('Whether the agent can use an item now.'),
+                useBasis: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['creator_grant', 'approved_grant'])
+                      .describe('Why a usable item is usable.'),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Current agent access to one item, recomputed on every use.'
+              ),
+            agentAccountId: zod.string().describe('Agent account.'),
+            itemId: zod
+              .uuid()
+              .describe('Vault item identity, UUIDv7 for new items.'),
+            permission: zod
+              .union([
+                zod.null(),
+                zod.enum(['view', 'edit']).describe('Grant capability.'),
+              ])
+              .optional(),
+            requestId: zod
+              .uuid()
+              .nullish()
+              .describe('Request id; null when none exists.'),
+            revision: zod
+              .number()
+              .describe('Request revision; 0 when none exists.'),
+            status: zod
+              .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+              .describe('Wire request status.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Last transition.'),
+          })
+          .describe("An agent's request state.")
+      )
+      .describe('Pending requests on items the caller may manage.'),
+  })
+  .describe('A page of requests for human review.');
 
 /**
  * @summary List the authenticated team’s folders.
@@ -78071,6 +78929,144 @@ export const passwordsActivityResponse = zod.array(
 );
 
 /**
+ * @summary Approve or deny a pending agent request.
+ */
+export const passwordsAgentResolveRequestParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+  request: zod.uuid(),
+});
+
+export const passwordsAgentResolveRequestHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentResolveRequestBody = zod
+  .union([
+    zod
+      .object({
+        decision: zod.enum(['approve']),
+        permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
+        revision: zod
+          .number()
+          .describe('Request revision observed by the reviewer.'),
+      })
+      .describe('Grant the permission and standing approval together.'),
+    zod
+      .object({
+        decision: zod.enum(['deny']),
+        revision: zod
+          .number()
+          .describe('Request revision observed by the reviewer.'),
+      })
+      .describe('Deny the request.'),
+  ])
+  .describe('Human decision on a pending request.');
+
+export const passwordsAgentResolveRequestResponse = zod
+  .object({
+    access: zod
+      .object({
+        canSetTotp: zod
+          .boolean()
+          .describe('Whether the agent may enroll a verification-code seed.'),
+        canUpdate: zod
+          .boolean()
+          .describe('Whether the agent may update values and metadata.'),
+        pendingRequestId: zod
+          .uuid()
+          .nullish()
+          .describe('Live request awaiting review.'),
+        permissionRevision: zod
+          .number()
+          .describe("Revision of this agent's grant\/approval on the item."),
+        status: zod
+          .enum(['usable', 'request_access', 'pending'])
+          .describe('Whether the agent can use an item now.'),
+        useBasis: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['creator_grant', 'approved_grant'])
+              .describe('Why a usable item is usable.'),
+          ])
+          .optional(),
+      })
+      .describe('Current agent access to one item, recomputed on every use.'),
+    agentAccountId: zod.string().describe('Agent account.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    permission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
+    requestId: zod
+      .uuid()
+      .nullish()
+      .describe('Request id; null when none exists.'),
+    revision: zod.number().describe('Request revision; 0 when none exists.'),
+    status: zod
+      .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+      .describe('Wire request status.'),
+    updatedAt: zod.iso.datetime({}).nullish().describe('Last transition.'),
+  })
+  .describe("An agent's request state.");
+
+/**
+ * @summary Revoke an agent's standing approval, or its grant and approval.
+ */
+export const passwordsAgentRevokeParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+  agent: zod.string(),
+});
+
+export const passwordsAgentRevokeHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentRevokeBody = zod
+  .object({
+    expectedPermissionRevision: zod
+      .number()
+      .describe('Permission revision observed by the reviewer.'),
+    scope: zod
+      .enum(['approval', 'grant_and_approval'])
+      .describe('What a revocation removes.'),
+  })
+  .describe('Human revocation of agent access.');
+
+export const passwordsAgentRevokeResponse = zod
+  .object({
+    canSetTotp: zod
+      .boolean()
+      .describe('Whether the agent may enroll a verification-code seed.'),
+    canUpdate: zod
+      .boolean()
+      .describe('Whether the agent may update values and metadata.'),
+    pendingRequestId: zod
+      .uuid()
+      .nullish()
+      .describe('Live request awaiting review.'),
+    permissionRevision: zod
+      .number()
+      .describe("Revision of this agent's grant\/approval on the item."),
+    status: zod
+      .enum(['usable', 'request_access', 'pending'])
+      .describe('Whether the agent can use an item now.'),
+    useBasis: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['creator_grant', 'approved_grant'])
+          .describe('Why a usable item is usable.'),
+      ])
+      .optional(),
+  })
+  .describe('Current agent access to one item, recomputed on every use.');
+
+/**
  * @summary Disclose values for an explicitly audited clipboard action.
  */
 export const passwordsCopyParams = zod.object({
@@ -78234,9 +79230,9 @@ export const passwordsGrantsResponseItem = zod
   .object({
     id: zod.string().describe('Identity of this resource within its team.'),
     kind: zod
-      .enum(['user', 'team'])
+      .enum(['user', 'team', 'agent'])
       .describe(
-        'Future principals can extend this without exposing agent controls in v1.'
+        'Grant recipient category. Agent grants are managed only through the agent\naccess routes and never appear in, or count toward, human sharing.'
       ),
     permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
   })
@@ -78265,9 +79261,9 @@ export const passwordsShareBody = zod
               .string()
               .describe('Identity of this resource within its team.'),
             kind: zod
-              .enum(['user', 'team'])
+              .enum(['user', 'team', 'agent'])
               .describe(
-                'Future principals can extend this without exposing agent controls in v1.'
+                'Grant recipient category. Agent grants are managed only through the agent\naccess routes and never appear in, or count toward, human sharing.'
               ),
             permission: zod
               .enum(['view', 'edit'])

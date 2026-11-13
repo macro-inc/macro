@@ -422,6 +422,56 @@ fn each_access_request_and_task_is_its_own_row() {
     );
 }
 
+const TEAM: u128 = 0x7E;
+
+#[test]
+fn a_team_holds_one_row_per_password_request_and_none_for_invites() {
+    let request = |id: u128, request: u128, minute: u32| {
+        notification(
+            id,
+            entity(EntityType::Team, TEAM),
+            "password_access_requested",
+            json!({
+                "requestId": uuid(request),
+                "teamId": uuid(TEAM),
+                "itemId": uuid(0x1E),
+                "itemName": "Deploy key",
+            }),
+            minute,
+            NotificationState::Unseen,
+        )
+    };
+    let invite = notification(
+        3,
+        entity(EntityType::Team, TEAM),
+        "invite_to_team",
+        json!({
+            "teamName": "Team",
+            "teamId": uuid(TEAM),
+            "teamInviteId": uuid(0x1A),
+            "invitedBy": "macro|other@example.com",
+        }),
+        3,
+        NotificationState::Unseen,
+    );
+    let team = group(EntityType::Team, TEAM);
+    let listed = rows_of(
+        &team,
+        &[request(1, 0xA1, 1), request(2, 0xA2, 2), invite.clone()],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::PasswordAccessRequested, vec![uuid(2)], vec![]),
+            (InboxRowType::PasswordAccessRequested, vec![uuid(1)], vec![]),
+        ]
+    );
+    assert!(
+        rows_of(&team, &[invite]).is_empty(),
+        "an invite alone lists nothing"
+    );
+}
+
 fn calendar_reminder(id: u128, ends_minute: u32) -> FeedNotification {
     notification(
         id,

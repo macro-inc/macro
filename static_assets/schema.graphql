@@ -6783,7 +6783,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -6951,6 +6951,28 @@ enum GraphqlOwnerType {
 	A team.
 	"""
 	TEAM
+}
+
+"""
+Metadata for an agent's request for access to a team vault item.
+"""
+type GraphqlPasswordAccessRequestedMetadata {
+	"""
+	Request identifier.
+	"""
+	requestId: ID!
+	"""
+	Team owning the item.
+	"""
+	teamId: ID!
+	"""
+	Requested item identifier.
+	"""
+	itemId: ID!
+	"""
+	Item display name when the request was made.
+	"""
+	itemName: String!
 }
 
 """
@@ -10147,6 +10169,10 @@ enum GraphqlSoupEntityType {
 	A paired runtime, listed only by attention feeds.
 	"""
 	HARNESS
+	"""
+	A team, listed only by attention feeds.
+	"""
+	TEAM
 }
 
 """
@@ -10581,6 +10607,67 @@ type GraphqlSoupReminderReference {
 	Sub type, when the reference is a task or snippet document.
 	"""
 	subType: String
+}
+
+"""
+A team. Only attention feeds list it, for team-scoped notifications filed
+under it, such as a vault access request.
+"""
+type GraphqlSoupTeam implements GraphqlSoupEntity {
+	"""
+	The team identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for teams.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	The team's name.
+	"""
+	displayName: String
+	"""
+	Common team metadata; teams record no timestamps.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The team's name.
+	"""
+	name: String!
+	"""
+	The user who owns the team.
+	"""
+	ownerId: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
@@ -11678,6 +11765,10 @@ enum NotificationInboxRowType {
 	A request to join a calendar event the viewer shared.
 	"""
 	CALENDAR_JOIN_REQUEST
+	"""
+	An agent's request for access to a vault item the viewer manages.
+	"""
+	PASSWORD_ACCESS_REQUESTED
 	"""
 	A request for access to something the viewer can share.
 	"""

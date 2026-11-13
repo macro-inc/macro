@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT access.agent_user_id,access.approved_by IS NOT NULL AS \"approved!\",access.permission_revision,access.request_id,access.request_permission,access.request_status,access.request_revision,access.request_updated_at,\n                item.metadata,item.user_id,item.grants,item.deleting,item.revision,item.totp_key_id\n            FROM password_agent_access access\n            CROSS JOIN LATERAL (\n                SELECT keyed_item.metadata,keyed_item.user_id,keyed_item.grants,keyed_item.deleting,keyed_item.revision,keyed_item.totp_key_id,keyed_item.deleted_at\n                FROM password_item_entities keyed_item\n                WHERE keyed_item.team_id=access.team_id AND keyed_item.id=access.item_id\n                OFFSET 0\n            ) item\n            WHERE access.team_id=$1 AND access.request_status='pending' AND item.deleted_at IS NULL AND NOT item.deleting\n                AND ($2::text IS NULL OR item.user_id=$2) AND ($3::uuid IS NULL OR access.request_id>$3)\n            ORDER BY access.request_id LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "approved!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "permission_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "request_permission",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "request_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "request_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "request_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "grants",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "deleting",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "totp_key_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "58bf3cd14ba123b63dbe9f955ffdbe40496101a81151c376198ed57a5913c339"
+}

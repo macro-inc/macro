@@ -187,6 +187,45 @@ describe('toInboxGroup', () => {
     ]);
   });
 
+  it('opens password access requests with their typed review target', () => {
+    const entry = inboxEntry({
+      docId: 'doc-a',
+      sortAt: '2026-02-01T10:09:00Z',
+      rows: [
+        {
+          id: 'password-request:r1',
+          rowType: 'PASSWORD_ACCESS_REQUESTED',
+          latestAt: '2026-02-01T10:09:00Z',
+          actions: [{ kind: 'OPEN', targetId: null, url: null }],
+        },
+      ],
+    });
+    entry.rows[0].notifications[0] = {
+      ...entry.rows[0].notifications[0],
+      eventType: 'password_access_requested',
+      metadata: {
+        __typename: 'GraphqlPasswordAccessRequestedMetadata',
+        passwordAccessRequestedRequestId: 'request-1',
+        passwordAccessRequestedTeamId: 'team-1',
+        passwordAccessRequestedItemId: 'item-1',
+        passwordAccessRequestedItemName: 'Synthetic login',
+      },
+    };
+
+    const row = toInboxGroup(entry)?.rows[0];
+    expect(row?.type).toBe('access_requested');
+    expect(row?.actions).toEqual([{ kind: 'open' }]);
+    expect(row?.content.notifications[0].notification_metadata).toEqual({
+      tag: 'password_access_requested',
+      content: {
+        requestId: 'request-1',
+        teamId: 'team-1',
+        itemId: 'item-1',
+        itemName: 'Synthetic login',
+      },
+    });
+  });
+
   it('reads who a row is from and what the viewer can do', () => {
     const group = toInboxGroup(
       inboxEntry({
@@ -372,6 +411,76 @@ describe('toInboxGroup for a runtime', () => {
           {
             entity_type: 'harness',
             notification_metadata: { tag: 'entity_access_requested' },
+          },
+        ],
+      },
+    });
+  });
+});
+
+describe('toInboxGroup for a team', () => {
+  it('lists a vault access request filed under the team as a row about it', () => {
+    const group = toInboxGroup({
+      groupId: 'team:0198a4cc-e138-7670-a308-a6b766602799',
+      sortAt: '2026-02-01T10:09:00Z',
+      entity: {
+        __typename: 'GraphqlSoupTeam',
+        id: '0198a4cc-e138-7670-a308-a6b766602799',
+        entityType: 'TEAM',
+        teamName: 'Synthetic team',
+        ownerId: 'macro|viewer@example.com',
+      },
+      rows: [
+        {
+          id: 'team:0198a4cc-e138-7670-a308-a6b766602799#password_access_requested:request-1',
+          rowType: 'ACCESS_REQUESTED',
+          revision: 'rev',
+          latestAt: '2026-02-01T10:09:00Z',
+          unseen: true,
+          count: 1,
+          actor: null,
+          actions: [],
+          notifications: [
+            {
+              id: 'n-1',
+              eventType: 'password_access_requested',
+              entityType: 'TEAM',
+              targetEntityType: 'TEAM',
+              entityId: '0198a4cc-e138-7670-a308-a6b766602799',
+              sent: false,
+              state: 'UNSEEN',
+              createdAt: '2026-02-01T10:09:00Z',
+              viewedAt: null,
+              updatedAt: '2026-02-01T10:09:00Z',
+              senderId: 'macro|agent@example.com',
+              metadata: {
+                __typename: 'GraphqlPasswordAccessRequestedMetadata',
+                passwordAccessRequestedRequestId: 'request-1',
+                passwordAccessRequestedTeamId:
+                  '0198a4cc-e138-7670-a308-a6b766602799',
+                passwordAccessRequestedItemId: 'item-1',
+                passwordAccessRequestedItemName: 'Synthetic login',
+              },
+            },
+          ],
+        },
+      ],
+    } as unknown as NotificationInboxEntryFieldsFragment);
+
+    expect(group?.rows).toHaveLength(1);
+    expect(group?.rows[0]).toMatchObject({
+      type: 'access_requested',
+      content: {
+        entity: {
+          type: 'team',
+          id: '0198a4cc-e138-7670-a308-a6b766602799',
+          name: 'Synthetic team',
+          ownerId: 'macro|viewer@example.com',
+        },
+        notifications: [
+          {
+            entity_type: 'team',
+            notification_metadata: { tag: 'password_access_requested' },
           },
         ],
       },

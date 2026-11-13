@@ -17,6 +17,7 @@ import { teamKeys } from '@queries/team/keys';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { passwordKeys } from '../passwords/queries/keys';
 import { scheduledActionKeys } from '../routines/queries/keys';
 import type { NotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
@@ -126,6 +127,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'calendar_event_join_request' }, ({ content }) => {
       queryClient.invalidateQueries({
         queryKey: calendarKeys.joinRequests(content.eventId).queryKey,
+      });
+    })
+    // An open item's pane lists the new agent request.
+    .with({ tag: 'password_access_requested' }, () => {
+      queryClient.invalidateQueries({
+        queryKey: passwordKeys.agentRequests._def,
       });
     })
     .with({ tag: 'crm_discussion' }, () => {

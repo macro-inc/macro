@@ -1708,6 +1708,12 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
 
 ### Passwords
 
+Keep agent-request loading and read failures inside the item pane using shared
+skeletons and local Retry; after a stale decision, hide cached actions until a
+successful refresh. Team inbox groups are notification-only: show only valid
+password requests for the current team while Passwords is enabled, and open
+the request's vault target without a generic Team preview or fallback page.
+
 The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
 source; the rail and phone dock show it only for team members (flag and team).
 Keep field values and drafts outside query caches and browser storage; drafts

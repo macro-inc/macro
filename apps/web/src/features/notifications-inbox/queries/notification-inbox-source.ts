@@ -72,6 +72,8 @@ export const inboxPageVariables = (
 });
 
 export type NotificationInboxSourceOptions = {
+  /** App presentation gates, rechecked reactively; absent preserves every row. */
+  includeRow?: (row: NotificationInboxRow) => boolean;
   client: Accessor<Client>;
   /** The normalized cache holding the inbox's pages, when it is available. */
   cacheHost: Accessor<Pick<CacheHost, 'readQuery' | 'writeQuery'> | undefined>;
@@ -221,7 +223,7 @@ export function createNotificationInboxSource(
             doneNotifications()
           ),
           seen()
-        )
+        ).filter((row) => options.includeRow?.(row) ?? true)
   );
 
   /** Patches for a filter that has since changed would add rows it hides. */

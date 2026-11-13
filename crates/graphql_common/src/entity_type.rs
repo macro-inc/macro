@@ -34,6 +34,8 @@ pub enum GraphqlSoupEntityType {
     DatabaseRow,
     /// A paired runtime, listed only by attention feeds.
     Harness,
+    /// A team, listed only by attention feeds.
+    Team,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -125,9 +127,9 @@ impl GraphqlSoupEntityType {
             EntityType::Initiative => Self::Initiative,
             EntityType::DatabaseRow => Self::DatabaseRow,
             EntityType::Harness => Self::Harness,
+            EntityType::Team => Self::Team,
             EntityType::User
             | EntityType::Reminder
-            | EntityType::Team
             | EntityType::StaticFile
             | EntityType::Skill
             | EntityType::ScheduledAction
@@ -156,6 +158,7 @@ impl GraphqlSoupEntityType {
             Self::Initiative => EntityType::Initiative,
             Self::DatabaseRow => EntityType::DatabaseRow,
             Self::Harness => EntityType::Harness,
+            Self::Team => EntityType::Team,
         }
     }
 }

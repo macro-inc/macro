@@ -55,6 +55,7 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       (entity) => entity.name || blockNameToDefaultFile('form')
     )
     .with({ type: 'harness' }, (entity) => entity.name)
+    .with({ type: 'team' }, (entity) => entity.name)
     .exhaustive(() => 'Untitled');
 }
 

@@ -252,7 +252,8 @@ it('acknowledges a failed lookup and opens the next native tap', async () => {
     onTestFinished(dispose);
     usePendingNotificationNavigationEffect(
       source,
-      () => 'macro|test@example.com'
+      () => 'macro|test@example.com',
+      () => true
     );
   });
   setGlobalSplitManager(layout);

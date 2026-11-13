@@ -14,10 +14,15 @@ means this is a Macro-managed team vault.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
+- `src/domain/agent.rs`, `src/domain/agent/service.rs`: bounded agent vault API
+  (closed Login/API selectors, Agent grants, standing approval, requests, TOTP lifetime).
+- `src/inbound/agent_router.rs`: agent routes at `/passwords/agent/teams/{team}` and
+  the human review routes; `src/outbound/postgres/agent.rs` their storage.
 
 ## Scope
 
-Owns password item entities, folders, grants and activity. No agent tools or UI.
+Owns password item entities, folders, grants and activity, and the agent vault API
+the agent platform's `secrets` capability calls. No agent tools or UI.
 Do not add plaintext values to any metadata record, errors or tracing fields.
 
 ## Checks
@@ -101,6 +106,44 @@ Construct one shared `PgRepository::new(pool)` for the service. Its nonblocking
 admission semaphore limits lease transactions to half the pool and leaves capacity
 for metadata queries. Every full-record save checks both provider version and
 metadata revision, so losing a lease cannot restore stale grants or TOTP pointers.
+
+## Agent vault API
+
+- Agents authenticate with their own user API key (`CredentialOrigin::UserApiKey`
+  only) and an untrusted `X-Macro-Agent-Session-Id` UUIDv7 wake. Admission order:
+  both `enable-passwords-v1` and `enable-agent-vault` in the agent's own per-user
+  snapshot, never its owner's (off, missing or failed → `404`), then
+  `AgentDirectory` (`403 invalid_agent`), wake (`400 invalid_session_attribution`),
+  provider configuration presence (`503`), and only then catalog, policy, kind,
+  provider I/O and post-I/O rechecks. Body errors surface only after admission.
+- Composition wires `NoAgents`, which admits nobody, until the agent platform
+  supplies the authoritative directory adapter.
+- Human review routes require the reviewer's own snapshot of both keys; request
+  event delivery, like the other vault jobs, evaluates no flags.
+- Use requires `G && (C || A)`: a current Agent grant, plus creator attribution or
+  standing approval. Human, team and folder grants never count. A creator whose
+  grant was revoked is `not_granted` even with a pending request.
+- Agent grants live in the item's `grants` JSON as `kind: agent`. Human sharing
+  rejects them as input, preserves them, and never lists or counts them.
+- Agent create/update intents retain the agent, wake and action; reconcile commits
+  metadata, that audit and intent completion in one transaction
+  (`save_reconciled`), whoever reconciles. Agent TOTP setup retains the same on
+  the enrollment and audits in the activation transaction. An operation id names
+  one action and one item.
+- Each agent use case runs under one 30-second `timeout_at` deadline from handler
+  entry, after key extraction; reading the request body in axum is outside it, and
+  it is no whole-network guarantee. Expiry is a sanitized `503`.
+- Verification codes carry `validForMs` from the bracket `[t0 - 2s, t1 + 2s]`
+  fitting one 30-second window; the 2 seconds is an operational provider/vault
+  clock assumption, not a measured generation time.
+- Committed request events go through `password_agent_access_events` (reviewers
+  and item name frozen at commit, deferred with backoff on failure): reviewers get
+  a `password_access_requested` inbox notification, the agent a private
+  `passwords.access_request.resolved` hint on `macro.passwords`.
+- **Rollout prerequisite:** released v1 binaries reject `kind: agent` grant JSON,
+  even with the flags off. Before the first Agent grant is written, every binary
+  that reads password records must include this change, and the rollback target
+  must be one that does.
 
 ## Membership and deletion
 

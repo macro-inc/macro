@@ -16,15 +16,21 @@ import type {
 } from '../core/types';
 import { createVault, type VaultController } from '../primitives/vault';
 import { passwordKeys } from '../queries/keys';
+import { createFocusSelection, type PasswordsFocus } from '../views/vault-view';
 import { createFakePasswordSource } from './fake-source';
 import { createFixtureScope, FIXTURE_SCOPE } from './fixture-scope';
 
 afterEach(cleanup);
 
-function mountVault(source: PasswordSource, clipboard = async () => {}) {
+function mountVault(
+  source: PasswordSource,
+  clipboard = async () => {},
+  focus?: () => PasswordsFocus | undefined
+) {
   let controller: VaultController | undefined;
   function Probe() {
     controller = createVault();
+    if (focus) createFocusSelection(controller, focus);
     return null;
   }
   render(() => (
@@ -41,6 +47,7 @@ function mountVault(source: PasswordSource, clipboard = async () => {}) {
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -302,6 +309,7 @@ it('discards a reveal that completes after the vault locks', async () => {
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: async () => {},
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -378,6 +386,7 @@ it('does not copy a late response for a credential that is no longer selected', 
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -464,6 +473,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsLoading: () => false,
             recipientsError: () => false,
             writeClipboard: async () => {},
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           }}
         >
           <Probe />
@@ -547,6 +557,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsLoading: () => false,
             recipientsError: () => false,
             writeClipboard: async () => {},
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           }}
         >
           <Probe />
@@ -608,6 +619,7 @@ it('drops a reveal, copy and clipboard write that finish after the viewer change
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -657,6 +669,7 @@ it('never carries a dirty draft into another account or sign-in session', async 
               recipientsLoading: () => false,
               recipientsError: () => false,
               writeClipboard: async () => {},
+              displayName: (accountId) => accountId.replace(/^macro\|/, ''),
             }}
           >
             <Probe />
@@ -741,4 +754,33 @@ it('a folder the vault fails to create reports false and leaves no item failure 
   expect(await vault.createFolder('Engineering', null)).toBe(false);
   expect(vault.failure()).toBeUndefined();
   expect(vault.loadedFolders()).toEqual([]);
+});
+
+it("selects a notification's item once a failed item load is retried", async () => {
+  const source = createFakePasswordSource();
+  const saved = await source.save(
+    undefined,
+    undefined,
+    LOGIN,
+    '019a0000-0000-7000-8000-000000000020'
+  );
+  if (saved.isErr()) throw new Error('Fixture save failed');
+  const list = source.list;
+  let failing = true;
+  source.list = () => (failing ? Promise.reject(new Error('offline')) : list());
+  const vault = mountVault(
+    source,
+    async () => {},
+    () => ({
+      itemId: saved.value.id,
+      focusRequestId: 1,
+    })
+  );
+  await waitFor(() => expect(vault.items.isError).toBe(true));
+  expect(vault.selected()).toBeUndefined();
+
+  failing = false;
+  await vault.items.refetch();
+
+  await waitFor(() => expect(vault.selected()?.id).toBe(saved.value.id));
 });

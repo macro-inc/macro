@@ -3249,6 +3249,21 @@
           },
           {
             "type": "object",
+            "description": "An agent asked for access to a vault item the user manages.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/PasswordAccessRequestedMetadata",
+                "description": "An agent asked for access to a vault item the user manages."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["password_access_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "One of the user's routines finished a run, successfully or not.",
             "required": ["content", "tag"],
             "properties": {
@@ -3382,6 +3397,32 @@
       "NotificationTypeName": {
         "type": "string",
         "description": "newtype wrapper for the the typename of a Notification"
+      },
+      "PasswordAccessRequestedMetadata": {
+        "type": "object",
+        "description": "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values.",
+        "required": ["requestId", "teamId", "itemId", "itemName"],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Requested item."
+          },
+          "itemName": {
+            "type": "string",
+            "description": "Item display name when the request was made."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request under review."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team owning the item."
+          }
+        }
       },
       "PushNotificationData": {
         "type": "object",

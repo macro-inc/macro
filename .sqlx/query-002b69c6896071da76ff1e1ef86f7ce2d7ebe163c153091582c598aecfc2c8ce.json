@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_activity(team_id,item_id,id,user_id,action,trace_id,agent_user_id,wake_id,permission_revision)\n        SELECT entry.team_id,entry.item_id,entry.id,entry.user_id,entry.action,$9,entry.agent_user_id,entry.wake_id,entry.permission_revision\n        FROM UNNEST($1::uuid[],$2::uuid[],$3::uuid[],$4::text[],$5::text[],$6::text[],$7::uuid[],$8::int8[])\n            AS entry(team_id,item_id,id,user_id,agent_user_id,action,wake_id,permission_revision)\n        ON CONFLICT(team_id,item_id,id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "UuidArray",
+        "Int8Array",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "002b69c6896071da76ff1e1ef86f7ce2d7ebe163c153091582c598aecfc2c8ce"
+}
