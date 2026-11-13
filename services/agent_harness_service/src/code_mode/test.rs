@@ -155,23 +155,26 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
     );
 }
 
+/// An SDK operation's path with every parameter filled in.
+fn concrete(path: &str) -> String {
+    path.split('/')
+        .map(|segment| {
+            if segment.starts_with('{') {
+                "x"
+            } else {
+                segment
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// The scope's list of POST reads covers every read the SDK sends as a POST,
-/// and the only writes it lets a generation session make are its own tools
-/// and creating an email draft.
+/// the only reads it refuses are the ones that hand out a credential, and the
+/// only writes it lets a generation session make are its own tools and
+/// creating an email draft.
 #[test]
 fn the_generation_scope_matches_the_sdk_catalog() {
-    let concrete = |path: &str| {
-        path.split('/')
-            .map(|segment| {
-                if segment.starts_with('{') {
-                    "x"
-                } else {
-                    segment
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("/")
-    };
     let intended = [
         "scheduled-action.addSuggestion",
         "scheduled-action.rewriteSuggestion",
@@ -182,14 +185,18 @@ fn the_generation_scope_matches_the_sdk_catalog() {
         "email.createDraft",
         "cognition.structuredCompletion",
     ];
+    // Reads that mint a credential no scope could hold.
+    let credentials = ["auth.macroApiToken"];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
         if !operation.write {
-            assert!(
+            assert_eq!(
                 allowed,
-                "the read {key} ({} {}) is refused",
-                operation.method, operation.path
+                !credentials.contains(&key.as_str()),
+                "the read {key} ({} {})",
+                operation.method,
+                operation.path
             );
         } else {
             assert_eq!(
@@ -208,18 +215,6 @@ fn the_generation_scope_matches_the_sdk_catalog() {
 /// listed here as reviewed, so a new one is classified before it ships.
 #[test]
 fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
-    let concrete = |path: &str| {
-        path.split('/')
-            .map(|segment| {
-                if segment.starts_with('{') {
-                    "x"
-                } else {
-                    segment
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("/")
-    };
     // Send-looking writes that reach nobody else.
     let reviewed = [
         "agent-harness.addConnectedMcpServer",
@@ -362,4 +357,252 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         }
     }
     assert!(unclassified.is_empty(), "unclassified: {unclassified:#?}");
+}
+
+/// A scoped run is refused every SDK operation that issues a Macro credential,
+/// which would not carry its scope. Any operation whose name or path looks
+/// like one is either refused under both scopes or listed here as reviewed,
+/// so a new one is classified before it ships.
+#[test]
+fn a_scoped_run_is_refused_every_credential_in_the_sdk() {
+    let reviewed = [
+        // Third-party keys and sign-ins: a saved key is never readable again,
+        // and none grants access to Macro.
+        "auth.deleteAgentApiKey",
+        "auth.getAgentApiKey",
+        "auth.putAgentApiKey",
+        "auth.deleteCursorApiKey",
+        "auth.getCursorApiKey",
+        "auth.putCursorApiKey",
+        "auth.putCursorDefaultModel",
+        "auth.listCursorModels",
+        "auth.startCodexLogin",
+        "auth.cancelCodexLogin",
+        "auth.pollCodexLogin",
+        "cognition.createPipedreamMcpToken",
+        // Signing in takes a password, an emailed code, a refresh token or an
+        // identity provider's token, none of which a run's credential is.
+        "auth.refresh",
+        "auth.appleLogin",
+        "auth.passwordLogin",
+        "auth.passwordlessLogin",
+        "auth.ssoLogin",
+        "auth.sessionLogin",
+        // Listings show no secret, and revoking issues nothing.
+        "storage.listBotTokens",
+        "storage.revokeBotToken",
+        "storage.listUserApiKeys",
+        "storage.deleteUserApiKey",
+        // A token for editing one document, refused under `Generation`;
+        // `NoSend` lets the run edit documents anyway.
+        "storage.createCollabSurfaceToken",
+        "storage.validateDocumentPermissionsToken",
+        "storage.getDocumentPermissionsToken",
+        // Refreshes a session's changes, not a credential.
+        "agent-harness.refreshAgentSessionChanges",
+    ];
+    let looks_like_a_credential = |key: &str, path: &str| {
+        let text = format!("{key} {path}").to_lowercase();
+        [
+            "token",
+            "api-key",
+            "apikey",
+            "jwt",
+            "login",
+            "credential",
+            "secret",
+            "refresh",
+        ]
+        .iter()
+        .any(|word| text.contains(word))
+    };
+    let mut unclassified = Vec::new();
+    for (key, operation) in code_execution::domain::operations() {
+        let path = concrete(&operation.path);
+        if !looks_like_a_credential(key, &path) {
+            continue;
+        }
+        let refused = [SessionScope::Generation, SessionScope::NoSend]
+            .iter()
+            .all(|scope| !scope.allows(&operation.method, &path));
+        if !refused && !reviewed.contains(&key.as_str()) {
+            unclassified.push(format!("{key} {} {}", operation.method, operation.path));
+        }
+    }
+    assert!(unclassified.is_empty(), "unclassified: {unclassified:#?}");
+}
+
+/// How a host's service holds a scoped session's credential to its scope.
+enum ScopeEnforcement {
+    /// `agent_correlation::inbound::propagate`: the scope stored with the
+    /// correlation and the one the credential signs.
+    Propagate,
+    /// `agent_correlation::inbound::enforce_signed_scope`: the signed scope
+    /// alone, for a service with no database.
+    SignedScope,
+    /// The service accepts no Macro API token, so the credential grants
+    /// nothing there.
+    NoMacroCredential,
+}
+
+/// Decided per host when it is added.
+fn enforcement(host: SdkHost) -> ScopeEnforcement {
+    match host {
+        SdkHost::Storage
+        | SdkHost::Search
+        | SdkHost::Properties
+        | SdkHost::Auth
+        | SdkHost::AgentHarness
+        | SdkHost::Email
+        | SdkHost::Calendar
+        | SdkHost::Cognition
+        | SdkHost::Notification
+        | SdkHost::ScheduledAction
+        | SdkHost::Connection
+        | SdkHost::Contacts => ScopeEnforcement::Propagate,
+        // The static file service and the CDN in front of it.
+        SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
+        // CloudFront serves document content only to URLs the storage service
+        // signs; the editing worker accepts only document tokens the storage
+        // service mints, behind its scope check; unfurl previews public links
+        // for any caller.
+        SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
+            ScopeEnforcement::NoMacroCredential
+        }
+    }
+}
+
+/// Every host the SDK can reach, including the ones it falls back to when
+/// code mode passes none, is one code mode knows, and its service holds a
+/// scoped session's credential to its scope: it checks the scope on a path
+/// the scope understands, or accepts no Macro credential and serves nothing
+/// outside either scope.
+#[test]
+fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
+    use std::str::FromStr;
+    let host = |name: &str| {
+        SdkHost::from_str(name).unwrap_or_else(|_| {
+            panic!("the SDK reaches {name}, which code mode doesn't know: add it to SdkHost")
+        })
+    };
+    let sdk: std::collections::BTreeMap<String, String> =
+        serde_json::from_str(code_mode_assets::HOSTS).unwrap();
+    assert!(sdk.contains_key("static-files"), "{sdk:?}");
+    for (name, url) in &sdk {
+        let path = url
+            .split_once("://")
+            .and_then(|(_, rest)| rest.find('/').map(|slash| &rest[slash..]))
+            .unwrap_or("");
+        match enforcement(host(name)) {
+            ScopeEnforcement::Propagate | ScopeEnforcement::SignedScope => assert!(
+                agent_correlation::scope::matches(&format!("{path}/suggestions"), "/suggestions"),
+                "{name} ({url}) serves under a prefix the scope doesn't strip"
+            ),
+            ScopeEnforcement::NoMacroCredential => {}
+        }
+    }
+    for (key, operation) in code_execution::domain::operations() {
+        let (service, _) = key.split_once('.').unwrap();
+        if let ScopeEnforcement::NoMacroCredential = enforcement(host(service)) {
+            for scope in [SessionScope::Generation, SessionScope::NoSend] {
+                assert!(
+                    scope.allows(&operation.method, &concrete(&operation.path)),
+                    "{key} ({} {}) is outside {scope:?} on a host that can't refuse it",
+                    operation.method,
+                    operation.path
+                );
+            }
+        }
+    }
+}
+
+const PRIVATE: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.private.pem"
+);
+const PUBLIC: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
+);
+
+/// Session and public MCP runs sign the scope they store with the
+/// correlation, so services with no database hold the run to it too.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) {
+    use macro_auth::middleware::decode_jwt::{JwtToken, JwtValidationArgs, handler};
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ('00000000-0000-4000-8000-000000000001', 'owner@example.com', 'owner@example.com', 'stripe_owner');
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ('macro|owner@example.com', 'owner@example.com', '00000000-0000-4000-8000-000000000001');
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../crates/agent_code_mode/src/outbound/postgres/test/sessions.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
+        1,
+    )));
+    let owner = session.owner_user().unwrap().clone();
+    // The agent the fixture's session runs, which a correlation must name.
+    let agent = bot_id::BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xa9e7));
+    let identity = ExecutionIdentity {
+        execution: agent_code_mode::domain::ExecutionId::mint(),
+        acting_as: ai_toolset::actor::ToolActor::Owner,
+        session: session.id,
+        agent_id: agent,
+        owner: owner.clone(),
+        turn: macro_uuid::Uuid::from_u128(1),
+    };
+    let signed = |token: &str| match handler(
+        &JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        token,
+    )
+    .unwrap()
+    {
+        JwtToken::MacroApiToken(token) => {
+            assert!(token.agent_correlation_id.is_some());
+            token.agent_scope
+        }
+        JwtToken::MacroAccessToken(_) => panic!("a code-mode credential is a Macro API token"),
+    };
+    for (scope, name) in [
+        (Some(SessionScope::Generation), Some("generation")),
+        (Some(SessionScope::NoSend), Some("no_send")),
+        (None, None),
+    ] {
+        let run = RunCredentials {
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            gate: Arc::new(Gate {
+                verdict: NativeToolVerdict::RunAs(owner.clone()),
+                calls: AtomicUsize::new(0),
+            }),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(scope)),
+        }
+        .issue(&identity, "fixture", CancellationToken::new())
+        .await
+        .unwrap();
+        assert_eq!(signed(&run.token).as_deref(), name, "session run {scope:?}");
+        let run = UserRunCredentials {
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(scope)),
+        }
+        .issue(
+            &owner,
+            &ai_toolset::ToolCaller::Agent(agent),
+            Some(session.id.as_uuid()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
+    }
 }

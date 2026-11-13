@@ -616,6 +616,7 @@ dependencies = [
  "chrono",
  "clap",
  "code_execution",
+ "code_mode_assets",
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
