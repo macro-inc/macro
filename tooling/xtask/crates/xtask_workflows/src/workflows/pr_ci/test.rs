@@ -42,6 +42,33 @@ fn every_called_workflow_can_be_called() {
     }
 }
 
+/// Without a limit GitHub lets a stalled job run for six hours, holding the gate.
+#[test]
+fn every_job_the_gate_waits_for_has_a_timeout() {
+    let workflows = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../.github/workflows");
+    let called = CALLS.iter().map(|call| {
+        let path = format!("{workflows}/{}", call.file);
+        let workflow: serde_yaml::Value =
+            serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
+                .expect("called workflow parses");
+        (call.file, workflow)
+    });
+
+    for (file, workflow) in std::iter::once(("pr-ci.yml", rendered())).chain(called) {
+        let jobs = workflow["jobs"].as_mapping().expect("jobs");
+        for (id, job) in jobs {
+            if job.get("uses").is_some() {
+                continue;
+            }
+            assert!(
+                job.get("timeout-minutes").is_some(),
+                "{file} job {} has no timeout-minutes",
+                id.as_str().unwrap_or_default()
+            );
+        }
+    }
+}
+
 /// Runs for other labels must neither share a group with a request (and
 /// cancel it) nor reach a called workflow.
 #[test]

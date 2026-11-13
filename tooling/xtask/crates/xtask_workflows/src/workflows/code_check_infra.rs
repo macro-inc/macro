@@ -33,6 +33,7 @@ pub fn code_check_infra() -> Workflow {
 
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_step(checkout(false))
@@ -41,6 +42,7 @@ fn path_check() -> Job {
 
 fn biome_check() -> Job {
     steps::gated_job()
+        .timeout_minutes(15u32)
         .name("Biome Check")
         .runs_on(infra_runner())
         .add_step(checkout(true))
@@ -53,6 +55,7 @@ fn biome_check() -> Job {
 
 fn check() -> Job {
     steps::gated_job()
+        .timeout_minutes(15u32)
         .runs_on(infra_runner())
         .add_step(checkout(false))
         .add_step(steps::mount_web_cache_volume(false))
@@ -67,6 +70,7 @@ fn check() -> Job {
 /// stable because branch protection references it.
 fn status_check() -> Job {
     Job::default()
+        .timeout_minutes(5u32)
         .name("Infra Status Check")
         .cond(Expression::new("always()"))
         .needs(vec![

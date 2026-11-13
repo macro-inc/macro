@@ -8,6 +8,7 @@ jobs:
     runs-on: namespace-profile-linux-small
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+    timeout-minutes: 10
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -29,6 +30,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -54,6 +56,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -84,6 +87,7 @@ jobs:
     if: always()
     name: Infra Status Check
     runs-on: namespace-profile-linux-small
+    timeout-minutes: 5
     steps:
     - name: Check job results
       run: |

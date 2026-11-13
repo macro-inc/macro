@@ -13,6 +13,7 @@ jobs:
   check-package:
     name: SDK Package Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

@@ -35,6 +35,7 @@ pub fn sdk_check() -> Workflow {
 /// but Bun and Node, including isolated consumers of the packed SDK.
 fn check_package() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .name("SDK Package Check")
         .runs_on("ubuntu-latest")
         .add_step(steps::checkout(false, false))

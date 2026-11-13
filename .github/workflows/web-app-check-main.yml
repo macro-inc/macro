@@ -13,6 +13,7 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+    timeout-minutes: 10
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -132,6 +133,7 @@ jobs:
       contents: read
       pull-requests: read
       statuses: read
+    timeout-minutes: 10
     steps:
     - name: Checkout PR merge commit
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -333,6 +335,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -403,7 +406,7 @@ jobs:
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -567,6 +570,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 20
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -600,6 +604,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     strategy:
       matrix:
         shard:
@@ -692,6 +697,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Functional Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -778,6 +784,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Browser Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -871,6 +878,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -903,6 +911,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -1041,6 +1050,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    timeout-minutes: 10
     steps:
     - id: checkout
       name: Checkout Repo
@@ -1417,6 +1427,7 @@ jobs:
     if: always()
     name: Web App Status Check
     runs-on: namespace-profile-linux-tiny-no-cache
+    timeout-minutes: 5
     steps:
     - name: Check job results
       run: |

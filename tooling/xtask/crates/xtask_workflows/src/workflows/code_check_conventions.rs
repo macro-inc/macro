@@ -35,6 +35,7 @@ pub fn code_check_conventions() -> Workflow {
 
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_step(steps::checkout(false, false))
@@ -43,6 +44,7 @@ fn path_check() -> Job {
 
 fn ast_grep() -> Job {
     steps::gated_job()
+        .timeout_minutes(15u32)
         .name("ast-grep Conventions")
         .runs_on(conventions_runner())
         .add_step(steps::checkout(false, false))
@@ -57,6 +59,7 @@ fn ast_grep() -> Job {
 /// stable because branch protection references it.
 fn status_check() -> Job {
     Job::default()
+        .timeout_minutes(5u32)
         .name("Conventions Status Check")
         .cond(Expression::new("always()"))
         .needs(vec!["path-check".to_string(), "ast-grep".to_string()])

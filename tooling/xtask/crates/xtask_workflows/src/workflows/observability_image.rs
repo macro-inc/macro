@@ -34,7 +34,7 @@ fn build_image_job() -> Job {
         Job::default()
             .name("Build observability image")
             .runs_on(runners::Runner::Mid.with_cache_tag(CACHE_TAG))
-            .timeout_minutes(90u32),
+            .timeout_minutes(15u32),
     )
     .add_step(build_image())
     .add_step(steps::teardown_nix())

@@ -58,6 +58,7 @@ fn android_native_check() -> Job {
 
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
@@ -92,6 +93,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true'",
         ))
         .name("Typecheck")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         // Entity icon permanence checks compare every committed name list.
         .add_step(checkout("Checkout Repo", true))
@@ -228,7 +230,7 @@ fn generated_code() -> Job {
             "needs.path-check.outputs.codegen_changed == 'true'",
         ))
         .name("Generated Code Check")
-        .timeout_minutes(45u32)
+        .timeout_minutes(25u32)
         .runs_on(mid_web_runner())
         // The generators run once and are thrown away, so debug info is pure
         // cost: it made the 15 binaries 12.7 GB instead of 466 MB. Job-level,
@@ -266,6 +268,7 @@ fn generated_code() -> Job {
 
 fn biome_check() -> Job {
     gated_web_job("Biome Check")
+        .timeout_minutes(20u32)
         .add_step(checkout("Checkout Repo", true))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_seed())
@@ -278,6 +281,7 @@ fn biome_check() -> Job {
 
 fn test() -> Job {
     gated_web_job("Test (${{ matrix.shard }}/6)")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .strategy(
             Strategy::default()
@@ -299,6 +303,7 @@ fn test() -> Job {
 /// job restores or builds them; unchanged packages come from the shared cache.
 fn functional() -> Job {
     gated_web_job("Functional Tests")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
@@ -317,6 +322,7 @@ fn functional() -> Job {
 /// neither waits for them.
 fn browser() -> Job {
     gated_web_job("Browser Tests")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
@@ -333,6 +339,7 @@ fn browser() -> Job {
 
 fn cycles() -> Job {
     gated_web_job("Cycles Import Check")
+        .timeout_minutes(15u32)
         .add_step(checkout("Checkout", false))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_seed())
@@ -347,6 +354,7 @@ fn cycles() -> Job {
 fn build() -> Job {
     let (preview_credentials, preview_steps) = preview::steps();
     let job = gated_web_job("Build")
+        .timeout_minutes(15u32)
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
         .runs_on(mid_web_runner())
         .permissions(
@@ -376,6 +384,7 @@ fn build() -> Job {
 fn status_check() -> Job {
     Job::default()
         .name("Web App Status Check")
+        .timeout_minutes(5u32)
         .cond(Expression::new("always()"))
         .needs(vec![
             "path-check".to_string(),

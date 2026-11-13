@@ -7,6 +7,15 @@
 //! `CI gate` then sets the [`GATE_CONTEXT`] commit status on the PR head, which
 //! `main` requires: a new push has no status until CI runs on it.
 //!
+//! The gate waits for every job, so every job sets `timeout-minutes`; GitHub's
+//! default is six hours. Take the larger of twice the job's p99 run time and
+//! 1.2 times its slowest healthy run, from the CI telemetry in Loki
+//! (`infra/stacks/observability/README.md`), rounded up to 5 minutes: at least
+//! 10, or 15 for a job that sets up Nix, whose cold setup alone can take 9
+//! ([`DEV_SHELL_TIMEOUT_MINUTES`](crate::workflows::vars::DEV_SHELL_TIMEOUT_MINUTES)).
+//! A job that times out ends cancelled, which cancels its call and fails the
+//! gate.
+//!
 //! Every label fires `labeled`, so runs for any other label skip every job and
 //! take a concurrency group of their own: they can't cancel a requested run or
 //! post a result. Fork PRs get a read-only token, so `ci_gate_fork` removes

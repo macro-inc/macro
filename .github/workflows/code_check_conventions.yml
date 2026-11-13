@@ -10,6 +10,7 @@ jobs:
     runs-on: namespace-profile-linux-small
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+    timeout-minutes: 10
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -37,6 +38,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: ast-grep Conventions
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -65,6 +67,7 @@ jobs:
     if: always()
     name: Conventions Status Check
     runs-on: namespace-profile-linux-small
+    timeout-minutes: 5
     steps:
     - name: Check job results
       run: |
