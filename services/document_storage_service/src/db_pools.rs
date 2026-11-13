@@ -1,14 +1,17 @@
 //! Connection limits for the service's primary and read replica pools, and the
 //! metrics that show how full each pool is and how long it makes callers wait.
 
-use std::time::{Duration, Instant};
+use std::{
+    str::FromStr,
+    time::{Duration, Instant},
+};
 
 use macro_env::Environment;
 use opentelemetry::{
     KeyValue,
     metrics::{Gauge, Histogram},
 };
-use sqlx::PgPool;
+use sqlx::{PgPool, postgres::PgConnectOptions};
 use tokio_util::sync::CancellationToken;
 
 const PROBE_INTERVAL: Duration = Duration::from_secs(1);
@@ -29,10 +32,16 @@ pub(crate) struct PoolLimits {
     pub(crate) acquire_timeout: Duration,
 }
 
-/// sqlx bounds a pool's first connection by its acquire timeout. The replica
-/// gets this many tries, so a shorter timeout does not send a task to the
-/// primary sooner than the thirty seconds it had before.
-pub(crate) const READONLY_CONNECT_ATTEMPTS: u32 = 3;
+/// Postgres shows this on each of the service's sessions, so a database's
+/// sessions can be attributed to the service.
+const APPLICATION_NAME: &str = "document_storage_service";
+
+/// sqlx's default, written out.
+const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(30);
+
+pub(crate) fn connect_options(database_url: &str) -> Result<PgConnectOptions, sqlx::Error> {
+    Ok(PgConnectOptions::from_str(database_url)?.application_name(APPLICATION_NAME))
+}
 
 /// Per task. Normally each task runs about one query at a time; a larger
 /// max only lets a slow database pile up more sessions.
@@ -46,30 +55,24 @@ pub(crate) fn primary_limits(environment: Environment) -> PoolLimits {
     PoolLimits {
         min_connections,
         max_connections,
-        acquire_timeout: Duration::from_secs(30),
+        acquire_timeout: ACQUIRE_TIMEOUT,
     }
 }
 
-/// Per task, against the read replica. The replica is shared, so the cap is
-/// what keeps this service inside its replica session budget however many
-/// tasks run (checked in `db_pools/test.rs`): reads past the cap queue in the task instead of adding sessions
-/// to a replica that is already slow.
-///
-/// A queued read fails after ten seconds, before the web app gives up on a
-/// Soup request at twelve, and is never retried on the primary.
+/// Per task, against the read replica, set apart from the primary because the
+/// replica is shared and its sessions add up across every task.
 pub(crate) fn readonly_limits(environment: Environment) -> PoolLimits {
     let (min_connections, max_connections) = match environment {
-        // 7 tasks hold at most 175 sessions, 14 tasks in a rolling deployment 350.
-        Environment::Production => (5, 25),
+        Environment::Production => (10, 50),
         // 3 tasks hold at most 60 sessions, 6 tasks in a rolling deployment 120.
         Environment::Develop => (2, 20),
-        Environment::Local => return primary_limits(environment),
+        Environment::Local => (15, 50),
     };
 
     PoolLimits {
         min_connections,
         max_connections,
-        acquire_timeout: Duration::from_secs(10),
+        acquire_timeout: ACQUIRE_TIMEOUT,
     }
 }
 

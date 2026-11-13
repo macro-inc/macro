@@ -248,7 +248,9 @@ async fn run_server() -> anyhow::Result<()> {
         .min_connections(primary_limits.min_connections)
         .max_connections(primary_limits.max_connections)
         .acquire_timeout(primary_limits.acquire_timeout)
-        .connect(&config.database_url)
+        .connect_with(
+            db_pools::connect_options(&config.database_url).context("could not parse db url")?,
+        )
         .await
         .context("could not connect to db")?;
 
@@ -260,25 +262,17 @@ async fn run_server() -> anyhow::Result<()> {
 
     let readonly_limits = db_pools::readonly_limits(config.environment);
 
-    let mut readonly_connection = None;
-    for attempt in 1..=db_pools::READONLY_CONNECT_ATTEMPTS {
-        match PgPoolOptions::new()
+    let readonly_connection = async {
+        PgPoolOptions::new()
             .min_connections(readonly_limits.min_connections)
             .max_connections(readonly_limits.max_connections)
             .acquire_timeout(readonly_limits.acquire_timeout)
-            .connect(&config.database_url_readonly)
+            .connect_with(db_pools::connect_options(&config.database_url_readonly)?)
             .await
-        {
-            Ok(pool) => {
-                readonly_connection = Some(pool);
-                break;
-            }
-            Err(e) => tracing::warn!(error=?e, attempt, "failed to connect to readonly db"),
-        }
-    }
+    };
 
-    let (readonly_db, readonly_is_replica) = match readonly_connection {
-        Some(pool) => {
+    let (readonly_db, readonly_is_replica) = match readonly_connection.await {
+        Ok(pool) => {
             tracing::trace!(
                 min_connections = readonly_limits.min_connections,
                 max_connections = readonly_limits.max_connections,
@@ -286,8 +280,8 @@ async fn run_server() -> anyhow::Result<()> {
             );
             (pool, true)
         }
-        None => {
-            tracing::warn!("no readonly db connection, falling back to primary");
+        Err(e) => {
+            tracing::warn!(error=?e, "failed to connect to readonly db, falling back to primary");
             (db.clone(), false)
         }
     };

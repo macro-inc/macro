@@ -113,18 +113,16 @@ threads, pins, recents, notifications, folders, activity.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
-- Pool limits live in `src/db_pools.rs`, per task. The readonly pool is sized
-  apart from the primary so the service stays inside a read replica session
-  budget at the autoscaling maximum and through a rolling deployment:
-  production 5–25 (7 tasks hold 175, 14 hold 350), dev 2–20 (3 hold 60, 6
-  hold 120). A test fails when a limit, the task maximum, or the budget stops
-  fitting; `maxCapacity` in `infra/stacks/cloud-storage-service` is mirrored
-  in `src/db_pools/test.rs`. The budget and the replica's other clients are in the
-  [infrastructure guide](../../docs/development/infrastructure.md).
-- A read waits up to 10 s for a replica connection, then fails; it is never
-  retried on the primary. The primary pool waits 30 s. The only fallback is at
-  startup: a task that cannot reach the replica in three 10 s tries reads the
-  primary for its lifetime and reports no `readonly` pool metrics.
+- Pool limits live in `src/db_pools.rs`, per task, with the readonly pool set
+  apart from the primary. Dev's readonly pool keeps 2–20 connections: three
+  tasks allow 60 replica sessions, or 120 while a rolling deployment overlaps
+  all three. Production's keeps 10–50, so 7 tasks allow 350 and a deployment
+  700. Both pools wait 30 s for a connection.
+- A read is never retried on the primary. The only fallback is at startup: a
+  task that cannot reach the replica reads the primary for its lifetime and
+  reports no `readonly` pool metrics.
+- Sessions carry the application name `document_storage_service`, so
+  `pg_stat_activity` and database monitoring can attribute them.
 - Each pool reports `db.client.connection.count` (state `idle`/`used`),
   `db.client.connection.max` and `db.client.connection.wait_time`, tagged
   `db.client.connection.pool.name` (`primary`/`readonly`). The wait is a
