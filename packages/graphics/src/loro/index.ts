@@ -29,3 +29,8 @@ export {
   presenceItemState,
   presenceRegionOccupants,
 } from './presence-state';
+export {
+  type Presentation,
+  type PresentationEdit,
+  readPresentation,
+} from './presentation';

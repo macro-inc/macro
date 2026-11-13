@@ -74,6 +74,12 @@ export const canvasNodeSchema = schema.LoroMap({
     (value): value is string | null =>
       value === null || typeof value === 'string'
   ),
+  /** Artifact transition JSON; null or absent inherits the deck default. Any
+   * stored value is accepted here and validated when projected, so an invalid
+   * or newer value is ignored on read and preserved on rewrite. */
+  transition: schema.Value(
+    (_value): _value is NonNullable<unknown> | null => true
+  ),
 });
 export type NodeData = InferType<typeof canvasNodeSchema>;
 export const canvasSchema = schema(
