@@ -416,7 +416,9 @@ otherwise). Each recipient who cannot is skipped and returned in `skipped`
 with reason `no_access`; nobody is given access, and the call still succeeds
 for the others. Recipients are also skipped as `not_listed` or
 `recipient_limit` (below). It returns `{ notified, skipped }`. Recipients who have the
-kind turned off are in `notified`: the sender is not told their settings.
+kind turned off are in `notified`: the sender is not told their settings. A
+background run that may send nothing (`no_send` scope) cannot ping anyone,
+itself included: the request is refused before it reaches the handler.
 
 Two guards stop a looping program from flooding people. The same title and
 body about the same `link` to the same recipients from the same sender is
