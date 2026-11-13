@@ -532,7 +532,17 @@ async fn outlook_deleting_a_delegate_removes_their_access() -> Result<(), Report
     let zed = stack.user("zed").await?;
     share_with(&stack, &zed, Provider::Outlook, alice.email()).await?;
     assert!(link_ids(&zed).await?.contains(&inbox.link_id().to_string()));
-    stack.outlook().clear_requests();
+    // The mailbox's lifecycle effects are deleted with the mailbox's rows
+    // once they are done, so a copy of each is kept as it is queued.
+    for statement in [
+        "CREATE TABLE e2e_lifecycle_effects (link_id uuid, payload jsonb)",
+        "CREATE FUNCTION e2e_keep_effect() RETURNS trigger LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO e2e_lifecycle_effects VALUES (NEW.link_id, NEW.payload); RETURN NEW; END $$",
+        "CREATE TRIGGER e2e_keep_effect AFTER INSERT ON email_mailbox_lifecycle_outbox \
+         FOR EACH ROW EXECUTE FUNCTION e2e_keep_effect()",
+    ] {
+        sqlx::query(statement).execute(stack.db()).await?;
+    }
 
     stack
         .send_to_queue(
@@ -559,12 +569,11 @@ async fn outlook_deleting_a_delegate_removes_their_access() -> Result<(), Report
         "the deleted user's grant to be queued for revocation",
         email_e2e::DEFAULT_TIMEOUT,
         async || {
-            let effects: Vec<(Value,)> = sqlx::query_as(
-                "SELECT payload FROM email_mailbox_lifecycle_outbox WHERE link_id = $1",
-            )
-            .bind(inbox.link_id())
-            .fetch_all(stack.db())
-            .await?;
+            let effects: Vec<(Value,)> =
+                sqlx::query_as("SELECT payload FROM e2e_lifecycle_effects WHERE link_id = $1")
+                    .bind(inbox.link_id())
+                    .fetch_all(stack.db())
+                    .await?;
             let effects: Vec<Value> = effects.into_iter().map(|(payload,)| payload).collect();
             Ok(effects
                 .iter()
