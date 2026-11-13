@@ -1,0 +1,91 @@
+docs/agent-guide/README.md
+  s_699e95788b47ad::t_d211fd018e21e8 28
+docs/agent-guide/agent-dashboards.md
+  s_699e95788b47ad::t_d211fd018e21e8 1-26,28-56
+  s_699e95788b47ad::t_90dbc298fae3d3 27
+docs/agent-guide/navigation.md
+  s_699e95788b47ad::t_3e555debca427a 265
+  s_699e95788b47ad::t_90dbc298fae3d3 266
+apps/web/src/features/agent-dashboards/core/dashboard.test.ts
+  s_699e95788b47ad::t_bd08ade64f37a9 3
+apps/web/src/features/agent-dashboards/core/dashboard.ts
+  s_699e95788b47ad::t_bd08ade64f37a9 1
+services/document_storage_service/src/service/entity_mutation.rs
+  s_c6fe7b7c1d36f7::t_db75a40ccd960f 455,516,571,635,674,733,841
+.sqlx/query-037f9409b415444c5a8a5d6397187df2fc0a705039d2d877207d5a493dda20df.json
+  s_8703f73ae8e37d::t_bd604438b01f24 1-22
+.sqlx/query-22d034976acd76646b12301a73d08582f898e322ea33950e950b955455a5dfbc.json
+  s_8c3721bf3caccf::t_420da6fce9a916 1-28
+.sqlx/query-33fe113cf764d668d68acfc29e43d6dba1bcb652b17dfd9f98b4534440713a96.json
+  s_8703f73ae8e37d::t_d6fcd28647d878 1-17
+.sqlx/query-49dc1ee282a34862ea1693fbb81f4242613e1c332f1bf0db8804cbc9080387bc.json
+  s_6dd028f21c9ecc::t_5adab0d94594ed 1-36
+.sqlx/query-5304479ac4da76a4aab322f259f1ac2b253f78761980a4b62197c7e78f337846.json
+  s_8703f73ae8e37d::t_3d5ea173a97bb9 1-58
+.sqlx/query-771246b4c1464e8e65812276ddd67ea01dca62c2c79b8f65be89db6091559cda.json
+  s_8703f73ae8e37d::t_95878861df6252 1-47
+.sqlx/query-95032bc7cd8ae76770d5fc7c7eb06655ae370d08906e8806031e052bd2d18783.json
+  s_8703f73ae8e37d::t_0c37e4eb2beb5e 1-35
+.sqlx/query-98eeb25a0ea4675243ce54ad30d15693fd5a44578a44242a7c5de19b506962ec.json
+  s_8703f73ae8e37d::t_b610650dfbba65 1-16
+.sqlx/query-9ad0d1634c7b9c492a553f98bc698a1d391b80518fb9586bb1b791b0005a3c1c.json
+  s_8703f73ae8e37d::t_ab7ff0bdf2ef15 1-15
+.sqlx/query-a912dfb699465bb99455ffb162ba0cb72c0e522f86567796059694865bf7d37e.json
+  s_8703f73ae8e37d::t_15d55404763913 1-42
+.sqlx/query-b21cb0743307e00addede42924e53a48ef6b901ac1afe5b69c162fa92650e054.json
+  s_8703f73ae8e37d::t_73757f2ae3aa85 1-14
+.sqlx/query-f054d6d5c30abc466719da1e4553f2e4e71ed0fc4970956cdd566cccaad93690.json
+  s_8703f73ae8e37d::t_2a0ae0bb9a491e 1-14
+.sqlx/query-f3f78f52132ddcf61c9954a5dad9788e14cb74b1643d205f43b01b52e71a2a23.json
+  s_8703f73ae8e37d::t_844d9d492324e8 1-30
+.sqlx/query-fb90e8dc16ba1605d1927dddda3225dc86920e684e2d9d95d1d2d82a89278950.json
+  s_8703f73ae8e37d::t_9427ad50ef2649 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7a25188f81f79849525c9cfe7bbe3fcefd0519ba",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6dd028f21c9ecc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12ca901f-69ea-43d0-ba06-391ff7d83e32",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8c3721bf3caccf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7fc28a7b-3361-4350-a707-88668366a4cb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
