@@ -39,18 +39,24 @@ const MOVING_POLL_MS = 10_000;
 /** How soon an idle, visible tab learns of a send from another device. */
 const IDLE_POLL_MS = 60_000;
 
-/** Failed and unconfirmed sends wait on a person; a send due later waits on its time. */
+/**
+ * A failed send waits on a person and a send due later on its time. An
+ * unconfirmed one is reconciled by the server but can stay listed for good, so
+ * it keeps the idle pace too.
+ */
 function isMoving(row: ServerEmailSend, now: number) {
   const { status, sendTime } = row.attempt;
   if (status === 'SENDING' || status === 'SENT') return true;
   if (status !== 'ACCEPTED') return false;
-  return !sendTime || Date.parse(sendTime) <= now + IDLE_POLL_MS;
+  return !sendTime || !(Date.parse(sendTime) > now + IDLE_POLL_MS);
 }
 
 /** Shared by the app shell, composers and status panel; never grants send authority. */
 function createServerSendObserver(accountId: string) {
   let disposed = false;
   let moving = false;
+  let failed = false;
+  let journalRead = 0;
   // Unknown until the journal is read, so the first reads keep the fast pace.
   let localSends: number | undefined;
   let pages = 1;
@@ -82,7 +88,9 @@ function createServerSendObserver(accountId: string) {
       setServerEmailSends([...collected.values()]);
       setHasMore(!!after);
       setError(undefined);
+      failed = false;
     } catch {
+      failed = true;
       if (!disposed)
         setError(
           'Could not refresh server delivery status. Previously confirmed sends are preserved.'
@@ -93,8 +101,9 @@ function createServerSendObserver(accountId: string) {
       if (!disposed && document.visibilityState === 'visible')
         timer = setTimeout(
           wake,
-          moving || localSends !== 0 ? MOVING_POLL_MS : IDLE_POLL_MS
+          moving || failed || localSends !== 0 ? MOVING_POLL_MS : IDLE_POLL_MS
         );
+      if (!disposed && localSends === undefined) journalChanged();
     }
   }
   /** Resolves after a read that started after this call, so callers see their change. */
@@ -122,13 +131,14 @@ function createServerSendObserver(accountId: string) {
   };
   /** Sends queued by any tab of this browser; drafts share the journal and are ignored. */
   async function readLocalSends() {
+    const read = ++journalRead;
     let count: number | undefined;
     try {
       count = (await readEmailSendIntents()).length;
     } catch {
       count = undefined;
     }
-    if (disposed || count === localSends) return;
+    if (disposed || read !== journalRead || count === localSends) return;
     const first = localSends === undefined;
     localSends = count;
     // The sign-in read is already under way, and showing a hidden tab reads.

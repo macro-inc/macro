@@ -257,3 +257,52 @@ it('keeps the fast pace when the journal cannot be read', async () => {
   await vi.advanceTimersByTimeAsync(60_000);
   expect(reads()).toBe(7);
 });
+
+it('retries a failed read at the fast pace', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  vi.mocked(readPendingEmailSends).mockRejectedValue(new Error('offline'));
+  await vi.advanceTimersByTimeAsync(60_000);
+  const failed = reads();
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(reads()).toBe(failed + 1);
+});
+
+it('re-arms after a read that was in flight while the tab was hidden and shown', async () => {
+  const slow = Promise.withResolvers<PendingEmailSendsQuery['user']>();
+  vi.mocked(readPendingEmailSends).mockImplementationOnce(() => slow.promise);
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(0);
+  show('hidden');
+  show('visible');
+  slow.resolve(nothingPending);
+  await vi.advanceTimersByTimeAsync(0);
+  const shown = reads();
+  await vi.advanceTimersByTimeAsync(70_000);
+  expect(reads()).toBeGreaterThan(shown);
+});
+
+it('picks up the fast pace when a scheduled send comes due', async () => {
+  const due = Date.now() + 150_000;
+  vi.mocked(readPendingEmailSends).mockResolvedValue(
+    withStatus('ACCEPTED', new Date(due).toISOString())
+  );
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(100_000);
+  const idle = reads();
+  expect(idle).toBeLessThanOrEqual(3);
+  await vi.advanceTimersByTimeAsync(50_000);
+  expect(reads()).toBeGreaterThanOrEqual(idle + 3);
+});
+
+it('retries an unreadable journal and settles once it reads', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  vi.mocked(readEmailSendIntents).mockRejectedValueOnce(new Error('busy'));
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  const settled = reads();
+  await vi.advanceTimersByTimeAsync(59_000);
+  expect(reads()).toBeLessThanOrEqual(settled + 1);
+});
