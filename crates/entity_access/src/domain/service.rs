@@ -955,7 +955,7 @@ where
         }
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, principal_id))]
     async fn is_accessor(
         &self,
         principal_id: &str,

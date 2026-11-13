@@ -29,7 +29,7 @@ mod test;
 /// The exact id is probed first: stored ids are normally canonical, so a hit
 /// is one index probe per arm. Only a miss also tries the case-folded
 /// comparison, which filters every member of the granting channels and teams.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, principal_id))]
 pub async fn is_entity_user(
     pool: &PgPool,
     entity_id: &Uuid,
@@ -100,7 +100,7 @@ pub async fn is_entity_user(
 
 /// Whether `principal_id` holds a direct `user` grant that was not inherited
 /// from a project.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, principal_id))]
 pub async fn is_direct_entity_user(
     pool: &PgPool,
     entity_id: &Uuid,
@@ -127,7 +127,7 @@ pub async fn is_direct_entity_user(
 
 /// Whether `principal_id` is an active participant of a channel: the exact
 /// id first (one index probe), the case-folded comparison only on a miss.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, principal_id))]
 pub async fn is_channel_user(
     pool: &PgPool,
     channel_id: &Uuid,

@@ -913,7 +913,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, principal_id))]
     async fn is_entity_user(
         &self,
         entity_id: &Uuid,
@@ -929,7 +929,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, principal_id))]
     async fn is_direct_entity_user(
         &self,
         entity_id: &Uuid,
@@ -945,7 +945,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, principal_id))]
     async fn is_channel_user(
         &self,
         channel_id: &Uuid,
