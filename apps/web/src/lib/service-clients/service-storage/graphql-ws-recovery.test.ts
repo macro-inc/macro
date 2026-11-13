@@ -272,7 +272,7 @@ describe('GraphQL websocket liveness on resume', () => {
     plugin.live = true;
     const { client, lifecycle, reconnected } = livenessClient();
     const resumed = vi.fn();
-    lifecycle.liveUpdates.hold(resumed);
+    lifecycle.liveUpdates.hold(1, resumed);
     const subscription = follow(client);
     await vi.waitFor(() =>
       expect(subscription.values).toEqual([{ data: { ping: 1 } }])

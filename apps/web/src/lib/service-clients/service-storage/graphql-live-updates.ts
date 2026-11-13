@@ -60,41 +60,46 @@ export function createLiveUpdatesGate(options: {
   /**
    * The subscriptions are live. `stale` when reads that follow them went out
    * earlier (the hold timed out, or the socket could not be pinged), so their
-   * readers must read again.
+   * readers must read again. Otherwise `sent` holds the operation keys of the
+   * reads that waited and went out just now: every reader of those keys sees
+   * a read sent after the subscriptions started.
    */
-  onLive: (stale: boolean) => void;
+  onLive: (stale: boolean, sent: ReadonlySet<number>) => void;
 }) {
   const holdMs = options.holdMs ?? LIVE_UPDATES_HOLD_MS;
   let state: GateState = 'waiting';
   let connection = 0;
   let pinged = false;
   let bound: ReturnType<typeof setTimeout> | undefined;
-  const holds = new Set<(outcome: HoldOutcome) => void>();
+  /** Each held read's resume, with its operation key. */
+  const holds = new Map<(outcome: HoldOutcome) => void, number>();
 
-  const release = (outcome: HoldOutcome) => {
+  const release = (outcome: HoldOutcome): ReadonlySet<number> => {
     clearTimeout(bound);
     bound = undefined;
     const released = [...holds];
     holds.clear();
-    for (const resume of released) resume(outcome);
+    for (const [resume] of released) resume(outcome);
+    return new Set(released.map(([, key]) => key));
   };
   const live = (outcome: 'live' | 'unverified') => {
     if (state === 'live' || state === 'disposed') return;
     const stale = state === 'released' || outcome === 'unverified';
     state = 'live';
-    release(outcome);
-    options.onLive(stale);
+    const sent = release(outcome);
+    options.onLive(stale, sent);
   };
 
   return {
     /** Whether a read that follows live updates waits now. */
     holding: () => state === 'waiting',
     /**
-     * Calls `resume` once a held read may go. The first held read starts the
-     * bound, after which every read goes and later ones are not held.
+     * Calls `resume` once the held read of operation `key` may go. The first
+     * held read starts the bound, after which every read goes and later ones
+     * are not held.
      */
-    hold(resume: (outcome: HoldOutcome) => void): () => void {
-      holds.add(resume);
+    hold(key: number, resume: (outcome: HoldOutcome) => void): () => void {
+      holds.set(resume, key);
       bound ??= setTimeout(() => {
         bound = undefined;
         if (state !== 'waiting') return;
@@ -214,7 +219,7 @@ export function liveUpdatesGateExchange(gate: LiveUpdatesGate): Exchange {
           cancel: () => undefined,
         };
         held.set(operation.key, read);
-        read.cancel = gate.hold((outcome) => {
+        read.cancel = gate.hold(operation.key, (outcome) => {
           read.cancel = () => undefined;
           for (const released of finish(operation.key, outcome))
             send(resumed(released));

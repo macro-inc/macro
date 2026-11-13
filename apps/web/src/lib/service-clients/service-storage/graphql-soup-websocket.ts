@@ -386,10 +386,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     channels?.reconnect();
   };
   const liveUpdates = createLiveUpdatesGate({
-    onLive: (stale) => {
+    onLive: (stale, sent) => {
       if (stale) return recover();
       activity?.live();
-      channels?.live();
+      channels?.live(sent);
     },
   });
 

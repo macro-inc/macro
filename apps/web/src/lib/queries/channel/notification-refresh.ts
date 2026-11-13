@@ -183,11 +183,14 @@ export class ChannelNotificationRefresh {
   }
 
   /**
-   * The first connection's subscriptions are live. A job whose readers all
-   * follow them read after this; any other may show an older read.
+   * The first connection's subscriptions are live, and `sent` holds the keys
+   * of the reads that waited for them and went out just now. A job whose
+   * readers all follow them, or whose own read is one of those, reads after
+   * this; any other may show an older read.
    */
-  live() {
-    for (const job of this.jobs.values()) {
+  live(sent: ReadonlySet<number> = new Set()) {
+    for (const [key, job] of this.jobs) {
+      if (sent.has(key)) continue;
       if (
         [...job.readers].some(
           (reader) => reader.enabled && !reader.followsLiveUpdates

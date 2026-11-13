@@ -839,7 +839,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   always set both or neither. `liveUpdatesGateExchange` holds such reads until
   a pong after the subscribe frames (at most `LIVE_UPDATES_HOLD_MS`), so nothing
   published in between is lost. A `cache-first` read sets neither and is read
-  again when the subscriptions go live; so is every read if the hold gave up.
+  again when the subscriptions go live, unless a held read of the same
+  operation key went out then; every read is read again if the hold gave up.
   The gate only delays: it sends every held operation, because the normalized
   cache counts each one it forwards until its result arrives. A held operation
   records a `graphql_soup.live_updates.wait` span unless its one-shot trace

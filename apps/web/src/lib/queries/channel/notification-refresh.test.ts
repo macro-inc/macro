@@ -1,6 +1,6 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
-import { type Client, CombinedError, gql } from '@urql/core';
+import { type Client, CombinedError, createRequest, gql } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type ChannelNotificationReader,
@@ -267,6 +267,19 @@ describe('shared channel notification refresh', () => {
     expect(f.query.mock.calls.map(([, variables]) => variables)).toEqual([
       { id: 'b' },
       { id: 'c' },
+    ]);
+  });
+
+  it('does not read again at the first live connection a job whose held read went out then', async () => {
+    const f = setup();
+    f.register('a', { followsLiveUpdates: true });
+    // A display-only observer of the same channel reuses that read.
+    f.register('a');
+    f.register('b');
+    f.queue.live(new Set([createRequest(document, { id: 'a' }).key]));
+    await tick();
+    expect(f.query.mock.calls.map(([, variables]) => variables)).toEqual([
+      { id: 'b' },
     ]);
   });
 

@@ -35,7 +35,13 @@ afterEach(() => {
   setVisibility('visible');
 });
 
+import { createRequest, gql } from '@urql/core';
 import { registerActivityRevalidator } from '../../queries/activity/push-registry';
+import {
+  type ChannelNotificationReader,
+  channelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../queries/channel/notification-refresh';
 import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
@@ -515,13 +521,76 @@ describe('GraphQL Soup connection recovery', () => {
 
   it('reads everything again when the first connection outlasts the hold', async () => {
     const app = connectedApp();
-    app.lifecycle.liveUpdates.hold(() => undefined);
+    app.lifecycle.liveUpdates.hold(1, () => undefined);
     await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS);
     await app.live();
     await settle();
     expect(app.followed).toHaveBeenCalledExactlyOnceWith(null);
     expect(app.other).toHaveBeenCalledExactlyOnceWith(null);
     app.dispose();
+  });
+
+  it('reads no channel job again whose held read went out as the first connection went live', async () => {
+    vi.useFakeTimers();
+    const toPromise = vi.fn().mockResolvedValue({});
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+      })),
+      query: vi.fn((..._args: unknown[]) => ({ toPromise })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    const channel = gql`
+      query Channel($id: String!) {
+        channel(id: $id) {
+          id
+        }
+      }
+    `;
+    const reader = (
+      channelId: string,
+      followsLiveUpdates?: boolean
+    ): ChannelNotificationReader => ({
+      enabled: true,
+      fetching: false,
+      filtered: true,
+      channelId,
+      notificationIds: [],
+      followsLiveUpdates,
+    });
+    const refresh = channelNotificationRefresh(client as never);
+    const unregister = [
+      // The open channel's read waits; a menu observer of the same channel
+      // reuses its result from the cache.
+      refresh.register(
+        { document: channel, variables: { id: 'a' } },
+        reader('a', true)
+      ),
+      refresh.register(
+        { document: channel, variables: { id: 'a' } },
+        reader('a')
+      ),
+      refresh.register(
+        { document: channel, variables: { id: 'b' } },
+        reader('b')
+      ),
+    ];
+    lifecycle.liveUpdates.hold(
+      createRequest(channel, { id: 'a' }).key,
+      () => undefined
+    );
+
+    lifecycle.connected(() => true);
+    await vi.advanceTimersByTimeAsync(0);
+    lifecycle.pong(true);
+    await settle();
+    expect(client.query.mock.calls.map(([, variables]) => variables)).toEqual([
+      { id: 'b' },
+    ]);
+    for (const stop of unregister) stop();
+    lifecycle.dispose();
+    disposeChannelNotificationRefresh(client as never);
   });
 
   it('reads everything again on every later connection', async () => {

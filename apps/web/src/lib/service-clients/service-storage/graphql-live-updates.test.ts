@@ -137,14 +137,28 @@ describe('createLiveUpdatesGate', () => {
     gate.pong(true);
 
     expect(gate.holding()).toBe(false);
-    expect(onLive).toHaveBeenCalledExactlyOnceWith(false);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(false, new Set());
+  });
+
+  it('tells which held reads it sent as it went live', async () => {
+    const { gate, onLive } = await pingedGate();
+    const first = vi.fn();
+    const second = vi.fn();
+    gate.hold(1, first);
+    gate.hold(2, second);
+    const cancel = gate.hold(3, vi.fn());
+    cancel();
+    gate.pong(true);
+    expect(first).toHaveBeenCalledExactlyOnceWith('live');
+    expect(second).toHaveBeenCalledExactlyOnceWith('live');
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(false, new Set([1, 2]));
   });
 
   it('releases held reads at the bound and marks them stale once live', async () => {
     const onLive = vi.fn();
     const gate = createLiveUpdatesGate({ onLive });
     const resume = vi.fn();
-    gate.hold(resume);
+    gate.hold(1, resume);
 
     await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS);
     expect(resume).toHaveBeenCalledExactlyOnceWith('timed_out');
@@ -153,16 +167,16 @@ describe('createLiveUpdatesGate', () => {
     gate.connected(() => true);
     await vi.advanceTimersByTimeAsync(0);
     gate.pong(true);
-    expect(onLive).toHaveBeenCalledExactlyOnceWith(true);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(true, new Set());
   });
 
   it('starts the bound at the first held read', async () => {
     const gate = createLiveUpdatesGate({ onLive: vi.fn() });
     const first = vi.fn();
     const second = vi.fn();
-    gate.hold(first);
+    gate.hold(1, first);
     await vi.advanceTimersByTimeAsync(LIVE_UPDATES_HOLD_MS - 1);
-    gate.hold(second);
+    gate.hold(2, second);
     await vi.advanceTimersByTimeAsync(1);
     expect(first).toHaveBeenCalledWith('timed_out');
     expect(second).toHaveBeenCalledWith('timed_out');
@@ -172,11 +186,11 @@ describe('createLiveUpdatesGate', () => {
     const onLive = vi.fn();
     const gate = createLiveUpdatesGate({ onLive });
     const resume = vi.fn();
-    gate.hold(resume);
+    gate.hold(1, resume);
     gate.connected(() => false);
     await vi.advanceTimersByTimeAsync(0);
     expect(resume).toHaveBeenCalledExactlyOnceWith('unverified');
-    expect(onLive).toHaveBeenCalledExactlyOnceWith(true);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(true, new Set([1]));
   });
 
   it('pings the next connection when the first closes before its ping', async () => {
@@ -191,7 +205,7 @@ describe('createLiveUpdatesGate', () => {
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledOnce();
     gate.pong(true);
-    expect(onLive).toHaveBeenCalledExactlyOnceWith(false);
+    expect(onLive).toHaveBeenCalledExactlyOnceWith(false, new Set());
   });
 
   it('ignores a pong on a connection that closed after its ping', async () => {
@@ -216,7 +230,7 @@ describe('createLiveUpdatesGate', () => {
   it('releases held reads on dispose without going live', async () => {
     const { gate, onLive } = await pingedGate();
     const resume = vi.fn();
-    gate.hold(resume);
+    gate.hold(1, resume);
     gate.dispose();
     gate.pong(true);
     expect(resume).toHaveBeenCalledExactlyOnceWith('disposed');
