@@ -158,3 +158,6 @@ RPC only on authoritative empty metadata rechecked under the existing team lease
 the returned guard stays in the deletion proof through team-row deletion. Retained
 state requires acknowledged purge before ordinary cleanup; release the guard before RPC.
 - The Soup GraphQL request context supplies session activity subscriptions with the realtime activity consumer and a primary-backed correlation repository; GraphQL checks session visibility before streaming.
+
+- `ChannelGraphqlContext` shares the primary-backed REST messages service and access
+  service; insert it through `insert_graphql_context_data` for HTTP and websockets.

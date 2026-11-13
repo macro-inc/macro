@@ -86,6 +86,7 @@ impl RecordingMessages {
             id,
             parent: messages::domain::models::MessageParent::parse("channel", channel_id).unwrap(),
             thread_id: None,
+            import_order: None,
             sender_id: self
                 .stored_sender
                 .clone()
@@ -156,6 +157,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             id: Uuid::new_v4(),
             parent,
             thread_id: input.thread_id,
+            import_order: None,
             sender_id: sender,
             guest_name: None,
             imported_author: None,
@@ -278,6 +280,23 @@ impl messages::domain::api::MessageReader for RecordingMessages {
     ) -> Result<messages::domain::models::MessageThread, messages::domain::ports::MessageError>
     {
         unimplemented!("read path unused by mutation tools")
+    }
+    async fn get_root(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::ports::MessageTimelineEntry, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn thread_page(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+        _: messages::domain::ports::MessageThreadQuery,
+    ) -> Result<messages::domain::ports::MessageThreadPage, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
     }
     async fn timeline(
         &self,

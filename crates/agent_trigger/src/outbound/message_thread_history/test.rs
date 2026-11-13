@@ -52,6 +52,7 @@ fn message(id: Uuid, deleted: bool) -> Message {
         mentions: vec![],
         guest_name: None,
         imported_author: None,
+        import_order: None,
         content: "history".into(),
         created_at: now,
         updated_at: now,

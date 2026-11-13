@@ -9,6 +9,7 @@ use uuid::Uuid;
 mod change_log;
 mod changes;
 mod historical;
+mod thread;
 mod threads;
 mod timeline;
 mod write_hydration;
@@ -30,6 +31,7 @@ struct StoredMessage {
     parent_entity_type: String,
     parent_entity_id: String,
     thread_id: Option<Uuid>,
+    import_order: Option<i64>,
     kind: MessageKind,
     sender_id: String,
     guest_name: Option<String>,
@@ -548,6 +550,23 @@ impl MessageRepository for PgMessageRepository {
         .await
         .map_err(database_error)?;
         self.hydrate(rows).await
+    }
+
+    async fn root(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> Result<Option<MessageListItem>, MessageError> {
+        self.read_root(parent, root_id).await
+    }
+
+    async fn thread_page(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        query: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError> {
+        self.read_thread_page(parent, root_id, query).await
     }
 
     async fn document_file_type(&self, document_id: &str) -> Result<Option<String>, MessageError> {

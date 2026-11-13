@@ -95,6 +95,67 @@ pub struct MessagePage {
     pub previous_cursor: Option<MessageCursor>,
 }
 
+/// Position in a thread's imported-first reply order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MessageReplyCursor {
+    /// Historical reply position; ordinary replies sort after imported replies.
+    pub import_order: Option<i64>,
+    /// Reply creation time, breaking ties in historical position.
+    pub created_at: DateTime<Utc>,
+    /// Reply UUID, breaking timestamp ties.
+    pub id: Uuid,
+}
+
+impl MessageReplyCursor {
+    /// The stable position of a hydrated reply.
+    pub fn from_message(message: &Message) -> Self {
+        Self {
+            import_order: message.import_order,
+            created_at: message.created_at,
+            id: message.id,
+        }
+    }
+}
+
+/// Bounded selection within a single thread, in reply display order.
+#[derive(Debug, Clone)]
+pub struct MessageThreadQuery {
+    /// Exclusive position before or after which to read.
+    pub cursor: Option<MessageReplyCursor>,
+    /// Older reads preceding replies; newer reads following replies.
+    pub direction: MessageDirection,
+    /// Center the window on a live reply in this thread.
+    pub around: Option<Uuid>,
+    /// Page size, clamped by the application to 1..=100.
+    pub limit: Option<u16>,
+}
+
+impl Default for MessageThreadQuery {
+    fn default() -> Self {
+        Self {
+            cursor: None,
+            direction: MessageDirection::Newer,
+            around: None,
+            limit: None,
+        }
+    }
+}
+
+/// A bounded thread window with the same root and live replies as a full read.
+#[derive(Debug, Clone)]
+pub struct MessageThreadPage {
+    /// Root, state, counts, and oldest three live replies.
+    pub root: MessageListItem,
+    /// Live replies in imported-first, oldest-first display order.
+    pub replies: Vec<Message>,
+    /// Continue to replies preceding this window.
+    pub next_cursor: Option<MessageReplyCursor>,
+    /// Continue to replies following this window.
+    pub previous_cursor: Option<MessageReplyCursor>,
+    /// Call lifecycle when the root represents a call.
+    pub call: Option<CallEntryStatus>,
+}
+
 /// One chronological entry in a parent's timeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -472,6 +533,19 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         root_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
+    /// Hydrate a root and its thread context, including thread tombstones.
+    fn root(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> impl Future<Output = Result<Option<MessageListItem>, MessageError>> + Send;
+    /// Read a bounded window of live replies and its root context.
+    fn thread_page(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        query: MessageThreadQuery,
+    ) -> impl Future<Output = Result<MessageThreadPage, MessageError>> + Send;
     /// Live messages before a prompt, in chronological order. Discussion context
     /// stays within the prompt's thread; channel context includes the timeline.
     fn preceding(

@@ -1432,6 +1432,10 @@ async fn run_server() -> anyhow::Result<()> {
             call_service.clone(),
         ),
     );
+    let graphql_channel_context = graphql_channel::ChannelGraphqlContext::new(
+        message_service.clone(),
+        entity_access_service.clone(),
+    );
     let messages_state = messages::inbound::axum_router::MessagesRouterState {
         service: message_service.clone(),
         access: entity_access_service.clone(),
@@ -2562,6 +2566,7 @@ async fn run_server() -> anyhow::Result<()> {
             scheduled_action_read_service,
         ),
         graphql_contacts_context,
+        graphql_channel_context,
         graphql_calendar_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
