@@ -392,47 +392,186 @@ async fn denies_ambient_io_and_external_module_imports() {
     service.shutdown().await;
 }
 
+/// Every way a program could open its own connection to an API, each sending
+/// the run's token. Only the final `fetch` may arrive, marked as the program's.
+const RAW_REQUESTS: &str = r#"
+const load = (specifier) => import(specifier);
+export async function main() {
+  const host = new URL("HOST");
+  const port = Number(host.port);
+  const request = `GET /raw HTTP/1.1\r\nHost: ${host.host}\r\nAuthorization: Bearer fixture-run-token\r\n\r\n`;
+  const headers = {authorization: "Bearer fixture-run-token"};
+  const send = (net) => net.connect(port, host.hostname).end(request);
+  const attempts = {
+    "Deno.connect": async () => {
+      const connection = await Deno.connect({hostname: host.hostname, port});
+      await connection.write(new TextEncoder().encode(request));
+    },
+    "Deno internals": () => Deno[Deno.internal].core,
+    "WebSocket": () => new WebSocket(`ws://${host.host}/raw`),
+    "Worker": () => new Worker("data:text/javascript,1", {type: "module"}),
+    "node:net": async () => send(await load("node:net")),
+    "net": async () => send(await load("net")),
+    "node:http": async () => (await load("node:http")).get(`${host.origin}/raw`, {headers}),
+    "node:_http_client": async () => new (await load("node:_http_client")).ClientRequest(`${host.origin}/raw`, {headers}).end(),
+    "node:_tls_wrap": async () => (await load("node:_tls_wrap")).connect(port, host.hostname),
+    "node:child_process": async () => (await load("node:child_process")).spawn("curl", [host.origin]),
+    "node:module": async () => send((await load("node:module")).createRequire(import.meta.url)("node:net")),
+    "node:process": async () => send((await load("node:process")).getBuiltinModule("node:net")),
+    "process.getBuiltinModule": () => send(process.getBuiltinModule("node:net")),
+    "process.binding": () => process.binding("tcp_wrap").TCP,
+  };
+  const results = {};
+  for (const [name, attempt] of Object.entries(attempts)) {
+    try { await attempt(); results[name] = "sent"; } catch { results[name] = "blocked"; }
+  }
+  const response = await fetch(`${host.origin}/marked`, {headers});
+  return {results, status: response.status};
+}
+"#;
+
+/// Accept the program's one request, which must be its marked fetch, and
+/// nothing after it.
+async fn expect_only_the_marked_fetch(listener: TcpListener) {
+    let (mut stream, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    let request = read_request(&mut stream).await;
+    assert!(request.starts_with("GET /marked "), "{request}");
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("x-macro-code-execution: 1\r\n"),
+        "{request}"
+    );
+    respond(&mut stream, "{}").await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), listener.accept())
+            .await
+            .is_err()
+    );
+}
+
+fn every_raw_request_blocked() -> serde_json::Value {
+    serde_json::json!({
+        "results": {
+            "Deno.connect": "blocked",
+            "Deno internals": "blocked",
+            "WebSocket": "blocked",
+            "Worker": "blocked",
+            "node:net": "blocked",
+            "net": "blocked",
+            "node:http": "blocked",
+            "node:_http_client": "blocked",
+            "node:_tls_wrap": "blocked",
+            "node:child_process": "blocked",
+            "node:module": "blocked",
+            "node:process": "blocked",
+            "process.getBuiltinModule": "blocked",
+            "process.binding": "blocked",
+        },
+        "status": 200,
+    })
+}
+
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_program_has_no_way_to_the_network_but_fetch() {
-    // Only fetch marks a request as the program's; anything else would send
-    // the run's token as if the person had.
     let (_root, service) = setup(Limits::default()).await;
-    let source = r#"
-export async function main() {
-  const modules = {};
-  for (const name of ["net", "tls", "http", "https", "http2", "dgram", "child_process", "module"]) {
-    try { await import("node:" + name); modules[name] = "loaded"; } catch { modules[name] = "unavailable"; }
-  }
-  let worker = "started";
-  try { new Worker("data:text/javascript,1", {type: "module"}); } catch { worker = "refused"; }
-  return {
-    sockets: [Deno.connect, Deno.connectTls, Deno.startTls, Deno.listen, Deno.listenTls, Deno.listenDatagram, Deno.serve].map((value) => typeof value),
-    worker,
-    websocket: typeof WebSocket,
-    builtins: typeof globalThis.process?.getBuiltinModule,
-    modules,
-  };
-}
-"#;
-    let (_, outcome) = run(&service, source, 5000).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(expect_only_the_marked_fetch(listener));
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), host.clone())]),
+            ..SdkEndpoints::default()
+        },
+        ..RunEnvironment::default()
+    };
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: RAW_REQUESTS.replace("HOST", &host),
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
     let Outcome::Succeeded { value } = outcome else {
         panic!("{outcome:?}");
     };
-    assert_eq!(
-        value,
-        serde_json::json!({
-            "sockets": ["undefined", "undefined", "undefined", "undefined", "undefined", "undefined", "undefined"],
-            "worker": "refused",
-            "websocket": "undefined",
-            "builtins": "undefined",
-            "modules": {
-                "net": "unavailable", "tls": "unavailable", "http": "unavailable",
-                "https": "unavailable", "http2": "unavailable", "dgram": "unavailable",
-                "child_process": "unavailable", "module": "unavailable",
-            },
-        })
+    assert_eq!(value, every_raw_request_blocked());
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_program_has_no_way_to_the_network_but_fetch() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(expect_only_the_marked_fetch(listener));
+    let environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone())],
+        serde_json::json!({}),
+        false,
     );
+    let (_, outcome) =
+        run_unattended(&service, &RAW_REQUESTS.replace("HOST", &host), environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, every_raw_request_blocked());
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn every_node_builtin_but_the_allowed_ones_is_unavailable() {
+    let (_root, service) = setup(Limits::default()).await;
+    // The pinned runtime lists no built-in the import map doesn't know.
+    let deno = Command::new("deno")
+        .args([
+            "eval",
+            r#"import { builtinModules } from "node:module"; console.log(JSON.stringify(builtinModules));"#,
+        ])
+        .output()
+        .await
+        .unwrap();
+    assert!(deno.status.success());
+    let listed: Vec<String> = serde_json::from_slice(&deno.stdout).unwrap();
+    for name in &listed {
+        let name = name.strip_prefix("node:").unwrap_or(name);
+        assert!(
+            NODE_BUILTINS.contains(&name),
+            "{name} is missing from NODE_BUILTINS"
+        );
+    }
+    let source = format!(
+        r#"
+export async function main() {{
+  const loaded = [];
+  for (const name of {names}) {{
+    try {{ await import("node:" + name); loaded.push(name); }} catch {{}}
+  }}
+  return loaded;
+}}
+"#,
+        names = serde_json::json!(NODE_BUILTINS)
+    );
+    let (_, outcome) = run(&service, &source, 10_000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, serde_json::json!(NODE_ALLOWED));
     service.shutdown().await;
 }
 
@@ -799,18 +938,14 @@ async fn unattended_typescript_gets_its_arguments_and_no_credential_or_raw_netwo
     let source = r#"
 type Context = { macro: object; trigger: { subject: string } };
 export async function main(context: Context): Promise<object> {
-  const modules: Record<string, string> = {};
-  for (const name of ["net", "tls", "http", "https", "http2", "dgram", "child_process", "module"]) {
-    try { await import("node:" + name); modules[name] = "loaded"; } catch { modules[name] = "unavailable"; }
-  }
+  let net = "loaded";
+  try { await import("node:" + "net"); } catch { net = "unavailable"; }
   return {
     keys: Object.keys(context).sort(),
     subject: context.trigger.subject,
-    sockets: [Deno.connect, Deno.connectTls, Deno.startTls, Deno.listen, Deno.listenTls, Deno.listenDatagram, Deno.serve].map((value) => typeof value),
+    connect: typeof Deno.connect,
     worker: typeof Worker,
-    websocket: typeof WebSocket,
-    builtins: typeof (globalThis as any).process?.getBuiltinModule,
-    modules,
+    net,
   };
 }
 "#;
@@ -829,15 +964,9 @@ export async function main(context: Context): Promise<object> {
         serde_json::json!({
             "keys": ["macro", "trigger"],
             "subject": "Invoice 7",
-            "sockets": ["undefined", "undefined", "undefined", "undefined", "undefined", "undefined", "undefined"],
+            "connect": "undefined",
             "worker": "undefined",
-            "websocket": "undefined",
-            "builtins": "undefined",
-            "modules": {
-                "net": "unavailable", "tls": "unavailable", "http": "unavailable",
-                "https": "unavailable", "http2": "unavailable", "dgram": "unavailable",
-                "child_process": "unavailable", "module": "unavailable",
-            },
+            "net": "unavailable",
         })
     );
     service.shutdown().await;

@@ -128,14 +128,17 @@ try {
   // Every request must go through the fetch above, which marks it as the
   // program's and holds back a dry run's writes. Nothing else may reach the
   // network (raw sockets, listeners, websockets), start a realm with its own
-  // fetch (workers), or load a networking built-in past the import map.
-  for (const name of ["connect", "connectTls", "connectQuic", "startTls", "listen", "listenTls", "listenDatagram", "serve", "upgradeWebSocket"]) {
+  // fetch (workers), or reach Node's or Deno's internals past the import map.
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket"]) {
     Object.defineProperty(Deno, name, {value: undefined});
   }
+  delete Deno[Deno.internal];
   for (const name of ["WebSocket", "WebSocketStream", "EventSource"]) globalThis[name] = undefined;
   // An unattended program gets no Worker at all; elsewhere it throws as a sleep.
   if (unattended) globalThis.Worker = undefined;
-  if (globalThis.process) globalThis.process.getBuiltinModule = undefined;
+  if (globalThis.process) {
+    for (const name of ["getBuiltinModule", "binding", "_linkedBinding"]) globalThis.process[name] = undefined;
+  }
   const { main } = await import(program);
   let value;
   if (unattended) {
