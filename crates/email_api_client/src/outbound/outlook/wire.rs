@@ -38,7 +38,8 @@ pub(super) struct Recipient {
 
 #[derive(Deserialize, Serialize)]
 pub(super) struct Address {
-    pub address: String,
+    /// Graph leaves it out for some senders and recipients, giving only a name.
+    pub address: Option<String>,
     pub name: Option<String>,
 }
 
