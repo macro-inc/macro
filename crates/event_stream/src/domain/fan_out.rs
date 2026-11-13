@@ -62,6 +62,7 @@ where
             match item {
                 Ok(TailItem::Entry(entry)) => self.deliver(*entry).await,
                 Ok(TailItem::Gap) => {
+                    crate::metrics::metrics().tail_gaps.add(1, &[]);
                     tracing::error!(
                         open_streams = self.registry.len(),
                         "public event log tail lost its place; resetting every stream"
@@ -98,6 +99,10 @@ where
         let Some(public) = record.event else {
             return;
         };
+        let now_ms = u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or_default();
+        crate::metrics::metrics()
+            .fan_out_lag_ms
+            .record(now_ms.saturating_sub(cursor.ms), &[]);
 
         let fan_out_span = tracing::info_span!(
             parent: &span,

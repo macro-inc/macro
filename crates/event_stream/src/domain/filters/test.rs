@@ -65,26 +65,33 @@ fn ids_and_entity_types_narrow_the_same_filter() {
 }
 
 #[test]
-fn caps_are_the_routine_trigger_caps() {
-    let too_many = vec![filter(&["document.updated"]); MAX_FILTERS + 1];
-    assert!(validate_filters(&too_many).is_err());
-    assert!(validate_filters(&too_many[..MAX_FILTERS]).is_ok());
+fn streams_cap_at_32_filters_and_webhooks_keep_50() {
+    let filters = vec![filter(&["document.updated"]); MAX_WEBHOOK_FILTERS + 1];
+
+    assert!(validate_filters(&filters[..MAX_STREAM_FILTERS], MAX_STREAM_FILTERS).is_ok());
+    assert!(validate_filters(&filters[..MAX_STREAM_FILTERS + 1], MAX_STREAM_FILTERS).is_err());
+    assert!(validate_filters(&filters[..MAX_WEBHOOK_FILTERS], MAX_WEBHOOK_FILTERS).is_ok());
+    assert!(validate_filters(&filters, MAX_WEBHOOK_FILTERS).is_err());
+    assert_eq!((MAX_STREAM_FILTERS, MAX_WEBHOOK_FILTERS), (32, 50));
 
     let mut ids = filter(&["document.updated"]);
     ids.ids = Some((0..=MAX_FILTER_IDS).map(|id| id.to_string()).collect());
-    assert!(validate_filters(&[ids]).is_err());
+    assert!(validate_filters(&[ids], MAX_STREAM_FILTERS).is_err());
 }
 
 #[test]
 fn a_star_anywhere_but_a_whole_family_is_refused() {
     for pattern in ["doc*", "document.up*", "*.updated", "document.*.x", ".*"] {
         assert!(
-            validate_filters(&[filter(&[pattern])]).is_err(),
+            validate_filters(&[filter(&[pattern])], MAX_STREAM_FILTERS).is_err(),
             "{pattern} should be refused"
         );
     }
     for pattern in ["*", "document.*", "document.updated"] {
-        assert!(validate_filters(&[filter(&[pattern])]).is_ok(), "{pattern}");
+        assert!(
+            validate_filters(&[filter(&[pattern])], MAX_STREAM_FILTERS).is_ok(),
+            "{pattern}"
+        );
     }
 }
 

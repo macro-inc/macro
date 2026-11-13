@@ -175,13 +175,21 @@ combined with an ID match in another element. Because deletion is published
 after soft deletion, a webhook cannot receive its own `webhook.deleted` event;
 other eligible webhooks in the same owner workspace can receive it.
 
+Team and GitHub audiences: a team event for every member matches the team's
+workspace; an admin-only team event (invites) matches only the personal
+workspaces of the team's current admins and owners, never the team workspace,
+whose webhook creator need not be an admin. A GitHub installation's events
+match the personal workspaces of the users who hold a claim on it (its user
+and team owners with a linked GitHub account, the rule routines use) plus the
+workspaces of the teams that own it.
+
 ### Filter semantics
 
 Each filter requires `events`. `ids` and `entity_types` are optional; an
 absent or `null` value matches every entity ID or type for that filter's
-events. A webhook holds at most 32 filters of at most 100 events and 100 ids
-each (the routine trigger caps), and the same validation applies to live
-streams, so a filter set is valid for both or neither.
+events. A webhook holds at most 50 filters (a live stream 32, the routine
+trigger cap) of at most 100 events and 100 ids each; every other rule is
+shared with live streams.
 
 `events` entries are exact names, a family wildcard such as `document.*`, or
 `*`. Wildcards expand at match time against the event catalog

@@ -22,7 +22,9 @@ use entity_access::domain::models::{AccessError, AccessLevel, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use event_stream::domain::filters::{self, FilterSubject};
 use event_stream::domain::normalize::NormalizeError;
-use event_stream::domain::ports::PreviewFlag;
+use event_stream::domain::ports::{
+    GithubClaims, InstallationOwners, PreviewFlag, TeamDirectory, TeamRole,
+};
 use futures::future::join_all;
 use macro_event_broker::exposure::{Audience, ExposureError, MinAccessLevel, MinTeamRole, Stage};
 use macro_event_broker::{Event, TopicEvent};
@@ -32,6 +34,7 @@ use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
 use user_events::UserTopicEvent;
+use uuid::Uuid;
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -173,21 +176,72 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
 /// preview events, and filters matched only through a wildcard, reach a
 /// webhook only when its owner has the flag. Without one ([`NoPreview`]) no
 /// owner has it, which is how every webhook behaved before the flag.
-pub struct WebhookEventIngestionServiceImpl<A, R, Q, P = NoPreview> {
+///
+/// `T` and `G` resolve team-admin and GitHub-installation audiences. Without
+/// them ([`Unconfigured`]) those audiences are refused as unsupported.
+pub struct WebhookEventIngestionServiceImpl<
+    A,
+    R,
+    Q,
+    P = NoPreview,
+    T = Unconfigured,
+    G = Unconfigured,
+> {
     entity_access_service: Arc<A>,
     repository: R,
     enqueuer: Q,
     preview: Arc<P>,
+    teams: Option<Arc<T>>,
+    github: Option<Arc<G>>,
 }
 
-impl<A, R: Clone, Q: Clone, P> Clone for WebhookEventIngestionServiceImpl<A, R, Q, P> {
+impl<A, R: Clone, Q: Clone, P, T, G> Clone for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G> {
     fn clone(&self) -> Self {
         Self {
             entity_access_service: self.entity_access_service.clone(),
             repository: self.repository.clone(),
             enqueuer: self.enqueuer.clone(),
             preview: self.preview.clone(),
+            teams: self.teams.clone(),
+            github: self.github.clone(),
         }
+    }
+}
+
+/// Audience directories that are not configured.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Unconfigured;
+
+impl TeamDirectory for Unconfigured {
+    async fn members(
+        &self,
+        _team_id: Uuid,
+    ) -> Result<Vec<(MacroUserIdStr<'static>, TeamRole)>, rootcause::Report> {
+        Err(rootcause::report!("team directory not configured"))
+    }
+
+    async fn teams_of(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<(Uuid, TeamRole)>, rootcause::Report> {
+        Err(rootcause::report!("team directory not configured"))
+    }
+}
+
+impl GithubClaims for Unconfigured {
+    async fn installation_owners(
+        &self,
+        _installation_id: &str,
+    ) -> Result<InstallationOwners, rootcause::Report> {
+        Err(rootcause::report!("GitHub claims not configured"))
+    }
+
+    async fn has_claim(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _installation_id: &str,
+    ) -> Result<bool, rootcause::Report> {
+        Err(rootcause::report!("GitHub claims not configured"))
     }
 }
 
@@ -202,39 +256,63 @@ impl PreviewFlag for NoPreview {
 }
 
 impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
-    /// Create a webhook event ingestion service with no preview access.
+    /// Create a webhook event ingestion service with no preview access and
+    /// no team or GitHub directories.
     pub fn new(entity_access_service: Arc<A>, repository: R, enqueuer: Q) -> Self {
         Self {
             entity_access_service,
             repository,
             enqueuer,
             preview: Arc::new(NoPreview),
+            teams: None,
+            github: None,
         }
     }
 }
 
-impl<A, R, Q, P> WebhookEventIngestionServiceImpl<A, R, Q, P> {
+impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G> {
     /// Evaluate the `public-event-stream` flag for webhook owners with
     /// `preview`.
     pub fn with_preview_flag<P2>(
         self,
         preview: Arc<P2>,
-    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P2> {
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P2, T, G> {
         WebhookEventIngestionServiceImpl {
             entity_access_service: self.entity_access_service,
             repository: self.repository,
             enqueuer: self.enqueuer,
             preview,
+            teams: self.teams,
+            github: self.github,
+        }
+    }
+
+    /// Resolve team-admin audiences through `teams` and GitHub-installation
+    /// audiences through `github`.
+    pub fn with_audience_directories<T2, G2>(
+        self,
+        teams: Arc<T2>,
+        github: Arc<G2>,
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P, T2, G2> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            preview: self.preview,
+            teams: Some(teams),
+            github: Some(github),
         }
     }
 }
 
-impl<A, R, Q, P> WebhookEventIngestionServiceImpl<A, R, Q, P>
+impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
     P: PreviewFlag,
+    T: TeamDirectory,
+    G: GithubClaims,
 {
     /// Resolve the users that currently have access to an entity.
     #[tracing::instrument(skip(self), err)]
@@ -247,6 +325,67 @@ where
             .get_users_by_entity(entity_id, entity_type)
             .await
             .map_err(WebhookEventIngestionError::EntityAccess)
+    }
+
+    /// Admin-only team events reach the personal workspaces of the team's
+    /// current admins and owners, never the team workspace: a team webhook's
+    /// creator need not be an admin.
+    #[tracing::instrument(skip(self), err)]
+    async fn team_admins(
+        &self,
+        team_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
+        let Some(teams) = &self.teams else {
+            return Err(WebhookEventIngestionError::UnsupportedAudience(
+                "team admins",
+            ));
+        };
+        let members = teams.members(team_id).await.map_err(directory_error)?;
+        Ok(members
+            .into_iter()
+            .filter(|(_, role)| *role >= TeamRole::Admin)
+            .map(|(user, _)| user)
+            .collect())
+    }
+
+    /// A GitHub installation's events reach, as the live stream does, the
+    /// users who hold a claim on it (owners with a linked GitHub account, by
+    /// the routines' rule): their personal workspaces, plus the workspaces of
+    /// the teams that own it.
+    #[tracing::instrument(skip(self), err)]
+    async fn installation_workspaces(
+        &self,
+        installation_id: &str,
+    ) -> Result<Vec<String>, WebhookEventIngestionError> {
+        let (Some(teams), Some(github)) = (&self.teams, &self.github) else {
+            return Err(WebhookEventIngestionError::UnsupportedAudience(
+                "GitHub installation",
+            ));
+        };
+        let owners = github
+            .installation_owners(installation_id)
+            .await
+            .map_err(directory_error)?;
+
+        let mut candidates = owners.users.clone();
+        for team_id in &owners.teams {
+            let members = teams.members(*team_id).await.map_err(directory_error)?;
+            candidates.extend(members.into_iter().map(|(user, _)| user));
+        }
+        candidates.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+        candidates.dedup();
+
+        let mut workspaces: Vec<String> = owners.teams.iter().map(ToString::to_string).collect();
+        for candidate in candidates {
+            if github
+                .has_claim(&candidate, installation_id)
+                .await
+                .map_err(directory_error)?
+            {
+                workspaces.push(candidate.to_string());
+            }
+        }
+        Ok(workspaces)
     }
 
     /// The explicit accessors whose access level is at least `min_level`:
@@ -405,6 +544,10 @@ fn normalize_staged<E: TopicEvent>(
     Ok(Some((public.event, public.audience, public.stage)))
 }
 
+fn directory_error(report: rootcause::Report) -> WebhookEventIngestionError {
+    WebhookEventIngestionError::WorkspaceResolution(anyhow::anyhow!("{report:?}"))
+}
+
 /// Every audience nested in `audience`, depth first, with `Any` expanded.
 fn audience_members(audience: &Audience) -> Vec<&Audience> {
     match audience {
@@ -448,12 +591,14 @@ impl WorkspaceAudience {
     }
 }
 
-impl<A, R, Q, P> WebhookEventIngestionServiceImpl<A, R, Q, P>
+impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
     P: PreviewFlag,
+    T: TeamDirectory,
+    G: GithubClaims,
 {
     /// Normalize one event and enqueue it for every matching webhook its
     /// audience reaches.
@@ -513,12 +658,15 @@ where
                     min_role: MinTeamRole::Member,
                 } => workspaces.exact.push(team_id.to_string()),
                 Audience::Team {
+                    team_id,
                     min_role: MinTeamRole::Admin,
-                    ..
                 } => {
-                    return Err(WebhookEventIngestionError::UnsupportedAudience(
-                        "team admins",
-                    ));
+                    workspaces.exact.extend(
+                        self.team_admins(*team_id)
+                            .await?
+                            .into_iter()
+                            .map(|admin| admin.to_string()),
+                    );
                 }
                 Audience::EntityAtLeast {
                     entity_type,
@@ -533,10 +681,10 @@ where
                         workspaces.add_person(&accessor);
                     }
                 }
-                Audience::GithubInstallation { .. } => {
-                    return Err(WebhookEventIngestionError::UnsupportedAudience(
-                        "GitHub installation",
-                    ));
+                Audience::GithubInstallation { installation_id } => {
+                    workspaces
+                        .exact
+                        .extend(self.installation_workspaces(installation_id).await?);
                 }
                 Audience::Any(_) => {
                     return Err(WebhookEventIngestionError::UnsupportedAudience(
@@ -562,12 +710,15 @@ where
     }
 }
 
-impl<A, R, Q, P> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q, P>
+impl<A, R, Q, P, T, G> WebhookEventIngestionService
+    for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
     P: PreviewFlag,
+    T: TeamDirectory,
+    G: GithubClaims,
 {
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_document_event(

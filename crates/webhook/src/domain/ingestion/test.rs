@@ -2456,3 +2456,177 @@ async fn an_access_floor_audience_reaches_only_accessors_at_that_level() {
         vec![vec![user_id(editor)]]
     );
 }
+
+mod team_and_installation_audiences {
+    use super::*;
+    use event_stream::domain::ports::{GithubClaims, InstallationOwners, TeamDirectory, TeamRole};
+    use macro_event_broker::exposure::{MinTeamRole, Stage};
+
+    const TEAM: uuid::Uuid = uuid::Uuid::from_u128(0x7ea);
+    const ADMIN: &str = "macro|admin@example.com";
+    const MEMBER: &str = "macro|member@example.com";
+    const CLAIMANT: &str = "macro|claimant@example.com";
+    const INSTALLATION: &str = "4242";
+
+    #[derive(Default)]
+    struct Directories {
+        members: Mutex<Vec<(MacroUserIdStr<'static>, TeamRole)>>,
+        claimants: Mutex<Vec<String>>,
+        personal_owner: Option<MacroUserIdStr<'static>>,
+    }
+
+    impl TeamDirectory for Directories {
+        async fn members(
+            &self,
+            team_id: uuid::Uuid,
+        ) -> Result<Vec<(MacroUserIdStr<'static>, TeamRole)>, rootcause::Report> {
+            assert_eq!(team_id, TEAM);
+            Ok(lock(&self.members).clone())
+        }
+
+        async fn teams_of(
+            &self,
+            _user: &MacroUserIdStr<'static>,
+        ) -> Result<Vec<(uuid::Uuid, TeamRole)>, rootcause::Report> {
+            Ok(Vec::new())
+        }
+    }
+
+    impl GithubClaims for Directories {
+        async fn installation_owners(
+            &self,
+            _installation_id: &str,
+        ) -> Result<InstallationOwners, rootcause::Report> {
+            Ok(InstallationOwners {
+                users: self.personal_owner.iter().cloned().collect(),
+                teams: vec![TEAM],
+            })
+        }
+
+        async fn has_claim(
+            &self,
+            user: &MacroUserIdStr<'static>,
+            installation_id: &str,
+        ) -> Result<bool, rootcause::Report> {
+            Ok(installation_id == INSTALLATION
+                && lock(&self.claimants)
+                    .iter()
+                    .any(|claimant| claimant == user.as_ref()))
+        }
+    }
+
+    fn event(name: &str) -> NormalizedWebhookEvent {
+        NormalizedWebhookEvent {
+            event_id: "0193b3a0-0000-7000-8000-000000000001".to_string(),
+            schema_version: 1,
+            event_name: name.to_string(),
+            entity_type: "team".to_string(),
+            entity_id: TEAM.to_string(),
+            ordering_key: TEAM.to_string(),
+            occurred_at: timestamp(),
+            broker_envelope: Value::Null,
+        }
+    }
+
+    async fn matched_workspaces(directories: &Arc<Directories>, audience: Audience) -> Vec<String> {
+        let repository = MockRepository::new(Vec::new(), Vec::new());
+        let service = service(
+            MockAccessService::with_users(Vec::new()),
+            repository.clone(),
+            MockEnqueuer::default(),
+        )
+        .with_audience_directories(directories.clone(), directories.clone());
+        service
+            .resolve_audience_and_enqueue(event("team.invite_created"), Stage::Stable, &audience)
+            .await
+            .unwrap();
+        let mut workspaces = lock(&repository.state)
+            .match_calls
+            .last()
+            .map(|call| call.workspace_ids.clone())
+            .unwrap_or_default();
+        workspaces.sort();
+        workspaces
+    }
+
+    #[tokio::test]
+    async fn admin_only_team_events_reach_admins_personal_workspaces_only() {
+        let directories = Arc::new(Directories::default());
+        *lock(&directories.members) = vec![
+            (user_id(ADMIN), TeamRole::Admin),
+            (user_id(MEMBER), TeamRole::Member),
+        ];
+        let admins_only = Audience::Team {
+            team_id: TEAM,
+            min_role: MinTeamRole::Admin,
+        };
+
+        assert_eq!(
+            matched_workspaces(&directories, admins_only.clone()).await,
+            vec![ADMIN.to_string()],
+            "never the team workspace, never a plain member"
+        );
+
+        // Demoted: they stop receiving.
+        *lock(&directories.members) = vec![
+            (user_id(ADMIN), TeamRole::Member),
+            (user_id(MEMBER), TeamRole::Member),
+        ];
+        assert!(
+            matched_workspaces(&directories, admins_only)
+                .await
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn installation_events_reach_claimants_and_owning_teams_only() {
+        let directories = Arc::new(Directories {
+            personal_owner: Some(user_id(CLAIMANT)),
+            ..Directories::default()
+        });
+        *lock(&directories.members) = vec![(user_id(MEMBER), TeamRole::Member)];
+        *lock(&directories.claimants) = vec![CLAIMANT.to_string()];
+        let installation = Audience::GithubInstallation {
+            installation_id: INSTALLATION.to_string(),
+        };
+
+        // The member has no linked GitHub account: no claim, no delivery.
+        assert_eq!(
+            matched_workspaces(&directories, installation.clone()).await,
+            vec![TEAM.to_string(), CLAIMANT.to_string()]
+        );
+
+        // The claimant unlinks GitHub: they stop receiving.
+        lock(&directories.claimants).clear();
+        assert_eq!(
+            matched_workspaces(&directories, installation).await,
+            vec![TEAM.to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn without_directories_these_audiences_stay_unsupported() {
+        let service = service(
+            MockAccessService::with_users(Vec::new()),
+            MockRepository::new(Vec::new(), Vec::new()),
+            MockEnqueuer::default(),
+        );
+
+        let result = service
+            .resolve_audience_and_enqueue(
+                event("team.invite_created"),
+                Stage::Stable,
+                &Audience::Team {
+                    team_id: TEAM,
+                    min_role: MinTeamRole::Admin,
+                },
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(WebhookEventIngestionError::UnsupportedAudience(_))
+        ));
+    }
+}

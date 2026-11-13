@@ -112,8 +112,11 @@ fn validate_endpoint_url(
 /// Validate a filter set for persistence: the same rules a live stream
 /// applies, so a filter set is valid for both deliveries or neither.
 pub(crate) fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookError> {
-    event_stream::domain::filters::validate_filters(filters)
-        .map_err(|error| WebhookError::BadRequest(error.0))
+    event_stream::domain::filters::validate_filters(
+        filters,
+        event_stream::domain::filters::MAX_WEBHOOK_FILTERS,
+    )
+    .map_err(|error| WebhookError::BadRequest(error.0))
 }
 
 fn validate_create_request(

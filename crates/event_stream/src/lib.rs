@@ -10,5 +10,6 @@
 
 pub mod domain;
 pub mod inbound;
+pub mod metrics;
 pub mod outbound;
 pub mod topics;

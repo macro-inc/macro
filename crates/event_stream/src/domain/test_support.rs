@@ -373,6 +373,13 @@ impl FakeGithub {
 }
 
 impl GithubClaims for FakeGithub {
+    async fn installation_owners(
+        &self,
+        _installation_id: &str,
+    ) -> Result<crate::domain::ports::InstallationOwners, Report> {
+        Ok(crate::domain::ports::InstallationOwners::default())
+    }
+
     async fn has_claim(
         &self,
         user: &MacroUserIdStr<'static>,

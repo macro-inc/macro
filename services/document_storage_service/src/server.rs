@@ -1033,6 +1033,7 @@ async fn run_server() -> anyhow::Result<()> {
                 github::outbound::pg_installation_claims::PgGithubInstallationClaims::new(
                     db.clone(),
                 ),
+                PgGithubSyncRepo::new(db.clone()),
             ),
             Arc::new(event_stream::domain::access::AccessCaches::default()),
         ));
@@ -1101,7 +1102,18 @@ async fn run_server() -> anyhow::Result<()> {
         )
         .with_preview_flag(Arc::new(
             event_stream::outbound::preview_flag::FeatureFlagPreview::new(flags.clone()),
-        ));
+        ))
+        .with_audience_directories(
+            Arc::new(event_stream::outbound::pg_teams::PgTeamDirectory::new(
+                db.clone(),
+            )),
+            Arc::new(crate::outbound::event_stream::InstallationClaims::new(
+                github::outbound::pg_installation_claims::PgGithubInstallationClaims::new(
+                    db.clone(),
+                ),
+                PgGithubSyncRepo::new(db.clone()),
+            )),
+        );
     let webhook_delivery_repository =
         webhook::outbound::PgWebhookDeliveryRepository::new(db.clone());
     let webhook_delivery_service = webhook::domain::delivery::WebhookEventDeliveryServiceImpl::new(

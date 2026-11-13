@@ -931,6 +931,7 @@ pub(crate) type DssEventAudienceResolver = event_stream::domain::access::Audienc
     >,
     crate::outbound::event_stream::InstallationClaims<
         github::outbound::pg_installation_claims::PgGithubInstallationClaims,
+        github::outbound::pg_github_sync_repo::PgGithubSyncRepo,
     >,
 >;
 
@@ -943,6 +944,7 @@ pub(crate) type DssEventStreamService = event_stream::domain::stream::StreamServ
     >,
     crate::outbound::event_stream::InstallationClaims<
         github::outbound::pg_installation_claims::PgGithubInstallationClaims,
+        github::outbound::pg_github_sync_repo::PgGithubSyncRepo,
     >,
     event_stream::outbound::redis_log::RedisEventLog,
     event_stream::outbound::preview_flag::FeatureFlagPreview<

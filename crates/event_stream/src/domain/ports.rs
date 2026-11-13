@@ -201,11 +201,27 @@ pub trait CredentialCheck: Send + Sync + 'static {
     fn still_valid(&self) -> futures::future::BoxFuture<'_, Result<bool, Report>>;
 }
 
+/// The Macro owners of a GitHub App installation.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InstallationOwners {
+    /// Users who installed it personally.
+    pub users: Vec<MacroUserIdStr<'static>>,
+    /// Teams it is installed for.
+    pub teams: Vec<Uuid>,
+}
+
 /// GitHub App installation claims, by the rule routines use: a user holds a
 /// claim when they own the installation (personal, with the installing
 /// GitHub account still linked) or belong to an owning team, and have a
 /// linked GitHub account.
 pub trait GithubClaims: Send + Sync + 'static {
+    /// The users and teams an installation is recorded against, before the
+    /// claim rule: candidates for [`Self::has_claim`].
+    fn installation_owners(
+        &self,
+        installation_id: &str,
+    ) -> impl Future<Output = Result<InstallationOwners, Report>> + Send;
+
     /// Whether `user` holds a claim on the installation.
     fn has_claim(
         &self,

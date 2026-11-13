@@ -3,9 +3,10 @@
 
 use bots::domain::models::{BotId, BotOwner};
 use bots::domain::ports::BotRepo;
-use event_stream::domain::ports::GithubClaims;
+use event_stream::domain::ports::{GithubClaims, InstallationOwners};
 use event_stream::inbound::stream_router::BotOwners;
-use github::domain::ports::GithubInstallationClaims;
+use github::domain::models::GithubAppInstallationSource;
+use github::domain::ports::{GithubInstallationClaims, GithubSyncRepo};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -47,19 +48,50 @@ where
     }
 }
 
-/// GitHub installation claims, by the rule routines use.
-pub struct InstallationClaims<C> {
+/// GitHub installation owners and claims, by the rule routines use.
+pub struct InstallationClaims<C, S> {
     claims: C,
+    sources: S,
 }
 
-impl<C> InstallationClaims<C> {
-    /// Read claims through `claims`.
-    pub fn new(claims: C) -> Self {
-        Self { claims }
+impl<C, S> InstallationClaims<C, S> {
+    /// Read claims through `claims` and installation owners through
+    /// `sources`.
+    pub fn new(claims: C, sources: S) -> Self {
+        Self { claims, sources }
     }
 }
 
-impl<C: GithubInstallationClaims + Send + Sync + 'static> GithubClaims for InstallationClaims<C> {
+impl<C, S> GithubClaims for InstallationClaims<C, S>
+where
+    C: GithubInstallationClaims + Send + Sync + 'static,
+    S: GithubSyncRepo + Send + Sync + 'static,
+{
+    async fn installation_owners(
+        &self,
+        installation_id: &str,
+    ) -> Result<InstallationOwners, rootcause::Report> {
+        let sources = self
+            .sources
+            .get_installation_sources(installation_id)
+            .await
+            .map_err(|error| {
+                rootcause::report!("failed to read a GitHub installation's owners: {error:?}")
+            })?;
+        let mut owners = InstallationOwners::default();
+        for source in sources {
+            match source {
+                GithubAppInstallationSource::Team(team_id) => owners.teams.push(team_id),
+                GithubAppInstallationSource::User(user_id) => {
+                    if let Ok(user) = MacroUserIdStr::try_from(user_id) {
+                        owners.users.push(user);
+                    }
+                }
+            }
+        }
+        Ok(owners)
+    }
+
     async fn has_claim(
         &self,
         user: &MacroUserIdStr<'static>,

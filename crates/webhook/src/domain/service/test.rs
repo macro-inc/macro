@@ -1432,3 +1432,13 @@ async fn delete_succeeds_when_event_scheduling_fails() {
         .await
         .expect("event scheduling must not fail webhook deletion");
 }
+
+/// The webhook API keeps its original cap of 50 filters (streams take 32).
+#[test]
+fn a_webhook_holds_up_to_50_filters() {
+    let fifty: WebhookFilters = (0..50).flat_map(|_| valid_filters()).collect();
+    let fifty_one: WebhookFilters = (0..51).flat_map(|_| valid_filters()).collect();
+
+    assert!(super::validate_filters(&fifty).is_ok());
+    assert_bad_request(super::validate_filters(&fifty_one));
+}

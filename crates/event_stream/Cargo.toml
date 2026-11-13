@@ -9,7 +9,6 @@ default = []
 outbound = [
   "dep:entity_access",
   "dep:feature_flags",
-  "dep:opentelemetry",
   "dep:rate_limit",
   "dep:redis",
   "dep:sqlx",
@@ -64,7 +63,7 @@ macro_event_topics = { path = "../macro_event_topics" }
 messages = { path = "../messages", features = ["broker"] }
 model-error-response = { path = "../model-error-response", optional = true }
 macro_user_id = { path = "../macro_user_id" }
-opentelemetry = { workspace = true, optional = true }
+opentelemetry = { workspace = true, features = ["metrics", "trace"] }
 rate_limit = { path = "../rate_limit", optional = true }
 rdkafka = { workspace = true, optional = true }
 redis = { workspace = true, optional = true, features = ["aio", "streams", "tokio-comp"] }

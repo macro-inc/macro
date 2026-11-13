@@ -69,6 +69,9 @@ event (`lagged`, `revoked`, `reset`).
   logged revocation is exact.
 - Link-share viewers are never in an audience; a bot listens as its acting
   user and sees `owner`/`recipient` events only if that user owns it.
+- Metrics (`src/metrics.rs`, global OTel meter): `events.stream.open`,
+  `events.stream.closes{reason}`, `events.stream.fan_out_lag`,
+  `events.log.append_lag`, `events.stream.tail_gaps`. No ids as attributes.
 - An audience resolution error drops that event for those streams; it never
   closes them. Upstream is at most once (no outbox); SSE is at least once
   within the replay window when the client resumes with its cursor.

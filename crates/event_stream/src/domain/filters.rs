@@ -5,7 +5,8 @@
 //! against the catalog at match time, so a new event in a family arrives
 //! without re-registering; they work only for users with the
 //! `public-event-stream` flag, and are literal names (which match nothing)
-//! otherwise.
+//! otherwise. Webhooks keep their original cap of 50 filters; streams take
+//! 32.
 
 #[cfg(test)]
 mod test;
@@ -13,8 +14,12 @@ mod test;
 use crate::domain::catalog;
 use serde::{Deserialize, Serialize};
 
-/// Most filters one subscription may hold (shared with routine triggers).
-pub const MAX_FILTERS: usize = 32;
+/// Most filters one live stream may hold (shared with routine triggers).
+pub const MAX_STREAM_FILTERS: usize = 32;
+/// Most filters one persisted webhook may hold: the cap webhooks were
+/// created under before streams shared their filters, kept because the
+/// webhook API is a deployed boundary.
+pub const MAX_WEBHOOK_FILTERS: usize = 50;
 /// Most event names one filter may hold.
 pub const MAX_FILTER_EVENTS: usize = 100;
 /// Most entity ids one filter may hold (shared with routine triggers).
@@ -166,16 +171,21 @@ fn validate_event_pattern(pattern: &str) -> Result<(), InvalidFilters> {
     )))
 }
 
-/// Reject filter sets neither delivery accepts.
-pub fn validate_filters(filters: &[WebhookFilter]) -> Result<(), InvalidFilters> {
+/// Reject a filter set with more than `max_filters` filters, or any filter
+/// neither delivery accepts. Streams pass [`MAX_STREAM_FILTERS`], webhooks
+/// [`MAX_WEBHOOK_FILTERS`]; every other rule is shared.
+pub fn validate_filters(
+    filters: &[WebhookFilter],
+    max_filters: usize,
+) -> Result<(), InvalidFilters> {
     if filters.is_empty() {
         return Err(InvalidFilters(
             "filters must be a non-empty array".to_string(),
         ));
     }
-    if filters.len() > MAX_FILTERS {
+    if filters.len() > max_filters {
         return Err(InvalidFilters(format!(
-            "filters must include at most {MAX_FILTERS} entries"
+            "filters must include at most {max_filters} entries"
         )));
     }
 

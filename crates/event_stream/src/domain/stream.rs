@@ -16,7 +16,9 @@
 mod test;
 
 use crate::domain::access::{AudienceResolver, Candidate};
-use crate::domain::filters::{self, FilterSubject, WebhookFilters, validate_filters};
+use crate::domain::filters::{
+    self, FilterSubject, MAX_STREAM_FILTERS, WebhookFilters, validate_filters,
+};
 use crate::domain::models::{
     CloseReason, ControlEvent, Cursor, LogEntry, PrincipalKind, StreamItem, StreamPrincipal,
     WebhookScope,
@@ -240,7 +242,8 @@ where
         request: OpenStream,
     ) -> Result<BoxStream<'static, StreamItem>, StreamError> {
         let span = tracing::Span::current();
-        validate_filters(&request.filters).map_err(|error| StreamError::BadRequest(error.0))?;
+        validate_filters(&request.filters, MAX_STREAM_FILTERS)
+            .map_err(|error| StreamError::BadRequest(error.0))?;
 
         let preview = self.preview_enabled(&request.principal).await;
         span.record("preview", preview);
@@ -303,6 +306,7 @@ where
             preview,
         });
         span.record("stream.id", subscription.id);
+        crate::metrics::metrics().open_streams.add(1, &[]);
 
         let (transport, items) = mpsc::channel(TRANSPORT_BUFFER);
         let task = StreamTask {
@@ -652,6 +656,7 @@ where
 
     async fn finish(self, reason: CloseReason) {
         self.service.registry.deregister(self.id);
+        crate::metrics::record_close(reason.as_str());
         self.service
             .limiter
             .release(&self.limit_keys, &self.lease_holder)

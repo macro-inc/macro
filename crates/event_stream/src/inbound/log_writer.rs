@@ -97,7 +97,17 @@ where
         async {
             match message.decode_payload() {
                 Ok(event) => {
-                    append_with_retry(writer, kafka_message.topic(), &event).await?;
+                    let outcome = append_with_retry(writer, kafka_message.topic(), &event).await?;
+                    if let (WriteOutcome::Appended(cursor), Some(published_ms)) =
+                        (outcome, kafka_message.timestamp().to_millis())
+                    {
+                        crate::metrics::metrics().append_lag_ms.record(
+                            cursor
+                                .ms
+                                .saturating_sub(u64::try_from(published_ms).unwrap_or_default()),
+                            &[],
+                        );
+                    }
                 }
                 Err(error) => {
                     record_span_error(&tracing::Span::current(), &error);
