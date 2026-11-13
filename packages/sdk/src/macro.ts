@@ -36,6 +36,7 @@ import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
+import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UiNamespace } from './entities/ui/namespace';
@@ -143,6 +144,9 @@ export type { RequestActivity } from './utils/activity';
 export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
+
+  /** suggestions resources and operations. */
+  readonly suggestions: SuggestionNamespace;
 
   /** unfurls resources and operations. */
   readonly unfurls: UnfurlNamespace;
@@ -270,6 +274,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     const client = new MacroClient(opts);
     this._client = client;
     this.routines = new RoutineNamespace(client);
+    this.suggestions = new SuggestionNamespace(client);
     this.unfurls = new UnfurlNamespace(client);
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
@@ -553,6 +558,7 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export { RoutineSuggestion } from './entities/routines/suggestion';
 export {
   SavedView,
   type SavedViewConfig,
@@ -586,6 +592,16 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/spreadsheets/spreadsheet';
+export type {
+  SuggestionInput,
+  SuggestionsReview,
+} from './entities/suggestions/namespace';
+export {
+  Suggestion,
+  type SuggestionChanges,
+  type SuggestionItem,
+  type SuggestionWriteOutcome,
+} from './entities/suggestions/suggestion';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export {

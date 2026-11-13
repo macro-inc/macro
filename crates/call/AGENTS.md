@@ -86,6 +86,10 @@ in-call chat.
   standalone ownership, attendance, or an explicit invite is required.
 - Every token-producing HTTP route refuses `x-macro-code-execution` because
   tokens can outlive a code execution and cannot be revoked.
+- `edit_call_record_handler` refuses share permission and team sharing
+  changes from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

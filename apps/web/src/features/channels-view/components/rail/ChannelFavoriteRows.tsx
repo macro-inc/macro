@@ -8,7 +8,8 @@ import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
+import { ChannelMentionCount } from './ChannelCountPill';
 import {
   ChannelAvatar,
   ChannelRailItemContextMenu,
@@ -76,9 +77,14 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
       </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
       <ChannelMutedIndicator muted={item().muted} />
-      <Show when={item().unread}>
-        <UnreadIndicator active />
-      </Show>
+      <Switch>
+        <Match when={item().mentions > 0}>
+          <ChannelMentionCount count={item().mentions} />
+        </Match>
+        <Match when={item().unread}>
+          <UnreadIndicator active />
+        </Match>
+      </Switch>
     </ViewSidebar.Item>
   );
 

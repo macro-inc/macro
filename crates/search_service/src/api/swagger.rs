@@ -37,7 +37,7 @@ use models_search::project::{
 use models_search::names::{
     NameKind, NameMatch, NameQuery, NameResult, NameSearchRequest, NameSearchResponse, NamedItem,
 };
-use models_search::{MatchType, SearchHighlight};
+use models_search::{MatchType, SearchHighlight, TermMatching};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -58,6 +58,7 @@ use models_search::{MatchType, SearchHighlight};
             schemas(
                         EmptyResponse,
                         MatchType,
+                        TermMatching,
                         SearchHighlight,
                         DocumentSubType,
 

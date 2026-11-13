@@ -25,6 +25,7 @@ comms_db_client = { path = "../comms_db_client" }
 crm = { path = "../crm", default-features = false, features = ["search"] }
 document_sub_type = { path = "../document_sub_type" }
 email_db_client = { path = "../email_db_client" }
+feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "outbound",
