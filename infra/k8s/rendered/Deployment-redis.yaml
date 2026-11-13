@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: redis
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: redis
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: redis
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: redis
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom: []
+          image: localhost:32550/macro/redis:build.xbbhyndmnz1fpdmbi1rij295ybyywjy7
+          imagePullPolicy: IfNotPresent
+          name: redis
+          ports:
+            - containerPort: 6379
+              protocol: TCP
+            - containerPort: 8001
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            periodSeconds: 1
+            tcpSocket:
+              port: 6379
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /data
+              name: vol-data
+      enableServiceLinks: false
+      initContainers: []
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-data
+          persistentVolumeClaim:
+            claimName: cache

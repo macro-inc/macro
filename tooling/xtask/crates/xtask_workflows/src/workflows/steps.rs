@@ -416,7 +416,8 @@ pub fn mount_web_build_cache_volume() -> Step<Use> {
 }
 
 /// [`mount_web_build_cache_volume`] plus [`vars::WASM_PKG_CACHE_DIR`], for the PR
-/// build that reuses unchanged wasm packages. Deploy builds always rebuild them.
+/// build that reuses unchanged wasm packages. Deploy builds keep theirs in an
+/// Actions cache instead (`build_web_app`), since PR jobs write this volume.
 pub fn mount_web_build_check_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "nix"))

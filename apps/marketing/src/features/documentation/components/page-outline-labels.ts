@@ -28,6 +28,7 @@ export const pageOutlineLabels: Record<string, string> = {
   'crm-from-email-title': 'Email integration',
   'crm-enrichment-title': 'Customer records',
   'crm-context-title': 'Customer discussions',
+  'crm-databases-title': 'Pipelines as databases',
   'crm-tasks-title': 'Task integration',
   'crm-agents-title': 'Agent updates',
   'agent-sources-title': 'Team context',

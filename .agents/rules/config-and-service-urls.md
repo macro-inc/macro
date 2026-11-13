@@ -38,8 +38,9 @@ startup loudly.
   `Environment` to build a URL. Queue names follow the same pattern in
   `crates/macro_queues`.
 - Third-party hosts our code calls are typed the same way when a test double
-  exists for them (`GmailApiUrl`, `GooglePeopleApiUrl`, `GoogleOauthCertsUrl`
-  for `crates/gmail_emulator`; `MicrosoftGraphUrl` for
+  exists for them (`GmailApiUrl`, `GoogleCalendarApiUrl`, `GooglePeopleApiUrl`,
+  `GoogleOauthCertsUrl`, `GoogleOauthAuthorizationUrl`, `GoogleOauthTokenUrl`,
+  `GoogleOauthRevokeUrl` for `crates/gmail_emulator`; `MicrosoftGraphUrl` for
   `crates/outlook_emulator`): the provider's host in every environment, with
   the override as the only way to point elsewhere. They are not part of the
   hand-copied table below.
