@@ -226,7 +226,7 @@ async fn confirmed_selection_is_the_durable_upload_and_work_scope(pool: PgPool) 
                 && c.archived)
     );
     assert_eq!(repo.progress(team, job).await.unwrap().unwrap(), original);
-    assert_eq!(repo.list(team, None).await.unwrap(), [original.clone()]);
+    assert_eq!(repo.list(team, None).await.unwrap(), std::slice::from_ref(&original));
     for altered in [
         CreateImport {
             include_message_history: false,
@@ -265,7 +265,7 @@ async fn confirmed_selection_is_the_durable_upload_and_work_scope(pool: PgPool) 
         ImportError::Unavailable,
     );
     error(
-        repo.uploads(team, job, &[unselected.upload.clone()]).await,
+        repo.uploads(team, job, std::slice::from_ref(&unselected.upload)).await,
         ImportError::Unavailable,
     );
     let forged = VerifiedUpload {
