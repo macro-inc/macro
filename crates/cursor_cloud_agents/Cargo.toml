@@ -13,6 +13,7 @@ test-utils = []
 
 [[bin]]
 name = "cursor_cloud_agents"
+test = false
 
 [dependencies]
 nom = { workspace = true }

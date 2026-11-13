@@ -4,6 +4,9 @@ name = "models_sfs"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

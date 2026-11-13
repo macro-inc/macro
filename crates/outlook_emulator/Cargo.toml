@@ -5,6 +5,11 @@ publish = false
 version = "0.1.0"
 description = "Test support: a stateful fake of the Microsoft Graph mail and calendar APIs and the Microsoft identity platform Macro's email, calendar and sign-in code call (messages, folders, delta, drafts, attachments, subscriptions with change notifications, throttling; calendars, events, series, calendarView delta; sign-in page, tokens, ID tokens and their keys), in process or as a standalone binary."
 
+[[bin]]
+name = "outlook_emulator"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 askama = { workspace = true }
 axum = { workspace = true }

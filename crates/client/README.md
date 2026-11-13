@@ -284,9 +284,9 @@ the predicate/collation; older local schema-12 shapes without it are incompatibl
 not silently upgraded. No additional format/version cutover or contacts store was
 introduced.
 
-`cargo test -p cache-turso --test search` checks matching/ranking parity, including
+`cargo test -p cache-turso --test it -- search::` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
-measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
+measurement with `cargo test -p cache-turso --test it -- search:: --ignored --nocapture`.
 The `web` test target exercises the same parity contract over real browser OPFS;
 its ignored `search_100k_rows_over_opfs` measurement runs with
 `-- --include-ignored --nocapture` under the browser runner.
@@ -308,7 +308,7 @@ preserves normalized data, mutations, and storage generation.
 
 Hydration omits contact page and exact-lookup wrappers from the viewer while
 retaining normalized contacts. Foreground contact variants share Soup's bounded
-64-page / 2 MiB snapshot budget shared with Soup and database view pages. `cache-turso/tests/contacts.rs` and the OPFS
+64-page / 2 MiB snapshot budget shared with Soup and database view pages. `cache-turso/tests/it/contacts.rs` and the OPFS
 suite hydrate the real client operation, reopen, search, materialize bounded
 fragments with target `userId` intact, and reset account identity. The background
 runner now shares Soup's leadership and commits pages through `HydrationScope`:

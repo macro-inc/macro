@@ -8,10 +8,12 @@ version = "0.1.0"
 [[bin]]
 name = "whatsapp_session_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "whatsapp_session_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [dependencies]
 async-trait = { workspace = true }

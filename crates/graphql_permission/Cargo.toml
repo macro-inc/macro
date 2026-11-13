@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[lib]
+test = false
+
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
 entity_access = { path = "../entity_access", default-features = false, features = [

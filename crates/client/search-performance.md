@@ -79,7 +79,7 @@ or disk-space growth across large real corpora.
 ## Normalized contact hydration
 
 ```sh
-cargo test --release -p cache-turso --test contacts hydrate_and_search_100k_contacts -- --ignored --nocapture
+cargo test --release -p cache-turso --test it -- contacts::hydrate_and_search_100k_contacts --ignored --nocapture
 ```
 
 A separate native filesystem trial hydrates 100,000 `GraphqlContact` records
@@ -103,7 +103,7 @@ responses. It rebuilds only derived rows, without another storage-schema cutover
 
 ## Context-aware person-policy prototype
 
-`cargo test --release -p cache-turso --test people people_policy_100k -- --ignored --nocapture`
+`cargo test --release -p cache-turso --test it -- people::people_policy_100k --ignored --nocapture`
 measures the new person-policy API against 100k normalized synthetic people, with
 50 winners and an empty published context. A local release sample took roughly
 345 ms for the first broad query, 340 ms warm, 43 ms selective, 39 ms absent, and

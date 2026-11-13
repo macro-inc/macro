@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [lib]
 proc-macro = true
+test = false
 
 [dependencies]
 proc-macro2 = "1"

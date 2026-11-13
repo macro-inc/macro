@@ -8,6 +8,7 @@ version = "0.1.0"
 name = "backfill_markdown_content_location"
 path = "src/bin/backfill_markdown_content_location.rs"
 required-features = ["backfill_binary"]
+test = false
 
 [features]
 purge = [

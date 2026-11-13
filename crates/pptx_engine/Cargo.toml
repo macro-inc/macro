@@ -28,6 +28,7 @@ openapi = ["dep:utoipa"]
 [[bin]]
 name = "pptx_corpus"
 required-features = ["cli"]
+test = false
 
 [dependencies]
 base64 = { workspace = true }

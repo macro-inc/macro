@@ -7,6 +7,7 @@
 #   cargo x doppler-bins <file>      # Doppler config-validation bins affected by changed files
 #   cargo x graphql-soup-schema <file> # export GraphQL Soup SDL to a file
 #   cargo x kafka-topics [--check]   # regenerate / verify kafka-cluster-topics.json
+#   cargo x test-targets             # fail on test binaries without tests of their own
 #   (anything else)                  # local/dev orchestration (xtask_local)
 #
 # `xtask` is a dependency-free launcher: it maps the subcommand to its own

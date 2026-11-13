@@ -445,6 +445,8 @@ jobs:
       run: cargo fmt --check
     - name: unused dependencies
       run: cargo shear --format github
+    - name: test targets
+      run: cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- test-targets
     - name: clippy
       run: |
         set -euo pipefail

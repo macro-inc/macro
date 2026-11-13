@@ -89,6 +89,16 @@ The tests themselves live in `src/user/test.rs` and can use `use super::*;`.
 A file module can coexist with its directory; do not convert `user.rs` to
 `user/mod.rs` just to add tests.
 
+Each test binary must run tests of its own, and `cargo x test-targets` (run by
+CI's `check` job) enforces it:
+
+- Give a lib or bin `test = false` when it has no tests, or only re-declares
+  modules another target already tests (openapi, doppler-config and backfill
+  bins). Its tests would build a second test binary that runs nothing new.
+- Put a crate's integration tests in `tests/it/`, one module per file, declared
+  from `tests/it/main.rs`. Each `tests/*.rs` file is its own binary. Run one
+  file's tests with `cargo test -p <package> --test it -- <module>::`.
+
 Update regression tests for changed behavior, including allow/deny cases for
 authorization changes. Run relevant tests between batches of query changes and
 refresh SQLx metadata as directed by the database guide. If you cannot run a

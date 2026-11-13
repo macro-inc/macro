@@ -3,7 +3,7 @@ mod name_index;
 use cache_core::engine::Engine;
 use cache_core::predicate::{PredicateIndexStorage, ProjectionMutation};
 use pollster::block_on;
-#[path = "../../../tests/common/people_sql.rs"]
+#[path = "../../../tests/it/common/people_sql.rs"]
 mod contract;
 
 #[test]

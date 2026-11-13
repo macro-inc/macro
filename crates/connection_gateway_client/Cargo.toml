@@ -4,6 +4,9 @@ name = "connection_gateway_client"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 connection_gateway_models = { path = "../connection_gateway_models" }

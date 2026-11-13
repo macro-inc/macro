@@ -102,8 +102,8 @@ Primary files:
 
 - `crates/client/cache-core/src/engine.rs`
 - `crates/client/cache-core/src/queue.rs` if common result types belong there
-- `crates/client/cache-core/tests/optimistic.rs`
-- `crates/client/cache-core/tests/mutation_queue.rs`
+- `crates/client/cache-core/tests/it/optimistic.rs`
+- `crates/client/cache-core/tests/it/mutation_queue.rs`
 
 Add a composite engine method such as:
 

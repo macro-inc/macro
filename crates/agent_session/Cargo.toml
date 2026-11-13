@@ -114,6 +114,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 name = "seed_jsonl"
 path = "src/bin/seed_jsonl.rs"
 required-features = ["cli"]
+test = false
 
 [dev-dependencies]
 messages = { path = "../messages", features = ["outbound"] }
@@ -138,3 +139,4 @@ tower = { workspace = true, features = ["util"] }
 name = "backfill_turn_states"
 path = "src/bin/backfill_turn_states.rs"
 required-features = ["cli"]
+test = false

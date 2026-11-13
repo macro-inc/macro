@@ -7,7 +7,8 @@
 //! AWS credentials anywhere).
 //!
 //! Critical path: `path-check` (no Rust compile on a warm binary cache) →
-//! `test`. `check` (fmt + clippy), `build-service-bins`, `doppler-config`, and
+//! `test`. `check` (fmt, unused dependencies, test targets, clippy),
+//! `build-service-bins`, `doppler-config`, and
 //! `graphql-schema-compat` run alongside `test`.
 
 use gh_workflow::{
@@ -90,7 +91,7 @@ fn path_check() -> Job {
         .add_step(compute_nextest_filter())
 }
 
-/// fmt + unused dependencies + clippy.
+/// fmt, unused dependencies, test targets and clippy.
 fn check() -> Job {
     steps::gated_job()
         .timeout_minutes(45u32)
@@ -104,6 +105,7 @@ fn check() -> Job {
         .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
         .add_step(cargo_shear())
+        .add_step(test_targets())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
@@ -413,6 +415,12 @@ fn cargo_fmt() -> Step<Run> {
 /// manifest's `[package.metadata.cargo-shear] ignored`.
 fn cargo_shear() -> Step<Run> {
     Step::new("unused dependencies").run("cargo shear --format github")
+}
+
+/// Every test binary runs a test of its own, and every test runs in one.
+fn test_targets() -> Step<Run> {
+    Step::new("test targets")
+        .run("cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- test-targets")
 }
 
 /// `cargo clippy`, scoped to the same package set as nextest.

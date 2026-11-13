@@ -12,10 +12,10 @@ fixtures `seed_cli` and Playwright use.
 - `README.md`: how to run tests against a fresh or already-running stack, and
   which env vars they read (`LOCAL_E2E_DATABASE_URL`,
   `LOCAL_E2E_DOCUMENT_STORAGE_URL`).
-- `tests/`: one file per scenario (`bot_entity_access.rs`,
+- `tests/it/`: one file per scenario (`bot_entity_access.rs`,
   `channel_mutations.rs`, `channel_websocket.rs`).
-- `tests/support/`: shared HTTP and websocket helpers.
-- `src/lib.rs`: thin — most logic lives under `tests/`.
+- `tests/it/support/`: shared HTTP and websocket helpers.
+- `src/lib.rs`: thin — most logic lives under `tests/it/`.
 
 ## Scope
 
@@ -26,8 +26,8 @@ fixtures `seed_cli` and Playwright use.
 
 ## Recipes
 
-- Add a scenario: `tests/<name>.rs` → reuse `tests/support/http.rs` /
-  `websocket.rs` for requests.
+- Add a scenario: `tests/it/<name>.rs`, declared in `tests/it/main.rs` → reuse
+  `crate::support::http` / `websocket` for requests.
 
 ## Checks
 

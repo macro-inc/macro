@@ -4,6 +4,9 @@ name = "macro_middleware"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [features]
 all = ["cloud_storage", "tracking"]
 cloud_storage = [

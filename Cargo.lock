@@ -23886,6 +23886,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask_test_targets"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "proc-macro2",
+ "syn 2.0.117",
+ "tempfile",
+ "xtask_graph",
+]
+
+[[package]]
 name = "xtask_workflows"
 version = "0.1.0"
 dependencies = [

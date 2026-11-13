@@ -11,6 +11,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "search_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [dependencies]
 agent_session = { path = "../agent_session", default-features = false }

@@ -22,13 +22,13 @@ scope. It uses random UUIDs and removes its rows after verification.
 Compile the test without requiring the local stack:
 
 ```bash
-nix develop --command cargo test -p local_e2e_integration_tests --test bot_entity_access --no-run
+nix develop --command cargo test -p local_e2e_integration_tests --test it --no-run
 ```
 
 To run it against an already-running local stack:
 
 ```bash
-nix develop --command cargo test -p local_e2e_integration_tests --test bot_entity_access -- --ignored --nocapture
+nix develop --command cargo test -p local_e2e_integration_tests --test it -- bot_entity_access:: --ignored --nocapture
 ```
 
 The test reads `LOCAL_E2E_DATABASE_URL` and

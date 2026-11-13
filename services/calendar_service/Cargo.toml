@@ -8,10 +8,12 @@ version = "0.1.0"
 [[bin]]
 name = "calendar_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "calendar_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [features]
 connection_gateway = []

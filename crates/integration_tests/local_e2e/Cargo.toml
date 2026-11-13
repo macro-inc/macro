@@ -4,6 +4,9 @@ name = "local_e2e_integration_tests"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dev-dependencies]
 anyhow = { workspace = true }
 bot_token = { path = "../../bot_token" }

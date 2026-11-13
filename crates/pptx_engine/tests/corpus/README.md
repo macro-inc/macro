@@ -171,7 +171,7 @@ Segoe UI…) still differ from what PowerPoint shows.
 (a 32-column grid of 4-bit luminance cells at 320 px) and, when references
 were available, the SSIM and mismatched-pixel fraction against them.
 
-- `cargo test -p pptx_engine --test corpus` (part of the normal test run, about
+- `cargo test -p pptx_engine --test it -- corpus::` (part of the normal test run, about
   30 s in a debug build) opens every deck, renders every slide, compares the
   fingerprints with the baseline (cross-platform rounding is tolerated), and
   checks that saving without edits keeps every part's bytes. It needs no

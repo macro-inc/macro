@@ -4,6 +4,11 @@ name = "upload_extractor_lambda_trigger"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "upload_extractor_lambda_trigger"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }

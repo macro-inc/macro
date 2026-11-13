@@ -4,6 +4,9 @@ name = "graphql_registered_work"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 agent_session = { path = "../agent_session", default-features = false }
 async-graphql = { workspace = true }

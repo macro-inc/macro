@@ -11,18 +11,22 @@ path = "src/main.rs"
 [[bin]]
 name = "agent_harness_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [[bin]]
 name = "agent_harness_cognition_openapi"
 path = "src/cognition_openapi.rs"
+test = false
 
 [[bin]]
 name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
+test = false
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }

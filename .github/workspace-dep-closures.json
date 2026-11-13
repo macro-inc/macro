@@ -16575,6 +16575,11 @@
       "crates/workspace-hack",
       "tooling/xtask/crates/xtask_ports"
     ],
+    "xtask_test_targets": [
+      "tooling/xtask/crates/xtask_graph",
+      "tooling/xtask/crates/xtask_paths",
+      "tooling/xtask/crates/xtask_test_targets"
+    ],
     "xtask_workflows": [
       "tooling/xtask/crates/xtask_paths",
       "tooling/xtask/crates/xtask_workflows"

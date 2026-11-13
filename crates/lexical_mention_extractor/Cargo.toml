@@ -4,6 +4,9 @@ name = "lexical_mention_extractor"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 lexical_client = { path = "../lexical_client" }

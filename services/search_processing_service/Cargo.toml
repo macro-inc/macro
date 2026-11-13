@@ -44,6 +44,7 @@ required-features = ["processing", "service"]
 [[bin]]
 name = "search_processing_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [dependencies]
 agent_session = { path = "../../crates/agent_session", default-features = false, features = ["outbound"] }

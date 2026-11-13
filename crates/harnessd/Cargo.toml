@@ -7,6 +7,7 @@ version = "0.1.0"
 [[bin]]
 name = "harnessd"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 chrono = { workspace = true }

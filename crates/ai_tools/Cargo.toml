@@ -4,6 +4,21 @@ name = "ai_tools"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "gen_ai_request_schemas"
+path = "src/bin/gen_ai_request_schemas.rs"
+test = false
+
+[[bin]]
+name = "gen_tool_schemas"
+path = "src/bin/gen_tool_schemas.rs"
+test = false
+
+[[bin]]
+name = "memory"
+path = "src/bin/memory.rs"
+test = false
+
 [features]
 test-support = []
 

@@ -5,5 +5,8 @@ edition = "2024"
 publish = false
 description = "The Deno SDK bundles and agent documentation code mode embeds, generated from the public SDK at build time."
 
+[lib]
+test = false
+
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

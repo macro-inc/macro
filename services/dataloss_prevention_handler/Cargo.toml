@@ -5,6 +5,11 @@ name = "dataloss_prevention_handler"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "dataloss_prevention_handler"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }

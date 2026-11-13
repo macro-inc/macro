@@ -1,0 +1,20 @@
+[package]
+description = "xtask test-targets: fail on test binaries that run no test of their own, and on tests no binary runs"
+edition = "2024"
+name = "xtask_test_targets"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask_test_targets"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+guppy = { workspace = true }
+proc-macro2 = { workspace = true }
+syn = { workspace = true }
+xtask_graph = { path = "../xtask_graph" }
+
+[dev-dependencies]
+tempfile = { workspace = true }

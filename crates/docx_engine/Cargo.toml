@@ -19,6 +19,7 @@ cli = ["dep:clap", "embedded-fonts"]
 [[bin]]
 name = "docx_corpus"
 required-features = ["cli"]
+test = false
 
 [dependencies]
 base64 = { workspace = true }

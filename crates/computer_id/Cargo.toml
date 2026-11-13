@@ -4,6 +4,9 @@ name = "computer_id"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [features]
 schema = ["dep:utoipa"]
 sqlx = ["dep:sqlx"]

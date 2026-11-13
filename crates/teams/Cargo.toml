@@ -8,6 +8,7 @@ version = "0.1.0"
 name = "backfill_teammate_dms"
 path = "src/bin/backfill_teammate_dms.rs"
 required-features = ["backfill_binary"]
+test = false
 
 [features]
 ai_tools = [

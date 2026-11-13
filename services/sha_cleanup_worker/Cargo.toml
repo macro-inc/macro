@@ -4,6 +4,11 @@ name = "sha_cleanup_worker"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "sha_cleanup_worker"
+path = "src/main.rs"
+test = false
+
 [features]
 local = []
 redis_client_test = []

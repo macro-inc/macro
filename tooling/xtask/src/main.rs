@@ -40,6 +40,7 @@ fn main() {
         Some("graphql-soup-schema") => "xtask_graphql_soup_schema",
         Some("graphql-schema-compat") => "xtask_graphql_schema_compat",
         Some("kafka-topics") => "xtask_kafka_topics",
+        Some("test-targets") => "xtask_test_targets",
         Some("workflows") => "xtask_workflows",
         // Everything else (including no args) is the local/dev orchestration
         // surface. Forward every arg — the subcommand is its clap parser's

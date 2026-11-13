@@ -37,7 +37,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/engine/people/sync.rs`: capture the single-owner engine's contact write fence, optionally scan at most 500 raw contact records by key, and reconcile complete exact-ID evidence. Never delete from scan omissions; reject stale fences, foreign/duplicate evidence and omitted self. Removal clears durable/hot records and invalidates dependent reads; context-only stubs are not membership. Engine replacement, clear and contact invalidation/deletion invalidate admission.
 - `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
-- `tests/`: the primary spec for engine behavior — one file per concern
+- `tests/it/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
 
 ## Scope
@@ -57,7 +57,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 ## Recipes
 
 - Add a new mutation's optimistic resolver: `src/engine.rs` (resolver registration)
-  → a new `tests/<name>_optimistic.rs` first (see the existing `*_optimistic.rs` tests).
+  → a new `tests/it/<name>_optimistic.rs` first (see the existing `*_optimistic.rs` tests).
 - Change what a query can select: `src/predicate.rs` → `src/record_selection.rs`
   → `src/query_inspection.rs`.
 
