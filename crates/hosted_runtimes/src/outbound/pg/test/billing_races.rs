@@ -12,9 +12,7 @@ use super::*;
 use crate::domain::fakes::MovingClock;
 use crate::domain::lifecycle::SubscriptionItemId;
 use crate::domain::models::{Purchase, PurchaseBilling, PurchaseRequest, Quote, SubscriptionItem};
-use crate::domain::ports::{
-    Billing as _, BillingError, ChargeStatus, ItemCharge, StaticFleetAttachment,
-};
+use crate::domain::ports::{BillingError, ChargeStatus, ItemCharge, StaticFleetAttachment};
 use crate::domain::service::{Clock, ComputerError, ComputerService, TeamComputerRelease};
 
 /// How the next add goes wrong.
@@ -454,6 +452,53 @@ async fn team_deletion_during_a_charge_leaves_no_billed_computer(pool: PgPool) {
     assert_eq!(released.state.phase, Phase::Destroying);
     assert!(stripe.items_for(id).await.is_empty());
     assert!(repo.team_reservations(TEAM).await.unwrap().is_empty());
+}
+
+/// A charge whose answer was lost, released before its retry: the retry
+/// fences the add and takes the landed item back, so the team is never
+/// billed for a computer it no longer has.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_charge_that_lands_after_release_is_taken_back(pool: PgPool) {
+    let stripe = Arc::new(Stripe::default());
+    let (service, repo, clock) = service(pool, stripe.clone()).await;
+    let Purchase::Ready(id) = service.purchase(purchase_request("buy-1")).await.unwrap() else {
+        panic!("expected a ready purchase");
+    };
+    // The add lands at Stripe, but its answer is lost: the computer stays charging.
+    *stripe.fail_next_add.lock().unwrap() = Some(Fail::LostAnswer { landed: true });
+    service.run_billing_effects().await.unwrap();
+    assert_eq!(billing_of(&repo, id).await, Billing::Charging);
+    assert_eq!(stripe.items_for(id).await.len(), 1);
+
+    // Released before the retry learns the charge was paid.
+    changed(&repo, id, Event::ReleaseNow, clock.now()).await;
+    clock.advance(Duration::minutes(1));
+    service.run_billing_effects().await.unwrap();
+
+    assert!(stripe.items_for(id).await.is_empty());
+    assert_eq!(
+        repo.get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
+        Phase::Destroying
+    );
+    // Nothing is left to retry, and a later pass charges nothing.
+    clock.advance(Duration::hours(2));
+    service.run_billing_effects().await.unwrap();
+    assert!(stripe.items_for(id).await.is_empty());
+    assert_eq!(
+        stripe
+            .keys()
+            .iter()
+            .filter(|key| **key == crate::domain::models::charge_key(id))
+            .count(),
+        1
+    );
 }
 
 /// A purchase dropped between reserving and converting: its reservation
