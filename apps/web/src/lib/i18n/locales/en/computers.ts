@@ -121,6 +121,7 @@ export default {
   stepConfigureAgentShort: 'Agent',
   stepBringAiShort: 'Your AI',
   loadingSizes: 'Loading computer sizes',
+  noSizes: 'No computer sizes are available right now.',
   setupProgressLabel: 'Setup progress',
   stageBilling: 'Updating billing…',
   stageSignIn: 'Sign in to Claude',
