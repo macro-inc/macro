@@ -378,7 +378,6 @@ async function warm(
     span.error(error);
     return 'failed';
   }
-  // The open then waits on the cache instead of racing the server.
   return read.outcome;
 }
 

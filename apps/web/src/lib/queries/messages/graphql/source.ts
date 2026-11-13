@@ -32,6 +32,8 @@ import {
   type Client,
   CombinedError,
   type DocumentInput,
+  type OperationResult,
+  type OperationResultSource,
   stringifyDocument,
 } from '@urql/core';
 import {
@@ -98,17 +100,55 @@ export function readError(error: unknown): unknown {
   );
 }
 
+/**
+ * The query's first complete result. An abort unsubscribes, which is what
+ * cancels the request: the client replaces a signal passed in its fetch
+ * options with its own.
+ */
+function firstResult<Data, Variables extends AnyVariables>(
+  source: OperationResultSource<OperationResult<Data, Variables>>,
+  signal?: AbortSignal
+): Promise<OperationResult<Data, Variables>> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    let settled = false;
+    let unsubscribe: (() => void) | undefined;
+    const finish = () => {
+      settled = true;
+      signal?.removeEventListener('abort', abort);
+      unsubscribe?.();
+    };
+    const abort = () => {
+      finish();
+      reject(signal?.reason);
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+    const subscription = source.subscribe((result) => {
+      if (settled || result.stale || result.hasNext) return;
+      finish();
+      resolve(result);
+    });
+    unsubscribe = () => subscription.unsubscribe();
+    // A result delivered while subscribing settled before there was anything
+    // to unsubscribe.
+    if (settled) unsubscribe();
+  });
+}
+
 async function queryUncached<Data, Variables extends AnyVariables>(
   document: DocumentInput<Data, Variables>,
   variables: Variables,
   signal?: AbortSignal
 ): Promise<Data> {
-  const result = await getUncachedGraphqlSoupClient()
-    .query(document, variables, {
+  const result = await firstResult(
+    getUncachedGraphqlSoupClient().query(document, variables, {
       requestPolicy: 'network-only',
-      ...(signal ? { fetchOptions: { signal } } : {}),
-    })
-    .toPromise();
+    }),
+    signal
+  );
   if (result.error) throw readError(result.error);
   if (!result.data) throw new Error('Channel query returned no data');
   return result.data;
