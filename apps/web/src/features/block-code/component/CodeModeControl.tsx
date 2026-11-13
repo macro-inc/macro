@@ -8,6 +8,7 @@ export function CodeModeControl(props: {
   return (
     <Tabs
       aria-label="HTML views"
+      size="sm"
       touch="inset"
       class="shrink-0"
       options={[

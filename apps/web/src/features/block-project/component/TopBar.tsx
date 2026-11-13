@@ -123,7 +123,7 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
+      <SplitHeaderRight size="md">
         <div class="order-[1000] flex items-center gap-2">
           <Show when={!isTouchDevice()}>
             <HeaderActionGroup label="Folder actions" size="md">
