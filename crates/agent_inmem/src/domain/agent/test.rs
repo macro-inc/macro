@@ -728,9 +728,8 @@ async fn changing_reasoning_effort_applies_to_the_next_turn() {
     );
 }
 
-/// A routine draft asks for no thinking whatever the session's model:
-/// Sonnet 5.5 runs without it, and a model that doesn't offer it refuses
-/// the change and runs the next prompt at its default.
+/// Sonnet 5.5 runs without thinking when asked, and a model that doesn't
+/// offer it refuses the change and runs the next prompt at its default.
 #[tokio::test]
 async fn no_thinking_runs_where_offered_and_is_refused_elsewhere() {
     for (model, expected) in [
@@ -751,18 +750,17 @@ async fn no_thinking_runs_where_offered_and_is_refused_elsewhere() {
                 .block_task()
                 .await
                 .expect("the model should be accepted");
-            let accepted = connection
-                .send_request(SetSessionConfigOptionRequest::new(
-                    session.clone(),
-                    REASONING_EFFORT_CONFIG_ID,
-                    "none",
-                ))
-                .block_task()
-                .await
-                .is_ok();
+            // The prompt goes right behind the change, without waiting
+            // for its answer, as a routine session sends them.
+            let effort = connection.send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                REASONING_EFFORT_CONFIG_ID,
+                "none",
+            ));
+            let prompt = connection.send_request(text_prompt(&session, "draft a routine"));
+            let accepted = effort.block_task().await.is_ok();
             assert_eq!(accepted, expected.is_some(), "{model}");
-            connection
-                .send_request(text_prompt(&session, "draft a routine"))
+            prompt
                 .block_task()
                 .await
                 .expect("the prompt should still run");
