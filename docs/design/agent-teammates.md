@@ -143,6 +143,11 @@ The agent's account appears only as a hash.
 
 - `enable-agent-teammates`: every entry point (invite, the purchase default,
   enrollment, agent_git routes, the team_agents API, the image choice, the
-  web settings, and the brain's `/brain/anthropic` gateway, evaluated for the
-  agent's own account). Off, or an unreachable flag service, means off.
+  web settings, and the brain's `/brain/anthropic` gateway). People's
+  requests check the acting person. What the agent itself calls (enrollment,
+  agent_git, the model and speech gateways, MCP keys) checks the agent's
+  creator (`team_agents.created_by`, via `agent_credentials::rollout`), since
+  PostHog targeting never matches an agent's own account. A creator who has
+  left the team still decides; a deleted creator account, a missing row, an
+  unreachable flag service, or the flag off all mean off.
 - `enable-agent-vault`: the secrets capability.

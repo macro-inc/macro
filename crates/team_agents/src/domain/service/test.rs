@@ -276,7 +276,8 @@ impl Computers for FakeComputers {
     }
 }
 
-/// The rollout, which a test can turn off after an invite.
+/// The rollout for people, which a test can turn off after an invite. Like
+/// PostHog's targeting, it never matches an agent's own account.
 #[derive(Clone)]
 struct Flags(Arc<AtomicBool>);
 
@@ -287,10 +288,11 @@ impl Flags {
 }
 
 impl FeatureFlags for Flags {
-    async fn load(&self, _: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
+    async fn load(&self, user: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
+        let agent = user.as_ref().ends_with(AGENT_EMAIL_DOMAIN);
         Ok(FlagSnapshot::new([(
             AGENT_TEAMMATES_FLAG.to_owned(),
-            FlagValue::Boolean(self.0.load(Ordering::SeqCst)),
+            FlagValue::Boolean(!agent && self.0.load(Ordering::SeqCst)),
         )]))
     }
 }
@@ -601,7 +603,7 @@ async fn an_agents_computer_enrolls_with_fresh_credentials_and_its_addresses() {
 }
 
 #[tokio::test]
-async fn with_the_rollout_off_an_agents_computer_enrolls_without_its_credentials() {
+async fn with_the_rollout_off_for_its_creator_an_agents_computer_enrolls_without_its_credentials() {
     let (service, journal, flags) = service_with_flags(true, FakeComputers::default());
     service.create(receipt(), request()).await.unwrap();
     flags.set(false);
@@ -617,6 +619,26 @@ async fn with_the_rollout_off_an_agents_computer_enrolls_without_its_credentials
 
     assert_eq!(enrollment, None);
     // Nothing minted: no key, no repo token.
+    assert_eq!(journal.entries().len(), before);
+}
+
+#[tokio::test]
+async fn an_agent_whose_creator_is_gone_enrolls_without_its_credentials() {
+    let (service, journal) = service(true, FakeComputers::default());
+    service.create(receipt(), request()).await.unwrap();
+    // Deleting the creator's account clears `created_by`.
+    service.repository.agents.lock().unwrap()[0].created_by = None;
+    let before = journal.entries().len();
+
+    let enrollment = service
+        .issue_enrollment(
+            ComputerId::new_from_uuid(COMPUTER),
+            EnrollmentGeneration::new(1),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(enrollment, None);
     assert_eq!(journal.entries().len(), before);
 }
 

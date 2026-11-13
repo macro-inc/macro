@@ -178,6 +178,25 @@ pub(crate) async fn ensure_enabled<Flags: FeatureFlags>(
     }
 }
 
+/// Agents' creators, read from their records.
+struct RepositoryCreators<'a, Repository>(&'a Repository);
+
+impl<Repository: TeamAgentRepository> agent_credentials::AgentCreators
+    for RepositoryCreators<'_, Repository>
+{
+    async fn creator_of(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<MacroUserIdStr<'static>>, rootcause::Report> {
+        let record = self
+            .0
+            .get(agent)
+            .await
+            .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
+        Ok(record.and_then(|record| record.created_by))
+    }
+}
+
 fn env_entry(
     values: &mut BTreeMap<AgentEnvKey, String>,
     key: &str,
@@ -544,11 +563,15 @@ where
             })?
             .ok_or(AgentEnrollmentError::NotFound)?;
 
-        // With the rollout off for the agent (as its brain checks it), the
-        // computer enrolls as a plain one: no fresh key or repo token, no
-        // agent environment, so the agent doesn't start.
-        if ensure_enabled(self.flags.as_ref(), &agent).await.is_err() {
-            tracing::warn!("agent teammates are off for this agent; enrolling without it");
+        // With the rollout off for the agent's creator (as its brain checks
+        // it), the computer enrolls as a plain one: no fresh key or repo
+        // token, no agent environment, so the agent doesn't start.
+        let creators = RepositoryCreators(&self.repository);
+        if !agent_credentials::agent_teammates_enabled(&creators, self.flags.as_ref(), &agent).await
+        {
+            tracing::warn!(
+                "agent teammates are off for this agent (its creator's rollout); enrolling without it"
+            );
             return Ok(None);
         }
 

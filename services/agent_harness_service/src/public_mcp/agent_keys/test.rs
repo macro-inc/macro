@@ -21,29 +21,40 @@ impl McpUserApiKeys for KeysOf {
     }
 }
 
-fn keys(rollout_on: bool) -> AgentUserApiKeys<KeysOf> {
+/// The rollout on or off for [`PERSON`], who invited [`AGENT`], and the
+/// other way round for the agent's own account.
+fn keys(creator_rollout_on: bool) -> AgentUserApiKeys<KeysOf> {
+    let mut creators = agent_credentials::FakeAgentCreators::default();
+    creators.set(user(AGENT), user(PERSON));
     let mut flags = FakeFeatureFlags::default();
+    flags.set(
+        user(PERSON),
+        Ok(FlagSnapshot::new([(
+            agent_credentials::AGENT_TEAMMATES_FLAG.to_owned(),
+            feature_flags::FlagValue::Boolean(creator_rollout_on),
+        )])),
+    );
     flags.set(
         user(AGENT),
         Ok(FlagSnapshot::new([(
             agent_credentials::AGENT_TEAMMATES_FLAG.to_owned(),
-            feature_flags::FlagValue::Boolean(rollout_on),
+            feature_flags::FlagValue::Boolean(!creator_rollout_on),
         )])),
     );
     AgentUserApiKeys::with_lookup(
         KeysOf,
         Arc::new(|user| Box::pin(async move { user.as_ref() == AGENT })),
-        BrainRollout::new(flags),
+        BrainRollout::new(creators, flags),
     )
 }
 
 #[tokio::test]
-async fn an_agent_with_the_rollout_on_signs_in_with_its_own_key() {
+async fn an_agent_with_the_rollout_on_for_its_creator_signs_in_with_its_own_key() {
     assert_eq!(keys(true).user(AGENT).await, Some(user(AGENT)));
 }
 
 #[tokio::test]
-async fn a_person_or_an_agent_with_the_rollout_off_is_refused() {
+async fn a_person_or_an_agent_with_the_rollout_off_for_its_creator_is_refused() {
     assert_eq!(keys(true).user(PERSON).await, None);
     assert_eq!(keys(false).user(AGENT).await, None);
     // No flag provider: closed.

@@ -1,6 +1,7 @@
 //! The public MCP's user API key path, for agent teammates only: a key is
 //! accepted only when its owner has a `team_agents` row and
-//! `enable-agent-teammates` is on for that account, as the brain checks.
+//! `enable-agent-teammates` is on for the person who invited it, as the brain
+//! checks.
 //! Every other key holder signs in with a JWT or a Macro API token.
 
 use std::{future::Future, pin::Pin, sync::Arc};
