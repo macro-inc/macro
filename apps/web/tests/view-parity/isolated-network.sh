@@ -3,6 +3,8 @@
 # forwarded from the host. Chromium drops in-flight requests whenever a host
 # network interface changes (net::ERR_NETWORK_CHANGED); in the namespace none
 # ever does.
+# The namespace has its own process tree too, so killing the script or its
+# process group stops everything in it.
 #
 #   tests/view-parity/isolated-network.sh "<port> <port>" <command...>
 #
@@ -20,9 +22,13 @@ for port in $ports; do
   (cd "$sockets" && exec socat "UNIX-LISTEN:$port.sock,fork" "TCP:127.0.0.1:$port") &
   bridges+=($!)
 done
-trap 'kill "${bridges[@]}" 2>/dev/null; rm -rf "$sockets"' EXIT
+# Killing unshare kills the namespace's first process (--kill-child), and the
+# kernel then stops everything else in it, so the trap ends the namespace too
+# when the script itself is the one being killed.
+namespace=
+trap 'kill -KILL $namespace 2>/dev/null; kill "${bridges[@]}" 2>/dev/null; rm -rf "$sockets"' EXIT
 
-SOCKETS=$sockets PORTS=$ports unshare --map-root-user --net --kill-child bash -c '
+SOCKETS=$sockets PORTS=$ports unshare --map-root-user --net --pid --fork --mount-proc --kill-child bash -c '
   ip link set lo up
   forwards=()
   for port in $PORTS; do
@@ -34,4 +40,6 @@ SOCKETS=$sockets PORTS=$ports unshare --map-root-user --net --kill-child bash -c
   status=$?
   kill "${forwards[@]}" 2>/dev/null
   exit $status
-' isolated-network "$@"
+' isolated-network "$@" &
+namespace=$!
+wait "$namespace"
