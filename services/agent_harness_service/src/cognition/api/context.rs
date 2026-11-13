@@ -136,6 +136,20 @@ pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
     DcsAuthorizationService,
 >;
 
+/// Synced tables over the harness's databases service, entity access,
+/// Pipedream connections and teams.
+pub type DcsDatabaseSyncsService = database_syncs::wiring::PgDatabaseSyncsService<
+    ai_tools::ToolDatabasesService,
+    DcsEntityAccessService,
+    Arc<
+        import_notion::outbound::pipedream::PipedreamNotionConnections<
+            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+            pipedream_mcp::outbound::dispatch::ConnectorBackends,
+        >,
+    >,
+    ai_tools::ToolTeamService,
+>;
+
 /// Redis-backed rate limiting for the web routes.
 pub type WebRateLimiter =
     rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
@@ -189,6 +203,9 @@ pub struct ApiContext {
     /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
     pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,
+    /// Synced tables: the `/databases/syncs` routes; its worker runs in
+    /// `cognition::build`.
+    pub database_syncs_service: Arc<DcsDatabaseSyncsService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.
     pub macro_event_broker: DcsEventBroker,

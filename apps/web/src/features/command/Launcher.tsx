@@ -1,5 +1,6 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
+import { openSyncedDatabaseDialog } from '@app/features/block-database/views/open-synced-database-dialog';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
@@ -503,6 +504,24 @@ export function runCreateAction(
   }
 }
 
+/** Ask for a Granola or Notion source, then open the database created from it. */
+function createSyncedDatabase(shouldInsert: boolean) {
+  if (!isFeatureEnabled(enableDatabases)) return;
+  setCreateMenuOpen(false, false);
+  openSyncedDatabaseDialog({
+    createdFrom: 'create_menu',
+    onCreated: (databaseId) =>
+      fireAndForget(
+        createBlock({
+          blockName: 'database',
+          createFn: async () => databaseId,
+          shouldInsert,
+        }),
+        'launcher'
+      ),
+  });
+}
+
 /** Capture the provider during setup; snapshot only when the action runs. */
 export function useCreateAction(): typeof runCreateAction {
   const context = useCreateContext();
@@ -593,6 +612,24 @@ const createBlocks = (
     hotkey: 'l',
     keyDownHandler: () => {
       createAction('database', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    id: 'Synced database',
+    get label() {
+      return t('create.syncedDatabaseLabel');
+    },
+    icon: getIconConfig('database').icon,
+    description: () => t('create.syncedDatabaseDescription'),
+    get launcherHint() {
+      return t('create.syncedDatabaseHint');
+    },
+    keywords: ['new', 'sync', 'granola', 'notion', 'database', 'meetings'],
+    blockName: 'database',
+    enabled: () => isFeatureEnabled(enableDatabases),
+    keyDownHandler: () => {
+      createSyncedDatabase(pressedKeys().has('shift'));
       return true;
     },
   },

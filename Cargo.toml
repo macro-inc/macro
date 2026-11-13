@@ -53,6 +53,7 @@ members = [
   "crates/jev",
   "crates/universal_input",
   "crates/database_sql",
+  "crates/database_syncs",
   "crates/database_webhooks",
   "crates/databases",
   "crates/databases_sql",

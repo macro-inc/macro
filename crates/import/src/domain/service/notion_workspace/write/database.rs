@@ -5,7 +5,7 @@
 use std::collections::{HashMap, HashSet};
 
 use futures::{FutureExt, StreamExt, stream};
-use import_notion::domain::inventory::{all_rows, full_markdown};
+use import_notion::domain::inventory::full_markdown;
 use import_notion::domain::macro_cells::{
     ColumnNames, ColumnPlan, PeopleMap, capped_name, derived_id,
 };
@@ -21,7 +21,7 @@ use models_databases::{
 };
 use uuid::Uuid;
 
-use super::{BODY_CONCURRENCY, Cancel, Progress, WriteItem, folder_once};
+use super::{BODY_CONCURRENCY, Cancel, Progress, WriteItem, every_row, folder_once};
 use crate::domain::models::{WrittenKind, WrittenObject};
 use crate::domain::ports::{
     ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity, SourceDates,
@@ -135,7 +135,7 @@ pub(in super::super) async fn write_database<
             .await?;
     }
 
-    let rows = all_rows(api, &item.notion_id).await?.rows;
+    let rows = every_row(api, &item.notion_id).await?;
     let database = DatabaseId::from_uuid(created.database_id);
     let mut written = WrittenDatabase {
         import_id: item.import_id,
@@ -371,7 +371,7 @@ pub(in super::super) async fn recorded_database<Api: NotionApi, Store: WrittenOb
     });
     // Only a database with relations left to link needs its rows again.
     if unlinked {
-        let rows = all_rows(api, &item.notion_id).await?.rows;
+        let rows = every_row(api, &item.notion_id).await?;
         written.relations = pending_relations(&source, &rows, &written);
     }
     Ok(Some(written))

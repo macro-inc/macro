@@ -1212,3 +1212,156 @@ describe('Database', () => {
     ]);
   });
 });
+
+describe('Database syncs', () => {
+  const cognition = 'https://cognition.example.test';
+  const syncId = '0198a4cc-e138-7670-a308-a6b766602720';
+  const syncedTableId = '0198a4cc-e138-7670-a308-a6b766602721';
+  const syncedColumnId = '0198a4cc-e138-7670-a308-a6b766602722';
+  const detachedColumnId = '0198a4cc-e138-7670-a308-a6b766602723';
+  const notionSync = {
+    id: syncId,
+    databaseId,
+    tableId: syncedTableId,
+    source: { kind: 'notion_data_source', dataSourceId: 'notion-roadmap' },
+    createdBy: 'macro|ada@example.test',
+    createdAt: '2026-11-06T09:00:00Z',
+    lastSyncedAt: '2026-11-06T09:30:00Z',
+    status: { state: 'failed', failure: 'source_disconnected' },
+    columns: [
+      {
+        column: syncedColumnId,
+        field: { source: 'notion', propertyId: 'title' },
+      },
+    ],
+    detachedColumns: [
+      {
+        column: detachedColumnId,
+        field: { source: 'notion', propertyId: 'Owner' },
+        reason: 'type_changed',
+      },
+    ],
+  };
+
+  test('lists the sources, creates a synced database from a Notion data source, and adds a Granola table', async () => {
+    const granolaSync = {
+      ...notionSync,
+      source: { kind: 'granola_meetings' },
+      lastSyncedAt: null,
+      status: { state: 'pending' },
+      detachedColumns: [],
+    };
+    const requests: { method: string; url: string; body: unknown }[] = [];
+    intercept(async (request) => {
+      const body = request.method === 'POST' ? await request.json() : undefined;
+      requests.push({ method: request.method, url: request.url, body });
+      if (request.url.endsWith('/syncs/sources'))
+        return Response.json({
+          granola: { connected: true },
+          notion: {
+            connected: true,
+            dataSources: [{ id: 'notion-roadmap', title: 'Roadmap' }],
+          },
+        });
+      if (request.url === `${cognition}/databases/syncs`)
+        return Response.json(notionSync, { status: 201 });
+      return Response.json(granolaSync, { status: 201 });
+    });
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: host, cognition },
+    });
+
+    const sources = await macro.databases.syncSources();
+    const [roadmap] = sources.notion.dataSources;
+    if (!roadmap) throw new Error('Missing listed data source');
+    const created = await macro.databases.createSynced({
+      kind: 'notion_data_source',
+      dataSource: roadmap,
+    });
+    const added = await created.database.addSync({ kind: 'granola_meetings' });
+
+    expect(sources.granola).toEqual({ connected: true });
+    expect(roadmap.toJSON()).toEqual({
+      id: 'notion-roadmap',
+      title: 'Roadmap',
+    });
+    expect(created.toJSON()).toEqual({
+      id: syncId,
+      databaseId,
+      tableId: syncedTableId,
+      source: {
+        kind: 'notion_data_source',
+        dataSource: expect.objectContaining({ id: 'notion-roadmap' }),
+      },
+      status: { state: 'failed', failure: 'source_disconnected' },
+      lastSyncedAt: '2026-11-06T09:30:00Z',
+    });
+    expect(created.createdBy.id).toBe('macro|ada@example.test');
+    expect(
+      created.columns.map(({ column, field }) => [column.id, field]),
+    ).toEqual([[syncedColumnId, { source: 'notion', propertyId: 'title' }]]);
+    expect(
+      created.detachedColumns.map(({ column, reason }) => [column.id, reason]),
+    ).toEqual([[detachedColumnId, 'type_changed']]);
+    expect(added.source).toEqual({ kind: 'granola_meetings' });
+    expect(added.lastSyncedAt).toBeUndefined();
+    expect(added.table.database).toBe(created.database);
+    expect(requests).toEqual([
+      {
+        method: 'GET',
+        url: `${cognition}/databases/syncs/sources`,
+        body: undefined,
+      },
+      {
+        method: 'POST',
+        url: `${cognition}/databases/syncs`,
+        body: {
+          id: expect.any(String),
+          source: {
+            kind: 'notion_data_source',
+            dataSourceId: 'notion-roadmap',
+          },
+        },
+      },
+      {
+        method: 'POST',
+        url: `${cognition}/databases/${databaseId}/syncs`,
+        body: { id: expect.any(String), source: { kind: 'granola_meetings' } },
+      },
+    ]);
+  });
+
+  test("lists a database's syncs, runs one now and stops it by handle", async () => {
+    const requests: { method: string; url: string }[] = [];
+    intercept(async (request) => {
+      requests.push({ method: request.method, url: request.url });
+      if (request.method === 'GET')
+        return Response.json({ syncs: [notionSync] });
+      if (request.method === 'POST') return new Response(null, { status: 202 });
+      return new Response(null, { status: 204 });
+    });
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: host, cognition },
+    });
+
+    const [sync] = await macro.databases.byId(databaseId).syncs();
+    if (!sync) throw new Error('Missing listed sync');
+    await sync.syncNow();
+    await sync.stop();
+
+    expect(sync.table.id).toBe(syncedTableId);
+    expect(requests).toEqual([
+      { method: 'GET', url: `${cognition}/databases/${databaseId}/syncs` },
+      {
+        method: 'POST',
+        url: `${cognition}/databases/${databaseId}/syncs/${syncId}/run`,
+      },
+      {
+        method: 'DELETE',
+        url: `${cognition}/databases/${databaseId}/syncs/${syncId}`,
+      },
+    ]);
+  });
+});

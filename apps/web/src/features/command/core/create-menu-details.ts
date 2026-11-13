@@ -133,6 +133,16 @@ const DETAILS: Record<string, CreateMenuDetails> = {
       'create.databaseExample3',
     ]
   ),
+  'Synced database': details(
+    'data',
+    'create.syncedDatabaseTagline',
+    'create.syncedDatabaseDetails',
+    [
+      'create.syncedDatabaseExample1',
+      'create.syncedDatabaseExample2',
+      'create.syncedDatabaseExample3',
+    ]
+  ),
   Spreadsheet: details(
     'data',
     'create.spreadsheetTagline',
@@ -316,6 +326,7 @@ const SHORT_TAGLINES: Record<string, TranslationKey> = {
   Design: 'create.designShortTagline',
   Spreadsheet: 'create.spreadsheetShortTagline',
   Database: 'create.databaseShortTagline',
+  'Synced database': 'create.syncedDatabaseShortTagline',
   Email: 'create.emailShortTagline',
   Message: 'create.messageShortTagline',
   Channel: 'create.channelShortTagline',

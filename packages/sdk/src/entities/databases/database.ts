@@ -40,6 +40,7 @@ import {
 } from './query';
 import type { DatabaseRow } from './row';
 import { SavedQuery, type SaveQueryOptions } from './saved-query';
+import { DatabaseSync, type DatabaseSyncSource, sourceRecord } from './sync';
 import { DatabaseTable } from './table';
 import type { DatabaseView } from './view';
 import { DatabaseWebhook } from './webhook';
@@ -672,6 +673,60 @@ export class Database extends MacroEntity<DatabaseDetail> {
       await this.client.storage.deleteDatabaseWebhook({
         path: { id: this.id, webhook_id: webhook.id },
       }),
+    );
+  }
+
+  /**
+   * The database's synced tables, oldest first. Takes edit access.
+   *
+   * @readonly
+   */
+  async syncs(): Promise<DatabaseSync[]> {
+    const { syncs } = unwrap(
+      await this.client.cognition.listDatabaseSyncs({ path: { id: this.id } }),
+    );
+    return syncs.map((record) =>
+      DatabaseSync.fromRecord(this.client, this, record),
+    );
+  }
+
+  /**
+   * Add a table synced with `source`; the first sync runs at once.
+   *
+   * The table is named after the source. Its writes act with the caller's
+   * access. Takes edit
+   * access; the source must be connected (see `macro.databases.syncSources()`).
+   *
+   * @write
+   * @openworld
+   * @mcp-exclude Takes a source handle built from a listing record, which an MCP call can't reference.
+   */
+  async addSync(source: DatabaseSyncSource): Promise<DatabaseSync> {
+    const record = await this.mutate((client) =>
+      client.cognition.createDatabaseSync({
+        path: { id: this.id },
+        body: { id: uuidv7(), source: sourceRecord(source) },
+      }),
+    );
+    return DatabaseSync.fromRecord(this.client, this, record);
+  }
+
+  /**
+   * Create a database whose one table syncs with `source`; the first sync runs at once.
+   */
+  static async createSynced(
+    client: MacroClient,
+    source: DatabaseSyncSource,
+  ): Promise<DatabaseSync> {
+    const record = unwrap(
+      await client.cognition.createSyncedDatabase({
+        body: { id: uuidv7(), source: sourceRecord(source) },
+      }),
+    );
+    return DatabaseSync.fromRecord(
+      client,
+      new Database(client, record.databaseId),
+      record,
     );
   }
 

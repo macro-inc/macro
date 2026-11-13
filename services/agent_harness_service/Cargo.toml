@@ -84,6 +84,7 @@ crm = { path = "../../crates/crm", features = ["lookup", "ports"] }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
+database_syncs = { path = "../../crates/database_syncs", features = ["inbound", "postgres"] }
 databases = { path = "../../crates/databases", features = ["ai_tools", "gateway", "postgres"] }
 databases_sql = { path = "../../crates/databases_sql", features = ["ai_tools"] }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }

@@ -13,6 +13,9 @@ export default {
   databaseLabel: 'Database',
   databaseDescription: 'Create database',
   databaseHint: 'Tables and boards',
+  syncedDatabaseLabel: 'Synced database',
+  syncedDatabaseDescription: 'Create synced database',
+  syncedDatabaseHint: 'Kept in sync with Granola or Notion',
   formLabel: 'Form',
   formDescription: 'Create form',
   formHint: 'Questions answered into a database',
@@ -151,6 +154,13 @@ export default {
   databaseExample2: 'Content calendar',
   databaseExample3: 'Inventory',
   databaseShortTagline: 'Tables & boards',
+  syncedDatabaseTagline: 'A table kept in sync with Granola or Notion',
+  syncedDatabaseDetails:
+    'Mirror your Granola meetings or a Notion database.\nRows update on their own as the source changes.',
+  syncedDatabaseExample1: 'Meeting notes',
+  syncedDatabaseExample2: 'Notion roadmap',
+  syncedDatabaseExample3: 'Customer calls',
+  syncedDatabaseShortTagline: 'From Granola or Notion',
   spreadsheetTagline: 'Excel-style workbook with formulas',
   spreadsheetDetails:
     'Build shared spreadsheets for budgets and models.\nUse formulas, multiple sheets and AI edits.',

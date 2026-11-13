@@ -103,3 +103,16 @@ pub trait NotionConnections: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Self::Api>, NotionError>> + Send;
 }
+
+/// One connections value shared by several services, so they share its
+/// per-account request pacing.
+impl<Connections: NotionConnections> NotionConnections for std::sync::Arc<Connections> {
+    type Api = Connections::Api;
+
+    fn for_user(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Self::Api>, NotionError>> + Send {
+        Connections::for_user(self, user)
+    }
+}

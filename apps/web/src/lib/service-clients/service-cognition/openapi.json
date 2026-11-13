@@ -1242,6 +1242,442 @@
         }
       }
     },
+    "/databases/syncs": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Create a database, named after the source, whose one table is synced\nwith it. Retrying with the same `id` answers the first attempt's sync.",
+        "operationId": "create_synced_database",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDatabaseSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseSync"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The source was not found, or the connection may not read it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The source is not connected, or the id names another sync",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The source could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/syncs/sources": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "What the caller can sync a table from: whether Granola is connected,\nand the Notion data sources their connection can read.",
+        "operationId": "list_database_sync_sources",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseSyncSources"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Notion could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/syncs": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "The database's syncs.",
+        "operationId": "list_database_syncs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListDatabaseSyncsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["databases"],
+        "summary": "Add a table synced with a source to the database. Its writes act with\nthe caller's access. Retrying with the same `id` answers the first\nattempt's sync.",
+        "operationId": "create_database_sync",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDatabaseSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseSync"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The source was not found, or the connection may not read it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The source is not connected, or the id names another sync",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The source could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/syncs/{sync_id}": {
+      "delete": {
+        "tags": ["databases"],
+        "summary": "Stop a sync. Its table and rows stay as they are.",
+        "operationId": "delete_database_sync",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sync_id",
+            "in": "path",
+            "description": "Sync id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/syncs/{sync_id}/run": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Run a sync as soon as a worker is free.",
+        "operationId": "run_database_sync",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sync_id",
+            "in": "path",
+            "description": "Sync id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/decisions": {
       "post": {
         "tags": ["decisions"],
@@ -4463,6 +4899,22 @@
           }
         }
       },
+      "CreateDatabaseSyncRequest": {
+        "type": "object",
+        "description": "A sync to create, under an id its client minted so a retry finds it.",
+        "required": ["id", "source"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its id, minted by the client (UUIDv7)."
+          },
+          "source": {
+            "$ref": "#/components/schemas/DatabaseSyncSource",
+            "description": "What it mirrors."
+          }
+        }
+      },
       "DatabaseChange": {
         "oneOf": [
           {
@@ -4597,6 +5049,300 @@
             "type": "string"
           }
         }
+      },
+      "DatabaseSync": {
+        "type": "object",
+        "description": "A table of a database kept in sync with a source.",
+        "required": [
+          "id",
+          "databaseId",
+          "tableId",
+          "createdBy",
+          "source",
+          "columns",
+          "detachedColumns",
+          "status",
+          "lastSyncedAt",
+          "createdAt"
+        ],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatabaseSyncColumn"
+            },
+            "description": "The columns it writes."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Who created it; its writes act with their access and read the source\nthrough their connection."
+          },
+          "databaseId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The database."
+          },
+          "detachedColumns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatabaseSyncDetachedColumn"
+            },
+            "description": "The columns it stopped writing."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier."
+          },
+          "lastSyncedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a run last succeeded."
+          },
+          "source": {
+            "$ref": "#/components/schemas/DatabaseSyncSource",
+            "description": "What it mirrors."
+          },
+          "status": {
+            "$ref": "#/components/schemas/DatabaseSyncStatus",
+            "description": "How its last run went."
+          },
+          "tableId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The table the sync writes."
+          }
+        }
+      },
+      "DatabaseSyncColumn": {
+        "type": "object",
+        "description": "A column the sync writes, and the field it holds.",
+        "required": ["field", "column"],
+        "properties": {
+          "column": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The column."
+          },
+          "field": {
+            "$ref": "#/components/schemas/DatabaseSyncField",
+            "description": "The source field."
+          }
+        }
+      },
+      "DatabaseSyncDetachReason": {
+        "type": "string",
+        "description": "Why a column stopped syncing.",
+        "enum": ["deleted", "type_changed"]
+      },
+      "DatabaseSyncDetachedColumn": {
+        "type": "object",
+        "description": "A column that no longer syncs. Its cells stay as they are, and the sync\nnever adds its field back.",
+        "required": ["field", "column", "reason"],
+        "properties": {
+          "column": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The column."
+          },
+          "field": {
+            "$ref": "#/components/schemas/DatabaseSyncField",
+            "description": "The source field it held."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/DatabaseSyncDetachReason",
+            "description": "Why it stopped."
+          }
+        }
+      },
+      "DatabaseSyncFailure": {
+        "type": "string",
+        "description": "Why a sync's last run failed.",
+        "enum": [
+          "source_disconnected",
+          "source_not_found",
+          "source_unavailable",
+          "creator_lost_access",
+          "database_unavailable",
+          "internal"
+        ]
+      },
+      "DatabaseSyncField": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A field of a Granola meeting.",
+            "required": ["field", "source"],
+            "properties": {
+              "field": {
+                "$ref": "#/components/schemas/DatabaseSyncGranolaField",
+                "description": "Which one."
+              },
+              "source": {
+                "type": "string",
+                "enum": ["granola"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property of a Notion data source.",
+            "required": ["propertyId", "source"],
+            "properties": {
+              "propertyId": {
+                "type": "string",
+                "description": "The property's id, which survives renames."
+              },
+              "source": {
+                "type": "string",
+                "enum": ["notion"]
+              }
+            }
+          }
+        ],
+        "description": "A source field a column of a synced table holds."
+      },
+      "DatabaseSyncGranolaField": {
+        "type": "string",
+        "description": "One field of a Granola meeting a synced table keeps.",
+        "enum": ["title", "date", "attendees", "summary", "link", "call"]
+      },
+      "DatabaseSyncGranolaSource": {
+        "type": "object",
+        "description": "Whether the user has connected Granola.",
+        "required": ["connected"],
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "description": "Whether a Granola connection syncs meetings into Macro."
+          }
+        }
+      },
+      "DatabaseSyncNotionDataSource": {
+        "type": "object",
+        "description": "A Notion data source the creator's connection can read.",
+        "required": ["id", "title"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The data source."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its title."
+          }
+        }
+      },
+      "DatabaseSyncNotionSource": {
+        "type": "object",
+        "description": "Whether the user has connected Notion, and what it can read.",
+        "required": ["connected", "dataSources"],
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "description": "Whether Notion is connected."
+          },
+          "dataSources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatabaseSyncNotionDataSource"
+            },
+            "description": "The data sources the connection can read, most recently edited\nfirst; empty when not connected."
+          }
+        }
+      },
+      "DatabaseSyncSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The creator's meetings imported from Granola.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["granola_meetings"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One Notion data source (a Notion database's table), read through the\ncreator's Notion connection.",
+            "required": ["dataSourceId", "kind"],
+            "properties": {
+              "dataSourceId": {
+                "type": "string",
+                "description": "The data source."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["notion_data_source"]
+              }
+            }
+          }
+        ],
+        "description": "What a synced table mirrors."
+      },
+      "DatabaseSyncSources": {
+        "type": "object",
+        "description": "What a user can sync a table from.",
+        "required": ["granola", "notion"],
+        "properties": {
+          "granola": {
+            "$ref": "#/components/schemas/DatabaseSyncGranolaSource",
+            "description": "Granola meetings."
+          },
+          "notion": {
+            "$ref": "#/components/schemas/DatabaseSyncNotionSource",
+            "description": "Notion data sources."
+          }
+        }
+      },
+      "DatabaseSyncStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "It has not run yet.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["pending"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its last run succeeded.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["synced"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its last run failed; it tries again on its schedule.",
+            "required": ["failure", "state"],
+            "properties": {
+              "failure": {
+                "$ref": "#/components/schemas/DatabaseSyncFailure",
+                "description": "Why."
+              },
+              "state": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "How a sync stands."
       },
       "DecisionErrorBody": {
         "type": "object",
@@ -5829,6 +6575,20 @@
         "type": "string",
         "description": "Defines who can access an item through its share link.",
         "enum": ["PUBLIC", "TEAM"]
+      },
+      "ListDatabaseSyncsResponse": {
+        "type": "object",
+        "description": "A database's syncs.",
+        "required": ["syncs"],
+        "properties": {
+          "syncs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatabaseSync"
+            },
+            "description": "Oldest first."
+          }
+        }
       },
       "MacroUserIdStr": {
         "type": "string"

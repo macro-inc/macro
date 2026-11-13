@@ -72,6 +72,9 @@ enforced by the ordinary backend APIs.
   out of the SDK.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
+- `src/entities/databases/sync.ts`: synced tables (`DatabaseSync`) over cognition
+  `/databases/syncs` (served by the agent harness); sources come from
+  `databases.syncSources()` as `NotionDataSource` handles, never raw ids.
 - `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a
   contact's addresses; `setCompany(company)` links or switches a contact with a
   personal-provider primary and `unlinkCompany()` removes the link. The server

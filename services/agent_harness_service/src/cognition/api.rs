@@ -161,6 +161,16 @@ fn api_router(api_context: ApiContext) -> Router {
                 authorization_state: authorization_state.clone(),
             },
         ))
+        .nest(
+            "/databases",
+            database_syncs::inbound::axum_router::database_syncs_router(
+                database_syncs::inbound::axum_router::DatabaseSyncsRouterState::new(
+                    api_context.database_syncs_service.clone(),
+                    api_context.entity_access_service.clone(),
+                    authorization_state.clone(),
+                ),
+            ),
+        )
         .merge(onboarding::inbound::axum_router::onboarding_router(
             onboarding::inbound::axum_router::OnboardingRouterState {
                 service: onboarding_service,

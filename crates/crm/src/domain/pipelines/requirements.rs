@@ -375,7 +375,7 @@ fn validate_batch(
                 _ => {}
             },
             DatabaseOp::Rows { change, .. } => match change {
-                RowsChange::Insert { rows, .. } => {
+                RowsChange::Insert { rows, ids } => {
                     for (row_index, cells) in rows.iter().enumerate() {
                         let mut draft = Draft {
                             cells: HashMap::new(),
@@ -386,7 +386,13 @@ fn validate_batch(
                             row: Some(row_index),
                         };
                         draft.write(cells, &labels, op_index, Some(row_index));
-                        inserted.push(draft);
+                        // Client-minted ids let later ops in the batch name the row.
+                        match ids.as_ref().and_then(|ids| ids.get(row_index)) {
+                            Some(id) => {
+                                drafts.insert(*id, draft);
+                            }
+                            None => inserted.push(draft),
+                        }
                     }
                 }
                 RowsChange::Update {
@@ -501,3 +507,6 @@ fn update_group(groups: &mut HashMap<ViewId, ColumnId>, view: ViewId, layout: &R
         }
     }
 }
+
+#[cfg(test)]
+mod test;
