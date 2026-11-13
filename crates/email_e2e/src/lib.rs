@@ -13,6 +13,7 @@
 mod api;
 mod aws;
 mod calendar;
+pub mod events;
 mod inbox;
 mod infra;
 mod macro_services;
