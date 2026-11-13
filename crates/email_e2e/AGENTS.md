@@ -16,12 +16,18 @@ scenarios.
   production queues with their dead-letter queues, an in-memory S3 and CDN
   (`src/aws.rs`), stand-ins for the other Macro services that record what
   they were asked (`src/macro_services.rs`), and the two service processes.
+- `Stack::start_with(StackOptions { document_storage: true, .. })` also
+  starts the real `document_storage_service` on the same database, Redis
+  database, queues and providers: it serves the GraphQL API the web app
+  sends mail through. It is a third large process, so only scenarios that
+  need GraphQL ask for it. The email services still call the stand-in for
+  document storage, not this process.
   Scenarios run in parallel and share nothing but the four servers (Postgres, Redis, SQS, Kafka).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
   started with an environment the harness builds (`src/stack/environment.rs`)
   and nothing else. Build them before running; `just email-e2e` does.
 - Each scenario's service logs are in
-  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers}.log`.
+  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,document_storage_service}.log`.
   A failing scenario prints the directory and the end of the logs.
 
 ## Writing a scenario
@@ -69,13 +75,21 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   is marked `#[ignore = "known bug: <class id>"]`. The suite skips it; `just
   email-e2e-known-bugs` (a non-gating CI step) runs only those and reports
   which still fail and which now pass. Remove the attribute with the fix.
+- Sending the way the web composer does (a stack with `document_storage`):
+  `inbox.send_attempt(attempt_id, &message, &extra)` with the GraphQL draft
+  input (`draftId`, `subject`, `to`, `bodyText`, …), then `cancel_send`,
+  `send_attempt_state` and `wait_for_send_attempt(attempt_id, "SENT")`. The
+  undo window is `SENT_UNDO_DELAY_SECS` (1 s); a scenario that undoes sets
+  it longer through `StackOptions.env`. Any other query or mutation:
+  `user.graphql(query, &variables)`. See `tests/send_attempt.rs`.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
 - A user at an address that matters (a staff domain): `stack.user_at`.
 - Failures of what the services depend on: a provider fault on the emulator,
   `stack.fail_next_service_request` (`_with` for a JSON body) for another
   Macro service,
-  `stack.refuse_queue_sends` for an enqueue. `stack.redis()` reaches the
-  services' Redis database.
+  `stack.refuse_queue_sends` for an enqueue (`queue_send_refusals_left`
+  tells that the services met it). `stack.redis()` reaches the services'
+  Redis database.
 
 ## Start here
 
@@ -88,14 +102,19 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Owns: the harness and the email scenarios.
 - Not here: the fakes of Google and Microsoft → `crates/gmail_emulator`,
   `crates/outlook_emulator`. Tests of one crate's logic → that crate.
-- Not started yet: `calendar_service`, search, the real notification,
-  document storage and authentication services, and the web app.
+- Not started yet: `calendar_service`, search, the real notification and
+  authentication services, and the web app. `document_storage_service` is
+  started only for its GraphQL API; its document, search and AI features
+  run on placeholder settings.
 
 ## Checks
 
 - `just email-e2e` (in `nix develop`), with `EMAIL_E2E_SQS_URL` pointing at
   an ElasticMQ, `EMAIL_E2E_KAFKA_BROKERS` at a Kafka broker, and Postgres and Redis from `DATABASE_URL`/`REDIS_URI` or
   `EMAIL_E2E_DATABASE_URL`/`EMAIL_E2E_REDIS_URL`.
+- `just email-e2e` also builds `document_storage_service`, whose build
+  needs the repository's `bun install` or `CODE_MODE_ASSETS_DIR` pointing
+  at `nix build .#code-mode-assets`.
 - No ElasticMQ at hand: `docker run -p 9324:9324
   softwaremill/elasticmq-native:1.7.1`, then
   `EMAIL_E2E_SQS_URL=http://127.0.0.1:9324`.
@@ -117,8 +136,15 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Linking goes through `in_progress_user_link` and `POST /email/init`, not
   the browser OAuth pages; a user may link two inboxes before needing the
   `professional_subscriber` role.
-- Kafka topics are shared by every scenario and nothing in the stack reads
-  them; the services only need the broker to accept what they publish.
+- Kafka topics are shared by every scenario. The email services only need
+  the broker to accept what they publish. `document_storage_service` reads
+  topics, which a stack that starts it creates when missing, and its
+  consumers share their groups across scenarios: an event one scenario
+  publishes may be read by another scenario's process, so do not assert on
+  what that service does with Kafka events.
+- A session connected to a template database blocks every clone of it;
+  the harness waits up to a minute for it and closes templates to
+  connections.
 
 ## Related
 
