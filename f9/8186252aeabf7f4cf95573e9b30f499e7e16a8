@@ -1,0 +1,33 @@
+crates/complete_graph/src/schema/test/team_activity.rs
+  s_422464c85346e5::t_541a97c6d2a27a 98-103
+static_assets/schema.graphql
+  s_422464c85346e5::t_541a97c6d2a27a 21-22
+crates/graphql_activity/src/feed.rs
+  s_422464c85346e5::t_541a97c6d2a27a 58-59,101-105,132-137
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_395ce1e1803595::t_10c1d68952075c 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f98186252aeabf7f4cf95573e9b30f499e7e16a8",
+  "prompts": {},
+  "sessions": {
+    "s_395ce1e1803595": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd67b15d-a0f0-45c2-9a11-632923825196",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_422464c85346e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae48edd-7ffa-4908-b6b8-ce91c4bf54e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

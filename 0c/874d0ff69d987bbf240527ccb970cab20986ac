@@ -1,0 +1,34 @@
+apps/web/src/features/dynamic-ui/widgets/agent-panes/agent-panes.test.tsx
+  s_422464c85346e5::t_57bef5ae91ed10 56
+apps/web/src/features/dynamic-ui/widgets/panes/agent-pane.tsx
+  s_422464c85346e5::t_57bef5ae91ed10 4
+crates/ai_usage/src/domain/spend.rs
+  s_422464c85346e5::t_02dab271e40a00 135,137-139,210-215
+crates/ai_usage/src/outbound/pg_agent_spend_repo.rs
+  s_422464c85346e5::t_02dab271e40a00 73-83
+crates/ai_usage/src/outbound/pg_agent_spend_repo/test.rs
+  s_422464c85346e5::t_02dab271e40a00 187,191
+crates/ai_usage/src/domain/spend/test.rs
+  s_422464c85346e5::t_02dab271e40a00 93-96,166-173
+  s_422464c85346e5::t_45f42fcc8f63e5 174-177
+crates/ai_usage/AGENTS.md
+  s_422464c85346e5::t_02dab271e40a00 73-74
+.sqlx/query-264ebb2ef651c7f941fd3f7002966fce40dc2eb6e2ba61dcf9e91e5f0461b502.json
+  s_422464c85346e5::t_934ba3361537ba 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0c874d0ff69d987bbf240527ccb970cab20986ac",
+  "prompts": {},
+  "sessions": {
+    "s_422464c85346e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae48edd-7ffa-4908-b6b8-ce91c4bf54e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
