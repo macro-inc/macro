@@ -61,5 +61,6 @@ export function waitToResumeSync(
     window.addEventListener('online', online);
     document.addEventListener('visibilitychange', visible);
     signal.addEventListener('abort', stop);
+    if (signal.aborted) stop();
   });
 }

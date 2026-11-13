@@ -583,10 +583,10 @@ fn invalid_gzip(error: std::io::Error) -> SyncFailure {
 }
 
 /// Reads and decodes the body until it ends, fails, sends nothing for
-/// `stall_timeout` while it is being read, or the run stops, acquiring each decoded chunk's size from `budget` (at most the whole
-/// budget, so one chunk larger than the cap still passes). The budget
-/// therefore bounds unapplied decoded bytes to the cap plus the one chunk
-/// read while waiting for room.
+/// `stall_timeout` while it is being read, or the run stops, acquiring each
+/// decoded chunk's size from `budget` (at most the whole budget, so one chunk
+/// larger than the cap still passes). The budget therefore bounds unapplied
+/// decoded bytes to the cap plus the one chunk read while waiting for room.
 async fn read_ahead(
     mut body: Box<dyn SyncResponseBody>,
     mut decoder: BodyDecoder,

@@ -87,4 +87,11 @@ describe('waitToResumeSync', () => {
     await vi.advanceTimersByTimeAsync(5_000);
     expect(state.reason).toBeUndefined();
   });
+
+  it('does not wait on a signal that is already aborted', () => {
+    const controller = new AbortController();
+    controller.abort();
+    waiting(1_000, controller.signal);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

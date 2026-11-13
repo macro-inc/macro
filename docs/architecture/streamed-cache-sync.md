@@ -243,8 +243,10 @@ A sync whose stream used up its retries stops and waits
 often as it takes: when the device comes back online, when the app returns to
 the foreground, or after a pause of 1 minute, doubled per stop in a row up to
 5 minutes and spread by a fifth either way. The pause covers a server that was
-unreachable while the device stayed online, which raises no event. Only
-`unsupported` ends the streamed sync.
+unreachable while the device stayed online, which raises no event. This holds
+for every failure, a run its host stopped included (`aborted`: a parked
+browser engine, a suspended native app). Only `unsupported` ends the streamed
+sync.
 
 ### Telemetry
 

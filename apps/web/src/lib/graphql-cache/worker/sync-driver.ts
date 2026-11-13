@@ -447,9 +447,10 @@ export class CacheSyncDriver {
           };
     } catch (error) {
       if (signal.aborted) return await this.stopped(began, { kind: 'aborted' });
-      // Close the connection first, so the server stops running pages.
-      await readAhead?.close();
+      // Close the connection first, so the server stops running pages. The
+      // abort is what drops a connection that went silent.
       closeConnection();
+      await readAhead?.close();
       const failure = match(markedFailureKind(error))
         .returnType<SyncFailure>()
         .with('busy', () => ({ kind: 'busy' }))
