@@ -247,6 +247,13 @@ both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
 
+On iOS, Macro stays visible whenever it leaves the foreground without a tap:
+opening the app switcher, Control Center, or Notification Center over it keeps
+its content on screen, including on its switcher card. A tap on a banner over
+the open app navigates in place. A tap that opens the app (from the
+background, the Lock Screen, or Notification Center) goes from the system's
+blank launch screen to the destination, never through the previous page.
+
 For an iOS warm resume, leave the app running past its startup timeout before
 backgrounding it. Tap an uncached notification without a direct channel target
 and fail its notification lookup: the app must reveal the existing page and
